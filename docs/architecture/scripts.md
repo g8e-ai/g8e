@@ -1,7 +1,7 @@
 # g8e Scripts
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 This document catalogs the executable automation under `scripts/`, the deploy-script templates embedded in the Gateway, and the script-backed `g8e demos` image-transfer workflow. The root `Makefile` owns build and validation orchestration.
 
@@ -16,6 +16,7 @@ This document catalogs the executable automation under `scripts/`, the deploy-sc
 | Package smoke test | `scripts/smoke-test-python.sh` | Installs the local Python protocol package in a virtual environment and runs its public imports and examples |
 | Data validation | `scripts/validate-cosais-overlays.sh` | Checks detector references for overlays marked finalized in the checked-in COSAiS catalog |
 | Make target audit | `scripts/validate-make-targets.sh` | Runs selected groups of root Makefile targets and summarizes their results |
+| Repository administration | `scripts/github-sponsors-setup.sh` | Reads or changes the repository’s GitHub Sponsors setting through the GitHub GraphQL API |
 | Remote Operator bootstrap | `/g8e-deploy.sh` and `/g8e-deploy.ps1` | Public Gateway HTTP routes that render embedded scripts for binary download and Operator startup |
 | Air-gap image transfer | `g8e demos pull`, `export`, `import`, and `images` | Transfers the digest-pinned external images declared in `demos/images.json` |
 
@@ -33,7 +34,7 @@ Each script performs three steps:
 
 1. It checks for `make` and `go`. Its version check accepts Go 1.26 or any later major or minor release; the root `go.mod` is the authoritative build requirement and currently declares Go 1.26.6.
 2. If a checked dependency is missing or too old, it asks before invoking a supported package manager. Linux supports `apt-get`, `dnf`, `pacman`, or `zypper`; macOS uses Homebrew; Windows prefers `winget` and otherwise uses Chocolatey. The package manager is necessary only when the script must install a dependency.
-3. It runs `make build`, which writes the platform binary and SHA-256 file under `bin/` and copies the host executable to the repository root.
+3. It runs `make build`, which first requires the built evaluation-explorer asset at `dashboard/g8e-adapter/evaluation-explorer/dist/index.html`, then writes the platform binary and SHA-256 file under `bin/` and copies the host executable to the repository root. Build that asset with `cd dashboard/g8e-adapter/evaluation-explorer && npm run build` when it is not already present; the setup scripts do not install Node dependencies or build it.
 
 The Linux and macOS scripts append the repository root to `~/.zshrc`, `~/.bashrc`, or `~/.profile`, based on the current shell. The Windows script updates the user-level `Path`. These are persistent user-environment mutations. The scripts also update their own process environment, but that child-process update does not alter the invoking shell. Open a new terminal or source the selected profile, then run `g8e --version`.
 
@@ -70,13 +71,25 @@ make validate-cosais
 
 ### Make Target Audit
 
-`validate-make-targets.sh` is a manually invoked broad audit of root Makefile targets. Run every configured phase with `bash scripts/validate-make-targets.sh`, or select one phase through the environment:
+`validate-make-targets.sh` is a manually invoked broad audit of root Makefile targets. Run every configured phase with `bash scripts/validate-make-targets.sh`, or select one phase through the `PHASE` environment variable:
 
 ```bash
 PHASE=lint bash scripts/validate-make-targets.sh
 ```
 
-The script groups targets into help, build, protocol, lint, test, Python, dashboard, Docker, CI, doctrine, and cleanup phases. It suppresses each target’s output, continues after failures, and exits nonzero after printing the aggregate summary when any target failed. It always skips `release`, but an unfiltered run still invokes targets that require local services, Docker, external credentials, or network access, and its final cleanup phase runs state-removing Make targets. Review the phase definitions before using the unfiltered mode. This audit is not wired into the primary CI workflow.
+The configured phases are `help`, `build`, `proto`, `lint`, `test`, `python`, `dashboard`, `docker`, `ci`, `doctrine`, and `clean`. The script suppresses each target’s output, continues after failures, and exits nonzero after printing the aggregate summary when any target failed. It always skips `release`, but an unfiltered run still invokes targets that require local services, Docker, external credentials, or network access, and its final cleanup phase runs state-removing Make targets. Review the phase definitions before using the unfiltered mode. This audit is not wired into the primary CI workflow.
+
+## Repository Administration
+
+`scripts/github-sponsors-setup.sh` uses the GitHub CLI (`gh`) and requires an authenticated account with permission to read or update the repository. The default repository is `g8e-ai/g8e`; override it with `GITHUB_REPO`, and override the GraphQL repository ID with `GITHUB_REPO_ID` when operating on a different repository. The script does not create or approve a GitHub Sponsors profile. Complete the profile and GitHub approval through the GitHub web interface first.
+
+```bash
+./scripts/github-sponsors-setup.sh status
+./scripts/github-sponsors-setup.sh enable
+./scripts/github-sponsors-setup.sh disable
+```
+
+`status` queries the repository’s sponsorship setting and checks the configured sponsor accounts `Badoot`, `opendevops`, and `g8e-ai`. `enable` and `disable` mutate the repository’s `hasSponsorshipsEnabled` setting through GitHub. Treat those commands as external administrative changes, not local validation.
 
 ## Gateway-Served Operator Bootstrap
 
@@ -114,7 +127,7 @@ Linux and macOS require `curl` or `wget`; Windows requires PowerShell. Container
 
 ## Air-Gap Image Transfer
 
-The `g8e demos` image commands read `demos/images.json` relative to the current working directory, so run them from the repository root. They require the Docker CLI and a reachable Docker daemon.
+The `g8e demos` image commands read `demos/images.json` relative to the current working directory, so run them from the repository root. `g8e demos pull`, `export`, and `import` require the Docker CLI and a reachable Docker daemon; `g8e demos images` only reads the manifest.
 
 - `g8e demos images` prints each manifest image, digest, informational tag, and associated demos.
 - `g8e demos pull` pulls every entry as `<image>@<digest>`.

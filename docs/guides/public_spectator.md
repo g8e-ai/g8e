@@ -89,6 +89,21 @@ After the owner starts the tunnel, verify HTTPS, CORS, bounded reads, rate limit
 
 Restart the gateway and tunnel independently. The mirror must recover the same accepted high-water sequence, feed-chain hash, key revocations, catalog, manifest, and proof bytes. Tunnel or mirror unavailability must produce an honest stale or source-offline storefront state and must not trigger inference or mutate accepted evidence.
 
+The repository capacity harness requires an explicit target and does not default to a live deployment. Use loopback for local acceptance:
+
+```bash
+go run ./test/capacity --target http://127.0.0.1:8082 --synthetic-client-ips --mode cold --clients 300 --hold 5m --docker-container g8e-gateway
+go run ./test/capacity --target http://127.0.0.1:8082 --synthetic-client-ips --mode stream --clients 300 --hold 5m --docker-container g8e-gateway
+```
+
+A public origin additionally requires `--allow-public`, and running it remains an owner-approved operation:
+
+```bash
+go run ./test/capacity --target https://opendevops.ai --allow-public --mode stream --clients 300 --hold 5m
+```
+
+The harness emits JSON status, outcome, latency, stream-survival, and optional Docker resource samples, and exits nonzero unless every requested lifecycle completes and every stream survives. `--synthetic-client-ips` is accepted only with a loopback target and exercises distinct forwarded identities through the configured Docker trusted peer. One generator host remains one Cloudflare client identity and correctly shares one anonymous request window. A 300-distinct-visitor cold-load claim therefore requires distributed generators with distinct public client addresses; callers never spoof `CF-Connecting-IP` against a public target to manufacture identity cardinality.
+
 ## Manual record publish (advanced)
 
 `g8e public publish`, `g8e public push`, and `g8e public status` remain available for pushing pre-built JSONL record files through a **configured remote mirror origin**. They do not start a local mirror process. Evaluation campaigns use gateway-mediated publication instead.

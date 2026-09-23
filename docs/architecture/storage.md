@@ -5,28 +5,31 @@ parent: Architecture
 
 # Storage Architecture
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ## Overview
 
-g8e separates platform coordination state from host-local execution evidence. Each Gateway and outbound Operator has a local canonical SQLite database named `g8e.db`. The Gateway uses it for shared platform state and Gateway-executed audit evidence, while an outbound Operator uses its local copy for state services and authoritative evidence from operations executed on that host.
+g8e separates platform coordination state from host-local execution evidence. Each Gateway and outbound Operator opens a local canonical SQLite database at `.g8e/data/g8e.db`. The Gateway uses it for platform coordination state and Gateway-runtime audit evidence. An outbound Operator opens its own copy for the shared state-root schema, replay-independent execution services, and authoritative evidence from operations executed in that Operator runtime.
 
-Additional stores have separate lifecycles. An outbound Operator maintains an execution vault, a replay database, and, when enabled, git-backed file ledgers. Both operating modes use a separate suspended-transaction database for pending L3 approvals. Platform evaluation evidence (native runs and campaign artifacts) persists under `.g8e/data/eval/runs/` on the host that owns the evaluation CLI; see [Evaluations](./evals.md). A remote Operator remains authoritative for its local execution evidence; its publication of signed receipts to the Gateway is a best-effort mirror.
+Additional stores have separate lifecycles. An outbound Operator maintains `.g8e/data/execution_vault.db`, `.g8e/data/replay_store.db`, and, when Git integration is enabled, Git-backed ledgers under `.g8e/data/ledger/`. Both Gateway and outbound Operator modes open `.g8e/data/suspended_transactions.db` for pending L3 approvals. Native and campaign evaluation artifacts persist under `.g8e/data/eval/` on the host that owns the evaluation CLI; model inventories and the rollout queue use the project-root `.g8e/eval/` paths. See [Evaluations](./evals.md) and the [Unified Docker Stack Guide](../guides/unified_stack.md). A remote Operator remains authoritative for its local execution evidence; its publication of signed receipts to the Gateway is a best-effort mirror.
 
 See [Encryption Architecture](./encryption.md) for vault and keystore protection, [Gateway Architecture](./gateway.md) for Gateway service assembly, and [Operator Architecture](./operator.md) for host-local execution.
 
 ## Persistence Topology
 
-| Store | Gateway | Outbound Operator | Purpose |
+| Store | Gateway | Outbound Operator | Default path and purpose |
 | --- | --- | --- | --- |
-| `g8e.db` | Yes | Yes | Platform documents, key-value and blob state, state roots, replay nonces, SSE events, audit events, receipts, and commitments |
-| Suspended-transaction database | Yes | Yes | Transactions and proof material awaiting L3 approval |
-| Execution vault | No separate Gateway service | Yes | Command output and file-diff content plus searchable execution metadata |
-| Replay database | Gateway replay uses `g8e.db` | Yes | Durable nonce reservation for the Operator's independent L4 verification |
-| File ledger | No Gateway service | Optional | Per-session file snapshots, commit history, diffs, and restoration |
+| `g8e.db` | Yes | Yes | `.g8e/data/g8e.db`: platform documents, key-value and blob state, state roots, Gateway replay nonces, SSE events, audit events, receipts, and commitments |
+| Suspended-transaction database | Yes | Yes | `.g8e/data/suspended_transactions.db`: transactions and proof material awaiting L3 approval |
+| Execution vault | Not a separate Gateway service | Yes | `.g8e/data/execution_vault.db`: command output and file-diff content plus searchable execution metadata |
+| Replay database | Gateway replay uses `g8e.db` | Yes | `.g8e/data/replay_store.db`: durable nonce reservation for the Operator's independent L4 verification |
+| File ledger | Not a separate Gateway service | Optional | `.g8e/data/ledger/`: default and per-session file snapshots, commit history, diffs, and restoration |
+| Evaluation artifacts | Host-side evaluation CLI | Host-side evaluation CLI | `.g8e/data/eval/` for run and campaign evidence; project-root `.g8e/eval/` for inventories and rollout state |
 
-All of these files are local to the runtime that opens them. The presence of `g8e.db` on an outbound Operator does not make the Operator a central platform database, and the Gateway receipt mirror does not replace the Operator's local record.
+All of these files are local to the runtime that opens them. The presence of `g8e.db` on an outbound Operator does not make the Operator a central platform database. During outbound verification, the Operator obtains the Gateway's current state root; its local database is not substituted for that Gateway root. The Gateway receipt mirror does not replace the Operator's local record.
+
+In the root Compose deployment, `g8e-gateway`, `g8e-operator`, and `g8e-inference-operator` use separate named runtime volumes (`g8e-gateway-data`, `g8e-operator-data`, and `g8e-inference-data`). The cross-enrollment secondary gateway and the `g8ellama` inference topology also use separate volumes. The shared `/tmp` volume is not a storage-owner boundary for these databases. Removing a component volume removes that component's local database, PKI, vault, and evidence; it does not remove another component's stores. See [Docker Gateway Guide](../guides/docker_gateway.md) and [Unified Docker Stack Guide](../guides/unified_stack.md) for the complete Compose topology.
 
 ## Canonical Database
 

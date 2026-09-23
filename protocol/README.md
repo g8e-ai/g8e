@@ -24,7 +24,7 @@ The protocol has several source types with distinct responsibilities:
 - `internal/constants/` defines the Go protocol constants. The JSON registries in `constants/` are external protocol definitions and reference data; contract tests keep mirrored Go values aligned with them.
 - `models/` defines JSON wire shapes used outside protobuf surfaces. The Python Pydantic models implement the supported subset and conformance tests verify their schema and serialization parity.
 - `schemas/oscal/` embeds the authenticated NIST OSCAL 1.1.2 assessment-results schema and its provenance for offline validation.
-- `vectors/` and `conformance/hash_vectors.json` define shared canonicalization and transaction-hash examples consumed by Go and Python tests.
+- `vectors/` and `conformance/hash_vectors.json` define shared canonicalization and transaction-hash examples consumed by cross-language tests. Vectors are executable examples of another source of truth, not schemas or parallel message descriptors. Evaluation vectors with a `canonical_json` field exercise canonical protobuf JSON; `vectors/eval/chat_probe_trace.json` exercises the canonical JSON digest shared by g8e and g8ee for the application-owned evaluation trace contract.
 
 The Python package loads its supported JSON registries from the bundled `g8e/_data/` directory. `make python-build` refreshes that bundle from `protocol/constants/` before building the package.
 
@@ -39,7 +39,7 @@ The Python package loads its supported JSON registries from the bundled `g8e/_da
 - `docs/`: Governance, MCP, A2A, constants, and generated protobuf reference documentation.
 - `examples/`: Go examples and MCP client configuration templates.
 - `conformance/`: Cross-language constants, model, and transaction-hash tests.
-- `vectors/`: Cross-language receipt, persistence-attestation, and compliance canonicalization vectors.
+- `vectors/`: Cross-language receipt, persistence-attestation, compliance, and evaluation canonicalization vectors.
 
 ## Protocol Surfaces
 

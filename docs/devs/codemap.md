@@ -1,19 +1,24 @@
 # g8e Code Map
 
+Last Updated: 2026-09-23
+Version: v2.1.12
+
 This document maps the current repository by runtime entry point, service boundary, and supporting component. It identifies where behavior is owned without duplicating protocol specifications or user guides. The codebase remains the source of truth.
 
 ## Repository Map
 
 - `cmd/g8e/`: Go binary entry point. `main.go` passes build metadata to the Cobra command package.
-- `internal/cli/`: CLI commands, configuration loading, enrollment, process management, service startup, SSE clients, streaming, the terminal UI, and the onboarding wizard.
-- `internal/services/`: Gateway, Operator, governance, transport, persistence, execution, native evaluation, compliance, and supporting services.
+- `internal/cli/`: CLI commands, API clients, authentication, configuration, frontend-origin verification, process management, service startup, SSE clients, streams, platform integration, the terminal UI, and the onboarding wizard.
+- `internal/services/`: Gateway, Operator, governance, transport, persistence, execution, evaluation, compliance, inference, public disclosure, and supporting services.
 - `internal/adapters/`: Optional external system adapters. The current adapter integrates an Operator with Anduril Lattice.
 - `internal/constants/`: Go constants for paths, errors, protocol identifiers, permissions, and runtime behavior.
-- `internal/models/`: Internal typed models used by services and CLI code.
-- `internal/paths/`: Initialized runtime paths derived from the configured project root.
+- `internal/config/`, `internal/models/`, and `internal/paths/`: Typed configuration, internal service models, and initialized runtime paths derived from the configured project root.
+- `internal/buildinfo/`, `internal/exitcode/`, `internal/governance/`, `internal/infra/`, `internal/jsonschema/`, `internal/pathutil/`, `internal/pkg/`, `internal/testutil/`, `internal/timesvc/`, and `internal/uuid/`: Shared build metadata, exit handling, governance types, infrastructure helpers, schema validation, path utilities, reusable packages, test infrastructure, time services, and UUID helpers.
 - `internal/certs/`, `internal/httpclient/`, `internal/marshaler/`, `internal/response/`, and `internal/security/`: Shared certificate, HTTP, serialization, response, and security infrastructure.
-- `protocol/`: Canonical protobuf schemas, JSON registries, JSON model schemas, generated language bindings, conformance tests, vectors, examples, and protocol documentation.
+- `internal/tools/`: Agent harness, chaos, doctrine validation, terminal-media, and tree-hash tools used by the platform and its tests.
+- `protocol/`: Canonical protobuf schemas, generated descriptors and language bindings, JSON registries, JSON model schemas, conformance tests, vectors, examples, scripts, and protocol documentation.
 - `test/`: Cross-package integration tests, reusable gateway fixtures, and Docker E2E tests.
+- `eval/`: Evaluation campaign inputs, native-boundary Compose configuration, and examples consumed by the Go evaluation workflows.
 - `ensemble/`: Python g8ee application, agent ensemble, and tests. See [Ensemble documentation](../ensemble/index.md).
 - `dashboard/`: Node.js g8ed static SPA host and browser application. See [Dashboard documentation](../dashboard/index.md).
 - `demos/`: Healthcare, finance, DHS, and FedRAMP demo environments.
@@ -34,11 +39,11 @@ The root command registers these command groups:
 - `mcp`: MCP stdio serving and supported agent integration.
 - `operator`: Operator discovery, startup, deployment, file transfer, and stream management.
 - `vault`: Local vault initialization, unlock, rekey, status, reset, export, and import.
-- `test`: Unit, integration, E2E, coverage, lint, chaos, and summary workflows.
+- `test`: Unit, integration, live E2E, full-lifecycle E2E, coverage, lint, chaos, and summary workflows.
 - `demos`: Demo environment and scenario lifecycle.
 - `docker`: Unified Docker Compose stack lifecycle.
-- `eval`: Native execution-boundary runs, model campaign orchestration (`campaign`, `queue`, `inference`), inventory freeze, verification, and persisted report inspection.
-- `public`: Public spectator feed configuration, publication, mirror operation, and status.
+- `eval` (also available as `evals`): Native execution-boundary runs, model campaign orchestration, provider inventory and rollout qualification, inference and chat acceptance gates, local development utilities, verification, and persisted report inspection.
+- `public`: Public spectator feed configuration, publication, outbox repair, mirror operation, and status.
 - `audit`: Receipt, event, summary, export, and report queries.
 - `report`: Deterministic CSV evidence generation and offline verification.
 - `compliance`: KSI evaluation, KSI history, overlay validation, demo-run verification, release evidence, evidence graph verification, and signed compliance report workflows.
@@ -144,9 +149,11 @@ Use `Resolve` only when an API requires an absolute path and `Rel` when converti
 - `internal/services/compliance/`: KSI models and evaluation, history and unavailable intervals, OSCAL support, catalog validation, evidence import and graph verification, assertion grading, and signed report bundles.
 - `internal/services/consensus/`: Consensus members, policy-based service construction, deliberation, and Ed25519 voting.
 - `internal/services/evaluation/`: Native suite registry, governed command lane, independent target observer, model campaign controller, provider-boundary and model-provenance verification, deterministic grading, canonical evidence storage, verification, and compliance importing.
+- `internal/services/inference/`: Inference dispatch plus provider-boundary observation and model-provenance services.
 - `internal/services/inference/provider_observer/`: Observer Operator GPU/RAM sampling at the provider execution boundary.
 - `internal/services/inference/model_provenance/`: Provenance Operator storage-side model weight attestation.
 - `internal/services/operatorcapability/`: Operator role selection (`provider_boundary_observer`, `provenance_operator`, inference, data).
+- `internal/services/publicdisclosure/`: Validation of public-disclosure records and signed projections used by the spectator publication path; Gateway publisher and mirror orchestration lives in `internal/services/gateway/`.
 - `internal/services/execution/`: Command execution and governed file edits.
 - `internal/services/fs/`: Scoped `.g8e/` runtime file operations.
 - `internal/services/gateway/`: Gateway orchestration, HTTP controllers, identity, PKI, enrollment, persistence stores, pub/sub, and embedded assets.
@@ -166,9 +173,13 @@ Use `Resolve` only when an API requires an absolute path and `Rel` when converti
 ## CLI Packages
 
 - `internal/cli/cmd/`: Cobra command tree and dependency-injected command constructors.
-- `internal/cli/auth/`: CLI enrollment coordinator, gateway enrollment transport, credential staging, key generation, passkey registration, trust bundle loading, and mTLS clients.
 - `internal/cli/api/`: Typed CLI HTTP client.
+- `internal/cli/auth/`: CLI enrollment, gateway enrollment transport, credential staging, key generation, passkey registration, trust bundles, and mTLS clients.
+- `internal/cli/browserorigin/`: Frontend-origin validation and normalization.
 - `internal/cli/config/`: CLI-facing configuration resolution and endpoint overrides.
+- `internal/cli/frontendverify/`: Frontend connection and running-Gateway verification.
+- `internal/cli/operator/`: Operator discovery and management helpers.
+- `internal/cli/output/`: Human-readable and JSON command output.
 - `internal/cli/serve/`: Gateway and Operator foreground runtimes, platform enrollment, certificate renewal, and build version metadata.
 - `internal/cli/platform/`: Cross-platform process, browser, and system trust operations.
 - `internal/cli/sse/`: CLI SSE client.
@@ -248,11 +259,12 @@ The root `README.md` is the handwritten product overview. `website/` converts th
 
 ## Test Map
 
-Tests follow three platform tiers:
+Tests follow four platform tiers across the Go platform and first-party components:
 
-- Tier 1 unit tests live beside Go packages and use stubs at external boundaries.
+- Tier 1 unit tests live beside Go packages and use stubs at external boundaries. Ensemble, eval, Dashboard, and protocol unit suites are also Tier 1.
 - Tier 2 integration tests use the `integration` build tag, real local SQLite and PKI infrastructure, and in-process gateway fixtures. Cross-package suites live in `test/`, with reusable setup in `test/fixtures/`.
-- Tier 3 E2E tests use the `e2e` build tag and live in `test/e2e/`. They connect to an already running, approved platform over its external HTTP, mTLS, pub/sub, and component surfaces.
+- Tier 3 live E2E tests use the `e2e` build tag and live in `test/e2e/`. The standard command connects to an already running, approved platform over its external HTTP, mTLS, pub/sub, and component surfaces; `e2e-full` owns a temporary Compose lifecycle around the same network-only suite.
+- Tier 4 external tests exercise configured third-party providers and are owned by the Ensemble test commands rather than the Go platform test command.
 
 Test-only implementations live under packages such as `internal/services/storage/storagetest/`, `internal/services/pubsub/pubsubtest/`, and `internal/services/governance/governancetest/`. Production packages do not depend on them.
 
@@ -261,10 +273,13 @@ Run platform verification through the CLI:
 - `./g8e test unit`
 - `./g8e test integration`
 - `./g8e test e2e`
+- `./g8e test e2e-full`
 - `./g8e test coverage`
 - `./g8e test lint`
+- `./g8e test chaos`
+- `./g8e test summary`
 
-See [Testing Guide](./tests.md) for fixture conventions, build tags, and the full verification matrix.
+See [Testing Guide](./tests.md) for fixture conventions, build tags, component suites, and the full verification matrix.
 
 ## Build and Validation Map
 
@@ -276,5 +291,5 @@ The primary boundaries are:
 - `make lint`: Runs Go lint and repository quality checks, including doctrine, COSAiS, vulnerability, and Swagger validation.
 - `make test`, `make test-unit`, `make test-integration`, and `make test-docker`: Run the platform test tiers.
 - `make python-build`: Builds the Python protocol distribution with bundled registries.
-- `make dashboard-test`, `make ensemble-test`, and `make website-test`: Validate non-Go components.
+- `make dashboard-test`, `make ensemble-test`, `make test-external`, and `make website-test`: Validate Dashboard, Ensemble, external-provider, and website surfaces. Evaluation code is tested through the Go platform commands and its integration workflows.
 - `make build-fips` and `make verify-fips`: Build and verify the pinned Linux AMD64 FIPS variant. See [FIPS 140-3 Compliance](../reference/fips140-3.md).

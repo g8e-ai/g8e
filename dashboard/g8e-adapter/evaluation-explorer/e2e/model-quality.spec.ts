@@ -162,6 +162,7 @@ test('downgrades stale verified-public model records before rendering', async ({
   await installMirror(page, [stale]);
 
   await page.goto('/models');
+  await page.getByLabel('Filter by evaluation status').selectOption('all');
   const row = page.locator('tr').filter({ has: page.getByRole('link', { name: 'Quality Model' }) });
   await expect(row).toContainText('20.0%');
   await expect(row).toContainText('Legacy · not current-standard verified');

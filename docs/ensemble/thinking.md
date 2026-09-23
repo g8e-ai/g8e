@@ -2,88 +2,99 @@
 
 ## Overview
 
-The g8e Agentic Ensemble (`g8ee`) normalizes provider reasoning controls and reasoning output across Gemini, Anthropic, OpenAI-compatible services, and Ollama. A canonical thinking level selects the closest reasoning mode supported by the configured model, while each provider adapter translates that selection into its native request format. During a streamed agent turn, g8ee separates thought content from visible answer text, preserves provider context required by tool-call protocols, and reports the reasoning lifecycle to clients.
+The g8e Agentic Ensemble (`g8ee`) represents provider reasoning with a canonical `ThinkingLevel` and translates it at the provider boundary. The supported levels are `off`, `minimal`, `low`, `medium`, and `high`. During a streamed primary agent turn, g8ee normalizes provider reasoning into thought parts, emits thought lifecycle events separately from visible text, and preserves provider context required by later tool-result requests.
 
-The main implementation entry points are `ensemble/app/llm/thinking.py`, `ensemble/app/models/model_configs.py`, and `ensemble/app/services/ai/agent_turn.py`.
+The main implementation entry points are `ensemble/app/constants/config.py`, `ensemble/app/models/model_configs.py`, `ensemble/app/llm/thinking.py`, `ensemble/app/llm/providers/`, `ensemble/app/services/ai/generation_config_builder.py`, and `ensemble/app/services/ai/agent_turn.py`.
+
+Thinking is an application-level model capability. It does not authorize a governed operation, substitute for protocol L2 consensus or L3 notary authorization, or attest to provider behavior outside the g8e path. See [Governance](governance.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md).
 
 ## When Thinking Runs
 
-Thinking configuration is part of the primary generation call shape. The main chat agent uses this call shape for both simple and complex turns because either path can enter the tool loop. Primary settings request `high` reasoning and provider-returned thought content by default, then reduce that request to the selected model's supported level.
+The primary generation call shape carries `ThinkingConfig`, tools, and system instructions. The production generation builder requests `high` and `include_thoughts=true` for primary calls, then clamps that request to the selected model's registered capability. This call shape is used for both complex and simple chat turns because either route can enter the tool loop; a simple turn selects the assistant model while still using the primary call shape.
 
-Assistant and lite generation call shapes do not accept thinking configuration. Triage, memory extraction, title generation, risk analysis, and other concise or structured helper calls therefore run without requested reasoning output. A provider can still behave outside its declared contract, but g8ee does not ask these call shapes to return thoughts.
+Assistant and lite call shapes do not carry thinking configuration. Triage, Tribunal generation, risk analysis, title generation, memory extraction, response analysis, and other assistant or lite helper calls therefore do not request reasoning output. The provider may return unexpected fields, but g8ee does not enable thinking for these call shapes. Ollama assistant and lite requests explicitly send `think=false` for native-toggle models and omit the parameter for models whose dialect is `none`.
 
 ## Canonical Levels and Model Profiles
 
-`ThinkingLevel` defines five values: `off`, `minimal`, `low`, `medium`, and `high`. Each registered model declares its accepted values through `supported_thinking_levels`:
+`LLModelConfig.supported_thinking_levels` is the capability source of truth:
 
-- An empty list means that g8ee does not request thinking from the model.
-- A list containing `off` describes an opt-in model whose thinking can be disabled.
+- An empty list means the model has no registered thinking capability and resolves every request to `off`.
+- A list containing `off` describes a model whose reasoning can be disabled.
 - A list without `off` describes an always-on reasoning model. No built-in model profile currently uses this form.
 
-The level resolver returns the highest supported intensity at or below the requested intensity. If the request is lower than every supported intensity, it returns the model's lowest supported intensity. It resolves models without declared thinking support to `off`; for an always-on profile, an `off` request resolves to the lowest supported intensity.
+`clamp_thinking_level` resolves a requested level to the highest supported intensity at or below it. If the request is lower than every supported intensity, it returns the model's lowest supported intensity. An `off` request returns `off` when the model supports it; for an always-on profile it returns the lowest supported intensity.
 
-Unknown model names use a shared conservative profile with thinking disabled. Custom or newly released models require a registered profile before g8ee requests reasoning from them. See [LLM Providers](llm-providers.md#model-capability-registry) for the current model list and supported levels.
+The production primary builder always requests `high`; the other levels are used by the canonical translation API and capability-specific callers. Unknown model names resolve to the shared conservative profile, which disables thinking, tools, and provider-enforced structured-output decisions. A custom model must have a registered profile before g8ee relies on its reasoning capability. See [LLM Providers](llm-providers.md#model-capability-registry) for the current registry.
 
 ## Provider Translation
 
-Provider adapters translate only the resolved level. They omit unsupported reasoning fields rather than sending a level that the model profile does not declare.
+Provider translators are pure functions of a requested level and an immutable model configuration. They return typed translation results; the provider adapter applies the result to its outbound request. Providers omit reasoning fields when the resolved level is `off` rather than sending an unsupported level.
 
 ### Gemini
 
-Gemini receives `thinking_level` with `include_thoughts`. The level is one of `minimal`, `low`, `medium`, or `high`; the current Gemini Flash Lite profile is the only registered Gemini profile that accepts `minimal`. When the resolved level is `off`, g8ee omits the thinking configuration and does not request thought content.
+Gemini receives `thinking_config.thinking_level` and `include_thoughts`. The registered Gemini profiles support `off`, `low`, `medium`, and `high`; `gemini-3.1-flash-lite` also supports `minimal`. When the resolved level is `off`, the adapter omits `thinking_config` and disables thought output. Gemini thought parts may carry opaque thought signatures, which the adapter normalizes to base64 strings.
 
 ### Anthropic
 
-Anthropic receives extended thinking with an integer token budget. The default budgets are 1,024 tokens for `minimal`, 2,048 for `low`, 8,192 for `medium`, and 16,384 for `high`. The Claude Opus profile overrides the supported budgets to 4,096 for `low`, 16,384 for `medium`, and 32,000 for `high`.
+Anthropic receives extended thinking with a token budget instead of a level name. The default budgets are 1,024 tokens for `minimal`, 2,048 for `low`, 8,192 for `medium`, and 16,384 for `high`. The Claude Opus profile overrides the supported budgets to 4,096 for `low`, 16,384 for `medium`, and 32,000 for `high`.
 
-While extended thinking is active, the adapter omits `top_k`. It raises `max_tokens` when necessary so the total output limit is at least the thinking budget plus the model's visible-output reserve. The default reserve is 4,096 tokens, while the Claude Opus profile uses 8,192. When the resolved level is `off`, the adapter omits the thinking object, preserves `top_k`, and does not raise `max_tokens` for reasoning.
+When extended thinking is active, the adapter omits `top_k` and `top_p`. It raises `max_tokens` when necessary so the total output limit includes the thinking budget plus visible-output headroom: 4,096 tokens by default or 8,192 for Claude Opus. When thinking is off, it omits the thinking object and preserves the sampling parameters. Anthropic thinking blocks can carry opaque signatures, which remain attached when history is converted back to the Messages API format.
 
-### OpenAI
+### OpenAI-compatible providers
 
-OpenAI receives `reasoning.effort` with the resolved `minimal`, `low`, `medium`, or `high` value. The current registered reasoning profile, `gpt-5.4-mini`, accepts only `minimal` and `low` in addition to `off`. When the resolved level is `off`, g8ee omits the reasoning object.
+OpenAI receives `reasoning.effort` with the resolved `minimal`, `low`, `medium`, or `high` value. The registered `gpt-5.4-mini` profile supports `off`, `minimal`, and `low`; the generic OpenAI profile has no declared thinking capability and therefore resolves to `off`. When thinking is off, the adapter omits the `reasoning` object.
+
+llama.cpp inherits the OpenAI-compatible adapter, so it uses the same translation and can return `reasoning_content`. No llama.cpp-specific model profiles are registered; its model names therefore resolve to the unknown profile unless a matching model is registered.
 
 ### Ollama
 
-Every registered Ollama profile declares a thinking dialect. Native-toggle models receive `think=true` when thinking is enabled and `think=false` when it is disabled. Profiles with the `none` dialect receive no `think` parameter. Current native-toggle profiles expose a binary `off` or `high` capability, so lower nonzero requests resolve to `high`.
+Each registered Ollama profile declares a thinking dialect. Native-toggle models receive `think=true` when the resolved level is enabled and `think=false` when it is off. Profiles with the `none` dialect receive no `think` parameter. Current native-toggle profiles expose binary `off` or `high` capability, so a lower nonzero request resolves to `high`. The adapter reads reasoning from the response message's `thinking` field.
 
-llama.cpp inherits the OpenAI-compatible translation and can send `reasoning.effort` when the selected model has a registered thinking profile. No llama.cpp-specific model profiles are registered, so unknown llama.cpp model names resolve thinking to `off`. The fake provider accepts primary settings for tests but does not emit thought content.
+### Governed `g8e` provider
+
+The `g8e` provider sends inference through the Gateway's governed inference-dispatch endpoint. Its `InferenceThinkingControl` is derived from the selected model's registered Ollama thinking dialect and carries an enabled flag plus `include_thoughts`. The response adapter converts protocol thinking parts into canonical thought parts and maps the dispatch response's optional thinking-token count into `UsageMetadata`. The Gateway and Inference Operator govern the inference request separately from g8ee's model reasoning; see [LLM Providers](llm-providers.md#supported-providers).
+
+### Fake provider
+
+The fake provider accepts primary settings for tests and scenarios, but its deterministic responses do not emit thought content. It does not cross a provider network boundary.
 
 ## Reasoning Output and Tool Context
 
-Gemini, Anthropic, OpenAI, and Ollama adapters normalize provider reasoning output into thought parts. Gemini reads parts marked as thoughts, Anthropic reads thinking blocks, OpenAI reads `reasoning_content`, and Ollama reads the message's `thinking` field. The stream processor emits thought text separately from visible text and accumulates each contiguous thought block for the current model turn.
+Gemini normalizes parts marked as thoughts, Anthropic normalizes thinking blocks, OpenAI-compatible adapters normalize `reasoning_content`, Ollama normalizes the message `thinking` field, and the governed `g8e` adapter normalizes protocol thinking parts. These adapters expose the result as canonical `Part(thought=True, ...)` values or streamed `StreamChunkFromModel` values.
 
-The turn lifecycle follows these transitions:
+For one provider stream, the turn processor maintains this state machine:
 
-- The first thought chunk enters the active thinking phase.
-- Additional thought chunks extend the current block.
-- Visible text or a tool call ends the active phase before that output is processed.
-- End of stream also closes an active thinking phase.
+```text
+INACTIVE -> thought chunk -> ACTIVE -> visible text or tool call -> INACTIVE
+```
 
-The completed thought block remains in the model response parts used by the in-memory ReAct tool loop. This allows the next provider request to retain reasoning context and any required signatures. Visible response assembly and interrogation detection read only non-thought text.
+The first thought chunk starts a phase and is emitted as a `THINKING` chunk. Additional thought chunks extend the phase. Visible text or a tool call closes the phase before that output is processed. End of stream also closes an active phase. `THINKING_END` is emitted once for each transition out of the active phase.
+
+The completed thought block remains in the model response parts used by the in-memory ReAct loop. This preserves reasoning context and provider-required signatures for the next request in a tool turn. Consolidation merges only adjacent plain, unsigned, non-thought text parts; it preserves thought parts, tool calls, and signature-bearing parts in order. Visible response assembly and interrogation detection read only non-thought text.
 
 ## Thought Signatures
 
-Gemini and Anthropic can return opaque signatures with thinking output. These values are provider context tokens, not signatures that g8ee verifies cryptographically. g8ee preserves them so later tool-result turns can satisfy the originating provider's conversation protocol.
+Thought signatures are opaque provider context values, not cryptographic signatures that g8ee verifies. g8ee preserves them only to satisfy the originating provider's conversation or tool-call protocol.
 
-Gemini byte signatures are normalized to base64 strings at the provider boundary. A signed part remains a separate part during consolidation because merging it with unsigned content or another signed part would change the provider's required history structure. Signature-only Gemini parts become empty-text parts on the outbound request so the signature remains in context without adding visible text.
+Gemini inbound byte signatures are normalized to base64 strings. A part with a signature is never merged with unsigned content or another signed part. Signature-only Gemini parts are sent back as empty-text parts so the signature remains in provider history without adding visible text. Gemini tool-call parts retain their required signature, and signatures on other returned parts remain attached.
 
-Anthropic thinking-block signatures remain attached to the corresponding thinking blocks when conversation history is converted back to the Messages API format.
+Anthropic signatures remain attached to their corresponding thinking blocks when conversation history is converted back to the Messages API format. OpenAI-compatible, Ollama, fake, and governed `g8e` response adapters do not add a separate thought-signature field to their canonical response parts.
 
 ## Streaming Events
 
-The stream processor emits internal `THINKING` chunks for thought text and one `THINKING_END` chunk whenever it leaves an active thinking phase. The event layer publishes all three lifecycle actions under `g8e.v1.ai.llm.chat.iteration.thinking.started` using `ChatThinkingPayload.action_type`:
+The stream processor emits internal `THINKING` chunks for thought text and a `THINKING_END` chunk when a phase ends. The SSE layer publishes all three lifecycle actions under the single event identifier `g8e.v1.ai.llm.chat.iteration.thinking.started` using `ChatThinkingPayload.action_type`:
 
 - `start` carries the first thought chunk in a phase.
 - `update` carries each later thought chunk in that phase.
 - `end` carries no thought text and marks the transition to visible text, tool execution, or stream completion.
 
-The protocol registry also defines `thinking.update` and `thinking.end` event identifiers, but the current ensemble runtime does not publish them.
+The protocol registry also defines `thinking.update` and `thinking.end` identifiers, but the current ensemble runtime does not publish those identifiers. These events are session-targeted delivery telemetry; they are not governance state, authorization, or durable execution evidence.
 
 ## Memory and Telemetry
 
-Durable memory generation skips conversation messages marked `is_thinking`. This filtering prevents a thinking-only message from becoming a user preference or investigation summary. The filter does not remove thought parts from the turn-local provider history, where they can be required for multi-turn tool calling.
+Durable memory generation skips conversation messages marked `is_thinking`. This prevents a thinking-only message from becoming a user preference or investigation summary. The filter does not remove thought parts from the turn-local provider history, where they can be required for multi-turn tool calling.
 
-The agent records provider-reported input, output, cache, total, and thinking token counts in model-call telemetry and aggregates them into the completed response metadata. Gemini supplies a separate thought-token count. The current Anthropic, OpenAI, and Ollama adapters do not populate a separate thinking-token field, so `thinking_tokens` remains zero for those calls even when their output includes reasoning.
+The agent accumulates provider-reported input, output, cache, total, and thinking token counts in turn results and includes them in model-call telemetry and completed response metadata. Gemini supplies a separate thought-token count, and the governed `g8e` provider can propagate one from the inference response. The Anthropic, OpenAI-compatible, and Ollama adapters currently do not populate a separate thinking-token field, so `thinking_tokens` remains zero for those calls even when their responses contain reasoning. A provider that omits usage leaves the usage fields at zero with `usage_reported=false`.
 
 ## Related
 
@@ -94,3 +105,4 @@ The agent records provider-reported input, output, cache, total, and thinking to
 - [Prompts](prompts.md): System prompt assembly and persona templating
 - [Governance](governance.md): Five-layer verification pipeline and envelope validation
 - [Evals](evals.md): Benchmark evaluation suite and Judge scoring rubrics
+- [Documentation Guide](../devs/docs.md): Documentation audit and ownership rules

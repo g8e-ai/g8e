@@ -5,26 +5,33 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-09-22
+Last Updated: 2026-09-23
 Version: v2.1.12
 
 ---
 
 ## Overview
 
-A g8e-compatible application is an untrusted client of the g8e Gateway. It submits typed intent through a public Gateway ingress, receives governed results, and never sends mutations directly to a target host. The Gateway and the bound Governed Operator enforce the five-layer governance pipeline: L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator.
+A g8e-compatible application is an untrusted client of the g8e Gateway. It submits typed intent through an authenticated Gateway ingress, receives governed results, and never sends mutations directly to a target host. The Gateway and the bound Governed Operator enforce the five-layer governance pipeline: L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator.
 
 The current Gateway supports three application integration patterns:
 
 | Pattern | Client sends | Gateway responsibility | Credential |
 | --- | --- | --- | --- |
-| **MCP or A2A** | JSON-RPC tool or skill intent | Builds the `GovernanceEnvelope`, binds current state, runs configured L2 deliberation, manages L3 suspension, and dispatches the action | Enrolled app or CLI mTLS certificate |
+| **MCP or A2A** | JSON-RPC tool or skill intent | Builds the `GovernanceEnvelope`, binds current state, runs configured L2 deliberation, manages supported L3 suspension, and dispatches the action | Enrolled app or CLI mTLS certificate; JWT when JWKS is configured |
 | **CommandIntent over pub/sub** | Typed `CommandIntent` on `cmd:<operator_id>:<operator_session_id>` | Validates the target session, builds the envelope, binds current state and posture, and forwards the governed command | Enrolled app mTLS certificate and app policy |
 | **Direct envelope** | Complete canonical protojson `GovernanceEnvelope` | Verifies the supplied envelope and executes it synchronously; it does not add missing L2 votes | CLI or Operator mTLS certificate; app certificates are denied |
 
 MCP and A2A are the normal application-facing surfaces. Direct envelope submission is a privileged integration for clients that already possess an authorized CLI or Operator transport identity and can construct every posture-required proof correctly.
 
 Application working memory remains application-owned. g8e governs mutations to platform and host state; it does not use the Gateway as an application memory store unless the application explicitly writes a governed platform record.
+
+## Before You Start
+
+1. Start a Gateway and choose its posture. The default is `doctrine`; `consensus`, `ratify`, and `notary` require the corresponding signer, deliberation, or notary configuration before gated mutations can succeed.
+2. Enroll a CLI identity with `./g8e auth enroll user` when using CLI-authenticated examples or when delegating an application credential.
+3. Decide where execution occurs. MCP and A2A calls execute through the Gateway's embedded Operator or configured downstream service; `CommandIntent` targets a specific outbound Operator session.
+4. Obtain the Gateway trust bundle and validate the TLS server identity. Do not disable certificate verification in an application.
 
 ---
 
@@ -36,13 +43,13 @@ Use MCP for standard tool discovery and invocation. The unified `/mcp` endpoint 
 
 ```bash
 curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
 ```
 
-For IDE integrations, `g8e mcp stdio` bridges stdio MCP to the Gateway. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for credential resolution and [Connect Apps to Gateway](connect_apps_to_gateway.md) for the tool catalog.
+Discovery methods such as `tools/list`, `resources/list`, and `prompts/list` return catalogs; they do not execute governed actions. `tools/call`, `resources/read`, and `prompts/get` enter the Gateway governance path. For IDE integrations, `g8e mcp stdio` bridges stdio MCP to the Gateway. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for credential resolution and [Connect Apps to Gateway](connect_apps_to_gateway.md) for the tool catalog.
 
 ### A2A
 
@@ -50,13 +57,13 @@ Use A2A for a configured downstream skill. The Gateway accepts the `a2a/call` JS
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/a2a/call \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"file.read","payload":{"path":"/etc/hosts"},"execution_id":"task-1"}}'
 ```
 
-The named skill must exist on the configured A2A server. A2A applies the same posture-aware governance flow as MCP.
+Start the Gateway with `--a2a-downstream-url <url>` so it can reach the A2A server, and ensure the named skill exists there. A2A applies the same posture-aware governance flow as MCP.
 
 ### CommandIntent over Pub/Sub
 
@@ -83,15 +90,41 @@ Run the CLI enrollment coordinator for local testing and human-authorized integr
 ./g8e auth enroll user
 ```
 
-The coordinator creates or recovers the user and CLI session, generates a file-backed ECDSA P-256 key, and writes `.g8e/cli.crt` and `.g8e/cli.key`. It installs the Gateway Root CA in the OS trust store unless `--no-system-trust` is set. Passkey enrollment is required by notary posture and optional in postures that do not enforce L3.
+The coordinator creates or recovers the user and CLI session, generates a file-backed ECDSA P-256 key, and writes `.g8e/pki/cli.crt` and `.g8e/pki/cli.key`. It installs the Gateway Root CA in the OS trust store unless `--no-system-trust` is set. Passkey enrollment is required by notary posture and optional in postures that do not enforce L3.
 
 The CLI certificate carries a SPIFFE identity of the form `spiffe://g8e.local/cli/<user_id>/<session_id>`. Direct mutation envelopes submitted with this certificate still bind a target `operator_id` or `operator_session_id`, and their `cli_session_id` must match the certificate identity.
 
 ### External Application Credentials
 
-External applications obtain short-lived delegated credentials from `POST /api/v1/pki/apps/delegated`. The request is authenticated by an enrolled human CLI certificate and contains a P-256 CSR, `app_name`, `app_type`, and optional `organization_id`. The returned certificate is valid for one hour and contains both the app and requesting-user SPIFFE identities. The Gateway also creates the default app policy needed by app authentication.
+External applications obtain short-lived delegated credentials from `POST /api/v1/pki/apps/delegated`. The request is authenticated by an enrolled human CLI certificate and contains a client-generated P-256 CSR, `app_name`, `app_type`, and optional `organization_id`. The returned client-auth certificate is valid for one hour and contains both the app and requesting-user SPIFFE identities. The Gateway also creates the default app policy needed by app authentication.
 
-Delegated enrollment establishes identity only. It does not grant L2 signing authority. An administrator separately enrolls trusted Ed25519 signer keys and a consensus policy when an external service produces protocol L2 votes.
+Create the P-256 key and CSR locally, then place the CSR and application metadata in `app-enrollment.json`:
+
+```bash
+openssl ecparam -name prime256v1 -genkey -noout -out app.key
+openssl req -new -key app.key -out app.csr -subj "/CN=example-app"
+```
+
+```json
+{
+  "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\\n...\\n-----END CERTIFICATE REQUEST-----\\n",
+  "app_name": "example-app",
+  "app_type": "mcp-client",
+  "organization_id": "optional-organization-id"
+}
+```
+
+Submit the CSR with the enrolled CLI credentials:
+
+```bash
+curl -X POST https://localhost:8443/api/v1/pki/apps/delegated \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
+  -H "Content-Type: application/json" \
+  -d @app-enrollment.json
+```
+
+Replace the example CSR with the contents of `app.csr`. The response includes `app_cert`, `cert_chain`, `trust_bundle`, `app_id`, and `expires_at`. Store the private key locally; the Gateway receives only the CSR. Delegated enrollment establishes identity only. It does not grant L2 signing authority. An administrator separately enrolls trusted Ed25519 signer keys and a consensus policy when an external service produces protocol L2 votes.
 
 The reserved first-party names `g8ed`, `g8ee`, and `g8eo` use the owner-approved platform enrollment protocol instead of delegated enrollment. That resumable flow uses the request, status, and completion endpoints under `/api/v1/auth/platform-enrollments/`; the first owner reviews requests with:
 
@@ -105,7 +138,7 @@ See [Authentication and Authorization](../architecture/auth.md) for both enrollm
 
 ### App Authorization
 
-An app certificate is accepted only while its `AppPolicy` exists. The current authentication middleware blocks privileged routes and enforces configured request rate and payload-size limits; it also contains collection filtering for query routes, although app identities are currently denied those routes before filtering. `AppPolicy` stores allowed event types, intents, and an L3 requirement, but the current middleware does not enforce those three fields. App certificates cannot access privileged direct-envelope or query routes. Keep app and human/Operator credentials separate; do not treat a successful mTLS handshake as authorization for every endpoint.
+An app certificate is accepted only while its `AppPolicy` exists. The current authentication middleware blocks privileged routes and enforces configured request-rate and payload-size limits. It does not currently enforce the policy's allowed event types, intents, or `RequireL3Approval` fields. Collection filtering is implemented only for query paths, while app identities are denied those privileged query routes before that filtering runs. App certificates cannot access the direct-envelope route. Keep app and human/Operator credentials separate; do not treat a successful mTLS handshake as authorization for every endpoint.
 
 ---
 
@@ -197,8 +230,15 @@ Construct the generated protobuf message, serialize it to bytes, and base64-enco
 7. `intent_data`, recursively canonicalized with sorted keys
 8. `requestor_user_id`
 9. `acting_app_id`
+10. `operator_id`
+11. `operator_session_id`
+12. `case_id`
+13. `investigation_id`
+14. `task_id`
+15. `web_session_id`
+16. `cli_session_id`
 
-Each present value is followed by `|`; absent and empty values are omitted. Numbers in `intent_data` use fixed-point decimal formatting. L3 and posture are excluded so L2 can sign before human authorization.
+Each present value is followed by `|`; absent and empty values are omitted. Numbers in `intent_data` use fixed-point decimal formatting. L3 and posture are excluded so L2 can sign before human authorization. Pass every non-empty identity and context field to `compute_transaction_hash`; omitting a field that is present in the envelope produces a hash mismatch.
 
 Use the protocol helper rather than reimplementing canonicalization:
 
@@ -215,6 +255,8 @@ transaction_hash = compute_transaction_hash(
     intent_data=intent_data,
     requestor_user_id=user_id,
     acting_app_id=app_id,
+    operator_id=operator_id,
+    operator_session_id=operator_session_id,
 )
 ```
 
@@ -247,8 +289,8 @@ Identity mismatch returns HTTP 403 without execution.
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```

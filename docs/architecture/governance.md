@@ -1,27 +1,27 @@
 # Governance
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ## Overview
 
-The g8e system governs every transaction through a five-layer verification pipeline (L1 through L5). Transactions flow from AI clients through a governance gateway to governed operators, where they undergo verification before execution on target systems. A configurable **GovernancePosture** determines which layers are enforced as fail-closed gates versus audited only.
+The g8e system governs each operation that enters a governed platform path through a five-layer verification pipeline (L1 through L5). Governed requests flow from clients through a Gateway or direct envelope path to an executing Operator, where they undergo verification before execution in that Operator's runtime. Client-native tools, external MCP wrappers, and other side channels remain outside this pipeline; see [AI Agents and the g8e Governance Boundary](./agents.md). A configurable **GovernancePosture** determines which L2 and L3 checks are enforced as fail-closed gates versus audited only.
 
-The posture is set at startup via `--posture <doctrine|consensus|ratify|notary>` and cannot be changed at runtime. The gateway boots regardless of posture; layer enforcement happens at transaction time. The posture is consulted at two points: the L4 Warden gates transaction dispatch based on L2 and L3 results, and the L5 Actuator records L2 and L3 status in the signed action receipt.
+The posture is selected at Gateway startup via `--posture <doctrine|consensus|ratify|notary>` and cannot be changed at runtime. The CLI rejects an unrecognized posture before startup. A valid posture does not by itself make the Gateway fully ready: consensus and notary transactions can remain unavailable until their required services, policies, and signers are configured. The posture is authoritative per envelope at L4; the L5 Actuator records the resulting L2 and L3 status in the signed action receipt. See [AI Agents and the g8e Governance Boundary](./agents.md) for ingress-specific differences.
 
-The canonical transaction container is the **GovernanceEnvelope**, a typed protobuf message that binds identity, intent, state, replay-protection material, and governance proofs into a single transaction. See [Authentication & Authorization](./auth.md) for the identity and session fields, and [Protocol](./protocol.md) for the wire format.
+The canonical transaction container is the **GovernanceEnvelope**, a typed protobuf message that binds identity, intent, state, replay-protection material, posture, and governance proofs into a single transaction. Its deterministic transaction hash covers the envelope's executable intent, target, payload, state root, replay fields, and attribution fields; L2/L3 metadata and posture are not included so L2 can sign before human approval and the Gateway can inject the posture. L4 requires both `transaction_hash` and `id` to match the recomputed hash. See [Authentication & Authorization](./auth.md) for identity and session fields, and [Protocol](./protocol.md) for the wire format.
 
 ---
 
 ## The Five-Layer Interlock Sequence
 
-Each transaction passes through five layers in order. Universal checks and proofs required by the active posture fail closed: a failed required check rejects the transaction and releases its nonce reservation. Optional L2 and L3 results are audited without gating execution. The Gateway acts as the Policy Decision Point for L1 through L3; the Operator substrate acts as the Policy Execution Point for L4 and L5.
+Each governed operation crosses five responsibility layers. Universal checks and proofs required by the active posture fail closed: a failed required check prevents dispatch and releases a nonce reservation when one was made. Optional L2 and L3 results are still verified when evidence is present and are recorded as audit evidence without gating execution. The Gateway is the Policy Decision Point for client-facing construction and coordination; the executing Operator, including the Gateway's embedded Operator, independently runs L4 and L5 in its own runtime.
 
 - **L1 Doctrine**: Hard gates via forbidden pattern matching and MITRE-based threat detection. Any violation rejects the transaction. Enforced in every posture.
-- **L2 Consensus**: Multi-agent consensus signature verification. Each consensus member independently evaluates the payload against L1 Doctrine and signs an Ed25519 vote over the transaction hash and the member's decision. A transaction must collect enough affirmative votes from distinct members to meet quorum. See [Consensus](./consensus.md) for enrollment, deliberation, and vote verification.
+- **L2 Consensus**: Protocol K-of-N authorization, not application-level model voting. Each enrolled consensus member independently evaluates the payload against L1 Doctrine and signs an Ed25519 vote over the transaction hash and the member's decision. A transaction must collect enough affirmative votes from distinct members to meet quorum. See [Consensus](./consensus.md) for enrollment, deliberation, and vote verification.
 - **L3 Notary**: Human-in-the-loop authorization. In gateway mode the proof is a WebAuthn passkey assertion; in outbound operator mode the proof is an Ed25519 signature over the transaction hash from an approved suspended transaction. CLI callers additionally bind the proof to an mTLS certificate fingerprint. There is no auto-approved bypass; the L4 Warden re-derives whether L3 is required from the action type and posture and demands a real proof. See [Authentication & Authorization](./auth.md) for the notary modes and the out-of-band approval flow.
 - **L4 Warden**: Pre-dispatch verification. Reserves the nonce in durable storage, checks expiry, recomputes and compares the transaction hash, validates the state Merkle root, decodes and validates the payload against L1 Doctrine, and applies posture-gated L2 and L3 verification. See [Gateway Architecture](./gateway.md) for the admission checks that run before the L4 Warden.
-- **L5 Actuator**: Fail-closed receipt persistence, atomic commitment append, isolated tool dispatch, and final persistence attestation. It signs a canonical pre-execution receipt whose signature binds deterministic stage evidence, persists the complete protojson receipt, appends a signed commitment against the locked chain head, executes with a just-in-time capability, and signs and attests the final durable receipt. See [Operator Architecture](./operator.md) for the execution boundary and local audit vault.
+- **L5 Actuator**: Fail-closed receipt persistence, commitment append when the SQL commitment ledger is configured, isolated tool dispatch, and final persistence attestation. It signs and persists an `EXECUTING` receipt before invoking the handler, appends a signed commitment against the current chain head when SQL audit is enabled, rehydrates the local payload, mints a transaction-bound just-in-time capability, executes the typed action, and signs and persists the final receipt plus its persistence attestation. Receipt publication from a remote Operator to the Gateway is best effort; the executing runtime's local receipt remains authoritative. See [Operator Architecture](./operator.md) for the execution boundary and local audit vault.
 
 ---
 
@@ -79,7 +79,7 @@ The doctrine and consensus postures allow mutations to execute without human aut
 
 ## Transaction Flow
 
-This section describes the practical end-to-end path of a transaction, from intent to audited result. The flow is designed to keep raw data and audit logs on the sovereign host while returning only scrubbed, signed evidence to the caller.
+This section describes the practical end-to-end path of a transaction, from intent to audited result. The executing runtime owns authoritative local execution evidence; governed payloads and result data may cross authenticated component boundaries, while the platform uses scrubbing, vault services, and signed receipts to limit retained and returned data.
 
 ### 1. Principal Submits Intent
 
@@ -89,33 +89,33 @@ A **Principal** (a human user or AI agent) submits an intent through an MCP clie
 
 The **Producer** wraps the intent in a GovernanceEnvelope carrying the typed payload, principal identity, nonce, state root, and governance proofs. Under `consensus` and `notary` postures, the envelope must include the required L2 consensus votes before the L4 Warden will admit it. Clients may obtain those votes through the gateway's deliberation endpoint or provide them along with the envelope. Under `doctrine` and `ratify` postures, L2 votes are not required.
 
-Under `ratify` and `notary` postures, if the principal cannot produce an L3 notary proof, the gateway suspends the transaction, sends an out-of-band WebAuthn challenge URL to the client, and resumes the L4 and L5 flow after the human approves via browser. See [Gateway Architecture](./gateway.md) for the suspension and approval flow.
+For Gateway MCP and A2A calls under `ratify` and `notary`, the Gateway can suspend a transaction when L3 proof is missing or invalid, persist the pending approval, return an approval URL, and retry processing after the human approves through the WebAuthn flow. Direct envelope submission and the Operator `CommandIntent` relay do not synthesize or suspend for missing L3 proof; those paths must supply evidence that satisfies the active posture, and Gateway CLI dispatch rejects mutation construction when it cannot mint the proof. See [AI Agents and the g8e Governance Boundary](./agents.md) and [Gateway Architecture](./gateway.md) for path-specific behavior.
 
 ### 3. Gateway Admits the Envelope
 
-The **Governance Gateway** acts as the Policy Decision Point and the system's PKI authority. It enforces mTLS at the application layer for all non-public routes, checks certificate revocation, binds the transport identity to the envelope identity claims to prevent impersonation, and rate-limits the submission endpoint. Envelopes that pass admission are queued for processing; failures are rejected immediately with a typed error and audit entry.
+The **Governance Gateway** acts as the Policy Decision Point and the system's PKI authority. It authenticates each route according to its configured transport mode, checks certificate and session requirements where applicable, binds mTLS transport identity to envelope identity claims on the direct-envelope route, and applies route-specific limits. Envelopes that pass admission are processed synchronously by the configured Gateway or Operator path. Malformed input and pre-verification failures can return a typed error without a receipt; failures that reach the Actuator produce signed rejection or execution evidence when the Actuator's audit dependencies are available.
 
 ### 4. Operator Retrieves the Envelope
 
-A **Governed Operator** on a sovereign host establishes an outbound-only mTLS tunnel to the gateway and pulls its assigned envelopes. The operator initiates the connection; the gateway cannot reach into the operator. This keeps operators sovereign: they pull work but cannot be pushed into. In synchronous gateway mode, the in-process operator handles the envelope directly without a tunnel.
+A **Governed Operator** on a sovereign runtime establishes an outbound-only mTLS WebSocket connection to the Gateway and subscribes to its exact `cmd:<operator-id>:<operator-session-id>` channel. The Gateway publishes assigned envelopes to that session; it cannot open an inbound connection or broadcast work to the Operator. In synchronous Gateway mode, the embedded Operator handles the envelope directly without a tunnel.
 
 ### 5. Warden Verifies (L4)
 
-The **L4 Warden** runs the five-stage verification sequence: in-flight tracking to prevent concurrent processing of the same nonce, durable nonce reservation and expiry checks, stateless validation covering structural checks and L1 Doctrine, stateful validation of the state Merkle root, and posture-gated L2 and L3 verification. Any failed stage rejects the transaction and releases the nonce reservation.
+The **L4 Warden** performs ordered pre-dispatch checks: it tracks the nonce in process, reserves it durably for replay protection after checking required nonce and expiry fields, performs stateless validation (known action type, typed payload decoding, L1 Doctrine, and transaction hash), verifies the current state Merkle root, reads posture from the envelope, and verifies posture-required L2 and L3 evidence. A failed check after reservation releases that reservation; a transaction is not dispatched to the handler.
 
 ### 6. Actuator Executes (L5)
 
-The **L5 Actuator** receives L4 deterministic evidence bound to the transaction, identities, state, doctrine bundle, L2/L3 signature digests, timing, and parent stages. It signs an `EXECUTING` receipt whose signature includes the deterministic evidence hash and persists the complete protojson receipt before any side effect. Under the SQLite write lock, it builds and appends a signed `CommitmentAttestation` against the current chain head and records the commitment and prior-commitment hashes in receipt evidence. Any signing, persistence, or commitment failure stops execution.
+The **L5 Actuator** receives L4 deterministic evidence bound to the transaction, identities, state, doctrine bundle, L2/L3 signature digests, timing, and parent stages. It signs and persists an `EXECUTING` receipt before any handler side effect. When the SQL audit store is configured, it appends a signed `CommitmentAttestation` against the current chain head and records the commitment and prior-commitment hashes in receipt evidence; signing, initial persistence, or commitment failure stops execution.
 
 The actuator then rehydrates the sovereignty-scrubbed payload, mints a just-in-time capability scoped to the transaction, dispatches the action, and dissolves the capability immediately afterward. It adds L5 outcome evidence, state transitions, and L2/L3 status; signs and persists the final `COMPLETED` or `FAILED` receipt; then attaches a signed `ReceiptPersistenceAttestation` binding the final receipt-signature digest, audit record ID, signer key, and durable timestamp. Failure to persist the final receipt or attestation is returned as an execution failure rather than silently accepting incomplete evidence.
 
 ### 7. Audit Vault Records
 
-The operator writes the complete `ActionReceipt` to the SQLite audit store and the signed `CommitmentAttestation` to the SQLite hash-chained commitment ledger. Governed file mutations additionally create snapshots in the git-backed ledger. Audit data stays on the host; raw data never leaves. Even failed transactions remain observable through their typed receipt and stage evidence. See [Operator Architecture](./operator.md) for the audit store and git ledger.
+The executing runtime writes the complete `ActionReceipt` to its local SQLite audit store and, when enabled, the signed `CommitmentAttestation` to its SQLite hash-chained commitment ledger. Governed file mutations can additionally create snapshots in the optional git-backed ledger. The Gateway may mirror a verified remote receipt, but that mirror is best effort and does not replace the executing Operator's local evidence. Execution payloads cross the governed transport to the target runtime; local scrubbing and vault services limit what is retained or returned. Verification failures that occur before Actuator processing may have no receipt. See [Operator Architecture](./operator.md) for the audit store and git ledger.
 
 ### 8. Receipt Returns to the Principal
 
-The operator returns the sovereignty-scrubbed signed receipt to the gateway. In synchronous gateway mode the receipt goes directly to the HTTP caller; in outbound mode it is pushed over the mTLS tunnel. The receipt is returned even on execution failure so callers receive cryptographic evidence of the attempt. The gateway returns the final safe output, plus an audit reference for traceability.
+The executing Operator returns the signed receipt or result envelope to the Gateway over the authenticated outbound channel. In synchronous Gateway mode the embedded Operator returns the receipt directly to the HTTP or MCP/A2A handler; in outbound mode the receipt is published on the session's result or receipt channel. Admitted execution failures still return signed failure evidence. Client-facing handlers expose only the response shape owned by that ingress: for example, MCP returns tool content plus a signed receipt reference, while the direct envelope route returns the canonical protojson `ActionReceipt`.
 
 ---
 
@@ -127,11 +127,11 @@ Universal checks and posture-required proofs fail closed. A failed required chec
 
 ### Sovereignty
 
-Raw data and audit logs stay on the sovereign host. Operators initiate outbound-only connections to the gateway, so the gateway cannot reach into an operator. Sensitive data is scrubbed at the execution boundary and rehydrated only locally before execution.
+The executing runtime owns authoritative local execution evidence. Operators initiate outbound-only connections to the Gateway, so the Gateway cannot reach into an Operator runtime. Governed payloads and results can cross the authenticated channel as required by the operation; scrubbing and vault services rehydrate protected values only at the execution boundary, and the receipt path returns scrubbed or summary evidence rather than assuming all raw data is absent from transport.
 
 ### Cryptographic Integrity
 
-L2 consensus votes are Ed25519 signatures from enrolled members, produced over the transaction hash and the member's decision, and verified against the trusted signer store and the configured consensus policy. Every receipt is signed by the L5 Actuator using Ed25519 over its canonical fields and deterministic stage evidence hash. The final persistence attestation independently signs the receipt-signature digest, audit record, signer, and durable timestamp. Signed commitments form an insertion-ordered hash chain and bind receipt evidence to the prior chain head. Audit entries are stored in encrypted databases, and file mutations are optionally encrypted before storage. mTLS protects the HTTPS port with application-layer enforcement for non-public routes, and transport-to-envelope identity binding prevents impersonation by matching certificate SPIFFE URI SANs to envelope identity claims. See [Encryption](./encryption.md) for the key hierarchy and cryptographic primitives.
+L2 consensus votes are Ed25519 signatures from enrolled members, produced over the transaction hash and the member's decision, and verified against the trusted signer store and configured consensus policy. Every receipt is signed by the L5 Actuator over its canonical fields and deterministic stage evidence. The final persistence attestation independently signs the final receipt-signature digest, audit record ID, signer key, and durable timestamp. Signed commitments form an insertion-ordered hash chain and bind receipt evidence to the prior chain head. Selected event content and execution output use vault encryption; SQLite metadata and complete databases are not uniformly encrypted, and file mutations may additionally use encrypted storage. mTLS protects the HTTPS port where route policy requires it, and transport-to-envelope identity binding prevents impersonation by matching certificate SPIFFE URI SANs to envelope identity claims. See [Encryption](./encryption.md) for the key hierarchy and cryptographic primitives.
 
 The trusted signer lookup endpoint returns enabled keystore-backed signer material when a metadata document is absent, so consensus vote verification does not fail when a signer has not published a separate metadata document. The gateway receipt relay verifies both the canonical receipt signature and the final persistence attestation before accepting a relayed receipt, so a receipt with a valid signature but a missing or invalid persistence attestation is rejected.
 
@@ -141,7 +141,7 @@ The five layers interlock so that each layer assumes the prior layer may be comp
 
 ### Accountability
 
-Every transaction is logged with a unique transaction hash. Every failure is recorded with a typed rejection. Principal identity is verified at L3, and the L2 and L3 status are reflected in every signed receipt.
+Every admitted transaction carries a deterministic transaction hash. Governance and execution failures use typed errors or typed receipt failure codes; failures before Actuator processing may not produce a receipt. Transport identity binding and, where required, L3 proof verification establish the relevant identity and authorization checks. L2 and L3 verification status is reflected in receipts that reach the Actuator.
 
 ---
 

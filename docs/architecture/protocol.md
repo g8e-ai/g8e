@@ -5,18 +5,18 @@ parent: Architecture
 
 # g8e Protocol Library
 
-Last Updated: 2026-09-22
+Last Updated: 2026-09-23
 Version: v2.1.12
 
-The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
+The g8e Protocol Library is the canonical wire contract for governed operations that enter the platform through a g8e ingress. It provides protobuf schemas and generated bindings, JSON constant registries, JSON model schemas, Python Pydantic models, canonicalization and verification helpers, SPIFFE workload identity helpers, and examples for compatible clients and services. Governed mutations use the five-layer interlock; discovery, read-only operations, and the external MCP wrapper have narrower behavior documented in [AI Agents and the g8e Governance Boundary](./agents.md).
 
-- **L1 Doctrine**: Hard gates, forbidden pattern matching, MITRE threat detection.
-- **L2 Consensus**: K-of-N Ed25519 protocol authorization over the transaction hash.
-- **L3 Notary**: Human-in-the-loop authorization (WebAuthn or signed CLI proofs).
-- **L4 Warden**: Pre-dispatch verification (signatures, replay prevention, expiry, nonces, Merkle root).
-- **L5 Actuator**: Isolated tool dispatch (MCP/A2A), JIT capability minting, and signed receipt production.
+- **L1 Doctrine**: Hard gates, forbidden-pattern matching, and threat detection.
+- **L2 Consensus**: K-of-N Ed25519 protocol authorization over the transaction hash when required by posture.
+- **L3 Notary**: Human authorization through WebAuthn or signed CLI proofs when required by posture.
+- **L4 Warden**: Pre-dispatch verification of integrity, replay protection, expiry, nonce, state binding, and required proofs.
+- **L5 Actuator**: Governed dispatch, just-in-time capability minting, and signed receipt production.
 
-The protocol publishes as two independent packages: a Go module sharing the platform root module path and a Python package. Both packages share a single unified version number with the platform binary. There are no separate protocol-only releases. Every release ships the platform binary, the Go module, and the Python package at the same version.
+The repository contains the Go protocol packages in the root module, the installable Python package, and private generated TypeScript protobuf artifacts for repository consumers. These surfaces share the version in `VERSION`; the Go package is released through the root module tag, while the Python package is published from a separate `protocol/v*` release tag. The TypeScript artifacts are not a published package.
 
 ---
 
@@ -34,6 +34,7 @@ The protocol publishes as two independent packages: a Go module sharing the plat
   - [Constants & Enums](#python-constants--enums)
   - [Pydantic Models](#python-pydantic-models)
   - [Environment Configuration](#python-environment-configuration)
+- [TypeScript Protobuf Package](#typescript-protobuf-package)
 - [Shared Protocol Assets](#shared-protocol-assets)
   - [Constants Registries](#constants-registries)
   - [JSON Model Schemas](#json-model-schemas)
@@ -54,7 +55,7 @@ The protocol publishes as two independent packages: a Go module sharing the plat
 
 ### Go Requirements & Installation
 
-The Go protocol package requires Go 1.26.6 or later. Direct dependencies include `google.golang.org/grpc v1.84.0` and `google.golang.org/protobuf v1.36.12`; remaining dependencies are managed through the root `go.mod`.
+The Go protocol package requires Go 1.26.6 or later. The root module directly depends on `google.golang.org/grpc v1.84.0` and `google.golang.org/protobuf v1.36.12`; remaining dependencies are managed through the root `go.mod`.
 
 Install or update the Go module using standard Go tooling:
 
@@ -76,14 +77,15 @@ Import paths use `github.com/g8e-ai/g8e/v2/protocol/...`. Consumers configure th
 
 ### Go Package Overview
 
-The Go protocol package provides the canonical wire structures and helpers for platform interaction.
+The Go protocol package provides the canonical wire structures and helpers for platform interaction. Generated bindings for the other supported language surfaces are maintained alongside it in the repository.
 
-- **Generated Protobuf Types**: Contains compiled Go structs and gRPC client stubs generated from protobuf schemas in `protocol/proto/g8e/...`, plus generated Python modules and type stubs under `protocol/python/g8e/`.
+- **Generated Protobuf Types**: Contains compiled Go structs and gRPC client stubs generated from protobuf schemas in `protocol/proto/g8e/...`; generated Python modules and type stubs live under `protocol/python/g8e/`, and private generated TypeScript modules live under `protocol/node/src/gen/`.
 - **Governance Types**: Provides structures for the canonical transaction envelope, governance metadata, consensus votes, deterministic governance-stage evidence, persistence attestations, and threat pattern options.
 - **Compliance Types**: Provides canonical assertion, framework, crosswalk, assessment-scope, content-addressed evidence, assessment, report-manifest, verification-report, demo-manifest, scenario, step-result, scenario-result, and metric-evidence messages in `g8e.compliance.v1`, with deterministic protojson helpers in Go and Python.
+- **Evaluation Types**: Provides eval-native campaign, provider-boundary observation, model-provenance, bundle-verification, and publication messages in `g8e.eval.v1`.
 - **Operator Services**: Defines gRPC service interfaces for command execution, file modifications, filesystem inspection, and governance verification.
+- **Pub/Sub and Event Types**: Defines pub/sub envelopes, event transport, and result messages for distribution across nodes.
 - **Receipt Verification**: Defines canonical receipt and persistence-attestation serialization and Ed25519 verification in Go and in `g8e.receipts`, backed by shared cross-language vectors.
-- **Pub/Sub Messages**: Defines pub/sub message and event transport structures for event distribution across nodes.
 
 ### Go Workload Identity Helpers
 
@@ -106,7 +108,7 @@ Protocol development uses standard Make targets defined in the protocol build co
 - `make fmt`: Formats source files using standard formatting rules (`gofmt -s -w .`).
 - `make vet`: Executes Go static analysis checks (`go vet ./...`).
 - `make lint`: Runs configured linter checks across the package (`golangci-lint run`).
-- `make openapi`: Stub target that prints setup instructions for OpenAPI generation from protobuf; use `make proto` from the repo root to regenerate protobuf artifacts.
+- `make openapi`: Stub target that prints setup instructions; it does not generate an OpenAPI document. Use the root `make proto` target to regenerate protobuf artifacts.
 
 ---
 
@@ -114,7 +116,7 @@ Protocol development uses standard Make targets defined in the protocol build co
 
 ### Python Requirements & Installation
 
-The Python package requires Python 3.10 or later (tested on 3.10 through 3.14). Runtime dependencies are `pydantic>=2.0.0` and `protobuf>=4.0.0`. The build system uses `setuptools>=61.0` and `wheel`.
+The Python package requires Python 3.10 or later (tested on 3.10 through 3.14). Runtime dependencies are `pydantic>=2.0.0`, `protobuf>=4.0.0`, and `PyNaCl>=1.5.0`. The build system uses `setuptools>=61.0` and `wheel`; development dependencies include `grpcio-tools==1.84.0` and `pytest>=8.0`.
 
 Install the package from PyPI using pip:
 
@@ -130,7 +132,7 @@ pip install g8e==2.1.12
 
 ### Python Package Overview
 
-The Python package installs as `g8e` and provides generated protobuf modules and type stubs, including `g8e.compliance.v1`, type-checked models, runtime constants, canonical compliance protojson helpers, and canonical `ActionReceipt` parsing and Ed25519 verification helpers for Python applications. It includes standard type markers (`py.typed`) for static type-checker support. Unit tests cover constant loading, enum generation, model validation, receipt and persistence-attestation verification, and cross-language parity.
+The Python package installs as `g8e` and provides generated protobuf modules and type stubs, including `g8e.compliance.v1` and `g8e.eval.v1`, type-checked models, runtime constants, canonical compliance and evaluation protojson helpers, and canonical `ActionReceipt` parsing and Ed25519 verification helpers for Python applications. It includes standard type markers (`py.typed`) for static type-checker support. Unit tests cover constant loading, enum generation, model validation, receipt and persistence-attestation verification, and cross-language parity.
 
 ### Python Constants & Enums
 
@@ -146,7 +148,7 @@ Dynamic enum generation (`g8e.enums`) builds string and integer enums from the u
 
 ### Python Pydantic Models
 
-Pydantic v2 models in `g8e.models` define protocol structures with strict field validation. All models extend `G8eBaseModel` (which configures `populate_by_name=True`, `extra="ignore"`, and serializes UTC datetimes to standard ISO 8601 strings with a `Z` suffix):
+Pydantic v2 models in `g8e.models` define protocol structures with typed field validation. Most models extend `G8eBaseModel` (which configures `populate_by_name=True`, `extra="ignore"`, and serializes UTC datetimes to standard ISO 8601 strings with a `Z` suffix); selected producer and public-feed models override this with `extra="forbid"`.
 
 - **Request Context (`g8e.models.context`)**: Validates session identity and operator bindings for client requests (`RequestContext`, `BoundOperator`).
 - **Internal API Models (`g8e.models.internal_api`)**: Defines payloads for chat sessions, message streaming, and LLM overrides (`ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`, `LLMOverrides`).
@@ -173,19 +175,25 @@ export G8E_PROTOCOL_DIR=/custom/path/to/protocol
 
 ---
 
+## TypeScript Protobuf Package
+
+`protocol/node/` contains private generated TypeScript protobuf bindings for repository consumers. It is not published to npm. The bindings use `@bufbuild/protobuf` and cover the common, compliance, evaluation, operator, and pub/sub schemas. Generate them with `make proto-node` from the repository root and run `npm ci --prefix protocol/node && npm --prefix protocol/node run typecheck` to verify the generated modules.
+
+---
+
 ## Shared Protocol Assets
 
 ### Constants Registries
 
-JSON files in `protocol/constants/` serve as the single source of truth for protocol identifiers, endpoint paths, and default configurations. Both Go and Python packages consume these definitions to maintain cross-language alignment.
+JSON files in `protocol/constants/` are external protocol definitions and reference data for identifiers, endpoint paths, and default configurations. Python loads the registries from bundled package data; Go constants have their own source declarations, and contract tests keep mirrored values aligned. Registry ownership is therefore specific to each registry and is not uniformly shared by both language packages.
 
 Registries cover event names (`events.json`), status codes (`status.json`), database collections (`collections.json`), API paths (`api_paths.json`), authentication parameters (`auth.json`), HTTP headers (`headers.json`), key-value keys (`kv_keys.json`), channels (`channels.json`), pubsub definitions (`pubsub.json`), intents (`intents.json`), prompt templates (`prompts.json`), agent roles (`agents.json`), platform settings (`platform.json`), platform enrollment parameters and transcript vectors (`platform_enrollment.json`, `platform_enrollment_completion_transcript_vectors.json`), compliance artifact paths and digest-verified assertion, framework, crosswalk, and demo-scenario catalogs (`compliance_paths.json`, `compliance/`), senders (`senders.json`), exit codes (`exit_codes.json`), field paths (`field_paths.json`), document types (`document_ids.json`), network parameters (`network.json`), output formats (`output.json`), default ports (`ports.json`), timestamp formats (`timestamp.json`), and environment variable names (`env_vars.json`). Threat detection pattern registries in `protocol/constants/doctrine/` define forbidden execution patterns, blacklist/whitelist rules, Gitleaks patterns, OWASP CRS rules, and MCP attack vector patterns for L1 Doctrine evaluation.
 
-The event dashboard classification inventory (`protocol/constants/event_dashboard_classification.json`) classifies every registered event family by its relationship to the browser observability frontend: `produced_to_sse` (a real production path emits this event through the SSE push endpoint with a typed payload), `governed_record_only` (persisted but not emitted as browser telemetry), `mixed` (some events in the family are produced to SSE, others are governed records), and `unsupported` (registered but no real producer or no protocol-owned payload schema). The `g8e.v1.app.agent` family is `mixed` because `app.agent.activity.recorded` is `governed_record_only` while `app.agent.status.updated` is `produced_to_sse` through the Gateway mTLS producer endpoint. The `g8e.v1.app.run` family is `produced_to_sse` because `app.run.status.updated` is produced through the Gateway mTLS producer endpoint and verified by real HTTP integration tests. The `g8e.v1.ai.eval` family is `produced_to_sse` and `dashboard_safe`: live campaign events (`ai.eval.cycle.started`, `ai.eval.assignment.completed`, `ai.eval.publication.completed`, and related types) are emitted by the in-process observe producer after persisting projections; gateway live tests verify emission. Reserved dashboard contracts `ai.eval.run.completed` and `ai.eval.metric.recorded` remain typed payloads without a native evaluation HTTP producer at v2.1.8. The `g8e.v1.public.feed` family is `produced_to_sse` for outbound public-spectator export events. Coverage and value tests in `internal/constants/event_dashboard_classification_test.go` enforce that classifications correspond to actual producer evidence.
+The event dashboard classification inventory (`protocol/constants/event_dashboard_classification.json`) classifies every registered event family by its relationship to the browser observability frontend: `produced_to_sse` (a real production path emits this event through the SSE push endpoint with a typed payload), `governed_record_only` (persisted but not emitted as browser telemetry), `mixed` (some events in the family are produced to SSE, others are governed records), and `unsupported` (registered but no real producer or no protocol-owned payload schema). The `g8e.v1.app.agent` family is `mixed` because `app.agent.activity.recorded` is `governed_record_only` while `app.agent.status.updated` is `produced_to_sse` through the Gateway mTLS producer endpoint. The `g8e.v1.app.run` family is `produced_to_sse` because `app.run.status.updated` is produced through the Gateway mTLS producer endpoint and verified by real HTTP integration tests. The `g8e.v1.ai.eval` family is `produced_to_sse` and `dashboard_safe`: live campaign events (`ai.eval.cycle.started`, `ai.eval.assignment.completed`, `ai.eval.publication.completed`, and related types) are emitted by the in-process observe producer after persisting projections; gateway live tests verify emission. Reserved dashboard contracts `ai.eval.run.completed` and `ai.eval.metric.recorded` remain typed payloads without a native evaluation HTTP producer in the current implementation. The `g8e.v1.public.feed` family is `produced_to_sse` for outbound public-spectator export events. Coverage and value tests in `internal/constants/event_dashboard_classification_test.go` enforce that classifications correspond to actual producer evidence.
 
 ### JSON Model Schemas
 
-JSON Schema files in `protocol/models/` define structural validation rules for data structures across the platform. Managed schemas include account locks, agent activity metadata, application policies, approvals, authentication administrative audits, bound sessions, cases, chat messages, CLI sessions, consensus configurations, console audits, conversations, conversation messages, enrollment tokens, execution results, file edits, filesystem grep/list operations, governance containers, heartbeats, investigations, local OS users, login audits, memories, observe API read and producer models, observe event payloads, operator documents, operator sessions, operator usage records, organizations, passkey challenges, passkey credentials, personas, platform enrollments, platform settings, public spectator feed batches and proofs, reputation commitments, reputation states, request contexts, revoked certificates, runtime configurations, security constraints, SSE event payloads, SSE event wire representations, SSE push payloads, stake resolutions, tasks, terminal outputs, tool results, trusted signers, users, user settings, web sessions, and WebAuthn responses. Python error category and code definitions are defined in `protocol/models/errors.py`.
+JSON Schema files in `protocol/models/` define structural validation rules for data structures across the platform. Managed schemas include account locks, agent activity metadata, application policies, approvals, authentication administrative audits, bound sessions, cases, chat messages, CLI sessions, consensus configurations, console audits, conversations, conversation messages, enrollment tokens, execution results, file edits, filesystem grep/list operations, governance containers, heartbeats, investigations, local OS users, login audits, memories, observe API read and producer models, observe event payloads, operator documents, operator sessions, operator usage records, organizations, passkey challenges, passkey credentials, personas, platform enrollments, platform settings, public spectator feed batches and proofs, reputation commitments, reputation states, request contexts, revoked certificates, runtime configurations, security constraints, SSE event payloads, SSE event wire representations, SSE push payloads, stake resolutions, tasks, terminal outputs, tool results, trusted signers, users, user settings, web sessions, and WebAuthn responses. Python error category and code definitions are defined in `protocol/models/errors.py`. Authenticated third-party schemas live under `protocol/schemas/`, including the pinned NIST OSCAL 1.1.2 assessment-results schema and provenance metadata.
 
 The observe API models (`protocol/models/observe_api.json`) define the browser-facing read models (`ObserveBootstrapSnapshot`, `ObservePage`, `RunDetail`, `EvalDetail`, `DownloadArtifact`) and the mTLS-internal producer request/response models (`observe_producer_agent_state_request`, `observe_producer_run_state_request`, `observe_producer_response`). The producer request models use typed lifecycle enums (`AgentLifecycleStatus`, `RunLifecycleStatus`, `RunKind`) and require exactly one routing target (`web_session_id` or `cli_session_id`). The producer response is a typed `{ "accepted": true }` object. The Python protocol package (`protocol/python/g8e/models/observe_api.py`) provides `ObserveProducerAgentStateRequest`, `ObserveProducerRunStateRequest`, and `ObserveProducerResponse` with `extra="forbid"` for unknown-field rejection.
 
@@ -214,7 +222,7 @@ Compile schemas from the repository root using the Buf-based `proto` target:
 make proto
 ```
 
-`make proto` installs the Buf CLI if it is not present and then runs `buf generate protocol/proto` to produce Go structs, gRPC stubs, and Markdown API reference documentation in `protocol/docs/reference/api`. From `protocol/`, `make python-proto` regenerates the Python protobuf modules and `.pyi` type stubs, while `make proto-check` verifies that committed Python outputs match the schemas.
+`make proto` installs the Buf CLI if it is not present and then runs `buf generate protocol/proto` to produce Go structs, gRPC stubs, and Markdown API reference documentation in `protocol/docs/reference/api`. From `protocol/`, `make python-proto` regenerates the Python protobuf modules and `.pyi` type stubs, while `make proto-check` verifies that committed Python outputs match the schemas. The root `make proto-node` target regenerates private TypeScript protobuf bindings under `protocol/node/src/gen/`.
 
 ---
 
@@ -268,10 +276,23 @@ Cross-language conformance tests validate that constants and models remain ident
 - Model schema alignment and validation rule enforcement between Pydantic models and JSON schemas (`test_models.py`).
 - SHA-256 transaction hash parity between Python (`compute_transaction_hash`) and Go (`GenerateMessageID`) implementations using shared test vector files (`test_hash_parity.py` using `hash_vectors.json`).
 
-Run conformance tests using pytest from the repository root:
+Run the conformance suite using the protocol Python development environment from the repository root:
 
 ```bash
-python3 -m pytest protocol/conformance/ -v
+uv run --project protocol/python --extra dev pytest protocol/conformance -v
+```
+
+The Python package tests use the same environment:
+
+```bash
+uv run --project protocol/python --extra dev pytest protocol/python/tests -v
+```
+
+For the generated TypeScript protobuf package, run:
+
+```bash
+npm ci --prefix protocol/node
+npm --prefix protocol/node run typecheck
 ```
 
 ---
@@ -281,11 +302,14 @@ python3 -m pytest protocol/conformance/ -v
 The protocol implementation is organized into functional subdirectories within the repository:
 
 - `protocol/`: Root directory containing package documentation and SPIFFE workload identity helpers (`go_package.go`, `workload_identity.go`).
-- `protocol/proto/`: Protobuf schema definitions and generated Go code for common, operator, and pub/sub packages (`buf.yaml`, `g8e/common/v1/`, `g8e/operator/v1/`, `g8e/pubsub/v1/`).
-- `protocol/constants/`: JSON protocol constant registries, including L1 Doctrine threat detection patterns in `doctrine/`.
+- `protocol/proto/`: Protobuf schema definitions and generated Go code for common, compliance, evaluation, operator, and pub/sub packages (`buf.yaml`, `g8e/*/v1/`).
+- `protocol/constants/`: JSON protocol constant registries, compliance catalogs, and L1 Doctrine threat detection patterns in `doctrine/`.
 - `protocol/models/`: JSON Schema definitions for platform models, per-agent role schemas in `agents/`, and Python error enums (`errors.py`).
-- `protocol/conformance/`: Cross-language test suites for constant structure, model schema, and hash parity verification.
-- `protocol/python/`: Python package implementation (`g8e`), including constants loaders, dynamic enums, Pydantic models, and bundled package data.
+- `protocol/schemas/`: Authenticated third-party schemas and provenance metadata used for offline validation, including NIST OSCAL.
+- `protocol/vectors/`: Cross-language canonicalization and verification examples for receipts, persistence attestations, compliance, and evaluation. These executable examples validate canonical encodings and digests; they do not duplicate or replace protobuf and JSON model definitions.
+- `protocol/conformance/`: Cross-language test suites for constant structure, model schema, and transaction-hash parity verification.
+- `protocol/python/`: Installable Python package implementation (`g8e`), including constants loaders, dynamic enums, Pydantic models, generated protobuf modules, and bundled package data.
+- `protocol/node/`: Private generated TypeScript protobuf modules and their typecheck/test configuration.
 - `protocol/examples/`: Sample programs demonstrating envelope construction, workload identity, and MCP server configurations.
 - `protocol/docs/`: Protocol specification documents, JSON-RPC schemas, template files, and generated API reference documentation in `reference/api/`.
 

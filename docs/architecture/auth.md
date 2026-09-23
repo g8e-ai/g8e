@@ -1,15 +1,21 @@
 # Authentication & Authorization
 
-Last Updated: 2026-09-22
+Last Updated: 2026-09-23
 Version: v2.1.12
 
 ## Overview
 
-g8e separates authentication from authorization. Authentication establishes the principal making a request through an mTLS workload certificate, a browser session created by WebAuthn, or a JWT from a configured identity provider. Authorization determines whether that principal may use a route and whether a governed transaction has the proofs required by the active governance posture.
+g8e separates authentication from authorization. Authentication establishes the principal making a request through an mTLS workload certificate, a browser session created by WebAuthn, or a JWT from a configured identity provider. JWT authentication is limited to the explicitly wrapped external MCP and A2A surfaces, plus JWT-authenticated just-in-time passkey registration; it does not create a general browser session or unlock administrative routes. Authorization determines whether that principal may use a route and whether a governed transaction has the proofs required by the active governance posture.
 
-The gateway exposes a small public surface for health checks, trust discovery, first-user bootstrap, browser passkey ceremonies, and token-scoped enrollment. Governed execution and administrative operations require an authenticated identity. Unknown HTTPS routes default to mTLS authentication, so an unclassified route does not become public.
+The Gateway exposes a deliberately classified public surface for health checks, trust discovery, first-user bootstrap, browser passkey ceremonies, and token-scoped CLI or platform enrollment discovery. The plain HTTP listener serves only health, discovery, and enrollment initiation/completion; other paths redirect to HTTPS. Governed execution and administrative operations require an authenticated identity. Unknown HTTPS routes default to mTLS authentication, so an unclassified route does not become public.
 
 Every governed transaction travels in a typed `GovernanceEnvelope` and passes through the five-layer interlock. L1, L4, and L5 always apply. L2 Consensus and L3 Notary are enforced or audited according to the active posture. See [Governance](./governance.md) for the complete transaction pipeline.
+
+## Route Authentication
+
+The Gateway's unified middleware classifies routes as public, mTLS-only, browser-session-only, or dual-authentication. Dual-authentication routes try mTLS first and otherwise validate the secure browser-session cookie. The registry matches exact paths before prefixes, chooses the longest matching prefix, and applies mTLS to unknown paths as a fail-closed default. The TLS listener requests but does not require a client certificate at handshake time so browser clients can reach public and browser-session routes; application middleware enforces the route's actual requirement.
+
+Browser-session routes validate the `g8e_web_session_cookie` against the Gateway's persisted web-session record and derive the user and session IDs from that record. mTLS routes validate certificate revocation and extract CLI, Operator, or application identity from the certificate's SPIFFE URI SAN and associated session or policy state. A caller-supplied identity header cannot replace that authenticated identity. Platform-enrollment review and decision routes accept either an authenticated browser session or an enrolled CLI certificate; SSE consumer routes accept either as well, while SSE producer and administrative routes remain mTLS-only.
 
 ## Authentication Methods
 
@@ -121,7 +127,7 @@ Bare `g8e auth enroll` prints help and exits non-zero. Select an explicit subcom
 
 ## Browser Authentication
 
-The Console uses WebAuthn passkeys. Platform authenticators such as Windows Hello and Touch ID, roaming security keys, and synced passkeys can satisfy the ceremony when they meet the gateway's resident-key and user-verification requirements.
+The Console uses WebAuthn passkeys. Platform authenticators such as Windows Hello and Touch ID, roaming security keys, and synced passkeys can satisfy the ceremony when they meet the configured relying-party policy. The Gateway's login assertion requests user verification as preferred rather than universally required; authenticator support and browser policy can therefore affect whether verification is performed.
 
 The normal browser flow is:
 
@@ -131,7 +137,7 @@ The normal browser flow is:
 4. Use the authenticated Console to review approvals, manage passkeys, inspect the current session, and review platform enrollment requests.
 5. Log out through the Console to delete the browser session and clear the cookie.
 
-A browser session authorizes only browser-classified routes. It does not substitute for a workload certificate on mTLS-only execution and administrative routes.
+A browser session authorizes browser-session and dual-auth routes. It does not substitute for a workload certificate on mTLS-only execution, producer, or administrative routes.
 
 ## External Identity Providers
 

@@ -5,7 +5,7 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-09-22
+Last Updated: 2026-09-23
 Version: v2.1.12
 
 ---
@@ -15,7 +15,7 @@ Version: v2.1.12
 g8e is a zero-trust execution platform for agentic infrastructure. Its two core execution components are:
 
 - **g8e Gateway**, the central Policy Decision Point (PDP): PKI authority, state store, pub/sub broker, and admission APIs.
-- **g8e Operator**, the host-side Policy Execution Point (PEP): outbound-only mTLS connection to the gateway, local audit vault, and governed tool execution.
+- **g8e Operator**, the Policy Execution Point (PEP) for the runtime where that Operator process runs: an outbound-only mTLS connection to the Gateway, local audit vault, and governed tool execution.
 
 Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcommand. The unified stack also includes the first-party Agentic Ensemble (g8ee) and Dashboard (g8ed).
 
@@ -23,29 +23,29 @@ Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcomm
 
 ## Quick Start (Docker Compose)
 
-The recommended path to launch g8e is the unified Docker Compose stack from the repository root. Building and running the stack requires Docker 24.0+ with Docker Compose v2 and no local Go compiler. Browser-based owner enrollment also requires a browser on the workstation where the CLI runs.
+The recommended path to launch g8e is the unified Docker Compose stack from the repository root. Building and running the stack requires Docker 24.0+ with the Docker Compose v2 plugin. No local Go compiler is required for the container build, but the owner-enrollment steps require a current `./g8e` CLI binary and a browser unless you choose headless enrollment.
 
-Building the gateway container image runs `make build-all` in the builder stage. It produces Linux amd64/arm64/386, Windows amd64/arm64, and Darwin amd64/arm64 binaries, which the gateway serves from `/.well-known/g8e/bin/{filename}` for remote operator deployment. Linux builds link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the project's FIPS 140-3 compliance claim is restricted to linux/amd64, and strict runtime enforcement requires `GODEBUG=fips140=only`.
+The root image builds the Linux amd64 runtime binary and also packages Linux, Windows, and Darwin deployment binaries. The Gateway serves those binaries from `/.well-known/g8e/bin/{filename}` for remote Operator deployment. Linux binaries link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the FIPS 140-3 claim is scoped to linux/amd64, and strict runtime enforcement requires `GODEBUG=fips140=only`. Inspect the deployed binary with `g8e version --fips`; the build setting alone does not enable runtime enforcement.
 
 ### 1. Clone and start the Gateway
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git
 cd g8e
-cp .env.example .env  # required: Compose fails fast without G8E_OLLAMA_ENDPOINT
+cp .env.example .env
 docker compose up -d --build
 ```
 
-The Compose file declares a `g8ellama` profile whose Inference Node requires `G8E_OLLAMA_ENDPOINT` (the approved remote Ollama provider). Because the variable uses Compose's fail-fast `:?` interpolation, every `docker compose` command — including `ps` and default-profile `up` — errors on a fresh clone until the variable is set in `.env` or exported. The `.env.example` value is `http://localhost:11434`; set it to the approved remote endpoint for your deployment. The `g8ellama` profile itself stays inactive unless explicitly selected.
+The Compose file contains optional profiles whose services use the required `G8E_OLLAMA_ENDPOINT` interpolation. Compose therefore requires that variable even when those profiles are inactive; the copied `.env.example` supplies a placeholder value. Replace it with the approved remote Ollama URL before enabling the `evaluation` or `g8ellama` profile. Do not treat `localhost` as a remote provider unless Ollama is reachable from the relevant container network.
 
-`docker compose up -d` starts the central Policy Decision Point (`g8e-gateway`) on port 8080 for plain-HTTP bootstrap and PKI discovery and port 8443 for HTTPS/mTLS APIs, MCP, and the Web Console. Platform workloads (`g8e-operator`, `ensemble`, `dashboard`) belong to the `bootstrapped` profile and do not start until Step 4.
+`docker compose up -d` starts only the unprofiled Gateway service. It publishes port 8080 for limited plain-HTTP health, bootstrap, PKI discovery, and enrollment flows, and port 8443 for the HTTPS APIs, MCP, A2A, pub/sub, and Web Console. The `bootstrapped` profile adds the Data Operator, ensemble, and dashboard after owner enrollment. The `evaluation` profile adds the Inference Operator and requires an approved remote Ollama endpoint. See the [Unified Docker Stack Guide](unified_stack.md) for profiles, volumes, network namespaces, and evaluation topology.
 
 ### 2. Get the CLI binary
 
 The CLI binary must run on the same workstation where you complete the browser-based WebAuthn passkey ceremony in Step 3, because `auth enroll user` opens a browser on the local machine. If your workstation with a browser is the same host where the gateway is running, copy the binary out of the gateway container:
 
 ```bash
-docker cp g8e-gateway:/g8e ./g8e
+docker cp "${G8E_PREFIX:-g8e}-gateway:/g8e" ./g8e
 ```
 
 If your workstation is on a different host than the gateway, download the binary over HTTP from the gateway's bootstrap endpoint instead. The gateway serves all platform binaries built by the Dockerfile at `/.well-known/g8e/bin/{filename}` on the HTTP discovery port (8080 by default), with no authentication required so that the g8e binary can be placed on remote hosts as soon as the Gateway is started:
@@ -76,7 +76,7 @@ Authenticate the CLI to bootstrap the gateway PKI hierarchy, install the root CA
 ./g8e auth enroll user -e localhost
 ```
 
-The command installs the gateway Root CA in the workstation's OS trust store before opening the browser, so it can request administrator privileges. Follow the browser prompt to create your passkey. Once enrolled, the CLI holds mTLS credentials bound to the first-owner identity. Use `--no-system-trust` only when an administrator has already installed the Root CA.
+By default, the command installs the Gateway Root CA in the workstation's OS trust store before opening the browser. Follow the browser prompt to create the passkey. Once enrollment completes, the CLI holds mTLS credentials bound to the first-owner identity. For a CLI-only owner, use `--headless`; it skips the browser and OS trust installation and cannot authenticate to the Web Console. Use `--no-system-trust` only when an administrator has already installed the Root CA. See [Authentication and Authorization](../architecture/auth.md) for recovery, rotation, and identity details.
 
 ### 4. Start the platform workloads
 
@@ -113,21 +113,26 @@ docker compose ps
 ```
 
 Service endpoints:
-- **Gateway bootstrap and PKI discovery:** `http://localhost:8080`
-- **Gateway HTTPS/mTLS API and MCP:** `https://localhost:8443` (`https://localhost:8443/mcp` for MCP)
+- **Gateway bootstrap, health, and PKI discovery:** `http://localhost:8080`
+- **Gateway HTTPS/mTLS API, MCP, and A2A:** `https://localhost:8443` (`https://localhost:8443/mcp` for MCP)
 - **Gateway Web Console:** `https://localhost:8443/console/`
-- **Dashboard:** `http://localhost:3000`
+- **Dashboard static host:** `http://localhost:3000`
 - **Ensemble API:** `http://localhost:8000`
+- **Public spectator private ingest:** `http://127.0.0.1:8081` (loopback only)
+- **Public spectator anonymous read/SSE:** `http://127.0.0.1:8082` (loopback only)
+- **Evaluation explorer:** `http://127.0.0.1:5173` (loopback only; available when its assets are built)
+
+The Dashboard is a static browser host; the browser authenticates directly to the Gateway. The Dashboard container identity is separate from the browser session and does not authorize browser actions.
 
 ### CLI-managed alternative
 
-If a current `g8e` binary is already available on the workstation, `./g8e docker start --full` starts the complete Compose stack, enrolls the first owner interactively, and prompts for each workload approval. Use `./g8e docker start --full --skip-enroll` only when enrollment and approvals are managed separately.
+If a current `g8e` binary is already available on the workstation, `./g8e docker start --full` starts the `bootstrapped` profile, enrolls or reuses the CLI owner interactively, and prompts for platform workload approvals. It does not start the `evaluation` profile. Use `./g8e docker start --full --skip-enroll` only when enrollment and approvals are managed separately. For automated evaluation bootstrap, use `./g8e docker init` with `G8E_OLLAMA_ENDPOINT` set in the repository-root `.env`; see the [Unified Docker Stack Guide](unified_stack.md).
 
 ---
 
 ## Requirements
 
-There are two ways to run g8e: **entirely in Docker** (no local toolchain required) or **natively** (compile and run directly on your machine). Choose the path that fits your environment.
+There are two ways to run g8e: **entirely in Docker** (no local Go toolchain required) or **natively** (compile and run directly on your machine). Choose the path that fits your environment. Run repository commands from the repository root.
 
 ### Docker path (no local toolchain required)
 
@@ -136,7 +141,7 @@ There are two ways to run g8e: **entirely in Docker** (no local toolchain requir
 | Docker | 24.0+ |
 | Docker Compose | v2 |
 
-Everything, including the Go compiler and build dependencies, runs inside the container. No local development toolchain is needed. Browser-based enrollment requires a local browser and may require administrator permission to install the gateway Root CA in the workstation's OS trust store.
+The Docker build runs the Go compiler and build dependencies inside the builder stage. No local Go or Make installation is needed. You still need the repository, Docker, the resulting `./g8e` CLI binary for enrollment and management, and a local browser for passkey enrollment. Browser-based enrollment may require administrator permission to install the Gateway Root CA in the workstation's OS trust store. Use `--headless` when a browser is unavailable.
 
 ### Local path (build and run natively)
 
@@ -146,6 +151,7 @@ Everything, including the Go compiler and build dependencies, runs inside the co
 | Make | Any recent version, required to run build targets |
 | Git | Any recent version, required to clone the repository |
 | Python | 3.10+, optional, required only for protocol library development |
+| Node.js and npm | Node.js 22+, required to build the embedded evaluation explorer before a local `make build` |
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically (see [scripts.md](../architecture/scripts.md) for details):
 > - **Linux:** `bash scripts/linux-setup.sh`
@@ -224,13 +230,17 @@ Requires Python 3.10+. See the [Protocol Library documentation](../architecture/
 
 ### Build locally
 
-Requires `make` and Go 1.26.6 installed on your machine. If you're not sure, run the [setup script](#local-path-build-and-run-natively) to check and install them automatically.
+Requires `make`, Go 1.26.6, and Node.js 22+ with npm. Before `make build`, build the embedded evaluation explorer so the Makefile can package its static assets:
 
 ```bash
+cd dashboard/g8e-adapter/evaluation-explorer
+npm ci
+npm run build
+cd ../../..
 make build
 ```
 
-Produces the `g8e` binary in the repository root and platform-specific binaries in `bin/`. All dependencies are resolved at build time; the compiled binary is statically linked and has zero runtime dependencies. No Go toolchain, OpenSSL, Git, or other external tools are needed on the target host.
+The build produces the `g8e` binary in the repository root and a platform-specific binary in `bin/`. The compiled Go binary is statically linked and has zero runtime dependencies; the Node.js toolchain is needed only to build the embedded explorer. If you're not sure whether the local tools are installed, run the [setup script](#local-path-build-and-run-natively) for the Go and Make prerequisites, then see [Build a g8e-Compatible Frontend](build_frontend.md) for frontend tooling.
 
 Additional build targets:
 
@@ -265,7 +275,7 @@ After owner enrollment, start the remaining workloads with `docker compose --pro
 To obtain a host-side CLI binary without a local Go toolchain, copy it out of the running gateway container:
 
 ```bash
-docker cp g8e-gateway:/g8e ./g8e
+docker cp "${G8E_PREFIX:-g8e}-gateway:/g8e" ./g8e
 ```
 
 The Dockerfile builder stage produces all supported platform binaries, and the gateway serves them via `/.well-known/g8e/bin/{filename}` for remote deployment. Linux builds link the pinned Go Cryptographic Module; run `g8e version --fips` to inspect module status. The project's FIPS 140-3 compliance claim applies only to linux/amd64.
@@ -343,10 +353,10 @@ docker run -d \
   -p 8443:8443 \
   -v g8e-data:/root/.g8e \
   g8e-gateway:latest \
-  gw start -f --posture doctrine
+  gw start -f --posture doctrine --cert-mode localhost
 ```
 
-The named volume `g8e-data` persists all runtime state (PKI, database, vault) across container restarts.
+`--cert-mode localhost` makes this standalone example suitable for local access. Use the default `full` certificate mode only when the container can read the host identity inputs required for the Gateway serving certificate. The named volume `g8e-data` persists Gateway-local runtime state, including PKI, databases, and vault data, across container restarts.
 
 Check gateway health from the host:
 
@@ -399,13 +409,13 @@ See [Demo scenarios and ports](#demo-scenarios-and-ports) below for each demo's 
 
 ### Start a remote operator
 
-To connect an operator on a remote host to the gateway:
+To connect an Operator on a remote host to the Gateway, use a bare hostname that resolves on the Operator host and appears in the Gateway serving certificate:
 
 ```bash
-./g8e operator start -e <gateway-ip>
+./g8e operator start -e <gateway-hostname>
 ```
 
-When `--endpoint` (or `-e`) is provided, the operator automatically initiates platform enrollment with the gateway if credentials are not yet installed. The gateway holds the enrollment request in pending state until the enrolled owner decides it via `./g8e auth enroll pending`, then `./g8e auth enroll approve <request-id> --yes` or `./g8e auth enroll deny <request-id> --yes` (or via the gateway web console at `https://<gateway-ip>:8443/console/`). Once approved, the operator receives signed mTLS credentials, connects to the gateway pub/sub broker on port 8443, and begins executing governed actions. See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment and remote deployment options.
+When `--endpoint` (or `-e`) is provided, the Operator automatically initiates platform enrollment with the Gateway if credentials are not installed. The Gateway holds the enrollment request in pending state until the enrolled owner verifies and decides it with `./g8e auth enroll pending`, then `./g8e auth enroll approve <request-id> --yes` or `./g8e auth enroll deny <request-id> --yes`. After approval, the Operator receives signed mTLS credentials, opens its outbound connection to the Gateway on port 8443, and begins executing governed actions in its own runtime. The Operator does not expose an inbound management port. See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for hostname, certificate, enrollment, and remote deployment requirements.
 
 ### Run the gateway and operator in Docker
 
@@ -436,15 +446,14 @@ g8e integrates with popular AI agent binaries (Claude Code, Codex, Devin CLI, Go
 
 ### Launch an agent with governance
 
-Launch an agent with native tools disabled, forcing all I/O through the g8e MCP pipeline:
+Launch a supported agent with g8e as its MCP server. Claude, Codex, Goose, and Gemini launch profiles disable or exclude their native tools so supported I/O routes through the g8e MCP pipeline:
 
 ```bash
-# Launch Claude Code with L1-L5 governance
 ./g8e mcp agent run claude
-
-# Launch Goose with g8e MCP configuration
 ./g8e mcp agent run goose
 ```
+
+The launcher cannot disable Devin's native tools, and clients can still use side channels such as direct filesystem, shell, network, or other MCP access when those capabilities remain enabled. Only requests sent through g8e cross the governance boundary. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the launcher matrix and external MCP wrapper limitations.
 
 ### List supported agents
 
@@ -520,9 +529,21 @@ Run `./g8e demos run <demo> --help` for current scenario names and `./g8e demos 
 
 ---
 
+## Stop, restart, or reset the Compose stack
+
+Stop the stack while preserving named volumes, credentials, and component-local state:
+
+```bash
+docker compose --profile bootstrapped --profile evaluation down
+```
+
+Start it again with the profiles required by the deployment. After a volume-preserving stop, approved workload identities normally remain available; check `docker compose ps` and `./g8e auth enroll pending` if a workload is not ready.
+
+`docker compose down -v` removes the named volumes and therefore destroys Gateway, Operator, Ensemble, and Dashboard local state, including credentials and enrollment state. Use it only for an intentional cold reset; the workloads must enroll again. The CLI equivalent `./g8e docker clean` is also destructive. See [Docker Gateway Guide](docker_gateway.md) for lifecycle options and [Unified Docker Stack Guide](unified_stack.md) for profile-specific state ownership.
+
 ## Post-Bootstrap Actions
 
-After the gateway is running and the CLI is authenticated:
+After the Gateway is running and the CLI is authenticated:
 
 ```bash
 ./g8e gw status           # Gateway health and endpoint info

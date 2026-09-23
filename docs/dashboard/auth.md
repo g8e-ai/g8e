@@ -47,13 +47,19 @@ The runtime files are:
 | `pki/trust/hub-bundle.pem` | Returned Gateway trust bundle | `0644` |
 | `pki/pending-enrollment/dashboard.json` | Resumable request token, private key, request metadata, and expiry | `0600` |
 
-Installed identity reuse does not currently verify that the private key matches the certificate, validate the certificate chain against the stored trust bundle, require the trust bundle to exist, or require the URI subject alternative name to equal the expected `g8ed` SPIFFE identity. Enrollment completion checks that the returned certificate contains a URI subject alternative name containing `g8ed`, but it does not perform those stronger validations before installation. The running static host retains the resolved file paths but does not currently construct an outbound mTLS client from them.
+Installed identity reuse currently checks that the certificate and key files exist, parses the certificate, rejects certificates with 7 days or less remaining, and extracts a URI subject alternative name. It does not verify that the private key matches the certificate, validate the certificate chain against the stored trust bundle, require the trust bundle to exist, or require the URI subject alternative name to equal the exact expected `spiffe://g8e.local/app/g8ed` identity. Enrollment completion parses the returned certificate and requires a URI subject alternative name containing the component name `g8ed`; it does not validate the returned chain, trust bundle, or public-key match before installation. The running static host retains the resolved file paths but does not currently construct an outbound mTLS client from them.
 
 ## Browser Session Behavior
 
 On page startup, the dashboard asks the Gateway for the current user. If the Gateway accepts the session cookie, the dashboard also requests the public web-session identifier and keeps the returned user and session metadata in memory for display and event routing. JavaScript cannot read the HttpOnly cookie, and the dashboard does not add bearer tokens, session headers, API keys, or synthetic cookie headers to Gateway requests.
 
 The Gateway creates a session after successful passkey registration or authentication. Sessions expire after 24 hours. On every protected browser request, the Gateway looks up the session, checks its expiry, and verifies that the associated user remains valid. Reloading the dashboard reconstructs local display state from the Gateway; no browser session is persisted in local storage.
+
+## Gateway Route Authorization
+
+The Gateway, rather than Express, applies browser authentication. The console passkey registration and authentication ceremony routes are public Gateway routes because the ceremony itself establishes the browser session; registration without a user ID is accepted only when the Gateway has no users and is limited to the first credential. Logout is also public and safely handles a missing cookie.
+
+After a session exists, the Gateway's browser-session routes validate the cookie and derive the user and web-session IDs from the persisted session. These routes include the current-user and session-info endpoints, passkey management, browser approvals, and the read-only observe API. The Gateway also permits either a validated browser session or mTLS on selected event-consumption and platform-enrollment review routes. mTLS-only routes, including workload producers, Operator dispatch, administrative APIs, PKI management, and direct governance-envelope submission, are not browser routes and the dashboard static host does not proxy them.
 
 ## Current Passkey Limitation
 

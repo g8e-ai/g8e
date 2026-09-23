@@ -86,7 +86,7 @@ Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are
 
 ## Related
 
-- [Development](development.md)
+- [Development](devs.md)
 - [Architecture](architecture.md)
 - [Authentication](auth.md)
 - [Server-Sent Events](sse.md)

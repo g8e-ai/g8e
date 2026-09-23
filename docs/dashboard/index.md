@@ -25,7 +25,7 @@ The active dashboard is therefore a static browser application with limited Gate
 4. Start the dashboard. On first startup, it requests a `g8ed` workload identity and remains unavailable until an owner approves the request through the Gateway console.
 5. After approval, the dashboard stores its workload credential in the persistent runtime directory and begins serving over plain HTTP. Use an external proxy or load balancer when the dashboard origin requires HTTPS.
 
-See [Unified Docker Stack](../guides/unified_stack.md) for the deployment procedure and [Development](development.md) for local setup. Because interactive sign-in is currently unavailable, using the active session-dependent interface requires an existing valid Gateway browser session.
+See [Unified Docker Stack](../guides/unified_stack.md) for the deployment procedure and [Development](devs.md) for local setup. Because interactive sign-in is currently unavailable, using the active session-dependent interface requires an existing valid Gateway browser session.
 
 ## Documentation
 
@@ -36,7 +36,7 @@ See [Unified Docker Stack](../guides/unified_stack.md) for the deployment proced
 | [Gateway Integration](gateway.md) | Browser-direct connectivity, cross-origin requirements, configuration, and active request ownership |
 | [Server-Sent Events](sse.md) | Event lifecycle, authentication, reconnection behavior, and the current routing limitation |
 | [Operator Surfaces](operators.md) | Operator, deployment, approval, and terminal interfaces, including their current inactive status |
-| [Development](development.md) | Local setup, environment, source organization, Docker startup, and development model |
+| [Development](devs.md) | Local setup, environment, source organization, Docker startup, and development model |
 | [Testing](tests.md) | Vitest configuration, test scope, browser harness, enrollment tests, and verification commands |
 
 ## Related Platform Documentation

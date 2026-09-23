@@ -5,7 +5,7 @@ parent: Guides
 
 # Build and Run a g8e Operator
 
-Last Updated: 2026-09-22
+Last Updated: 2026-09-23
 Version: v2.1.12
 
 ---
@@ -25,8 +25,18 @@ This guide covers building and running the reference Operator and identifies the
 ### Prerequisites
 
 - **Go 1.26.6 or later**, as declared by the root Go module.
-- **Make** on Linux and macOS.
-- **PowerShell** for the native Windows build script.
+- **Make** on Linux and macOS. Windows builds use the repository's PowerShell workflow and still invoke Make.
+- **Node.js 22 or later** and **npm**, because the Go build embeds the evaluation explorer frontend.
+- **PowerShell 7 or later (`pwsh`)** for the native Windows setup script.
+
+Before running `make build` or `make build-compressed`, install the evaluation explorer dependencies and build its production bundle:
+
+```bash
+cd dashboard/g8e-adapter/evaluation-explorer
+npm ci
+npm run build
+cd ../../..
+```
 
 The repository setup scripts validate the development tools, offer to install missing tools, and run a build:
 
@@ -42,7 +52,7 @@ cd g8e
 make build
 ```
 
-`make build` creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows).
+`make build` first copies the built evaluation explorer from `dashboard/g8e-adapter/evaluation-explorer/dist/` into the Go binary, then creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows). If the explorer bundle has not been built, `make build` stops with an instruction to build it first.
 
 The build sets `CGO_ENABLED=0`, uses the `netgo` and `osusergo` build tags, strips symbol and debug data, and embeds the platform version, build ID, build time, and target platform. The resulting binary does not require a Go toolchain or a system SQLite library on the target host.
 
@@ -81,7 +91,7 @@ GOOS=darwin GOARCH=arm64 make build
 GOOS=windows GOARCH=amd64 make build
 ```
 
-On a native Windows host, use the repository's `build.ps1` workflow or WSL. The root Makefile itself directs Windows users to `build.ps1`.
+On a native Windows host, use `pwsh scripts/windows-setup.ps1` or run the Makefile targets from an environment that provides Make. The setup script invokes `make build` after validating its prerequisites.
 
 ---
 
@@ -138,6 +148,7 @@ The current worker path applies these options:
 | `-G, --no-git` | Disables the git-backed file ledger while retaining the encrypted audit store. |
 | `-l, --log <level>` | Sets `info`, `error`, or `debug` logging. |
 | `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds. |
+| `--lattice-endpoint <url>` and related `--lattice-*` flags | These flags are exposed by Cobra but `operatorStartCmd` does not copy their values into `ServeOperatorOptions`, so the flags currently have no effect. The service-layer environment path uses `LATTICE_ENDPOINT`, `LATTICE_CLIENT_ID`, `LATTICE_CLIENT_SECRET`, `SANDBOXES_TOKEN`, `LATTICE_ENTITY_NAME`, and `LATTICE_POSTURE_FLOOR`; the adapter remains incomplete. |
 | `--inference-campaign-id <id>` | Selects dedicated campaign authorization mode and requires every governed inference request to carry this exact campaign identity and complete assignment correlation. |
 | `--inference-model-registry-digest <sha256>` | Commits the dedicated campaign Operator to one immutable model registry. The Operator recomputes the digest over the request registry and rejects malformed registries, absent models, digest changes, and incomplete campaign bindings. |
 | `--inference-enabled` | Enables the governed inference backend for an Inference Operator. |

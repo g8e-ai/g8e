@@ -5,16 +5,16 @@ parent: Architecture
 
 # Dashboard (g8ed)
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ## Purpose
 
 g8ed is the first-party browser interface for g8e. A Node.js 22 and Express 5 process serves a framework-free JavaScript single-page application. The browser and the dashboard container have separate identities and communicate with different Gateway surfaces.
 
-The current runtime provides static application delivery and browser passkey authentication. It also contains user-interface modules for ensemble chat, Operator management, approvals, audit inspection, settings, and terminal activity, but those modules do not have an active API backend in the running dashboard server.
+The current g8ed runtime provides static application delivery, Gateway-direct session restoration, and logout. Its browser interface also contains passkey registration and sign-in controls plus modules for ensemble chat, Operator management, approvals, audit inspection, settings, and terminal activity, but the current sign-in flow does not provide the user identifier required by the Gateway, and the retained feature modules do not have an active API backend in the running dashboard server. Interactive registration and sign-in are therefore not operational in this interface.
 
-The audited `g8e-adapter` package at `dashboard/g8e-adapter/` is a separate, generator-neutral integration core for observe frontends. It implements the correct Gateway browser contract (absolute configured origin, `/api/v1/sse/stream`, nested envelope parsing, `withCredentials: true`, endpoint allowlist) and is verified by the adapter Vitest suite (445 passing unit tests at v2.1.8, including contract-pack drift check). The legacy dashboard transport (`dashboard/server.js`, `dashboard/public/js/`, `dashboard/routes/`) is left untouched because the original observability plan explicitly records that the in-tree dashboard has incompatible auth and SSE behavior. See [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack.
+The audited `g8e-adapter` package at `dashboard/g8e-adapter/` is a separate, generator-neutral integration core for observe frontends. It implements the Gateway browser contract (absolute configured origin, `/api/v1/sse/stream`, nested envelope parsing, `withCredentials: true`, endpoint allowlist) and its current Vitest suite passes 445 tests, including the contract-pack drift check. The adapter is not the transport used by the legacy g8ed SPA. It supplies the minimal host, reference frontend, and generated observe-frontends described in the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md). The evaluation explorer is another adapter consumer and is served by the Gateway's evaluation-explorer listener, not by the dashboard container. The legacy dashboard transport (`dashboard/server.js`, `dashboard/public/js/`, `dashboard/routes/`) remains separate because its authentication and SSE behavior do not match the Gateway browser contract.
 
 See the [Dashboard documentation](../dashboard/index.md) for component-level details and development guidance.
 
@@ -30,11 +30,11 @@ The running static host does not use the enrolled workload certificate for outbo
 
 ## Startup and Deployment Flow
 
-In the unified Docker deployment, the dashboard starts only after the Gateway health check succeeds and the platform has an enrolled owner. Startup then proceeds as follows:
+In the unified Docker deployment, the dashboard container starts after the Gateway health check succeeds. The dashboard still cannot listen until it has a usable workload identity; if the Gateway has not yet been bootstrapped, enrollment submission retries while owner bootstrap completes. Startup then proceeds as follows:
 
-1. The container waits for the Gateway's plain-HTTP health surface.
+1. The entrypoint waits for the Gateway's plain-HTTP health surface, polling up to 30 times at two-second intervals.
 2. The dashboard loads its installed workload identity or starts owner-approved enrollment.
-3. The Gateway console presents the enrollment request to an owner. The dashboard remains unavailable while approval is pending.
+3. The Gateway console presents a new enrollment request to an owner. The dashboard remains unavailable while approval is pending.
 4. The dashboard stores the approved certificate, private key, trust bundle, and any resumable pending state in its persistent runtime volume.
 5. Express starts on plain HTTP and publishes the configured browser-facing Gateway origin to the single-page application.
 
@@ -46,9 +46,9 @@ See [Unified Docker Stack](../guides/unified_stack.md) for the deployment proced
 
 ## Browser Authentication
 
-The browser performs passkey registration and authentication directly against the Gateway. It translates Gateway challenge data for the WebAuthn browser API, returns the resulting credential response to the Gateway, and installs local display state only after Gateway verification succeeds.
+The browser's passkey registration and authentication code calls the Gateway directly and translates Gateway challenge data for the WebAuthn browser API. In the current g8ed interface, however, the sign-in request omits the user identifier required by the Gateway, so a new registration or sign-in does not complete. Existing valid sessions can still be restored, and logout remains Gateway-authoritative.
 
-A successful ceremony creates an HttpOnly `g8e_web_session_cookie` at the Gateway origin. Dashboard JavaScript cannot read this cookie and does not synthesize bearer, session, cookie, or API-key headers for Gateway requests. The browser attaches the cookie to credentialed requests, and the Gateway remains the authority for session validity and user identity.
+A successful ceremony would create an HttpOnly `g8e_web_session_cookie` at the Gateway origin. Dashboard JavaScript cannot read this cookie and does not synthesize bearer, session, cookie, or API-key headers for Gateway requests. The browser attaches the cookie to credentialed requests, and the Gateway remains the authority for session validity and user identity.
 
 At startup, the browser requests the current user and public web-session identifier. Logout asks the Gateway to invalidate the session, disconnects event delivery, clears local state, and returns to the home route. See [Dashboard Authentication](../dashboard/auth.md) and [Authentication and Authorization](./auth.md).
 
@@ -57,7 +57,8 @@ At startup, the browser requests the current user and public web-session identif
 | Capability | Current runtime status |
 | --- | --- |
 | Static application and runtime Gateway configuration | Active. Express serves checked-in assets and the browser-facing Gateway origin. |
-| Passkey registration, sign-in, session validation, and logout | Active. The browser calls the Gateway directly over HTTPS. |
+| Passkey session restoration and logout | Active. The browser calls the Gateway directly over HTTPS when an existing valid session cookie is present. |
+| Passkey registration and sign-in | Not operational in the current g8ed interface. The sign-in flow omits the Gateway-required user identifier. |
 | Container workload enrollment | Active and required before the static host listens. The resulting mTLS identity is not consumed by the running host after startup. |
 | Server-Sent Events | Not operational in the standard separate-origin deployment. The client uses a relative Gateway event path, which resolves to the dashboard origin, and the static host does not proxy it. |
 | Chat, cases, Operator management, approvals, audit, settings, and terminal actions | Not operational in the running host. Their browser modules call dashboard-origin API paths, but Express mounts no handlers for those paths. |
@@ -67,9 +68,9 @@ This status distinction prevents browser components present in the source tree f
 
 ## Event Delivery
 
-After authentication, the browser creates one credentialed `EventSource`, decodes typed event envelopes, and distributes application payloads through an in-browser event bus. The client monitors activity, closes stale connections, and retries failures with bounded exponential backoff and jitter.
+The legacy g8ed browser client creates one credentialed `EventSource`, decodes its expected event shape, and distributes application payloads through an in-browser event bus. It monitors activity and retries failures with bounded backoff and jitter. This client is not operational against the Gateway in the standard deployment: it uses the relative `/api/v1/sse/events` URL, which resolves to the dashboard origin, selects the Gateway's finite polling endpoint rather than `/api/v1/sse/stream`, and expects a different event envelope.
 
-The current event URL is relative rather than based on `G8E_GATEWAY_URL`. In the unified stack, it therefore reaches the dashboard origin, where no event endpoint exists. A reverse proxy that deliberately maps the event path to the Gateway can satisfy this topology, but the standard dashboard and Gateway deployment does not provide that mapping. See [Dashboard Server-Sent Events](../dashboard/sse.md) and [SSE Streaming](./sse.md).
+The separate `g8e-adapter` uses the corrected absolute Gateway origin and `/api/v1/sse/stream` contract, with replay cursors, event normalization, reconciliation, and polling fallback. It is intended for observe frontends and is not mounted by `dashboard/server.js`. A reverse proxy could map the legacy dashboard path, but that alone would not fix its endpoint or envelope mismatch. See [Dashboard Server-Sent Events](../dashboard/sse.md), [SSE Streaming](./sse.md), and the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md).
 
 ## Security Properties
 
@@ -83,9 +84,9 @@ When a supported Gateway request produces a governed operation, authorization re
 
 ## Build and Verification
 
-The browser assets have no compilation step; Node serves the checked-in files directly. From the dashboard directory, `npm start` runs the server, `npm run lint` runs ESLint, and `npm test` runs the Vitest suite. Repository-level verification uses `make dashboard-lint` and `make dashboard-test`, while `make build-dashboard` builds the container image.
+The legacy dashboard browser assets have no compilation step; Node serves the checked-in files directly. From `dashboard/`, `npm start` runs the server, `npm run lint` runs ESLint, and `npm test` runs the Vitest suite. Repository-level verification uses `make dashboard-lint` and `make dashboard-test`, while `make build-dashboard` builds the dashboard container image. The separate adapter is verified from `dashboard/g8e-adapter/` with `npm test`, `npm run lint`, `npm run build`, `npm run build:host`, and `npm run gen:contract-pack:check`.
 
-Tests cover browser authentication, event handling and reconnection, static-host behavior, startup enrollment, UI components, models, and inactive server-side modules. See [Dashboard Development](../dashboard/development.md) and [Dashboard Tests](../dashboard/tests.md).
+The current local runs for this repository version pass 2,145 legacy-dashboard tests and 445 adapter tests. The dashboard tests cover browser authentication, event handling and reconnection, static-host behavior, startup enrollment, UI components, models, and inactive server-side modules; they do not make inactive routes operational. See [Dashboard Development](../dashboard/devs.md), [Dashboard Tests](../dashboard/tests.md), and the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md).
 
 ## Related Documentation
 

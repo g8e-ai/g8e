@@ -1,7 +1,7 @@
 # Proof-Backed Compliance Evidence
 
 **Document Version:** 2.1.12
-**Last Updated:** 2026-09-22
+**Last Updated:** 2026-09-23
 **Platform:** g8e v2.1.12
 **Maintained by:** Lateralus Labs, LLC.
 
@@ -9,7 +9,7 @@
 
 ## Purpose
 
-This document is the evidence companion to the [Compliance Alignment Report](./compliance-alignment.md). The alignment report maps g8e's security controls to external frameworks (SOC 2, ISO 27001, GDPR, HIPAA, NIST SP 800-53, PCI DSS, NIST SP 800-63B, NSA ZIG, FedRAMP 20x). This document describes the proof-backed reporting pipeline that binds those mappings to immutable, independently verifiable evidence rather than prose claims.
+This document is the evidence companion to the [Compliance Alignment Report](./compliance-alignment.md). The canonical alignment currently covers FedRAMP 20x and NIST SP 800-53; the other frameworks named in the alignment report are planned and do not receive generated framework-control assessments. This document describes the proof-backed reporting pipeline that binds reviewed mappings to immutable, independently verifiable evidence rather than prose claims.
 
 The pipeline answers five questions for every reported control:
 
