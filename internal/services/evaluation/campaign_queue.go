@@ -347,8 +347,8 @@ func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string
 		if filepath.IsAbs(inventoryPath) {
 			return nil, fmt.Errorf("evaluation: resolve campaign start plan: inventory path must be runtime-relative")
 		}
+		inventoryPath = normalizeRuntimeInventoryPath(inventoryPath)
 		freeze, err := LoadModelInventoryFreezeFromRuntime(req.Context, req.FileService, inventoryPath)
-		inventoryPath = req.FileService.Resolve(inventoryPath)
 		if err != nil {
 			return nil, err
 		}
@@ -410,7 +410,7 @@ func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string
 	if err := materializeImmutableModelInventory(req.Context, req.FileService, inventoryRelPath, freeze); err != nil {
 		return nil, err
 	}
-	inventoryPath = req.FileService.Resolve(inventoryRelPath)
+	inventoryPath = inventoryRelPath
 	runID := req.RunID
 	if runID == "" {
 		runID = campaignID + "-" + fmt.Sprintf("%d", now.Unix())
@@ -429,11 +429,10 @@ func planFromQueueEntry(req CampaignStartPlanRequest, entry *CampaignQueueModel,
 	if entry == nil {
 		return nil, fmt.Errorf("evaluation: resolve campaign start plan: %w", constants.ErrMissingRequiredField)
 	}
-	inventoryPath := entry.InventoryFile
+	inventoryPath := normalizeRuntimeInventoryPath(entry.InventoryFile)
 	if filepath.IsAbs(inventoryPath) {
 		return nil, fmt.Errorf("evaluation: resolve campaign start plan: inventory path must be runtime-relative")
 	}
-	inventoryPath = req.FileService.Resolve(inventoryPath)
 	campaignID := req.CampaignID
 	if campaignID == "" {
 		campaignID = entry.CampaignID
@@ -452,6 +451,11 @@ func planFromQueueEntry(req CampaignStartPlanRequest, entry *CampaignQueueModel,
 		HomogeneousCellCount: entry.HomogeneousCellCount,
 		QueueEntry:           &selected,
 	}, nil
+}
+
+func normalizeRuntimeInventoryPath(rawPath string) string {
+	path := filepath.ToSlash(strings.TrimSpace(rawPath))
+	return strings.TrimPrefix(path, constants.RuntimeDirname+"/")
 }
 
 func normalizeModelTags(modelTag string, modelTags []string) []string {

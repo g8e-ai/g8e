@@ -222,6 +222,28 @@ func TestResolveCampaignStartPlanFromQueueBuildsDeterministicRun(t *testing.T) {
 	assert.Equal(t, []string{"gemma3:4b"}, plan.ModelTags)
 	assert.Equal(t, "digest", plan.RegistryDigest)
 	assert.Equal(t, uint64(75), plan.HomogeneousCellCount)
+	assert.Equal(t, "eval/inventories/eval-init-gemma3-4b.json", plan.InventoryPath)
+}
+
+func TestResolveCampaignStartPlanFromQueueNormalizesRuntimePrefixedInventoryPath(t *testing.T) {
+	fileSvc := newCampaignQueueFileService()
+	queue := &CampaignQueue{Models: []CampaignQueueModel{{
+		VariantID:      "qwen3-4b",
+		ServedModelTag: "qwen3:4b",
+		CampaignID:     "eval-init-qwen3-4b",
+		InventoryFile:  constants.RuntimeDirname + "/eval/inventories/eval-init-qwen3-4b.json",
+		Status:         "pending",
+	}}}
+	writeCampaignQueue(t, fileSvc, DefaultInitCampaignQueueRelPath, queue)
+
+	plan, err := ResolveCampaignStartPlan(CampaignStartPlanRequest{
+		Context:     context.Background(),
+		FileService: fileSvc,
+		QueueRef:    "next",
+		Now:         time.Unix(1789669555, 0).UTC(),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "eval/inventories/eval-init-qwen3-4b.json", plan.InventoryPath)
 }
 
 func TestInitCampaignQueueIncludesAllSourceInventoryVariants(t *testing.T) {
