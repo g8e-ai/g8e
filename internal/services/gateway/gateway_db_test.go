@@ -10,10 +10,9 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -267,9 +266,7 @@ func TestSchemaIdempotent(t *testing.T) {
 // Data directory creation
 // ---------------------------------------------------------------------------
 
-func TestCreateDataDir(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
-	dir := filepath.Join(tmpDir, "nested", "deep", "data")
+func TestOpenCanonicalDBService_CreatesDatabaseAtRuntimePath(t *testing.T) {
 	fileSvc := newTestFileSvc(t)
 
 	logger := testutil.NewTestLogger()
@@ -278,7 +275,7 @@ func TestCreateDataDir(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	_, err = os.Stat(filepath.Join(dir, constants.DbFilename))
+	_, err = fileSvc.Stat(context.Background(), constants.CanonicalDBRelPath)
 	require.NoError(t, err)
 }
 

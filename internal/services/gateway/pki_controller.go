@@ -26,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway/scripts"
 )
 
@@ -397,6 +398,10 @@ func (c *PKIController) handleG8eBinaryDownload(w http.ResponseWriter, r *http.R
 	filename := filepath.Base(r.URL.Path)
 	if filename == "" || filename == "." || strings.Contains(r.URL.Path, "..") || strings.Contains(filename, "\\") {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrPathValidation.Error())
+		return
+	}
+	if err := g8ebinaries.ValidateArtifactName(filename); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

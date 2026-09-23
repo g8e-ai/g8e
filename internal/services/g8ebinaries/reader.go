@@ -60,7 +60,7 @@ func OpenReader(root string) (*Reader, error) {
 
 // Artifact opens a manifest-listed executable or checksum sidecar.
 func (r *Reader) Artifact(name string) (io.ReadSeeker, os.FileInfo, error) {
-	if err := validateFilename(name); err != nil {
+	if err := ValidateArtifactName(name); err != nil {
 		return nil, nil, err
 	}
 	if r.manifest != nil {

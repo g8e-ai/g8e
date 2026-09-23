@@ -25,7 +25,7 @@ The Go integration command enables the `integration` build tag across the select
 - Keep Tier 1 tests independent of a running platform and third-party services. Tier 2 and Tier 3 tests use real local or deployed platform boundaries instead of mocking internal services, database clients, or cross-component communication.
 - Do not use `t.Parallel()` in integration or E2E tests. The Go E2E runner also passes `-parallel=1` as a backstop against accidental parallel tests.
 - Run Go platform suites through `./g8e test` or the repository Makefile targets. Do not invoke `go test` directly for platform suites; the protocol package's own Makefile test target is the exception for protocol-only tests.
-- Go test targets enable the race detector on non-Windows platforms and disable test caching with `-count=1` where the runner controls the invocation.
+- Tier 2 integration tests enable the race detector on non-Windows platforms and always pass `-count=1`. Tier 1 unit tests omit `-race` for speed and use Go's test cache locally; CI sets `CI=true` and passes `-count=1` for unit tests.
 - Give goroutines explicit cancellation contexts and clear ownership. Join long-running goroutines before the test completes.
 - Register resource and temporary credential cleanup with `t.Cleanup`. A setup helper must not defer cleanup that needs to remain active for the test body.
 - Use typed constants from `internal/constants/` in assertions instead of duplicating status values, reason strings, paths, or permissions.
@@ -35,7 +35,7 @@ The Go integration command enables the `integration` build tag across the select
 
 The `g8e test` command is the primary entry point:
 
-- `./g8e test unit` delegates to `make test-unit`, which runs the root Makefile's serial Tier 1 package set.
+- `./g8e test unit` delegates to `make test-unit`, which runs the root Makefile's Tier 1 package set in parallel across packages.
 - `./g8e test integration` runs `go test` with the `integration` build tag, `-count=1`, a 180-second timeout, and `-race` on non-Windows platforms. Use `--pkg` and `--run` to select packages and tests.
 - `./g8e test e2e` runs Tier 3 tests against an already running platform. Its default regular expression selects the approved steady-state suite; `--run <regexp>` selects a topology-specific scenario.
 - `./g8e test e2e-full` starts the root Compose stack with the `bootstrapped` profile, waits for Gateway and Ensemble health, runs the same E2E binary, and tears the stack down with `docker compose down -v` when the command exits. `--cross-enrollment` also activates the cross-enrollment profile.
@@ -50,7 +50,7 @@ The `g8e test` command is the primary entry point:
 The root Makefile provides these test and quality entry points:
 
 - `make test` runs `test-unit` followed by `test-integration`.
-- `make test-unit` runs the configured Tier 1 package set serially with `-p=1`, excludes packages listed in `TEST_EXCLUDE_PKGS`, enables the race detector except on Windows, disables caching, and uses a 180-second per-package timeout.
+- `make test-unit` runs the configured Tier 1 package set in parallel (default `go test` package concurrency), excludes packages listed in `TEST_EXCLUDE_PKGS`, omits the race detector for speed, uses Go's test cache locally (`-count=1` when `CI` is set), and uses a 180-second per-package timeout.
 - `make test-integration` runs all Go packages serially with the `integration` build tag, race detection except on Windows, disabled caching, and a 360-second timeout.
 - `make test-docker` runs the approved steady-state E2E subset through `./g8e test e2e`.
 - `make test-cross-enrollment` runs the cross-enrollment E2E subset and assumes the Compose `bootstrapped` and `cross-enrollment` profiles are already running. `./g8e test e2e-full --cross-enrollment` manages that lifecycle instead.

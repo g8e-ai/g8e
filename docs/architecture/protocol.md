@@ -104,7 +104,7 @@ Workload helpers format SPIFFE identifiers and URLs, validate incoming request i
 
 Protocol development uses standard Make targets defined in the protocol build configuration (`protocol/Makefile`):
 
-- `make test`: Runs unit tests with race detection enabled (`go test -race -count=1 ./...`).
+- `make test`: Runs Tier 1 unit tests, then Tier 2 integration tests with race detection (`go test -tags=integration -race -count=1 ./...`).
 - `make fmt`: Formats source files using standard formatting rules (`gofmt -s -w .`).
 - `make vet`: Executes Go static analysis checks (`go vet ./...`).
 - `make lint`: Runs configured linter checks across the package (`golangci-lint run`).

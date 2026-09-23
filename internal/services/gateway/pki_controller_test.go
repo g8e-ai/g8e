@@ -522,9 +522,11 @@ func TestPKIController_HandleG8eBinaryDownload(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	// Create binaries directory and a test binary
-	binaryRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirBinaries, "g8e-windows-amd64.exe")
+	binDir := t.TempDir()
 	testG8eBinaryContent := []byte("test binary content")
-	require.NoError(t, c.pki.fileSvc.WriteFile(context.Background(), binaryRelPath, testG8eBinaryContent, constants.PermFilePublic))
+	binaryPath := filepath.Join(binDir, "g8e-windows-amd64.exe")
+	require.NoError(t, os.WriteFile(binaryPath, testG8eBinaryContent, constants.PermFilePublic))
+	c.g8eReader = testG8eBinaryReader{root: binDir}
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-windows-amd64.exe", nil)
 	rr := httptest.NewRecorder()

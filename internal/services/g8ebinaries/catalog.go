@@ -52,7 +52,7 @@ func targetByFilename(name string) (Target, bool) {
 	return Target{}, false
 }
 
-func validateFilename(name string) error {
+func ValidateArtifactName(name string) error {
 	if name == "" || filepath.Base(name) != name || strings.Contains(name, "\\") || strings.Contains(name, "..") {
 		return fmt.Errorf("%w: %q", constants.ErrG8eBinaryArtifact, name)
 	}

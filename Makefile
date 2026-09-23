@@ -75,14 +75,16 @@ FIPS_GOARCH := amd64
 # out" panics where the victim test had only just started (0s elapsed). 360s
 # gives ~25% headroom over the heaviest package; a genuine hang still trips this.
 TEST_TIMEOUT := 360s
-# Per-package deadlock backstop for unit tests. Kept generous because `-race`
-# slows the pure-Go SQLite (modernc) used by DB-heavy packages (e.g.
-# internal/services/gateway), and CI runs the whole module in parallel, starving
-# any one package of CPU. 60s was too tight and produced flaky "test timed out"
-# failures; a real hang still trips this well before 180s.
+# Per-package deadlock backstop for unit tests.
 TEST_SHORT_TIMEOUT := 180s
+# Race detector for Tier 2 integration tests (non-Windows). Tier 1 unit tests
+# omit -race for speed; use CI=1 make test-unit or integration tests when
+# hunting data races.
 TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
+# Integration and coverage always disable caching. Unit tests use the Go test
+# cache locally; CI sets CI=true and passes -count=1.
 TEST_COUNT := -count=1
+TEST_UNIT_COUNT := $(if $(CI),-count=1,)
 COVERAGE_THRESHOLD := 75
 
 # =============================================================================
@@ -562,7 +564,7 @@ test: test-unit test-integration
 .PHONY: test-unit
 test-unit:
 	@echo "Running Tier 1 (Unit) tests..."
-	@go test -p=1 -tags=!integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
+	@go test -tags=!integration $(TEST_UNIT_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
 
 # Tier 2: In-Process Integration Tests - no external dependencies
