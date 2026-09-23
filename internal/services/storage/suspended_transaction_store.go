@@ -112,9 +112,10 @@ func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
-	// Backwards-compatible migration for existing SQLite database files.
-	// Fails silently if the column already exists.
-	_, _ = db.Exec("ALTER TABLE suspended_transactions ADD COLUMN submitter_cli_session_id TEXT;")
+	if err := ensureSubmitterCLISessionColumn(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to migrate suspended transaction schema: %w", err)
+	}
 
 	sts := &SuspendedTransactionService{
 		config: config,
@@ -129,6 +130,31 @@ func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *
 	sts.logger.Info("Suspended transaction store initialized",
 		"db_path", config.DBPath)
 	return sts, nil
+}
+
+func ensureSubmitterCLISessionColumn(db *sqliteutil.DB) error {
+	columns, err := sqliteutil.MaterializeRows(db, "PRAGMA table_info(suspended_transactions)", nil, func(rows *sql.Rows) (string, error) {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return "", err
+		}
+		return name, nil
+	})
+	if err != nil {
+		return fmt.Errorf("inspect suspended transaction columns: %w", err)
+	}
+	for _, column := range columns {
+		if column == "submitter_cli_session_id" {
+			return nil
+		}
+	}
+	if _, err := db.ExecWithRetry("ALTER TABLE suspended_transactions ADD COLUMN submitter_cli_session_id TEXT"); err != nil {
+		return fmt.Errorf("add submitter CLI session column: %w", err)
+	}
+	return nil
 }
 
 // suspendedTransactionSchema defines the initial schema for the suspended transaction database.

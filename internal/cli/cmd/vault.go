@@ -102,7 +102,11 @@ func vaultInitCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runtim
 			}
 
 			vaultDirAbs := fileSvc.Resolve(vaultDir)
-			if vault.VaultHeaderExists(vaultDirAbs) {
+			headerExists, err := vault.VaultHeaderExists(fileSvc)
+			if err != nil {
+				return fmt.Errorf("vault init: check header: %w", err)
+			}
+			if headerExists {
 				return fmt.Errorf("%w: %s", constants.ErrVaultAlreadyInitialized, vaultDirAbs)
 			}
 
@@ -124,7 +128,7 @@ func vaultInitCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runtim
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
 
-			if err := header.Save(vaultDirAbs); err != nil {
+			if err := header.Save(fileSvc); err != nil {
 				vault.SecureZero(privateKey)
 				return fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
 			}
@@ -177,7 +181,11 @@ func vaultUnlockCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runt
 			}
 
 			vaultDirAbs := fileSvc.Resolve(vaultDir)
-			if !vault.VaultHeaderExists(vaultDirAbs) {
+			headerExists, err := vault.VaultHeaderExists(fileSvc)
+			if err != nil {
+				return fmt.Errorf("vault unlock: check header: %w", err)
+			}
+			if !headerExists {
 				return fmt.Errorf("%w: %s. Run 'g8e vault init' first", constants.ErrVaultNotInitialized, vaultDirAbs)
 			}
 
@@ -188,7 +196,7 @@ func vaultUnlockCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runt
 			defer vault.SecureZero(privateKey)
 
 			v, err := vault.NewVault(&vault.VaultConfig{
-				DataDir: vaultDirAbs,
+				FileSvc: fileSvc,
 				Logger:  nil,
 			})
 			if err != nil {
@@ -243,7 +251,11 @@ func vaultRekeyCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runti
 			}
 
 			vaultDirAbs := fileSvc.Resolve(vaultDir)
-			if !vault.VaultHeaderExists(vaultDirAbs) {
+			headerExists, err := vault.VaultHeaderExists(fileSvc)
+			if err != nil {
+				return fmt.Errorf("vault: check header: %w", err)
+			}
+			if !headerExists {
 				return fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDirAbs)
 			}
 
@@ -259,7 +271,7 @@ func vaultRekeyCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runti
 			}
 
 			v, err := vault.NewVault(&vault.VaultConfig{
-				DataDir: vaultDirAbs,
+				FileSvc: fileSvc,
 				Logger:  nil,
 			})
 			if err != nil {
@@ -317,7 +329,7 @@ func vaultStatusCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runt
 
 			vaultDirAbs := fileSvc.Resolve(vaultDir)
 			v, err := vault.NewVault(&vault.VaultConfig{
-				DataDir: vaultDirAbs,
+				FileSvc: fileSvc,
 				Logger:  nil,
 			})
 			if err != nil {
@@ -372,7 +384,11 @@ func vaultResetCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runti
 			}
 
 			vaultDirAbs := fileSvc.Resolve(vaultDir)
-			if !vault.VaultHeaderExists(vaultDirAbs) {
+			headerExists, err := vault.VaultHeaderExists(fileSvc)
+			if err != nil {
+				return fmt.Errorf("vault: check header: %w", err)
+			}
+			if !headerExists {
 				return fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDirAbs)
 			}
 
@@ -391,7 +407,7 @@ func vaultResetCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Runti
 			}
 
 			v, err := vault.NewVault(&vault.VaultConfig{
-				DataDir: vaultDirAbs,
+				FileSvc: fileSvc,
 				Logger:  nil,
 			})
 			if err != nil {

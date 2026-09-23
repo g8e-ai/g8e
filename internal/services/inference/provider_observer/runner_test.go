@@ -86,6 +86,26 @@ func TestRunner_FinalizesCompletedAttempt(t *testing.T) {
 	assert.True(t, report.HostRAMReported)
 }
 
+func TestRunner_PollFailsOnMalformedAttemptRecord(t *testing.T) {
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	relPath := filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname, "malformed"+constants.FileExtJSON)
+	require.NoError(t, fileSvc.WriteFile(ctx, relPath, []byte("not-json"), constants.PermFilePrivate))
+
+	windowStore, err := NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	runner, err := NewRunner(RunnerConfig{
+		Collector:   &stubCollector{},
+		WindowStore: windowStore,
+		FileSvc:     fileSvc,
+	})
+	require.NoError(t, err)
+
+	err = runner.poll(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal attempt malformed.json")
+}
+
 func writeAttemptRecord(ctx context.Context, fileSvc fs.RuntimeFileService, record *operatorv1.InferenceProviderAttemptRecord) error {
 	dir := filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname)
 	if err := fileSvc.MkdirAll(ctx, dir, constants.PermDirStandard); err != nil {

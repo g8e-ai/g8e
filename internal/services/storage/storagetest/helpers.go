@@ -9,11 +9,10 @@ package storagetest
 
 import (
 	"context"
-	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	vault "github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -25,16 +24,18 @@ import (
 func CreateTestVault(t testing.TB, dataDir string, privateKey []byte) *vault.Vault {
 	t.Helper()
 
-	require.NoError(t, os.MkdirAll(dataDir, constants.PermDirPrivate))
+	fileSvc, err := fs.NewRuntimeFileService(filepath.Dir(dataDir), testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
 	logger := testutil.NewTestLogger()
 
 	header, _, err := vault.NewVaultHeader(privateKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(dataDir))
+	require.NoError(t, header.Save(fileSvc))
 
 	v, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: dataDir,
+		FileSvc: fileSvc,
 		Logger:  logger,
 	})
 	require.NoError(t, err)

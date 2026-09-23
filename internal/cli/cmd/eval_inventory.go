@@ -235,7 +235,7 @@ Examples:
 					Context:         cmd.Context(),
 					FileService:     fileSvc,
 					ProjectRoot:     cfg.ProjectRoot,
-					InventoryRelDir: outputDir,
+					InventoryRelDir: normalizeRuntimeEvalPath(outputDir),
 					Variant:         variant,
 				})
 				if err != nil {

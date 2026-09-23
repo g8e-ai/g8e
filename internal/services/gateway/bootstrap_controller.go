@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"

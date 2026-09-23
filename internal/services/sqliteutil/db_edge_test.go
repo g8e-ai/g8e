@@ -35,6 +35,13 @@ func TestOpenDB_EmptyPathReturnsMissingRequiredField(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }
 
+func TestOpenReadOnlyDB_EmptyPathReturnsMissingRequiredField(t *testing.T) {
+	t.Parallel()
+	_, err := OpenReadOnlyDB(DBConfig{}, testutil.NewTestLogger())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
 func TestDB_Backoff_DoesNotPanic(t *testing.T) {
 	t.Parallel()
 	dir := testutil.TempDir(t)

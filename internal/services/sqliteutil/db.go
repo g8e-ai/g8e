@@ -87,7 +87,9 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	sqlDB.SetConnMaxLifetime(0)
 
 	if err := sqlDB.Ping(); err != nil {
-		sqlDB.Close()
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			return nil, fmt.Errorf("sqliteutil: ping database %s: %w", cfg.Path, errors.Join(err, fmt.Errorf("close database: %w", closeErr)))
+		}
 		return nil, fmt.Errorf("sqliteutil: ping database %s: %w", cfg.Path, err)
 	}
 
@@ -120,7 +122,7 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 // WAL state while preventing schema, migration, pruning, and write side effects.
 func OpenReadOnlyDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	if cfg.Path == "" {
-		return nil, fmt.Errorf("sqliteutil: read-only database path is required")
+		return nil, fmt.Errorf("sqliteutil: read-only database path is required: %w", constants.ErrMissingRequiredField)
 	}
 	if logger == nil {
 		logger = slog.Default()
@@ -134,7 +136,9 @@ func OpenReadOnlyDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	sqlDB.SetMaxIdleConns(1)
 	sqlDB.SetConnMaxLifetime(0)
 	if err := sqlDB.Ping(); err != nil {
-		sqlDB.Close()
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			return nil, fmt.Errorf("sqliteutil: ping read-only database %s: %w", cfg.Path, errors.Join(err, fmt.Errorf("close database: %w", closeErr)))
+		}
 		return nil, fmt.Errorf("sqliteutil: ping read-only database %s: %w", cfg.Path, err)
 	}
 	return &DB{DB: sqlDB, logger: logger, path: cfg.Path, config: cfg}, nil
@@ -361,7 +365,10 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 			return fmt.Errorf("sqliteutil: acquire transaction connection: %w", err)
 		}
 		if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
-			conn.Close()
+			closeErr := conn.Close()
+			if closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
+			}
 			if isBusyError(err) {
 				db.backoff(i)
 				lastErr = err
@@ -371,8 +378,17 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 		}
 		err = fn(conn)
 		if err != nil {
-			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
-			conn.Close()
+			rollbackErr := func() error {
+				_, rollbackErr := conn.ExecContext(context.Background(), "ROLLBACK")
+				return rollbackErr
+			}()
+			closeErr := conn.Close()
+			if rollbackErr != nil {
+				err = errors.Join(err, fmt.Errorf("rollback transaction: %w", rollbackErr))
+			}
+			if closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
+			}
 			if isBusyError(err) {
 				db.backoff(i)
 				lastErr = err
@@ -381,7 +397,14 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 			return err
 		}
 		_, err = conn.ExecContext(ctx, "COMMIT")
-		conn.Close()
+		closeErr := conn.Close()
+		if closeErr != nil {
+			if err != nil {
+				err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
+			} else {
+				err = fmt.Errorf("close transaction connection: %w", closeErr)
+			}
+		}
 		if err == nil {
 			return nil
 		}

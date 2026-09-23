@@ -96,7 +96,6 @@ func TestResolveCampaignStartPlanFromQueue(t *testing.T) {
 	plan, err := ResolveCampaignStartPlan(CampaignStartPlanRequest{
 		Context:     context.Background(),
 		FileService: fileSvc,
-		ProjectRoot: root,
 		QueueRef:    "next",
 		Now:         now,
 	})
@@ -104,16 +103,6 @@ func TestResolveCampaignStartPlanFromQueue(t *testing.T) {
 	assert.Equal(t, "eval-init-gemma3-4b", plan.CampaignID)
 	assert.Equal(t, "eval-init-gemma3-4b-1789669555", plan.RunID)
 	assert.Equal(t, []string{"gemma3:4b"}, plan.ModelTags)
-}
-
-func TestResolveModelInventoryPathDefaultsToBaseInventory(t *testing.T) {
-	root := t.TempDir()
-	basePath := ResolveBaseModelInventoryPath(root)
-	require.NoError(t, os.MkdirAll(filepath.Dir(basePath), 0o755))
-	require.NoError(t, os.WriteFile(basePath, []byte(`{"variants":[]}`), 0o600))
-
-	assert.Equal(t, basePath, ResolveModelInventoryPath(root, ""))
-	assert.Equal(t, filepath.Join(root, "custom.json"), ResolveModelInventoryPath(root, "custom.json"))
 }
 
 func TestInitCampaignQueueFiltersRuntimeFreezeToBaseTags(t *testing.T) {
@@ -132,7 +121,6 @@ func TestInitCampaignQueueFiltersRuntimeFreezeToBaseTags(t *testing.T) {
 	result, err := InitCampaignQueue(InitCampaignQueueRequest{
 		Context:             context.Background(),
 		FileService:         fileSvc,
-		ProjectRoot:         root,
 		SourceInventoryPath: DefaultModelInventoryRelPath,
 	})
 	require.NoError(t, err)
@@ -175,7 +163,6 @@ func TestResolveCampaignStartPlanForModelTags(t *testing.T) {
 	plan, err := ResolveCampaignStartPlan(CampaignStartPlanRequest{
 		Context:     context.Background(),
 		FileService: fileSvc,
-		ProjectRoot: root,
 		ModelTag:    "qwen3:4b",
 		Now:         now,
 	})
@@ -227,7 +214,7 @@ func TestMaterializeImmutableModelInventory_ReturnsReadWriteAndMarshalErrors(t *
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			relPath := filepath.Join(constants.EvaluationDirname, constants.EvaluationInventoriesDirname, freeze.CampaignID+".json")
+			relPath := campaignInventoryPath(DefaultCampaignInventoryRelDirname, freeze.CampaignID)
 			err := materializeImmutableModelInventory(context.Background(), test.service, relPath, test.freeze)
 			require.Error(t, err)
 			assert.ErrorIs(t, err, test.want)
@@ -251,7 +238,6 @@ func TestResolveCampaignStartPlan_ReusesIdenticalReadOnlyInventoryAndRejectsDiff
 	request := CampaignStartPlanRequest{
 		Context:     context.Background(),
 		FileService: fileSvc,
-		ProjectRoot: root,
 		ModelTag:    variant.GetServedModelTag(),
 		CampaignID:  "eval-init-qwen3-4b",
 		Now:         time.Unix(1789657337, 0).UTC(),

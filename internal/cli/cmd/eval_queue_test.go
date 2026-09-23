@@ -10,20 +10,34 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
+
+func writeTestRuntimeQueue(t *testing.T, root string, queue *evaluation.CampaignQueue) fs.RuntimeFileService {
+	t.Helper()
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
+	return fileSvc
+}
+
+func assertTestRuntimeFileExists(t *testing.T, root, relPath string) {
+	t.Helper()
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	exists, err := fileSvc.FileExists(context.Background(), relPath)
+	require.NoError(t, err)
+	assert.True(t, exists, relPath)
+}
 
 func TestQueueEvalNext_PrintsPendingEntry(t *testing.T) {
 	root := t.TempDir()
@@ -33,11 +47,7 @@ func TestQueueEvalNext_PrintsPendingEntry(t *testing.T) {
 			{ServedModelTag: "deepseek-r1:7b", VariantID: "deepseek-r1-7b", CampaignID: "eval-init-deepseek-r1-7b", Status: "pending", InventoryFile: "eval/inventories/eval-init-deepseek-r1-7b.json", ModelRegistryDigest: "digest", HomogeneousCellCount: 75},
 		},
 	}
-	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(queuePath), 0o755))
-	body, err := json.Marshal(queue)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(queuePath, body, 0o600))
+	writeTestRuntimeQueue(t, root, &queue)
 
 	deps := nativeEvalDeps{
 		configLoader: func(string) (*config.Config, error) { return &config.Config{ProjectRoot: root}, nil },

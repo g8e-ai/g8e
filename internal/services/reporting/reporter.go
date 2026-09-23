@@ -87,7 +87,7 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	}
 
 	// Open vault (locked or unlocked).
-	v, vaultUnlocked := openVault(opts.VaultDir, opts.VaultKeyPath, logger)
+	v, vaultUnlocked := openVault(fileSvc, opts.VaultKeyPath, logger)
 
 	// Open audit store (sessions, events, file_mutations, receipts, commitment_ledger).
 	auditStoreCfg := storage.DefaultAuditStoreConfig()
@@ -257,8 +257,8 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 
 // openVault tries to create and unlock the vault from the key file.
 // Returns a (possibly locked) vault and whether it was successfully unlocked.
-func openVault(vaultDir, keyPath string, logger *slog.Logger) (*vault.Vault, bool) {
-	v, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
+func openVault(fileSvc fs.RuntimeFileService, keyPath string, logger *slog.Logger) (*vault.Vault, bool) {
+	v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: logger})
 	if err != nil {
 		logger.Warn("Could not create vault; proceeding without encryption", "error", err)
 		return nil, false

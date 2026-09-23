@@ -258,7 +258,7 @@ func runCleanups(cleanups []func()) {
 func openVault(ctx context.Context, fileSvc fs.RuntimeFileService) (*vault.Vault, func()) {
 	logger := slog.Default()
 	v, vaultErr := vault.NewVault(&vault.VaultConfig{
-		DataDir: fileSvc.Resolve(constants.VaultDirname),
+		FileSvc: fileSvc,
 		Logger:  logger,
 	})
 	if vaultErr != nil {

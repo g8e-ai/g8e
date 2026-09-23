@@ -123,6 +123,12 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.
 	if config.EncryptionVault == nil {
 		return nil, constants.ErrAuditStoreEncryptionVaultRequired
 	}
+	if fileSvc == nil {
+		return nil, fmt.Errorf("audit store: file service: %w", constants.ErrMissingRequiredField)
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
 
 	ass := &SQLAuditStore{
 		config:          config,
@@ -570,10 +576,12 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 		// Auto-create session row for app sessions to avoid FK race conditions
 		// This mirrors the behavior in RecordActionReceipt
 		if event.OperatorSessionID != "" {
-			_, _ = tx.Exec(
+			if _, err := tx.Exec(
 				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
 				event.OperatorSessionID, string(constants.SessionTypeApp), event.OperatorSessionID, event.OperatorSessionID,
-			)
+			); err != nil {
+				return fmt.Errorf("audit store: create app session: %w", err)
+			}
 		}
 
 		if err := ass.requireExistingSessionTx(tx, event); err != nil {

@@ -99,7 +99,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	}
 
 	vaultConfig := &vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  logger,
 	}
 	encryptionVault, err := vault.NewVault(vaultConfig)
@@ -121,7 +121,12 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	// mirrors the `g8e vault init` CLI command and ensures the vault is always
 	// ready without requiring a separate initialization step — same pattern as
 	// SQLite creating the database file on first open.
-	if !vault.VaultHeaderExists(vaultDir) {
+	headerExists, err := vault.VaultHeaderExists(fileSvc)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("gateway: check vault header: %w", err)
+	}
+	if !headerExists {
 		relVaultDir, err := fileSvc.Rel(vaultDir)
 		if err != nil {
 			db.Close()
@@ -145,7 +150,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
 		}
 
-		if err := header.Save(vaultDir); err != nil {
+		if err := header.Save(fileSvc); err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
 			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)

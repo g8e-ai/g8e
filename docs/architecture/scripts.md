@@ -16,6 +16,7 @@ This document catalogs the executable automation under `scripts/`, the deploy-sc
 | Package smoke test | `scripts/smoke-test-python.sh` | Installs the local Python protocol package in a virtual environment and runs its public imports and examples |
 | Data validation | `scripts/validate-cosais-overlays.sh` | Checks detector references for overlays marked finalized in the checked-in COSAiS catalog |
 | Make target audit | `scripts/validate-make-targets.sh` | Runs selected groups of root Makefile targets and summarizes their results |
+| Developer-guideline audit | `scripts/audit-dev-guidelines.py` | Ranks files by statically detectable violations of `docs/devs/devs.md` |
 | Repository administration | `scripts/github-sponsors-setup.sh` | Reads or changes the repository’s GitHub Sponsors setting through the GitHub GraphQL API |
 | Remote Operator bootstrap | `/g8e-deploy.sh` and `/g8e-deploy.ps1` | Public Gateway HTTP routes that render embedded scripts for binary download and Operator startup |
 | Air-gap image transfer | `g8e demos pull`, `export`, `import`, and `images` | Transfers the digest-pinned external images declared in `demos/images.json` |
@@ -78,6 +79,10 @@ PHASE=lint bash scripts/validate-make-targets.sh
 ```
 
 The configured phases are `help`, `build`, `proto`, `lint`, `test`, `python`, `dashboard`, `docker`, `ci`, `doctrine`, and `clean`. The script suppresses each target’s output, continues after failures, and exits nonzero after printing the aggregate summary when any target failed. It always skips `release`, but an unfiltered run still invokes targets that require local services, Docker, external credentials, or network access, and its final cleanup phase runs state-removing Make targets. Review the phase definitions before using the unfiltered mode. This audit is not wired into the primary CI workflow.
+
+### Developer-Guideline Triage
+
+Run `python3 scripts/audit-dev-guidelines.py` from the repository root to rank files by statically detectable patterns associated with the rules in `docs/devs/devs.md`. The default output shows the 25 files with the most findings and includes each matching line and rule identifier. Use `--limit 0` to print every matching file, `--min-violations N` to focus on higher-count files, `--include-generated` to include generated and Swagger/OpenAPI paths, or `--json` for machine-readable output. The audit is intentionally heuristic: it identifies review candidates and does not prove that a line violates a guideline or replace the repository’s semantic lint and test commands.
 
 ## Repository Administration
 
