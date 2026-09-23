@@ -109,7 +109,12 @@ func initializeCampaignRun(
 	if err != nil {
 		return fmt.Errorf("evaluation: campaign init: load CLI identity: %w", err)
 	}
-	inventory, err := evaluation.LoadModelInventoryFreezeFile(plan.InventoryPath)
+	var inventory *evaluation.ModelInventoryFreeze
+	if relPath, relErr := fileSvc.Rel(plan.InventoryPath); relErr == nil {
+		inventory, err = evaluation.LoadModelInventoryFreezeFromRuntime(cmd.Context(), fileSvc, relPath)
+	} else {
+		inventory, err = evaluation.LoadModelInventoryFreezeFile(plan.InventoryPath)
+	}
 	if err != nil {
 		return err
 	}
@@ -620,7 +625,7 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	if !opts.JSONOutput {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d assignments for run %s\n", assignmentCount, plan.RunID)
 	}
-	if err := persistActiveCampaignRun(cfg.ProjectRoot, plan, startedAt); err != nil {
+	if err := persistActiveCampaignRunWithFileService(cmd.Context(), fileSvc, plan, startedAt); err != nil {
 		return nil, err
 	}
 	result := &campaignStartFlowResult{Plan: plan}
@@ -665,13 +670,13 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	if report.GetFailureCount() > 0 {
 		return result, constants.ErrEvalRunVerificationFailed
 	}
-	if err := markQueueEntryVerifiedAfterPass(cfg.ProjectRoot, plan, report, opts.RequireProviderObservation && opts.RequireModelProvenance); err != nil {
+	if err := markQueueEntryVerifiedAfterPassWithFileService(cmd.Context(), fileSvc, cfg.ProjectRoot, plan, report, opts.RequireProviderObservation && opts.RequireModelProvenance); err != nil {
 		return result, err
 	}
 	return result, nil
 }
 
-func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, tierA bool) error {
+func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot string, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, tierA bool) error {
 	if plan == nil || plan.QueueEntry == nil || report == nil {
 		return nil
 	}
@@ -683,6 +688,8 @@ func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.Campai
 		notes = evaluation.TierAVerifyNotes(plan.RunID)
 	}
 	_, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
+		Context:       ctx,
+		FileService:   fileSvc,
 		ProjectRoot:   projectRoot,
 		VariantID:     plan.QueueEntry.VariantID,
 		Status:        "verified",
@@ -693,6 +700,14 @@ func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.Campai
 		return fmt.Errorf("evaluation: update init campaign queue: %w", err)
 	}
 	return nil
+}
+
+func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, tierA bool) error {
+	fileSvc, err := fs.NewRuntimeFileService(projectRoot, nil)
+	if err != nil {
+		return err
+	}
+	return markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, projectRoot, plan, report, tierA)
 }
 
 func writeCampaignStartPlan(out io.Writer, plan *evaluation.CampaignStartPlan, sessions campaignOperatorSessions, jsonOutput bool) error {
@@ -726,14 +741,22 @@ func writeCampaignStartPlan(out io.Writer, plan *evaluation.CampaignStartPlan, s
 	return err
 }
 
-func persistActiveCampaignRun(projectRoot string, plan *evaluation.CampaignStartPlan, startedAt time.Time) error {
-	return evaluation.SaveActiveCampaignRun(projectRoot, evaluation.ActiveCampaignRun{
+func persistActiveCampaignRunWithFileService(ctx context.Context, fileSvc fs.RuntimeFileService, plan *evaluation.CampaignStartPlan, startedAt time.Time) error {
+	return evaluation.SaveActiveCampaignRunToRuntime(ctx, fileSvc, evaluation.ActiveCampaignRun{
 		RunID:         plan.RunID,
 		CampaignID:    plan.CampaignID,
 		InventoryFile: plan.InventoryPath,
 		ModelTags:     plan.ModelTags,
 		StartedAt:     startedAt,
 	})
+}
+
+func persistActiveCampaignRun(projectRoot string, plan *evaluation.CampaignStartPlan, startedAt time.Time) error {
+	fileSvc, err := fs.NewRuntimeFileService(projectRoot, nil)
+	if err != nil {
+		return err
+	}
+	return persistActiveCampaignRunWithFileService(context.Background(), fileSvc, plan, startedAt)
 }
 
 func resolveCampaignRunID(cmd *cobra.Command, command, flagValue string, args []string) (string, error) {

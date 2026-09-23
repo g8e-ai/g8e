@@ -16,7 +16,6 @@ import (
 	"fmt"
 	stdfs "io/fs"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -380,7 +379,7 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
-	if err := writeExportFile(ctx, fileSvc, outputDir, "export_schema.json", schemaBody, report); err != nil {
+	if err := writeExportFile(ctx, fileSvc, outputDir, constants.EvaluationExportSchemaFilename, schemaBody, report); err != nil {
 		return nil, err
 	}
 
@@ -395,7 +394,7 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
-	if err := writeExportFile(ctx, fileSvc, outputDir, "run_summary.json", runSummaryBody, report); err != nil {
+	if err := writeExportFile(ctx, fileSvc, outputDir, constants.EvaluationRunSummaryFilename, runSummaryBody, report); err != nil {
 		return nil, err
 	}
 	if err := writeExportFile(ctx, fileSvc, outputDir, constants.CampaignExportEvaluationSummaryFilename, evaluationSummaryBody, report); err != nil {
@@ -406,7 +405,7 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
-	if err := writeExportFile(ctx, fileSvc, outputDir, "assignments.jsonl", assignmentsJSONL, report); err != nil {
+	if err := writeExportFile(ctx, fileSvc, outputDir, constants.EvaluationAssignmentsJSONLFilename, assignmentsJSONL, report); err != nil {
 		return nil, err
 	}
 
@@ -414,7 +413,7 @@ func (e *CampaignExporter) ExportRun(
 	if len(modelSummaryLines) > 0 {
 		modelSummariesJSONL = append(modelSummariesJSONL, '\n')
 	}
-	if err := writeExportFile(ctx, fileSvc, outputDir, "model_summaries.jsonl", modelSummariesJSONL, report); err != nil {
+	if err := writeExportFile(ctx, fileSvc, outputDir, constants.EvaluationModelSummariesJSONLFilename, modelSummariesJSONL, report); err != nil {
 		return nil, err
 	}
 
@@ -422,7 +421,7 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
-	if err := writeExportFile(ctx, fileSvc, outputDir, "assignments.csv", assignmentsCSV, report); err != nil {
+	if err := writeExportFile(ctx, fileSvc, outputDir, constants.EvaluationAssignmentsCSVFilename, assignmentsCSV, report); err != nil {
 		return nil, err
 	}
 
@@ -430,13 +429,16 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
-	if err := writeExportFile(ctx, fileSvc, outputDir, "model_summaries.csv", modelSummariesCSV, report); err != nil {
+	if err := writeExportFile(ctx, fileSvc, outputDir, constants.EvaluationModelSummariesCSVFilename, modelSummariesCSV, report); err != nil {
 		return nil, err
 	}
 
-	sqlitePath := filepath.Join(outputDir, "campaign_export.sqlite")
+	sqlitePath := filepath.Join(outputDir, constants.EvaluationCampaignExportSQLiteFilename)
+	if err := fileSvc.Remove(ctx, sqlitePath); err != nil {
+		return nil, fmt.Errorf("evaluation: export campaign run: remove existing sqlite export: %w", err)
+	}
 	if err := e.writeSQLiteExport(
-		sqlitePath,
+		fileSvc.Resolve(sqlitePath),
 		run,
 		spec,
 		catalog,
@@ -651,11 +653,11 @@ func buildCampaignExportSchemaDocument() map[string]any {
 		"schema_version": campaignExportSchemaVersion,
 		"description":    "Disclosure-safe campaign export bundle derived from public projections.",
 		"files": map[string]any{
-			"export_schema.json": map[string]string{
+			constants.EvaluationExportSchemaFilename: map[string]string{
 				"format":      "json",
 				"description": "This schema document.",
 			},
-			"run_summary.json": map[string]string{
+			constants.EvaluationRunSummaryFilename: map[string]string{
 				"format":      "json",
 				"description": "Run-level metadata, catalog/registry digests, and aggregate counters.",
 			},
@@ -663,19 +665,19 @@ func buildCampaignExportSchemaDocument() map[string]any {
 				"format":      "json",
 				"description": "Explorer evaluation_summary projection with typed headline metrics and bound verification metadata.",
 			},
-			"assignments.jsonl": map[string]string{
+			constants.EvaluationAssignmentsJSONLFilename: map[string]string{
 				"format":      "jsonl",
 				"description": "One named export wrapper per terminal assignment containing canonical protobuf JSON under projection plus approved benchmark_observations and resource_summary extensions.",
 			},
-			"model_summaries.jsonl": map[string]string{
+			constants.EvaluationModelSummariesJSONLFilename: map[string]string{
 				"format":      "jsonl",
 				"description": "One explorer model_summary snapshot per variant-role bucket.",
 			},
-			"assignments.csv": map[string]string{
+			constants.EvaluationAssignmentsCSVFilename: map[string]string{
 				"format":      "csv",
 				"description": "Tabular assignment results with disclosure-safe benchmark columns.",
 			},
-			"model_summaries.csv": map[string]string{
+			constants.EvaluationModelSummariesCSVFilename: map[string]string{
 				"format":      "csv",
 				"description": "Tabular model-role aggregate counters.",
 			},
@@ -889,9 +891,6 @@ func (e *CampaignExporter) writeSQLiteExport(
 	aggregate *runAggregateState,
 	modelSummaries [][]byte,
 ) error {
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("evaluation: export campaign run: remove existing sqlite export: %w", err)
-	}
 	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(path), slog.Default())
 	if err != nil {
 		return fmt.Errorf("evaluation: export campaign run: open sqlite: %w", err)

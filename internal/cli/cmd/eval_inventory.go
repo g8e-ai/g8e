@@ -170,7 +170,7 @@ Examples:
   g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
     --campaign-id eval-smoke-mini --output .g8e/eval/inventories/eval-smoke-mini.json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
@@ -203,6 +203,8 @@ Examples:
 					return fmt.Errorf("evaluation: inventory materialize: --output is required with --campaign-id")
 				}
 				freeze, relPath, err := evaluation.MaterializeCampaignInventory(evaluation.MaterializeCampaignInventoryRequest{
+					Context:     cmd.Context(),
+					FileService: fileSvc,
 					ProjectRoot: cfg.ProjectRoot,
 					CampaignID:  campaignID,
 					OutputPath:  outputPath,
@@ -226,6 +228,8 @@ Examples:
 			lines := make([]inventoryMaterializeLine, 0, len(selected))
 			for _, variant := range selected {
 				entry, err := evaluation.MaterializeInitCampaignInventory(evaluation.MaterializeInitCampaignInventoryRequest{
+					Context:         cmd.Context(),
+					FileService:     fileSvc,
 					ProjectRoot:     cfg.ProjectRoot,
 					InventoryRelDir: outputDir,
 					Variant:         variant,

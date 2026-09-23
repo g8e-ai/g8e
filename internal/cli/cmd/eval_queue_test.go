@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
@@ -29,10 +30,10 @@ func TestQueueEvalNext_PrintsPendingEntry(t *testing.T) {
 	queue := evaluation.CampaignQueue{
 		Models: []evaluation.CampaignQueueModel{
 			{ServedModelTag: "gemma3:4b", VariantID: "gemma3-4b", CampaignID: "eval-init-gemma3-4b", Status: "verified"},
-			{ServedModelTag: "deepseek-r1:7b", VariantID: "deepseek-r1-7b", CampaignID: "eval-init-deepseek-r1-7b", Status: "pending", InventoryFile: ".g8e/eval/inventories/eval-init-deepseek-r1-7b.json", ModelRegistryDigest: "digest", HomogeneousCellCount: 75},
+			{ServedModelTag: "deepseek-r1:7b", VariantID: "deepseek-r1-7b", CampaignID: "eval-init-deepseek-r1-7b", Status: "pending", InventoryFile: "eval/inventories/eval-init-deepseek-r1-7b.json", ModelRegistryDigest: "digest", HomogeneousCellCount: 75},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(queuePath), 0o755))
 	body, err := json.Marshal(queue)
 	require.NoError(t, err)

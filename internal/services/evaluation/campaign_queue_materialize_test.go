@@ -49,8 +49,27 @@ func TestMaterializeInitCampaignInventory(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "eval-init-qwen3-4b", entry.CampaignID)
-	assert.Equal(t, ".g8e/eval/inventories/eval-init-qwen3-4b.json", entry.InventoryFile)
+	assert.Equal(t, "eval/inventories/eval-init-qwen3-4b.json", entry.InventoryFile)
 	assert.FileExists(t, filepath.Join(root, entry.InventoryFile))
+}
+
+func TestMaterializeInitCampaignInventory_AbsoluteDirectoryWritesOutsideProjectRoot(t *testing.T) {
+	root := t.TempDir()
+	outputDir := t.TempDir()
+	variant := &evalv1.ModelVariant{
+		VariantId:      "qwen3-4b",
+		ServedModelTag: "qwen3:4b",
+		ModelDigest:    "digest",
+		ProviderClass:  "ollama",
+	}
+	entry, err := MaterializeInitCampaignInventory(MaterializeInitCampaignInventoryRequest{
+		ProjectRoot:     root,
+		InventoryRelDir: outputDir,
+		Variant:         variant,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(outputDir, entry.CampaignID+".json"), entry.InventoryFile)
+	assert.FileExists(t, entry.InventoryFile)
 }
 
 func TestInitCampaignQueueMaterializeAndMerge(t *testing.T) {

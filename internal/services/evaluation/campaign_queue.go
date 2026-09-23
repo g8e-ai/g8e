@@ -27,10 +27,10 @@ import (
 )
 
 const (
-	// Runtime operator data lives under .g8e/ (gitignored). Checked-in templates: eval/examples/.
-	DefaultInitCampaignQueueRelPath    = ".g8e/eval/init-campaign-queue.json"
-	DefaultModelInventoryRelPath       = ".g8e/eval/model-inventory.json"
-	DefaultCampaignInventoryRelDirname = ".g8e/eval/inventories"
+	// Runtime paths are relative to RuntimeFileService. Checked-in templates use the repository root.
+	DefaultInitCampaignQueueRelPath    = constants.EvaluationInitCampaignQueuePath
+	DefaultModelInventoryRelPath       = constants.EvaluationModelInventoryPath
+	DefaultCampaignInventoryRelDirname = constants.EvaluationDirname + "/" + constants.EvaluationInventoriesDirname
 
 	// Checked-in genesis program inventory.
 	DefaultBaseModelInventoryRelPath    = "eval/base-model-inventory.json"
@@ -83,6 +83,40 @@ type CampaignStartPlanRequest struct {
 	InventoryFile string
 	RunID         string
 	Now           time.Time
+}
+
+// LoadInitCampaignQueueFromRuntime reads the rollout manifest through the runtime file service.
+func LoadInitCampaignQueueFromRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string) (*CampaignQueue, error) {
+	if fileSvc == nil || relPath == "" {
+		return nil, fmt.Errorf("evaluation: load init campaign queue: %w", constants.ErrMissingRequiredField)
+	}
+	data, err := fileSvc.ReadFile(ctx, relPath)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: load init campaign queue: %w", err)
+	}
+	queue := &CampaignQueue{}
+	if err := json.Unmarshal(data, queue); err != nil {
+		return nil, fmt.Errorf("evaluation: load init campaign queue: decode: %w", err)
+	}
+	if len(queue.Models) == 0 {
+		return nil, fmt.Errorf("evaluation: load init campaign queue: %w", constants.ErrMissingRequiredField)
+	}
+	return queue, nil
+}
+
+// SaveInitCampaignQueueToRuntime writes the rollout manifest through the runtime file service.
+func SaveInitCampaignQueueToRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, queue *CampaignQueue) error {
+	if fileSvc == nil || relPath == "" || queue == nil || len(queue.Models) == 0 {
+		return fmt.Errorf("evaluation: save init campaign queue: %w", constants.ErrMissingRequiredField)
+	}
+	body, err := json.MarshalIndent(queue, "", "  ")
+	if err != nil {
+		return fmt.Errorf("evaluation: save init campaign queue: encode: %w", err)
+	}
+	if err := fileSvc.WriteFile(ctx, relPath, body, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("evaluation: save init campaign queue: %w", err)
+	}
+	return nil
 }
 
 // LoadInitCampaignQueue reads the init-campaign rollout manifest.
@@ -197,12 +231,43 @@ func BaseModelInventoryTags(projectRoot string) ([]string, error) {
 	return tags, nil
 }
 
+// LoadFrozenVariantsFromRuntime reads a frozen inventory through RuntimeFileService.
+func LoadFrozenVariantsFromRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string) ([]*evalv1.ModelVariant, error) {
+	if fileSvc == nil || relPath == "" {
+		return nil, fmt.Errorf("evaluation: load frozen variants: %w", constants.ErrMissingRequiredField)
+	}
+	data, err := fileSvc.ReadFile(ctx, relPath)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: load frozen variants: %w", err)
+	}
+	return parseFrozenVariants(data)
+}
+
 // LoadFrozenVariants reads a frozen model inventory export.
 func LoadFrozenVariants(path string) ([]*evalv1.ModelVariant, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: load frozen variants: %w", err)
 	}
+	var payload struct {
+		Variants []json.RawMessage `json:"variants"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, fmt.Errorf("evaluation: load frozen variants: decode: %w", err)
+	}
+	variants := make([]*evalv1.ModelVariant, 0, len(payload.Variants))
+	for _, raw := range payload.Variants {
+		variant := &evalv1.ModelVariant{}
+		if err := protojson.Unmarshal(raw, variant); err != nil {
+			return nil, fmt.Errorf("evaluation: load frozen variants: decode variant: %w", err)
+		}
+		variants = append(variants, variant)
+	}
+	SortModelVariantsForRollout(variants)
+	return variants, nil
+}
+
+func parseFrozenVariants(data []byte) ([]*evalv1.ModelVariant, error) {
 	var payload struct {
 		Variants []json.RawMessage `json:"variants"`
 	}

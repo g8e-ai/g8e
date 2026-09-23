@@ -8,13 +8,18 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 func rolloutEvalCmd(deps nativeEvalDeps) *cobra.Command {
@@ -49,11 +54,13 @@ Examples:
   g8e eval rollout init --from .g8e/eval/model-inventory.json --tags qwen3:4b,gemma3:4b
   g8e eval rollout init --materialize --merge`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
 			result, err := evaluation.InitCampaignQueue(evaluation.InitCampaignQueueRequest{
+				Context:             cmd.Context(),
+				FileService:         fileSvc,
 				ProjectRoot:         cfg.ProjectRoot,
 				SourceInventoryPath: fromPath,
 				InventoryRelDir:     inventoryDir,
@@ -115,11 +122,13 @@ func rolloutEvalMarkCmd(deps nativeEvalDeps) *cobra.Command {
 Example:
   g8e eval rollout mark --tag qwen3:4b --status verified --run-id eval-init-qwen3-4b-1789657337`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
 			entry, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
+				Context:        cmd.Context(),
+				FileService:    fileSvc,
 				ProjectRoot:    cfg.ProjectRoot,
 				QueuePath:      queuePath,
 				VariantID:      variantID,
@@ -153,13 +162,20 @@ Example:
 	return cmd
 }
 
-func loadInitCampaignQueue(cfgProjectRoot, queueFile string) (*evaluation.CampaignQueue, string, error) {
+func loadInitCampaignQueue(ctx context.Context, fileSvc fs.RuntimeFileService, cfgProjectRoot, queueFile string) (*evaluation.CampaignQueue, string, error) {
 	queuePath := queueFile
 	if queuePath == "" {
 		queuePath = evaluation.DefaultInitCampaignQueueRelPath
 	}
-	absQueuePath := evaluation.ResolveEvalPath(cfgProjectRoot, queuePath)
-	queue, err := evaluation.LoadInitCampaignQueue(absQueuePath)
+	if fileSvc != nil && !filepath.IsAbs(queuePath) {
+		relPath := strings.TrimPrefix(filepath.ToSlash(queuePath), constants.RuntimeDirname+"/")
+		queue, err := evaluation.LoadInitCampaignQueueFromRuntime(ctx, fileSvc, relPath)
+		if err != nil {
+			return nil, queuePath, err
+		}
+		return queue, queuePath, nil
+	}
+	queue, err := evaluation.LoadInitCampaignQueue(evaluation.ResolveEvalPath(cfgProjectRoot, queuePath))
 	if err != nil {
 		return nil, queuePath, err
 	}
@@ -173,11 +189,11 @@ func rolloutEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "list",
 		Short: "List init-campaign queue entries",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			queue, _, err := loadInitCampaignQueue(cfg.ProjectRoot, queueFile)
+			queue, _, err := loadInitCampaignQueue(cmd.Context(), fileSvc, cfg.ProjectRoot, queueFile)
 			if err != nil {
 				return fmt.Errorf("evaluation: queue list: %w", err)
 			}
@@ -223,11 +239,11 @@ func rolloutEvalNextCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "next",
 		Short: "Show the next pending init-campaign queue entry",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			queue, _, err := loadInitCampaignQueue(cfg.ProjectRoot, queueFile)
+			queue, _, err := loadInitCampaignQueue(cmd.Context(), fileSvc, cfg.ProjectRoot, queueFile)
 			if err != nil {
 				return fmt.Errorf("evaluation: queue next: %w", err)
 			}

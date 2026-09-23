@@ -43,7 +43,7 @@ func TestQueueEvalRunDryRun(t *testing.T) {
 			{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "pending"},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
 
 	deps := testNativeEvalDeps(root)
@@ -68,9 +68,9 @@ func TestQueueEvalInitMaterialize(t *testing.T) {
 	command.SetOut(&output)
 	command.SetArgs([]string{"rollout", "init", "--project-root", root, "--materialize"})
 	require.NoError(t, command.Execute())
-	assert.Contains(t, output.String(), ".g8e/eval/init-campaign-queue.json")
-	assert.FileExists(t, filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath))
-	assert.FileExists(t, filepath.Join(root, ".g8e/eval/inventories/eval-init-qwen3-4b.json"))
+	assert.Contains(t, output.String(), "eval/init-campaign-queue.json")
+	assert.FileExists(t, filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath))
+	assert.FileExists(t, filepath.Join(root, constants.RuntimeDirname, "eval/inventories/eval-init-qwen3-4b.json"))
 }
 
 func TestQueueEvalMarkVerified(t *testing.T) {
@@ -80,7 +80,7 @@ func TestQueueEvalMarkVerified(t *testing.T) {
 			{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "pending"},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(queuePath), 0o755))
 	body, err := json.Marshal(queue)
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestRolloutEvalListCmd_TextAndJSON(t *testing.T) {
 			{VariantID: "gemma3-4b", ServedModelTag: "gemma3:4b", Status: "verified", CampaignID: "eval-init-gemma3-4b", HomogeneousCellCount: 3},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
 
 	deps := testNativeEvalDeps(root)
@@ -279,7 +279,7 @@ func TestRolloutEvalListCmd_ReportsEmptyQueue(t *testing.T) {
 			{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "pending"},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
 
 	deps := testNativeEvalDeps(root)
@@ -306,7 +306,7 @@ func TestRolloutEvalNextCmd_ShowsPendingEntry(t *testing.T) {
 			},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
 
 	deps := testNativeEvalDeps(root)
@@ -333,7 +333,7 @@ func TestRolloutEvalRunCmd_RecordsStartFailure(t *testing.T) {
 			},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
 
 	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -478,7 +478,7 @@ func TestRolloutEvalRunCmd_ReportsEmptySelection(t *testing.T) {
 			{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "verified"},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	queuePath := filepath.Join(root, constants.RuntimeDirname, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
 
 	deps := testNativeEvalDeps(root)

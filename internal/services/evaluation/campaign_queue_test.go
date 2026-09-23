@@ -277,6 +277,7 @@ func TestActiveCampaignRunRoundTrip(t *testing.T) {
 		StartedAt:     time.Unix(1789669555, 0).UTC(),
 	}
 	require.NoError(t, SaveActiveCampaignRun(root, run))
+	assert.Equal(t, filepath.Join(root, constants.RuntimeDirname, constants.DataDirname, constants.EvaluationDirname, constants.EvaluationActiveRunFilename), ActiveCampaignRunPath(root))
 	loaded, err := LoadActiveCampaignRun(root)
 	require.NoError(t, err)
 	assert.Equal(t, run.RunID, loaded.RunID)

@@ -8,12 +8,15 @@
 package evaluation
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -33,6 +36,8 @@ func ResolveEvalPath(projectRoot, path string) string {
 
 // MaterializeInitCampaignInventoryRequest writes one single-model inventory file.
 type MaterializeInitCampaignInventoryRequest struct {
+	Context         context.Context
+	FileService     fs.RuntimeFileService
 	ProjectRoot     string
 	InventoryRelDir string
 	Variant         *evalv1.ModelVariant
@@ -40,16 +45,18 @@ type MaterializeInitCampaignInventoryRequest struct {
 
 // MaterializeInitCampaignInventory freezes one model variant to a per-campaign inventory file.
 func MaterializeInitCampaignInventory(req MaterializeInitCampaignInventoryRequest) (CampaignQueueModel, error) {
-	if req.ProjectRoot == "" || req.Variant == nil {
+	if req.Variant == nil || (req.FileService == nil && req.ProjectRoot == "") {
 		return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: missing required field")
 	}
 	inventoryRelDir := req.InventoryRelDir
 	if inventoryRelDir == "" {
 		inventoryRelDir = DefaultCampaignInventoryRelDirname
 	}
-	inventoryDir := filepath.Join(req.ProjectRoot, inventoryRelDir)
-	if err := os.MkdirAll(inventoryDir, 0o700); err != nil {
-		return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: create dir: %w", err)
+	if req.FileService == nil {
+		inventoryDir := ResolveEvalPath(req.ProjectRoot, inventoryRelDir)
+		if err := os.MkdirAll(inventoryDir, constants.PermDirPrivate); err != nil {
+			return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: create dir: %w", err)
+		}
 	}
 
 	campaignID := CampaignIDForVariant(req.Variant)
@@ -61,9 +68,19 @@ func MaterializeInitCampaignInventory(req MaterializeInitCampaignInventoryReques
 		return CampaignQueueModel{}, err
 	}
 
-	inventoryRelPath := filepath.Join(inventoryRelDir, campaignID+".json")
-	inventoryPath := filepath.Join(req.ProjectRoot, inventoryRelPath)
-	if err := writeModelInventoryFreezeFile(inventoryPath, freeze); err != nil {
+	inventoryRelPath := filepath.ToSlash(filepath.Join(inventoryRelDir, campaignID+".json"))
+	if req.FileService != nil {
+		if req.Context == nil {
+			req.Context = context.Background()
+		}
+		payload, err := marshalModelInventoryFreeze(freeze)
+		if err != nil {
+			return CampaignQueueModel{}, err
+		}
+		if err := req.FileService.WriteFile(req.Context, inventoryRelPath, payload, constants.PermFileReadOnly); err != nil {
+			return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: write: %w", err)
+		}
+	} else if err := writeModelInventoryFreezeFile(ResolveEvalPath(req.ProjectRoot, inventoryRelPath), freeze); err != nil {
 		return CampaignQueueModel{}, err
 	}
 
@@ -80,6 +97,8 @@ func MaterializeInitCampaignInventory(req MaterializeInitCampaignInventoryReques
 
 // MaterializeCampaignInventoryRequest writes a multi-model inventory freeze file.
 type MaterializeCampaignInventoryRequest struct {
+	Context     context.Context
+	FileService fs.RuntimeFileService
 	ProjectRoot string
 	CampaignID  string
 	OutputPath  string
@@ -88,7 +107,7 @@ type MaterializeCampaignInventoryRequest struct {
 
 // MaterializeCampaignInventory freezes one or more variants into a single inventory file.
 func MaterializeCampaignInventory(req MaterializeCampaignInventoryRequest) (*ModelInventoryFreeze, string, error) {
-	if req.ProjectRoot == "" || req.CampaignID == "" || len(req.Variants) == 0 {
+	if (req.FileService == nil && req.ProjectRoot == "") || req.CampaignID == "" || len(req.Variants) == 0 {
 		return nil, "", fmt.Errorf("evaluation: materialize campaign inventory: missing required field")
 	}
 	freeze, err := MaterializeModelRegistry(req.CampaignID, req.Variants)
@@ -103,18 +122,34 @@ func MaterializeCampaignInventory(req MaterializeCampaignInventoryRequest) (*Mod
 	if outputPath == "" {
 		outputPath = filepath.Join(DefaultCampaignInventoryRelDirname, req.CampaignID+".json")
 	}
-	absOutputPath := ResolveEvalPath(req.ProjectRoot, outputPath)
-	if err := os.MkdirAll(filepath.Dir(absOutputPath), 0o700); err != nil {
-		return nil, "", fmt.Errorf("evaluation: materialize campaign inventory: create dir: %w", err)
+	outputPath = filepath.ToSlash(outputPath)
+	if req.FileService != nil {
+		if req.Context == nil {
+			req.Context = context.Background()
+		}
+		payload, err := marshalModelInventoryFreeze(freeze)
+		if err != nil {
+			return nil, "", err
+		}
+		if err := req.FileService.WriteFile(req.Context, outputPath, payload, constants.PermFileReadOnly); err != nil {
+			return nil, "", fmt.Errorf("evaluation: materialize campaign inventory: write: %w", err)
+		}
+	} else {
+		absOutputPath := ResolveEvalPath(req.ProjectRoot, outputPath)
+		if err := os.MkdirAll(filepath.Dir(absOutputPath), constants.PermDirPrivate); err != nil {
+			return nil, "", fmt.Errorf("evaluation: materialize campaign inventory: create dir: %w", err)
+		}
+		if err := writeModelInventoryFreezeFile(absOutputPath, freeze); err != nil {
+			return nil, "", err
+		}
 	}
-	if err := writeModelInventoryFreezeFile(absOutputPath, freeze); err != nil {
-		return nil, "", err
-	}
-	return freeze, filepath.ToSlash(outputPath), nil
+	return freeze, outputPath, nil
 }
 
 // InitCampaignQueueRequest builds the init-campaign rollout queue manifest.
 type InitCampaignQueueRequest struct {
+	Context             context.Context
+	FileService         fs.RuntimeFileService
 	ProjectRoot         string
 	SourceInventoryPath string
 	InventoryRelDir     string
@@ -136,17 +171,31 @@ type InitCampaignQueueResult struct {
 
 // InitCampaignQueue materializes per-model inventories and writes the rollout queue manifest.
 func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, error) {
-	if req.ProjectRoot == "" {
+	if req.FileService == nil && req.ProjectRoot == "" {
 		return nil, fmt.Errorf("evaluation: init campaign queue: missing required field")
 	}
-	inventoryPath := ResolveModelInventoryPath(req.ProjectRoot, req.SourceInventoryPath)
-	variants, err := LoadFrozenVariants(inventoryPath)
+	if req.Context == nil {
+		req.Context = context.Background()
+	}
+	var inventoryPath string
+	var variants []*evalv1.ModelVariant
+	var err error
+	if req.FileService != nil && req.SourceInventoryPath == "" {
+		inventoryPath = ResolveBaseModelInventoryPath(req.ProjectRoot)
+		variants, err = LoadFrozenVariants(inventoryPath)
+	} else if req.FileService != nil && !filepath.IsAbs(req.SourceInventoryPath) && strings.HasPrefix(filepath.ToSlash(req.SourceInventoryPath), constants.RuntimeDirname+"/") {
+		relPath := strings.TrimPrefix(filepath.ToSlash(req.SourceInventoryPath), constants.RuntimeDirname+"/")
+		inventoryPath = relPath
+		variants, err = LoadFrozenVariantsFromRuntime(req.Context, req.FileService, relPath)
+	} else {
+		inventoryPath = ResolveModelInventoryPath(req.ProjectRoot, req.SourceInventoryPath)
+		variants, err = LoadFrozenVariants(inventoryPath)
+	}
 	if err != nil {
 		return nil, err
 	}
 	tags := req.Tags
-	runtimeInventoryPath := ResolveEvalPath(req.ProjectRoot, DefaultModelInventoryRelPath)
-	if len(tags) == 0 && inventoryPath == runtimeInventoryPath {
+	if len(tags) == 0 && inventoryPath == ResolveEvalPath(req.ProjectRoot, DefaultModelInventoryRelPath) {
 		tags, err = BaseModelInventoryTags(req.ProjectRoot)
 		if err != nil {
 			return nil, err
@@ -178,6 +227,8 @@ func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, 
 		}
 		if req.Materialize {
 			materializedEntry, err := MaterializeInitCampaignInventory(MaterializeInitCampaignInventoryRequest{
+				Context:         req.Context,
+				FileService:     req.FileService,
 				ProjectRoot:     req.ProjectRoot,
 				InventoryRelDir: inventoryRelDir,
 				Variant:         variant,
@@ -198,15 +249,24 @@ func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, 
 		if mergeQueuePath == "" {
 			mergeQueuePath = DefaultInitCampaignQueueRelPath
 		}
-		preserved = queue.MergePreservingVerifiedStatus(ResolveEvalPath(req.ProjectRoot, mergeQueuePath))
+		if req.FileService != nil {
+			if existing, loadErr := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, mergeQueuePath); loadErr == nil {
+				preserved = queue.MergePreservingVerifiedStatusFromQueue(existing)
+			}
+		} else {
+			preserved = queue.MergePreservingVerifiedStatus(ResolveEvalPath(req.ProjectRoot, mergeQueuePath))
+		}
 	}
 
 	queuePath := req.OutputQueuePath
 	if queuePath == "" {
 		queuePath = DefaultInitCampaignQueueRelPath
 	}
-	absQueuePath := ResolveEvalPath(req.ProjectRoot, queuePath)
-	if err := SaveInitCampaignQueue(absQueuePath, queue); err != nil {
+	if req.FileService != nil {
+		if err := SaveInitCampaignQueueToRuntime(req.Context, req.FileService, queuePath, queue); err != nil {
+			return nil, err
+		}
+	} else if err := SaveInitCampaignQueue(ResolveEvalPath(req.ProjectRoot, queuePath), queue); err != nil {
 		return nil, err
 	}
 
@@ -243,6 +303,14 @@ func (queue *CampaignQueue) MergePreservingVerifiedStatus(existingQueuePath stri
 	if err != nil {
 		return 0
 	}
+	return queue.MergePreservingVerifiedStatusFromQueue(existing)
+}
+
+// MergePreservingVerifiedStatusFromQueue copies verified metadata from an already loaded queue.
+func (queue *CampaignQueue) MergePreservingVerifiedStatusFromQueue(existing *CampaignQueue) int {
+	if queue == nil || existing == nil {
+		return 0
+	}
 	byVariant := make(map[string]CampaignQueueModel, len(existing.Models))
 	for _, entry := range existing.Models {
 		byVariant[entry.VariantID] = entry
@@ -266,6 +334,8 @@ func (queue *CampaignQueue) MergePreservingVerifiedStatus(existingQueuePath stri
 
 // MarkCampaignQueueEntryRequest updates one queue entry after verification.
 type MarkCampaignQueueEntryRequest struct {
+	Context        context.Context
+	FileService    fs.RuntimeFileService
 	ProjectRoot    string
 	QueuePath      string
 	VariantID      string
@@ -277,15 +347,23 @@ type MarkCampaignQueueEntryRequest struct {
 
 // MarkCampaignQueueEntry updates and persists one queue entry.
 func MarkCampaignQueueEntry(req MarkCampaignQueueEntryRequest) (*CampaignQueueModel, error) {
-	if req.ProjectRoot == "" || req.Status == "" {
+	if (req.FileService == nil && req.ProjectRoot == "") || req.Status == "" {
 		return nil, fmt.Errorf("evaluation: mark campaign queue entry: missing required field")
+	}
+	if req.Context == nil {
+		req.Context = context.Background()
 	}
 	queuePath := req.QueuePath
 	if queuePath == "" {
 		queuePath = DefaultInitCampaignQueueRelPath
 	}
-	absQueuePath := ResolveEvalPath(req.ProjectRoot, queuePath)
-	queue, err := LoadInitCampaignQueue(absQueuePath)
+	var queue *CampaignQueue
+	var err error
+	if req.FileService != nil {
+		queue, err = LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, queuePath)
+	} else {
+		queue, err = LoadInitCampaignQueue(ResolveEvalPath(req.ProjectRoot, queuePath))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +371,12 @@ func MarkCampaignQueueEntry(req MarkCampaignQueueEntryRequest) (*CampaignQueueMo
 	if err != nil {
 		return nil, err
 	}
-	if err := SaveInitCampaignQueue(absQueuePath, queue); err != nil {
+	if req.FileService != nil {
+		err = SaveInitCampaignQueueToRuntime(req.Context, req.FileService, queuePath, queue)
+	} else {
+		err = SaveInitCampaignQueue(ResolveEvalPath(req.ProjectRoot, queuePath), queue)
+	}
+	if err != nil {
 		return nil, err
 	}
 	return entry, nil

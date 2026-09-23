@@ -8,6 +8,7 @@
 package evaluation
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,9 +16,8 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
-
-const activeCampaignRunFilename = "active-run.json"
 
 // ActiveCampaignRun tracks the most recently started campaign run.
 type ActiveCampaignRun struct {
@@ -28,15 +28,12 @@ type ActiveCampaignRun struct {
 	StartedAt     time.Time `json:"started_at"`
 }
 
-// ActiveCampaignRunPath returns the active-run file path for one project root.
-func ActiveCampaignRunPath(projectRoot string) string {
-	return filepath.Join(projectRoot, constants.DataDirname, constants.EvaluationDirname, activeCampaignRunFilename)
-}
-
-// LoadActiveCampaignRun reads the active campaign run marker.
-func LoadActiveCampaignRun(projectRoot string) (*ActiveCampaignRun, error) {
-	path := ActiveCampaignRunPath(projectRoot)
-	data, err := os.ReadFile(path)
+// LoadActiveCampaignRun reads the active campaign run marker from runtime state.
+func LoadActiveCampaignRunFromRuntime(ctx context.Context, fileSvc fs.RuntimeFileService) (*ActiveCampaignRun, error) {
+	if fileSvc == nil {
+		return nil, fmt.Errorf("evaluation: load active campaign run: %w", constants.ErrMissingRequiredField)
+	}
+	data, err := fileSvc.ReadFile(ctx, constants.EvaluationActiveRunPath)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: load active campaign run: %w", err)
 	}
@@ -50,14 +47,10 @@ func LoadActiveCampaignRun(projectRoot string) (*ActiveCampaignRun, error) {
 	return run, nil
 }
 
-// SaveActiveCampaignRun writes the active campaign run marker.
-func SaveActiveCampaignRun(projectRoot string, run ActiveCampaignRun) error {
-	if projectRoot == "" || run.RunID == "" {
+// SaveActiveCampaignRun writes the active campaign run marker to runtime state.
+func SaveActiveCampaignRunToRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, run ActiveCampaignRun) error {
+	if fileSvc == nil || run.RunID == "" {
 		return fmt.Errorf("evaluation: save active campaign run: %w", constants.ErrMissingRequiredField)
-	}
-	dir := filepath.Join(projectRoot, constants.DataDirname, constants.EvaluationDirname)
-	if err := os.MkdirAll(dir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("evaluation: save active campaign run: create dir: %w", err)
 	}
 	if run.StartedAt.IsZero() {
 		run.StartedAt = time.Now().UTC()
@@ -66,7 +59,40 @@ func SaveActiveCampaignRun(projectRoot string, run ActiveCampaignRun) error {
 	if err != nil {
 		return fmt.Errorf("evaluation: save active campaign run: encode: %w", err)
 	}
-	path := filepath.Join(dir, activeCampaignRunFilename)
+	if err := fileSvc.WriteFile(ctx, constants.EvaluationActiveRunPath, payload, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("evaluation: save active campaign run: %w", err)
+	}
+	return nil
+}
+
+// ActiveCampaignRunPath is retained for external fixture compatibility; runtime callers use constants.EvaluationActiveRunPath.
+func ActiveCampaignRunPath(projectRoot string) string {
+	return filepath.Join(projectRoot, constants.RuntimeDirname, constants.EvaluationActiveRunPath)
+}
+
+// LoadActiveCampaignRun reads an explicitly supplied external fixture path.
+func LoadActiveCampaignRun(projectRoot string) (*ActiveCampaignRun, error) {
+	data, err := os.ReadFile(ActiveCampaignRunPath(projectRoot))
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: load active campaign run: %w", err)
+	}
+	run := &ActiveCampaignRun{}
+	if err := json.Unmarshal(data, run); err != nil {
+		return nil, fmt.Errorf("evaluation: load active campaign run: decode: %w", err)
+	}
+	return run, nil
+}
+
+// SaveActiveCampaignRun writes an explicitly supplied external fixture path.
+func SaveActiveCampaignRun(projectRoot string, run ActiveCampaignRun) error {
+	path := ActiveCampaignRunPath(projectRoot)
+	if err := os.MkdirAll(filepath.Dir(path), constants.PermDirPrivate); err != nil {
+		return fmt.Errorf("evaluation: save active campaign run: create dir: %w", err)
+	}
+	payload, err := json.MarshalIndent(run, "", "  ")
+	if err != nil {
+		return fmt.Errorf("evaluation: save active campaign run: encode: %w", err)
+	}
 	if err := os.WriteFile(path, payload, constants.PermFileReadOnly); err != nil {
 		return fmt.Errorf("evaluation: save active campaign run: %w", err)
 	}

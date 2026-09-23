@@ -76,11 +76,11 @@ Examples:
   g8e eval rollout run --dry-run --skip-variant granite3-3-2b
   g8e eval rollout run --tier-a --continue-on-error --log-dir .g8e/eval/logs/batch-001`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			queue, queuePath, err := loadInitCampaignQueue(cfg.ProjectRoot, queueFile)
+			queue, queuePath, err := loadInitCampaignQueue(cmd.Context(), fileSvc, cfg.ProjectRoot, queueFile)
 			if err != nil {
 				return fmt.Errorf("evaluation: queue run: %w", err)
 			}
