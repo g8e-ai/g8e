@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
