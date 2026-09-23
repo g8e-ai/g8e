@@ -52,10 +52,10 @@ type SQLReplayStore struct {
 	config *ReplayStoreConfig
 }
 
-// NewSQLReplayStore creates a new replay store backed by SQLite.
+// NewSQLReplayStore creates a new replay store backed by SQLite. The caller must provide a config with a runtime-resolved database path.
 func NewSQLReplayStore(config *ReplayStoreConfig, logger *slog.Logger) (*SQLReplayStore, error) {
 	if config == nil {
-		config = DefaultReplayStoreConfig()
+		return nil, fmt.Errorf("replay_store: %w", constants.ErrStorageConfigRequired)
 	}
 
 	cfg := sqliteutil.DefaultDBConfig(config.DBPath)

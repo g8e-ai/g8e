@@ -81,33 +81,13 @@ func TestExecutionVault_DefaultExecutionVaultConfig(t *testing.T) {
 	assert.Equal(t, 60, config.PruneIntervalMinutes)
 }
 
-func TestExecutionVault_NewExecutionVaultService_WithNilConfig(t *testing.T) {
+func TestExecutionVault_NewExecutionVaultService_NilConfig(t *testing.T) {
 	t.Parallel()
 
-	tempDir := testutil.TempDir(t)
-	fileSvc, _ := newTestFileSvc(t, tempDir)
-
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-
-	vHeader, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(fileSvc))
-
-	testVault, err := vault.NewVault(&vault.VaultConfig{
-		FileSvc: fileSvc,
-		Logger:  testutil.NewTestLogger(),
-	})
-	require.NoError(t, err)
-	require.NoError(t, testVault.Unlock(privKey))
-	t.Cleanup(func() { testVault.Close() })
-
-	ev, err := NewExecutionVaultService(nil, testutil.NewTestLogger(), testVault)
-	require.NoError(t, err)
-	require.NotNil(t, ev)
-
-	ev.Wait()
-	ev.Close()
+	ev, err := NewExecutionVaultService(nil, testutil.NewTestLogger(), nil)
+	require.Error(t, err)
+	assert.Nil(t, ev)
+	assert.ErrorIs(t, err, constants.ErrStorageConfigRequired)
 }
 
 func TestExecutionVault_NewExecutionVaultService_NilVault(t *testing.T) {

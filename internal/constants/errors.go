@@ -390,6 +390,9 @@ var (
 	ErrConsensusServiceRequired       = errors.New("consensus service is required for an L2-enforcing posture")
 	ErrPlatformEnrollmentDepsRequired = errors.New("platform enrollment deps are required")
 
+	// Storage errors
+	ErrStorageConfigRequired = errors.New("storage config is required")
+
 	// Execution vault errors
 	ErrExecutionVaultVaultLocked   = errors.New("execution vault: vault is locked, cannot encrypt/decrypt content")
 	ErrExecutionVaultEncryptFailed = errors.New("execution vault: failed to encrypt content")

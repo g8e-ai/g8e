@@ -95,10 +95,10 @@ type SuspendedTransactionService struct {
 // Ensure SuspendedTransactionService implements SuspendedTransactionStore.
 var _ SuspendedTransactionStore = (*SuspendedTransactionService)(nil)
 
-// NewSuspendedTransactionService creates a new suspended transaction store service.
+// NewSuspendedTransactionService creates a new suspended transaction store service. The caller must provide a config with a runtime-resolved database path.
 func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *slog.Logger) (*SuspendedTransactionService, error) {
 	if config == nil {
-		config = DefaultSuspendedTransactionConfig()
+		return nil, fmt.Errorf("suspended_transaction_store: %w", constants.ErrStorageConfigRequired)
 	}
 
 	cfg := sqliteutil.DefaultDBConfig(config.DBPath)
