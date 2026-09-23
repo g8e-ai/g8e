@@ -136,7 +136,7 @@ func campaignVerificationDiagnostics(report *evalv1.EvaluationVerificationReport
 	if report == nil {
 		return nil
 	}
-	result := make([]*compliancev1.AssessmentDiagnostic, 0, len(report.GetFailureReasons())+2)
+	result := make([]*compliancev1.AssessmentDiagnostic, 0, 2)
 	subject := &compliancev1.AssessmentSubjectSelection{RunId: report.GetRunId()}
 	conditionalMappingCount := 0
 	for _, mapping := range reviewedCampaignAssertionMappings() {

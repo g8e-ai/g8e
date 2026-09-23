@@ -218,6 +218,24 @@ func diagnosticCodes(diagnostics []*compliancev1.AssessmentDiagnostic) []string 
 	return codes
 }
 
+func TestCampaignVerificationDiagnosticsAppendsFailureReasonsBeyondInitialCapacity(t *testing.T) {
+	diagnostics := campaignVerificationDiagnostics(&evalv1.EvaluationVerificationReport{
+		RunId:                   "run-1",
+		ExpectedAssignmentCount: 2,
+		VerifiedAssignmentCount: 1,
+		FailureReasons:          []string{"first failure", "second failure"},
+	})
+
+	assert.Equal(t, []string{
+		"campaign_native_assertion_unmapped",
+		"campaign_population_incomplete",
+		"campaign_verification_failure",
+		"campaign_verification_failure",
+	}, diagnosticCodes(diagnostics))
+	assert.Equal(t, "first failure", diagnostics[2].GetMessage())
+	assert.Equal(t, "second failure", diagnostics[3].GetMessage())
+}
+
 func TestReviewedCampaignAssertionMappingsExcludeApplicationEvidence(t *testing.T) {
 	mappings := reviewedCampaignAssertionMappings()
 	require.NotEmpty(t, mappings)
