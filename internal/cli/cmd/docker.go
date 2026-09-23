@@ -184,6 +184,7 @@ Run these commands from the repository root where ` + "`" + `docker-compose.yml`
 		dockerResetCmd(),
 		dockerRebuildCmd(),
 		dockerLogsCmd(),
+		dockerBinariesExportCmd(),
 	)
 	return cmd
 }
@@ -297,10 +298,10 @@ already-enrolled CLI.`,
 					return fmt.Errorf("docker init: build arguments: %w", err)
 				}
 				cmd.Println("Building Docker images for the unified stack...")
-				if err := runDockerCompose(buildArgs, dockerFullStackProfiles()...); err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+				if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, dockerFullStackProfiles()...); err != nil {
+					return err
 				}
-				cmd.Println("Docker images built successfully.")
+				cmd.Println("Docker images built and node binaries exported successfully.")
 			}
 
 			cmd.Println("Starting gateway...")
@@ -1006,10 +1007,10 @@ func dockerBuildCmd() *cobra.Command {
 				return fmt.Errorf("docker: build arguments: %w", err)
 			}
 			cmd.Println("Building Docker images...")
-			if err := runDockerCompose(buildArgs, resolveDockerProfile(true, profile)); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+			if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, resolveDockerProfile(true, profile)); err != nil {
+				return err
 			}
-			cmd.Println("\nDocker images built successfully.")
+			cmd.Println("\nDocker images built and node binaries exported successfully.")
 			return nil
 		},
 	}
@@ -1126,13 +1127,13 @@ Use --no-cache=false to reuse the Docker build cache.`,
 			if err := runDockerCompose([]string{"down"}, dockerTeardownProfiles(profile)...); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 			}
-			buildArgs := []string{"build"}
-			if noCache {
-				buildArgs = append(buildArgs, "--no-cache")
+			buildArgs, err := dockerBuildArgs(versionInfoFromCmd(cmd), noCache)
+			if err != nil {
+				return fmt.Errorf("docker rebuild: build arguments: %w", err)
 			}
 			cmd.Println("\nRebuilding Docker images...")
-			if err := runDockerCompose(buildArgs, profile); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+			if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, profile); err != nil {
+				return err
 			}
 			fileSvc, err := newFileSvc("", slog.Default())
 			if err != nil {
@@ -1158,7 +1159,7 @@ Use --no-cache=false to reuse the Docker build cache.`,
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&noCache, "no-cache", true, "Rebuild without using the Docker cache")
+	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Rebuild without using the Docker cache")
 	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	return cmd

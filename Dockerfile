@@ -86,7 +86,11 @@ RUN test -f /build/bin/node-binaries.json && \
 # (`g8e version --fips`); it inspects module state, not env vars. It exits 0
 # with a warning when enforcement is off — that is the expected posture, not a
 # failure.
-RUN /build/bin/g8e-linux-amd64 version --fips
+RUN if [ "$(go env GOARCH)" = "amd64" ]; then \
+      /build/bin/g8e-linux-amd64 version --fips; \
+    else \
+      echo "Skipping amd64 FIPS smoke check on $(go env GOARCH) builder"; \
+    fi
 
 # =============================================================================
 # Stage 2: Runtime

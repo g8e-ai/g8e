@@ -344,11 +344,13 @@ const (
 // /.well-known/g8e/bin/{filename} endpoint. This path is outside the .g8e/
 // volume mount so it is always present regardless of volume state.
 const (
-	NodeBinariesDir                 = "/opt/g8e/bin"
-	NodeBinariesManifestFilename    = "node-binaries.json"
+	NodeBinariesDir                  = "/opt/g8e/bin"
+	NodeBinariesManifestFilename     = "node-binaries.json"
 	NodeBinariesExportRecordFilename = "node-binaries-export.json"
 	NodeBinaryChecksumSuffix         = ".sha256"
-	NodeBinariesArchiveRoot         = "/opt/g8e/bin"
+	NodeBinariesArchiveRoot          = "/opt/g8e/bin"
+	NodeBinariesStagingPrefix        = ".node-binaries-export-"
+	NodeBinariesPreviousSuffix       = ".previous"
 )
 
 // Deploy script filenames served by the gateway.

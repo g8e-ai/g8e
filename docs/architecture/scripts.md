@@ -106,7 +106,7 @@ The Gateway embeds `internal/services/gateway/scripts/g8e-deploy.sh` and `g8e-de
 | `/g8e-deploy.ps1` | Rendered PowerShell script for Windows | None |
 | `/.well-known/g8e/bin/{filename}` | Pre-built platform executable | None |
 
-The binary route accepts only names matching `g8e-(linux|darwin|windows)-(amd64|arm64|386)` with an optional `.exe` suffix. It searches the image-baked `/opt/g8e/bin`, a `bin/` directory beside the running executable, and the Gateway PKI binaries directory. The standard `make build-all` matrix produces Linux amd64, arm64, and 386; Windows amd64 and arm64; and Darwin amd64 and arm64. The scripts recognize Windows x86 and Darwin 386, but those binaries are not produced by the standard all-platform build.
+The binary route accepts only names listed in the validated `node-binaries.json` manifest. It serves from the image-baked `/opt/g8e/bin` or, for a source-built Gateway, a validated `bin/` directory beside the running executable. The standard matrix contains Linux amd64, arm64, and 386; Windows amd64 and arm64; and Darwin amd64 and arm64. Unsupported names and unvalidated roots fail closed.
 
 The rendered scripts derive the Gateway host and HTTP port from the request and configuration. The Windows handler prefers `X-Forwarded-Host`; both templates allow `GATEWAY_HOST` and `GATEWAY_PORT` environment variables to override the rendered values at execution time.
 

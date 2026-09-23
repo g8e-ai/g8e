@@ -23,7 +23,7 @@ Build the root image from the repository root:
 docker build -t g8e-gateway:latest .
 ```
 
-The image entrypoint is `/g8e`. The same image runs Gateway and Operator commands; the command supplied by Compose selects the mode. The Dockerfile builds the complete seven-target deployment matrix once, copies it with its manifest and checksum sidecars into the image-baked `/opt/g8e/bin/` directory, and selects the `/g8e` executable for the BuildKit target platform. The Gateway serves that immutable image set; host `./bin` is an exported mirror and is not mounted into the container. The current root `.dockerignore` excludes `dashboard/`, while the Dockerfile's `make build-all` step requires the generated Evaluation Explorer asset under that directory. Therefore, the root image build is not self-contained in the current tree; adjust the Docker build context or Dockerfile before relying on `docker build` or Compose image builds.
+The image entrypoint is `/g8e`. The same image runs Gateway and Operator commands; the command supplied by Compose selects the mode. The Dockerfile builds the complete seven-target deployment matrix once, copies it with its manifest and checksum sidecars into the image-baked `/opt/g8e/bin/` directory, and selects the `/g8e` executable for the BuildKit target platform. The Gateway serves that immutable image set; host `./bin` is an exported mirror and is not mounted into the container. Managed `g8e docker build`, `g8e docker init`, and `g8e docker rebuild` export the already-built image artifacts after a successful build. Raw `docker build` or `docker compose build` users can run `./g8e docker binaries export --image g8e-gateway` afterward. The current root `.dockerignore` excludes `dashboard/`, while the Dockerfile's `make build-all` step requires the generated Evaluation Explorer asset under that directory. Therefore, the root image build is not self-contained in the current tree; adjust the Docker build context or Dockerfile before relying on `docker build` or Compose image builds.
 
 The image exposes container ports 8080 and 8443. Compose declares service-specific health checks because the image also runs the outbound-only Operator, which has no listening gateway port.
 
@@ -244,10 +244,11 @@ The root Compose Gateway does not pass `--posture`, so it uses the CLI default, 
 | `./g8e docker init` | Builds and bootstraps the `bootstrapped` plus `evaluation` profiles. |
 | `./g8e docker stop` | Removes Compose containers while preserving volumes and networks. |
 | `./g8e docker status [--profile <name>]` | Displays Compose service status. |
-| `./g8e docker build [--no-cache]` | Builds the `bootstrapped` Compose scope by default; `--profile` selects another profile. |
+| `./g8e docker build [--no-cache]` | Builds the `bootstrapped` Compose scope by default, exports the Gateway node-binary mirror, and reports success only after export; `--profile` selects another profile. |
+| `./g8e docker binaries export [--image <ref>] [--output <dir>]` | Exports and validates the node-binary set from an existing Gateway image without building it. |
 | `./g8e docker logs [service] [-f] [--profile <name>]` | Displays or follows Compose logs. |
 | `./g8e docker reset [--full] [--profile <name>]` | Removes containers, volumes, and networks, then starts the Gateway or selected `bootstrapped` scope. Destructive. |
-| `./g8e docker rebuild [--full] [--profile <name>]` | Stops the selected teardown scope, rebuilds the selected build scope, and starts the Gateway or selected `bootstrapped` scope. `--no-cache` defaults to true. |
+| `./g8e docker rebuild [--full] [--profile <name>] [--no-cache]` | Stops the selected teardown scope, rebuilds the selected build scope with provenance, exports the node-binary mirror, and starts the Gateway or selected `bootstrapped` scope. Cache reuse is the default. |
 | `./g8e docker clean` | Removes containers, volumes, networks, and orphans across the unified profiles. Confirmation is skipped by default; use `--yes=false` to prompt. Destructive. |
 
 If a workload remains unhealthy, inspect the relevant service logs and `./g8e auth enroll pending`. If a volume was removed, treat all prior identities as invalid and repeat owner and workload enrollment. If a previous Docker invocation created the host `.g8e` tree as root, repair ownership before CLI enrollment, for example `sudo chown -R $(id -u):$(id -g) .g8e`.
