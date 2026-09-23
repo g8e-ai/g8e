@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -44,6 +45,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/internal/services/nodebinaries"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -675,6 +677,24 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
 	modelProvenanceDeps.ProvenanceCoordinator = ls.modelProvenanceCoord
 
+	nodeReader, err := nodebinaries.OpenReader(constants.NodeBinariesDir)
+	if err != nil {
+		return fmt.Errorf("gateway: initialize node-binary reader: %w", err)
+	}
+	if !nodeReader.HasManifest() {
+		executable, execErr := os.Executable()
+		if execErr != nil {
+			return fmt.Errorf("gateway: resolve executable for node-binary reader: %w", execErr)
+		}
+		adjacentReader, readerErr := nodebinaries.OpenReader(filepath.Join(filepath.Dir(executable), constants.BinDirname))
+		if readerErr != nil {
+			return fmt.Errorf("gateway: initialize adjacent node-binary reader: %w", readerErr)
+		}
+		if adjacentReader.HasManifest() {
+			nodeReader = adjacentReader
+		}
+	}
+
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:    cfg,
 		Logger: logger,
@@ -686,6 +706,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			AppEnrollment: appEnrollment,
 			Registration:  reg,
 			Responder:     ls.responder,
+			NodeReader:    nodeReader,
 		},
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:        cfg,

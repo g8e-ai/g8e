@@ -13,13 +13,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -29,14 +30,18 @@ import (
 )
 
 // PKIController handles PKI and certificate management endpoints.
+type nodeBinaryReader interface {
+	Artifact(string) (io.ReadSeeker, os.FileInfo, error)
+}
+
 type PKIController struct {
-	cfg             *config.Config
-	logger          *slog.Logger
-	pki             *PKIAuthority
-	appEnrollment   *AppEnrollmentService
-	registration    *RegistrationService
-	responder       *response.Writer
-	nodeBinariesDir string
+	cfg           *config.Config
+	logger        *slog.Logger
+	pki           *PKIAuthority
+	appEnrollment *AppEnrollmentService
+	registration  *RegistrationService
+	responder     *response.Writer
+	nodeReader    nodeBinaryReader
 }
 
 // PKIControllerDeps groups all dependencies for PKIController.
@@ -47,17 +52,18 @@ type PKIControllerDeps struct {
 	AppEnrollment *AppEnrollmentService
 	Registration  *RegistrationService
 	Responder     *response.Writer
+	NodeReader    nodeBinaryReader
 }
 
 func newPKIController(d PKIControllerDeps) *PKIController {
 	return &PKIController{
-		cfg:             d.Cfg,
-		logger:          d.Logger,
-		pki:             d.PKI,
-		appEnrollment:   d.AppEnrollment,
-		registration:    d.Registration,
-		responder:       d.Responder,
-		nodeBinariesDir: constants.NodeBinariesDir,
+		cfg:           d.Cfg,
+		logger:        d.Logger,
+		pki:           d.PKI,
+		appEnrollment: d.AppEnrollment,
+		registration:  d.Registration,
+		responder:     d.Responder,
+		nodeReader:    d.NodeReader,
 	}
 }
 
@@ -389,53 +395,33 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 	}
 
 	filename := filepath.Base(r.URL.Path)
-	if filename == "" || filename == "." {
+	if filename == "" || filename == "." || strings.Contains(r.URL.Path, "..") || strings.Contains(filename, "\\") {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrPathValidation.Error())
 		return
 	}
 
-	// Validate binary name pattern for security
-	binaryPattern := regexp.MustCompile(`^g8e-(linux|darwin|windows)-(amd64|arm64|386)(\.exe)?$`)
-	if !binaryPattern.MatchString(filename) {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrPathValidation.Error())
+	if c.nodeReader == nil {
+		c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 		return
 	}
 
-	possiblePaths := []string{}
-
-	// Check in the image-baked node binaries directory (Docker deployments).
-	// This directory is populated by the Dockerfile with all platform binaries
-	// and lives outside the .g8e/ volume mount, so it is always available.
-	possiblePaths = append(possiblePaths, filepath.Join(c.nodeBinariesDir, filename))
-
-	// Check relative to executable
-	if execPath, err := os.Executable(); err == nil {
-		possiblePaths = append(possiblePaths, filepath.Join(filepath.Dir(execPath), constants.BinDirname, filename))
-	}
-
-	// Check in PKI binaries directory
-	possiblePaths = append(possiblePaths, filepath.Join(c.pki.BinariesDir(), filename))
-
-	var binaryPath string
-	for _, path := range possiblePaths {
-		fileInfo, err := os.Stat(path)
-		if err == nil && !fileInfo.IsDir() {
-			binaryPath = path
-			break
-		}
-	}
-
-	if binaryPath == "" {
-		c.logger.Error("Binary not found", "filename", filename, "checked_paths", possiblePaths)
-		c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("binary %q not found on the Gateway. Run 'make build-all' on the Gateway host to build all platform binaries, then restart the Gateway.", filename))
+	file, info, err := c.nodeReader.Artifact(filename)
+	if err != nil {
+		c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 		return
 	}
-
-	w.Header().Set(constants.HeaderContentType, constants.HeaderValueOctetStream)
+	if closer, ok := file.(io.Closer); ok {
+		defer closer.Close()
+	}
+	contentType := constants.HeaderValueOctetStream
+	if strings.HasSuffix(filename, constants.NodeBinaryChecksumSuffix) {
+		contentType = constants.HeaderValueTextPlain
+	}
+	w.Header().Set(constants.HeaderContentType, contentType)
 	w.Header().Set(constants.HeaderContentDisposition, fmt.Sprintf("attachment; filename=%s", filename))
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
 	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
-	http.ServeFile(w, r, binaryPath)
+	http.ServeContent(w, r, filename, info.ModTime(), file)
 }
 
 // @Summary		Deploy script Linux

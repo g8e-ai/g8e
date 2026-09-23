@@ -71,25 +71,39 @@ if [ "$OS" = "windows" ]; then
   BINARY_NAME="${BINARY_NAME}.exe"
 fi
 DOWNLOAD_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}/.well-known/g8e/bin/${BINARY_NAME}"
+CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
 
 echo -e "${YELLOW}Detected: $OS $ARCH${NC}"
 echo -e "${YELLOW}Downloading from: $DOWNLOAD_URL${NC}"
 
-# Remove existing binary to ensure overwrite
-echo -e "${YELLOW}Removing existing g8e binary...${NC}"
-rm -f g8e
-
-# Download binary
+# Download the binary and checksum to temporary files before replacing the
+# existing executable.
+TEMP_BINARY="g8e.download"
+TEMP_CHECKSUM="g8e.download.sha256"
+trap 'rm -f "$TEMP_BINARY" "$TEMP_CHECKSUM"' EXIT
 if command -v curl &> /dev/null; then
-  curl -fsSL "$DOWNLOAD_URL" -o g8e
+  curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_BINARY"
+  curl -fsSL "$CHECKSUM_URL" -o "$TEMP_CHECKSUM"
 elif command -v wget &> /dev/null; then
-  wget -q "$DOWNLOAD_URL" -O g8e
+  wget -q "$DOWNLOAD_URL" -O "$TEMP_BINARY"
+  wget -q "$CHECKSUM_URL" -O "$TEMP_CHECKSUM"
 else
   echo -e "${RED}Neither curl nor wget found. Please install one of them.${NC}"
   exit 1
 fi
 
-# Make executable
+if command -v sha256sum &> /dev/null; then
+  (cd "$(dirname "$TEMP_BINARY")" && sha256sum -c "$(basename "$TEMP_CHECKSUM")")
+elif command -v shasum &> /dev/null; then
+  EXPECTED="$(awk '{print $1}' "$TEMP_CHECKSUM")"
+  ACTUAL="$(shasum -a 256 "$TEMP_BINARY" | awk '{print $1}')"
+  [ "$EXPECTED" = "$ACTUAL" ] || { echo -e "${RED}Checksum verification failed.${NC}"; exit 1; }
+else
+  echo -e "${RED}Neither sha256sum nor shasum found. Cannot verify download.${NC}"
+  exit 1
+fi
+
+mv "$TEMP_BINARY" g8e
 chmod +x g8e
 
 echo -e "${GREEN}g8e deployed successfully!${NC}"

@@ -438,15 +438,13 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservat
 
 	envelope := CampaignProjectionEnvelope{}
 	require.NoError(t, json.Unmarshal([]byte(exporter.records[0].RecordBytes), &envelope))
-	record := map[string]any{}
+	record := publicAssignmentRecordEnvelope{}
 	require.NoError(t, json.Unmarshal(envelope.Record, &record))
-	benchmark, ok := record["benchmark_observations"].(map[string]any)
-	require.True(t, ok)
-	gpu, ok := benchmark["gpu"].(map[string]any)
-	require.True(t, ok)
-	peak, ok := gpu["vram_peak_bytes"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, float64(16_000_000_000), peak["value"])
+	require.NotNil(t, record.BenchmarkObservations)
+	require.NotNil(t, record.BenchmarkObservations.GPU)
+	require.NotNil(t, record.BenchmarkObservations.GPU.VRAMPeakBytes)
+	require.NotNil(t, record.BenchmarkObservations.GPU.VRAMPeakBytes.Value)
+	assert.Equal(t, float64(16_000_000_000), *record.BenchmarkObservations.GPU.VRAMPeakBytes.Value)
 }
 
 // completedTestCampaign runs one full stubbed campaign: init, schedule, and

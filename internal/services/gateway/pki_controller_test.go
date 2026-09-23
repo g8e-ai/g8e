@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -353,10 +354,12 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 			body:           mustMarshalJSON(t, validRevokePayload),
 			expectedStatus: http.StatusOK,
 			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
-				var resp map[string]interface{}
+				var resp struct {
+					Status string `json:"status"`
+				}
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err, "failed to unmarshal response")
-				assert.Equal(t, "ok", resp["status"], "status should be ok")
+				assert.Equal(t, "ok", resp.Status, "status should be ok")
 			},
 		},
 		{
@@ -546,19 +549,31 @@ func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
+type testNodeBinaryReader struct {
+	root string
+}
+
+func (r testNodeBinaryReader) Artifact(name string) (io.ReadSeeker, os.FileInfo, error) {
+	file, err := os.Open(filepath.Join(r.root, name))
+	if err != nil {
+		return nil, nil, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, nil, err
+	}
+	return file, info, nil
+}
+
 func TestPKIController_HandleNodeBinaryDownload_ImageBakedBinDir(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
-	// Use a temp directory to simulate the image-baked /opt/g8e/bin directory
-	// where the Dockerfile copies all platform binaries. The controller's
-	// nodeBinariesDir field is overridden so the test does not require root
-	// to write to /opt/g8e.
 	binDir := t.TempDir()
-	c.nodeBinariesDir = binDir
-
 	testContent := []byte("image-baked binary content")
 	binaryPath := filepath.Join(binDir, "g8e-darwin-arm64")
 	require.NoError(t, os.WriteFile(binaryPath, testContent, constants.PermFilePublic))
+	c.nodeReader = testNodeBinaryReader{root: binDir}
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-darwin-arm64", nil)
 	rr := httptest.NewRecorder()

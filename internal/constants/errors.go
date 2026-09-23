@@ -154,6 +154,10 @@ var (
 	ErrProcessForceKillTimeout = errors.New("process did not exit after force kill")
 	ErrBinaryResolveFailed     = errors.New("failed to resolve operator binary")
 	ErrBinaryCopyFailed        = errors.New("failed to copy operator binary")
+	ErrNodeBinaryManifest      = errors.New("invalid node-binary manifest")
+	ErrNodeBinaryArtifact      = errors.New("invalid node-binary artifact")
+	ErrNodeBinaryExport        = errors.New("node-binary export failed")
+	ErrNodeBinaryArchive       = errors.New("invalid node-binary archive")
 
 	// Launch profile errors. The launch profile is the complete validated
 	// configuration persisted after every successful managed background

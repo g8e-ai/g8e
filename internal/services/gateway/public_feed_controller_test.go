@@ -25,14 +25,22 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
+type testPublicFeedProjection struct {
+	SchemaVersion string `json:"schema_version"`
+	Kind          string `json:"kind"`
+	DatasetID     string `json:"dataset_id"`
+	QualityState  string `json:"quality_state"`
+	ObservedAt    string `json:"observed_at"`
+}
+
 func testPublicFeedProjectionBytes(t *testing.T) []byte {
 	t.Helper()
-	body, err := json.Marshal(map[string]any{
-		"schema_version": "1.3.0",
-		"kind":           "catalog_snapshot",
-		"dataset_id":     "test-dataset",
-		"quality_state":  "live_in_progress",
-		"observed_at":    "2026-09-21T00:00:00Z",
+	body, err := json.Marshal(testPublicFeedProjection{
+		SchemaVersion: "1.3.0",
+		Kind:          "catalog_snapshot",
+		DatasetID:     "test-dataset",
+		QualityState:  "live_in_progress",
+		ObservedAt:    "2026-09-21T00:00:00Z",
 	})
 	require.NoError(t, err)
 	return body

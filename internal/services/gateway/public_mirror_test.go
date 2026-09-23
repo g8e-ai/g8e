@@ -1969,6 +1969,7 @@ func TestMirror_History_CursorIsOpaqueSequence(t *testing.T) {
 
 	// Verify no overlap: page2 items should start after page1's last item.
 	page1LastSeq, _ := strconv.ParseInt(page1.Cursor, 10, 64)
-	page2FirstItem := page2.Items[0]["sequence"].(float64)
-	assert.Greater(t, int64(page2FirstItem), page1LastSeq)
+	var page2FirstSeq int64
+	require.NoError(t, json.Unmarshal(page2.Items[0]["sequence"], &page2FirstSeq))
+	assert.Greater(t, page2FirstSeq, page1LastSeq)
 }

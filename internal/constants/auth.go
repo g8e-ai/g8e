@@ -148,6 +148,7 @@ const (
 	HeaderValueXHTML               = "application/xhtml+xml"
 	HeaderValueXML                 = "application/xml"
 	HeaderValueOctetStream         = "application/octet-stream"
+	HeaderValueTextPlain           = "text/plain; charset=utf-8"
 	HeaderValuePEM                 = "application/x-pem-file"
 	HeaderValueCRL                 = "application/pkix-crl"
 	HeaderValueShell               = "application/x-sh"

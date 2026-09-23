@@ -19,7 +19,7 @@ TMPDIR ?= /tmp
 # BUILD VARIABLES
 # =============================================================================
 VERSION := $(shell cat VERSION | tr -d '\n')
-BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 BIN_DIR := bin
 MAIN_PKG := ./cmd/g8e
 
@@ -377,6 +377,7 @@ embed-explorer:
 build: embed-explorer
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
+	@rm -f $(BIN_DIR)/node-binaries.json
 	@set -e; \
 	NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
@@ -412,6 +413,7 @@ build-compressed: build
 build-all:
 	@echo "Building g8e Operator for all platforms (FIPS 140-3 for linux)..."
 	@mkdir -p $(BIN_DIR)
+	@rm -f $(BIN_DIR)/node-binaries.json
 	@for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
 		GOARCH=$${platform#*/}; \
@@ -436,7 +438,8 @@ build-all:
 		ROOT_COPY=g8e; \
 	fi; \
 	INSTALL_SRC=$$HOST_NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
-	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
+	@go run ./internal/tools/nodebinaries --root $(BIN_DIR) --version "$(VERSION)" --build-id "$(BUILD_ID)" --build-time "$(BUILD_TIME)" --source-revision "$(SOURCE_REVISION)" --source-tree-hash "$(SOURCE_TREE_HASH)"
+	@echo "Multi-platform build complete. Manifest and checksums: $(BIN_DIR)/node-binaries.json"
 	@echo "Host binary copied: ./g8e ($(HOST_OS)/$(HOST_ARCH))"
 
 .PHONY: build-darwin

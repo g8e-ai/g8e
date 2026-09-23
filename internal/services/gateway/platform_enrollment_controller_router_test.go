@@ -716,11 +716,11 @@ func TestPlatformEnrollmentRouter_CSRValidationRejectsInvalidBody(t *testing.T) 
 	})
 
 	t.Run("invalid component kind returns 400", func(t *testing.T) {
-		body, err := json.Marshal(map[string]interface{}{
-			"component_kind": "unknown",
-			"instance_id":    "x",
-			"hostname":       "x.local",
-			"app":            map[string]string{"csr_pem": "invalid"},
+		body, err := json.Marshal(models.PlatformEnrollmentCreateRequest{
+			ComponentKind: models.PlatformComponentKind("unknown"),
+			InstanceID:    "x",
+			Hostname:      "x.local",
+			App:           &models.PlatformAppCSRPayload{CSRPEM: "invalid"},
 		})
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPlatformEnrollmentRequest, bytes.NewReader(body))

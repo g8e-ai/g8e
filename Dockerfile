@@ -31,7 +31,11 @@
 # =============================================================================
 
 # Stage 1: Build (FIPS module linked in here for linux targets)
-FROM golang:1.26.6 AS builder
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+FROM --platform=${BUILDPLATFORM} golang:1.26.6 AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -64,14 +68,18 @@ COPY docs/reference/ ./docs/reference/
 # GOFIPS140=v1.0.0 for linux targets and explicitly unsets it for non-linux
 # targets. CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and
 # does not require CGO. Binaries are written to /build/bin/g8e-{os}-{arch}.
+ARG VERSION=unknown
 ARG BUILD_ID=unknown
 ARG SOURCE_REVISION=unknown
 ARG SOURCE_TREE_HASH=unknown
+ARG BUILD_TIME=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    make build-all BUILD_ID="${BUILD_ID}" SOURCE_REVISION="${SOURCE_REVISION}" SOURCE_TREE_HASH="${SOURCE_TREE_HASH}"
+    make build-all VERSION="${VERSION}" BUILD_ID="${BUILD_ID}" BUILD_TIME="${BUILD_TIME}" SOURCE_REVISION="${SOURCE_REVISION}" SOURCE_TREE_HASH="${SOURCE_TREE_HASH}"
 
-# Verify the linux/amd64 binary built and runs.
-RUN /build/bin/g8e-linux-amd64 --help
+# Verify the complete matrix and the builder-platform executable without
+# attempting to execute a foreign target during a multi-platform build.
+RUN test -f /build/bin/node-binaries.json && \
+    /build/bin/g8e-linux-$(go env GOARCH) --help
 
 # Verify FIPS 140-3 approved mode is active via the native crypto/fips140 module
 # API. This is the same self-check operators run in production
@@ -99,15 +107,28 @@ RUN /build/bin/g8e-linux-amd64 version --fips
 # vendor-affirmed OE. The slim variant reduces attack surface. Do not change to
 # a different OS or version without confirming it is a tested or
 # vendor-affirmed OE for the applicable CMVP certificate.
-FROM debian@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168
+FROM --platform=${TARGETPLATFORM} debian@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION
+ARG BUILD_ID
+ARG BUILD_TIME
+ARG SOURCE_REVISION
+ARG SOURCE_TREE_HASH
+LABEL org.opencontainers.image.version="${VERSION}" \
+      io.g8e.build.id="${BUILD_ID}" \
+      io.g8e.build.time="${BUILD_TIME}" \
+      io.g8e.source.revision="${SOURCE_REVISION}" \
+      io.g8e.source.tree.hash="${SOURCE_TREE_HASH}"
 
 # Install container utilities (not binary dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the linux/amd64 binary as the entrypoint
-COPY --from=builder /build/bin/g8e-linux-amd64 /g8e
+# Copy the binary matching the image target as the entrypoint.
+COPY --from=builder /build/bin/g8e-${TARGETOS}-${TARGETARCH} /g8e
 
 # Copy all platform binaries for node deployment via /.well-known/g8e/bin/
 COPY --from=builder /build/bin/ /opt/g8e/bin/

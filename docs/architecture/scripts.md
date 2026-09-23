@@ -116,7 +116,7 @@ On a target host, the script performs this sequence:
 2. It detects the operating system and architecture, downloads the selected executable over plain HTTP into the current directory as `g8e` or `g8e.exe`, and replaces an existing file with that name.
 3. It starts `g8e operator start -e <gateway-host>` in the foreground. When no Operator credentials remain, Operator startup enters the owner-approved platform enrollment flow described in [Build and Run a g8e Operator](../guides/build_operator.md).
 
-The deploy scripts do not fetch or verify the `.sha256` files produced by the build, do not verify a signature, and do not protect the script or binary download with TLS. The routes are bootstrap conveniences for a trusted network, not an authenticated software-distribution boundary. Fetch and inspect the rendered script before execution, and do not run it on a host whose existing `.g8e/pki` state must be retained.
+The deploy scripts fetch the matching `.sha256` sidecar and verify the downloaded temporary file before replacing the local executable. They do not verify a signature or protect the script and artifact downloads with TLS. The routes are bootstrap conveniences for a trusted network, not an authenticated software-distribution boundary. Fetch and inspect the rendered script before execution, and do not run it on a host whose existing `.g8e/pki` state must be retained.
 
 After the Gateway is reachable and the required platform binaries are present, the current direct execution forms are:
 
