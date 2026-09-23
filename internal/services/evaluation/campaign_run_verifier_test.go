@@ -132,7 +132,7 @@ func TestCampaignRunVerifier_PassesCompletedAssignment(t *testing.T) {
 	assignment, err := store.LoadAssignment(context.Background(), req.RunID, result.GetAssignmentId())
 	require.NoError(t, err)
 	trace := completedHomogeneousTrace(t, "primary")
-	trace["evaluation_context"] = map[string]any{
+	trace["evaluation_context"] = EvaluationTrace{
 		"campaign_id":                req.CampaignID,
 		"run_id":                     req.RunID,
 		"assignment_id":              assignment.GetAssignmentId(),

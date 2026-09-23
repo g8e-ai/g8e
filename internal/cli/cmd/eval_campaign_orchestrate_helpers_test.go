@@ -31,7 +31,7 @@ func TestWriteCampaignStartPlan_TextAndJSON(t *testing.T) {
 	plan := &evaluation.CampaignStartPlan{
 		CampaignID:           "eval-init-qwen3-4b",
 		RunID:                "run-123",
-		InventoryPath:        ".g8e/eval/inventories/eval-init-qwen3-4b.json",
+		InventoryPath:        filepath.Join(constants.EvaluationDirname, constants.EvaluationInventoriesDirname, "eval-init-qwen3-4b.json"),
 		ModelTags:            []string{"qwen3:4b"},
 		RegistryDigest:       "digest-1",
 		HomogeneousCellCount: 75,
@@ -64,7 +64,7 @@ func TestPersistActiveCampaignRun_WritesMarker(t *testing.T) {
 	plan := &evaluation.CampaignStartPlan{
 		RunID:         "run-abc",
 		CampaignID:    "eval-init-gemma3-4b",
-		InventoryPath: ".g8e/eval/inventories/eval-init-gemma3-4b.json",
+		InventoryPath: filepath.Join(constants.EvaluationDirname, constants.EvaluationInventoriesDirname, "eval-init-gemma3-4b.json"),
 		ModelTags:     []string{"gemma3:4b"},
 	}
 	fileSvc, err := fs.NewRuntimeFileService(root, nil)

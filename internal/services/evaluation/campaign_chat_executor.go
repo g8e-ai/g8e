@@ -20,7 +20,7 @@ import (
 // CampaignChatClient submits production chat and reads persisted g8ee traces.
 type CampaignChatClient interface {
 	EnsembleChat(ctx context.Context, persona harnessclient.Persona, req harnessclient.EnsembleChatRequest) (*harnessclient.EnsembleChatResponse, error)
-	GetEvaluationTrace(ctx context.Context, persona harnessclient.Persona, assignmentID, evaluationAttemptID string) (map[string]any, error)
+	GetEvaluationTrace(ctx context.Context, persona harnessclient.Persona, assignmentID, evaluationAttemptID string) (EvaluationTrace, error)
 }
 
 // CampaignTraceWaiter polls until one g8ee trace reaches a terminal status.
@@ -92,11 +92,7 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 		return nil, fmt.Errorf("evaluation: execute assignment: trace waiter is required")
 	}
 	trace, err := e.waitForTrace(ctx, func(pollCtx context.Context) (EvaluationTrace, error) {
-		rawTrace, err := e.client.GetEvaluationTrace(pollCtx, e.persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
-		if err != nil {
-			return nil, err
-		}
-		return EvaluationTrace(rawTrace), nil
+		return e.client.GetEvaluationTrace(pollCtx, e.persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: execute assignment: wait for trace: %w", err)

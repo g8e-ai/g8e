@@ -79,7 +79,7 @@ func TestCampaignAssignmentVerifier_FailsWhenStoredGradesDrift(t *testing.T) {
 func TestCampaignAssignmentVerifier_FailsWhenCapturedTelemetryDriftsFromTrace(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")
-	call := trace["model_calls"].([]any)[0].(map[string]any)
+	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
 	call["usage_reported"] = true
 	call["input_tokens"] = float64(1)
 	call["output_tokens"] = float64(2)

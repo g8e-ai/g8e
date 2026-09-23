@@ -188,7 +188,7 @@ func TestRunMCPAgentRun_HTTPProxyEmptyStdin(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(JSONRPCResponse{
 				JSONRPC: "2.0",
 				ID:      float64(1),
-				Result:  map[string]interface{}{"status": "ok"},
+				Result:  mcpProxyStatusResult{Status: "ok"},
 			})
 		}))
 		defer server.Close()
@@ -218,7 +218,7 @@ func TestRunMCPAgentRun_HTTPProxyL1Blocked(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(JSONRPCResponse{
 				JSONRPC: "2.0",
 				ID:      float64(1),
-				Result:  map[string]interface{}{"status": "ok"},
+				Result:  mcpProxyStatusResult{Status: "ok"},
 			})
 		}))
 		defer server.Close()

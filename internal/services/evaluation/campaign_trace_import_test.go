@@ -118,7 +118,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")
 	trace["tool_decisions"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"decision_id": "exec-1",
 			"tool_name":   "recursive_grep_search",
 			"selected":    true,
@@ -126,7 +126,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 		},
 	}
 	trace["tool_calls"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"call_id":          "exec-1",
 			"tool_name":        "recursive_grep_search",
 			"arguments_hash":   "a" + repeatHex('a', 63),
@@ -136,7 +136,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 		},
 	}
 	trace["governed_actions"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"binding_id":          "exec-1",
 			"transaction_id":      "exec-1",
 			"operator_id":         "operator-1",
@@ -159,7 +159,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")
-	call := trace["model_calls"].([]any)[0].(map[string]any)
+	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
 	call["usage_reported"] = true
 	call["input_tokens"] = float64(0)
 	call["output_tokens"] = float64(12)
@@ -170,7 +170,7 @@ func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testi
 	call["governed_output_hash"] = "d" + repeatHex('d', 63)
 	call["monotonic_start"] = 10.25
 	call["monotonic_end"] = 11.5
-	trace["policy_decisions"] = []any{map[string]any{
+	trace["policy_decisions"] = []any{EvaluationTrace{
 		"decision_id": "policy-1",
 		"tool_name":   "",
 		"outcome":     "deny",
@@ -201,7 +201,7 @@ func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testi
 func TestImportAssignmentResultFromTrace_RejectsUnknownPolicyOutcome(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")
-	trace["policy_decisions"] = []any{map[string]any{
+	trace["policy_decisions"] = []any{EvaluationTrace{
 		"decision_id": "policy-1",
 		"tool_name":   "read_file",
 		"outcome":     "maybe",
@@ -236,15 +236,15 @@ func TestDurationSecondsToNanosChecked_RoundsProviderTelemetryFloats(t *testing.
 	}
 }
 
-func completedHomogeneousTrace(t *testing.T, role string) map[string]any {
+func completedHomogeneousTrace(t *testing.T, role string) EvaluationTrace {
 	t.Helper()
-	trace := map[string]any{
+	trace := EvaluationTrace{
 		"schema_version":    "1",
 		"chat_execution_id": "exec-1",
 		"status":            "completed",
 		"completed_at":      "2026-09-15T00:00:00+00:00",
 		"role_outcome":      "invoked",
-		"evaluation_context": map[string]any{
+		"evaluation_context": EvaluationTrace{
 			"campaign_id":                "campaign-1",
 			"run_id":                     "run-1",
 			"assignment_id":              "assignment-1",
@@ -255,11 +255,11 @@ func completedHomogeneousTrace(t *testing.T, role string) map[string]any {
 			"evaluation_lane":            "model_role",
 			"designated_model_role":      role,
 		},
-		"controlled_role_assignment": map[string]any{
+		"controlled_role_assignment": EvaluationTrace{
 			"designated_model_role": role,
 		},
 		"model_calls": []any{
-			map[string]any{
+			EvaluationTrace{
 				"agent_role":              "sage",
 				"model_role":              role,
 				"provider":                "G8EProvider",

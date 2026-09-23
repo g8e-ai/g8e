@@ -104,6 +104,13 @@ func extractArchive(reader io.Reader, root string) error {
 		if err != nil {
 			return fmt.Errorf("%w: read tar stream: %w", constants.ErrG8eBinaryArchive, err)
 		}
+		if header.Typeflag == tar.TypeDir && (header.Name == "." || header.Name == "./") && header.Size == 0 {
+			if _, ok := seen[constants.PathCurrentDir]; ok {
+				return fmt.Errorf("%w: duplicate entry %q", constants.ErrG8eBinaryArchive, header.Name)
+			}
+			seen[constants.PathCurrentDir] = struct{}{}
+			continue
+		}
 		name, err := archiveName(header.Name)
 		if err != nil {
 			return err

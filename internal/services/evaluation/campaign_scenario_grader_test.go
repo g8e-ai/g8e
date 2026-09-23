@@ -80,7 +80,7 @@ func TestGradeHomogeneousScenario_SemanticScenarioUsesImportedTraceGrades(t *tes
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")
 	trace["semantic_grades"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"grade_id":         "assignment-3:semantic-judge",
 			"criterion_id":     "semantic-judge",
 			"status":           "pass",
@@ -138,7 +138,7 @@ func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")
 	trace["tool_decisions"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"decision_id": "exec-1",
 			"tool_name":   "recursive_grep_search",
 			"selected":    true,
@@ -146,7 +146,7 @@ func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing
 		},
 	}
 	trace["tool_calls"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"call_id":          "exec-1",
 			"tool_name":        "recursive_grep_search",
 			"arguments_hash":   "a" + repeatHex('a', 63),

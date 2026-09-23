@@ -184,7 +184,7 @@ Run these commands from the repository root where ` + "`" + `docker-compose.yml`
 		dockerResetCmd(),
 		dockerRebuildCmd(),
 		dockerLogsCmd(),
-		dockerBinariesExportCmd(),
+		dockerBinariesCmd(),
 	)
 	return cmd
 }

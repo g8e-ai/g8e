@@ -87,10 +87,19 @@ func (execDockerBinaryRunner) RemoveContainer(ctx context.Context, container str
 	return nil
 }
 
+func dockerBinariesCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "binaries",
+		Short: "Manage Gateway image g8e-binary artifacts",
+	}
+	cmd.AddCommand(dockerBinariesExportCmd())
+	return cmd
+}
+
 func dockerBinariesExportCmd() *cobra.Command {
 	var image, output string
 	cmd := &cobra.Command{
-		Use:   "binaries export",
+		Use:   "export",
 		Short: "Export the g8e-binary set from an existing Gateway image",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -201,11 +210,12 @@ func publishDockerArchive(ctx context.Context, runner dockerBinaryRunner, publis
 	if publishErr != nil {
 		_ = reader.CloseWithError(publishErr)
 	}
-	if err := <-copyErr; err != nil {
-		return g8ebinaries.Manifest{}, err
-	}
+	copyPathErr := <-copyErr
 	if publishErr != nil {
 		return g8ebinaries.Manifest{}, publishErr
+	}
+	if copyPathErr != nil {
+		return g8ebinaries.Manifest{}, copyPathErr
 	}
 	return manifest, nil
 }

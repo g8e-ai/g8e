@@ -562,6 +562,22 @@ func chatEvalListOperators(
 	return operators, nil
 }
 
+type campaignChatHarnessClient struct {
+	client *harnessclient.Client
+}
+
+func (w *campaignChatHarnessClient) EnsembleChat(ctx context.Context, persona harnessclient.Persona, req harnessclient.EnsembleChatRequest) (*harnessclient.EnsembleChatResponse, error) {
+	return w.client.EnsembleChat(ctx, persona, req)
+}
+
+func (w *campaignChatHarnessClient) GetEvaluationTrace(ctx context.Context, persona harnessclient.Persona, assignmentID, evaluationAttemptID string) (evaluation.EvaluationTrace, error) {
+	trace, err := w.client.GetEvaluationTrace(ctx, persona, assignmentID, evaluationAttemptID)
+	if err != nil {
+		return nil, err
+	}
+	return evaluation.EvaluationTrace(trace), nil
+}
+
 func chatEvalEnsembleClient(cfg *config.Config, authContext *auth.ClientAuthContext, ensembleURL string, deps chatEvalDeps) (*harnessclient.Client, error) {
 	clientConfig := harnessconfig.Config{
 		EnsembleBaseURL: ensembleURL,

@@ -27,7 +27,9 @@ echo -e "${GREEN}Deploying g8e...${NC}"
 
 # Clean up existing certificates
 echo -e "${YELLOW}Cleaning up existing certificates...${NC}"
-rm -rf "${HOME}/.g8e/pki"
+RUNTIME_BASENAME="g8e"
+RUNTIME_DIR="${HOME}/.${RUNTIME_BASENAME}"
+rm -rf "${RUNTIME_DIR}/pki"
 
 # Detect OS
 OS="$(uname -s)"

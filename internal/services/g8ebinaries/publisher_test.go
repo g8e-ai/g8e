@@ -34,7 +34,7 @@ func TestPublisherPublish_ValidatesAndReplacesCompleteMirror(t *testing.T) {
 	require.NoError(t, os.MkdirAll(old, constants.PermDirPrivate))
 	require.NoError(t, os.WriteFile(filepath.Join(old, "old.txt"), []byte("old"), constants.PermFilePublic))
 
-	archive := validArchive(t, "build-1")
+	archive := validArchive(t, "build-1", false)
 	manifest, err := NewPublisher(old).Publish(bytes.NewReader(archive))
 
 	require.NoError(t, err)
@@ -44,6 +44,16 @@ func TestPublisherPublish_ValidatesAndReplacesCompleteMirror(t *testing.T) {
 	reader, err := OpenReader(old)
 	require.NoError(t, err)
 	assert.True(t, reader.HasManifest())
+}
+
+func TestPublisherPublish_AcceptsDockerCopyRootDirectory(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "mirror")
+
+	manifest, err := NewPublisher(output).Publish(bytes.NewReader(validArchive(t, "build-1", true)))
+
+	require.NoError(t, err)
+	assert.Equal(t, "build-1", manifest.BuildID)
+	assert.FileExists(t, filepath.Join(output, constants.G8eBinariesManifestFilename))
 }
 
 func TestPublisherPublish_RejectsUnsafeArchiveWithoutReplacingMirror(t *testing.T) {
@@ -56,10 +66,11 @@ func TestPublisherPublish_RejectsUnsafeArchiveWithoutReplacingMirror(t *testing.
 	var archive bytes.Buffer
 	writer := tar.NewWriter(&archive)
 	require.NoError(t, writer.WriteHeader(&tar.Header{Name: "../escape", Mode: int64(constants.PermFilePublic), Size: 1}))
-	require.NoError(t, writer.Write([]byte("x")))
+	_, err := writer.Write([]byte("x"))
+	require.NoError(t, err)
 	require.NoError(t, writer.Close())
 
-	_, err := NewPublisher(output).Publish(&archive)
+	_, err = NewPublisher(output).Publish(&archive)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrG8eBinaryArchive)
 	data, readErr := os.ReadFile(marker)
@@ -72,7 +83,8 @@ func TestPublisherPublish_RejectsDuplicateArchiveEntries(t *testing.T) {
 	writer := tar.NewWriter(&archive)
 	for range 2 {
 		require.NoError(t, writer.WriteHeader(&tar.Header{Name: constants.G8eBinariesManifestFilename, Mode: int64(constants.PermFilePublic), Size: 2}))
-		require.NoError(t, writer.Write([]byte("{}")))
+		_, err := writer.Write([]byte("{}"))
+		require.NoError(t, err)
 	}
 	require.NoError(t, writer.Close())
 
@@ -81,10 +93,13 @@ func TestPublisherPublish_RejectsDuplicateArchiveEntries(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrG8eBinaryArchive)
 }
 
-func validArchive(t *testing.T, buildID string) []byte {
+func validArchive(t *testing.T, buildID string, includeRoot bool) []byte {
 	t.Helper()
 	var archive bytes.Buffer
 	writer := tar.NewWriter(&archive)
+	if includeRoot {
+		require.NoError(t, writer.WriteHeader(&tar.Header{Name: "./", Typeflag: tar.TypeDir, Mode: int64(constants.PermDirPrivate)}))
+	}
 	artifacts := make([]Artifact, 0, len(Targets()))
 	for _, target := range Targets() {
 		data := []byte("binary-" + target.Filename)

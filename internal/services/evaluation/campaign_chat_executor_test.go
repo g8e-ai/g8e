@@ -27,7 +27,7 @@ func (s *stubCampaignChatClient) EnsembleChat(_ context.Context, _ harnessclient
 	return &harnessclient.EnsembleChatResponse{CaseID: "case-1", InvestigationID: "inv-1"}, nil
 }
 
-func (s *stubCampaignChatClient) GetEvaluationTrace(_ context.Context, _ harnessclient.Persona, _, _ string) (map[string]any, error) {
+func (s *stubCampaignChatClient) GetEvaluationTrace(_ context.Context, _ harnessclient.Persona, _, _ string) (EvaluationTrace, error) {
 	return s.trace, nil
 }
 

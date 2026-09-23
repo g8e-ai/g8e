@@ -252,7 +252,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		OperatorSessionID: dataOperator.OperatorSessionID,
 	}
 	executor := evaluation.NewCampaignChatExecutor(
-		ensembleClient,
+		&campaignChatHarnessClient{client: ensembleClient},
 		persona,
 		dataOperator.OperatorID,
 		dataOperator.OperatorSessionID,

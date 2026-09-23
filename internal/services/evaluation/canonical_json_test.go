@@ -16,7 +16,7 @@ import (
 
 func TestMarshalCanonicalJSONObject_EscapesHTMLSensitiveCharacters(t *testing.T) {
 	t.Parallel()
-	trace := map[string]any{
+	trace := EvaluationTrace{
 		"designated_role_output": "Action & Safeguard <done>",
 		"trace_digest":           "",
 	}

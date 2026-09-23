@@ -59,17 +59,17 @@ func TestNumericValue_AcceptsSupportedTypes(t *testing.T) {
 
 func TestHasTraceToolCallsAndGovernedActions(t *testing.T) {
 	t.Parallel()
-	trace := map[string]any{
+	trace := EvaluationTrace{
 		"tool_calls": []any{
-			map[string]any{"name": "probe_echo"},
+			EvaluationTrace{"name": "probe_echo"},
 		},
 		"governed_actions": []any{
-			map[string]any{"action_type": "inference_dispatch"},
+			EvaluationTrace{"action_type": "inference_dispatch"},
 		},
 	}
 	assert.True(t, hasTraceToolCalls(trace))
 	assert.True(t, hasTraceGovernedActions(trace))
-	assert.False(t, hasTraceToolCalls(map[string]any{}))
+	assert.False(t, hasTraceToolCalls(EvaluationTrace{}))
 }
 
 func TestParseExactFormatExpectedAndCountWords(t *testing.T) {

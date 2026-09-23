@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -136,16 +137,17 @@ func TestGenerateTunnelConfig(t *testing.T) {
 	})
 
 	t.Run("generates config with CA bundle and originServerName", func(t *testing.T) {
+		caBundle := filepath.Join(constants.RuntimeDirname, constants.PkiDirname, constants.PkiFileGatewayBundle)
 		config := generateTunnelConfig(
 			"abc123",
 			"/home/user/.cloudflared/abc123.json",
 			"console.g8e.ai",
 			"https://localhost:8443",
-			"./.g8e/pki/g8eg-ca-bundle.pem",
+			caBundle,
 			"g8e.local",
 		)
 
-		assert.Contains(t, config, "originCaPool: ./.g8e/pki/g8eg-ca-bundle.pem")
+		assert.Contains(t, config, "originCaPool: "+caBundle)
 		assert.Contains(t, config, "originServerName: g8e.local")
 		assert.NotContains(t, config, "noTLSVerify")
 	})

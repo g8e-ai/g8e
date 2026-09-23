@@ -39,6 +39,7 @@ func TestDockerCommandSubcommands(t *testing.T) {
 			"reset",
 			"rebuild",
 			"logs",
+			"binaries",
 		}
 
 		for _, subcmd := range expectedSubcommands {
@@ -52,6 +53,17 @@ func TestDockerCommandSubcommands(t *testing.T) {
 			assert.Truef(t, found, "docker command should have %s subcommand", subcmd)
 		}
 	})
+}
+
+func TestDockerBinariesCommandHasExportSubcommand(t *testing.T) {
+	cmd := dockerCmd()
+	binaries, _, err := cmd.Find([]string{"binaries"})
+	require.NoError(t, err)
+	require.Equal(t, "binaries", binaries.Name())
+
+	export, _, err := binaries.Find([]string{"export"})
+	require.NoError(t, err)
+	assert.Equal(t, "export", export.Name())
 }
 
 func TestDockerCommand_RegisteredOnRoot(t *testing.T) {

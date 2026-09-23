@@ -21,13 +21,22 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	_ "modernc.org/sqlite"
 )
 
+func newCampaignExportFileService(t *testing.T) fs.RuntimeFileService {
+	t.Helper()
+	fileSvc, err := fs.NewRuntimeFileService(t.TempDir(), nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	return fileSvc
+}
+
 func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
-	files := newCampaignMemoryFileService()
+	files := newCampaignExportFileService(t)
 	store := NewStore(files)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
 	req := testCampaignInitRequest(t)
@@ -59,7 +68,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, executed)
 
-	outputDir := filepath.Join(t.TempDir(), "export")
+	outputDir := constants.EvaluationCampaignExportDirname
 	exporter := NewCampaignExporter(func() time.Time { return time.Unix(1_700_000_100, 0).UTC() })
 	report, err := exporter.ExportRun(context.Background(), store, files, req.RunID, outputDir)
 	require.NoError(t, err)
@@ -77,7 +86,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	}
 	assert.Equal(t, uint32(1), assignmentFile.RecordCount)
 
-	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "assignments.jsonl"))
+	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, constants.EvaluationAssignmentsJSONLFilename))
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(assignmentsJSONL)), "\n")
 	require.Len(t, lines, 1)
@@ -89,14 +98,14 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	assert.NotContains(t, lines[0], "prompt")
 	assert.NotContains(t, lines[0], "raw_output")
 
-	runSummaryBody, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "run_summary.json"))
+	runSummaryBody, err := files.ReadFile(context.Background(), filepath.Join(outputDir, constants.EvaluationRunSummaryFilename))
 	require.NoError(t, err)
 	var runSummary campaignRunSummaryExport
 	require.NoError(t, json.Unmarshal(runSummaryBody, &runSummary))
 	assert.Equal(t, req.RunID, runSummary.RunID)
 	assert.Equal(t, truncated.GetCatalogDigest(), runSummary.CatalogDigest)
 
-	db, err := sql.Open("sqlite", filepath.Join(outputDir, "campaign_export.sqlite"))
+	db, err := sql.Open("sqlite", files.Resolve(filepath.Join(outputDir, constants.EvaluationCampaignExportSQLiteFilename)))
 	require.NoError(t, err)
 	defer db.Close()
 	var assignmentCount int
@@ -194,7 +203,7 @@ func TestCampaignExporter_ExportRunRequiresRunID(t *testing.T) {
 }
 
 func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
-	files := newCampaignMemoryFileService()
+	files := newCampaignExportFileService(t)
 	store := NewStore(files)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
 	req := testCampaignInitRequest(t)
@@ -276,7 +285,7 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	}
 	require.NotEmpty(t, expectedEvaluationSummaryBody)
 
-	outputDir := filepath.Join(t.TempDir(), "export-verified")
+	outputDir := constants.EvaluationCampaignExportDirname
 	exporter := NewCampaignExporter(func() time.Time { return time.Unix(1_700_000_300, 0).UTC() })
 	exportReport, err := exporter.ExportRun(context.Background(), store, files, req.RunID, outputDir)
 	require.NoError(t, err)
@@ -337,7 +346,7 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 		assert.Equal(t, CampaignDatasetID(req.RunID), ms.DatasetID)
 	}
 
-	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "assignments.jsonl"))
+	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, constants.EvaluationAssignmentsJSONLFilename))
 	require.NoError(t, err)
 	assignmentLines := strings.Split(strings.TrimSpace(string(assignmentsJSONL)), "\n")
 	require.Len(t, assignmentLines, 3)
