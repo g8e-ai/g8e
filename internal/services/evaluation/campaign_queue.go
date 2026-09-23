@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,6 +38,15 @@ const (
 	DefaultBaseInitCampaignQueueRelPath = "eval/base-init-campaign-queue.json"
 	DefaultGenesisHomogeneousCampaignID = "eval-genesis-homogeneous"
 )
+
+// QueueLogDir returns the canonical runtime-relative directory for one rollout.
+func QueueLogDir(runName string) string {
+	runName = strings.TrimSpace(runName)
+	if runName == "" || runName == "." || runName == ".." || strings.ContainsAny(runName, `/\\`) {
+		return ""
+	}
+	return path.Join(constants.EvaluationQueueLogsDirname, runName)
+}
 
 // CampaignQueueModel summarizes one init-campaign queue entry.
 type CampaignQueueModel struct {

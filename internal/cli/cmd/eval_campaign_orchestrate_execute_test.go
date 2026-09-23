@@ -350,7 +350,7 @@ func (l *campaignTraceLookup) resolve(assignmentID, attemptID string) map[string
 		return nil
 	}
 	store := evaluation.NewStore(fileSvc)
-	active, err := evaluation.LoadActiveCampaignRun(l.root)
+	active, err := evaluation.LoadActiveCampaignRunFromRuntime(context.Background(), fileSvc)
 	if err != nil || active.RunID == "" {
 		return nil
 	}

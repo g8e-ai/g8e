@@ -346,7 +346,7 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "schedule", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "schedule", runID, args)
 			if err != nil {
 				return err
 			}
@@ -409,7 +409,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "execute", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "execute", runID, args)
 			if err != nil {
 				return err
 			}
@@ -489,7 +489,7 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "publish", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "publish", runID, args)
 			if err != nil {
 				return err
 			}
@@ -584,7 +584,7 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "verify", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "verify", runID, args)
 			if err != nil {
 				return err
 			}
@@ -629,7 +629,7 @@ func campaignEvalAccountCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "account", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "account", runID, args)
 			if err != nil {
 				return err
 			}
@@ -709,7 +709,7 @@ func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "export", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "export", runID, args)
 			if err != nil {
 				return err
 			}
@@ -781,7 +781,7 @@ func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "repair trace-digests", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "repair trace-digests", runID, args)
 			if err != nil {
 				return err
 			}
@@ -818,7 +818,7 @@ func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "repair results", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "repair results", runID, args)
 			if err != nil {
 				return err
 			}
@@ -934,7 +934,7 @@ func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "status", runID, args)
+			runID, err = resolveCampaignRunID(cmd, deps, "status", runID, args)
 			if err != nil {
 				return err
 			}

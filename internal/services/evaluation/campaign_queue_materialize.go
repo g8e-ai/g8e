@@ -336,7 +336,6 @@ func (queue *CampaignQueue) MergePreservingVerifiedStatusFromQueue(existing *Cam
 type MarkCampaignQueueEntryRequest struct {
 	Context        context.Context
 	FileService    fs.RuntimeFileService
-	ProjectRoot    string
 	QueuePath      string
 	VariantID      string
 	ServedModelTag string
@@ -347,7 +346,7 @@ type MarkCampaignQueueEntryRequest struct {
 
 // MarkCampaignQueueEntry updates and persists one queue entry.
 func MarkCampaignQueueEntry(req MarkCampaignQueueEntryRequest) (*CampaignQueueModel, error) {
-	if (req.FileService == nil && req.ProjectRoot == "") || req.Status == "" {
+	if req.FileService == nil || req.Status == "" {
 		return nil, fmt.Errorf("evaluation: mark campaign queue entry: missing required field")
 	}
 	if req.Context == nil {
@@ -357,13 +356,7 @@ func MarkCampaignQueueEntry(req MarkCampaignQueueEntryRequest) (*CampaignQueueMo
 	if queuePath == "" {
 		queuePath = DefaultInitCampaignQueueRelPath
 	}
-	var queue *CampaignQueue
-	var err error
-	if req.FileService != nil {
-		queue, err = LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, queuePath)
-	} else {
-		queue, err = LoadInitCampaignQueue(ResolveEvalPath(req.ProjectRoot, queuePath))
-	}
+	queue, err := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, queuePath)
 	if err != nil {
 		return nil, err
 	}
@@ -371,11 +364,7 @@ func MarkCampaignQueueEntry(req MarkCampaignQueueEntryRequest) (*CampaignQueueMo
 	if err != nil {
 		return nil, err
 	}
-	if req.FileService != nil {
-		err = SaveInitCampaignQueueToRuntime(req.Context, req.FileService, queuePath, queue)
-	} else {
-		err = SaveInitCampaignQueue(ResolveEvalPath(req.ProjectRoot, queuePath), queue)
-	}
+	err = SaveInitCampaignQueueToRuntime(req.Context, req.FileService, queuePath, queue)
 	if err != nil {
 		return nil, err
 	}

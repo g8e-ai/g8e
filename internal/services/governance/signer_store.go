@@ -8,13 +8,16 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // SignerStore defines the interface for loading trusted L2 signers.
@@ -40,77 +43,62 @@ func (s *FailClosedSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKe
 }
 
 // FilesystemSignerStore implements SignerStore by loading public keys from
-// .pub files in a directory. Each file's basename is the keyID, and the file
-// content is a hex-encoded ED25519 public key.
+// runtime .pub files. Each file's basename is the keyID, and the file content
+// is a hex-encoded ED25519 public key.
 type FilesystemSignerStore struct {
 	signers map[string]ed25519.PublicKey
 }
 
-// NewFilesystemSignerStore loads all .pub files from the specified directory.
-// The directory must exist and contain .pub files with hex-encoded public keys.
-// Returns an error if the directory does not exist or if any file is malformed.
-func NewFilesystemSignerStore(dir string, logger *slog.Logger) (*FilesystemSignerStore, error) {
-	entries, err := os.ReadDir(dir)
+// NewFilesystemSignerStore loads all .pub files from a runtime-relative
+// directory through RuntimeFileService. The directory must exist.
+func NewFilesystemSignerStore(fileSvc fs.RuntimeFileService, relDir string, logger *slog.Logger) (*FilesystemSignerStore, error) {
+	if fileSvc == nil || relDir == "" {
+		return nil, fmt.Errorf("trusted signers: %w", constants.ErrMissingRequiredField)
+	}
+	entries, err := fileSvc.ReadDir(context.Background(), relDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read trusted signers directory %s: %w", dir, err)
+		return nil, fmt.Errorf("failed to read trusted signers directory %s: %w", relDir, err)
 	}
 
 	signers := make(map[string]ed25519.PublicKey)
 	loadedCount := 0
 	failureCount := 0
-
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
 			continue
 		}
-		if !strings.HasSuffix(entry.Name(), ".pub") {
-			continue
-		}
-
 		keyID := strings.TrimSuffix(entry.Name(), ".pub")
-		filePath := filepath.Join(dir, entry.Name())
-
-		data, err := os.ReadFile(filePath)
+		relPath := filepath.Join(relDir, entry.Name())
+		data, err := fileSvc.ReadFile(context.Background(), relPath)
 		if err != nil {
 			if logger != nil {
-				logger.Warn("Failed to read trusted signer file", "path", filePath, "error", err)
+				logger.Warn("Failed to read trusted signer file", "path", relPath, "error", err)
 			}
 			failureCount++
 			continue
 		}
-
-		hexKey := strings.TrimSpace(string(data))
-		pubKeyBytes, err := hex.DecodeString(hexKey)
+		pubKeyBytes, err := hex.DecodeString(strings.TrimSpace(string(data)))
 		if err != nil {
 			if logger != nil {
-				logger.Warn("Failed to decode hex public key", "path", filePath, "error", err)
+				logger.Warn("Failed to decode hex public key", "path", relPath, "error", err)
 			}
 			failureCount++
 			continue
 		}
-
 		if len(pubKeyBytes) != ed25519.PublicKeySize {
 			if logger != nil {
-				logger.Warn("Invalid public key size", "path", filePath, "size", len(pubKeyBytes), "expected", ed25519.PublicKeySize)
+				logger.Warn("Invalid public key size", "path", relPath, "size", len(pubKeyBytes), "expected", ed25519.PublicKeySize)
 			}
 			failureCount++
 			continue
 		}
-
 		signers[keyID] = ed25519.PublicKey(pubKeyBytes)
 		loadedCount++
 	}
-
 	if logger != nil {
-		logger.Info("Loaded trusted signers from filesystem",
-			"directory", dir,
-			"loaded", loadedCount,
-			"failed", failureCount)
+		logger.Info("Loaded trusted signers from filesystem", "directory", relDir, "loaded", loadedCount, "failed", failureCount)
 	}
-
-	return &FilesystemSignerStore{
-		signers: signers,
-	}, nil
+	return &FilesystemSignerStore{signers: signers}, nil
 }
 
 func (s *FilesystemSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {

@@ -8,6 +8,7 @@
 package evaluation
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -125,11 +127,15 @@ func TestMarkCampaignQueueEntry(t *testing.T) {
 			{VariantID: "gemma3-4b", ServedModelTag: "gemma3:4b", Status: "pending"},
 		},
 	}
-	queuePath := filepath.Join(root, DefaultInitCampaignQueueRelPath)
-	require.NoError(t, SaveInitCampaignQueue(queuePath, &queue))
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, DefaultInitCampaignQueueRelPath, &queue))
 
 	entry, err := MarkCampaignQueueEntry(MarkCampaignQueueEntryRequest{
-		ProjectRoot:    root,
+		Context:        context.Background(),
+		FileService:    fileSvc,
+		QueuePath:      DefaultInitCampaignQueueRelPath,
 		ServedModelTag: "gemma3:4b",
 		Status:         "verified",
 		VerifiedRunID:  "eval-init-gemma3-4b-123",
@@ -139,7 +145,7 @@ func TestMarkCampaignQueueEntry(t *testing.T) {
 	assert.Equal(t, "verified", entry.Status)
 	assert.Equal(t, "eval-init-gemma3-4b-123", entry.VerifiedRunID)
 
-	loaded, err := LoadInitCampaignQueue(queuePath)
+	loaded, err := LoadInitCampaignQueueFromRuntime(context.Background(), fileSvc, DefaultInitCampaignQueueRelPath)
 	require.NoError(t, err)
 	assert.Equal(t, "verified", loaded.Models[0].Status)
 }

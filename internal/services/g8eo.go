@@ -12,6 +12,7 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -304,8 +305,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	// Load trusted L2 signers from filesystem
-	trustedSignersDir := paths.Infra.TrustedSignersDir
-	signerStore, err := governance.NewFilesystemSignerStore(trustedSignersDir, vs.logger)
+	trustedSignersDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrustedSigners)
+	signerStore, err := governance.NewFilesystemSignerStore(vs.fileSvc, trustedSignersDir, vs.logger)
 	if err != nil {
 		return fmt.Errorf("%w: failed to load trusted signers: %w", constants.ErrPathNotFound, err)
 	}

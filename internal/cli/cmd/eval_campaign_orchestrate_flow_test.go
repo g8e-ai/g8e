@@ -188,7 +188,9 @@ func TestRunCampaignStartFlow_PrepareOnlyInitializesAndSchedules(t *testing.T) {
 	assert.Contains(t, output.String(), "Initialized campaign")
 	assert.Contains(t, output.String(), "Scheduled")
 
-	active, err := evaluation.LoadActiveCampaignRun(root)
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	active, err := evaluation.LoadActiveCampaignRunFromRuntime(context.Background(), fileSvc)
 	require.NoError(t, err)
 	assert.Equal(t, result.Plan.RunID, active.RunID)
 }

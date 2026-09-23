@@ -37,7 +37,9 @@ func prepareCampaignRunViaStart(t *testing.T, root string, deps nativeEvalDeps) 
 	require.NotNil(t, result)
 	require.NotNil(t, result.Plan)
 
-	active, err := evaluation.LoadActiveCampaignRun(root)
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	active, err := evaluation.LoadActiveCampaignRunFromRuntime(context.Background(), fileSvc)
 	require.NoError(t, err)
 	require.NotEmpty(t, active.RunID)
 	return active

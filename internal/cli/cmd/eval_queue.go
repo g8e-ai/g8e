@@ -122,14 +122,13 @@ func rolloutEvalMarkCmd(deps nativeEvalDeps) *cobra.Command {
 Example:
   g8e eval rollout mark --tag qwen3:4b --status verified --run-id eval-init-qwen3-4b-1789657337`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
 			entry, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
 				Context:        cmd.Context(),
 				FileService:    fileSvc,
-				ProjectRoot:    cfg.ProjectRoot,
 				QueuePath:      queuePath,
 				VariantID:      variantID,
 				ServedModelTag: servedModelTag,

@@ -11,8 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -60,40 +58,6 @@ func SaveActiveCampaignRunToRuntime(ctx context.Context, fileSvc fs.RuntimeFileS
 		return fmt.Errorf("evaluation: save active campaign run: encode: %w", err)
 	}
 	if err := fileSvc.WriteFile(ctx, constants.EvaluationActiveRunPath, payload, constants.PermFileReadOnly); err != nil {
-		return fmt.Errorf("evaluation: save active campaign run: %w", err)
-	}
-	return nil
-}
-
-// ActiveCampaignRunPath is retained for external fixture compatibility; runtime callers use constants.EvaluationActiveRunPath.
-func ActiveCampaignRunPath(projectRoot string) string {
-	return filepath.Join(projectRoot, constants.RuntimeDirname, constants.EvaluationActiveRunPath)
-}
-
-// LoadActiveCampaignRun reads an explicitly supplied external fixture path.
-func LoadActiveCampaignRun(projectRoot string) (*ActiveCampaignRun, error) {
-	data, err := os.ReadFile(ActiveCampaignRunPath(projectRoot))
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: load active campaign run: %w", err)
-	}
-	run := &ActiveCampaignRun{}
-	if err := json.Unmarshal(data, run); err != nil {
-		return nil, fmt.Errorf("evaluation: load active campaign run: decode: %w", err)
-	}
-	return run, nil
-}
-
-// SaveActiveCampaignRun writes an explicitly supplied external fixture path.
-func SaveActiveCampaignRun(projectRoot string, run ActiveCampaignRun) error {
-	path := ActiveCampaignRunPath(projectRoot)
-	if err := os.MkdirAll(filepath.Dir(path), constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("evaluation: save active campaign run: create dir: %w", err)
-	}
-	payload, err := json.MarshalIndent(run, "", "  ")
-	if err != nil {
-		return fmt.Errorf("evaluation: save active campaign run: encode: %w", err)
-	}
-	if err := os.WriteFile(path, payload, constants.PermFileReadOnly); err != nil {
 		return fmt.Errorf("evaluation: save active campaign run: %w", err)
 	}
 	return nil

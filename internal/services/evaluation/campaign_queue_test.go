@@ -267,18 +267,40 @@ func TestResolveCampaignStartPlan_ReusesIdenticalReadOnlyInventoryAndRejectsDiff
 	assert.True(t, errors.Is(err, constants.ErrImmutableInventoryConflict))
 }
 
+func TestQueueLogDirReturnsCanonicalRuntimeRelativePath(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "rollout name", input: "queue-run-20260923", want: "eval/logs/queue-run-20260923"},
+		{name: "blank name", input: "", want: ""},
+		{name: "nested name rejected", input: "batch/one", want: ""},
+		{name: "parent name rejected", input: "..", want: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, QueueLogDir(test.input))
+		})
+	}
+}
+
 func TestActiveCampaignRunRoundTrip(t *testing.T) {
-	root := t.TempDir()
+	fileSvc, err := fs.NewRuntimeFileService(t.TempDir(), nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	run := ActiveCampaignRun{
 		RunID:         "eval-init-gemma3-4b-1789669555",
 		CampaignID:    "eval-init-gemma3-4b",
-		InventoryFile: ".g8e/eval/inventories/eval-init-gemma3-4b.json",
+		InventoryFile: "eval/inventories/eval-init-gemma3-4b.json",
 		ModelTags:     []string{"gemma3:4b"},
 		StartedAt:     time.Unix(1789669555, 0).UTC(),
 	}
-	require.NoError(t, SaveActiveCampaignRun(root, run))
-	assert.Equal(t, filepath.Join(root, constants.RuntimeDirname, constants.DataDirname, constants.EvaluationDirname, constants.EvaluationActiveRunFilename), ActiveCampaignRunPath(root))
-	loaded, err := LoadActiveCampaignRun(root)
+	require.NoError(t, SaveActiveCampaignRunToRuntime(context.Background(), fileSvc, run))
+	exists, err := fileSvc.FileExists(context.Background(), constants.EvaluationActiveRunPath)
+	require.NoError(t, err)
+	assert.True(t, exists)
+	loaded, err := LoadActiveCampaignRunFromRuntime(context.Background(), fileSvc)
 	require.NoError(t, err)
 	assert.Equal(t, run.RunID, loaded.RunID)
 	assert.Equal(t, run.CampaignID, loaded.CampaignID)

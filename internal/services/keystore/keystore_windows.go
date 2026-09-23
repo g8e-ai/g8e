@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -19,9 +18,7 @@ import (
 // and the provided RuntimeFileService for file I/O.
 // Windows Credential Manager integration could be added in the future.
 func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger) (*Keystore, error) {
-	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
-
-	keyring, err := newFileKeyring(secretsDir)
+	keyring, err := newFileKeyring(fileSvc)
 	if err != nil {
 		return nil, fmt.Errorf("keystore: initialize file keyring: %w", err)
 	}

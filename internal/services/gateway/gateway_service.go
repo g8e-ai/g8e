@@ -305,7 +305,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if consensusSvc == nil && cfg.Gateway.Posture.RequiresL2() && cfg.Gateway.ConsensusID != "" {
 		policy, err := consensusStore.GetConsensus(cfg.Gateway.ConsensusID)
 		if err == nil && policy != nil {
-			fileProvider := consensus.NewFileKeyProvider(cfg.Gateway.SecretsDir, cfg.Gateway.ConsensusID)
+			fileProvider, err := consensus.NewFileKeyProvider(b.fileSvc, cfg.Gateway.ConsensusID)
+			if err != nil {
+				return nil, fmt.Errorf("gateway: create consensus file key provider: %w", err)
+			}
 			keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
 				if key, err := fileProvider.GetMemberKey(appID); err == nil {
 					return key, nil
