@@ -301,7 +301,7 @@ already-enrolled CLI.`,
 				if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, dockerFullStackProfiles()...); err != nil {
 					return err
 				}
-				cmd.Println("Docker images built and g8e binaries exported successfully.")
+				cmd.Println("Docker images built and runtime binary exported to ./g8e.")
 			}
 
 			cmd.Println("Starting gateway...")
@@ -1020,7 +1020,7 @@ func dockerBuildCmd() *cobra.Command {
 			if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, resolveDockerProfile(true, profile)); err != nil {
 				return err
 			}
-			cmd.Println("\nDocker images built and g8e binaries exported successfully.")
+			cmd.Println("\nDocker images built and runtime binary exported to ./g8e.")
 			return nil
 		},
 	}

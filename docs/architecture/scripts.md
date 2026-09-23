@@ -128,7 +128,7 @@ curl -fsSL http://<gateway-host>:8080/g8e-deploy.sh | bash
 iwr http://<gateway-host>:8080/g8e-deploy.ps1 -UseBasicParsing | iex
 ```
 
-Linux and macOS require `curl` or `wget`; Windows requires PowerShell. Container-built Gateways include the complete standard platform matrix in `/opt/g8e/bin`; a source-built Gateway host needs the requested binaries in one of the searched locations, normally through `make build-all`.
+Linux and macOS require `curl` or `wget`; Windows requires PowerShell. Standard Gateway container images ship only the runtime binary at `/g8e`; the `/.well-known/g8e/bin/` download surface is available when a validated `bin/` mirror exists beside a source-built Gateway or when `/opt/g8e/bin` contains a full manifest from a custom image build. Build the complete matrix on the host with `make build-all`.
 
 ## Air-Gap Image Transfer
 

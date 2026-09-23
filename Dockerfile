@@ -9,14 +9,14 @@
 # Multi-stage Dockerfile for g8e Gateway
 # Modern, minimal, and secure container image.
 #
-# This Dockerfile runs `make build-all` to produce all platform binaries
-# (linux/amd64, linux/arm64, linux/386, windows/amd64, windows/arm64,
-# darwin/amd64, darwin/arm64). Linux binaries are built with FIPS 140-3
-# approved mode enabled via GOFIPS140 (Go Cryptographic Module v1.0.0,
-# CMVP Cert #5247, CAVP A6650); non-linux binaries are built without it.
-# The gateway serves these binaries via /.well-known/g8e/bin/{filename} so
-# operators can deploy g8e on any supported platform by fetching the
-# appropriate binary from the gateway.
+# This Dockerfile runs `make build-target` to produce only the binary for the
+# image target platform (linux/amd64 or linux/arm64). Linux binaries are built
+# with FIPS 140-3 approved mode enabled via GOFIPS140 (Go Cryptographic Module
+# v1.0.0, CMVP Cert #5247, CAVP A6650).
+#
+# The full cross-platform deployment matrix is not built here. Run `make
+# build-all` on the host when you need Linux, Windows, and macOS artifacts for
+# remote operator deployment.
 #
 # FIPS 140-3 enforcement is a RUNTIME setting, off by default: non-approved
 # primitives (Ed25519 for consensus/receipts/PKI, ChaCha20-Poly1305 for SSH
@@ -64,32 +64,40 @@ COPY internal/ ./internal/
 COPY protocol/ ./protocol/
 COPY docs/reference/ ./docs/reference/
 
-# Build all platform binaries via `make build-all`. The Makefile sets
-# GOFIPS140=v1.0.0 for linux targets and explicitly unsets it for non-linux
-# targets. CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and
-# does not require CGO. Binaries are written to /build/bin/g8e-{os}-{arch}.
+# Build only the image target platform via `make build-target`. The Makefile
+# sets GOFIPS140=v1.0.0 for linux targets. CGO_ENABLED=0 is intentional: the
+# Go FIPS module is pure Go and does not require CGO. The binary is written to
+# /build/bin/g8e-{os}-{arch}.
+ARG TARGETOS
+ARG TARGETARCH
 ARG VERSION=unknown
 ARG BUILD_ID=unknown
 ARG SOURCE_REVISION=unknown
 ARG SOURCE_TREE_HASH=unknown
 ARG BUILD_TIME=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    make build-all VERSION="${VERSION}" BUILD_ID="${BUILD_ID}" BUILD_TIME="${BUILD_TIME}" SOURCE_REVISION="${SOURCE_REVISION}" SOURCE_TREE_HASH="${SOURCE_TREE_HASH}"
+    make build-target GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" \
+    VERSION="${VERSION}" BUILD_ID="${BUILD_ID}" BUILD_TIME="${BUILD_TIME}" \
+    SOURCE_REVISION="${SOURCE_REVISION}" SOURCE_TREE_HASH="${SOURCE_TREE_HASH}"
 
-# Verify the complete matrix and the builder-platform executable without
-# attempting to execute a foreign target during a multi-platform build.
-RUN test -f /build/bin/g8e-binaries.json && \
-    /build/bin/g8e-linux-$(go env GOARCH) --help
+# Verify the target executable without attempting to execute a foreign platform
+# during a multi-platform build.
+RUN test -f /build/bin/g8e-${TARGETOS}-${TARGETARCH} && \
+    if [ "${TARGETOS}" = "$(go env GOOS)" ] && [ "${TARGETARCH}" = "$(go env GOARCH)" ]; then \
+      /build/bin/g8e-${TARGETOS}-${TARGETARCH} --help; \
+    else \
+      echo "Skipping --help smoke check for ${TARGETOS}/${TARGETARCH} on $(go env GOOS)/$(go env GOARCH) builder"; \
+    fi
 
 # Verify FIPS 140-3 approved mode is active via the native crypto/fips140 module
 # API. This is the same self-check operators run in production
 # (`g8e version --fips`); it inspects module state, not env vars. It exits 0
 # with a warning when enforcement is off — that is the expected posture, not a
 # failure.
-RUN if [ "$(go env GOARCH)" = "amd64" ]; then \
+RUN if [ "${TARGETOS}" = "linux" ] && [ "${TARGETARCH}" = "amd64" ]; then \
       /build/bin/g8e-linux-amd64 version --fips; \
     else \
-      echo "Skipping amd64 FIPS smoke check on $(go env GOARCH) builder"; \
+      echo "Skipping amd64 FIPS smoke check for ${TARGETOS}/${TARGETARCH}"; \
     fi
 
 # =============================================================================
@@ -133,9 +141,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy the binary matching the image target as the entrypoint.
 COPY --from=builder /build/bin/g8e-${TARGETOS}-${TARGETARCH} /g8e
-
-# Copy all platform binaries for g8e deployment via /.well-known/g8e/bin/
-COPY --from=builder /build/bin/ /opt/g8e/bin/
 
 # Copy protocol constants (required for doctrine mode)
 COPY --from=builder /build/protocol/constants /protocol/constants

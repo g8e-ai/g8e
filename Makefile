@@ -177,6 +177,7 @@ help:
 	@echo "Build:"
 	@echo "  build			Build g8e for current OS and architecture"
 	@echo "  build-all			Build g8e for all platforms (linux, windows, darwin)"
+	@echo "  build-target		Build g8e for one GOOS/GOARCH (used by Dockerfile)"
 	@echo "  build-linux		Build g8e for Linux (amd64, arm64, 386)"
 	@echo "  build-windows		Build g8e for Windows (amd64, arm64)"
 	@echo "  build-darwin		Build g8e for Darwin (amd64, arm64)"
@@ -414,6 +415,27 @@ build-compressed: build
 	fi; \
 	upx --best --lzma $$BINARY; \
 	echo "Compressed binary: $$BINARY"
+
+.PHONY: build-target
+build-target:
+	@test -n "$(GOOS)" || { echo "ERROR: GOOS is required for build-target"; exit 1; }
+	@test -n "$(GOARCH)" || { echo "ERROR: GOARCH is required for build-target"; exit 1; }
+	@echo "Building g8e for $(GOOS)/$(GOARCH)..."
+	@mkdir -p $(BIN_DIR)
+	@set -e; \
+	G8E_BINARY=$(BIN_DIR)/g8e-$(GOOS)-$(GOARCH); \
+	if [ "$(GOOS)" = "windows" ]; then \
+		G8E_BINARY=$$G8E_BINARY.exe; \
+	fi; \
+	echo "Building $(GOOS)/$(GOARCH) -> $$G8E_BINARY..."; \
+	if [ "$(GOOS)" = "linux" ]; then \
+		FIPS_ENV="GOFIPS140=$(GOFIPS140_VERSION)"; \
+	else \
+		FIPS_ENV="-u GOFIPS140"; \
+	fi; \
+	env $$FIPS_ENV CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(GOOS)_$(GOARCH)" -o $$G8E_BINARY $(MAIN_PKG); \
+	sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256
+	@echo "Target build complete: $(BIN_DIR)/g8e-$(GOOS)-$(GOARCH)$(if $(filter windows,$(GOOS)),.exe,)"
 
 .PHONY: build-all
 build-all:

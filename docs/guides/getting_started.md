@@ -25,7 +25,7 @@ Both roles use the same `g8e` binary, selected by the `gw` or `operator` subcomm
 
 The recommended path to launch g8e is the unified Docker Compose stack from the repository root. Building and running the stack requires Docker 24.0+ with the Docker Compose v2 plugin. No local Go compiler is required for the container build, but the owner-enrollment steps require a current `./g8e` CLI binary and a browser unless you choose headless enrollment.
 
-The root image builds the Linux amd64 runtime binary and also packages Linux, Windows, and Darwin deployment binaries. The Gateway serves those binaries from `/.well-known/g8e/bin/{filename}` for remote Operator deployment. Linux binaries link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the FIPS 140-3 claim is scoped to linux/amd64, and strict runtime enforcement requires `GODEBUG=fips140=only`. Inspect the deployed binary with `g8e version --fips`; the build setting alone does not enable runtime enforcement.
+The root image builds only the runtime binary for the image target platform (`linux/amd64` or `linux/arm64`). Run `make build-all` on the host when you need the full Linux, Windows, and macOS deployment matrix for remote Operator deployment. Linux binaries link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the FIPS 140-3 claim is scoped to linux/amd64, and strict runtime enforcement requires `GODEBUG=fips140=only`. Inspect the deployed binary with `g8e version --fips`; the build setting alone does not enable runtime enforcement.
 
 ### 1. Clone and start the Gateway
 
@@ -278,7 +278,7 @@ To obtain a host-side CLI binary without a local Go toolchain, copy it out of th
 docker cp "${G8E_PREFIX:-g8e}-gateway:/g8e" ./g8e
 ```
 
-The Dockerfile builder stage produces all supported platform binaries, and the gateway serves them via `/.well-known/g8e/bin/{filename}` for remote deployment. Linux builds link the pinned Go Cryptographic Module; run `g8e version --fips` to inspect module status. The project's FIPS 140-3 compliance claim applies only to linux/amd64.
+The Dockerfile builder stage produces only the image target platform binary. Run `make build-all` on the host when you need the full deployment matrix for `/.well-known/g8e/bin/{filename}` downloads. Linux builds link the pinned Go Cryptographic Module; run `g8e version --fips` to inspect module status. The project's FIPS 140-3 compliance claim applies only to linux/amd64.
 
 Related Docker Compose lifecycle targets:
 

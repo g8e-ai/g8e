@@ -179,18 +179,40 @@ func TestCampaignEvalExport_WritesArtifacts(t *testing.T) {
 	defer cleanup()
 
 	active := prepareCampaignRunViaStart(t, root, deps)
-	outputDir := filepath.Join(root, "exports", active.RunID)
+	outputRelDir := filepath.Join("data", "eval", "runs", active.RunID, "export")
 
 	command := evalCmdWithConfig(deps)
 	var output bytes.Buffer
 	command.SetOut(&output)
 	command.SetArgs([]string{
 		"campaign", "export", "--project-root", root,
-		"--output-dir", outputDir, active.RunID,
+		"--output-dir", outputRelDir, active.RunID,
 	})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), active.RunID)
-	assert.DirExists(t, outputDir)
+
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	exists, err := fileSvc.FileExists(context.Background(), filepath.Join(outputRelDir, constants.EvaluationRunSummaryFilename))
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+func TestCampaignEvalExport_RejectsExternalOutputDir(t *testing.T) {
+	root, deps, _, cleanup := setupCampaignOrchestrateEnv(t)
+	defer cleanup()
+
+	active := prepareCampaignRunViaStart(t, root, deps)
+	externalDir := filepath.Join(root, "exports", active.RunID)
+
+	command := evalCmdWithConfig(deps)
+	command.SetArgs([]string{
+		"campaign", "export", "--project-root", root,
+		"--output-dir", externalDir, active.RunID,
+	})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "output directory must be runtime-relative")
 }
 
 func TestCampaignEvalInit_RequiresFields(t *testing.T) {

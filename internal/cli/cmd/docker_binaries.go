@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -26,8 +27,10 @@ import (
 const defaultDockerGatewayImage = "g8e-gateway"
 
 type dockerImage struct {
-	ID     string            `json:"Id"`
-	Config dockerImageConfig `json:"Config"`
+	ID           string            `json:"Id"`
+	Os           string            `json:"Os"`
+	Architecture string            `json:"Architecture"`
+	Config       dockerImageConfig `json:"Config"`
 }
 
 type dockerImageConfig struct {
@@ -40,6 +43,8 @@ type dockerBinaryRunner interface {
 	CopyContainerPath(context.Context, string, string, io.Writer) error
 	RemoveContainer(context.Context, string) error
 }
+
+const dockerRuntimeBinaryPath = "/g8e"
 
 type execDockerBinaryRunner struct{}
 
@@ -100,8 +105,13 @@ func dockerBinariesExportCmd() *cobra.Command {
 	var image, output string
 	cmd := &cobra.Command{
 		Use:   "export",
-		Short: "Export the g8e-binary set from an existing Gateway image",
-		Args:  cobra.NoArgs,
+		Short: "Export the full g8e-binary set from an existing Gateway image",
+		Long: `Export the complete platform deployment matrix from a Gateway image.
+
+Standard Gateway images only contain the runtime binary for the image target
+platform. Use ` + "`make build-all`" + ` on the host when you need the full Linux,
+Windows, and macOS artifact set.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
@@ -135,8 +145,42 @@ func buildDockerImagesAndExport(ctx context.Context, buildArgs []string, profile
 	if err := runDockerCompose(buildArgs, profiles...); err != nil {
 		return fmt.Errorf("%w: build images: %w", constants.ErrProcessStartFailed, err)
 	}
-	if err := exportDockerG8eBinaries(ctx, execDockerBinaryRunner{}, defaultDockerGatewayImage, filepath.Join(constants.PathCurrentDir, constants.BinDirname)); err != nil {
-		return fmt.Errorf("%w: export g8e binaries: %w", constants.ErrG8eBinaryExport, err)
+	if err := exportDockerRuntimeBinary(ctx, execDockerBinaryRunner{}, defaultDockerGatewayImage, filepath.Join(constants.PathCurrentDir, "g8e")); err != nil {
+		return fmt.Errorf("%w: export runtime binary: %w", constants.ErrG8eBinaryExport, err)
+	}
+	return nil
+}
+
+func exportDockerRuntimeBinary(ctx context.Context, runner dockerBinaryRunner, image, destination string) error {
+	if strings.TrimSpace(image) == "" || strings.TrimSpace(destination) == "" {
+		return fmt.Errorf("%w: image and destination are required", constants.ErrG8eBinaryExport)
+	}
+	inspected, err := runner.InspectImage(ctx, image)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
+	}
+	container, err := runner.CreateContainer(ctx, inspected.ID)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
+	}
+	defer func() {
+		_ = runner.RemoveContainer(ctx, container)
+	}()
+
+	var binary bytes.Buffer
+	if err := runner.CopyContainerPath(ctx, container, dockerRuntimeBinaryPath, &binary); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
+	}
+	if binary.Len() == 0 {
+		return fmt.Errorf("%w: runtime binary %q is empty", constants.ErrG8eBinaryExport, dockerRuntimeBinaryPath)
+	}
+	staging := destination + ".new"
+	if err := os.WriteFile(staging, binary.Bytes(), constants.PermFileExecutable); err != nil {
+		return fmt.Errorf("%w: write runtime binary: %w", constants.ErrG8eBinaryExport, err)
+	}
+	if err := os.Rename(staging, destination); err != nil {
+		_ = os.Remove(staging)
+		return fmt.Errorf("%w: publish runtime binary: %w", constants.ErrG8eBinaryExport, err)
 	}
 	return nil
 }

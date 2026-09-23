@@ -9,7 +9,10 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -399,4 +402,45 @@ func TestDockerComposePath_ResolvesFromCwd(t *testing.T) {
 	p, err := dockerComposePath()
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(tmpDir, constants.DockerComposeFile), p)
+}
+
+type fakeDockerBinaryRunner struct {
+	image     dockerImage
+	container string
+	binary    []byte
+}
+
+func (r *fakeDockerBinaryRunner) InspectImage(context.Context, string) (dockerImage, error) {
+	return r.image, nil
+}
+
+func (r *fakeDockerBinaryRunner) CreateContainer(context.Context, string) (string, error) {
+	return r.container, nil
+}
+
+func (r *fakeDockerBinaryRunner) CopyContainerPath(_ context.Context, container, path string, destination io.Writer) error {
+	if container != r.container || path != dockerRuntimeBinaryPath {
+		return fmt.Errorf("unexpected copy request: %s:%s", container, path)
+	}
+	_, err := destination.Write(r.binary)
+	return err
+}
+
+func (r *fakeDockerBinaryRunner) RemoveContainer(context.Context, string) error { return nil }
+
+func TestExportDockerRuntimeBinary_WritesExecutable(t *testing.T) {
+	tmpDir := t.TempDir()
+	destination := filepath.Join(tmpDir, "g8e")
+	runner := &fakeDockerBinaryRunner{
+		image:     dockerImage{ID: "sha256:image"},
+		container: "container-id",
+		binary:    []byte("runtime-binary"),
+	}
+
+	err := exportDockerRuntimeBinary(t.Context(), runner, "g8e-gateway", destination)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(destination)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("runtime-binary"), data)
 }

@@ -464,7 +464,7 @@ The Go protocol code is part of the root module `github.com/g8e-ai/g8e/v2`. Ther
 The following files read the version dynamically from `VERSION` at build time and do **not** require manual updates:
 
 - `Makefile`: Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files, tags, and pushes (GitHub Actions workflows create the release)
-- `Dockerfile`: Builds via `make build-all`, which reads `VERSION` from the file at build time (no version build arg)
+- `Dockerfile`: Builds via `make build-target` for the image platform, which reads `VERSION` from the file at build time (no version build arg)
 - `docker-compose.yml`: References build context, not version
 - Release workflows under `.github/workflows/`: Triggered by their release tags and derive the release version from the tag. The separate build-and-test workflow includes a version sync check that fails if Python files don't match `VERSION`.
 
