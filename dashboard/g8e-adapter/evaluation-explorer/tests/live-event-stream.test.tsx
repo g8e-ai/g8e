@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { AssignmentResult, EvaluationSummary, LiveEvent } from '../src/contract/types';
+import type { EvaluationSummary, LiveEvent } from '../src/contract/types';
 import { LiveEventStream } from '../src/components/LiveEventStream';
 import { evalStore, recordKey } from '../src/state/store';
 import { EvaluationDetailView } from '../src/views/EvaluationDetailView';
@@ -162,52 +162,19 @@ describe('LiveEventStream', () => {
     expect(screen.getByText('780 ms')).toBeInTheDocument();
   });
 
-  it('shows thinking and cache metrics as unavailable in the live stream', () => {
-    const assignment: AssignmentResult = {
-      schema_version: '1.3.0',
-      kind: 'assignment_result',
-      dataset_id: 'ds-live-a',
-      quality_state: 'live_in_progress',
-      observed_at: '2026-09-17T08:00:00Z',
-      assignment_id: 'assignment-resource-metrics',
-      run_id: 'run-a',
-      task_id: 'resource-metrics-task',
-      variant_id: 'model-resource-metrics',
-      role: 'primary',
-      repetition: 1,
-      terminal_status: 'completed',
-      metric_values: {},
-      stage_summary: [],
-      resource_summary: {
-        thinking_tokens: { value: 12 },
-        cache_tokens: { value: 34 },
-        retries: { value: 2 },
-      },
-    };
-
-    evalStore.loadFixtures([assignment], [
-      liveEvent({
-        event_id: 'evt-resource-metrics',
-        kind: 'assignment_completed',
-        assignment_id: assignment.assignment_id,
-        variant_id: assignment.variant_id,
-      }),
-    ]);
-
+  it('hides thinking and cache token columns from the live stream', () => {
     render(
       <MemoryRouter>
         <LiveEventStream
-          events={evalStore.getState().events}
+          events={[liveEvent({ event_id: 'evt-resource-metrics', kind: 'assignment_completed' })]}
           connection="live"
           streamConnection="connected"
         />
       </MemoryRouter>,
     );
 
-    const metricCells = screen.getAllByRole('row')[1]?.querySelectorAll('.stream-metric-value');
-    expect(metricCells?.[6]).toHaveTextContent('Unavailable');
-    expect(metricCells?.[7]).toHaveTextContent('Unavailable');
-    expect(metricCells?.[8]).toHaveTextContent('2');
+    expect(screen.queryByRole('columnheader', { name: 'Thinking tokens' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Cache tokens' })).not.toBeInTheDocument();
   });
 
   it('sorts the Event and Assignment details columns independently', async () => {
@@ -281,8 +248,6 @@ describe('LiveEventStream', () => {
       'Latency',
       'Input tokens',
       'Output tokens',
-      'Thinking tokens',
-      'Cache tokens',
       'Retries',
       'Model',
       'Progress',

@@ -95,15 +95,8 @@ const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: str
   { key: 'latency_ms', label: 'Latency' },
   { key: 'input_tokens', label: 'Input tokens' },
   { key: 'output_tokens', label: 'Output tokens' },
-  { key: 'thinking_tokens', label: 'Thinking tokens' },
-  { key: 'cache_tokens', label: 'Cache tokens' },
   { key: 'retries', label: 'Retries' },
 ];
-
-const UNAVAILABLE_LIVE_STREAM_METRICS = new Set<AssignmentMetricColumn>([
-  'thinking_tokens',
-  'cache_tokens',
-]);
 
 function assignmentMetric(event: LiveEvent, assignment: AssignmentResult | undefined, key: AssignmentMetricColumn): MetricValue | undefined {
   return assignmentMetricValues(event, assignment)[key];
@@ -367,9 +360,7 @@ export function LiveEventStream({
                     {ASSIGNMENT_METRIC_COLUMNS.map(({ key }) => {
                       const displayed = !event.assignment_id
                         ? { text: '—', unavailable: true }
-                        : UNAVAILABLE_LIVE_STREAM_METRICS.has(key)
-                          ? { text: 'Unavailable', unavailable: true }
-                          : metricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key));
+                        : metricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key));
                       return (
                         <td className="stream-metric-cell" key={key}>
                           <span className={displayed.unavailable ? 'stream-metric-value unavailable' : 'stream-metric-value'}>

@@ -1527,5 +1527,6 @@ var (
 	ErrEvaluationDispatchFailed         = errors.New("evaluation: governed dispatch failed")
 	ErrEvaluationReceiptUnavailable     = errors.New("evaluation: canonical receipt is unavailable")
 	ErrEvaluationAssignmentUnresolved   = errors.New("evaluation: assignment has an unresolved running execution")
+	ErrEvaluationProviderModelsResident = errors.New("evaluation: provider has resident models")
 	ErrImmutableInventoryConflict       = errors.New("evaluation: immutable inventory content conflict")
 )

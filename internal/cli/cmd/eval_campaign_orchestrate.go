@@ -10,8 +10,10 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -152,7 +154,7 @@ func scheduleHomogeneousCampaignRun(cmd *cobra.Command, deps nativeEvalDeps, run
 	return controller.ScheduleHomogeneousRun(cmd.Context(), runID)
 }
 
-func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignExecuteOptions) (int, error) {
+func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignExecuteOptions) (executed int, runErr error) {
 	if opts.Daemon {
 		opts.Limit = ^uint32(0)
 	} else if opts.Limit == 0 {
@@ -276,7 +278,31 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		ModelRegistryDigest:        spec.GetModelRegistryDigest(),
 		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
 	}
-	executed := 0
+	defer func() {
+		if cleanupErr := releaseCampaignModels(cmd, deps, opts, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec); cleanupErr != nil {
+			cleanupErr = fmt.Errorf("evaluation: campaign execute: release provider models: %w", cleanupErr)
+			if runErr == nil {
+				runErr = cleanupErr
+				return
+			}
+			runErr = errors.Join(runErr, cleanupErr)
+		}
+	}()
+	endpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, selected.OperatorSessionID)
+	if err != nil {
+		return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
+	}
+	residency, err := inference.ReadProviderResidency(cmd.Context(), inference.ProviderResidencyOptions{Endpoint: endpoint})
+	if err != nil {
+		return executed, fmt.Errorf("evaluation: campaign execute: read provider residency: %w", err)
+	}
+	if len(residency.Models) > 0 {
+		residentTags := make([]string, 0, len(residency.Models))
+		for _, model := range residency.Models {
+			residentTags = append(residentTags, model.Name)
+		}
+		return executed, fmt.Errorf("evaluation: campaign execute: %w: %s", constants.ErrEvaluationProviderModelsResident, strings.Join(residentTags, ", "))
+	}
 	if err := preflightProviderObservationDelivery(fileSvc, cfg); err != nil {
 		return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 	}
@@ -315,9 +341,6 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 	}
 	if summary.QueuedCount == 0 && summary.RunningCount == 0 {
-		if err := releaseCampaignModels(cmd, deps, opts, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec); err != nil {
-			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
-		}
 		if publication != nil {
 			completionCount, publishErr := publication.PublishRunCompletion(cmd.Context(), opts.RunID, deps.now().UTC())
 			if publishErr != nil {
