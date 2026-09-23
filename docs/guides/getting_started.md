@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 ---
 
@@ -174,7 +174,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 Import the protocol packages in your Go code:
@@ -201,7 +201,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 The package provides:

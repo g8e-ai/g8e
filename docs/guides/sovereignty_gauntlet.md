@@ -1,7 +1,7 @@
 # Sovereignty Gauntlet Evidence and Social Content Guide
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 This runbook gives a coding agent a repeatable process for generating, preserving, and explaining g8e proof artifacts for social posts, articles, demonstrations, and technical review. The campaign message is:
 

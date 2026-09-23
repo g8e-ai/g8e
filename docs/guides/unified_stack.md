@@ -1,6 +1,6 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-22  
+Last Updated: 2026-09-22
 Version: v2.1.12
 
 This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.

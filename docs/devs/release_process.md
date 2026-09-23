@@ -1,6 +1,6 @@
 # g8e Release Process
 
-Last Updated: 2026-09-21
+Last Updated: 2026-09-22
 
 The primary purpose of a release is to inventory every change since the last release and ensure that all affected documentation accurately reflects the current state of the code. Version bumps and CHANGELOG entries follow this documentation reconciliation; they do not replace it.
 

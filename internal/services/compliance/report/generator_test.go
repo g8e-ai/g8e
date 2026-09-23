@@ -316,3 +316,30 @@ func TestGenerateComplianceAnalysis_RejectsImporterFailureBeforeGrading(t *testi
 	require.Len(t, result.GraphReport.ImporterErrors, 1)
 	assert.Contains(t, result.GraphReport.ImporterErrors[0].Error, importErr.Error())
 }
+
+func TestAssessmentDiagnosticsCanonicalRoundTripAndMalformedInputs(t *testing.T) {
+	diagnostics := []*compliancev1.AssessmentDiagnostic{{
+		Code: "campaign_population_incomplete", Severity: "warning", SourceAdmissionId: "source-1",
+		Subject: &compliancev1.AssessmentSubjectSelection{RunId: "run-1"}, Message: "selected campaign population is incomplete",
+	}}
+
+	body, err := MarshalAssessmentDiagnostics(diagnostics)
+	require.NoError(t, err)
+	decoded, err := UnmarshalAssessmentDiagnostics(body)
+	require.NoError(t, err)
+	assert.Equal(t, diagnostics, decoded)
+
+	for _, tc := range []struct {
+		name string
+		body []byte
+	}{
+		{name: "invalid JSON", body: []byte("{")},
+		{name: "invalid diagnostic", body: []byte(`[{"unknown":"field"}]`)},
+		{name: "noncanonical diagnostic", body: []byte(`[ {"code":"campaign_population_incomplete","severity":"warning","source_admission_id":"source-1","subject":{"run_id":"run-1"},"message":"selected campaign population is incomplete"} ]`)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, decodeErr := UnmarshalAssessmentDiagnostics(tc.body)
+			assert.ErrorIs(t, decodeErr, constants.ErrEvidenceArtifactMalformed)
+		})
+	}
+}

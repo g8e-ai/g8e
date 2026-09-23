@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 ---
 
@@ -144,7 +144,7 @@ Consensus and notary require an enabled consensus policy, trusted signers, and a
 - `--pki-dir <dir>` - Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` - Directory for platform secrets (default: .g8e/secrets)
 - `--vault-dir <dir>` - Directory for vault data (default: .g8e/vault)
-- `--vault-key <path>` - Path to the vault private key (default: `.g8e/vault/key`)
+- `--vault-key <path>` - Path to the vault private key (default: `.g8e/secrets/key`)
 - `--passkey-rp-id <id>` - RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>` - RP Name for passkey operations (default: g8e)
 - `--passkey-rp-origin <origin>` - Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)
@@ -158,6 +158,12 @@ Consensus and notary require an enabled consensus policy, trusted signers, and a
 - `--mcp-downstream-url <url>` - URL of a downstream MCP server to proxy discovery and execution to (default: none)
 - `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
 - `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
+- `--public-spectator` - Start the in-process public mirror and Evaluation Explorer listeners (enabled by default)
+- `--public-spectator-private-listen <address>` - Authenticated mirror-ingest listener (default: `127.0.0.1:8081`)
+- `--public-spectator-public-listen <address>` - Anonymous mirror read and SSE listener (default: `127.0.0.1:8082`)
+- `--public-spectator-trusted-proxy-cidr <cidr>` - Trusted proxy CIDR permitted to supply exactly one `CF-Connecting-IP` value (repeatable)
+- `--eval-explorer-listen <address>` - Evaluation Explorer listener (default: `127.0.0.1:5173`)
+- `--eval-explorer-root <dir>` - Directory containing built Evaluation Explorer assets
 - `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
 - `--doctrine-dir <dir>` - Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)
 - `-f, --follow` - Run gateway in foreground instead of background (Ctrl+C stops gateway)
@@ -178,7 +184,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -190,7 +196,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build and Run a g8e Operator
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 ---
 
@@ -140,6 +140,13 @@ The current worker path applies these options:
 | `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds. |
 | `--inference-campaign-id <id>` | Selects dedicated campaign authorization mode and requires every governed inference request to carry this exact campaign identity and complete assignment correlation. |
 | `--inference-model-registry-digest <sha256>` | Commits the dedicated campaign Operator to one immutable model registry. The Operator recomputes the digest over the request registry and rejects malformed registries, absent models, digest changes, and incomplete campaign bindings. |
+| `--inference-enabled` | Enables the governed inference backend for an Inference Operator. |
+| `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. |
+| `--provider-boundary-observer-enabled` | Enrolls a read-only provider-boundary hardware witness with no generic command or provider-lifecycle authority. |
+| `--provider-boundary-observer-id <id>` | Sets the stable Observer Operator identity pseudonym. |
+| `--provenance-operator-enabled` | Enrolls a storage-side model provenance witness. |
+| `--provenance-operator-id <id>` | Sets the stable Provenance Operator identity pseudonym. |
+| `--model-storage-root <path>` | Selects the local content-addressed model storage tree read by the Provenance Operator. |
 
 Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest. Both campaign flags are required together; ordinary inference omits both and retains the configured role-model authority.
 
@@ -204,6 +211,12 @@ Binding pins the authenticated CLI session to one active operator session owned 
 
 This path is the supported owner automation surface for multi-host shell execution. It is distinct from MCP/A2A ingress and from manual `GovernanceEnvelope` submission.
 
+### Stop or revoke an Operator
+
+`./g8e operator stop <operator-session-id> --reason <reason>` sends a governed `SHUTDOWN` command to one active remote Operator owned by the authenticated user. The Gateway records `stopped` only after the exact session publishes the correlated acknowledgement. The stop retains the workload certificate and enrollment, so the process can start again with the same identity.
+
+`./g8e auth enroll revoke <request-id> --reason <reason> --yes` permanently revokes the identity issued by a completed platform enrollment. Operator revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects their active pub/sub channels. Re-enrollment and owner approval are required before that workload can authenticate again.
+
 ---
 
 ## Current Operator Processing Contract
@@ -252,7 +265,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -264,7 +277,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 See [Protocol Library](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.

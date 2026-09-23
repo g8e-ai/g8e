@@ -1155,6 +1155,25 @@ func TestPlatformEnrollmentService_GetStatusInvalidTokenFails(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequestNotFound)
 }
 
+func TestPlatformEnrollmentService_TerminalStatesReturnTypedErrors(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	for _, tc := range []struct {
+		name  string
+		state models.PlatformEnrollmentState
+		err   error
+	}{
+		{name: "completed", state: models.PlatformEnrollmentStateCompleted, err: constants.ErrPlatformEnrollmentAlreadyDecided},
+		{name: "denied", state: models.PlatformEnrollmentStateDenied, err: constants.ErrPlatformEnrollmentRequestDenied},
+		{name: "expired", state: models.PlatformEnrollmentStateExpired, err: constants.ErrPlatformEnrollmentRequestExpired},
+		{name: "revoked", state: models.PlatformEnrollmentStateRevoked, err: constants.ErrPlatformEnrollmentRevoked},
+		{name: "nonterminal", state: models.PlatformEnrollmentStatePending, err: constants.ErrPlatformEnrollmentInvalidState},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ErrorIs(t, env.enrollSvc.terminalError(tc.state), tc.err)
+		})
+	}
+}
+
 // TestPlatformEnrollmentService_ListPendingReturnsOwnerVisibleMetadata proves
 // that ListPending returns pending request metadata without tokens or CSR PEM.
 func TestPlatformEnrollmentService_ListPendingReturnsOwnerVisibleMetadata(t *testing.T) {

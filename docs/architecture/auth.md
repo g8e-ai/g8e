@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-09-21
-Version: v2.1.11
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 ## Overview
 

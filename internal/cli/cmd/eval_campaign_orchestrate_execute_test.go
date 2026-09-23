@@ -369,7 +369,7 @@ func (l *campaignTraceLookup) resolve(assignmentID, attemptID string) map[string
 	return buildCompletedCampaignTrace(assignment, attemptID, spec.GetModelRegistryDigest(), "infer-session")
 }
 
-func TestRunCampaignStartFlow_ExecuteAndVerifyPersistsAndPublishesPopulationBoundReport(t *testing.T) {
+func TestRunCampaignStartFlow_ExecuteAndVerifyPersistsPopulationBoundReportWithoutPublication(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 	defer enableCampaignWitnessGateway(t, root, deps)()
@@ -406,8 +406,6 @@ func TestRunCampaignStartFlow_ExecuteAndVerifyPersistsAndPublishesPopulationBoun
 	loaded, err := evaluation.NewStore(fileSvc).LoadCampaignVerification(context.Background(), result.Plan.RunID)
 	require.NoError(t, err)
 	assertPopulationBoundCampaignReport(t, loaded, 75, 1)
-	assert.Equal(t, []string{result.Plan.RunID}, publication.completionRunIDs)
-	require.Len(t, publication.reports, 1)
-	assertPopulationBoundCampaignReport(t, publication.reports[0], 75, 1)
-	assert.Equal(t, loaded.GetReportDigestRef().GetSha256(), publication.reports[0].GetReportDigestRef().GetSha256())
+	assert.Empty(t, publication.completionRunIDs)
+	assert.Empty(t, publication.reports)
 }

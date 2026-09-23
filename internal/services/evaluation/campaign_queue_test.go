@@ -48,12 +48,12 @@ func TestCampaignIDForVariant(t *testing.T) {
 
 func TestSortModelVariantsForRollout_PrioritizesCurrentSmallModels(t *testing.T) {
 	variants := []*evalv1.ModelVariant{
-		{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b"},
-		{VariantId: "qwen3-5-9b", ServedModelTag: "qwen3.5:9b"},
-		{VariantId: "granite4-2-8b", ServedModelTag: "granite4.2:8b"},
-		{VariantId: "qwen3-5-0-8b", ServedModelTag: "qwen3.5:0.8b"},
-		{VariantId: "granite4-2-3b", ServedModelTag: "granite4.2:3b"},
-		{VariantId: "gemma3-4b", ServedModelTag: "gemma3:4b"},
+		{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ParameterCount: 4_000_000_000},
+		{VariantId: "qwen3-5-9b", ServedModelTag: "qwen3.5:9b", ParameterCount: 9_000_000_000},
+		{VariantId: "granite4-2-8b", ServedModelTag: "granite4.2:8b", ParameterCount: 8_000_000_000},
+		{VariantId: "qwen3-5-0-8b", ServedModelTag: "qwen3.5:0.8b", ParameterCount: 800_000_000},
+		{VariantId: "granite4-2-3b", ServedModelTag: "granite4.2:3b", ParameterCount: 3_000_000_000},
+		{VariantId: "gemma3-4b", ServedModelTag: "gemma3:4b", ParameterCount: 4_000_000_000},
 	}
 
 	SortModelVariantsForRollout(variants)
@@ -63,12 +63,12 @@ func TestSortModelVariantsForRollout_PrioritizesCurrentSmallModels(t *testing.T)
 		orderedTags = append(orderedTags, variant.GetServedModelTag())
 	}
 	assert.Equal(t, []string{
-		"granite4.2:3b",
-		"granite4.2:8b",
 		"qwen3.5:0.8b",
-		"qwen3.5:9b",
+		"granite4.2:3b",
 		"gemma3:4b",
 		"qwen3:4b",
+		"granite4.2:8b",
+		"qwen3.5:9b",
 	}, orderedTags)
 }
 

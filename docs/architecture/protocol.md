@@ -5,13 +5,13 @@ parent: Architecture
 
 # g8e Protocol Library
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
 - **L1 Doctrine**: Hard gates, forbidden pattern matching, MITRE threat detection.
-- **L2 Consensus**: Multi-agent consensus signature verification (Ed25519).
+- **L2 Consensus**: K-of-N Ed25519 protocol authorization over the transaction hash.
 - **L3 Notary**: Human-in-the-loop authorization (WebAuthn or signed CLI proofs).
 - **L4 Warden**: Pre-dispatch verification (signatures, replay prevention, expiry, nonces, Merkle root).
 - **L5 Actuator**: Isolated tool dispatch (MCP/A2A), JIT capability minting, and signed receipt production.
@@ -54,12 +54,12 @@ The protocol publishes as two independent packages: a Go module sharing the plat
 
 ### Go Requirements & Installation
 
-The Go protocol package requires Go 1.26.6 or later. Direct dependencies include `google.golang.org/grpc v1.83.0` and `google.golang.org/protobuf v1.36.11`; remaining dependencies are managed through the root `go.mod`.
+The Go protocol package requires Go 1.26.6 or later. Direct dependencies include `google.golang.org/grpc v1.84.0` and `google.golang.org/protobuf v1.36.12`; remaining dependencies are managed through the root `go.mod`.
 
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 To fetch the latest release:
@@ -125,7 +125,7 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 ### Python Package Overview

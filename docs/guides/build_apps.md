@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 ---
 
@@ -116,7 +116,7 @@ An app certificate is accepted only while its `AppPolicy` exists. The current au
 The Go protocol packages are part of the platform module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `CommandIntent`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers.
@@ -126,7 +126,7 @@ Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. T
 Install the Python protocol package from PyPI:
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 The package requires Python 3.10 or later. It includes generated protobuf modules, Pydantic models, protocol constants, deterministic transaction hashing, and receipt parsing and verification helpers. `G8E_PROTOCOL_DIR` overrides the bundled protocol constants directory for development.
@@ -310,7 +310,7 @@ An agentic application can add any internal reasoning, generation, voting, risk 
 
 The in-tree g8ee application currently uses two dispatch paths:
 
-- For host operations, its five-member Tribunal generates candidate commands, requires two matching candidates, uses deterministic tie breaking, performs a second anonymized peer-review round when needed, runs Marshal risk analysis, and sends the audited result as `CommandIntent` over pub/sub. The Gateway constructs the `GovernanceEnvelope` and owns protocol L2 deliberation.
+- For host operations, its five-member Tribunal generates candidate commands, requires two matching candidates, uses deterministic tie breaking, performs a second anonymized peer-review round when needed, runs Marshal risk analysis, and sends the audited result as `CommandIntent` over pub/sub. The Gateway constructs the `GovernanceEnvelope`, but this pub/sub relay does not synthesize protocol L2 votes or L3 approval.
 - For governed platform records such as cases, investigations, memories, and reputation state, `GovernanceClient` builds direct envelopes. Because app certificates cannot access the direct endpoint, the unified stack mounts the Operator certificate read-only for this dedicated governance transport. Normal g8ee traffic continues to use its enrolled `spiffe://g8e.local/app/g8ee` identity.
 
 This distinction is security-critical: g8ee’s Tribunal consensus improves command generation, but it does not currently emit protocol L2 signatures. The Gateway’s enrolled consensus service produces and verifies those votes according to posture.

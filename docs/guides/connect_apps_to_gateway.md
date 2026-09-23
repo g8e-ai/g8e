@@ -5,14 +5,14 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 ---
 
 ## Overview
 
-This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) that enforces 5-layer Byzantine Fault Tolerant governance over all AI agent mutations. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and the document store API.
+This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) for governed AI-agent mutations, while the selected Operator independently verifies the envelope and owns L4/L5 execution. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and the document store API.
 
 ---
 
@@ -63,7 +63,7 @@ Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 con
 
 #### Consensus Mode
 
-Enforces L1 and L2 (multi-signature Byzantine consensus). L3 notary signature is audited but not required.
+Enforces L1 and L2 K-of-N Ed25519 protocol authorization. L3 notary evidence is audited but not required.
 
 ```bash
 ./g8e gw start --posture consensus
@@ -388,7 +388,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -396,7 +396,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.

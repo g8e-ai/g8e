@@ -327,4 +327,5 @@ func TestOperationalExportImporter_ReplaysExportedReceiptAndPersistenceBodies(t 
 	_, err = importer.Import(context.Background())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
+	assert.Equal(t, "operational-export", importer.SourceID())
 }
