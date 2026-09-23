@@ -138,26 +138,28 @@ func TestShouldPublishViaGatewayReturnsFalseWhenGatewayUnhealthy(t *testing.T) {
 }
 
 func TestMirrorCatalogDatasetPresent(t *testing.T) {
-	assert.True(t, mirrorCatalogDatasetPresent(map[string]any{
+	assert.True(t, mirrorCatalogDatasetPresent(models.NewPublicFeedObject(map[string]string{
 		"kind":       "catalog_snapshot",
 		"dataset_id": "eval-run-1",
-	}, "eval-run-1"))
-	assert.False(t, mirrorCatalogDatasetPresent(map[string]any{
+	}), "eval-run-1"))
+	assert.False(t, mirrorCatalogDatasetPresent(models.NewPublicFeedObject(map[string]string{
 		"kind":       "catalog_snapshot",
 		"dataset_id": "other-run",
-	}, "eval-run-1"))
-	assert.True(t, mirrorCatalogDatasetPresent(map[string]any{
-		"record": map[string]any{
-			"kind":       "catalog_snapshot",
-			"dataset_id": "nested-run",
-		},
-	}, "nested-run"))
+	}), "eval-run-1"))
+	nested := models.NewPublicFeedObject(map[string]string{
+		"kind":       "catalog_snapshot",
+		"dataset_id": "nested-run",
+	})
+	nestedBytes, err := json.Marshal(nested)
+	require.NoError(t, err)
+	outer := models.PublicFeedObject{"record": nestedBytes}
+	assert.True(t, mirrorCatalogDatasetPresent(outer, "nested-run"))
 }
 
 func TestMirrorProjectionHasDataset(t *testing.T) {
-	projections := []map[string]any{
-		{"kind": "other", "dataset_id": "missing"},
-		{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+	projections := []models.PublicFeedObject{
+		models.NewPublicFeedObject(map[string]string{"kind": "other", "dataset_id": "missing"}),
+		models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"}),
 	}
 	assert.True(t, mirrorProjectionHasDataset(projections, "eval-run-1"))
 	assert.False(t, mirrorProjectionHasDataset(projections, "eval-run-2"))
@@ -169,8 +171,8 @@ func TestHTTPCampaignMirrorProbe_DatasetPresentFromBootstrap(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{
 			Snapshot: models.PublicFeedSnapshot{HighWaterSequence: 1},
-			RecentProjections: []map[string]any{
-				{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+			RecentProjections: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"}),
 			},
 		}))
 	}))
@@ -366,8 +368,8 @@ func TestHTTPCampaignMirrorProbe_IndexesMirrorOnceForMultipleDatasets(t *testing
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{
 			Snapshot: models.PublicFeedSnapshot{HighWaterSequence: 2},
-			RecentProjections: []map[string]any{
-				{"kind": "catalog_snapshot", "dataset_id": "eval-run-recent"},
+			RecentProjections: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-recent"}),
 			},
 		}))
 	}))

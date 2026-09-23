@@ -19,7 +19,86 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-type CampaignViewJSON map[string]any
+type catalogSnapshotRecord struct {
+	SchemaVersion        string   `json:"schema_version"`
+	Kind                 string   `json:"kind"`
+	DatasetID            string   `json:"dataset_id"`
+	DatasetKind          string   `json:"dataset_kind"`
+	QualityState         string   `json:"quality_state"`
+	ObservedAt           string   `json:"observed_at"`
+	SourceRevisionLabel  string   `json:"source_revision_label"`
+	Title                string   `json:"title"`
+	Description          string   `json:"description"`
+	Limitations          []string `json:"limitations"`
+	ModelCount           uint32   `json:"model_count"`
+	EvaluatedCount       uint32   `json:"evaluated_count"`
+	SuiteCount           uint32   `json:"suite_count"`
+	RunCount             uint32   `json:"run_count"`
+	AssignmentCount      uint32   `json:"assignment_count"`
+	ProviderRequestCount uint32   `json:"provider_request_count"`
+	ProviderTokenCount   uint32   `json:"provider_token_count"`
+	RetryCount           uint32   `json:"retry_count"`
+	VerifierPassedCount  uint32   `json:"verifier_passed_count"`
+	VerifierFailedCount  uint32   `json:"verifier_failed_count"`
+	GeneratedAt          string   `json:"generated_at"`
+}
+
+type modelPassRateRecord struct {
+	Estimate    float64 `json:"estimate"`
+	Lower       float64 `json:"lower"`
+	Upper       float64 `json:"upper"`
+	Denominator uint32  `json:"denominator"`
+}
+
+type modelSummaryRecord struct {
+	SchemaVersion        string               `json:"schema_version"`
+	Kind                 string               `json:"kind"`
+	DatasetID            string               `json:"dataset_id"`
+	QualityState         string               `json:"quality_state"`
+	ObservedAt           string               `json:"observed_at"`
+	SourceRevisionLabel  string               `json:"source_revision_label"`
+	VariantID            string               `json:"variant_id"`
+	DisplayName          string               `json:"display_name"`
+	ServedModelTag       string               `json:"served_model_tag"`
+	Role                 string               `json:"role"`
+	BackendProviderClass string               `json:"backend_provider_class"`
+	InventoryOnly        bool                 `json:"inventory_only"`
+	EvaluationCoverage   float64              `json:"evaluation_coverage"`
+	PassRate             *modelPassRateRecord `json:"pass_rate,omitempty"`
+	TerminalOutcomes     map[string]uint32    `json:"terminal_outcomes,omitempty"`
+	UnavailableReasons   []string             `json:"unavailable_reasons,omitempty"`
+}
+
+type methodologySuiteRecord struct {
+	SuiteID     string `json:"suite_id"`
+	DisplayName string `json:"display_name"`
+	TaskCount   uint32 `json:"task_count"`
+	Description string `json:"description"`
+}
+
+type methodologyMetricRecord struct {
+	Key                  string `json:"key"`
+	Name                 string `json:"name"`
+	Unit                 string `json:"unit"`
+	Direction            string `json:"direction"`
+	Denominator          string `json:"denominator"`
+	MissingValueBehavior string `json:"missing_value_behavior"`
+	Aggregation          string `json:"aggregation"`
+	UncertaintyMethod    string `json:"uncertainty_method"`
+	Explanation          string `json:"explanation"`
+}
+
+type methodologySnapshotRecord struct {
+	SchemaVersion       string                    `json:"schema_version"`
+	Kind                string                    `json:"kind"`
+	DatasetID           string                    `json:"dataset_id"`
+	QualityState        string                    `json:"quality_state"`
+	ObservedAt          string                    `json:"observed_at"`
+	SourceRevisionLabel string                    `json:"source_revision_label"`
+	MetricDefinitions   []methodologyMetricRecord `json:"metric_definitions"`
+	SuiteDefinitions    []methodologySuiteRecord  `json:"suite_definitions"`
+	Limitations         []string                  `json:"limitations"`
+}
 
 const (
 	explorerViewSchemaVersion = "1.5.0"
@@ -382,7 +461,7 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 		Body:           summaryBody,
 	})
 
-	var catalogRecord CampaignViewJSON
+	var catalogRecord catalogSnapshotRecord
 	if settled {
 		catalogRecord = buildCompletedCatalogSnapshotRecord(datasetID, runID, observed, state)
 	} else {
@@ -404,7 +483,7 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 	sort.Strings(keys)
 	for _, key := range keys {
 		bucket := state.VariantRoles[key]
-		var modelRecord CampaignViewJSON
+		var modelRecord modelSummaryRecord
 		if settled {
 			modelRecord = buildCompletedModelSummaryRecord(datasetID, observed, bucket)
 		} else {
@@ -420,7 +499,7 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 		})
 	}
 
-	var methodologyRecord CampaignViewJSON
+	var methodologyRecord methodologySnapshotRecord
 	if settled {
 		methodologyRecord = buildCompletedMethodologySnapshotRecord(datasetID, observed)
 	} else {
@@ -505,74 +584,46 @@ func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*eva
 	return records, nil
 }
 
-func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) CampaignViewJSON {
-	return CampaignViewJSON{
-		"schema_version":         explorerViewSchemaVersion,
-		"kind":                   "catalog_snapshot",
-		"dataset_id":             datasetID,
-		"dataset_kind":           "live_run",
-		"quality_state":          "live_in_progress",
-		"observed_at":            observedAt,
-		"source_revision_label":  campaignSourceRevision,
-		"title":                  fmt.Sprintf("Live smoke run (%s)", runID),
-		"description":            "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. Values are provisional while assignments are still executing.",
-		"limitations":            catalogSnapshotLimitations(),
-		"model_count":            state.ModelCount,
-		"evaluated_count":        state.EvaluatedCount,
-		"suite_count":            1,
-		"run_count":              1,
-		"assignment_count":       state.Scheduled,
-		"provider_request_count": state.Terminal,
-		"provider_token_count":   0,
-		"retry_count":            0,
-		"verifier_passed_count":  0,
-		"verifier_failed_count":  0,
-		"generated_at":           observedAt,
+func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) catalogSnapshotRecord {
+	return catalogSnapshotRecord{
+		SchemaVersion: explorerViewSchemaVersion, Kind: "catalog_snapshot", DatasetID: datasetID, DatasetKind: "live_run",
+		QualityState: "live_in_progress", ObservedAt: observedAt, SourceRevisionLabel: campaignSourceRevision,
+		Title:       fmt.Sprintf("Live smoke run (%s)", runID),
+		Description: "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. Values are provisional while assignments are still executing.",
+		Limitations: catalogSnapshotLimitations(), ModelCount: state.ModelCount, EvaluatedCount: state.EvaluatedCount,
+		SuiteCount: 1, RunCount: 1, AssignmentCount: state.Scheduled, ProviderRequestCount: state.Terminal,
+		GeneratedAt: observedAt,
 	}
 }
 
-func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) CampaignViewJSON {
+func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) modelSummaryRecord {
 	scheduled := bucket.Scheduled
 	terminal := bucket.Terminal
 	coverage := 0.0
 	if scheduled > 0 {
 		coverage = float64(terminal) / float64(scheduled)
 	}
-	record := CampaignViewJSON{
-		"schema_version":         explorerViewSchemaVersion,
-		"kind":                   "model_summary",
-		"dataset_id":             datasetID,
-		"quality_state":          qualityStateForModelSummary(terminal),
-		"observed_at":            observedAt,
-		"source_revision_label":  campaignSourceRevision,
-		"variant_id":             bucket.VariantID,
-		"display_name":           displayNameForVariant(bucket.VariantID),
-		"served_model_tag":       servedTagForVariant(bucket.VariantID),
-		"role":                   bucket.Role,
-		"backend_provider_class": "ollama",
-		"inventory_only":         terminal == 0,
-		"evaluation_coverage":    coverage,
+	record := modelSummaryRecord{
+		SchemaVersion: explorerViewSchemaVersion, Kind: "model_summary", DatasetID: datasetID,
+		QualityState: qualityStateForModelSummary(terminal), ObservedAt: observedAt, SourceRevisionLabel: campaignSourceRevision,
+		VariantID: bucket.VariantID, DisplayName: displayNameForVariant(bucket.VariantID), ServedModelTag: servedTagForVariant(bucket.VariantID),
+		Role: bucket.Role, BackendProviderClass: "ollama", InventoryOnly: terminal == 0, EvaluationCoverage: coverage,
 	}
 	if terminal > 0 {
 		passEstimate := float64(bucket.Passed) / float64(terminal)
-		record["pass_rate"] = CampaignViewJSON{
-			"estimate":    passEstimate,
-			"lower":       passEstimate,
-			"upper":       passEstimate,
-			"denominator": terminal,
-		}
-		record["terminal_outcomes"] = terminalOutcomesRecord(bucket.Outcomes)
+		record.PassRate = &modelPassRateRecord{Estimate: passEstimate, Lower: passEstimate, Upper: passEstimate, Denominator: terminal}
+		record.TerminalOutcomes = terminalOutcomesRecord(bucket.Outcomes)
 	} else {
-		record["unavailable_reasons"] = []string{"awaiting terminal assignments"}
+		record.UnavailableReasons = []string{"awaiting terminal assignments"}
 	}
 	return record
 }
 
-func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) CampaignViewJSON {
+func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) catalogSnapshotRecord {
 	record := buildCatalogSnapshotRecord(datasetID, runID, observedAt, state)
-	record["quality_state"] = qualityStateForCompletedAggregate(state)
-	record["description"] = "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. The campaign matrix is complete; values remain provisional until verification runs."
-	record["limitations"] = []string{
+	record.QualityState = qualityStateForCompletedAggregate(state)
+	record.Description = "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. The campaign matrix is complete; values remain provisional until verification runs."
+	record.Limitations = []string{
 		"Campaign execution is complete; values remain provisional until verification runs.",
 		"Model aggregates reflect designated role responsibility inside the production chat pipeline, not a provider-only benchmark.",
 		"Resource telemetry remains unavailable until provider-boundary observation is published.",
@@ -580,18 +631,18 @@ func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, st
 	return record
 }
 
-func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) CampaignViewJSON {
+func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) modelSummaryRecord {
 	record := buildModelSummaryRecord(datasetID, observedAt, bucket)
 	if bucket.Scheduled > 0 && bucket.Terminal >= bucket.Scheduled {
-		record["quality_state"] = "exploratory_partial"
+		record.QualityState = "exploratory_partial"
 	}
 	return record
 }
 
-func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) CampaignViewJSON {
+func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) methodologySnapshotRecord {
 	record := buildMethodologySnapshotRecord(datasetID, observedAt)
-	record["quality_state"] = "exploratory_partial"
-	record["limitations"] = []string{
+	record.QualityState = "exploratory_partial"
+	record.Limitations = []string{
 		"Campaign execution is complete; values remain provisional until verification runs.",
 		"Homogeneous model-role and heterogeneous system leaderboards remain separate datasets.",
 		"GPU and system efficiency metrics remain unavailable until provider-boundary observation is published.",
@@ -658,7 +709,7 @@ func appendVerifiedModelSummaryRecords(records []CampaignViewRecord, runID, data
 		}
 		modelRecord := buildCompletedModelSummaryRecord(datasetID, observed, bucket)
 		if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
-			modelRecord["quality_state"] = "exploratory_verified"
+			modelRecord.QualityState = "exploratory_verified"
 		}
 		modelBody, err := marshalCanonicalViewRecord(modelRecord)
 		if err != nil {
@@ -1014,24 +1065,13 @@ func buildModelRoleMapping(state *runAggregateState) map[string]string {
 	return mapping
 }
 
-func buildMethodologySnapshotRecord(datasetID, observedAt string) CampaignViewJSON {
-	return CampaignViewJSON{
-		"schema_version":        explorerViewSchemaVersion,
-		"kind":                  "methodology_snapshot",
-		"dataset_id":            datasetID,
-		"quality_state":         "live_in_progress",
-		"observed_at":           observedAt,
-		"source_revision_label": campaignSourceRevision,
-		"metric_definitions":    methodologyMetricDefinitions(),
-		"suite_definitions": []CampaignViewJSON{
-			{
-				"suite_id":     standardSuiteID,
-				"display_name": "Standard 25",
-				"task_count":   25,
-				"description":  "Frozen 25-scenario catalog covering instruction adherence, tool use, analysis, routing, verification, security, recovery, and final response.",
-			},
-		},
-		"limitations": methodologyLimitations(),
+func buildMethodologySnapshotRecord(datasetID, observedAt string) methodologySnapshotRecord {
+	return methodologySnapshotRecord{
+		SchemaVersion: explorerViewSchemaVersion, Kind: "methodology_snapshot", DatasetID: datasetID,
+		QualityState: "live_in_progress", ObservedAt: observedAt, SourceRevisionLabel: campaignSourceRevision,
+		MetricDefinitions: methodologyMetricDefinitions(),
+		SuiteDefinitions:  []methodologySuiteRecord{{SuiteID: standardSuiteID, DisplayName: "Standard 25", TaskCount: 25, Description: "Frozen 25-scenario catalog covering instruction adherence, tool use, analysis, routing, verification, security, recovery, and final response."}},
+		Limitations:       methodologyLimitations(),
 	}
 }
 
@@ -1043,30 +1083,10 @@ func catalogSnapshotLimitations() []string {
 	}
 }
 
-func methodologyMetricDefinitions() []CampaignViewJSON {
-	return []CampaignViewJSON{
-		{
-			"key":                    "pass_rate",
-			"name":                   "Pass rate",
-			"unit":                   "proportion",
-			"direction":              "higher_is_better",
-			"denominator":            "terminal homogeneous model-role assignments for the variant and designated role",
-			"missing_value_behavior": "excluded until a terminal assignment exists; never rendered as zero",
-			"aggregation":            "mean over terminal assignments within the active live dataset",
-			"uncertainty_method":     "point estimate while the smoke campaign is in progress",
-			"explanation":            "The fraction of terminal assignments that passed for one frozen model variant acting in one designated role through the production chat pipeline.",
-		},
-		{
-			"key":                    "evaluation_coverage",
-			"name":                   "Evaluation coverage",
-			"unit":                   "proportion",
-			"direction":              "higher_is_better",
-			"denominator":            "scheduled assignments for the variant and designated role",
-			"missing_value_behavior": "rendered as zero only when no assignments are scheduled",
-			"aggregation":            "terminal assignments divided by scheduled assignments",
-			"uncertainty_method":     "none (descriptive)",
-			"explanation":            "How much of the scheduled smoke matrix has reached a terminal public result for this variant and role.",
-		},
+func methodologyMetricDefinitions() []methodologyMetricRecord {
+	return []methodologyMetricRecord{
+		{Key: "pass_rate", Name: "Pass rate", Unit: "proportion", Direction: "higher_is_better", Denominator: "terminal homogeneous model-role assignments for the variant and designated role", MissingValueBehavior: "excluded until a terminal assignment exists; never rendered as zero", Aggregation: "mean over terminal assignments within the active live dataset", UncertaintyMethod: "point estimate while the smoke campaign is in progress", Explanation: "The fraction of terminal assignments that passed for one frozen model variant acting in one designated role through the production chat pipeline."},
+		{Key: "evaluation_coverage", Name: "Evaluation coverage", Unit: "proportion", Direction: "higher_is_better", Denominator: "scheduled assignments for the variant and designated role", MissingValueBehavior: "rendered as zero only when no assignments are scheduled", Aggregation: "terminal assignments divided by scheduled assignments", UncertaintyMethod: "none (descriptive)", Explanation: "How much of the scheduled smoke matrix has reached a terminal public result for this variant and role."},
 	}
 }
 

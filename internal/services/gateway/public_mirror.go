@@ -513,7 +513,11 @@ func (m *PublicMirrorServer) RevokeSourceKey(ctx context.Context, sourceID, keyI
 // by tests to simulate stale, stopped, or offline sources.
 func (m *PublicMirrorServer) SetSourceFreshness(ctx context.Context, sourceID string, freshness models.CampaignFreshness) error {
 	return m.mutateState(ctx, func(storeState *PublicMirrorStoreState) error {
-		state := getOrCreatePublicMirrorSource(storeState, sourceID)
+		state, ok := storeState.Sources[sourceID]
+		if !ok {
+			state = newPublicMirrorSourceState()
+			storeState.Sources[sourceID] = state
+		}
 		state.Freshness = freshness
 		return nil
 	})
@@ -524,20 +528,13 @@ func (m *PublicMirrorServer) keyRegistryKey(sourceID, keyID string) string {
 	return sourceID + ":" + keyID
 }
 
-// getOrCreateSource returns the source state, creating it if absent. Caller
-// must hold the write lock.
-func getOrCreatePublicMirrorSource(state *PublicMirrorStoreState, sourceID string) *PublicMirrorSourceState {
-	source, ok := state.Sources[sourceID]
-	if !ok {
-		source = &PublicMirrorSourceState{
-			FeedChainHash:             constants.PublicFeedZeroHashHex,
-			RetainedFromSequence:      1,
-			RetainedPreviousBatchHash: constants.PublicFeedZeroHashHex,
-			Freshness:                 models.CampaignFreshnessActive,
-		}
-		state.Sources[sourceID] = source
+func newPublicMirrorSourceState() *PublicMirrorSourceState {
+	return &PublicMirrorSourceState{
+		FeedChainHash:             constants.PublicFeedZeroHashHex,
+		RetainedFromSequence:      1,
+		RetainedPreviousBatchHash: constants.PublicFeedZeroHashHex,
+		Freshness:                 models.CampaignFreshnessActive,
 	}
-	return source
 }
 
 func (m *PublicMirrorServer) mutateState(ctx context.Context, mutate func(*PublicMirrorStoreState) error) error {
@@ -781,7 +778,11 @@ func (m *PublicMirrorServer) acceptBatch(ctx context.Context, batch models.Publi
 		if err != nil {
 			return err
 		}
-		state := getOrCreatePublicMirrorSource(storeState, batch.SourceID)
+		state, ok := storeState.Sources[batch.SourceID]
+		if !ok {
+			state = newPublicMirrorSourceState()
+			storeState.Sources[batch.SourceID] = state
+		}
 		if batch.FirstSequence != state.HighWaterSequence+1 || batch.PreviousBatchHash != state.FeedChainHash {
 			return constants.ErrPublicFeedHashChainMismatch
 		}
@@ -1309,7 +1310,7 @@ func (m *PublicMirrorServer) handleBootstrap(w http.ResponseWriter, r *http.Requ
 				Freshness:         models.CampaignFreshnessSourceOffline,
 			},
 			SourceFreshness:     models.CampaignFreshnessSourceOffline,
-			RecentProjections:   []map[string]any{},
+			RecentProjections:   []models.PublicFeedObject{},
 			ProofCatalogSummary: models.PublicProofCatalogSummary{ArtifactCount: 0, TotalByteSize: 0},
 			GeneratedAt:         time.Now().UTC(),
 		})
@@ -1453,33 +1454,36 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		m.writeJSON(w, http.StatusOK, models.PublicFeedCursorPage{
 			ProtocolVersion: constants.PublicFeedProtocolVersion,
-			Items:           []map[string]any{},
+			Items:           []models.PublicFeedObject{},
 			HasMore:         false,
 			Limit:           limit,
 		})
 		return
 	}
 
-	var items []map[string]any
+	var items []models.PublicFeedObject
 	var lastSeq int64
 	hasMore := false
 	for _, rec := range state.Records {
 		if rec.Sequence <= cursor {
 			continue
 		}
-		var item map[string]any
+		var item models.PublicFeedObject
 		if err := json.Unmarshal([]byte(rec.RecordBytes), &item); err != nil {
 			continue
 		}
-		if recordKind != "" && item["kind"] != recordKind {
-			continue
+		if recordKind != "" {
+			kind, ok := item.StringField("kind")
+			if !ok || kind != recordKind {
+				continue
+			}
 		}
 		if len(items) >= limit {
 			hasMore = true
 			break
 		}
-		item["sequence"] = rec.Sequence
-		item["record_type"] = rec.RecordType
+		item.SetInt64Field("sequence", rec.Sequence)
+		item["record_type"] = json.RawMessage(strconv.Quote(string(rec.RecordType)))
 		items = append(items, item)
 		lastSeq = rec.Sequence
 	}
@@ -1490,7 +1494,7 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	if items == nil {
-		items = []map[string]any{}
+		items = []models.PublicFeedObject{}
 	}
 
 	m.writeJSON(w, http.StatusOK, models.PublicFeedCursorPage{
@@ -1729,22 +1733,22 @@ func (m *PublicMirrorServer) handleProofDownload(w http.ResponseWriter, r *http.
 
 // recentProjectionsLocked returns the most recent projection records as
 // deserialized JSON objects. Caller must hold the read lock.
-func (m *PublicMirrorServer) recentProjectionsLocked(state *PublicMirrorSourceState, max int) []map[string]any {
-	var projections []map[string]any
+func (m *PublicMirrorServer) recentProjectionsLocked(state *PublicMirrorSourceState, max int) []models.PublicFeedObject {
+	var projections []models.PublicFeedObject
 	for i := len(state.Records) - 1; i >= 0 && len(projections) < max; i-- {
 		rec := state.Records[i]
 		if rec.RecordType != models.PublicFeedRecordTypeProjection {
 			continue
 		}
-		var item map[string]any
+		var item models.PublicFeedObject
 		if err := json.Unmarshal([]byte(rec.RecordBytes), &item); err != nil {
 			continue
 		}
-		item["sequence"] = rec.Sequence
+		item.SetInt64Field("sequence", rec.Sequence)
 		projections = append(projections, item)
 	}
 	if projections == nil {
-		return []map[string]any{}
+		return []models.PublicFeedObject{}
 	}
 	return projections
 }

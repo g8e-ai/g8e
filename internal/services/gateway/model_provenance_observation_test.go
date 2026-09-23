@@ -73,7 +73,7 @@ func TestModelProvenanceObservationCoordinator_EnsureOperator_SubscribesToProven
 		logger,
 	)
 
-	assert.NoError(t, coordinator.ensureOperator(context.Background()))
+	assert.NoError(t, coordinator.synchronizeOperatorSubscription(context.Background()))
 	assert.NotNil(t, coordinator.operator)
 	assert.Equal(t, "sess-prov-1", coordinator.operator.OperatorSessionID)
 }
@@ -129,7 +129,7 @@ func TestModelProvenanceObservationCoordinator_IngestPersistsAttestationWindow(t
 		logger,
 	)
 
-	require.NoError(t, coordinator.ensureOperator(context.Background()))
+	require.NoError(t, coordinator.synchronizeOperatorSubscription(context.Background()))
 	window := testModelProvenanceWindow(t, "attempt-async-1")
 	completion := &evalv1.ModelProvenanceObservationCompleted{Window: window}
 	payload, err := proto.Marshal(completion)

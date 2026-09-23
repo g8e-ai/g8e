@@ -21,6 +21,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
+type campaignMirrorRestoreRunJSON struct {
+	RunID            string `json:"run_id"`
+	PublishedRecords int    `json:"published_records"`
+}
+
 func campaignEvalMirrorCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mirror",
@@ -87,9 +92,9 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign mirror restore: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"run_id":            runID,
-					"published_records": published,
+				payload, err := json.MarshalIndent(campaignMirrorRestoreRunJSON{
+					RunID:            runID,
+					PublishedRecords: published,
 				}, "", "  ")
 				if err != nil {
 					return err

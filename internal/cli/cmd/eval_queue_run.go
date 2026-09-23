@@ -202,9 +202,13 @@ Examples:
 	return cmd
 }
 
+type campaignQueueRunPlanJSON struct {
+	Models []evaluation.CampaignQueueModel `json:"models"`
+}
+
 func writeCampaignQueueRunPlan(cmd *cobra.Command, plan []evaluation.CampaignQueueModel, jsonOutput bool) error {
 	if jsonOutput {
-		payload, err := json.MarshalIndent(map[string]any{"models": plan}, "", "  ")
+		payload, err := json.MarshalIndent(campaignQueueRunPlanJSON{Models: plan}, "", "  ")
 		if err != nil {
 			return err
 		}

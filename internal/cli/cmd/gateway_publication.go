@@ -213,23 +213,24 @@ func (p *httpCampaignMirrorProbe) indexDatasets(ctx context.Context) error {
 	return fmt.Errorf("campaign mirror probe: history exceeds 3200 retained records: %w", constants.ErrPublicFeedHistoryIncomplete)
 }
 
-func indexMirrorDatasets(datasetIDs map[string]struct{}, projections []map[string]any) {
+func indexMirrorDatasets(datasetIDs map[string]struct{}, projections []models.PublicFeedObject) {
 	for _, item := range projections {
-		if item == nil {
-			continue
-		}
-		if item["kind"] == "catalog_snapshot" {
-			if datasetID, ok := item["dataset_id"].(string); ok && datasetID != "" {
+		kind, _ := item.StringField("kind")
+		if kind == "catalog_snapshot" {
+			if datasetID, ok := item.StringField("dataset_id"); ok && datasetID != "" {
 				datasetIDs[datasetID] = struct{}{}
 			}
 		}
-		if record, ok := item["record"].(map[string]any); ok {
-			indexMirrorDatasets(datasetIDs, []map[string]any{record})
+		if recordBytes, ok := item["record"]; ok {
+			var record models.PublicFeedObject
+			if err := json.Unmarshal(recordBytes, &record); err == nil {
+				indexMirrorDatasets(datasetIDs, []models.PublicFeedObject{record})
+			}
 		}
 	}
 }
 
-func mirrorProjectionHasDataset(projections []map[string]any, datasetID string) bool {
+func mirrorProjectionHasDataset(projections []models.PublicFeedObject, datasetID string) bool {
 	for _, item := range projections {
 		if mirrorCatalogDatasetPresent(item, datasetID) {
 			return true
@@ -238,15 +239,18 @@ func mirrorProjectionHasDataset(projections []map[string]any, datasetID string) 
 	return false
 }
 
-func mirrorCatalogDatasetPresent(item map[string]any, datasetID string) bool {
-	if item == nil {
-		return false
+func mirrorCatalogDatasetPresent(item models.PublicFeedObject, datasetID string) bool {
+	kind, _ := item.StringField("kind")
+	if kind == "catalog_snapshot" {
+		if currentDatasetID, ok := item.StringField("dataset_id"); ok && currentDatasetID == datasetID {
+			return true
+		}
 	}
-	if item["kind"] == "catalog_snapshot" && item["dataset_id"] == datasetID {
-		return true
-	}
-	if record, ok := item["record"].(map[string]any); ok {
-		return mirrorCatalogDatasetPresent(record, datasetID)
+	if recordBytes, ok := item["record"]; ok {
+		var record models.PublicFeedObject
+		if err := json.Unmarshal(recordBytes, &record); err == nil {
+			return mirrorCatalogDatasetPresent(record, datasetID)
+		}
 	}
 	return false
 }

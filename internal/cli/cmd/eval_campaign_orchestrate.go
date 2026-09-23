@@ -695,17 +695,28 @@ func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc
 	return nil
 }
 
+type campaignStartPlanJSON struct {
+	CampaignID           string   `json:"campaign_id"`
+	RunID                string   `json:"run_id"`
+	InventoryFile        string   `json:"inventory_file"`
+	ModelTags            []string `json:"model_tags"`
+	ModelRegistryDigest  string   `json:"model_registry_digest"`
+	HomogeneousCellCount uint64   `json:"homogeneous_cell_count"`
+	InferenceSession     string   `json:"inference_session"`
+	DataSession          string   `json:"data_session"`
+}
+
 func writeCampaignStartPlan(out io.Writer, plan *evaluation.CampaignStartPlan, sessions campaignOperatorSessions, jsonOutput bool) error {
 	if jsonOutput {
-		payload, err := json.MarshalIndent(map[string]any{
-			"campaign_id":            plan.CampaignID,
-			"run_id":                 plan.RunID,
-			"inventory_file":         plan.InventoryPath,
-			"model_tags":             plan.ModelTags,
-			"model_registry_digest":  plan.RegistryDigest,
-			"homogeneous_cell_count": plan.HomogeneousCellCount,
-			"inference_session":      sessions.InferenceSessionID,
-			"data_session":           sessions.DataSessionID,
+		payload, err := json.MarshalIndent(campaignStartPlanJSON{
+			CampaignID:           plan.CampaignID,
+			RunID:                plan.RunID,
+			InventoryFile:        plan.InventoryPath,
+			ModelTags:            plan.ModelTags,
+			ModelRegistryDigest:  plan.RegistryDigest,
+			HomogeneousCellCount: plan.HomogeneousCellCount,
+			InferenceSession:     sessions.InferenceSessionID,
+			DataSession:          sessions.DataSessionID,
 		}, "", "  ")
 		if err != nil {
 			return err

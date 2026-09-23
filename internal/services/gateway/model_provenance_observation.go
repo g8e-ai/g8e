@@ -69,7 +69,7 @@ func NewModelProvenanceObservationCoordinator(
 	}
 }
 
-func (c *ModelProvenanceObservationCoordinator) ensureOperator(ctx context.Context) error {
+func (c *ModelProvenanceObservationCoordinator) synchronizeOperatorSubscription(ctx context.Context) error {
 	if c == nil || c.dispatch == nil || c.operatorLister == nil || c.pubsub == nil || c.windows == nil {
 		return constants.ErrServiceUnavailable
 	}
@@ -153,7 +153,7 @@ func (c *ModelProvenanceObservationCoordinator) Stop() {
 // PreflightCommandDelivery verifies that the active provenance operator is
 // enrolled and has at least one cmd-channel WebSocket subscriber.
 func (c *ModelProvenanceObservationCoordinator) PreflightCommandDelivery(ctx context.Context) error {
-	if err := c.ensureOperator(ctx); err != nil {
+	if err := c.synchronizeOperatorSubscription(ctx); err != nil {
 		return fmt.Errorf("model provenance observation preflight: %w", err)
 	}
 	c.mu.Lock()
@@ -260,7 +260,7 @@ func (c *ModelProvenanceObservationCoordinator) NotifyAttemptBegin(
 	if providerAttemptID == "" || servedModelTag == "" || expectedModelDigest == "" {
 		return nil
 	}
-	if err := c.ensureOperator(ctx); err != nil {
+	if err := c.synchronizeOperatorSubscription(ctx); err != nil {
 		return fmt.Errorf("model provenance observation begin: %w", err)
 	}
 	command := &evalv1.ModelProvenanceObservationCommand{
@@ -294,7 +294,7 @@ func (c *ModelProvenanceObservationCoordinator) NotifyAttemptFinalize(
 	if providerAttemptID == "" {
 		return nil
 	}
-	if err := c.ensureOperator(ctx); err != nil {
+	if err := c.synchronizeOperatorSubscription(ctx); err != nil {
 		return fmt.Errorf("model provenance observation finalize: %w", err)
 	}
 	status := evalv1.ModelProvenanceObservationAttemptStatus_MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED

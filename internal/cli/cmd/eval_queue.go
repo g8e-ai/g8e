@@ -180,6 +180,10 @@ func loadInitCampaignQueue(ctx context.Context, fileSvc fs.RuntimeFileService, q
 	return queue, queuePath, nil
 }
 
+type campaignQueueListJSON struct {
+	Models []evaluation.CampaignQueueModel `json:"models"`
+}
+
 func rolloutEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 	var status string
 	var queueFile string
@@ -197,7 +201,7 @@ func rolloutEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 			}
 			entries := queue.FilterByStatus(status)
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{"models": entries}, "", "  ")
+				payload, err := json.MarshalIndent(campaignQueueListJSON{Models: entries}, "", "  ")
 				if err != nil {
 					return err
 				}

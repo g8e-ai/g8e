@@ -458,8 +458,14 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: publish run catch-up: %w", constants.ErrMissingRequiredField)
 	}
-	if err := c.ensureMirrorCatchUpReady(ctx, runID); err != nil {
+	resetRequired, err := c.mirrorCatchUpResetRequired(ctx, runID)
+	if err != nil {
 		return 0, err
+	}
+	if resetRequired {
+		if err := c.ResetPublicationIdempotency(ctx, runID); err != nil {
+			return 0, err
+		}
 	}
 	run, err := c.store.LoadRun(ctx, runID)
 	if err != nil {
@@ -509,25 +515,22 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	return published + completionCount, nil
 }
 
-func (c *CampaignPublicationCoordinator) ensureMirrorCatchUpReady(ctx context.Context, runID string) error {
+func (c *CampaignPublicationCoordinator) mirrorCatchUpResetRequired(ctx context.Context, runID string) (bool, error) {
 	if c == nil || c.mirrorProbe == nil || runID == "" {
-		return nil
+		return false, nil
 	}
 	present, err := c.mirrorProbe.DatasetPresent(ctx, CampaignDatasetID(runID))
 	if err != nil {
-		return fmt.Errorf("evaluation: publish run catch-up: mirror probe: %w", err)
+		return false, fmt.Errorf("evaluation: publish run catch-up: mirror probe: %w", err)
 	}
 	if present {
-		return nil
+		return false, nil
 	}
 	state, err := c.publicationState.Load(ctx, runID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if len(state.PublishedIdempotency) == 0 {
-		return nil
-	}
-	return c.ResetPublicationIdempotency(ctx, runID)
+	return len(state.PublishedIdempotency) > 0, nil
 }
 
 func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Context, runID string) (*evalv1.EvaluationRun, []*evalv1.EvaluationAssignment, map[string]*evalv1.EvaluationAssignmentResult, *runAggregateState, error) {
