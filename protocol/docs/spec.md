@@ -381,7 +381,7 @@ The g8e Gateway runs with four posture options:
 ### Port Configuration
 
 The g8e Gateway exposes two logical protocol surfaces in a consolidated 2-port configuration:
-- **HTTP port 8080**: Bootstrap, CLI recovery discovery, deploy scripts, node binary download, health checks, and a catch-all redirect to HTTPS
+- **HTTP port 8080**: Bootstrap, CLI recovery discovery, deploy scripts, g8e binary download, health checks, and a catch-all redirect to HTTPS
 - **HTTPS port 8443**: mTLS API and public surface, including MCP/A2A ingress, SSE, console, and authenticated API routes
 
 See [Network Architecture](../../docs/architecture/network.md) for detailed port topology, authentication requirements, and port constraints.

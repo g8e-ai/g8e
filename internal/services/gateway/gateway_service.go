@@ -38,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
@@ -45,7 +46,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
-	"github.com/g8e-ai/g8e/v2/internal/services/nodebinaries"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -677,21 +677,21 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
 	modelProvenanceDeps.ProvenanceCoordinator = ls.modelProvenanceCoord
 
-	nodeReader, err := nodebinaries.OpenReader(constants.NodeBinariesDir)
+	g8eReader, err := g8ebinaries.OpenReader(constants.G8eBinariesDir)
 	if err != nil {
-		return fmt.Errorf("gateway: initialize node-binary reader: %w", err)
+		return fmt.Errorf("gateway: initialize g8e-binary reader: %w", err)
 	}
-	if !nodeReader.HasManifest() {
+	if !g8eReader.HasManifest() {
 		executable, execErr := os.Executable()
 		if execErr != nil {
-			return fmt.Errorf("gateway: resolve executable for node-binary reader: %w", execErr)
+			return fmt.Errorf("gateway: resolve executable for g8e-binary reader: %w", execErr)
 		}
-		adjacentReader, readerErr := nodebinaries.OpenReader(filepath.Join(filepath.Dir(executable), constants.BinDirname))
+		adjacentReader, readerErr := g8ebinaries.OpenReader(filepath.Join(filepath.Dir(executable), constants.BinDirname))
 		if readerErr != nil {
-			return fmt.Errorf("gateway: initialize adjacent node-binary reader: %w", readerErr)
+			return fmt.Errorf("gateway: initialize adjacent g8e-binary reader: %w", readerErr)
 		}
 		if adjacentReader.HasManifest() {
-			nodeReader = adjacentReader
+			g8eReader = adjacentReader
 		}
 	}
 
@@ -706,7 +706,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			AppEnrollment: appEnrollment,
 			Registration:  reg,
 			Responder:     ls.responder,
-			NodeReader:    nodeReader,
+			G8eReader:     g8eReader,
 		},
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:        cfg,

@@ -519,41 +519,41 @@ func TestPKIController_HandlePKICABundle(t *testing.T) {
 	assert.NotEmpty(t, rr.Body.Bytes())
 }
 
-func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
+func TestPKIController_HandleG8eBinaryDownload(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	// Create binaries directory and a test binary
 	binaryRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirBinaries, "g8e-windows-amd64.exe")
-	testNodeBinaryContent := []byte("test binary content")
-	require.NoError(t, c.pki.fileSvc.WriteFile(context.Background(), binaryRelPath, testNodeBinaryContent, constants.PermFilePublic))
+	testG8eBinaryContent := []byte("test binary content")
+	require.NoError(t, c.pki.fileSvc.WriteFile(context.Background(), binaryRelPath, testG8eBinaryContent, constants.PermFilePublic))
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-windows-amd64.exe", nil)
 	rr := httptest.NewRecorder()
 
-	c.handleNodeBinaryDownload(rr, req)
+	c.handleG8eBinaryDownload(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, "application/octet-stream", rr.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment; filename=g8e-windows-amd64.exe", rr.Header().Get("Content-Disposition"))
-	assert.Equal(t, testNodeBinaryContent, rr.Body.Bytes())
+	assert.Equal(t, testG8eBinaryContent, rr.Body.Bytes())
 }
 
-func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
+func TestPKIController_HandleG8eBinaryDownload_NotFound(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-linux-amd64", nil)
 	rr := httptest.NewRecorder()
 
-	c.handleNodeBinaryDownload(rr, req)
+	c.handleG8eBinaryDownload(rr, req)
 
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
-type testNodeBinaryReader struct {
+type testG8eBinaryReader struct {
 	root string
 }
 
-func (r testNodeBinaryReader) Artifact(name string) (io.ReadSeeker, os.FileInfo, error) {
+func (r testG8eBinaryReader) Artifact(name string) (io.ReadSeeker, os.FileInfo, error) {
 	file, err := os.Open(filepath.Join(r.root, name))
 	if err != nil {
 		return nil, nil, err
@@ -566,19 +566,19 @@ func (r testNodeBinaryReader) Artifact(name string) (io.ReadSeeker, os.FileInfo,
 	return file, info, nil
 }
 
-func TestPKIController_HandleNodeBinaryDownload_ImageBakedBinDir(t *testing.T) {
+func TestPKIController_HandleG8eBinaryDownload_ImageBakedBinDir(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	binDir := t.TempDir()
 	testContent := []byte("image-baked binary content")
 	binaryPath := filepath.Join(binDir, "g8e-darwin-arm64")
 	require.NoError(t, os.WriteFile(binaryPath, testContent, constants.PermFilePublic))
-	c.nodeReader = testNodeBinaryReader{root: binDir}
+	c.g8eReader = testG8eBinaryReader{root: binDir}
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-darwin-arm64", nil)
 	rr := httptest.NewRecorder()
 
-	c.handleNodeBinaryDownload(rr, req)
+	c.handleG8eBinaryDownload(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, "application/octet-stream", rr.Header().Get("Content-Type"))
@@ -586,7 +586,7 @@ func TestPKIController_HandleNodeBinaryDownload_ImageBakedBinDir(t *testing.T) {
 	assert.Equal(t, testContent, rr.Body.Bytes())
 }
 
-func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
+func TestPKIController_HandleG8eBinaryDownload_InvalidName(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	testCases := []string{
@@ -603,7 +603,7 @@ func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/"+tc, nil)
 			rr := httptest.NewRecorder()
 
-			c.handleNodeBinaryDownload(rr, req)
+			c.handleG8eBinaryDownload(rr, req)
 
 			assert.Equal(t, http.StatusBadRequest, rr.Code)
 		})

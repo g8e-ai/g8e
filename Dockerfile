@@ -78,7 +78,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 # Verify the complete matrix and the builder-platform executable without
 # attempting to execute a foreign target during a multi-platform build.
-RUN test -f /build/bin/node-binaries.json && \
+RUN test -f /build/bin/g8e-binaries.json && \
     /build/bin/g8e-linux-$(go env GOARCH) --help
 
 # Verify FIPS 140-3 approved mode is active via the native crypto/fips140 module
@@ -134,7 +134,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the binary matching the image target as the entrypoint.
 COPY --from=builder /build/bin/g8e-${TARGETOS}-${TARGETARCH} /g8e
 
-# Copy all platform binaries for node deployment via /.well-known/g8e/bin/
+# Copy all platform binaries for g8e deployment via /.well-known/g8e/bin/
 COPY --from=builder /build/bin/ /opt/g8e/bin/
 
 # Copy protocol constants (required for doctrine mode)

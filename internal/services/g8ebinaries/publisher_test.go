@@ -7,7 +7,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package nodebinaries
+package g8ebinaries
 
 import (
 	"archive/tar"
@@ -40,7 +40,7 @@ func TestPublisherPublish_ValidatesAndReplacesCompleteMirror(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "build-1", manifest.BuildID)
 	assert.NoFileExists(t, filepath.Join(old, "old.txt"))
-	assert.FileExists(t, filepath.Join(old, constants.NodeBinariesManifestFilename))
+	assert.FileExists(t, filepath.Join(old, constants.G8eBinariesManifestFilename))
 	reader, err := OpenReader(old)
 	require.NoError(t, err)
 	assert.True(t, reader.HasManifest())
@@ -61,7 +61,7 @@ func TestPublisherPublish_RejectsUnsafeArchiveWithoutReplacingMirror(t *testing.
 
 	_, err := NewPublisher(output).Publish(&archive)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrNodeBinaryArchive)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryArchive)
 	data, readErr := os.ReadFile(marker)
 	require.NoError(t, readErr)
 	assert.Equal(t, "current", string(data))
@@ -71,14 +71,14 @@ func TestPublisherPublish_RejectsDuplicateArchiveEntries(t *testing.T) {
 	var archive bytes.Buffer
 	writer := tar.NewWriter(&archive)
 	for range 2 {
-		require.NoError(t, writer.WriteHeader(&tar.Header{Name: constants.NodeBinariesManifestFilename, Mode: int64(constants.PermFilePublic), Size: 2}))
+		require.NoError(t, writer.WriteHeader(&tar.Header{Name: constants.G8eBinariesManifestFilename, Mode: int64(constants.PermFilePublic), Size: 2}))
 		require.NoError(t, writer.Write([]byte("{}")))
 	}
 	require.NoError(t, writer.Close())
 
 	_, err := NewPublisher(filepath.Join(t.TempDir(), "mirror")).Publish(&archive)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrNodeBinaryArchive)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryArchive)
 }
 
 func validArchive(t *testing.T, buildID string) []byte {
@@ -97,7 +97,7 @@ func validArchive(t *testing.T, buildID string) []byte {
 	manifest := Manifest{SchemaVersion: 1, Version: "test", BuildID: buildID, BuildTime: time.Now().UTC().Format(time.RFC3339), SourceRevision: "test", SourceTreeHash: strings.Repeat("a", 64), Targets: artifacts}
 	data, err := json.Marshal(manifest)
 	require.NoError(t, err)
-	writeTarFile(t, writer, constants.NodeBinariesManifestFilename, data, constants.PermFilePublic)
+	writeTarFile(t, writer, constants.G8eBinariesManifestFilename, data, constants.PermFilePublic)
 	require.NoError(t, writer.Close())
 	return archive.Bytes()
 }

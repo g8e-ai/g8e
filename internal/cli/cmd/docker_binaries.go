@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/services/nodebinaries"
+	g8ebinaries "github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
 )
 
 const defaultDockerGatewayImage = "g8e-gateway"
@@ -40,7 +40,7 @@ func (execDockerBinaryRunner) InspectImage(ctx context.Context, image string) (s
 	}
 	id := strings.TrimSpace(string(output))
 	if id == "" {
-		return "", fmt.Errorf("%w: image %q has no immutable ID", constants.ErrNodeBinaryExport, image)
+		return "", fmt.Errorf("%w: image %q has no immutable ID", constants.ErrG8eBinaryExport, image)
 	}
 	return id, nil
 }
@@ -52,7 +52,7 @@ func (execDockerBinaryRunner) CreateContainer(ctx context.Context, image string)
 	}
 	container := strings.TrimSpace(string(output))
 	if container == "" {
-		return "", fmt.Errorf("%w: Docker returned an empty container ID", constants.ErrNodeBinaryExport)
+		return "", fmt.Errorf("%w: Docker returned an empty container ID", constants.ErrG8eBinaryExport)
 	}
 	return container, nil
 }
@@ -62,7 +62,7 @@ func (execDockerBinaryRunner) CopyContainerPath(ctx context.Context, container, 
 	command.Stdout = destination
 	command.Stderr = os.Stderr
 	if err := command.Run(); err != nil {
-		return fmt.Errorf("copy node binaries from container %q: %w", container, err)
+		return fmt.Errorf("copy g8e binaries from container %q: %w", container, err)
 	}
 	return nil
 }
@@ -78,7 +78,7 @@ func dockerBinariesExportCmd() *cobra.Command {
 	var image, output string
 	cmd := &cobra.Command{
 		Use:   "binaries export",
-		Short: "Export the node-binary set from an existing Gateway image",
+		Short: "Export the g8e-binary set from an existing Gateway image",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
@@ -93,19 +93,19 @@ func dockerBinariesExportCmd() *cobra.Command {
 			if output == "" {
 				cwd, err := os.Getwd()
 				if err != nil {
-					return fmt.Errorf("%w: resolve export output: %w", constants.ErrNodeBinaryExport, err)
+					return fmt.Errorf("%w: resolve export output: %w", constants.ErrG8eBinaryExport, err)
 				}
 				output = filepath.Join(cwd, constants.BinDirname)
 			}
-			if err := exportDockerNodeBinaries(cmd.Context(), execDockerBinaryRunner{}, image, output); err != nil {
+			if err := exportDockerG8eBinaries(cmd.Context(), execDockerBinaryRunner{}, image, output); err != nil {
 				return err
 			}
-			cmd.Printf("Exported node binaries from %s to %s.\n", image, output)
+			cmd.Printf("Exported g8e binaries from %s to %s.\n", image, output)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&image, "image", defaultDockerGatewayImage, "Gateway image reference to export")
-	cmd.Flags().StringVar(&output, "output", "", "Host directory for the exported node-binary mirror")
+	cmd.Flags().StringVar(&output, "output", "", "Host directory for the exported g8e-binary mirror")
 	return cmd
 }
 
@@ -113,41 +113,41 @@ func buildDockerImagesAndExport(ctx context.Context, buildArgs []string, profile
 	if err := runDockerCompose(buildArgs, profiles...); err != nil {
 		return fmt.Errorf("%w: build images: %w", constants.ErrProcessStartFailed, err)
 	}
-	if err := exportDockerNodeBinaries(ctx, execDockerBinaryRunner{}, defaultDockerGatewayImage, filepath.Join(constants.PathCurrentDir, constants.BinDirname)); err != nil {
-		return fmt.Errorf("%w: export node binaries: %w", constants.ErrNodeBinaryExport, err)
+	if err := exportDockerG8eBinaries(ctx, execDockerBinaryRunner{}, defaultDockerGatewayImage, filepath.Join(constants.PathCurrentDir, constants.BinDirname)); err != nil {
+		return fmt.Errorf("%w: export g8e binaries: %w", constants.ErrG8eBinaryExport, err)
 	}
 	return nil
 }
 
-func exportDockerNodeBinaries(ctx context.Context, runner dockerBinaryRunner, image, output string) (err error) {
+func exportDockerG8eBinaries(ctx context.Context, runner dockerBinaryRunner, image, output string) (err error) {
 	if strings.TrimSpace(image) == "" || strings.TrimSpace(output) == "" {
-		return fmt.Errorf("%w: image and output are required", constants.ErrNodeBinaryExport)
+		return fmt.Errorf("%w: image and output are required", constants.ErrG8eBinaryExport)
 	}
 	imageID, err := runner.InspectImage(ctx, image)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrNodeBinaryExport, err)
+		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
 	}
 	container, err := runner.CreateContainer(ctx, imageID)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrNodeBinaryExport, err)
+		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
 	}
 	defer func() {
 		cleanupErr := runner.RemoveContainer(ctx, container)
 		if err == nil && cleanupErr != nil {
-			err = fmt.Errorf("%w: cleanup export container: %w", constants.ErrNodeBinaryExport, cleanupErr)
+			err = fmt.Errorf("%w: cleanup export container: %w", constants.ErrG8eBinaryExport, cleanupErr)
 		}
 	}()
 
-	publisher := nodebinaries.NewPublisher(output)
+	publisher := g8ebinaries.NewPublisher(output)
 	manifest, err := publishDockerArchive(ctx, runner, publisher, container)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrNodeBinaryExport, err)
+		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
 	}
-	manifestDigest, err := nodebinaries.ManifestDigest(output)
+	manifestDigest, err := g8ebinaries.ManifestDigest(output)
 	if err != nil {
 		return err
 	}
-	if err := nodebinaries.WriteExportRecord(output, nodebinaries.ExportRecord{
+	if err := g8ebinaries.WriteExportRecord(output, g8ebinaries.ExportRecord{
 		ImageReference: image,
 		ImageID:        imageID,
 		ManifestSHA256: manifestDigest,
@@ -158,11 +158,11 @@ func exportDockerNodeBinaries(ctx context.Context, runner dockerBinaryRunner, im
 	return nil
 }
 
-func publishDockerArchive(ctx context.Context, runner dockerBinaryRunner, publisher *nodebinaries.Publisher, container string) (nodebinaries.Manifest, error) {
+func publishDockerArchive(ctx context.Context, runner dockerBinaryRunner, publisher *g8ebinaries.Publisher, container string) (g8ebinaries.Manifest, error) {
 	reader, writer := io.Pipe()
 	copyErr := make(chan error, 1)
 	go func() {
-		copyErr <- runner.CopyContainerPath(ctx, container, constants.NodeBinariesArchiveRoot+"/.", writer)
+		copyErr <- runner.CopyContainerPath(ctx, container, constants.G8eBinariesArchiveRoot+"/.", writer)
 		_ = writer.Close()
 	}()
 	manifest, publishErr := publisher.Publish(reader)
@@ -170,10 +170,10 @@ func publishDockerArchive(ctx context.Context, runner dockerBinaryRunner, publis
 		_ = reader.CloseWithError(publishErr)
 	}
 	if err := <-copyErr; err != nil {
-		return nodebinaries.Manifest{}, err
+		return g8ebinaries.Manifest{}, err
 	}
 	if publishErr != nil {
-		return nodebinaries.Manifest{}, publishErr
+		return g8ebinaries.Manifest{}, publishErr
 	}
 	return manifest, nil
 }

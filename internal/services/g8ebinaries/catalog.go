@@ -5,7 +5,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package nodebinaries
+package g8ebinaries
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// Target describes one artifact in the node deployment matrix.
+// Target describes one artifact in the g8e deployment matrix.
 type Target struct {
 	OS       string `json:"os"`
 	Arch     string `json:"arch"`
@@ -54,10 +54,10 @@ func targetByFilename(name string) (Target, bool) {
 
 func validateFilename(name string) error {
 	if name == "" || filepath.Base(name) != name || strings.Contains(name, "\\") || strings.Contains(name, "..") {
-		return fmt.Errorf("%w: %q", constants.ErrNodeBinaryArtifact, name)
+		return fmt.Errorf("%w: %q", constants.ErrG8eBinaryArtifact, name)
 	}
 	if _, ok := targetByFilename(name); !ok {
-		return fmt.Errorf("%w: unsupported filename %q", constants.ErrNodeBinaryArtifact, name)
+		return fmt.Errorf("%w: unsupported filename %q", constants.ErrG8eBinaryArtifact, name)
 	}
 	return nil
 }
@@ -69,7 +69,7 @@ func PlatformTarget(goos, goarch string) (Target, error) {
 			return target, nil
 		}
 	}
-	return Target{}, fmt.Errorf("%w: unsupported platform %s/%s", constants.ErrNodeBinaryArtifact, goos, goarch)
+	return Target{}, fmt.Errorf("%w: unsupported platform %s/%s", constants.ErrG8eBinaryArtifact, goos, goarch)
 }
 
 // HostTarget returns the catalogued executable for the current Go platform.

@@ -30,7 +30,7 @@ import (
 )
 
 // PKIController handles PKI and certificate management endpoints.
-type nodeBinaryReader interface {
+type g8eBinaryReader interface {
 	Artifact(string) (io.ReadSeeker, os.FileInfo, error)
 }
 
@@ -41,7 +41,7 @@ type PKIController struct {
 	appEnrollment *AppEnrollmentService
 	registration  *RegistrationService
 	responder     *response.Writer
-	nodeReader    nodeBinaryReader
+	g8eReader     g8eBinaryReader
 }
 
 // PKIControllerDeps groups all dependencies for PKIController.
@@ -52,7 +52,7 @@ type PKIControllerDeps struct {
 	AppEnrollment *AppEnrollmentService
 	Registration  *RegistrationService
 	Responder     *response.Writer
-	NodeReader    nodeBinaryReader
+	G8eReader     g8eBinaryReader
 }
 
 func newPKIController(d PKIControllerDeps) *PKIController {
@@ -63,7 +63,7 @@ func newPKIController(d PKIControllerDeps) *PKIController {
 		appEnrollment: d.AppEnrollment,
 		registration:  d.Registration,
 		responder:     d.Responder,
-		nodeReader:    d.NodeReader,
+		g8eReader:     d.G8eReader,
 	}
 }
 
@@ -382,13 +382,13 @@ func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Re
 	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
-// @Summary		Download node binary
+// @Summary		Download g8e binary
 // @Description	Downloads the g8e binary file binary for the current platform (internal endpoint)
 // @Tags			bootstrap
 // @Produce		application/octet-stream
 // @Success		200	{file}	file
 // @Router			/.well-known/g8e/bin/{filename} [get]
-func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.Request) {
+func (c *PKIController) handleG8eBinaryDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
@@ -400,12 +400,12 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if c.nodeReader == nil {
+	if c.g8eReader == nil {
 		c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 		return
 	}
 
-	file, info, err := c.nodeReader.Artifact(filename)
+	file, info, err := c.g8eReader.Artifact(filename)
 	if err != nil {
 		c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 		return
@@ -414,7 +414,7 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 		defer closer.Close()
 	}
 	contentType := constants.HeaderValueOctetStream
-	if strings.HasSuffix(filename, constants.NodeBinaryChecksumSuffix) {
+	if strings.HasSuffix(filename, constants.G8eBinaryChecksumSuffix) {
 		contentType = constants.HeaderValueTextPlain
 	}
 	w.Header().Set(constants.HeaderContentType, contentType)

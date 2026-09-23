@@ -2152,7 +2152,7 @@ paths:
           description: OK
           schema:
             type: file
-      summary: Download node binary
+      summary: Download g8e binary
       tags:
       - bootstrap
   /.well-known/g8e/pki/ca-bundle:

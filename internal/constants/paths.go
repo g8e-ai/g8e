@@ -338,19 +338,19 @@ const (
 	BinaryImageNameWindows = "g8e.exe"
 )
 
-// NodeBinariesDir is the image-baked directory in the Docker runtime image
+// G8eBinariesDir is the image-baked directory in the Docker runtime image
 // where all platform binaries (g8e-linux-amd64, g8e-darwin-arm64, etc.) are
 // placed by the Dockerfile. The gateway serves them via the
 // /.well-known/g8e/bin/{filename} endpoint. This path is outside the .g8e/
 // volume mount so it is always present regardless of volume state.
 const (
-	NodeBinariesDir                  = "/opt/g8e/bin"
-	NodeBinariesManifestFilename     = "node-binaries.json"
-	NodeBinariesExportRecordFilename = "node-binaries-export.json"
-	NodeBinaryChecksumSuffix         = ".sha256"
-	NodeBinariesArchiveRoot          = "/opt/g8e/bin"
-	NodeBinariesStagingPrefix        = ".node-binaries-export-"
-	NodeBinariesPreviousSuffix       = ".previous"
+	G8eBinariesDir                  = "/opt/g8e/bin"
+	G8eBinariesManifestFilename     = "g8e-binaries.json"
+	G8eBinariesExportRecordFilename = "g8e-binaries-export.json"
+	G8eBinaryChecksumSuffix         = ".sha256"
+	G8eBinariesArchiveRoot          = "/opt/g8e/bin"
+	G8eBinariesStagingPrefix        = ".g8e-binaries-export-"
+	G8eBinariesPreviousSuffix       = ".previous"
 )
 
 // Deploy script filenames served by the gateway.

@@ -5,7 +5,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package nodebinaries
+package g8ebinaries
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// Reader provides validated, catalogued node artifacts from an immutable root.
+// Reader provides validated, catalogued g8e artifacts from an immutable root.
 type Reader struct {
 	root     string
 	manifest *Manifest
@@ -31,10 +31,10 @@ func OpenReader(root string) (*Reader, error) {
 		if os.IsNotExist(err) {
 			return &Reader{root: root}, nil
 		}
-		return nil, fmt.Errorf("%w: stat root: %w", constants.ErrNodeBinaryManifest, err)
+		return nil, fmt.Errorf("%w: stat root: %w", constants.ErrG8eBinaryManifest, err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("%w: root is not a directory", constants.ErrNodeBinaryManifest)
+		return nil, fmt.Errorf("%w: root is not a directory", constants.ErrG8eBinaryManifest)
 	}
 	manifest, err := LoadManifest(root)
 	if err != nil {
@@ -44,15 +44,15 @@ func OpenReader(root string) (*Reader, error) {
 		path := filepath.Join(root, artifact.Filename)
 		size, digest, err := artifactDigest(path)
 		if err != nil || size != artifact.Size || digest != artifact.SHA256 {
-			return nil, fmt.Errorf("%w: verify %q: size or digest mismatch", constants.ErrNodeBinaryManifest, artifact.Filename)
+			return nil, fmt.Errorf("%w: verify %q: size or digest mismatch", constants.ErrG8eBinaryManifest, artifact.Filename)
 		}
 		checksum, err := os.ReadFile(filepath.Join(root, artifact.Checksum))
 		if err != nil {
-			return nil, fmt.Errorf("%w: read checksum %q: %w", constants.ErrNodeBinaryManifest, artifact.Checksum, err)
+			return nil, fmt.Errorf("%w: read checksum %q: %w", constants.ErrG8eBinaryManifest, artifact.Checksum, err)
 		}
 		fields := strings.Fields(string(checksum))
 		if len(fields) < 2 || fields[0] != artifact.SHA256 || fields[1] != artifact.Filename {
-			return nil, fmt.Errorf("%w: verify checksum %q", constants.ErrNodeBinaryManifest, artifact.Checksum)
+			return nil, fmt.Errorf("%w: verify checksum %q", constants.ErrG8eBinaryManifest, artifact.Checksum)
 		}
 	}
 	return &Reader{root: root, manifest: &manifest}, nil
@@ -83,11 +83,11 @@ func (r *Reader) Artifact(name string) (io.ReadSeeker, os.FileInfo, error) {
 	info, err := file.Stat()
 	if err != nil {
 		file.Close()
-		return nil, nil, fmt.Errorf("%w: stat %q: %w", constants.ErrNodeBinaryArtifact, name, err)
+		return nil, nil, fmt.Errorf("%w: stat %q: %w", constants.ErrG8eBinaryArtifact, name, err)
 	}
 	if info.IsDir() {
 		file.Close()
-		return nil, nil, fmt.Errorf("%w: %q is a directory", constants.ErrNodeBinaryArtifact, name)
+		return nil, nil, fmt.Errorf("%w: %q is a directory", constants.ErrG8eBinaryArtifact, name)
 	}
 	return file, info, nil
 }

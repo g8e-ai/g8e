@@ -154,10 +154,10 @@ var (
 	ErrProcessForceKillTimeout = errors.New("process did not exit after force kill")
 	ErrBinaryResolveFailed     = errors.New("failed to resolve operator binary")
 	ErrBinaryCopyFailed        = errors.New("failed to copy operator binary")
-	ErrNodeBinaryManifest      = errors.New("invalid node-binary manifest")
-	ErrNodeBinaryArtifact      = errors.New("invalid node-binary artifact")
-	ErrNodeBinaryExport        = errors.New("node-binary export failed")
-	ErrNodeBinaryArchive       = errors.New("invalid node-binary archive")
+	ErrG8eBinaryManifest       = errors.New("invalid g8e-binary manifest")
+	ErrG8eBinaryArtifact       = errors.New("invalid g8e-binary artifact")
+	ErrG8eBinaryExport         = errors.New("g8e-binary export failed")
+	ErrG8eBinaryArchive        = errors.New("invalid g8e-binary archive")
 
 	// Launch profile errors. The launch profile is the complete validated
 	// configuration persisted after every successful managed background

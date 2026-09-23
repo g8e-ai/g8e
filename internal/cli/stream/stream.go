@@ -31,7 +31,7 @@ const (
 	defaultTimeout     = 60 * time.Second
 )
 
-func getDefaultNodeBinaryDir() string {
+func getDefaultG8eBinaryDir() string {
 	return pathutil.SafeJoin(paths.Infra.RuntimeDir, constants.PathParentDir, constants.BinDirname)
 }
 
@@ -89,7 +89,7 @@ func RunStream(args []string) {
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
 	fs.StringVar(&sshKnownHosts, "known-hosts", "", "Path to SSH known_hosts file (default: ~/.ssh/known_hosts)")
-	fs.StringVar(&binaryDir, "binary-dir", getDefaultNodeBinaryDir(), "Directory containing arch-specific Operator builds")
+	fs.StringVar(&binaryDir, "binary-dir", getDefaultG8eBinaryDir(), "Directory containing arch-specific Operator builds")
 	fs.StringVar(&sshIdentityFile, "ssh-identity-file", "", "SSH identity file path")
 	fs.StringVar(&sshUser, "ssh-user", "", "SSH username")
 	fs.StringVar(&sshPassphrase, "ssh-passphrase", "", "Passphrase for encrypted SSH private keys")

@@ -244,11 +244,11 @@ The root Compose Gateway does not pass `--posture`, so it uses the CLI default, 
 | `./g8e docker init` | Builds and bootstraps the `bootstrapped` plus `evaluation` profiles. |
 | `./g8e docker stop` | Removes Compose containers while preserving volumes and networks. |
 | `./g8e docker status [--profile <name>]` | Displays Compose service status. |
-| `./g8e docker build [--no-cache]` | Builds the `bootstrapped` Compose scope by default, exports the Gateway node-binary mirror, and reports success only after export; `--profile` selects another profile. |
-| `./g8e docker binaries export [--image <ref>] [--output <dir>]` | Exports and validates the node-binary set from an existing Gateway image without building it. |
+| `./g8e docker build [--no-cache]` | Builds the `bootstrapped` Compose scope by default, exports the Gateway g8e-binary mirror, and reports success only after export; `--profile` selects another profile. |
+| `./g8e docker binaries export [--image <ref>] [--output <dir>]` | Exports and validates the g8e-binary set from an existing Gateway image without building it. |
 | `./g8e docker logs [service] [-f] [--profile <name>]` | Displays or follows Compose logs. |
 | `./g8e docker reset [--full] [--profile <name>]` | Removes containers, volumes, and networks, then starts the Gateway or selected `bootstrapped` scope. Destructive. |
-| `./g8e docker rebuild [--full] [--profile <name>] [--no-cache]` | Stops the selected teardown scope, rebuilds the selected build scope with provenance, exports the node-binary mirror, and starts the Gateway or selected `bootstrapped` scope. Cache reuse is the default. |
+| `./g8e docker rebuild [--full] [--profile <name>] [--no-cache]` | Stops the selected teardown scope, rebuilds the selected build scope with provenance, exports the g8e-binary mirror, and starts the Gateway or selected `bootstrapped` scope. Cache reuse is the default. |
 | `./g8e docker clean` | Removes containers, volumes, networks, and orphans across the unified profiles. Confirmation is skipped by default; use `--yes=false` to prompt. Destructive. |
 
 If a workload remains unhealthy, inspect the relevant service logs and `./g8e auth enroll pending`. If a volume was removed, treat all prior identities as invalid and repeat owner and workload enrollment. If a previous Docker invocation created the host `.g8e` tree as root, repair ownership before CLI enrollment, for example `sudo chown -R $(id -u):$(id -g) .g8e`.

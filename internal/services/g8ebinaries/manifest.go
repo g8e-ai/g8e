@@ -5,7 +5,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package nodebinaries
+package g8ebinaries
 
 import (
 	"crypto/sha256"
@@ -21,7 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// Manifest is the image and host mirror contract for node binaries.
+// Manifest is the image and host mirror contract for g8e binaries.
 type Manifest struct {
 	SchemaVersion  int        `json:"schema_version"`
 	Version        string     `json:"version"`
@@ -41,20 +41,20 @@ type Artifact struct {
 
 func (m Manifest) Validate() error {
 	if m.SchemaVersion != 1 || strings.TrimSpace(m.Version) == "" || strings.TrimSpace(m.BuildID) == "" || strings.TrimSpace(m.BuildTime) == "" || strings.TrimSpace(m.SourceTreeHash) == "" {
-		return fmt.Errorf("%w: malformed provenance", constants.ErrNodeBinaryManifest)
+		return fmt.Errorf("%w: malformed provenance", constants.ErrG8eBinaryManifest)
 	}
 	if _, err := time.Parse(time.RFC3339, m.BuildTime); err != nil {
-		return fmt.Errorf("%w: build time: %w", constants.ErrNodeBinaryManifest, err)
+		return fmt.Errorf("%w: build time: %w", constants.ErrG8eBinaryManifest, err)
 	}
 	expected := sortedTargets(targets)
 	actual := sortedArtifacts(m.Targets)
 	if len(actual) != len(expected) {
-		return fmt.Errorf("%w: expected %d targets, got %d", constants.ErrNodeBinaryManifest, len(expected), len(actual))
+		return fmt.Errorf("%w: expected %d targets, got %d", constants.ErrG8eBinaryManifest, len(expected), len(actual))
 	}
 	for i, target := range expected {
 		artifact := actual[i]
 		if artifact.Filename != target.Filename || artifact.Checksum != target.Checksum || artifact.OS != target.OS || artifact.Arch != target.Arch || artifact.Mode != target.Mode || artifact.Size <= 0 || !isSHA256(artifact.SHA256) {
-			return fmt.Errorf("%w: target %q does not match catalog", constants.ErrNodeBinaryManifest, artifact.Filename)
+			return fmt.Errorf("%w: target %q does not match catalog", constants.ErrG8eBinaryManifest, artifact.Filename)
 		}
 	}
 	return nil
@@ -82,13 +82,13 @@ func isSHA256(value string) bool {
 
 // LoadManifest reads and validates a manifest from root.
 func LoadManifest(root string) (Manifest, error) {
-	data, err := os.ReadFile(filepath.Join(root, constants.NodeBinariesManifestFilename))
+	data, err := os.ReadFile(filepath.Join(root, constants.G8eBinariesManifestFilename))
 	if err != nil {
-		return Manifest{}, fmt.Errorf("%w: read manifest: %w", constants.ErrNodeBinaryManifest, err)
+		return Manifest{}, fmt.Errorf("%w: read manifest: %w", constants.ErrG8eBinaryManifest, err)
 	}
 	var manifest Manifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
-		return Manifest{}, fmt.Errorf("%w: decode manifest: %w", constants.ErrNodeBinaryManifest, err)
+		return Manifest{}, fmt.Errorf("%w: decode manifest: %w", constants.ErrG8eBinaryManifest, err)
 	}
 	if err := manifest.Validate(); err != nil {
 		return Manifest{}, err

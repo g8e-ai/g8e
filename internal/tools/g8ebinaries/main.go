@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/services/nodebinaries"
+	"github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
 )
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 	treeHash := flag.String("source-tree-hash", "unknown", "source tree hash")
 	flag.Parse()
 	if err := generate(*root, *version, *buildID, *buildTime, *revision, *treeHash); err != nil {
-		fmt.Fprintf(os.Stderr, "node-binaries: %v\n", err)
+		fmt.Fprintf(os.Stderr, "g8e-binaries: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -45,8 +45,8 @@ func generate(root, version, buildID, buildTime, revision, treeHash string) erro
 	if strings.TrimSpace(version) == "" || strings.TrimSpace(buildID) == "" || strings.TrimSpace(treeHash) == "" {
 		return fmt.Errorf("provenance fields must not be empty")
 	}
-	artifacts := make([]nodebinaries.Artifact, 0, len(nodebinaries.Targets()))
-	for _, target := range nodebinaries.Targets() {
+	artifacts := make([]g8ebinaries.Artifact, 0, len(g8ebinaries.Targets()))
+	for _, target := range g8ebinaries.Targets() {
 		path := filepath.Join(root, target.Filename)
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -57,9 +57,9 @@ func generate(root, version, buildID, buildTime, revision, treeHash string) erro
 		if err := os.WriteFile(checksum, []byte(hex.EncodeToString(digest[:])+"  "+target.Filename+"\n"), 0644); err != nil {
 			return fmt.Errorf("write %s: %w", target.Checksum, err)
 		}
-		artifacts = append(artifacts, nodebinaries.Artifact{Target: target, Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])})
+		artifacts = append(artifacts, g8ebinaries.Artifact{Target: target, Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])})
 	}
-	manifest := nodebinaries.Manifest{SchemaVersion: 1, Version: version, BuildID: buildID, BuildTime: buildTime, SourceRevision: revision, SourceTreeHash: treeHash, Targets: artifacts}
+	manifest := g8ebinaries.Manifest{SchemaVersion: 1, Version: version, BuildID: buildID, BuildTime: buildTime, SourceRevision: revision, SourceTreeHash: treeHash, Targets: artifacts}
 	if err := manifest.Validate(); err != nil {
 		return err
 	}
@@ -68,11 +68,11 @@ func generate(root, version, buildID, buildTime, revision, treeHash string) erro
 		return fmt.Errorf("marshal manifest: %w", err)
 	}
 	data = append(data, '\n')
-	staging := filepath.Join(root, ".node-binaries.json.new")
+	staging := filepath.Join(root, ".g8e-binaries.json.new")
 	if err := os.WriteFile(staging, data, 0644); err != nil {
 		return fmt.Errorf("write manifest: %w", err)
 	}
-	if err := os.Rename(staging, filepath.Join(root, "node-binaries.json")); err != nil {
+	if err := os.Rename(staging, filepath.Join(root, "g8e-binaries.json")); err != nil {
 		return fmt.Errorf("publish manifest: %w", err)
 	}
 	return nil

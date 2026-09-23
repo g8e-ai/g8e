@@ -294,7 +294,7 @@ The gateway exposes two ports with distinct transport and authentication propert
 
 | Port | Transport | Client Cert | Purpose |
 |---|---|---|---|
-| **HTTP 8080** | Plain HTTP | None | Bootstrap health and state, CA discovery, initial owner bootstrap, token-scoped CLI recovery and platform enrollment, deploy scripts, and node binaries |
+| **HTTP 8080** | Plain HTTP | None | Bootstrap health and state, CA discovery, initial owner bootstrap, token-scoped CLI recovery and platform enrollment, deploy scripts, and g8e binaries |
 | **HTTPS 8443** | TLS 1.3 | Requested and verified when presented; route middleware decides whether a client certificate is required | Console and WebAuthn, public TLS routes, authenticated API and PKI management, pub/sub, MCP/A2A, governance, and audit |
 
 The HTTP router exposes only bootstrap and discovery operations, then redirects other requests to HTTPS. It does not expose privileged CSR signing, certificate revocation, MCP/A2A, pub/sub, or governance routes.

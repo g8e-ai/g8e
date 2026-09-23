@@ -82,7 +82,7 @@ Running `gw start` starts the Gateway mode; `--posture` selects `doctrine` (the 
 
 The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
-**HTTP Port (8080)**: Plain HTTP for health and state checks, bootstrap and PKI discovery, token-scoped CLI recovery and platform-enrollment request/status/complete flows, deploy scripts, and node binary distribution. Other paths redirect to HTTPS after validating the requested host. The old trust-script routes and legacy CLI enrollment handler are removed; trust installation is handled by `auth enroll user` directly. No MCP or governed API routes are available on this port.
+**HTTP Port (8080)**: Plain HTTP for health and state checks, bootstrap and PKI discovery, token-scoped CLI recovery and platform-enrollment request/status/complete flows, deploy scripts, and g8e binary distribution. Other paths redirect to HTTPS after validating the requested host. The old trust-script routes and legacy CLI enrollment handler are removed; trust installation is handled by `auth enroll user` directly. No MCP or governed API routes are available on this port.
 
 **HTTPS Port (8443)**: The primary TLS surface. Client certificates are optional at the TLS handshake so public browser and bootstrap assets can load, but application middleware requires a verified mTLS identity for governed routes classified as mTLS-only. Web-session routes use the browser session cookie, SSE consumer routes accept mTLS or a web session, and MCP/A2A accept JWT as an alternative only when JWKS is configured. The HTTPS router also serves the Console SPA, WebAuthn endpoints, Swagger UI, and OpenAPI specification; public assets are not uniformly mTLS-protected.
 
@@ -108,7 +108,7 @@ Every successful background `g8e gw start` writes a versioned launch profile to 
 
 The Gateway exposes two logical HTTP surfaces.
 
-- **HTTP surface (plain text)**: Used for health and state checks, initial bootstrap, PKI discovery, token-scoped CLI recovery and platform-enrollment request/status/complete flows, node binary download, deploy scripts, and a catch-all redirect to HTTPS. It does not serve mTLS, MCP, or governed API routes.
+- **HTTP surface (plain text)**: Used for health and state checks, initial bootstrap, PKI discovery, token-scoped CLI recovery and platform-enrollment request/status/complete flows, g8e binary download, deploy scripts, and a catch-all redirect to HTTPS. It does not serve mTLS, MCP, or governed API routes.
 - **HTTPS surface (hybrid TLS/application auth)**: Carries API, console, passkey, MCP/A2A, and Operator management traffic. Client certificates are verified when presented, while the auth registry applies mTLS, web-session, dual, public, and optional JWT requirements per route.
 
 The HTTPS router classifies each route into one of four auth modes:

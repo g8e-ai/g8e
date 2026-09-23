@@ -318,7 +318,7 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, h.platformEnrollmentController.handlePlatformEnrollmentStatus)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
 
-	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
+	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleG8eBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 

@@ -36,7 +36,7 @@
                 "tags": [
                     "bootstrap"
                 ],
-                "summary": "Download node binary",
+                "summary": "Download g8e binary",
                 "responses": {
                     "200": {
                         "description": "OK",

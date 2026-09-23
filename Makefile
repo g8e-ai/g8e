@@ -377,19 +377,19 @@ embed-explorer:
 build: embed-explorer
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
-	@rm -f $(BIN_DIR)/node-binaries.json
+	@rm -f $(BIN_DIR)/g8e-binaries.json
 	@set -e; \
-	NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
+	G8E_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
-		NODE_BINARY=$$NODE_BINARY.exe; \
+		G8E_BINARY=$$G8E_BINARY.exe; \
 		ROOT_COPY=g8e.exe; \
 	else \
 		ROOT_COPY=g8e; \
 	fi; \
-	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
-	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	INSTALL_SRC=$$NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
+	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$G8E_BINARY..."; \
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$G8E_BINARY $(MAIN_PKG); \
+	sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256; \
+	INSTALL_SRC=$$G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
 	@echo "Build complete. Binary: $(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH)$(if $(filter windows,$(HOST_OS)),.exe,)"
 
 .PHONY: build-compressed
@@ -413,33 +413,33 @@ build-compressed: build
 build-all:
 	@echo "Building g8e Operator for all platforms (FIPS 140-3 for linux)..."
 	@mkdir -p $(BIN_DIR)
-	@rm -f $(BIN_DIR)/node-binaries.json
+	@rm -f $(BIN_DIR)/g8e-binaries.json
 	@for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
 		GOARCH=$${platform#*/}; \
-		NODE_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
+		G8E_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
 		if [ "$$GOOS" = "windows" ]; then \
-			NODE_BINARY=$$NODE_BINARY.exe; \
+			G8E_BINARY=$$G8E_BINARY.exe; \
 		fi; \
-		echo "Building $$platform -> $$NODE_BINARY..."; \
+		echo "Building $$platform -> $$G8E_BINARY..."; \
 		if [ "$$GOOS" = "linux" ]; then \
 			FIPS_ENV="GOFIPS140=$(GOFIPS140_VERSION)"; \
 		else \
 			FIPS_ENV="-u GOFIPS140"; \
 		fi; \
-		env $$FIPS_ENV CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
-		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
+		env $$FIPS_ENV CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$$platform" -o $$G8E_BINARY $(MAIN_PKG); \
+		sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256; \
 	done
-	@HOST_NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
+	@HOST_G8E_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
-		HOST_NODE_BINARY=$$HOST_NODE_BINARY.exe; \
+		HOST_G8E_BINARY=$$HOST_G8E_BINARY.exe; \
 		ROOT_COPY=g8e.exe; \
 	else \
 		ROOT_COPY=g8e; \
 	fi; \
-	INSTALL_SRC=$$HOST_NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
-	@go run ./internal/tools/nodebinaries --root $(BIN_DIR) --version "$(VERSION)" --build-id "$(BUILD_ID)" --build-time "$(BUILD_TIME)" --source-revision "$(SOURCE_REVISION)" --source-tree-hash "$(SOURCE_TREE_HASH)"
-	@echo "Multi-platform build complete. Manifest and checksums: $(BIN_DIR)/node-binaries.json"
+	INSTALL_SRC=$$HOST_G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
+	@go run ./internal/tools/g8ebinaries --root $(BIN_DIR) --version "$(VERSION)" --build-id "$(BUILD_ID)" --build-time "$(BUILD_TIME)" --source-revision "$(SOURCE_REVISION)" --source-tree-hash "$(SOURCE_TREE_HASH)"
+	@echo "Multi-platform build complete. Manifest and checksums: $(BIN_DIR)/g8e-binaries.json"
 	@echo "Host binary copied: ./g8e ($(HOST_OS)/$(HOST_ARCH))"
 
 .PHONY: build-darwin
@@ -447,10 +447,10 @@ build-darwin:
 	@echo "Building g8e for Darwin..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(DARWIN_ARCHS); do \
-		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
-		echo "Building darwin/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=$$arch go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
-		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
+		G8E_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
+		echo "Building darwin/$$arch -> $$G8E_BINARY..."; \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=$$arch go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=darwin_$$arch" -o $$G8E_BINARY $(MAIN_PKG); \
+		sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256; \
 	done
 	@echo "Darwin build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
 
@@ -459,10 +459,10 @@ build-linux:
 	@echo "Building g8e for Linux..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(LINUX_ARCHS); do \
-		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
-		echo "Building linux/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=$$arch go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
-		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
+		G8E_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
+		echo "Building linux/$$arch -> $$G8E_BINARY..."; \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=$$arch go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=linux_$$arch" -o $$G8E_BINARY $(MAIN_PKG); \
+		sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256; \
 	done
 	@echo "Linux build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
 
@@ -471,10 +471,10 @@ build-windows:
 	@echo "Building g8e for Windows..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(WINDOWS_ARCHS); do \
-		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
-		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=windows_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
-		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
+		G8E_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
+		echo "Building windows/$$arch -> $$G8E_BINARY..."; \
+		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=windows_$$arch" -o $$G8E_BINARY $(MAIN_PKG); \
+		sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256; \
 	done
 	@echo "Windows build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
 
@@ -489,14 +489,14 @@ build-windows:
 build-fips:
 	@echo "Building g8e with FIPS 140-3 approved mode (GOFIPS140=$(GOFIPS140_VERSION), $(FIPS_GOOS)/$(FIPS_GOARCH))..."
 	@mkdir -p $(BIN_DIR)
-	@NODE_BINARY=$(BIN_DIR)/g8e-fips-$(FIPS_GOOS)-$(FIPS_GOARCH); \
-	echo "Building $(FIPS_GOOS)/$(FIPS_GOARCH) -> $$NODE_BINARY..."; \
+	@G8E_BINARY=$(BIN_DIR)/g8e-fips-$(FIPS_GOOS)-$(FIPS_GOARCH); \
+	echo "Building $(FIPS_GOOS)/$(FIPS_GOARCH) -> $$G8E_BINARY..."; \
 	GOFIPS140=$(GOFIPS140_VERSION) CGO_ENABLED=$(CGO_ENABLED) GOOS=$(FIPS_GOOS) GOARCH=$(FIPS_GOARCH) \
 		go build $(TRIMPATH) -tags $(BUILD_TAGS) \
 		-ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(FIPS_GOOS)_$(FIPS_GOARCH)" \
-		-o $$NODE_BINARY $(MAIN_PKG); \
-	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	INSTALL_SRC=$$NODE_BINARY INSTALL_DST=g8e-fips; $(INSTALL_EXECUTABLE)
+		-o $$G8E_BINARY $(MAIN_PKG); \
+	sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256; \
+	INSTALL_SRC=$$G8E_BINARY INSTALL_DST=g8e-fips; $(INSTALL_EXECUTABLE)
 	@echo "FIPS build complete. Binary: $(BIN_DIR)/g8e-fips-$(FIPS_GOOS)-$(FIPS_GOARCH)"
 	@echo "Verify with: ./g8e-fips version --fips"
 
