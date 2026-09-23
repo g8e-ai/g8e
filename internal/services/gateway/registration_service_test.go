@@ -54,7 +54,6 @@ func TestNewRegistrationService(t *testing.T) {
 func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 
 	// Test that calculateSerialFromPEM correctly extracts serial from a certificate
-	dataDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
 	db, err := openTestDB(t, fileSvc, logger)
@@ -131,7 +130,6 @@ func TestSessionOperatorBindKey(t *testing.T) {
 func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 	t.Run("RegisterDeviceCSR accepts enrollment without CLI CSR (operator-only)", func(t *testing.T) {
 
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, fileSvc, logger)
@@ -750,7 +748,6 @@ func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
 func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 
 	t.Run("Missing system_fingerprint returns error", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, fileSvc, logger)
@@ -781,7 +778,6 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Missing user_id returns error", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, fileSvc, logger)
@@ -812,7 +808,6 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Missing CSR returns error", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, fileSvc, logger)
@@ -842,7 +837,6 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Invalid system_fingerprint returns error", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, fileSvc, logger)
@@ -876,7 +870,6 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 func TestRegistrationService_CompleteRegistration(t *testing.T) {
 
 	t.Run("Invalid CSR PEM format returns error", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, fileSvc, logger)
@@ -909,7 +902,6 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 	})
 
 	t.Run("Wrong CSR block type returns error", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, fileSvc, logger)
@@ -947,7 +939,6 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 	})
 
 	t.Run("Missing CSR returns error", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, fileSvc, logger)

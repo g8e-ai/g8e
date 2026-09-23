@@ -47,7 +47,6 @@ func newTestSuspendedStore(t *testing.T) storage.SuspendedTransactionStore {
 
 func TestGatewayL3Notary_CLIVerifier_RejectsInactiveUser(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
@@ -158,7 +157,6 @@ func TestOutboundL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 
 func TestGatewayL3Notary_CLIVerifier_RejectsUnknownFingerprint(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
@@ -192,7 +190,6 @@ func TestGatewayL3Notary_CLIVerifier_RejectsUnknownFingerprint(t *testing.T) {
 
 func TestGatewayL3Notary_CLIVerifier_RejectsRevokedCertificate(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
@@ -253,7 +250,6 @@ func TestGatewayL3Notary_CLIVerifier_RejectsRevokedCertificate(t *testing.T) {
 
 func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)

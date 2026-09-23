@@ -47,6 +47,7 @@ func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
 	loadedKey, err := provider.GetMemberKey(memberAppID)
 	require.NoError(t, err)
 
@@ -61,6 +62,7 @@ func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 	consensusID := "test-consensus"
 
 	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
 	_, err = provider.GetMemberKey("nonexistent-member")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "key file not found")
@@ -79,6 +81,7 @@ func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
 	require.NoError(t, err)
 
 	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
 	_, err = provider.GetMemberKey(memberAppID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid seed length")
@@ -97,6 +100,7 @@ func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 	require.NoError(t, err)
 
 	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
 	_, err = provider.GetMemberKey(memberAppID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "decode seed")

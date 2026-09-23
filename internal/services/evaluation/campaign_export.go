@@ -300,12 +300,9 @@ func (e *CampaignExporter) ExportRun(
 	if e == nil || store == nil || fileSvc == nil || runID == "" {
 		return nil, fmt.Errorf("evaluation: export campaign run: %w", constants.ErrMissingRequiredField)
 	}
-	if outputDir == "" {
-		outputDir = filepath.Join(evaluationRunDir(runID), "export")
-	}
-	outputDir = filepath.ToSlash(outputDir)
-	if filepath.IsAbs(outputDir) || outputDir == ".." || strings.HasPrefix(outputDir, "../") {
-		return nil, fmt.Errorf("evaluation: export campaign run: output directory must be runtime-relative")
+	outputDir, err := normalizeRuntimeExportDir(runID, outputDir)
+	if err != nil {
+		return nil, err
 	}
 	run, err := store.LoadRun(ctx, runID)
 	if err != nil {
@@ -613,6 +610,17 @@ func replaceModelSummaryRecords(base, verified []CampaignViewRecord) []CampaignV
 	}
 	result = append(result, verified...)
 	return result
+}
+
+func normalizeRuntimeExportDir(runID, outputDir string) (string, error) {
+	if outputDir == "" {
+		outputDir = filepath.Join(evaluationRunDir(runID), "export")
+	}
+	outputDir = filepath.ToSlash(outputDir)
+	if filepath.IsAbs(outputDir) || outputDir == ".." || strings.HasPrefix(outputDir, "../") {
+		return "", fmt.Errorf("evaluation: export campaign run: output directory must be runtime-relative")
+	}
+	return outputDir, nil
 }
 
 func writeExportFile(ctx context.Context, fileSvc fs.RuntimeFileService, outputDir, name string, body []byte, report *CampaignExportReport) error {

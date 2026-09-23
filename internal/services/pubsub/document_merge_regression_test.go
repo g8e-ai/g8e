@@ -198,7 +198,7 @@ func TestHandleDocumentUpdateSync_ReplaceOverwritesAllFields(t *testing.T) {
 			Merge:      false,
 		}),
 	}
-	_, err = f.Svc.handleDocumentUpdateSync(context.Background(), createMsg)
+	_, err := f.Svc.handleDocumentUpdateSync(context.Background(), createMsg)
 	require.NoError(t, err)
 
 	// Replace with a smaller document (merge=false).
@@ -247,7 +247,7 @@ func TestHandleDocumentDeleteSync_RemovesDocument(t *testing.T) {
 			Merge:      false,
 		}),
 	}
-	_, err = f.Svc.handleDocumentUpdateSync(context.Background(), createMsg)
+	_, err := f.Svc.handleDocumentUpdateSync(context.Background(), createMsg)
 	require.NoError(t, err)
 
 	// Verify it exists.
@@ -291,7 +291,7 @@ func TestHandleDocumentUpdateSync_MergeFailsOnMissingDocument(t *testing.T) {
 			Merge:      true,
 		}),
 	}
-	_, err = f.Svc.handleDocumentUpdateSync(context.Background(), mergeMsg)
+	_, err := f.Svc.handleDocumentUpdateSync(context.Background(), mergeMsg)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrNotFound,
 		"merge into a missing document must fail with ErrNotFound, not silently create a partial document")

@@ -98,11 +98,11 @@ func TestInitCampaignQueueMaterializeAndMerge(t *testing.T) {
 	)
 	require.NoError(t, SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, DefaultInitCampaignQueueRelPath, existing))
 	result, err := InitCampaignQueue(InitCampaignQueueRequest{
-		Context:             context.Background(),
-		FileService:         fileSvc,
+		Context:              context.Background(),
+		FileService:          fileSvc,
 		RuntimeInventoryPath: DefaultModelInventoryRelPath,
-		Materialize:         true,
-		MergeExisting:       true,
+		Materialize:          true,
+		MergeExisting:        true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.ModelCount)

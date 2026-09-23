@@ -45,6 +45,24 @@ func CreateTestVault(t testing.TB, dataDir string, privateKey []byte) *vault.Vau
 	return v
 }
 
+// ReopenTestVault reopens an existing vault header from the same runtime tree.
+func ReopenTestVault(t testing.TB, dataDir string, privateKey []byte) *vault.Vault {
+	t.Helper()
+
+	fileSvc, err := fs.NewRuntimeFileService(filepath.Dir(dataDir), testutil.NewTestLogger())
+	require.NoError(t, err)
+
+	v, err := vault.NewVault(&vault.VaultConfig{
+		FileSvc: fileSvc,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, v.Unlock(privateKey))
+
+	t.Cleanup(func() { v.Close() })
+	return v
+}
+
 // NewTestFileSvc creates a RuntimeFileService backed by baseDir with the full
 // .g8e runtime tree created. Returns the file service.
 func NewTestFileSvc(t testing.TB, baseDir string) fs.RuntimeFileService {

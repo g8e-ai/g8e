@@ -532,7 +532,6 @@ func TestPKIAuthority_SignDelegatedCSR(t *testing.T) {
 }
 
 func TestPKIAuthority_CertsUseECDSASignatures_NotEd25519(t *testing.T) {
-	dataDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
 	db, err := openTestDB(t, fileSvc, logger)

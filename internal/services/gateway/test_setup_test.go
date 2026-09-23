@@ -12,7 +12,6 @@ package gateway
 import (
 	"context"
 	"log/slog"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -104,7 +103,6 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	logger := testutil.NewTestLogger()
 
 	fileSvc := newTestFileSvc(t)
-	pkiDir := testutil.TempDir(t)
 	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
 
 	ks := newTestKeystore(t, fileSvc, logger)
@@ -188,8 +186,8 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		Reg:                reg,
 		Passkey:            passkeyHandler,
 		SuspendedStore:     suspendedTxService,
-		DBDir:              dbDir,
-		PKIDir:             pkiDir,
+		DBDir:              fileSvc.Resolve(constants.DataDirname),
+		PKIDir:             fileSvc.Resolve(constants.PkiDirname),
 		SecretsDir:         secretsDir,
 	}
 }

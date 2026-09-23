@@ -68,7 +68,6 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 
 	ks := newTestKeystore(t, fileSvc, logger)

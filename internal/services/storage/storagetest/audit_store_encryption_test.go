@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -152,14 +153,7 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	assert.Contains(t, err.Error(), "EncryptionVault is required")
 
 	// Verify data can still be read with the correct vault
-	vault3, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDataDir,
-		Logger:  testutil.NewTestLogger(),
-	})
-	require.NoError(t, err)
-	err = vault3.Unlock(apiKey)
-	require.NoError(t, err)
-	defer vault3.Close()
+	vault3 := ReopenTestVault(t, vaultDataDir, apiKey)
 
 	config3 := &TestSQLAuditStoreConfig{
 		DBPath:                    "test.db",
@@ -230,8 +224,10 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 	vaultSvc.Close()
 
 	// Rekey: open a locked vault instance, rekey it, then unlock with the new key
+	fileSvcForVault, err := fs.NewRuntimeFileService(filepath.Dir(vaultDataDir), testutil.NewTestLogger())
+	require.NoError(t, err)
 	vault2, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDataDir,
+		FileSvc: fileSvcForVault,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)

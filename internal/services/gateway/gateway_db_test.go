@@ -47,7 +47,6 @@ func mustDocJSON(t *testing.T, v interface{}) json.RawMessage {
 }
 
 func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
-	dataDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 
@@ -77,7 +76,6 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 
 func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
-	dir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
@@ -243,7 +241,6 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSchemaIdempotent(t *testing.T) {
-	dir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 
 	logger := testutil.NewTestLogger()

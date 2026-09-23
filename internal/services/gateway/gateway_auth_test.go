@@ -515,7 +515,6 @@ func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
 func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
