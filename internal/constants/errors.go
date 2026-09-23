@@ -1528,5 +1528,6 @@ var (
 	ErrEvaluationReceiptUnavailable     = errors.New("evaluation: canonical receipt is unavailable")
 	ErrEvaluationAssignmentUnresolved   = errors.New("evaluation: assignment has an unresolved running execution")
 	ErrEvaluationProviderModelsResident = errors.New("evaluation: provider has resident models")
+	ErrEvaluationRecoveredResultMissing = errors.New("evaluation: recovered terminal assignment has no persisted result")
 	ErrImmutableInventoryConflict       = errors.New("evaluation: immutable inventory content conflict")
 )

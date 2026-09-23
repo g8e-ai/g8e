@@ -257,7 +257,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		dataOperator.OperatorID,
 		dataOperator.OperatorSessionID,
 		store,
-		func(ctx context.Context, fetch func(context.Context) (map[string]any, error)) (map[string]any, error) {
+		func(ctx context.Context, fetch func(context.Context) (evaluation.EvaluationTrace, error)) (evaluation.EvaluationTrace, error) {
 			return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), opts.JSONOutput))
 		},
 		deps.now,
@@ -298,7 +298,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		if err != nil {
 			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 		}
-		if err := ensureProviderModelsAbsent(cmd.Context(), endpoint); err != nil {
+		if err := rejectResidentProviderModels(cmd.Context(), endpoint); err != nil {
 			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 		}
 	}
@@ -353,7 +353,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 	return executed, nil
 }
 
-func ensureProviderModelsAbsent(ctx context.Context, endpoint string) error {
+func rejectResidentProviderModels(ctx context.Context, endpoint string) error {
 	residency, err := inference.ReadProviderResidency(ctx, inference.ProviderResidencyOptions{Endpoint: endpoint})
 	if err != nil {
 		return fmt.Errorf("evaluation: read provider residency: %w", err)
@@ -582,7 +582,6 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	plan, err := evaluation.ResolveCampaignStartPlan(evaluation.CampaignStartPlanRequest{
 		Context:       cmd.Context(),
 		FileService:   fileSvc,
-		ProjectRoot:   cfg.ProjectRoot,
 		ModelTag:      opts.ModelTag,
 		ModelTags:     opts.ModelTags,
 		QueueRef:      opts.QueueRef,

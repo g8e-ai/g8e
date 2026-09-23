@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
-	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -31,7 +31,7 @@ import (
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
-var errFactory = errors.New("factory boom")
+var errFactory = fmt.Errorf("factory boom")
 
 // panickingTrustInstaller is a mock auth.SystemTrustInstaller that panics on
 // every method call. Used in factory-error tests to prove that downstream

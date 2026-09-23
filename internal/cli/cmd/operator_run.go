@@ -29,6 +29,10 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
+type operatorRunJSON struct {
+	Results []operator.RunResult `json:"results"`
+}
+
 type operatorRunClientFactory func(fs.RuntimeFileService, *config.Config, time.Duration) (apiClient, error)
 
 func defaultOperatorRunClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Config, timeout time.Duration) (apiClient, error) {
@@ -107,7 +111,7 @@ authenticated user and be active.`,
 
 			results := dispatchOperatorRun(client, targets, command, creds.CLISessionID)
 			if output.JSONEnabled(cmd) {
-				return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"results": results})
+				return output.WriteJSON(cmd.OutOrStdout(), operatorRunJSON{Results: results})
 			}
 
 			failures := writeOperatorRunText(cmd, results)

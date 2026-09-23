@@ -59,7 +59,7 @@ type CampaignStore interface {
 	ListAssignments(ctx context.Context, runID string) ([]*evalv1.EvaluationAssignment, error)
 	AssignmentResultExists(ctx context.Context, runID, assignmentID string) (bool, error)
 	SaveAssignmentTrace(ctx context.Context, runID, assignmentID string, body []byte) error
-	LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (map[string]any, error)
+	LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (EvaluationTrace, error)
 	SaveAssignmentResult(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error
 	LoadAssignmentResult(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignmentResult, error)
 	SaveHeterogeneousStackSet(ctx context.Context, campaignID string, stackSet *HeterogeneousStackSet) error

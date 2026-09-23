@@ -138,7 +138,9 @@ func loadPlatformEnrollmentOrganization(deps PlatformEnrollmentDeps, userID stri
 // request does not exist so the caller can distinguish not-found from
 // decode errors.
 func loadPlatformEnrollmentRequest(ctx context.Context, deps PlatformEnrollmentDeps, requestID string) (*models.PlatformEnrollmentRequest, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("platform enrollment: check request context: %w", err)
+	}
 	if requestID == "" {
 		return nil, nil
 	}

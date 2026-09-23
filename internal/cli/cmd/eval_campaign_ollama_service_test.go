@@ -37,7 +37,7 @@ func TestEnsureProviderModelsAbsent_RejectsResidentModels(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	err := ensureProviderModelsAbsent(context.Background(), server.URL)
+	err := rejectResidentProviderModels(context.Background(), server.URL)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvaluationProviderModelsResident)
 	assert.Contains(t, err.Error(), "granite4.2:3b")
@@ -52,7 +52,7 @@ func TestEnsureProviderModelsAbsent_AllowsEmptyResidency(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	require.NoError(t, ensureProviderModelsAbsent(context.Background(), server.URL))
+	require.NoError(t, rejectResidentProviderModels(context.Background(), server.URL))
 }
 
 func TestDispatchOllamaModelCommand_RejectsMissingFields(t *testing.T) {

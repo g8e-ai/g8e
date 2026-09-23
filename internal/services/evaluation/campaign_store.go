@@ -435,7 +435,7 @@ func (s *Store) SaveAssignmentResult(ctx context.Context, result *evalv1.Evaluat
 }
 
 // LoadAssignmentTrace reads one persisted imported assignment trace.
-func (s *Store) LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (map[string]any, error) {
+func (s *Store) LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (EvaluationTrace, error) {
 	if s == nil || s.files == nil {
 		return nil, fmt.Errorf("evaluation: load assignment trace: %w", constants.ErrMissingRequiredField)
 	}

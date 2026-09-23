@@ -99,7 +99,9 @@ func protoDecision(d commonv1.PlatformEnrollmentDecision) (models.PlatformEnroll
 // This handler decodes the payload, returns a receipt summary, and
 // writes nothing to the doc store.
 func (h *PlatformEnrollmentHandler) HandleCreate(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("platform enrollment: create context: %w", err)
+	}
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -123,7 +125,6 @@ func (h *PlatformEnrollmentHandler) HandleCreate(ctx context.Context, msg *PubSu
 // decision_receipt_id (from msg.ID). The conditional update ensures a
 // concurrent or repeated decision does not consume approval.
 func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -141,7 +142,7 @@ func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSu
 		return "", constants.ErrPlatformEnrollmentInvalidDecision
 	}
 
-	req, err := loadPlatformEnrollmentRequest(context.Background(), h.deps, requestID)
+	req, err := loadPlatformEnrollmentRequest(ctx, h.deps, requestID)
 	if err != nil {
 		return "", err
 	}
@@ -200,7 +201,6 @@ func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSu
 // both the operator and CLI CSRs and persists the operator document;
 // app issuance uses SignPlatformAppCSR for the dual-SAN app certificate.
 func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -218,7 +218,7 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 		return "", constants.ErrPlatformEnrollmentInvalidDecision
 	}
 
-	req, err := loadPlatformEnrollmentRequest(context.Background(), h.deps, requestID)
+	req, err := loadPlatformEnrollmentRequest(ctx, h.deps, requestID)
 	if err != nil {
 		return "", err
 	}
@@ -440,7 +440,9 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 // enrollment service from the ISSUE handler outputs). This handler is
 // only invoked for dashboard and ensemble components.
 func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("platform enrollment: persist policy context: %w", err)
+	}
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -492,7 +494,9 @@ func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg
 }
 
 func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("platform enrollment: revoke context: %w", err)
+	}
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -501,7 +505,7 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 	if requestID == "" {
 		return "", constants.ErrPlatformEnrollmentRequestIDRequired
 	}
-	req, err := loadPlatformEnrollmentRequest(context.Background(), h.deps, requestID)
+	req, err := loadPlatformEnrollmentRequest(ctx, h.deps, requestID)
 	if err != nil {
 		return "", err
 	}
@@ -604,7 +608,9 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 // sessions are bound to the approving owner's user_id (the actor) so the
 // owner can discover and manage the platform-enrolled operator.
 func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("platform enrollment: create session context: %w", err)
+	}
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err

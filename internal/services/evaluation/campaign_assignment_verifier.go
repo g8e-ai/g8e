@@ -30,7 +30,7 @@ type CampaignAssignmentVerificationRequest struct {
 	ScenarioGold              ScenarioGoldCriteria
 	ScenarioTools             ScenarioToolExpectations
 	GradingMethod             evalv1.EvaluationGradingMethod
-	Trace                     map[string]any
+	Trace                     EvaluationTrace
 	ProviderObservationReader *CampaignProviderObservationReader
 	ProviderObservationPolicy ProviderObservationPolicy
 	ModelProvenanceReader     *CampaignModelProvenanceReader
@@ -128,21 +128,21 @@ func finalizeCampaignVerificationReport(report *evalv1.EvaluationVerificationRep
 	return report
 }
 
-func validateImportedTraceDigest(trace map[string]any) error {
+func validateImportedTraceDigest(trace EvaluationTrace) error {
 	if err := validateTraceDigest(trace); err != nil {
 		return err
 	}
 	return nil
 }
 
-func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, trace map[string]any) error {
+func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, trace EvaluationTrace) error {
 	candidate := homogeneousCandidateVariant(assignment)
 	attemptID := ""
 	if len(result.GetModelInferences()) > 0 {
 		attemptID = result.GetModelInferences()[0].GetEvaluationAttemptId()
 	}
 	if attemptID == "" {
-		if contextValues, ok := trace["evaluation_context"].(map[string]any); ok {
+		if contextValues, ok := evaluationTrace(trace["evaluation_context"]); ok {
 			attemptID, _ = contextValues["evaluation_attempt_id"].(string)
 		}
 	}
@@ -209,7 +209,7 @@ func designatedRoleFromAssignment(assignment *evalv1.EvaluationAssignment) (stri
 }
 
 // LoadAssignmentTraceEvidence reads one persisted imported assignment trace.
-func LoadAssignmentTraceEvidence(ctx context.Context, reader complianceevidence.ArtifactReader, runID, assignmentID string) (map[string]any, error) {
+func LoadAssignmentTraceEvidence(ctx context.Context, reader complianceevidence.ArtifactReader, runID, assignmentID string) (EvaluationTrace, error) {
 	if reader == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {
 		return nil, fmt.Errorf("evaluation: load assignment trace evidence: %w", constants.ErrMissingRequiredField)
 	}
@@ -221,7 +221,7 @@ func LoadAssignmentTraceEvidence(ctx context.Context, reader complianceevidence.
 	if err := complianceevidence.ValidateCanonicalJSON(body); err != nil {
 		return nil, fmt.Errorf("evaluation: load assignment trace evidence: %w", err)
 	}
-	trace := map[string]any{}
+	trace := EvaluationTrace{}
 	if err := json.Unmarshal(body, &trace); err != nil {
 		return nil, fmt.Errorf("evaluation: load assignment trace evidence: %w", err)
 	}

@@ -99,8 +99,11 @@ func BuildUniversalResultEnvelope(
 	// Populate IntentData for JSON-first protocol (using JSON marshaling for simplicity during transition)
 	var intentData map[string]interface{}
 	jsonBytes, err := json.Marshal(payload)
-	if err == nil {
-		_ = json.Unmarshal(jsonBytes, &intentData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload intent data: %w", err)
+	}
+	if err := json.Unmarshal(jsonBytes, &intentData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal payload intent data: %w", err)
 	}
 
 	// Inject canonical payload_type for consumer discriminator-based parsing (e.g., agent Pydantic)
@@ -113,9 +116,13 @@ func BuildUniversalResultEnvelope(
 	// Convert map to structpb.Struct for GovernanceEnvelope
 	var intentDataStruct *structpb.Struct
 	if intentData != nil {
-		if structBytes, err := json.Marshal(intentData); err == nil {
-			intentDataStruct = &structpb.Struct{}
-			_ = protojson.Unmarshal(structBytes, intentDataStruct)
+		structBytes, err := json.Marshal(intentData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal payload intent struct: %w", err)
+		}
+		intentDataStruct = &structpb.Struct{}
+		if err := protojson.Unmarshal(structBytes, intentDataStruct); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal payload intent struct: %w", err)
 		}
 	}
 

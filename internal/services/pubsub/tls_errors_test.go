@@ -9,7 +9,6 @@ package pubsub
 
 import (
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -27,10 +26,10 @@ func TestIsTLSCertError(t *testing.T) {
 
 	t.Run("returns false for generic errors", func(t *testing.T) {
 		t.Parallel()
-		assert.False(t, IsTLSCertError(errors.New("connection refused")))
-		assert.False(t, IsTLSCertError(errors.New("timeout")))
-		assert.False(t, IsTLSCertError(errors.New("EOF")))
-		assert.False(t, IsTLSCertError(errors.New("some random error")))
+		assert.False(t, IsTLSCertError(fmt.Errorf("connection refused")))
+		assert.False(t, IsTLSCertError(fmt.Errorf("timeout")))
+		assert.False(t, IsTLSCertError(fmt.Errorf("EOF")))
+		assert.False(t, IsTLSCertError(fmt.Errorf("some random error")))
 	})
 
 	t.Run("detects x509.UnknownAuthorityError", func(t *testing.T) {
@@ -75,25 +74,25 @@ func TestIsTLSCertError(t *testing.T) {
 
 	t.Run("detects string-based certificate signed by unknown authority", func(t *testing.T) {
 		t.Parallel()
-		err := errors.New("tls: failed to verify certificate: x509: certificate signed by unknown authority")
+		err := fmt.Errorf("tls: failed to verify certificate: x509: certificate signed by unknown authority")
 		assert.True(t, IsTLSCertError(err))
 	})
 
 	t.Run("detects string-based certificate has expired", func(t *testing.T) {
 		t.Parallel()
-		err := errors.New("x509: certificate has expired or is not yet valid")
+		err := fmt.Errorf("x509: certificate has expired or is not yet valid")
 		assert.True(t, IsTLSCertError(err))
 	})
 
 	t.Run("detects string-based tls bad certificate", func(t *testing.T) {
 		t.Parallel()
-		err := errors.New("tls: bad certificate")
+		err := fmt.Errorf("tls: bad certificate")
 		assert.True(t, IsTLSCertError(err))
 	})
 
 	t.Run("detects string-based tls handshake failure", func(t *testing.T) {
 		t.Parallel()
-		err := errors.New("tls: handshake failure")
+		err := fmt.Errorf("tls: handshake failure")
 		assert.True(t, IsTLSCertError(err))
 	})
 
@@ -102,7 +101,7 @@ func TestIsTLSCertError(t *testing.T) {
 		opErr := &net.OpError{
 			Op:  "dial",
 			Net: "tcp",
-			Err: errors.New("connection refused"),
+			Err: fmt.Errorf("connection refused"),
 		}
 		assert.False(t, IsTLSCertError(opErr))
 	})

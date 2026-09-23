@@ -20,7 +20,7 @@ import (
 )
 
 type stubCampaignChatClient struct {
-	trace map[string]any
+	trace EvaluationTrace
 }
 
 func (s *stubCampaignChatClient) EnsembleChat(_ context.Context, _ harnessclient.Persona, _ harnessclient.EnsembleChatRequest) (*harnessclient.EnsembleChatResponse, error) {
@@ -52,7 +52,7 @@ func TestCampaignChatExecutor_ImportsCompletedTrace(t *testing.T) {
 		"data-op",
 		"data-session",
 		traceStore,
-		func(ctx context.Context, fetch func(context.Context) (map[string]any, error)) (map[string]any, error) {
+		func(ctx context.Context, fetch func(context.Context) (EvaluationTrace, error)) (EvaluationTrace, error) {
 			return fetch(ctx)
 		},
 		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },

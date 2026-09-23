@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -109,8 +108,11 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 }
 
 func reconcileVerifiedCampaignMirrorQueue(ctx context.Context, projectRoot string, reconciler *evaluation.CampaignMirrorReconciler, runTimeout time.Duration, progress evaluation.CampaignMirrorReconcileProgressFunc) (*evaluation.CampaignMirrorReconcileResult, error) {
-	queuePath := filepath.Join(projectRoot, evaluation.DefaultInitCampaignQueueRelPath)
-	queue, err := evaluation.LoadInitCampaignQueue(queuePath)
+	fileSvc, err := fs.NewRuntimeFileService(projectRoot, nil)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign mirror queue file service: %w", err)
+	}
+	queue, err := evaluation.LoadInitCampaignQueueFromRuntime(ctx, fileSvc, evaluation.DefaultInitCampaignQueueRelPath)
 	if err != nil {
 		return nil, err
 	}

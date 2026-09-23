@@ -110,7 +110,9 @@ func (s *CLISessionService) DeactivateCLISession(sessionID string) error {
 	applied, err := s.db.DocConditionalUpdate(
 		marshaler.CollectionName(constants.CollectionCLISessions),
 		sessionID,
-		map[string]interface{}{"is_active": false},
+		struct {
+			IsActive bool `json:"is_active"`
+		}{IsActive: false},
 		"is_active", true,
 	)
 	if err != nil {
@@ -222,7 +224,9 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 	applied, err := s.db.DocConditionalUpdate(
 		marshaler.CollectionName(constants.CollectionCLISessions),
 		oldSessionID,
-		map[string]interface{}{"is_active": false},
+		struct {
+			IsActive bool `json:"is_active"`
+		}{IsActive: false},
 		"is_active", true,
 	)
 	if err != nil {
@@ -318,7 +322,9 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 				applied, err := s.db.DocConditionalUpdate(
 					marshaler.CollectionName(constants.CollectionCLISessions),
 					oldSessionID,
-					map[string]interface{}{"is_active": false},
+					struct {
+						IsActive bool `json:"is_active"`
+					}{IsActive: false},
 					"is_active", true,
 				)
 				if err != nil {
@@ -394,7 +400,9 @@ func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, 
 				applied, err := s.db.DocConditionalUpdate(
 					marshaler.CollectionName(constants.CollectionCLISessions),
 					oldSessionID,
-					map[string]interface{}{"is_active": false},
+					struct {
+						IsActive bool `json:"is_active"`
+					}{IsActive: false},
 					"is_active", true,
 				)
 				if err != nil {

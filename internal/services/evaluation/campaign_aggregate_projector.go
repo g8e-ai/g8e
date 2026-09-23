@@ -175,7 +175,7 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 			return nil, err
 		}
 		scheduledVariants[variantID] = struct{}{}
-		bucket := ensureVariantRoleAggregate(state, variantID, role)
+		bucket := variantRoleAggregateFor(state, variantID, role)
 		bucket.Scheduled++
 		result := results[assignment.GetAssignmentId()]
 		if result == nil {
@@ -1229,7 +1229,7 @@ func homogeneousVariantRole(assignment *evalv1.EvaluationAssignment) (string, st
 	return homogeneous.Homogeneous.GetCandidateVariant().GetVariantId(), role, nil
 }
 
-func ensureVariantRoleAggregate(state *runAggregateState, variantID, role string) *variantRoleAggregate {
+func variantRoleAggregateFor(state *runAggregateState, variantID, role string) *variantRoleAggregate {
 	key := variantID + ":" + role
 	bucket := state.VariantRoles[key]
 	if bucket == nil {

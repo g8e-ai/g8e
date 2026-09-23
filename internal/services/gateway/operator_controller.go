@@ -23,6 +23,24 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
+type operatorBootstrapConfig struct {
+	MaxConcurrentTasks       int    `json:"max_concurrent_tasks"`
+	MaxMemoryMB              int    `json:"max_memory_mb"`
+	HeartbeatIntervalSeconds int    `json:"heartbeat_interval_seconds"`
+	OperatorSessionID        string `json:"operator_session_id"`
+	OperatorID               string `json:"operator_id"`
+	UserID                   string `json:"user_id"`
+	Posture                  string `json:"posture"`
+}
+
+type operatorBootstrapResponse struct {
+	Success           bool                    `json:"success"`
+	OperatorSessionID string                  `json:"operator_session_id"`
+	OperatorID        string                  `json:"operator_id"`
+	UserID            string                  `json:"user_id"`
+	Config            operatorBootstrapConfig `json:"config"`
+}
+
 // OperatorController handles Operator lifecycle endpoints.
 type OperatorController struct {
 	cfg       *config.Config
@@ -346,24 +364,22 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Build BootstrapConfig with default values
-	bootstrapConfig := map[string]interface{}{
-		"max_concurrent_tasks":       25,
-		"max_memory_mb":              2048,
-		"heartbeat_interval_seconds": 30,
-		"operator_session_id":        op.OperatorSessionID,
-		"operator_id":                op.ID,
-		"user_id":                    op.UserID,
-		"posture":                    string(c.cfg.Gateway.Posture),
+	bootstrapConfig := operatorBootstrapConfig{
+		MaxConcurrentTasks:       25,
+		MaxMemoryMB:              2048,
+		HeartbeatIntervalSeconds: 30,
+		OperatorSessionID:        op.OperatorSessionID,
+		OperatorID:               op.ID,
+		UserID:                   op.UserID,
+		Posture:                  string(c.cfg.Gateway.Posture),
 	}
 
-	// Return response in format expected by Operator (AuthServicesResponse)
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"success":             true,
-		"operator_session_id": op.OperatorSessionID,
-		"operator_id":         op.ID,
-		"user_id":             op.UserID,
-		"config":              bootstrapConfig,
+	c.responder.JSON(w, http.StatusOK, operatorBootstrapResponse{
+		Success:           true,
+		OperatorSessionID: op.OperatorSessionID,
+		OperatorID:        op.ID,
+		UserID:            op.UserID,
+		Config:            bootstrapConfig,
 	})
 }
 

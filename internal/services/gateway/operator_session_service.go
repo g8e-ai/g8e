@@ -78,7 +78,9 @@ func (s *OperatorSessionService) DeactivateOperatorSession(operatorSessionID str
 	if doc == nil {
 		return constants.ErrGatewayOperatorSessionInvalid
 	}
-	update, err := json.Marshal(map[string]any{"is_active": false})
+	update, err := json.Marshal(struct {
+		IsActive bool `json:"is_active"`
+	}{IsActive: false})
 	if err != nil {
 		return fmt.Errorf("deactivate operator session: marshal: %w", err)
 	}

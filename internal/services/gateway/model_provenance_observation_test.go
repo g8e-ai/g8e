@@ -29,7 +29,8 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func testModelProvenanceWindow(providerAttemptID string) *evalv1.ModelProvenanceAttestationWindow {
+func testModelProvenanceWindow(t *testing.T, providerAttemptID string) *evalv1.ModelProvenanceAttestationWindow {
+	t.Helper()
 	digest := strings.Repeat("a", 64)
 	window := &evalv1.ModelProvenanceAttestationWindow{
 		SchemaVersion:              model_provenance.SchemaVersion,
@@ -44,9 +45,7 @@ func testModelProvenanceWindow(providerAttemptID string) *evalv1.ModelProvenance
 		DigestMatch:                true,
 	}
 	attestationDigest, err := model_provenance.ComputeAttestationDigest(window)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	window.AttestationDigest = attestationDigest
 	return window
 }
@@ -131,7 +130,7 @@ func TestModelProvenanceObservationCoordinator_IngestPersistsAttestationWindow(t
 	)
 
 	require.NoError(t, coordinator.ensureOperator(context.Background()))
-	window := testModelProvenanceWindow("attempt-async-1")
+	window := testModelProvenanceWindow(t, "attempt-async-1")
 	completion := &evalv1.ModelProvenanceObservationCompleted{Window: window}
 	payload, err := proto.Marshal(completion)
 	require.NoError(t, err)

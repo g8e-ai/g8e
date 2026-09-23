@@ -337,11 +337,16 @@ func (s *UserService) GetBySub(sub string) (*models.User, error) {
 	return s.GetByID(sub)
 }
 
+type userStatusUpdate struct {
+	Status    constants.UserStatus `json:"status"`
+	UpdatedAt int64                `json:"updated_at"`
+}
+
 // updateUserStatus updates a user's status field.
 func (s *UserService) updateUserStatus(userID string, status constants.UserStatus) error {
-	updates := map[string]interface{}{
-		"status":     marshaler.Status(status),
-		"updated_at": time.Now().UTC().UnixMilli(),
+	updates := userStatusUpdate{
+		Status:    status,
+		UpdatedAt: time.Now().UTC().UnixMilli(),
 	}
 
 	updateBytes, err := json.Marshal(updates)
@@ -357,11 +362,16 @@ func (s *UserService) updateUserStatus(userID string, status constants.UserStatu
 	return nil
 }
 
+type userPasskeyCredentialsUpdate struct {
+	PasskeyCredentials []models.PasskeyCredential `json:"passkey_credentials"`
+	UpdatedAt          int64                      `json:"updated_at"`
+}
+
 // UpdatePasskeyCredentials updates a user's passkey credentials.
 func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []models.PasskeyCredential) error {
-	updates := map[string]interface{}{
-		"passkey_credentials": credentials,
-		"updated_at":          time.Now().UTC().UnixMilli(),
+	updates := userPasskeyCredentialsUpdate{
+		PasskeyCredentials: credentials,
+		UpdatedAt:          time.Now().UTC().UnixMilli(),
 	}
 
 	updateBytes, err := json.Marshal(updates)

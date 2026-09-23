@@ -26,7 +26,7 @@ type ScenarioGradingRequest struct {
 	ScenarioInput  ScenarioInputFixture
 	ScenarioGold   ScenarioGoldCriteria
 	ScenarioTools  ScenarioToolExpectations
-	Trace          map[string]any
+	Trace          EvaluationTrace
 	Lifecycle      evalv1.EvaluationAssignmentLifecycleStatus
 }
 
@@ -175,8 +175,8 @@ func requiredEvidenceGrade(req ScenarioGradingRequest, evidenceType string) (eva
 	}
 }
 
-func gradeRoutingAgreement(assignmentID string, trace map[string]any) *evalv1.DeterministicGrade {
-	assignment, ok := trace["controlled_role_assignment"].(map[string]any)
+func gradeRoutingAgreement(assignmentID string, trace EvaluationTrace) *evalv1.DeterministicGrade {
+	assignment, ok := evaluationTrace(trace["controlled_role_assignment"])
 	if !ok {
 		return newDeterministicGrade(assignmentID, "routing-agreement", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "controlled role assignment is missing from trace", 0)
 	}
@@ -187,7 +187,7 @@ func gradeRoutingAgreement(assignmentID string, trace map[string]any) *evalv1.De
 	return newDeterministicGrade(assignmentID, "routing-agreement", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "designated role intentionally diverged from natural triage route", 1)
 }
 
-func gradeGovernedInference(assignmentID string, trace map[string]any) *evalv1.DeterministicGrade {
+func gradeGovernedInference(assignmentID string, trace EvaluationTrace) *evalv1.DeterministicGrade {
 	if hasGovernedModelCalls(trace) {
 		return newDeterministicGrade(assignmentID, "governed-inference", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "at least one governed inference call is recorded", 1)
 	}
@@ -280,7 +280,7 @@ func newDeterministicGrade(assignmentID, criterionID string, status evalv1.Evalu
 	}
 }
 
-func traceRoleInvoked(trace map[string]any, designatedRole string) bool {
+func traceRoleInvoked(trace EvaluationTrace, designatedRole string) bool {
 	roleOutcome, _ := trace["role_outcome"].(string)
 	return roleOutcome == "invoked" && designatedRole != ""
 }
@@ -343,11 +343,11 @@ func requiredSemanticGradeEvidence(req ScenarioGradingRequest) (evalv1.Evaluatio
 	return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "semantic judge grading is unavailable", 0
 }
 
-func semanticGradesFromTrace(assignmentID string, trace map[string]any) []*evalv1.SemanticGrade {
+func semanticGradesFromTrace(assignmentID string, trace EvaluationTrace) []*evalv1.SemanticGrade {
 	records := traceToolRecords(trace, "semantic_grades")
 	grades := make([]*evalv1.SemanticGrade, 0, len(records))
 	for _, rawGrade := range records {
-		record, ok := rawGrade.(map[string]any)
+		record, ok := evaluationTrace(rawGrade)
 		if !ok {
 			continue
 		}
@@ -443,10 +443,10 @@ func satisfiesPolicyDecisionWithoutCall(req ScenarioGradingRequest) bool {
 	return satisfiesToolDecisionWithoutCall(req)
 }
 
-func selectedToolNames(trace map[string]any) map[string]bool {
+func selectedToolNames(trace EvaluationTrace) map[string]bool {
 	selected := make(map[string]bool)
 	for _, rawDecision := range traceToolRecords(trace, "tool_decisions") {
-		decision, ok := rawDecision.(map[string]any)
+		decision, ok := evaluationTrace(rawDecision)
 		if !ok {
 			continue
 		}
@@ -462,31 +462,31 @@ func selectedToolNames(trace map[string]any) map[string]bool {
 	return selected
 }
 
-func hasTraceToolDecisions(trace map[string]any) bool {
+func hasTraceToolDecisions(trace EvaluationTrace) bool {
 	return len(traceToolRecords(trace, "tool_decisions")) > 0
 }
 
-func hasTraceToolCalls(trace map[string]any) bool {
+func hasTraceToolCalls(trace EvaluationTrace) bool {
 	return len(traceToolRecords(trace, "tool_calls")) > 0
 }
 
-func hasTraceGovernedActions(trace map[string]any) bool {
+func hasTraceGovernedActions(trace EvaluationTrace) bool {
 	return len(traceToolRecords(trace, "governed_actions")) > 0
 }
 
-func hasTracePolicyDecisions(trace map[string]any) bool {
+func hasTracePolicyDecisions(trace EvaluationTrace) bool {
 	return len(traceToolRecords(trace, "policy_decisions")) > 0
 }
 
-func traceToolRecords(trace map[string]any, field string) []any {
+func traceToolRecords(trace EvaluationTrace, field string) []any {
 	records, _ := trace[field].([]any)
 	return records
 }
 
-func hasGovernedModelCalls(trace map[string]any) bool {
+func hasGovernedModelCalls(trace EvaluationTrace) bool {
 	modelCalls, _ := trace["model_calls"].([]any)
 	for _, rawCall := range modelCalls {
-		call, ok := rawCall.(map[string]any)
+		call, ok := evaluationTrace(rawCall)
 		if !ok {
 			continue
 		}
@@ -504,7 +504,7 @@ func hasGovernedModelCalls(trace map[string]any) bool {
 	return false
 }
 
-func designatedRoleOutput(trace map[string]any) string {
+func designatedRoleOutput(trace EvaluationTrace) string {
 	output, _ := trace["designated_role_output"].(string)
 	return output
 }
@@ -522,14 +522,14 @@ func countWords(value string) int {
 	return len(fields)
 }
 
-func extractJSONObject(value string) map[string]any {
+func extractJSONObject(value string) EvaluationTrace {
 	trimmed := strings.TrimSpace(value)
 	start := strings.Index(trimmed, "{")
 	end := strings.LastIndex(trimmed, "}")
 	if start < 0 || end <= start {
 		return nil
 	}
-	payload := map[string]any{}
+	payload := EvaluationTrace{}
 	if err := json.Unmarshal([]byte(trimmed[start:end+1]), &payload); err != nil {
 		return nil
 	}

@@ -159,10 +159,14 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 				} else if runErr != nil {
 					reporter.chatSubmitFailed(runErr)
 				}
-				var trace map[string]any
+				var trace evaluation.EvaluationTrace
 				if runErr == nil {
-					trace, runErr = chatEvalWaitForTrace(ctx, func(pollCtx context.Context) (map[string]any, error) {
-						return ensembleClient.GetEvaluationTrace(pollCtx, persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
+					trace, runErr = chatEvalWaitForTrace(ctx, func(pollCtx context.Context) (evaluation.EvaluationTrace, error) {
+						rawTrace, err := ensembleClient.GetEvaluationTrace(pollCtx, persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
+						if err != nil {
+							return nil, err
+						}
+						return evaluation.EvaluationTrace(rawTrace), nil
 					}, reporter)
 				}
 				cancel()
@@ -333,18 +337,18 @@ func resolveChatEvalEnsembleURL(ensembleURL string) string {
 
 func chatEvalWaitForTrace(
 	ctx context.Context,
-	fetch func(context.Context) (map[string]any, error),
+	fetch func(context.Context) (evaluation.EvaluationTrace, error),
 	reporter *chatAcceptReporter,
-) (map[string]any, error) {
+) (evaluation.EvaluationTrace, error) {
 	return chatEvalWaitForTraceWithPoll(ctx, fetch, reporter, chatAcceptTracePollInterval)
 }
 
 func chatEvalWaitForTraceWithPoll(
 	ctx context.Context,
-	fetch func(context.Context) (map[string]any, error),
+	fetch func(context.Context) (evaluation.EvaluationTrace, error),
 	reporter *chatAcceptReporter,
 	pollInterval time.Duration,
-) (map[string]any, error) {
+) (evaluation.EvaluationTrace, error) {
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 	started := time.Now()

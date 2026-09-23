@@ -578,11 +578,16 @@ func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *mod
 	// conditional update and fails closed.
 	applied, err := s.db.DocConditionalUpdate(
 		platformEnrollmentCollectionName(), req.ID,
-		map[string]interface{}{
-			"state":                     string(models.PlatformEnrollmentStateIssuing),
-			"issuance_lease_owner":      leaseOwner,
-			"issuance_lease_expires_at": leaseExpiry,
-			"last_transition_at":        time.Now().UTC(),
+		struct {
+			State                string    `json:"state"`
+			IssuanceLeaseOwner   string    `json:"issuance_lease_owner"`
+			IssuanceLeaseExpires time.Time `json:"issuance_lease_expires_at"`
+			LastTransitionAt     time.Time `json:"last_transition_at"`
+		}{
+			State:                string(models.PlatformEnrollmentStateIssuing),
+			IssuanceLeaseOwner:   leaseOwner,
+			IssuanceLeaseExpires: leaseExpiry,
+			LastTransitionAt:     time.Now().UTC(),
 		},
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)

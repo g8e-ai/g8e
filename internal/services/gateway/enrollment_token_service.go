@@ -114,10 +114,10 @@ func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.
 	applied, err := s.db.DocConditionalUpdate(
 		marshaler.CollectionName(constants.CollectionEnrollmentTokens),
 		token,
-		map[string]interface{}{
-			"consumed":    true,
-			"consumed_at": nowStr,
-		},
+		struct {
+			Consumed   bool   `json:"consumed"`
+			ConsumedAt string `json:"consumed_at"`
+		}{Consumed: true, ConsumedAt: nowStr},
 		"consumed", 0,
 	)
 	if err != nil {

@@ -209,7 +209,6 @@ Examples:
 				freeze, relPath, err := evaluation.MaterializeCampaignInventory(evaluation.MaterializeCampaignInventoryRequest{
 					Context:     cmd.Context(),
 					FileService: fileSvc,
-					ProjectRoot: cfg.ProjectRoot,
 					CampaignID:  campaignID,
 					OutputPath:  normalizeRuntimeEvalPath(outputPath),
 					Variants:    selected,
@@ -234,7 +233,6 @@ Examples:
 				entry, err := evaluation.MaterializeInitCampaignInventory(evaluation.MaterializeInitCampaignInventoryRequest{
 					Context:         cmd.Context(),
 					FileService:     fileSvc,
-					ProjectRoot:     cfg.ProjectRoot,
 					InventoryRelDir: normalizeRuntimeEvalPath(outputDir),
 					Variant:         variant,
 				})

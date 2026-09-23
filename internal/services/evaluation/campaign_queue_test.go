@@ -10,7 +10,7 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -200,8 +200,8 @@ func TestMaterializeImmutableModelInventory_ReturnsReadWriteAndMarshalErrors(t *
 		ProviderClass:  "ollama",
 	}})
 	require.NoError(t, err)
-	errRead := errors.New("read failure")
-	errWrite := errors.New("write failure")
+	errRead := fmt.Errorf("read failure")
+	errWrite := fmt.Errorf("write failure")
 	tests := []struct {
 		name    string
 		service *immutableInventoryFileService

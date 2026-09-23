@@ -438,6 +438,7 @@ func (e *CampaignExporter) ExportRun(
 		return nil, fmt.Errorf("evaluation: export campaign run: remove existing sqlite export: %w", err)
 	}
 	if err := e.writeSQLiteExport(
+		ctx,
 		fileSvc.Resolve(sqlitePath),
 		run,
 		spec,
@@ -881,6 +882,7 @@ func formatTimestamp(ts *timestamppb.Timestamp) string {
 }
 
 func (e *CampaignExporter) writeSQLiteExport(
+	ctx context.Context,
 	path string,
 	run *evalv1.EvaluationRun,
 	spec *evalv1.EvaluationCampaignSpec,
@@ -890,12 +892,16 @@ func (e *CampaignExporter) writeSQLiteExport(
 	assignments []CampaignExportAssignmentRecord,
 	aggregate *runAggregateState,
 	modelSummaries [][]byte,
-) error {
+) (err error) {
 	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(path), slog.Default())
 	if err != nil {
 		return fmt.Errorf("evaluation: export campaign run: open sqlite: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("evaluation: export campaign run: close sqlite: %w", closeErr)
+		}
+	}()
 
 	schema := `
 CREATE TABLE export_metadata (
@@ -944,7 +950,7 @@ CREATE TABLE model_summaries (
   summary_json TEXT NOT NULL,
   PRIMARY KEY (variant_id, role)
 );`
-	if _, err := db.ExecContext(context.Background(), schema); err != nil {
+	if _, err := db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("evaluation: export campaign run: init sqlite schema: %w", err)
 	}
 
@@ -952,7 +958,7 @@ CREATE TABLE model_summaries (
 	if population.Complete {
 		populationComplete = 1
 	}
-	if _, err := db.ExecContext(context.Background(), `
+	if _, err := db.ExecContext(ctx, `
 INSERT INTO export_metadata (
   schema_version, run_id, campaign_id, catalog_digest, model_registry_digest,
   exported_at, assignment_count, terminal_result_count, population_complete, expected_cells
@@ -980,7 +986,7 @@ INSERT INTO export_metadata (
 		if err != nil {
 			return err
 		}
-		if _, err := db.ExecContext(context.Background(), `
+		if _, err := db.ExecContext(ctx, `
 INSERT INTO assignment_results (
   assignment_id, run_id, scenario_id, scenario_category, lane, designated_role, variant_id,
   lifecycle_status, summary_status, result_digest, verification_status, completed_at,
@@ -1048,7 +1054,7 @@ INSERT INTO assignment_results (
 			}
 			summaryJSON = string(fallback)
 		}
-		if _, err := db.ExecContext(context.Background(), `
+		if _, err := db.ExecContext(ctx, `
 INSERT INTO model_summaries (
   variant_id, role, scheduled, terminal, passed, failed,
   evaluation_coverage, pass_rate_estimate, summary_json

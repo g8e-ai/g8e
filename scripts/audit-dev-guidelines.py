@@ -155,6 +155,13 @@ def should_scan(path: Path, root: Path, guidelines: Path) -> bool:
     return path.name in SPECIAL_FILES or path.suffix in SOURCE_EXTENSIONS or path.suffix == ".md"
 
 
+def repository_relative_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def iter_files(root: Path, guidelines: Path) -> Iterable[Path]:
     for path in sorted(root.rglob("*")):
         if should_scan(path, root, guidelines):
@@ -163,7 +170,8 @@ def iter_files(root: Path, guidelines: Path) -> Iterable[Path]:
 
 def find_file(path: Path, root: Path, include_generated: bool) -> list[Finding]:
     relative = path.relative_to(root).as_posix()
-    if not include_generated and ("generated" in relative.lower() or "swagger" in relative.lower()):
+    repository_relative = repository_relative_path(path)
+    if not include_generated and ("generated" in repository_relative.lower() or "swagger" in repository_relative.lower()):
         return []
 
     try:
@@ -178,7 +186,7 @@ def find_file(path: Path, root: Path, include_generated: bool) -> list[Finding]:
             if rule.extensions is not None and path.suffix not in rule.extensions and path.name not in rule.extensions:
                 continue
             match = rule.pattern.search(line)
-            if match is None or (rule.matcher is not None and not rule.matcher(match, relative)):
+            if match is None or (rule.matcher is not None and not rule.matcher(match, repository_relative)):
                 continue
             findings.append(Finding(relative, line_number, rule.rule, rule.description, line.strip()))
     return findings
@@ -195,10 +203,23 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def display_guidelines_path(guidelines: Path, root: Path) -> str:
+    try:
+        return guidelines.relative_to(root).as_posix()
+    except ValueError:
+        try:
+            return guidelines.relative_to(ROOT).as_posix()
+        except ValueError:
+            return str(guidelines)
+
+
 def main() -> int:
     args = parse_args()
     root = args.root.resolve()
     guidelines = args.guidelines.resolve()
+    if not root.is_dir():
+        print(f"error: scan root is not a directory: {root}", file=sys.stderr)
+        return 2
     if not guidelines.is_file():
         print(f"error: guidelines file not found: {guidelines}", file=sys.stderr)
         return 2
@@ -212,12 +233,13 @@ def main() -> int:
     if args.limit:
         ranked = ranked[: args.limit]
 
+    guidelines_path = display_guidelines_path(guidelines, root)
     if args.as_json:
-        print(json.dumps({"guidelines": guidelines.relative_to(root).as_posix(), "files": [{"path": path, "violations": [asdict(finding) for finding in file_findings]} for path, file_findings in ranked]}, indent=2))
+        print(json.dumps({"guidelines": guidelines_path, "files": [{"path": path, "violations": [asdict(finding) for finding in file_findings]} for path, file_findings in ranked]}, indent=2))
         return 0
 
     print(f"Developer-guideline triage: {len(findings)} findings in {len(by_file)} files")
-    print(f"Guidelines: {guidelines.relative_to(root)}")
+    print(f"Guidelines: {guidelines_path}")
     if not ranked:
         print("No matching findings.")
         return 0
