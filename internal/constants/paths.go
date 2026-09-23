@@ -213,6 +213,13 @@ const (
 	ExecutionVaultDBPath       = RuntimeDirname + "/" + ExecutionVaultDBFilename
 	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename
 
+	// Runtime-relative database paths (relative to RuntimeFileService root).
+	CanonicalDBRelPath            = DataDirname + "/" + DbFilename
+	SuspendedTransactionDBRelPath = DataDirname + "/" + SuspendedTxFilename
+	ExecutionVaultDBRelPath       = DataDirname + "/" + ExecutionVaultDBFilename
+	ReplayStoreDBRelPath          = DataDirname + "/" + ReplayStoreDBFilename
+	DefaultVaultKeyRelPath        = VaultDirname + "/" + VaultKeyFilename
+
 	// Key filenames
 	MasterKeyFilename = ".master_key"
 	PublicKeySuffix   = ".pub"
@@ -353,11 +360,11 @@ const (
 	G8eBinariesPreviousSuffix       = ".previous"
 
 	// OCI labels copied from the build provenance embedded in g8e-binaries.json.
-	G8eImageVersionLabel       = "org.opencontainers.image.version"
-	G8eBuildIDLabel            = "io.g8e.build.id"
-	G8eBuildTimeLabel          = "io.g8e.build.time"
-	G8eSourceRevisionLabel     = "io.g8e.source.revision"
-	G8eSourceTreeHashLabel     = "io.g8e.source.tree.hash"
+	G8eImageVersionLabel   = "org.opencontainers.image.version"
+	G8eBuildIDLabel        = "io.g8e.build.id"
+	G8eBuildTimeLabel      = "io.g8e.build.time"
+	G8eSourceRevisionLabel = "io.g8e.source.revision"
+	G8eSourceTreeHashLabel = "io.g8e.source.tree.hash"
 )
 
 // Deploy script filenames served by the gateway.

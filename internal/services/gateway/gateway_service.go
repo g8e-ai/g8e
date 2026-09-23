@@ -33,7 +33,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
@@ -151,7 +150,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if b.db != nil {
 		db = b.db
 	} else {
-		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
+		db, err = OpenCanonicalDBService(logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
@@ -257,7 +256,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- Suspended transaction service ---
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               paths.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
+		DBPath:               b.fileSvc.Resolve(constants.SuspendedTransactionDBRelPath),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,

@@ -237,7 +237,7 @@ func TestInitCampaignQueueIncludesAllSourceInventoryVariants(t *testing.T) {
 	result, err := InitCampaignQueue(InitCampaignQueueRequest{
 		Context:             context.Background(),
 		FileService:         fileSvc,
-		SourceInventoryPath: DefaultModelInventoryRelPath,
+		RuntimeInventoryPath: DefaultModelInventoryRelPath,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.ModelCount)

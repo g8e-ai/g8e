@@ -100,7 +100,7 @@ func TestInitCampaignQueueMaterializeAndMerge(t *testing.T) {
 	result, err := InitCampaignQueue(InitCampaignQueueRequest{
 		Context:             context.Background(),
 		FileService:         fileSvc,
-		SourceInventoryPath: DefaultModelInventoryRelPath,
+		RuntimeInventoryPath: DefaultModelInventoryRelPath,
 		Materialize:         true,
 		MergeExisting:       true,
 	})

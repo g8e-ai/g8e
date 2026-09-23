@@ -143,12 +143,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize CanonicalDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode.
-	dataDir := vs.fileSvc.Resolve(constants.DataDirname)
-	vaultKeyPath := vs.config.VaultKeyPath
-	if vaultKeyPath == "" {
-		vaultKeyPath = vs.fileSvc.Resolve(filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
-	}
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
+	gatewayDB, err := gateway.OpenCanonicalDBService(vs.logger, vs.config.VaultKeyPath, vs.keystore, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}

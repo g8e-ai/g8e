@@ -535,7 +535,7 @@ func TestPKIAuthority_CertsUseECDSASignatures_NotEd25519(t *testing.T) {
 	dataDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
-	db, err := openTestDB(t, dataDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	sm := newTestSecretManager(t, db.db, fileSvc)

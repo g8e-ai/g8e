@@ -159,7 +159,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 
 	var svc *gateway.GatewayModeService
 	if cfg.ConsensusBootstrap != "" {
-		db, err := gateway.OpenCanonicalDBService(gatewayCfg.Gateway.DataDir, gatewayCfg.Gateway.VaultDir, logger, gatewayCfg.Gateway.VaultKeyPath, nil, fileSvc)
+		db, err := gateway.OpenCanonicalDBService(logger, gatewayCfg.Gateway.VaultKeyPath, nil, fileSvc)
 		if err != nil {
 			return fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}

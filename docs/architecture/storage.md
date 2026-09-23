@@ -33,7 +33,7 @@ In the root Compose deployment, `g8e-gateway`, `g8e-operator`, and `g8e-inferenc
 
 ## Canonical Database
 
-The canonical database opens in SQLite WAL mode with foreign-key enforcement, a busy timeout, bounded retries for lock contention, and incremental vacuum support. The shared SQLite layer attempts to apply private database-file permissions and logs a warning rather than failing startup if the permission change fails. Gateway and audit services use separate connection pools to the same `g8e.db` file.
+The canonical database opens in SQLite WAL mode with foreign-key enforcement, a busy timeout, bounded retries for lock contention, and incremental vacuum support. Database-file permission changes are owned by the runtime file service and the explicit SQLite open boundary; the shared SQLite layer does not create parent directories or mutate database-file permissions on open. Gateway and audit services use separate connection pools to the same `g8e.db` file.
 
 ### Platform Documents
 
@@ -105,7 +105,7 @@ This standalone database does not apply vault field encryption. Its envelopes an
 
 `RuntimeFileService` is the canonical abstraction for paths and file operations inside the `.g8e/` runtime tree. The audit store uses it to establish and verify its data directory before opening the resolved SQLite path. The file ledger uses it for runtime directories and mirrored ledger files, while the execution boundary accesses governed host targets outside the runtime tree.
 
-Standalone SQLite services open their configured database paths through the shared SQLite layer. Under default configuration, those paths resolve beneath the runtime data directory.
+Standalone SQLite services open their configured database paths through the shared SQLite layer. Production callers resolve each canonical relative database path exactly once through the injected `RuntimeFileService` before opening SQLite; under default configuration those paths resolve beneath the runtime data directory.
 
 ## Retention and Maintenance
 

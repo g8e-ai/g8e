@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -104,10 +105,10 @@ func generateSignedJWT(t *testing.T, privKey *rsa.PrivateKey, claims map[string]
 	return signingString + "." + sigB64
 }
 
-func setupSuspendedTxService(t *testing.T, dbDir string) storage.SuspendedTransactionStore {
+func setupSuspendedTxService(t *testing.T, fileSvc fs.RuntimeFileService) storage.SuspendedTransactionStore {
 	t.Helper()
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
+		DBPath:               fileSvc.Resolve(constants.SuspendedTransactionDBRelPath),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -127,10 +128,9 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -163,7 +163,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
-	suspendedTxService := setupSuspendedTxService(t, dbDir)
+	suspendedTxService := setupSuspendedTxService(t, fileSvc)
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
@@ -367,10 +367,9 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -403,7 +402,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
-	suspendedTxService := setupSuspendedTxService(t, dbDir)
+	suspendedTxService := setupSuspendedTxService(t, fileSvc)
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
@@ -622,10 +621,9 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -658,7 +656,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
-	suspendedTxService := setupSuspendedTxService(t, dbDir)
+	suspendedTxService := setupSuspendedTxService(t, fileSvc)
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
@@ -875,10 +873,9 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

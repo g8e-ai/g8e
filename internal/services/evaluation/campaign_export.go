@@ -303,6 +303,10 @@ func (e *CampaignExporter) ExportRun(
 	if outputDir == "" {
 		outputDir = filepath.Join(evaluationRunDir(runID), "export")
 	}
+	outputDir = filepath.ToSlash(outputDir)
+	if filepath.IsAbs(outputDir) || outputDir == ".." || strings.HasPrefix(outputDir, "../") {
+		return nil, fmt.Errorf("evaluation: export campaign run: output directory must be runtime-relative")
+	}
 	run, err := store.LoadRun(ctx, runID)
 	if err != nil {
 		return nil, err

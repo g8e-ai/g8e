@@ -191,8 +191,9 @@ func LoadFrozenVariantsFromRuntime(ctx context.Context, fileSvc fs.RuntimeFileSe
 	return parseFrozenVariants(data)
 }
 
-// LoadFrozenVariants reads a frozen model inventory export.
-func LoadFrozenVariants(path string) ([]*evalv1.ModelVariant, error) {
+// LoadFrozenVariantsFromExternalSource reads a frozen model inventory export
+// from an explicit external or checked-in source path.
+func LoadFrozenVariantsFromExternalSource(path string) ([]*evalv1.ModelVariant, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: load frozen variants: %w", err)

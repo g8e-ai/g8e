@@ -114,14 +114,15 @@ func MaterializeCampaignInventory(req MaterializeCampaignInventoryRequest) (*Mod
 
 // InitCampaignQueueRequest builds the init-campaign rollout queue manifest.
 type InitCampaignQueueRequest struct {
-	Context             context.Context
-	FileService         fs.RuntimeFileService
-	SourceInventoryPath string
-	InventoryRelDir     string
-	OutputQueuePath     string
-	Tags                []string
-	Materialize         bool
-	MergeExisting       bool
+	Context                     context.Context
+	FileService                 fs.RuntimeFileService
+	RuntimeInventoryPath        string
+	ExternalSourceInventoryPath string
+	InventoryRelDir             string
+	OutputQueuePath             string
+	Tags                        []string
+	Materialize                 bool
+	MergeExisting               bool
 }
 
 // InitCampaignQueueResult summarizes queue initialization output.
@@ -144,14 +145,15 @@ func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, 
 	}
 	var variants []*evalv1.ModelVariant
 	var err error
-	inventoryPath := filepath.ToSlash(strings.TrimSpace(req.SourceInventoryPath))
-	if inventoryPath == "" {
-		inventoryPath = DefaultModelInventoryRelPath
-		variants, err = LoadFrozenVariantsFromRuntime(req.Context, req.FileService, inventoryPath)
-	} else if filepath.IsAbs(inventoryPath) {
-		variants, err = LoadFrozenVariants(inventoryPath)
-	} else {
-		variants, err = LoadFrozenVariantsFromRuntime(req.Context, req.FileService, inventoryPath)
+	externalInventoryPath := strings.TrimSpace(req.ExternalSourceInventoryPath)
+	runtimeInventoryPath := filepath.ToSlash(strings.TrimSpace(req.RuntimeInventoryPath))
+	switch {
+	case externalInventoryPath != "":
+		variants, err = LoadFrozenVariantsFromExternalSource(externalInventoryPath)
+	case runtimeInventoryPath == "":
+		variants, err = LoadFrozenVariantsFromRuntime(req.Context, req.FileService, DefaultModelInventoryRelPath)
+	default:
+		variants, err = LoadFrozenVariantsFromRuntime(req.Context, req.FileService, runtimeInventoryPath)
 	}
 	if err != nil {
 		return nil, err

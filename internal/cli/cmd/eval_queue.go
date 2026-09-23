@@ -54,19 +54,24 @@ Examples:
   g8e eval rollout init --from .g8e/eval/model-inventory.json --tags qwen3:4b,gemma3:4b
   g8e eval rollout init --materialize --merge`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			runtimeInventoryPath, externalInventoryPath, err := resolveEvaluationInventorySource(fromPath, cfg.ProjectRoot)
 			if err != nil {
 				return err
 			}
 			result, err := evaluation.InitCampaignQueue(evaluation.InitCampaignQueueRequest{
-				Context:             cmd.Context(),
-				FileService:         fileSvc,
-				SourceInventoryPath: fromPath,
-				InventoryRelDir:     normalizeRuntimeEvalPath(inventoryDir),
-				OutputQueuePath:     normalizeRuntimeEvalPath(outputPath),
-				Tags:                splitCSVModelTags(tags),
-				Materialize:         materialize,
-				MergeExisting:       mergeExisting,
+				Context:                     cmd.Context(),
+				FileService:                 fileSvc,
+				RuntimeInventoryPath:        runtimeInventoryPath,
+				ExternalSourceInventoryPath: externalInventoryPath,
+				InventoryRelDir:             normalizeRuntimeEvalPath(inventoryDir),
+				OutputQueuePath:             normalizeRuntimeEvalPath(outputPath),
+				Tags:                        splitCSVModelTags(tags),
+				Materialize:                 materialize,
+				MergeExisting:               mergeExisting,
 			})
 			if err != nil {
 				return fmt.Errorf("evaluation: queue init: %w", err)

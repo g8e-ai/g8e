@@ -283,44 +283,60 @@ type inventoryMaterializeResultJSON struct {
 	Inventories []inventoryMaterializeLine `json:"inventories"`
 }
 
-func loadEvaluationInventoryVariants(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) ([]*evalv1.ModelVariant, error) {
+func resolveEvaluationInventorySource(explicitPath, projectRoot string) (runtimePath string, externalPath string, err error) {
 	explicitPath = strings.TrimSpace(explicitPath)
 	if explicitPath == "" {
+		return "", "", nil
+	}
+	if filepath.IsAbs(explicitPath) {
+		return "", explicitPath, nil
+	}
+	normalized := filepath.ToSlash(explicitPath)
+	if strings.HasPrefix(normalized, constants.RuntimeDirname+"/") {
+		return strings.TrimPrefix(normalized, constants.RuntimeDirname+"/"), "", nil
+	}
+	if normalized == evaluation.DefaultBaseModelInventoryRelPath {
+		return "", filepath.Join(projectRoot, normalized), nil
+	}
+	return normalized, "", nil
+}
+
+func loadEvaluationInventoryVariants(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) ([]*evalv1.ModelVariant, error) {
+	runtimePath, externalPath, err := resolveEvaluationInventorySource(explicitPath, projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	if externalPath != "" {
+		return evaluation.LoadFrozenVariantsFromExternalSource(externalPath)
+	}
+	if runtimePath == "" {
 		if exists, err := fileSvc.FileExists(ctx, evaluation.DefaultModelInventoryRelPath); err != nil {
 			return nil, fmt.Errorf("evaluation: inventory: check runtime freeze: %w", err)
 		} else if exists {
 			return evaluation.LoadFrozenVariantsFromRuntime(ctx, fileSvc, evaluation.DefaultModelInventoryRelPath)
 		}
-		explicitPath = evaluation.DefaultBaseModelInventoryRelPath
+		return evaluation.LoadFrozenVariantsFromExternalSource(filepath.Join(projectRoot, evaluation.DefaultBaseModelInventoryRelPath))
 	}
-	if !filepath.IsAbs(explicitPath) && strings.HasPrefix(filepath.ToSlash(explicitPath), constants.RuntimeDirname+"/") {
-		relPath := strings.TrimPrefix(filepath.ToSlash(explicitPath), constants.RuntimeDirname+"/")
-		return evaluation.LoadFrozenVariantsFromRuntime(ctx, fileSvc, relPath)
-	}
-	if explicitPath == evaluation.DefaultBaseModelInventoryRelPath {
-		explicitPath = filepath.Join(projectRoot, explicitPath)
-	}
-	return evaluation.LoadFrozenVariants(explicitPath)
+	return evaluation.LoadFrozenVariantsFromRuntime(ctx, fileSvc, runtimePath)
 }
 
 func loadEvaluationInventoryFreeze(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) (*evaluation.ModelInventoryFreeze, error) {
-	explicitPath = strings.TrimSpace(explicitPath)
-	if explicitPath == "" {
+	runtimePath, externalPath, err := resolveEvaluationInventorySource(explicitPath, projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	if externalPath != "" {
+		return evaluation.LoadModelInventoryFreezeFile(externalPath)
+	}
+	if runtimePath == "" {
 		if exists, err := fileSvc.FileExists(ctx, evaluation.DefaultModelInventoryRelPath); err != nil {
 			return nil, fmt.Errorf("evaluation: inventory: check runtime freeze: %w", err)
 		} else if exists {
 			return evaluation.LoadModelInventoryFreezeFromRuntime(ctx, fileSvc, evaluation.DefaultModelInventoryRelPath)
 		}
-		explicitPath = evaluation.DefaultBaseModelInventoryRelPath
+		return evaluation.LoadModelInventoryFreezeFile(filepath.Join(projectRoot, evaluation.DefaultBaseModelInventoryRelPath))
 	}
-	if !filepath.IsAbs(explicitPath) && strings.HasPrefix(filepath.ToSlash(explicitPath), constants.RuntimeDirname+"/") {
-		relPath := strings.TrimPrefix(filepath.ToSlash(explicitPath), constants.RuntimeDirname+"/")
-		return evaluation.LoadModelInventoryFreezeFromRuntime(ctx, fileSvc, relPath)
-	}
-	if explicitPath == evaluation.DefaultBaseModelInventoryRelPath {
-		explicitPath = filepath.Join(projectRoot, explicitPath)
-	}
-	return evaluation.LoadModelInventoryFreezeFile(explicitPath)
+	return evaluation.LoadModelInventoryFreezeFromRuntime(ctx, fileSvc, runtimePath)
 }
 
 func writeInventoryMaterializeResult(cmd *cobra.Command, lines []inventoryMaterializeLine, jsonOutput bool) error {

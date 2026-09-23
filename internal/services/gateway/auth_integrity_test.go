@@ -33,7 +33,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -98,7 +98,7 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -131,7 +131,7 @@ func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

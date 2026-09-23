@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -29,27 +28,12 @@ import (
 
 // Options configures a reporting run.
 type Options struct {
-	// DataDir is the .g8e/data directory (audit store + commitment ledger).
-	DataDir string
-	// RuntimeDir is the .g8e runtime directory (execution vault, replay store).
-	RuntimeDir string
-	// LedgerDir is the base directory for the git ledger (default: RuntimeDir/ledger).
-	LedgerDir string
-	// VaultDir is the vault data directory (for DEK key).
-	VaultDir string
-	// VaultKeyPath is the path to the hex-encoded vault key file.
+	// FileSvc owns runtime-relative database and ledger paths.
+	FileSvc fs.RuntimeFileService
+	// VaultKeyPath is the explicit external path to the hex-encoded vault key file.
 	VaultKeyPath string
-	// OutDir is the directory to write CSV files into.
+	// OutDir is the external directory to write CSV files into.
 	OutDir string
-	// ExecutionVaultDBPath is the precomputed path to the execution vault DB.
-	// If empty, defaults to RuntimeDir/execution_vault.db.
-	ExecutionVaultDBPath string
-	// ReplayStoreDBPath is the precomputed path to the replay store DB.
-	// If empty, defaults to RuntimeDir/replay_store.db.
-	ReplayStoreDBPath string
-	// SuspendedTransactionDBPath is the precomputed path to the suspended transaction DB.
-	// If empty, defaults to DataDir/suspended_transactions.db.
-	SuspendedTransactionDBPath string
 	// Logger is optional; if nil, slog.Default() is used.
 	Logger *slog.Logger
 }
@@ -69,22 +53,15 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	if opts.FileSvc == nil {
+		return RunResult{}, fmt.Errorf("%w: runtime file service", constants.ErrMissingRequiredField)
+	}
 
 	if err := os.MkdirAll(opts.OutDir, 0755); err != nil {
 		return RunResult{}, fmt.Errorf("%w: %s: %w", constants.ErrReportOutputDirFailed, opts.OutDir, err)
 	}
 
-	// Construct fileSvc for .g8e/ file I/O. Derive base dir from opts.DataDir
-	// (which is <base>/.g8e/data) so the audit store opens the same DB that
-	// the commitment ledger accesses via opts.DataDir directly.
-	baseDir := ""
-	if opts.DataDir != "" {
-		baseDir = filepath.Dir(filepath.Dir(opts.DataDir))
-	}
-	fileSvc, err := fs.NewRuntimeFileService(baseDir, logger)
-	if err != nil {
-		return RunResult{}, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
+	fileSvc := opts.FileSvc
 
 	// Open vault (locked or unlocked).
 	v, vaultUnlocked := openVault(fileSvc, opts.VaultKeyPath, logger)
@@ -99,7 +76,7 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	defer auditStore.Close()
 
 	// Open commitment ledger (shares g8e.db with audit store — open separately read-only).
-	dbPath := pathutil.ResolveDBPath(opts.DataDir, constants.DbFilename)
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
 	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
 	if err != nil {
 		return RunResult{}, fmt.Errorf("%w: main db: %w", constants.ErrReportStoreUnavailable, err)
@@ -109,11 +86,7 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 
 	// Open execution vault.
 	evCfg := storage.DefaultExecutionVaultConfig()
-	if opts.ExecutionVaultDBPath != "" {
-		evCfg.DBPath = opts.ExecutionVaultDBPath
-	} else {
-		evCfg.DBPath = filepath.Join(opts.RuntimeDir, constants.ExecutionVaultDBFilename)
-	}
+	evCfg.DBPath = fileSvc.Resolve(constants.ExecutionVaultDBRelPath)
 	ev, evErr := storage.NewExecutionVaultService(evCfg, logger, v)
 	if evErr != nil {
 		logger.Warn("Execution vault unavailable; executions and file_diffs will be skipped", "error", evErr)
@@ -125,11 +98,7 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 
 	// Open replay store.
 	rsCfg := storage.DefaultReplayStoreConfig()
-	if opts.ReplayStoreDBPath != "" {
-		rsCfg.DBPath = opts.ReplayStoreDBPath
-	} else {
-		rsCfg.DBPath = filepath.Join(opts.RuntimeDir, constants.ReplayStoreDBFilename)
-	}
+	rsCfg.DBPath = fileSvc.Resolve(constants.ReplayStoreDBRelPath)
 	rs, rsErr := storage.NewSQLReplayStore(rsCfg, logger)
 	if rsErr != nil {
 		logger.Warn("Replay store unavailable; replay_nonces will be skipped", "error", rsErr)
@@ -141,11 +110,7 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 
 	// Open suspended transaction store.
 	stsCfg := storage.DefaultSuspendedTransactionConfig()
-	if opts.SuspendedTransactionDBPath != "" {
-		stsCfg.DBPath = opts.SuspendedTransactionDBPath
-	} else {
-		stsCfg.DBPath = filepath.Join(opts.DataDir, constants.SuspendedTxFilename)
-	}
+	stsCfg.DBPath = fileSvc.Resolve(constants.SuspendedTransactionDBRelPath)
 	sts, stsErr := storage.NewSuspendedTransactionService(stsCfg, logger)
 	if stsErr != nil {
 		logger.Warn("Suspended transaction store unavailable; suspended_transactions will be skipped", "error", stsErr)

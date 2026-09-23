@@ -857,7 +857,7 @@ func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 				return err
 			}
 			store := evaluation.NewStore(fileSvc)
-			report, err := evaluation.NewCampaignExporter(deps.now).ExportRun(cmd.Context(), store, fileSvc, runID, outputDir)
+			report, err := evaluation.NewCampaignExporter(deps.now).ExportRun(cmd.Context(), store, fileSvc, runID, normalizeRuntimeEvalPath(outputDir))
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign export: %w", err)
 			}
