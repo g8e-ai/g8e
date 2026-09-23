@@ -154,6 +154,7 @@ func publicFeedExportBatchErrorStatus(err error) (int, string) {
 		errors.Is(err, constants.ErrPublicFeedSequenceOutOfOrder),
 		errors.Is(err, constants.ErrPublicFeedRecordHashMismatch),
 		errors.Is(err, constants.ErrPublicFeedRecordTypeInvalid),
+		errors.Is(err, constants.ErrPublicFeedRecordSchemaInvalid),
 		errors.Is(err, constants.ErrPublicFeedRestrictedField):
 		return http.StatusBadRequest, err.Error()
 	default:

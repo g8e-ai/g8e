@@ -116,9 +116,11 @@ func setupCampaignOrchestrateEnv(t *testing.T) (root string, deps nativeEvalDeps
 
 	paths := config.DefaultPathsConfig()
 	paths.Host = server.URL
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
 	cfg := &config.Config{
 		ProjectRoot: root,
-		RuntimeDir:  root + "/.g8e",
+		RuntimeDir:  fileSvc.Resolve(""),
 		Paths:       &paths,
 	}
 
@@ -188,7 +190,9 @@ func TestRunCampaignStartFlow_PrepareOnlyInitializesAndSchedules(t *testing.T) {
 	assert.Contains(t, output.String(), "Initialized campaign")
 	assert.Contains(t, output.String(), "Scheduled")
 
-	active, err := evaluation.LoadActiveCampaignRun(root)
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	active, err := evaluation.LoadActiveCampaignRunFromRuntime(context.Background(), fileSvc)
 	require.NoError(t, err)
 	assert.Equal(t, result.Plan.RunID, active.RunID)
 }
@@ -255,8 +259,11 @@ func TestScheduleHomogeneousCampaignRun_RequiresInitializedRun(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 
+	fileSvc, err := deps.fileSvcFactory(root, slog.Default())
+	require.NoError(t, err)
 	plan, err := evaluation.ResolveCampaignStartPlan(evaluation.CampaignStartPlanRequest{
-		ProjectRoot: root,
+		Context:     context.Background(),
+		FileService: fileSvc,
 		ModelTag:    "qwen3:4b",
 		Now:         deps.now().UTC(),
 	})

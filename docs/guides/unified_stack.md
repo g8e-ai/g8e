@@ -1,7 +1,7 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-21  
-Version: v2.1.11
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.
 
@@ -11,8 +11,8 @@ Run all commands from the repository root unless noted otherwise.
 
 - Docker Engine with the Docker Compose v2 plugin.
 - Built `./g8e` binary (`make build`).
-- Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **3000**, **8081**, **8082**, **5173**.
-- Repository-root `.env` (copy from `.env.example`).
+- Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **3000**, **8081**, **8082**, **5173**. The mirror and explorer ports are loopback-only in the root Compose file.
+- Repository-root `.env` (copy from `.env.example`). Remove or comment out the sample `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` values when using dispatch-carried campaign authority.
 - `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider** (not loopback on the campaign host when Ollama runs elsewhere). Compose fails fast when this variable is unset because the evaluation profile's Inference Operator interpolates it.
 - Remote Ollama reachable from the Docker network, for example: `curl -fsS http://192.168.1.2:11434/api/version`.
 
@@ -31,14 +31,28 @@ The root `docker-compose.yml` defines platform services on the `g8e-net` bridge 
 
 | Service | Profile | Published ports | Role |
 | --- | --- | --- | --- |
-| `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A. |
-| `g8e-operator` | `bootstrapped` | none | **Data Operator** — governed tool/filesystem/process boundary. |
+| `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS; 8081 private mirror ingest, 8082 public mirror read/SSE, 5173 evaluation explorer (loopback) | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A, public mirror, and evaluation explorer. |
+| `g8e-operator` | `bootstrapped` | none | **Data Operator** — governed tool/filesystem/process boundary for the Operator container runtime. |
 | `g8e-inference-operator` | `evaluation` | none | **Inference Operator** — governed inference to the remote Ollama provider. Requires `G8E_OLLAMA_ENDPOINT`; campaign authority travels on each governed dispatch. |
 | `ensemble` | `bootstrapped` | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
-| `dashboard` | `bootstrapped` | 3000 | Legacy dashboard (not the evaluation acceptance UI). |
-| `g8e-eval-observer` | `evaluation` | none | Short-lived networkless target observer for the native execution-boundary suite only. Not the provider-boundary Observer Operator. |
+| `dashboard` | `bootstrapped` | 3000 | g8ed browser static host; it is not the evaluation acceptance UI. |
 
-The Gateway and Operator containers use the same Go image. The evaluation acceptance topology requires **both** `bootstrapped` and `evaluation` profiles. The legacy `g8ellama` profile (separate User Gateway) is **not** used for model campaigns.
+The Gateway and Operator containers use the same Go image. The evaluation acceptance topology requires **both** `bootstrapped` and `evaluation` profiles. The Observer Operator is a separately enrolled process on the remote provider host and is never a service in the unified Compose stack.
+
+The root Compose file also defines optional profiles that are not part of the standard campaign stack:
+
+| Profile | Services | Purpose |
+| --- | --- | --- |
+| `cross-enrollment` | `g8e-gateway-secondary` | Runs a second gateway binary in outbound Operator mode against the primary Gateway. |
+| `g8ellama` | `g8e-gateway-user`, `g8e-inference` | Legacy separate User Gateway and Inference Node topology for a remote Ollama provider; it is not used for model campaigns. |
+
+The `g8ellama` services have separate volumes and ports (`8090`/`8453` for the User Gateway by default); do not combine that profile with the campaign topology unless you intend to run both independent deployments.
+
+### Runtime boundaries and persistent state
+
+The Compose services run in separate containers, process namespaces, network namespaces, and named volumes on the `g8e-net` bridge (`172.28.0.0/16`). The remote Data Operator targets only the Operator container runtime; it has no Docker socket, host root filesystem, host PID namespace, or host network. The Gateway's embedded Operator targets only the Gateway container runtime. Containers reach the Gateway as `g8e.local:8080` or `g8e.local:8443`; host-side clients reach the published host ports, and `localhost` is namespace-relative. The Gateway's read-only `/etc/hosts` and `/etc/hostname` mounts are used for network identity and serving-certificate SAN detection; they do not grant host execution access.
+
+The root stack uses `g8e-gateway-data`, `g8e-operator-data`, `g8e-inference-data`, `g8e-ensemble-data`, `g8e-dashboard-data`, and the shared `g8e-shared-tmp` volume. The ensemble additionally mounts `g8e-operator-data` read-only at `/operator-state` for bootstrap material; this does not make the ensemble the Operator or share the Operator's runtime tree. Removing a component volume removes that component's credentials and local state. `docker compose down` preserves volumes; `down -v` and `./g8e docker clean` destroy them and require re-enrollment.
 
 ### Evaluation campaign topology
 
@@ -51,7 +65,7 @@ Campaign host (Linux + Docker)
   g8e-inference-operator ............. Inference Operator → remote Ollama
   ensemble ........................... g8ee ChatPipelineService
 
-Provider host (Windows + Ollama)
+Provider host (Windows + Ollama example)
   Ollama ............................. approved provider (192.168.1.2:11434)
   ~/.ollama/models ................... content-addressed weight blobs
   g8e operator (Observer) ............ provider-boundary hardware observer
@@ -160,13 +174,13 @@ Matrix size for three models: **225** assignments (3 × 3 roles × 25 scenarios)
 
 ## Environment configuration
 
-Copy `.env.example` to `.env` and set at minimum:
+Copy `.env.example` to `.env`, remove or comment out its sample campaign binding values, and set at minimum:
 
 ```bash
 G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 ```
 
-`g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are **not** `.env` concerns — `g8e eval campaign start` resolves them from the queue or `--model` flag and g8ee attaches them to each governed dispatch.
+`g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are **not** startup `.env` bindings for the campaign workflow — `g8e eval campaign start` resolves them from the queue or `--model` flag and the campaign controller attaches them to each governed dispatch. Setting either startup binding causes the Inference Operator to reject governed campaign requests that do not match that static binding; leave both unset for per-dispatch campaign authority.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
@@ -176,9 +190,16 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 | `G8E_ENSEMBLE_PORT` | `8000` | Ensemble API |
 | `G8E_DASHBOARD_PORT` | `3000` | Dashboard |
 | `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (CORS, WebAuthn) |
-| `G8E_OLLAMA_ENDPOINT` | — | Remote Ollama URL for Inference Operator (required for `docker init`) |
-| `G8E_INFERENCE_CAMPAIGN_ID` | *(unset)* | **Leave empty.** Legacy startup binding; per-model rollout uses dispatch-carried authority instead |
-| `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | *(unset)* | **Leave empty.** Same as above |
+| `G8E_PUBLIC_MIRROR_PRIVATE_PORT` | `8081` | Loopback-only authenticated public-mirror ingest listener |
+| `G8E_PUBLIC_MIRROR_PUBLIC_PORT` | `8082` | Loopback-only anonymous public-mirror read/SSE listener |
+| `G8E_EVAL_EXPLORER_PORT` | `5173` | Loopback-only evaluation explorer listener |
+| `G8E_OLLAMA_ENDPOINT` | — | Remote Ollama URL for Inference Operator (required for the evaluation profile and `docker init`) |
+| `G8E_INFERENCE_PRIMARY_MODEL` | `gemm4:e4b` | Primary model tag passed to the Inference Operator |
+| `G8E_INFERENCE_ASSISTANT_MODEL` | `qwen3:1.7b` | Assistant model tag passed to the Inference Operator |
+| `G8E_INFERENCE_LITE_MODEL` | `smol-7b:latest` | Lite model tag passed to the Inference Operator |
+| `G8E_INFERENCE_KEEP_ALIVE` | `-1` | Ollama keep-alive passed to the Inference Operator |
+| `G8E_INFERENCE_CAMPAIGN_ID` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
+| `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
 
 ## Standard bootstrap workflow
 
@@ -239,6 +260,24 @@ Expect **two** remote Operators (data + inference) plus one embedded Gateway ope
 
 Session IDs change on every volume wipe. Rediscover them after any `docker compose down -v` or `./g8e docker clean`.
 
+### Stop or revoke an enrolled workload
+
+Use the Operator session ID from `./g8e operator list` for a reversible process stop:
+
+```bash
+./g8e operator stop <operator-session-id> --reason "planned maintenance"
+```
+
+The command targets one active remote Operator owned by the authenticated user. It waits for the Operator's governed shutdown acknowledgement before the Gateway records `stopped`; the embedded Gateway Operator is never a valid target. The workload retains its certificate-backed enrollment and can start again later with its existing credentials.
+
+Use the completed platform enrollment request ID for permanent identity revocation:
+
+```bash
+./g8e auth enroll revoke <request-id> --reason "host retired" --yes
+```
+
+Operator revocation invalidates the Operator and companion CLI certificates, deactivates their sessions, marks the Operator `terminated`, and disconnects established pub/sub connections. Dashboard or ensemble revocation invalidates the application certificate, removes its application policy, and disconnects established pub/sub connections. The workload must submit a new enrollment request and receive owner approval before it can authenticate again. Repeating the command for the same request is idempotent.
+
 ### Automated alternative
 
 ```bash
@@ -257,15 +296,17 @@ Useful flags:
 - `--skip-approvals` — start workloads without auto-approving enrollments.
 - `--headless` — mTLS-only owner enrollment without the browser passkey ceremony (default runs passkey enrollment).
 
-For a gateway-only automated start with interactive enrollment prompts, use:
+For the bootstrapped profile with interactive enrollment prompts, use:
 
 ```bash
-./g8e docker start --profile bootstrapped --profile evaluation --full
+./g8e docker start --full
 ```
 
-## Provider-boundary Observer Operator (Windows Ollama host)
+`g8e docker start` accepts one profile at a time. To start the full evaluation stack manually, use the Compose command in step 3; to run the complete automated workflow, use `./g8e docker init`.
 
-Deploy this **on the machine that runs Ollama** (for example `192.168.1.2`), not on the Linux campaign host.
+## Provider-boundary Observer Operator (provider host; Windows example)
+
+Deploy this **on the machine that runs Ollama** (for example `192.168.1.2`), not in the campaign-host Compose stack. The commands below use the Windows provider-host build and PowerShell; the Observer Operator also has Unix host-RAM collection support.
 
 ### Prerequisites on the provider host
 
@@ -369,10 +410,14 @@ Use this to validate the full pipeline (schedule → execute → publish → exp
 
 The gateway owns the public feed, mirror (`8081` private ingest, `8082` public read/SSE), and evaluation explorer (`5173`) in the `g8e-gateway-data` volume when started with `--public-spectator` (default). Docker Compose enables this automatically. Campaign `schedule --publish` and `execute --publish` post signed batches through the gateway API (`POST /api/v1/public-feed/batches`).
 
+A Compose volume wipe resets the entire Docker trust domain, not only the public feed. Use it only for a cold start, then repeat owner and workload enrollment:
+
 ```bash
-docker compose up -d g8e-gateway    # or: ./g8e gw start -f --public-spectator
-# To wipe spectator state: docker compose down -v && docker compose up -d g8e-gateway
+docker compose down -v
+docker compose up -d g8e-gateway
 ```
+
+For a normal restart that preserves the public feed and all credentials, use `docker compose up -d g8e-gateway` or `./g8e docker stop` followed by `./g8e docker start`.
 
 Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is up. Build static assets once with `cd dashboard/g8e-adapter/evaluation-explorer && npm run build` if the explorer listener logs that dist is missing. Do **not** run `npm run dev:real` for campaign acceptance — that path is legacy local supervisor only.
 
@@ -450,11 +495,12 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 | `./g8e docker init` | Build images, enroll owner, start full evaluation stack, auto-approve platform enrollments, and wait for readiness. |
 | `./g8e docker start` | Starts default profile (Gateway only). |
 | `./g8e docker start --full` | Starts `bootstrapped` profile with enrollment walkthrough. |
-| `./g8e docker start --profile bootstrapped --profile evaluation` | Starts full evaluation stack. |
+| `docker compose --profile bootstrapped --profile evaluation up -d` | Starts the full evaluation stack after owner enrollment; approve the resulting platform enrollment requests manually. |
+| `./g8e docker start --profile <profile>` | Starts one selected Compose profile; the CLI flag is singular. |
 | `./g8e docker stop` | `docker compose down` — preserves volumes. |
 | `./g8e docker status` | `docker compose ps`. |
-| `./g8e docker build` | Build all stack images. |
-| `./g8e docker rebuild [--full]` | Stop, rebuild, restart selected profile. |
+| `./g8e docker build` | Build the selected stack images, export the Gateway image's target-platform runtime binary to `./g8e`, and report success only after publication succeeds. |
+| `./g8e docker rebuild [--full]` | Stop the selected scope, rebuild with the same provenance inputs, publish the Gateway runtime binary to `./g8e`, and restart only after publication succeeds. |
 | `./g8e docker clean` | Destructive wipe of containers, volumes, networks. |
 
 Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean`, repeat owner enrollment and platform approvals.
@@ -473,7 +519,7 @@ Workloads remain unhealthy while enrollment is pending.
 
 | Service | CPU limit | Memory limit |
 | --- | --- | --- |
-| `g8e-gateway` | 2 | 1G |
+| `g8e-gateway` | 2 | 2G |
 | `g8e-operator` | 2 | 1G |
 | `g8e-inference-operator` | 4 | 4G |
 | `ensemble` | 2 | 2G |
@@ -502,7 +548,7 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 
 - Confirm Observer enrolled with `--provider-boundary-observer-enabled` (not the filesystem `eval dev provider-observer run` path).
 - Confirm Gateway can reach the Observer session (`./g8e operator list`).
-- Confirm Windows host can reach Gateway ports 8080/8443 and `g8e.local` resolves to the campaign host.
+- Confirm the provider host can reach Gateway ports 8080/8443 and `g8e.local` resolves to the campaign host.
 
 ### Provenance operator not attesting or digest mismatch
 
@@ -525,7 +571,7 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 
 ### Mirror empty after `docker init --clean` but host run artifacts remain
 
-`docker init --clean` wipes the gateway mirror volume only. Host campaign evidence under `.g8e/data/eval/runs/<run-id>/` and the rollout queue under `.g8e/eval/` are unchanged.
+`docker init --clean` wipes the standard bootstrapped/evaluation Docker containers, networks, and named volumes, including the gateway mirror and trust-domain state. Host campaign evidence under `.g8e/data/eval/runs/<run-id>/` and the rollout queue under `.g8e/eval/` are unchanged.
 
 Restore every verified queue entry to the gateway-owned mirror:
 
@@ -557,11 +603,14 @@ Confirm `G8E_HOSTNAME` matches the browser URL, the gateway root CA is trusted, 
 
 ```bash
 # Stop execute: Ctrl-C or kill the execute daemon PID
-docker compose restart g8e-gateway
-./g8e docker stop
-docker compose --profile bootstrapped --profile evaluation down -v   # destroys trust domain
-./g8e docker clean
+./g8e docker stop                         # preserves volumes and credentials
+
+# For a cold reset, choose one destructive command, not both:
+./g8e docker clean                        # removes standard stack containers, volumes, and networks
+# or: docker compose --profile bootstrapped --profile evaluation down -v
 ```
+
+Restarting the gateway with `docker compose up -d g8e-gateway` preserves the trust domain. A cold reset requires owner and workload re-enrollment.
 
 ## Relationship to other stacks
 

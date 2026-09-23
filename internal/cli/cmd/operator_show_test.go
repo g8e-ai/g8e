@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -199,19 +199,17 @@ func TestOperatorShowCmdWithConfig_JSONOutput(t *testing.T) {
 	err := cmd.RunE(cmd, []string{"session-json"})
 	require.NoError(t, err)
 
-	var payload map[string]any
+	var payload operatorShowOutput
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &payload))
-	assert.Equal(t, "op-json", payload["operator_id"])
-	heartbeatPayload, ok := payload["heartbeat"].(map[string]any)
-	require.True(t, ok)
-	systemIdentity, ok := heartbeatPayload["system_identity"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "json-host", systemIdentity["hostname"])
+	assert.Equal(t, "op-json", payload.OperatorID)
+	require.NotNil(t, payload.Heartbeat)
+	require.NotNil(t, payload.Heartbeat.SystemIdentity)
+	assert.Equal(t, "json-host", payload.Heartbeat.SystemIdentity.Hostname)
 }
 
 func TestOperatorShowCmdWithConfig_ConfigLoadError(t *testing.T) {
 	failLoader := func(string) (*config.Config, error) {
-		return nil, errors.New("config load error")
+		return nil, fmt.Errorf("config load error")
 	}
 
 	cmd := operatorShowCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)

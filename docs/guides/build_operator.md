@@ -5,8 +5,8 @@ parent: Guides
 
 # Build and Run a g8e Operator
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ---
 
@@ -25,8 +25,18 @@ This guide covers building and running the reference Operator and identifies the
 ### Prerequisites
 
 - **Go 1.26.6 or later**, as declared by the root Go module.
-- **Make** on Linux and macOS.
-- **PowerShell** for the native Windows build script.
+- **Make** on Linux and macOS. Windows builds use the repository's PowerShell workflow and still invoke Make.
+- **Node.js 22 or later** and **npm**, because the Go build embeds the evaluation explorer frontend.
+- **PowerShell 7 or later (`pwsh`)** for the native Windows setup script.
+
+Before running `make build` or `make build-compressed`, install the evaluation explorer dependencies and build its production bundle:
+
+```bash
+cd dashboard/g8e-adapter/evaluation-explorer
+npm ci
+npm run build
+cd ../../..
+```
 
 The repository setup scripts validate the development tools, offer to install missing tools, and run a build:
 
@@ -42,7 +52,7 @@ cd g8e
 make build
 ```
 
-`make build` creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows).
+`make build` first copies the built evaluation explorer from `dashboard/g8e-adapter/evaluation-explorer/dist/` into the Go binary, then creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows). If the explorer bundle has not been built, `make build` stops with an instruction to build it first.
 
 The build sets `CGO_ENABLED=0`, uses the `netgo` and `osusergo` build tags, strips symbol and debug data, and embeds the platform version, build ID, build time, and target platform. The resulting binary does not require a Go toolchain or a system SQLite library on the target host.
 
@@ -53,7 +63,7 @@ The binary is self-contained, but the running Operator is stateful. It creates a
 | Target | Result |
 | --- | --- |
 | `make build` | Builds the current OS and architecture, writes `bin/g8e-<os>-<arch>`, and copies the host binary to the repository root. |
-| `make build-all` | Builds Linux amd64/arm64/386, Windows amd64/arm64, and Darwin amd64/arm64 binaries with SHA-256 checksum files. Linux variants use the pinned FIPS module. |
+| `make build-all` | Builds Linux amd64/arm64/386, Windows amd64/arm64, and Darwin amd64/arm64 binaries, rewrites portable SHA-256 sidecars, and publishes `bin/g8e-binaries.json` last after the complete matrix validates. Linux variants use the pinned FIPS module. |
 | `make build-linux` | Builds `bin/g8e-linux-{amd64,arm64,386}` and checksum files. |
 | `make build-windows` | Builds `bin/g8e-windows-{amd64,arm64}.exe` and checksum files. |
 | `make build-darwin` | Builds `bin/g8e-darwin-{amd64,arm64}` and checksum files. |
@@ -81,7 +91,7 @@ GOOS=darwin GOARCH=arm64 make build
 GOOS=windows GOARCH=amd64 make build
 ```
 
-On a native Windows host, use the repository's `build.ps1` workflow or WSL. The root Makefile itself directs Windows users to `build.ps1`.
+On a native Windows host, use `pwsh scripts/windows-setup.ps1` or run the Makefile targets from an environment that provides Make. The setup script invokes `make build` after validating its prerequisites.
 
 ---
 
@@ -138,8 +148,16 @@ The current worker path applies these options:
 | `-G, --no-git` | Disables the git-backed file ledger while retaining the encrypted audit store. |
 | `-l, --log <level>` | Sets `info`, `error`, or `debug` logging. |
 | `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds. |
+| `--lattice-endpoint <url>` and related `--lattice-*` flags | These flags are exposed by Cobra but `operatorStartCmd` does not copy their values into `ServeOperatorOptions`, so the flags currently have no effect. The service-layer environment path uses `LATTICE_ENDPOINT`, `LATTICE_CLIENT_ID`, `LATTICE_CLIENT_SECRET`, `SANDBOXES_TOKEN`, `LATTICE_ENTITY_NAME`, and `LATTICE_POSTURE_FLOOR`; the adapter remains incomplete. |
 | `--inference-campaign-id <id>` | Selects dedicated campaign authorization mode and requires every governed inference request to carry this exact campaign identity and complete assignment correlation. |
 | `--inference-model-registry-digest <sha256>` | Commits the dedicated campaign Operator to one immutable model registry. The Operator recomputes the digest over the request registry and rejects malformed registries, absent models, digest changes, and incomplete campaign bindings. |
+| `--inference-enabled` | Enables the governed inference backend for an Inference Operator. |
+| `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. |
+| `--provider-boundary-observer-enabled` | Enrolls a read-only provider-boundary hardware witness with no generic command or provider-lifecycle authority. |
+| `--provider-boundary-observer-id <id>` | Sets the stable Observer Operator identity pseudonym. |
+| `--provenance-operator-enabled` | Enrolls a storage-side model provenance witness. |
+| `--provenance-operator-id <id>` | Sets the stable Provenance Operator identity pseudonym. |
+| `--model-storage-root <path>` | Selects the local content-addressed model storage tree read by the Provenance Operator. |
 
 Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest. Both campaign flags are required together; ordinary inference omits both and retains the configured role-model authority.
 
@@ -204,6 +222,12 @@ Binding pins the authenticated CLI session to one active operator session owned 
 
 This path is the supported owner automation surface for multi-host shell execution. It is distinct from MCP/A2A ingress and from manual `GovernanceEnvelope` submission.
 
+### Stop or revoke an Operator
+
+`./g8e operator stop <operator-session-id> --reason <reason>` sends a governed `SHUTDOWN` command to one active remote Operator owned by the authenticated user. The Gateway records `stopped` only after the exact session publishes the correlated acknowledgement. The stop retains the workload certificate and enrollment, so the process can start again with the same identity.
+
+`./g8e auth enroll revoke <request-id> --reason <reason> --yes` permanently revokes the identity issued by a completed platform enrollment. Operator revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects their active pub/sub channels. Re-enrollment and owner approval are required before that workload can authenticate again.
+
 ---
 
 ## Current Operator Processing Contract
@@ -252,7 +276,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -264,7 +288,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 See [Protocol Library](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.

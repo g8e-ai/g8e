@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestHandleUsers(t *testing.T) {
@@ -40,7 +41,7 @@ func TestHandleUsers(t *testing.T) {
 		c.handleUsers(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp []map[string]interface{}
+		var resp []models.User
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.Len(t, resp, 1)
@@ -64,11 +65,11 @@ func TestHandleUsers(t *testing.T) {
 		c.handleUsers(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp map[string]interface{}
+		var resp models.UserCreateResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.NotEmpty(t, resp["user_id"])
+		assert.True(t, resp.Success)
+		assert.NotEmpty(t, resp.UserID)
 	})
 }
 
@@ -96,11 +97,11 @@ func TestHandleUserMe(t *testing.T) {
 		c.handleUserMe(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.UserMeResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.NotNil(t, resp["user"])
+		assert.True(t, resp.Success)
+		assert.NotNil(t, resp.User)
 	})
 
 	t.Run("Failure - user not found", func(t *testing.T) {

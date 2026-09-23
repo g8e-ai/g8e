@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
+	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -42,7 +43,8 @@ CR26 KSIs and persists KSI evaluation snapshots for historical metrics.`,
 		complianceKSIHistoryCmdWithConfig(newFileSvc),
 		complianceOverlayCmdWithConfig(newFileSvc),
 		complianceDemoRunCmd(),
-		complianceReleaseEvidenceCmdWithConfig(newFileSvc, defaultProvenanceSourceFactory),
+		complianceReleaseEvidenceProjectionCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, time.Now),
+		complianceEvidenceCmd(),
 		complianceEvidenceGraphCmd(),
 		complianceReportCmd(),
 	)
@@ -256,7 +258,7 @@ func runCleanups(cleanups []func()) {
 func openVault(ctx context.Context, fileSvc fs.RuntimeFileService) (*vault.Vault, func()) {
 	logger := slog.Default()
 	v, vaultErr := vault.NewVault(&vault.VaultConfig{
-		DataDir: fileSvc.Resolve(constants.VaultDirname),
+		FileSvc: fileSvc,
 		Logger:  logger,
 	})
 	if vaultErr != nil {

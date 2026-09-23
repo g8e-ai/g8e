@@ -18,6 +18,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
@@ -25,9 +27,9 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	ls := newTestGatewayService(t, testGatewayOpts{})
 
 	t.Run("Valid heartbeat updates operator document", func(t *testing.T) {
-		opDoc := map[string]interface{}{
-			"id":     "op-123",
-			"status": "active",
+		opDoc := models.OperatorDocumentGo{
+			ID:     "op-123",
+			Status: constants.OperatorStatusActive,
 		}
 		opBytes, err := json.Marshal(opDoc)
 		require.NoError(t, err)

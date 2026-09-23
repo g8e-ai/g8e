@@ -10,8 +10,9 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"log/slog"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -73,14 +74,55 @@ func TestReconcileVerifiedCampaignMirrorQueue_LoadsQueueAndRestores(t *testing.T
 			VerifiedRunID: run.GetRunId(),
 		}},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
-	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, queue))
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
 	reconciler := evaluation.NewCampaignMirrorReconciler(coordinator, store, probe)
-	result, err := reconcileVerifiedCampaignMirrorQueue(context.Background(), root, reconciler)
+	result, err := reconcileVerifiedCampaignMirrorQueue(context.Background(), root, reconciler, time.Minute, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, []string{run.GetRunId()}, result.RestoredRunIDs)
+}
+
+func TestRunDockerInitCampaignMirrorRestore_BoundsOptionalRestore(t *testing.T) {
+	expected := &evaluation.CampaignMirrorReconcileResult{SkippedRunIDs: []string{"run-1"}}
+	tests := []struct {
+		name    string
+		restore func(context.Context) (*evaluation.CampaignMirrorReconcileResult, error)
+		want    *evaluation.CampaignMirrorReconcileResult
+		wantErr error
+	}{
+		{
+			name: "completed restore returns result",
+			restore: func(context.Context) (*evaluation.CampaignMirrorReconcileResult, error) {
+				return expected, nil
+			},
+			want: expected,
+		},
+		{
+			name: "blocked restore stops at deadline",
+			restore: func(ctx context.Context) (*evaluation.CampaignMirrorReconcileResult, error) {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			},
+			wantErr: context.DeadlineExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := runDockerInitCampaignMirrorRestore(context.Background(), time.Millisecond, tt.restore)
+			if tt.wantErr != nil {
+				require.Error(t, err)
+				assert.True(t, errors.Is(err, tt.wantErr))
+				return
+			}
+			require.NoError(t, err)
+			assert.Same(t, tt.want, result)
+		})
+	}
 }
 
 type evaluationRecordingCampaignFeedExporter struct {
@@ -171,15 +213,51 @@ func TestCampaignEvalMirrorRestoreQueue_ViaCLI(t *testing.T) {
 			VerifiedRunID: run.GetRunId(),
 		}},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
-	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, queue))
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
 	command := evalCmdWithConfig(deps)
-	var output bytes.Buffer
+	var output, progress bytes.Buffer
 	command.SetOut(&output)
+	command.SetErr(&progress)
 	command.SetArgs([]string{"campaign", "mirror", "restore", "--project-root", root, "--queue"})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), "Restored")
+	assert.Contains(t, progress.String(), "Checking verified run 1/1")
+	assert.Contains(t, progress.String(), "restored")
+}
+
+func TestCampaignEvalMirrorRestoreQueue_JSONReturnsFailureWhenRunsFail(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	root, deps, _, cleanup := setupCampaignPublishGatewayEnv(t)
+	defer cleanup()
+
+	queue := &evaluation.CampaignQueue{
+		Models: []evaluation.CampaignQueueModel{{
+			VariantID:     "qwen3-4b",
+			Status:        "verified",
+			VerifiedRunID: "run-blocked",
+		}},
+	}
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
+
+	command := evalCmdWithConfig(deps)
+	rootCmd := globalJSONRoot(t, command)
+	rootCmd.SilenceErrors = true
+	rootCmd.SilenceUsage = true
+	var output bytes.Buffer
+	rootCmd.SetOut(&output)
+	rootCmd.SetArgs([]string{"eval", "campaign", "mirror", "restore", "--project-root", root, "--queue", "--run-timeout", "1ns"})
+	err = rootCmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "1 run(s) failed")
+
+	var result evaluation.CampaignMirrorReconcileResult
+	require.NoError(t, json.Unmarshal(output.Bytes(), &result))
+	assert.Contains(t, result.FailedRuns, "run-blocked")
 }
 
 func TestCampaignEvalMirrorRestoreRun_ViaCLI(t *testing.T) {

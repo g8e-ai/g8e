@@ -14,11 +14,32 @@ import (
 	"net/http"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
+
+type operatorBootstrapConfig struct {
+	MaxConcurrentTasks       int    `json:"max_concurrent_tasks"`
+	MaxMemoryMB              int    `json:"max_memory_mb"`
+	HeartbeatIntervalSeconds int    `json:"heartbeat_interval_seconds"`
+	OperatorSessionID        string `json:"operator_session_id"`
+	OperatorID               string `json:"operator_id"`
+	UserID                   string `json:"user_id"`
+	Posture                  string `json:"posture"`
+}
+
+type operatorBootstrapResponse struct {
+	Success           bool                    `json:"success"`
+	OperatorSessionID string                  `json:"operator_session_id"`
+	OperatorID        string                  `json:"operator_id"`
+	UserID            string                  `json:"user_id"`
+	Config            operatorBootstrapConfig `json:"config"`
+}
 
 // OperatorController handles Operator lifecycle endpoints.
 type OperatorController struct {
@@ -26,6 +47,7 @@ type OperatorController struct {
 	logger    *slog.Logger
 	reg       *RegistrationService
 	auth      *AuthService
+	dispatch  *DispatchService
 	responder *response.Writer
 }
 
@@ -35,6 +57,7 @@ type OperatorControllerDeps struct {
 	Logger    *slog.Logger
 	Reg       *RegistrationService
 	Auth      *AuthService
+	Dispatch  *DispatchService
 	Responder *response.Writer
 }
 
@@ -44,6 +67,7 @@ func newOperatorController(d OperatorControllerDeps) *OperatorController {
 		logger:    d.Logger,
 		reg:       d.Reg,
 		auth:      d.Auth,
+		dispatch:  d.Dispatch,
 		responder: d.Responder,
 	}
 }
@@ -111,6 +135,69 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: operators})
+}
+
+func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	var req models.StopOperatorRequest
+	if err := json.Unmarshal(body, &req); err != nil || strings.TrimSpace(req.OperatorSessionID) == "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrGatewayOperatorSessionIDRequired.Error())
+		return
+	}
+	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	op, err := c.auth.ValidateOperatorSession(req.OperatorSessionID)
+	if err != nil {
+		c.responder.Error(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	if op.UserID != userID {
+		c.responder.Error(w, http.StatusForbidden, constants.ErrRegistrationOperatorNotBelongToUser.Error())
+		return
+	}
+	if op.Status != constants.OperatorStatusActive {
+		c.responder.Error(w, http.StatusConflict, constants.ErrRegistrationOperatorNoActiveSession.Error())
+		return
+	}
+	if op.OperatorType == constants.OperatorTypeEmbedded {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopEmbedded.Error())
+		return
+	}
+	if op.OperatorType != constants.OperatorTypeRemote {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopNotRemote.Error())
+		return
+	}
+	payload, err := proto.Marshal(&operatorv1.ShutdownRequested{Reason: strings.TrimSpace(req.Reason)})
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrRequestMarshalFailed.Error())
+		return
+	}
+	result, err := c.dispatch.Dispatch(r.Context(), DispatchRequest{
+		TargetOperatorSessionID: req.OperatorSessionID,
+		ActionType:              string(constants.ActionTypeShutdown),
+		Payload:                 payload,
+		TargetResource:          op.ID,
+		RequestorUserID:         userID,
+	})
+	if err != nil {
+		c.logger.Warn("gateway: stop operator dispatch failed", "operator_id", op.ID, "operator_session_id", op.OperatorSessionID, "error", err)
+		c.responder.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if err := c.reg.MarkOperatorStopped(op.ID, userID, req.Reason); err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, models.StopOperatorResponse{
+		Success: true, OperatorID: op.ID, OperatorSessionID: op.OperatorSessionID, TransactionID: result.TransactionID,
+	})
 }
 
 // POST /api/v1/operators/{id}/terminate
@@ -277,24 +364,22 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Build BootstrapConfig with default values
-	bootstrapConfig := map[string]interface{}{
-		"max_concurrent_tasks":       25,
-		"max_memory_mb":              2048,
-		"heartbeat_interval_seconds": 30,
-		"operator_session_id":        op.OperatorSessionID,
-		"operator_id":                op.ID,
-		"user_id":                    op.UserID,
-		"posture":                    string(c.cfg.Gateway.Posture),
+	bootstrapConfig := operatorBootstrapConfig{
+		MaxConcurrentTasks:       25,
+		MaxMemoryMB:              2048,
+		HeartbeatIntervalSeconds: 30,
+		OperatorSessionID:        op.OperatorSessionID,
+		OperatorID:               op.ID,
+		UserID:                   op.UserID,
+		Posture:                  string(c.cfg.Gateway.Posture),
 	}
 
-	// Return response in format expected by Operator (AuthServicesResponse)
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"success":             true,
-		"operator_session_id": op.OperatorSessionID,
-		"operator_id":         op.ID,
-		"user_id":             op.UserID,
-		"config":              bootstrapConfig,
+	c.responder.JSON(w, http.StatusOK, operatorBootstrapResponse{
+		Success:           true,
+		OperatorSessionID: op.OperatorSessionID,
+		OperatorID:        op.ID,
+		UserID:            op.UserID,
+		Config:            bootstrapConfig,
 	})
 }
 

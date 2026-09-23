@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+services:
+  g8e-native-target-reader:
+    image: g8e-gateway
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        target="/observe/$${G8E_EVAL_TARGET}"
+        if [ -L "$$target" ]; then
+          exit 4
+        fi
+        if [ -f "$$target" ]; then
+          cat "$$target" || exit 5
+          exit 0
+        fi
+        exit 3
+    network_mode: none
+    volumes:
+      - g8e-shared-tmp:/observe:ro
+    read_only: true
+    user: "0:0"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"

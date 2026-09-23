@@ -230,7 +230,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	// policy from the DB and wires the ConsensusService at construction via
 	// GatewayModeDeps — no SetConsensusService, no second pubsub construction,
 	// no adapter wiring).
-	db, err := gateway.OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, testutil.NewTestLogger(), cfg.Gateway.VaultKeyPath, nil, fileSvc)
+	db, err := gateway.OpenCanonicalDBService(testutil.NewTestLogger(), cfg.Gateway.VaultKeyPath, nil, fileSvc)
 	require.NoError(t, err)
 
 	var consensusSvc *consensus.ConsensusService

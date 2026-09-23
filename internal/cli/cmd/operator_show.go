@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -172,74 +173,90 @@ func unmarshalHeartbeatField(fields map[string]json.RawMessage, key string, dest
 	return json.Unmarshal(raw, dest) == nil
 }
 
-func operatorShowPayload(op models.OperatorDocumentGo) map[string]any {
-	payload := map[string]any{
-		"operator_id":         op.ID,
-		"operator_session_id": op.OperatorSessionID,
-		"operator_type":       op.OperatorType,
-		"status":              op.Status,
-		"component":           op.Component,
-		"created_at":          op.CreatedAt,
-		"updated_at":          op.UpdatedAt,
-	}
-	if op.Name != "" {
-		payload["name"] = op.Name
-	}
-	if op.SystemFingerprint != "" {
-		payload["system_fingerprint"] = op.SystemFingerprint
-	}
-	if op.RuntimeConfig != nil {
-		payload["runtime_config"] = op.RuntimeConfig
+type operatorShowOutput struct {
+	OperatorID        string                   `json:"operator_id"`
+	OperatorSessionID string                   `json:"operator_session_id"`
+	OperatorType      constants.OperatorType   `json:"operator_type"`
+	Status            constants.OperatorStatus `json:"status"`
+	Component         constants.ComponentName  `json:"component"`
+	CreatedAt         time.Time                `json:"created_at"`
+	UpdatedAt         time.Time                `json:"updated_at"`
+	Name              string                   `json:"name,omitempty"`
+	SystemFingerprint string                   `json:"system_fingerprint,omitempty"`
+	RuntimeConfig     *models.RuntimeConfig    `json:"runtime_config,omitempty"`
+	Heartbeat         *operatorHeartbeatOutput `json:"heartbeat,omitempty"`
+}
+
+type operatorHeartbeatOutput struct {
+	Timestamp          string                              `json:"timestamp,omitempty"`
+	HeartbeatType      string                              `json:"heartbeat_type,omitempty"`
+	SystemIdentity     *models.HeartbeatSystemIdentity     `json:"system_identity,omitempty"`
+	PerformanceMetrics *models.HeartbeatPerformanceMetrics `json:"performance_metrics,omitempty"`
+	NetworkInfo        *models.HeartbeatNetworkInfo        `json:"network_info,omitempty"`
+	UptimeInfo         *models.HeartbeatUptimeInfo         `json:"uptime_info,omitempty"`
+	OSDetails          *models.HeartbeatOSDetails          `json:"os_details,omitempty"`
+	UserDetails        *models.HeartbeatUserDetails        `json:"user_details,omitempty"`
+	DiskDetails        *models.HeartbeatDiskDetails        `json:"disk_details,omitempty"`
+	MemoryDetails      *models.HeartbeatMemoryDetails      `json:"memory_details,omitempty"`
+	Environment        *models.HeartbeatEnvironment        `json:"environment,omitempty"`
+	VersionInfo        *models.HeartbeatVersionInfo        `json:"version_info,omitempty"`
+	CapabilityFlags    *models.HeartbeatCapabilityFlags    `json:"capability_flags,omitempty"`
+	SystemFingerprint  string                              `json:"system_fingerprint,omitempty"`
+}
+
+func operatorShowPayload(op models.OperatorDocumentGo) operatorShowOutput {
+	payload := operatorShowOutput{
+		OperatorID:        op.ID,
+		OperatorSessionID: op.OperatorSessionID,
+		OperatorType:      op.OperatorType,
+		Status:            op.Status,
+		Component:         op.Component,
+		CreatedAt:         op.CreatedAt,
+		UpdatedAt:         op.UpdatedAt,
+		Name:              op.Name,
+		SystemFingerprint: op.SystemFingerprint,
+		RuntimeConfig:     op.RuntimeConfig,
 	}
 	if view := parseOperatorHeartbeatView(op.LatestHeartbeat); view != nil {
-		payload["heartbeat"] = heartbeatViewMap(view)
+		payload.Heartbeat = heartbeatViewOutput(view)
 	}
 	return payload
 }
 
-func heartbeatViewMap(view *operatorHeartbeatView) map[string]any {
-	result := map[string]any{}
-	if view.Timestamp != "" {
-		result["timestamp"] = view.Timestamp
-	}
-	if view.HeartbeatType != "" {
-		result["heartbeat_type"] = view.HeartbeatType
-	}
+func heartbeatViewOutput(view *operatorHeartbeatView) *operatorHeartbeatOutput {
+	result := &operatorHeartbeatOutput{Timestamp: view.Timestamp, HeartbeatType: view.HeartbeatType, SystemFingerprint: view.SystemFingerprint}
 	if view.SystemIdentity.Hostname != "" || view.SystemIdentity.OS != "" {
-		result["system_identity"] = view.SystemIdentity
+		result.SystemIdentity = &view.SystemIdentity
 	}
 	if view.PerformanceMetrics.CPUPercent != 0 || view.PerformanceMetrics.MemoryPercent != 0 || view.PerformanceMetrics.DiskPercent != 0 {
-		result["performance_metrics"] = view.PerformanceMetrics
+		result.PerformanceMetrics = &view.PerformanceMetrics
 	}
 	if len(view.NetworkInfo.Interfaces) > 0 || len(view.NetworkInfo.ConnectivityStatus) > 0 || view.NetworkInfo.HTTPPort != 0 || view.NetworkInfo.HTTPSPort != 0 {
-		result["network_info"] = view.NetworkInfo
+		result.NetworkInfo = &view.NetworkInfo
 	}
 	if view.UptimeInfo.Uptime != "" || view.UptimeInfo.UptimeSeconds != 0 {
-		result["uptime_info"] = view.UptimeInfo
+		result.UptimeInfo = &view.UptimeInfo
 	}
 	if view.OSDetails.Kernel != "" || view.OSDetails.Distro != "" || view.OSDetails.Version != "" {
-		result["os_details"] = view.OSDetails
+		result.OSDetails = &view.OSDetails
 	}
 	if view.UserDetails.Username != "" {
-		result["user_details"] = view.UserDetails
+		result.UserDetails = &view.UserDetails
 	}
 	if view.DiskDetails.TotalGB != 0 || view.DiskDetails.UsedGB != 0 {
-		result["disk_details"] = view.DiskDetails
+		result.DiskDetails = &view.DiskDetails
 	}
 	if view.MemoryDetails.TotalMB != 0 || view.MemoryDetails.UsedMB != 0 {
-		result["memory_details"] = view.MemoryDetails
+		result.MemoryDetails = &view.MemoryDetails
 	}
 	if view.Environment.PWD != "" || view.Environment.Timezone != "" || view.Environment.IsContainer {
-		result["environment"] = view.Environment
+		result.Environment = &view.Environment
 	}
 	if view.VersionInfo.OperatorVersion != "" {
-		result["version_info"] = view.VersionInfo
+		result.VersionInfo = &view.VersionInfo
 	}
 	if view.CapabilityFlags.ExecutionVaultEnabled || view.CapabilityFlags.GitAvailable || view.CapabilityFlags.LedgerMirrorEnabled {
-		result["capability_flags"] = view.CapabilityFlags
-	}
-	if view.SystemFingerprint != "" {
-		result["system_fingerprint"] = view.SystemFingerprint
+		result.CapabilityFlags = &view.CapabilityFlags
 	}
 	return result
 }

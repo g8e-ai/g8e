@@ -45,3 +45,12 @@ func TestBuildToolScorecardForScenarioKeepsRequiredDimensionsUnavailable(t *test
 	assert.Equal(t, "source_not_captured", scorecard["tool_selection"].UnavailableReason)
 	assert.Equal(t, "scenario_not_applicable", scorecard["tool_recognition"].UnavailableReason)
 }
+
+func TestToolScorecardMetricFromGradeMapsPrivateFailureDetailToClosedUnavailableReason(t *testing.T) {
+	t.Parallel()
+	metric := toolScorecardMetricFromGrade(&evalv1.DeterministicGrade{
+		Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
+		Detail: "compliance: evidence schema or version mismatch",
+	})
+	assert.Equal(t, "source_unavailable", metric.UnavailableReason)
+}

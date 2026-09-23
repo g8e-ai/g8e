@@ -1,9 +1,69 @@
 {
   "campaign_id": "eval-genesis-homogeneous",
-  "homogeneous_cell_count": 2625,
-  "model_count": 35,
-  "model_registry_digest": "21a5bebb0a68e94f3f4a0e437c1851290e6142cd45b669100ec46dc2d97b5b8d",
+  "homogeneous_cell_count": 3375,
+  "model_count": 45,
+  "model_registry_digest": "46c27692e4913ed5b34ba8b15915bb83d7688d646ccfbf440268f6a1cc2df879",
   "variants": [
+    {
+      "variantId": "granite4-2-3b",
+      "providerClass": "ollama",
+      "servedModelTag": "granite4.2:3b",
+      "modelDigest": "40577dc168a3a9ad34e9a1234e0c2570be86097fa75a236d4574ae985705d3c4",
+      "modelFamily": "granite",
+      "parameterCount": "3000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 131072
+    },
+    {
+      "variantId": "granite4-2-8b",
+      "providerClass": "ollama",
+      "servedModelTag": "granite4.2:8b",
+      "modelDigest": "f586c02fdecdf151b656207c339aa003997345774a41768bac1fd6d2fb85913b",
+      "modelFamily": "granite",
+      "parameterCount": "8000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 131072
+    },
+    {
+      "variantId": "qwen3-5-0-8b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3.5:0.8b",
+      "modelDigest": "f3817196d142eaf72ce79dfebe53dcb20bd21da87ce13e138a8f8e10a866b3a4",
+      "modelFamily": "qwen35",
+      "parameterCount": "800000000",
+      "quantization": "Q8_0",
+      "contextLimit": 262144
+    },
+    {
+      "variantId": "qwen3-5-2b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3.5:2b",
+      "modelDigest": "324d162be6ca5629ae4517c8710434d0bd2d665bc94dbad46e9af8fbf8a2f0df",
+      "modelFamily": "qwen35",
+      "parameterCount": "2000000000",
+      "quantization": "Q8_0",
+      "contextLimit": 262144
+    },
+    {
+      "variantId": "qwen3-5-4b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3.5:4b",
+      "modelDigest": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd",
+      "modelFamily": "qwen35",
+      "parameterCount": "4000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 262144
+    },
+    {
+      "variantId": "qwen3-5-9b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3.5:9b",
+      "modelDigest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+      "modelFamily": "qwen35",
+      "parameterCount": "9000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 262144
+    },
     {
       "variantId": "deepseek-r1-7b",
       "providerClass": "ollama",
@@ -66,6 +126,16 @@
       "modelFamily": "gemma4",
       "parameterCount": "8000000000",
       "quantization": "Q4_K_M"
+    },
+    {
+      "variantId": "gpt-oss-20b",
+      "providerClass": "ollama",
+      "servedModelTag": "gpt-oss:20b",
+      "modelDigest": "17052f91a42e97930aa6e28a6c6c06a983e6a58dbb00434885a0cf5313e376f7",
+      "modelFamily": "gptoss",
+      "parameterCount": "20914757184",
+      "quantization": "MXFP4",
+      "contextLimit": 131072
     },
     {
       "variantId": "granite3-3-2b",
@@ -131,6 +201,16 @@
       "quantization": "Q4_K_M"
     },
     {
+      "variantId": "milkey-glm-4-9b-0414-q4-k-m",
+      "providerClass": "ollama",
+      "servedModelTag": "milkey/GLM-4-9B-0414:Q4_K_M",
+      "modelDigest": "537211882a70230a6357420509469391976686c620d9d220c422ab0dc7297c83",
+      "modelFamily": "chatglm",
+      "parameterCount": "9000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 32768
+    },
+    {
       "variantId": "ministral-3-3b",
       "providerClass": "ollama",
       "servedModelTag": "ministral-3:3b",
@@ -156,6 +236,16 @@
       "modelFamily": "llama",
       "parameterCount": "7200000000",
       "quantization": "Q4_K_M"
+    },
+    {
+      "variantId": "pdevine-qwen3-6-27b-mtp-q4-k-m",
+      "providerClass": "ollama",
+      "servedModelTag": "pdevine/qwen3.6:27b-mtp-q4_K_M",
+      "modelDigest": "21c6dd8f67de6708ecf297561045b2c76587828b505bb90897267f62fd38a861",
+      "modelFamily": "qwen3.6",
+      "parameterCount": "27000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 262144
     },
     {
       "variantId": "phi4-mini-3-8b",
@@ -228,6 +318,16 @@
       "modelFamily": "qwen3",
       "parameterCount": "2000000000",
       "quantization": "Q4_K_M"
+    },
+    {
+      "variantId": "qwen3-30b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3:30b",
+      "modelDigest": "ad815644918f0eaab341c12b67837cc6dd4562342cdaf118f83d5d554cb37226",
+      "modelFamily": "qwen3moe",
+      "parameterCount": "30500000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 262144
     },
     {
       "variantId": "qwen3-4b",
@@ -322,6 +422,30 @@
   ],
   "variants_inference": [
     {
+      "digest": "40577dc168a3a9ad34e9a1234e0c2570be86097fa75a236d4574ae985705d3c4",
+      "model": "granite4.2:3b"
+    },
+    {
+      "digest": "f586c02fdecdf151b656207c339aa003997345774a41768bac1fd6d2fb85913b",
+      "model": "granite4.2:8b"
+    },
+    {
+      "digest": "f3817196d142eaf72ce79dfebe53dcb20bd21da87ce13e138a8f8e10a866b3a4",
+      "model": "qwen3.5:0.8b"
+    },
+    {
+      "digest": "324d162be6ca5629ae4517c8710434d0bd2d665bc94dbad46e9af8fbf8a2f0df",
+      "model": "qwen3.5:2b"
+    },
+    {
+      "digest": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd",
+      "model": "qwen3.5:4b"
+    },
+    {
+      "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+      "model": "qwen3.5:9b"
+    },
+    {
       "digest": "755ced02ce7befdb13b7ca74e1e4d08cddba4986afdb63a480f2c93d3140383f",
       "model": "deepseek-r1:7b"
     },
@@ -348,6 +472,10 @@
     {
       "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
       "model": "gemma4:e4b"
+    },
+    {
+      "digest": "17052f91a42e97930aa6e28a6c6c06a983e6a58dbb00434885a0cf5313e376f7",
+      "model": "gpt-oss:20b"
     },
     {
       "digest": "07bd1f170855240f9e162bf54ea494a8bc1c73d8cbd1365d7fccbeb7d2504947",
@@ -378,6 +506,10 @@
       "model": "llama3.2:3b"
     },
     {
+      "digest": "537211882a70230a6357420509469391976686c620d9d220c422ab0dc7297c83",
+      "model": "milkey/GLM-4-9B-0414:Q4_K_M"
+    },
+    {
       "digest": "f04aa1c738f64e13c625b82ae92504fc0260fa6723b509ed1ece0fa188179b1d",
       "model": "ministral-3:3b"
     },
@@ -388,6 +520,10 @@
     {
       "digest": "6577803aa9a036369e481d648a2baebb381ebc6e897f2bb9a766a2aa7bfbc1cf",
       "model": "mistral:7b"
+    },
+    {
+      "digest": "21c6dd8f67de6708ecf297561045b2c76587828b505bb90897267f62fd38a861",
+      "model": "pdevine/qwen3.6:27b-mtp-q4_K_M"
     },
     {
       "digest": "78fad5d182a7c33065e153a5f8ba210754207ba9d91973f57dffa7f487363753",
@@ -420,6 +556,10 @@
     {
       "digest": "8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
       "model": "qwen3:1.7b"
+    },
+    {
+      "digest": "ad815644918f0eaab341c12b67837cc6dd4562342cdaf118f83d5d554cb37226",
+      "model": "qwen3:30b"
     },
     {
       "digest": "359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7",

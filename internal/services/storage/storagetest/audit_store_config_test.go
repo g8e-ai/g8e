@@ -17,7 +17,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
-	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -191,12 +190,7 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 	assert.Contains(t, err.Error(), "EncryptionVault is required")
 
 	// 2. With encryption vault
-	v, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: filepath.Join(tempDir, "vault"),
-		Logger:  logger,
-	})
-	require.NoError(t, err)
-	defer v.Close()
+	v := CreateTestVault(t, filepath.Join(tempDir, "vault"), []byte("test-api-key-for-get-encryption-vault"))
 
 	fileSvc := NewTestFileSvc(t, tempDir)
 

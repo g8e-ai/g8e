@@ -5,14 +5,14 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ---
 
 ## Overview
 
-The g8e Operator is the host-side Policy Execution Point. It opens an outbound mTLS WebSocket connection to the Gateway, subscribes to its identity- and session-scoped command channel, verifies governed transactions, executes approved actions on its host, and publishes signed receipts and heartbeats. The Operator does not expose an inbound MCP, A2A, or command listener.
+The g8e Operator is the Policy Execution Point for the runtime visible to its process. It opens an outbound mTLS WebSocket connection to the Gateway, subscribes to its identity- and session-scoped command channel, verifies governed transactions, executes approved actions in its own runtime, and publishes signed receipts and heartbeats. The Operator does not expose an inbound MCP, A2A, or command listener. In the root Compose deployment, the Operator runs in its own container and does not execute against the Docker host.
 
 Connecting a new Operator has four parts:
 
@@ -30,7 +30,7 @@ The reference Gateway and Operator are commands in the same `g8e` binary. See [B
 The Gateway host requires:
 
 - A running `g8e` Gateway.
-- TCP ports 8080 and 8443 reachable from the Operator host. Port 8080 serves discovery, trust-bundle, and platform-enrollment routes. Port 8443 serves the mTLS API and WebSocket pub/sub connection.
+- TCP ports 8080 and 8443 reachable from the Operator host. Port 8080 serves health, discovery, trust-bundle, and token-scoped platform-enrollment routes. Port 8443 serves authenticated APIs and the mTLS WebSocket pub/sub connection. The standalone `operator start` worker uses these default ports for its HTTP and HTTPS channels; a remapped HTTPS port is not supported by this worker path.
 - A certificate identity that matches the hostname used by the Operator. The default `full` certificate mode detects hostnames and IP addresses at Gateway startup; `--cert-mode localhost` is suitable only for same-host connections.
 - An enrolled owner CLI to approve the Operator request.
 
@@ -137,7 +137,7 @@ Compare the displayed component, hostname, system fingerprint, and Operator and 
 
 Each command displays the request details and asks for confirmation. For non-interactive operation after independently validating the request, add `--yes`. Use `--reason` to attach an optional decision note.
 
-Only a valid, non-revoked CLI identity belonging to the first enrolled owner can approve or deny the request. The Gateway enforces this authorization.
+Only the active first owner can approve or deny the request. The Gateway accepts that owner's authenticated CLI identity or browser Console session and enforces this authorization.
 
 ### 5. Wait for the Connection
 
@@ -156,6 +156,30 @@ cmd:<operator-id>:<operator-session-id>
 ```
 
 A successful connection logs `Channel established - Ready to receive`. The Operator sends an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds.
+
+---
+
+## Connect the Root Compose Operator
+
+The root `docker-compose.yml` runs the Gateway and remote Operator as separate containers with separate process and network namespaces and named volumes. The Gateway publishes host ports 8080 and 8443 by default; the Compose Operator reaches it as `g8e.local:8080` and `g8e.local:8443` and exposes no host port. The Operator volume owns its credentials and local execution evidence; it is not the Gateway volume and does not provide Docker-host access.
+
+Start only the Gateway first, enroll the owner from the repository host, then start the bootstrapped workloads:
+
+```bash
+docker compose up -d
+./g8e auth enroll user -e localhost
+docker compose --profile bootstrapped up -d
+./g8e auth enroll pending
+```
+
+Approve the request whose component is the Data Operator, then verify the remote session:
+
+```bash
+./g8e auth enroll approve <data-operator-request-id> --yes
+./g8e operator list
+```
+
+The container command is `operator start -e g8e.local`. The same owner-approval flow applies to the dashboard and ensemble requests started by the `bootstrapped` profile. For profile details, volume ownership, and cleanup consequences, see [Unified Docker Stack](unified_stack.md).
 
 ---
 
@@ -296,7 +320,7 @@ The execution vault is enabled by default and is required for replay protection.
 
 ## Security Properties
 
-- **Owner-approved enrollment:** A new workload receives no platform certificate until the persistent Gateway owner approves its request over an authenticated mTLS CLI session.
+- **Owner-approved enrollment:** A new workload receives no platform certificate until the active first Gateway owner approves its request through an authenticated CLI or Console owner session. The CLI procedure in this guide uses mTLS.
 - **Proof of key possession:** The Operator signs the enrollment completion transcript with both generated private keys before credentials are issued.
 - **Outbound-only worker:** The Operator initiates its Gateway connections and exposes no inbound application listener.
 - **Scoped command channel:** The Operator subscribes to a channel bound to its Operator and session identities.

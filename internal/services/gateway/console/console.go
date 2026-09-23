@@ -9,6 +9,7 @@ package console
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"net/http"
 )
@@ -25,10 +26,10 @@ var staticFS embed.FS
 // @Produce		html
 // @Success		200	{string}	string	"Returns the index.html SPA"
 // @Router			/console/ [get]
-func Handler() http.Handler {
+func Handler() (http.Handler, error) {
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
-		panic("console: failed to sub static FS: " + err.Error())
+		return nil, fmt.Errorf("console: sub static FS: %w", err)
 	}
-	return http.FileServer(http.FS(sub))
+	return http.FileServer(http.FS(sub)), nil
 }

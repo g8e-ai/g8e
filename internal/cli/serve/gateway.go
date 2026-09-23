@@ -60,11 +60,12 @@ type GatewayConfig struct {
 	AllowedOrigins      []string              `json:"allowed_origins,omitempty"`
 	DoctrineDir         string                `json:"doctrine_dir,omitempty"`
 
-	PublicSpectatorEnabled     bool   `json:"public_spectator_enabled"`
-	PublicSpectatorPrivateAddr string `json:"public_spectator_private_addr,omitempty"`
-	PublicSpectatorPublicAddr  string `json:"public_spectator_public_addr,omitempty"`
-	EvalExplorerAddr           string `json:"eval_explorer_addr,omitempty"`
-	EvalExplorerRoot           string `json:"eval_explorer_root,omitempty"`
+	PublicSpectatorEnabled           bool     `json:"public_spectator_enabled"`
+	PublicSpectatorPrivateAddr       string   `json:"public_spectator_private_addr,omitempty"`
+	PublicSpectatorPublicAddr        string   `json:"public_spectator_public_addr,omitempty"`
+	EvalExplorerAddr                 string   `json:"eval_explorer_addr,omitempty"`
+	EvalExplorerRoot                 string   `json:"eval_explorer_root,omitempty"`
+	PublicSpectatorTrustedProxyCIDRs []string `json:"public_spectator_trusted_proxy_cidrs,omitempty"`
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -91,6 +92,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	if err != nil {
 		return fmt.Errorf("gateway: configure logger: %w", err)
 	}
+	logger = logger.With(logging.ComponentKey, logging.ComponentGateway)
 	defer func() {
 		if closeErr := logHandle.Close(); closeErr != nil {
 			logger.Error("gateway: close log handle", "error", closeErr)
@@ -148,6 +150,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	gatewayCfg.Gateway.PublicSpectatorPublicAddr = cfg.PublicSpectatorPublicAddr
 	gatewayCfg.Gateway.EvalExplorerAddr = cfg.EvalExplorerAddr
 	gatewayCfg.Gateway.EvalExplorerRoot = cfg.EvalExplorerRoot
+	gatewayCfg.Gateway.PublicSpectatorTrustedProxyCIDRs = cfg.PublicSpectatorTrustedProxyCIDRs
 	gatewayCfg.Version = vi.Version
 
 	// Git for ledger (embedded go-git)
@@ -156,11 +159,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 
 	var svc *gateway.GatewayModeService
 	if cfg.ConsensusBootstrap != "" {
-		db, err := gateway.OpenCanonicalDBService(gatewayCfg.Gateway.DataDir, gatewayCfg.Gateway.VaultDir, logger, gatewayCfg.Gateway.VaultKeyPath, nil, fileSvc)
+		db, err := gateway.OpenCanonicalDBService(logger, gatewayCfg.Gateway.VaultKeyPath, nil, fileSvc)
 		if err != nil {
 			return fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
-		if err := consensusPolicyBootstrap(db.GetConsensusStore(), db.GetSignerStore(), cfg.ConsensusBootstrap, cfg.SecretsDir, logger); err != nil {
+		if err := consensusPolicyBootstrap(db.GetConsensusStore(), db.GetSignerStore(), cfg.ConsensusBootstrap, fileSvc, logger); err != nil {
 			return fmt.Errorf("gateway: consensus bootstrap: %w", err)
 		}
 		svc, err = gateway.NewGatewayModeServiceWithDB(gatewayCfg, fileSvc, logger, db, nil, nil)
@@ -358,7 +361,7 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // NewGatewayModeServiceWithDB so that build() reads the seeded policy from
 // the DB and constructs the ConsensusService internally. Member private keys
 // are saved to secretsDir so build()'s FileKeyProvider can load them.
-func consensusPolicyBootstrap(consensusStore *gateway.ConsensusStoreService, signerStore *gateway.SignerStoreService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
+func consensusPolicyBootstrap(consensusStore *gateway.ConsensusStoreService, signerStore *gateway.SignerStoreService, bootstrapPath string, fileSvc fs.RuntimeFileService, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapReadConfig, err)
@@ -449,7 +452,7 @@ func consensusPolicyBootstrap(consensusStore *gateway.ConsensusStoreService, sig
 		if err := signerStore.AddTrustedSigner(signer); err != nil {
 			return fmt.Errorf("consensus bootstrap: register signer %s: %w", appID, err)
 		}
-		if err := consensus.SaveMemberKey(secretsDir, boot.ConsensusID, appID, privKey); err != nil {
+		if err := consensus.SaveMemberKey(fileSvc, boot.ConsensusID, appID, privKey); err != nil {
 			return fmt.Errorf("consensus bootstrap: save member key %s: %w", appID, err)
 		}
 		logger.Info("Trusted signer registered and key saved", "app_id", appID)

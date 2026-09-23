@@ -1052,7 +1052,10 @@ export class AppEnrollmentService {
         const abortSignal = signal || new AbortController().signal;
 
         // Step 2: Load persisted pending attempt if it exists.
-        const pending = await _loadPendingState(paths.pendingPath);
+        let pending = await _loadPendingState(paths.pendingPath);
+        if (pending?.expires_at && new Date(pending.expires_at) <= new Date()) {
+            pending = null;
+        }
 
         let token, requestId, fingerprint, keyPem, keyPair, csrPem;
 
@@ -1062,6 +1065,9 @@ export class AppEnrollmentService {
             requestId = pending.request_id;
             fingerprint = pending.fingerprint;
             keyPem = pending.key_pem;
+            if (pending.instance_id) {
+                this._instanceId = pending.instance_id;
+            }
             // Re-import the private key for proof signing.
             keyPair = {
                 privateKey: await webcrypto.subtle.importKey(

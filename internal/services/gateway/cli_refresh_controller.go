@@ -163,7 +163,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		certSerial = oldSession.CertSerial
 		loginMethod = oldSession.LoginMethod
 	}
-	if sessionID, opID, ok, regErr := c.registryDataOperatorBinding(userID); regErr != nil {
+	if sessionID, opID, ok, regErr := c.registryOperatorBinding(userID); regErr != nil {
 		c.logger.Error("CLI refresh: failed to look up active data operator binding",
 			"error", regErr,
 			"user_id", userID,
@@ -258,7 +258,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (c *CLIRefreshController) registryDataOperatorBinding(userID string) (sessionID, operatorID string, ok bool, err error) {
+func (c *CLIRefreshController) registryOperatorBinding(userID string) (sessionID, operatorID string, ok bool, err error) {
 	if c.reg == nil {
 		return "", "", false, nil
 	}
@@ -266,11 +266,23 @@ func (c *CLIRefreshController) registryDataOperatorBinding(userID string) (sessi
 	if err != nil {
 		return "", "", false, err
 	}
+	var embeddedSessionID string
 	for _, op := range operators {
-		if !operatorcapability.IsGovernedDataOperator(op) {
-			continue
+		if operatorcapability.IsGovernedDataOperator(op) {
+			validated, validateErr := c.auth.ValidateOperatorSession(op.OperatorSessionID)
+			if validateErr == nil && validated.UserID == userID {
+				return validated.OperatorSessionID, validated.ID, true, nil
+			}
 		}
-		return op.OperatorSessionID, op.ID, true, nil
+		if op.ID == string(constants.DocIDEmbeddedOperator) && op.Status == constants.OperatorStatusActive && op.OperatorSessionID != "" {
+			embeddedSessionID = op.OperatorSessionID
+		}
+	}
+	if embeddedSessionID != "" {
+		validated, validateErr := c.auth.ValidateOperatorSession(embeddedSessionID)
+		if validateErr == nil && validated.UserID == userID {
+			return validated.OperatorSessionID, validated.ID, true, nil
+		}
 	}
 	return "", "", false, nil
 }

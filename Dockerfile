@@ -9,14 +9,14 @@
 # Multi-stage Dockerfile for g8e Gateway
 # Modern, minimal, and secure container image.
 #
-# This Dockerfile runs `make build-all` to produce all platform binaries
-# (linux/amd64, linux/arm64, linux/386, windows/amd64, windows/arm64,
-# darwin/amd64, darwin/arm64). Linux binaries are built with FIPS 140-3
-# approved mode enabled via GOFIPS140 (Go Cryptographic Module v1.0.0,
-# CMVP Cert #5247, CAVP A6650); non-linux binaries are built without it.
-# The gateway serves these binaries via /.well-known/g8e/bin/{filename} so
-# operators can deploy g8e on any supported platform by fetching the
-# appropriate binary from the gateway.
+# This Dockerfile runs `make build-target` to produce only the binary for the
+# image target platform (linux/amd64 or linux/arm64). Linux binaries are built
+# with FIPS 140-3 approved mode enabled via GOFIPS140 (Go Cryptographic Module
+# v1.0.0, CMVP Cert #5247, CAVP A6650).
+#
+# The full cross-platform deployment matrix is not built here. Run `make
+# build-all` on the host when you need Linux, Windows, and macOS artifacts for
+# remote operator deployment.
 #
 # FIPS 140-3 enforcement is a RUNTIME setting, off by default: non-approved
 # primitives (Ed25519 for consensus/receipts/PKI, ChaCha20-Poly1305 for SSH
@@ -31,7 +31,11 @@
 # =============================================================================
 
 # Stage 1: Build (FIPS module linked in here for linux targets)
-FROM golang:1.26.6 AS builder
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+FROM --platform=${BUILDPLATFORM} golang:1.26.6 AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -60,25 +64,41 @@ COPY internal/ ./internal/
 COPY protocol/ ./protocol/
 COPY docs/reference/ ./docs/reference/
 
-# Build all platform binaries via `make build-all`. The Makefile sets
-# GOFIPS140=v1.0.0 for linux targets and explicitly unsets it for non-linux
-# targets. CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and
-# does not require CGO. Binaries are written to /build/bin/g8e-{os}-{arch}.
+# Build only the image target platform via `make build-target`. The Makefile
+# sets GOFIPS140=v1.0.0 for linux targets. CGO_ENABLED=0 is intentional: the
+# Go FIPS module is pure Go and does not require CGO. The binary is written to
+# /build/bin/g8e-{os}-{arch}.
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=unknown
 ARG BUILD_ID=unknown
 ARG SOURCE_REVISION=unknown
 ARG SOURCE_TREE_HASH=unknown
+ARG BUILD_TIME=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    make build-all BUILD_ID="${BUILD_ID}" SOURCE_REVISION="${SOURCE_REVISION}" SOURCE_TREE_HASH="${SOURCE_TREE_HASH}"
+    make build-target GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" \
+    VERSION="${VERSION}" BUILD_ID="${BUILD_ID}" BUILD_TIME="${BUILD_TIME}" \
+    SOURCE_REVISION="${SOURCE_REVISION}" SOURCE_TREE_HASH="${SOURCE_TREE_HASH}"
 
-# Verify the linux/amd64 binary built and runs.
-RUN /build/bin/g8e-linux-amd64 --help
+# Verify the target executable without attempting to execute a foreign platform
+# during a multi-platform build.
+RUN test -f /build/bin/g8e-${TARGETOS}-${TARGETARCH} && \
+    if [ "${TARGETOS}" = "$(go env GOOS)" ] && [ "${TARGETARCH}" = "$(go env GOARCH)" ]; then \
+      /build/bin/g8e-${TARGETOS}-${TARGETARCH} --help; \
+    else \
+      echo "Skipping --help smoke check for ${TARGETOS}/${TARGETARCH} on $(go env GOOS)/$(go env GOARCH) builder"; \
+    fi
 
 # Verify FIPS 140-3 approved mode is active via the native crypto/fips140 module
 # API. This is the same self-check operators run in production
 # (`g8e version --fips`); it inspects module state, not env vars. It exits 0
 # with a warning when enforcement is off — that is the expected posture, not a
 # failure.
-RUN /build/bin/g8e-linux-amd64 version --fips
+RUN if [ "${TARGETOS}" = "linux" ] && [ "${TARGETARCH}" = "amd64" ]; then \
+      /build/bin/g8e-linux-amd64 version --fips; \
+    else \
+      echo "Skipping amd64 FIPS smoke check for ${TARGETOS}/${TARGETARCH}"; \
+    fi
 
 # =============================================================================
 # Stage 2: Runtime
@@ -99,18 +119,28 @@ RUN /build/bin/g8e-linux-amd64 version --fips
 # vendor-affirmed OE. The slim variant reduces attack surface. Do not change to
 # a different OS or version without confirming it is a tested or
 # vendor-affirmed OE for the applicable CMVP certificate.
-FROM debian@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168
+FROM --platform=${TARGETPLATFORM} debian@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION
+ARG BUILD_ID
+ARG BUILD_TIME
+ARG SOURCE_REVISION
+ARG SOURCE_TREE_HASH
+LABEL org.opencontainers.image.version="${VERSION}" \
+      io.g8e.build.id="${BUILD_ID}" \
+      io.g8e.build.time="${BUILD_TIME}" \
+      io.g8e.source.revision="${SOURCE_REVISION}" \
+      io.g8e.source.tree.hash="${SOURCE_TREE_HASH}"
 
 # Install container utilities (not binary dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the linux/amd64 binary as the entrypoint
-COPY --from=builder /build/bin/g8e-linux-amd64 /g8e
-
-# Copy all platform binaries for node deployment via /.well-known/g8e/bin/
-COPY --from=builder /build/bin/ /opt/g8e/bin/
+# Copy the binary matching the image target as the entrypoint.
+COPY --from=builder /build/bin/g8e-${TARGETOS}-${TARGETARCH} /g8e
 
 # Copy protocol constants (required for doctrine mode)
 COPY --from=builder /build/protocol/constants /protocol/constants

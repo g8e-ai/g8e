@@ -286,6 +286,7 @@ const EventPlatformEnrollmentDecideRequested EventType = "g8e.v1.platform.enroll
 const EventPlatformEnrollmentIssueRequested EventType = "g8e.v1.platform.enrollment.issue.requested"
 const EventPlatformEnrollmentPersistPolicyRequested EventType = "g8e.v1.platform.enrollment.persist_policy.requested"
 const EventPlatformEnrollmentCreateSessionRequested EventType = "g8e.v1.platform.enrollment.create_session.requested"
+const EventPlatformEnrollmentRevokeRequested EventType = "g8e.v1.platform.enrollment.revoke.requested"
 const EventSourceUserChat EventType = "g8e.v1.source.user.chat"
 const EventSourceUserTerminal EventType = "g8e.v1.source.user.terminal"
 const EventSourceAiPrimary EventType = "g8e.v1.source.ai.primary"

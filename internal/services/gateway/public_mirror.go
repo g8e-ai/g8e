@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -21,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,6 +47,7 @@ type PublicMirrorSourceState struct {
 }
 
 type PublicMirrorStoreState struct {
+	ActiveSourceID string                                `json:"active_source_id"`
 	Sources        map[string]*PublicMirrorSourceState   `json:"sources"`
 	KeyRegistry    map[string]ed25519.PublicKey          `json:"key_registry"`
 	RevokedKeys    map[string]time.Time                  `json:"revoked_keys"`
@@ -149,9 +152,42 @@ func normalizePublicMirrorStoreState(state *PublicMirrorStoreState) {
 			source.RetainedPreviousBatchHash = constants.PublicFeedZeroHashHex
 		}
 	}
+	if state.ActiveSourceID == "" && len(state.Sources) == 1 {
+		for sourceID := range state.Sources {
+			state.ActiveSourceID = sourceID
+		}
+	}
+}
+
+func activePublicMirrorSourceID(state PublicMirrorStoreState) string {
+	if state.ActiveSourceID != "" {
+		return state.ActiveSourceID
+	}
+	sourceIDs := make([]string, 0, len(state.Sources))
+	for sourceID := range state.Sources {
+		sourceIDs = append(sourceIDs, sourceID)
+	}
+	sort.Strings(sourceIDs)
+	if len(sourceIDs) == 0 {
+		return ""
+	}
+	return sourceIDs[0]
 }
 
 func validatePublicMirrorStoreState(state PublicMirrorStoreState) error {
+	if state.ActiveSourceID != "" {
+		activeKeyPrefix := state.ActiveSourceID + ":"
+		activeKeyKnown := false
+		for registryID := range state.KeyRegistry {
+			if strings.HasPrefix(registryID, activeKeyPrefix) {
+				activeKeyKnown = true
+				break
+			}
+		}
+		if !activeKeyKnown {
+			return fmt.Errorf("%w: active source key is missing", constants.ErrPublicFeedMirrorStoreCorrupt)
+		}
+	}
 	for keyID, key := range state.KeyRegistry {
 		if keyID == "" || len(key) != ed25519.PublicKeySize {
 			return fmt.Errorf("%w: invalid key registry entry", constants.ErrPublicFeedMirrorStoreCorrupt)
@@ -249,6 +285,12 @@ func clonePublicMirrorStoreState(state PublicMirrorStoreState) (PublicMirrorStor
 	return cloned, nil
 }
 
+// PublicMirrorConfig configures trust for proxy-provided visitor identity.
+// An empty trusted-proxy set disables forwarded visitor identity entirely.
+type PublicMirrorConfig struct {
+	TrustedProxyCIDRs []string
+}
+
 // PublicMirrorServer is the hermetic reference mirror HTTP server. It accepts
 // signed append-only batches from the Gateway outbound publisher at the
 // authenticated ingest endpoint and serves anonymous read-only endpoints for
@@ -293,14 +335,17 @@ type PublicMirrorServer struct {
 	// maxPageSize is the maximum cursor page size.
 	maxPageSize int
 
-	now                  func() time.Time
-	freshnessDelayed     time.Duration
-	freshnessStale       time.Duration
-	freshnessOffline     time.Duration
-	anonymousRateMax     int
-	anonymousRateWindow  time.Duration
-	anonymousRateClients map[string]publicMirrorRateWindow
-	maxSSESubscribers    int
+	now                      func() time.Time
+	freshnessDelayed         time.Duration
+	freshnessStale           time.Duration
+	freshnessOffline         time.Duration
+	anonymousRateMax         int
+	anonymousRateWindow      time.Duration
+	anonymousRateClients     map[string]publicMirrorRateWindow
+	anonymousRateExpirations []publicMirrorRateExpiry
+	anonymousRateExpiryHead  int
+	maxSSESubscribers        int
+	trustedProxyNetworks     []*net.IPNet
 }
 
 // mirrorSSESubscriber represents one active SSE connection.
@@ -317,33 +362,44 @@ type publicMirrorRateWindow struct {
 	Count     int
 }
 
+type publicMirrorRateExpiry struct {
+	ClientID  string
+	StartedAt time.Time
+}
+
 // NewPublicMirrorServer creates a new reference mirror server with default
 // limits. The caller registers source public keys via RegisterSourceKey
 // before starting ingest.
-func NewPublicMirrorServer(logger *slog.Logger, store PublicMirrorStore) (*PublicMirrorServer, error) {
+func NewPublicMirrorServer(logger *slog.Logger, store PublicMirrorStore, cfg PublicMirrorConfig) (*PublicMirrorServer, error) {
+	trustedProxyNetworks, err := parseTrustedProxyCIDRs(cfg.TrustedProxyCIDRs)
+	if err != nil {
+		return nil, err
+	}
 	state, err := store.Load(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("public mirror: load store: %w", err)
 	}
 	return &PublicMirrorServer{
-		logger:                  logger,
-		store:                   store,
-		state:                   state,
-		sseSubscribers:          make(map[*mirrorSSESubscriber]struct{}),
-		maxBootstrapProjections: 50,
-		maxSSEQueueSize:         100,
-		maxSSEReplayRecords:     constants.PublicFeedSSEReplayMaxRecords,
-		maxRetainedBatches:      constants.PublicFeedMirrorRetainedBatches,
-		defaultPageSize:         20,
-		maxPageSize:             100,
-		now:                     time.Now,
-		freshnessDelayed:        time.Duration(constants.PublicFeedFreshnessDelayedSeconds) * time.Second,
-		freshnessStale:          time.Duration(constants.PublicFeedFreshnessStaleSeconds) * time.Second,
-		freshnessOffline:        time.Duration(constants.PublicFeedFreshnessOfflineSeconds) * time.Second,
-		anonymousRateMax:        constants.PublicFeedAnonymousRatePerWindow,
-		anonymousRateWindow:     time.Duration(constants.PublicFeedAnonymousRateWindowSecs) * time.Second,
-		anonymousRateClients:    make(map[string]publicMirrorRateWindow),
-		maxSSESubscribers:       constants.PublicFeedSSEMaxSubscribers,
+		logger:                   logger,
+		store:                    store,
+		state:                    state,
+		sseSubscribers:           make(map[*mirrorSSESubscriber]struct{}),
+		maxBootstrapProjections:  50,
+		maxSSEQueueSize:          100,
+		maxSSEReplayRecords:      constants.PublicFeedSSEReplayMaxRecords,
+		maxRetainedBatches:       constants.PublicFeedMirrorRetainedBatches,
+		defaultPageSize:          20,
+		maxPageSize:              500,
+		now:                      time.Now,
+		freshnessDelayed:         time.Duration(constants.PublicFeedFreshnessDelayedSeconds) * time.Second,
+		freshnessStale:           time.Duration(constants.PublicFeedFreshnessStaleSeconds) * time.Second,
+		freshnessOffline:         time.Duration(constants.PublicFeedFreshnessOfflineSeconds) * time.Second,
+		anonymousRateMax:         constants.PublicFeedAnonymousRatePerWindow,
+		anonymousRateWindow:      time.Duration(constants.PublicFeedAnonymousRateWindowSecs) * time.Second,
+		anonymousRateClients:     make(map[string]publicMirrorRateWindow),
+		anonymousRateExpirations: make([]publicMirrorRateExpiry, 0),
+		maxSSESubscribers:        constants.PublicFeedSSEMaxSubscribers,
+		trustedProxyNetworks:     trustedProxyNetworks,
 	}, nil
 }
 
@@ -408,6 +464,8 @@ func (m *PublicMirrorServer) SetAnonymousReadRateLimit(maxRequests int, window t
 	m.anonymousRateMax = maxRequests
 	m.anonymousRateWindow = window
 	m.anonymousRateClients = make(map[string]publicMirrorRateWindow)
+	m.anonymousRateExpirations = nil
+	m.anonymousRateExpiryHead = 0
 	return nil
 }
 
@@ -437,6 +495,7 @@ func (m *PublicMirrorServer) removeSSESubscriber(subscriber *mirrorSSESubscriber
 func (m *PublicMirrorServer) RegisterSourceKey(ctx context.Context, sourceID, keyID string, pubKey ed25519.PublicKey) error {
 	return m.mutateState(ctx, func(state *PublicMirrorStoreState) error {
 		state.KeyRegistry[m.keyRegistryKey(sourceID, keyID)] = append(ed25519.PublicKey(nil), pubKey...)
+		state.ActiveSourceID = sourceID
 		return nil
 	})
 }
@@ -454,7 +513,11 @@ func (m *PublicMirrorServer) RevokeSourceKey(ctx context.Context, sourceID, keyI
 // by tests to simulate stale, stopped, or offline sources.
 func (m *PublicMirrorServer) SetSourceFreshness(ctx context.Context, sourceID string, freshness models.CampaignFreshness) error {
 	return m.mutateState(ctx, func(storeState *PublicMirrorStoreState) error {
-		state := getOrCreatePublicMirrorSource(storeState, sourceID)
+		state, ok := storeState.Sources[sourceID]
+		if !ok {
+			state = newPublicMirrorSourceState()
+			storeState.Sources[sourceID] = state
+		}
 		state.Freshness = freshness
 		return nil
 	})
@@ -465,20 +528,13 @@ func (m *PublicMirrorServer) keyRegistryKey(sourceID, keyID string) string {
 	return sourceID + ":" + keyID
 }
 
-// getOrCreateSource returns the source state, creating it if absent. Caller
-// must hold the write lock.
-func getOrCreatePublicMirrorSource(state *PublicMirrorStoreState, sourceID string) *PublicMirrorSourceState {
-	source, ok := state.Sources[sourceID]
-	if !ok {
-		source = &PublicMirrorSourceState{
-			FeedChainHash:             constants.PublicFeedZeroHashHex,
-			RetainedFromSequence:      1,
-			RetainedPreviousBatchHash: constants.PublicFeedZeroHashHex,
-			Freshness:                 models.CampaignFreshnessActive,
-		}
-		state.Sources[sourceID] = source
+func newPublicMirrorSourceState() *PublicMirrorSourceState {
+	return &PublicMirrorSourceState{
+		FeedChainHash:             constants.PublicFeedZeroHashHex,
+		RetainedFromSequence:      1,
+		RetainedPreviousBatchHash: constants.PublicFeedZeroHashHex,
+		Freshness:                 models.CampaignFreshnessActive,
 	}
-	return source
 }
 
 func (m *PublicMirrorServer) mutateState(ctx context.Context, mutate func(*PublicMirrorStoreState) error) error {
@@ -591,10 +647,8 @@ func (m *PublicMirrorServer) validateBatch(batch models.PublicFeedBatch) (models
 		if err := checkProhibitedFields(r.RecordBytes); err != nil {
 			return models.PublicFeedIngestRejectionSignatureInvalid, err
 		}
-		if r.RecordType == models.PublicFeedRecordTypeProjection {
-			if err := publicdisclosure.ValidateAssignmentRecord("", []byte(r.RecordBytes)); err != nil {
-				return models.PublicFeedIngestRejectionSignatureInvalid, fmt.Errorf("public mirror: validate assignment record: %w", err)
-			}
+		if err := publicdisclosure.ValidatePublicFeedRecord(r.RecordType, []byte(r.RecordBytes)); err != nil {
+			return models.PublicFeedIngestRejectionSignatureInvalid, fmt.Errorf("public mirror: validate record: %w", err)
 		}
 	}
 	if _, err := validatePublicKeyRevocations(batch, storeState); err != nil {
@@ -724,7 +778,11 @@ func (m *PublicMirrorServer) acceptBatch(ctx context.Context, batch models.Publi
 		if err != nil {
 			return err
 		}
-		state := getOrCreatePublicMirrorSource(storeState, batch.SourceID)
+		state, ok := storeState.Sources[batch.SourceID]
+		if !ok {
+			state = newPublicMirrorSourceState()
+			storeState.Sources[batch.SourceID] = state
+		}
 		if batch.FirstSequence != state.HighWaterSequence+1 || batch.PreviousBatchHash != state.FeedChainHash {
 			return constants.ErrPublicFeedHashChainMismatch
 		}
@@ -788,12 +846,37 @@ func (m *PublicMirrorServer) publicReadMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/bootstrap", m.handleBootstrap)
 	mux.HandleFunc("/snapshot", m.handleSnapshot)
-	mux.HandleFunc("/history", m.handleHistory)
+	mux.Handle("/history", m.withGzip(http.HandlerFunc(m.handleHistory)))
 	mux.HandleFunc("/stream", m.handleStream)
 	mux.HandleFunc("/proof-catalog", m.handleProofCatalog)
 	mux.HandleFunc("/proof-manifest", m.handleProofManifest)
 	mux.HandleFunc("/proofs/", m.handleProofDownload)
 	return mux
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	writer *gzip.Writer
+}
+
+func (w gzipResponseWriter) Write(body []byte) (int, error) {
+	return w.writer.Write(body)
+}
+
+func (m *PublicMirrorServer) withGzip(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Accept-Encoding")
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		writer := gzip.NewWriter(w)
+		next.ServeHTTP(gzipResponseWriter{ResponseWriter: w, writer: writer}, r)
+		if err := writer.Close(); err != nil {
+			m.logger.Error("mirror: close gzip response", "error", err)
+		}
+	})
 }
 
 func publicMirrorAnonymousReadPath(requestPath string) bool {
@@ -805,36 +888,71 @@ func publicMirrorAnonymousReadPath(requestPath string) bool {
 	}
 }
 
-func publicMirrorClientID(r *http.Request) string {
+func parseTrustedProxyCIDRs(values []string) ([]*net.IPNet, error) {
+	networks := make([]*net.IPNet, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return nil, fmt.Errorf("public mirror: trusted proxy CIDR is empty: %w", constants.ErrPublicFeedTrustedProxyConfig)
+		}
+		_, network, err := net.ParseCIDR(value)
+		if err != nil {
+			return nil, fmt.Errorf("public mirror: parse trusted proxy CIDR %q: %w: %v", value, constants.ErrPublicFeedTrustedProxyConfig, err)
+		}
+		networks = append(networks, network)
+	}
+	return networks, nil
+}
+
+func (m *PublicMirrorServer) publicMirrorClientID(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	if remoteIP := net.ParseIP(host); remoteIP != nil && remoteIP.IsLoopback() {
-		connectingIP := strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))
-		if net.ParseIP(connectingIP) != nil {
-			return connectingIP
+	remoteIP := net.ParseIP(host)
+	if remoteIP != nil && m.isTrustedProxy(remoteIP) {
+		connectingIPs := r.Header.Values("CF-Connecting-IP")
+		if len(connectingIPs) == 1 {
+			connectingIP := net.ParseIP(strings.TrimSpace(connectingIPs[0]))
+			if isValidPublicMirrorClientIP(connectingIP) {
+				return connectingIP.String()
+			}
 		}
 	}
 	return host
 }
 
+func (m *PublicMirrorServer) isTrustedProxy(remoteIP net.IP) bool {
+	for _, network := range m.trustedProxyNetworks {
+		if network.Contains(remoteIP) {
+			return true
+		}
+	}
+	return false
+}
+
+func isValidPublicMirrorClientIP(ip net.IP) bool {
+	return ip != nil && ip.IsGlobalUnicast() && !ip.IsLoopback() && !ip.IsUnspecified() && !ip.IsMulticast()
+}
+
 func (m *PublicMirrorServer) allowAnonymousRead(r *http.Request) bool {
-	host := publicMirrorClientID(r)
+	host := m.publicMirrorClientID(r)
 	now := m.now().UTC()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for client, window := range m.anonymousRateClients {
-		if now.Sub(window.StartedAt) >= m.anonymousRateWindow {
-			delete(m.anonymousRateClients, client)
-		}
-	}
+	m.expireAnonymousRateWindows(now)
 	window, ok := m.anonymousRateClients[host]
+	if ok && !now.Before(window.StartedAt.Add(m.anonymousRateWindow)) {
+		delete(m.anonymousRateClients, host)
+		ok = false
+	}
 	if !ok {
 		if len(m.anonymousRateClients) >= constants.PublicFeedAnonymousRateMaxClients {
 			return false
 		}
-		m.anonymousRateClients[host] = publicMirrorRateWindow{StartedAt: now, Count: 1}
+		window = publicMirrorRateWindow{StartedAt: now, Count: 1}
+		m.anonymousRateClients[host] = window
+		m.anonymousRateExpirations = append(m.anonymousRateExpirations, publicMirrorRateExpiry{ClientID: host, StartedAt: now})
 		return true
 	}
 	if window.Count >= m.anonymousRateMax {
@@ -843,6 +961,29 @@ func (m *PublicMirrorServer) allowAnonymousRead(r *http.Request) bool {
 	window.Count++
 	m.anonymousRateClients[host] = window
 	return true
+}
+
+func (m *PublicMirrorServer) expireAnonymousRateWindows(now time.Time) {
+	for m.anonymousRateExpiryHead < len(m.anonymousRateExpirations) {
+		expiry := m.anonymousRateExpirations[m.anonymousRateExpiryHead]
+		if now.Before(expiry.StartedAt.Add(m.anonymousRateWindow)) {
+			break
+		}
+		m.anonymousRateExpiryHead++
+		window, ok := m.anonymousRateClients[expiry.ClientID]
+		if ok && window.StartedAt.Equal(expiry.StartedAt) {
+			delete(m.anonymousRateClients, expiry.ClientID)
+		}
+	}
+	if m.anonymousRateExpiryHead == 0 {
+		return
+	}
+	if m.anonymousRateExpiryHead*2 < len(m.anonymousRateExpirations) && m.anonymousRateExpiryHead < 1024 {
+		return
+	}
+	remaining := m.anonymousRateExpirations[m.anonymousRateExpiryHead:]
+	m.anonymousRateExpirations = append([]publicMirrorRateExpiry(nil), remaining...)
+	m.anonymousRateExpiryHead = 0
 }
 
 // withCORS wraps the handler with CORS headers for anonymous read endpoints.
@@ -973,6 +1114,14 @@ func (m *PublicMirrorServer) handleIngest(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		m.logger.Warn("mirror: ingest rejected", "source_id", req.Batch.SourceID, "reason", reason, "error", err)
 		resp := models.PublicIngestResponse{Accepted: false, RejectionReason: reason}
+		m.mu.RLock()
+		if state := m.state.Sources[req.Batch.SourceID]; state != nil {
+			resp.SourceID = req.Batch.SourceID
+			resp.HighWaterSequence = state.HighWaterSequence
+			resp.FeedChainHash = state.FeedChainHash
+			resp.BatchCount = state.BatchCount
+		}
+		m.mu.RUnlock()
 		m.writeJSON(w, http.StatusOK, resp)
 		return
 	}
@@ -990,12 +1139,15 @@ func (m *PublicMirrorServer) handleIngest(w http.ResponseWriter, r *http.Request
 	state := m.state.Sources[req.Batch.SourceID]
 	hw := state.HighWaterSequence
 	fch := state.FeedChainHash
+	batchCount := state.BatchCount
 	m.mu.RUnlock()
 
 	resp := models.PublicIngestResponse{
 		Accepted:          true,
+		SourceID:          req.Batch.SourceID,
 		HighWaterSequence: hw,
 		FeedChainHash:     fch,
+		BatchCount:        batchCount,
 	}
 	m.writeJSON(w, http.StatusOK, resp)
 }
@@ -1141,11 +1293,7 @@ func (m *PublicMirrorServer) handleBootstrap(w http.ResponseWriter, r *http.Requ
 	defer m.mu.RUnlock()
 
 	if sourceID == "" {
-		// Return the first available source.
-		for sid := range m.state.Sources {
-			sourceID = sid
-			break
-		}
+		sourceID = activePublicMirrorSourceID(m.state)
 	}
 
 	state, ok := m.state.Sources[sourceID]
@@ -1162,7 +1310,7 @@ func (m *PublicMirrorServer) handleBootstrap(w http.ResponseWriter, r *http.Requ
 				Freshness:         models.CampaignFreshnessSourceOffline,
 			},
 			SourceFreshness:     models.CampaignFreshnessSourceOffline,
-			RecentProjections:   []map[string]any{},
+			RecentProjections:   []models.PublicFeedObject{},
 			ProofCatalogSummary: models.PublicProofCatalogSummary{ArtifactCount: 0, TotalByteSize: 0},
 			GeneratedAt:         time.Now().UTC(),
 		})
@@ -1212,10 +1360,7 @@ func (m *PublicMirrorServer) handleSnapshot(w http.ResponseWriter, r *http.Reque
 	defer m.mu.RUnlock()
 
 	if sourceID == "" {
-		for sid := range m.state.Sources {
-			sourceID = sid
-			break
-		}
+		sourceID = activePublicMirrorSourceID(m.state)
 	}
 
 	state, ok := m.state.Sources[sourceID]
@@ -1230,6 +1375,31 @@ func (m *PublicMirrorServer) handleSnapshot(w http.ResponseWriter, r *http.Reque
 			Freshness:         models.CampaignFreshnessSourceOffline,
 		}
 		m.writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	if sequenceText := r.URL.Query().Get("sequence"); sequenceText != "" {
+		sequence, err := strconv.ParseInt(sequenceText, 10, 64)
+		if err != nil || sequence <= 0 {
+			http.Error(w, constants.ErrPublicFeedSnapshotNotFound.Error(), http.StatusNotFound)
+			return
+		}
+		for index, batch := range state.Batches {
+			if batch.LastSequence != sequence {
+				continue
+			}
+			m.writeJSON(w, http.StatusOK, models.PublicFeedSnapshot{
+				ProtocolVersion:   constants.PublicFeedProtocolVersion,
+				SourceID:          sourceID,
+				HighWaterSequence: batch.LastSequence,
+				FeedChainHash:     batch.ContentHash,
+				BatchCount:        state.BatchCount - len(state.Batches) + index + 1,
+				GeneratedAt:       time.Now().UTC(),
+				Freshness:         m.sourceFreshness(state),
+			})
+			return
+		}
+		http.Error(w, constants.ErrPublicFeedSnapshotNotFound.Error(), http.StatusNotFound)
 		return
 	}
 
@@ -1255,6 +1425,7 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 	sourceID := r.URL.Query().Get("source")
 	cursorStr := r.URL.Query().Get("cursor")
 	limitStr := r.URL.Query().Get("limit")
+	recordKind := r.URL.Query().Get("kind")
 
 	limit := m.defaultPageSize
 	if limitStr != "" {
@@ -1276,58 +1447,54 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 	defer m.mu.RUnlock()
 
 	if sourceID == "" {
-		for sid := range m.state.Sources {
-			sourceID = sid
-			break
-		}
+		sourceID = activePublicMirrorSourceID(m.state)
 	}
 
 	state, ok := m.state.Sources[sourceID]
 	if !ok {
 		m.writeJSON(w, http.StatusOK, models.PublicFeedCursorPage{
 			ProtocolVersion: constants.PublicFeedProtocolVersion,
-			Items:           []map[string]any{},
+			Items:           []models.PublicFeedObject{},
 			HasMore:         false,
 			Limit:           limit,
 		})
 		return
 	}
 
-	var items []map[string]any
+	var items []models.PublicFeedObject
 	var lastSeq int64
-	count := 0
+	hasMore := false
 	for _, rec := range state.Records {
 		if rec.Sequence <= cursor {
 			continue
 		}
-		if count >= limit {
-			break
-		}
-		var item map[string]any
+		var item models.PublicFeedObject
 		if err := json.Unmarshal([]byte(rec.RecordBytes), &item); err != nil {
 			continue
 		}
-		item["sequence"] = rec.Sequence
-		item["record_type"] = rec.RecordType
-		items = append(items, item)
-		lastSeq = rec.Sequence
-		count++
-	}
-
-	hasMore := false
-	nextCursor := ""
-	if count == limit {
-		for _, rec := range state.Records {
-			if rec.Sequence > lastSeq {
-				hasMore = true
-				nextCursor = strconv.FormatInt(lastSeq, 10)
-				break
+		if recordKind != "" {
+			kind, ok := item.StringField("kind")
+			if !ok || kind != recordKind {
+				continue
 			}
 		}
+		if len(items) >= limit {
+			hasMore = true
+			break
+		}
+		item.SetInt64Field("sequence", rec.Sequence)
+		item["record_type"] = json.RawMessage(strconv.Quote(string(rec.RecordType)))
+		items = append(items, item)
+		lastSeq = rec.Sequence
+	}
+
+	nextCursor := ""
+	if hasMore {
+		nextCursor = strconv.FormatInt(lastSeq, 10)
 	}
 
 	if items == nil {
-		items = []map[string]any{}
+		items = []models.PublicFeedObject{}
 	}
 
 	m.writeJSON(w, http.StatusOK, models.PublicFeedCursorPage{
@@ -1376,10 +1543,7 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 
 	m.mu.RLock()
 	if sourceID == "" {
-		for sid := range m.state.Sources {
-			sourceID = sid
-			break
-		}
+		sourceID = activePublicMirrorSourceID(m.state)
 	}
 	state, stateExists := m.state.Sources[sourceID]
 	var replayRecords []models.PublicFeedRecord
@@ -1569,22 +1733,22 @@ func (m *PublicMirrorServer) handleProofDownload(w http.ResponseWriter, r *http.
 
 // recentProjectionsLocked returns the most recent projection records as
 // deserialized JSON objects. Caller must hold the read lock.
-func (m *PublicMirrorServer) recentProjectionsLocked(state *PublicMirrorSourceState, max int) []map[string]any {
-	var projections []map[string]any
+func (m *PublicMirrorServer) recentProjectionsLocked(state *PublicMirrorSourceState, max int) []models.PublicFeedObject {
+	var projections []models.PublicFeedObject
 	for i := len(state.Records) - 1; i >= 0 && len(projections) < max; i-- {
 		rec := state.Records[i]
 		if rec.RecordType != models.PublicFeedRecordTypeProjection {
 			continue
 		}
-		var item map[string]any
+		var item models.PublicFeedObject
 		if err := json.Unmarshal([]byte(rec.RecordBytes), &item); err != nil {
 			continue
 		}
-		item["sequence"] = rec.Sequence
+		item.SetInt64Field("sequence", rec.Sequence)
 		projections = append(projections, item)
 	}
 	if projections == nil {
-		return []map[string]any{}
+		return []models.PublicFeedObject{}
 	}
 	return projections
 }

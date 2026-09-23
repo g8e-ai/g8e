@@ -147,13 +147,13 @@ func TestBindProviderBoundaryObservationRefs_AttachesComplianceRef(t *testing.T)
 	assert.Equal(t, digest, ref.GetSha256())
 }
 
-func TestToolScorecardMetricFromGrade_DefaultsUnavailableDetail(t *testing.T) {
+func TestToolScorecardMetricFromGrade_UsesClosedUnavailableReason(t *testing.T) {
 	t.Parallel()
 	metric := toolScorecardMetricFromGrade(&evalv1.DeterministicGrade{
 		Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
 	})
 	require.NotNil(t, metric)
-	assert.Equal(t, "criterion unavailable", metric.UnavailableReason)
+	assert.Equal(t, "source_unavailable", metric.UnavailableReason)
 }
 
 func TestProviderBoundaryObservationRef_ReturnsNilForMissingWindow(t *testing.T) {

@@ -1,10 +1,11 @@
 {
-  "schema_version": "1.4.0",
+  "schema_version": "1.5.0",
   "enums": {
     "QualityState": [
       "verified_public",
       "exploratory_verified",
       "exploratory_partial",
+      "legacy_unverified",
       "live_in_progress",
       "terminal_failed",
       "dead_evidence",
@@ -92,9 +93,15 @@
       "insufficient"
     ],
     "VerifierState": [
+      "not_run",
       "passed",
       "failed",
       "not_applicable"
+    ],
+    "RunMetricUnit": [
+      "ratio",
+      "milliseconds",
+      "tokens_per_second"
     ],
     "NativePosture": [
       "doctrine",

@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -137,26 +138,28 @@ func TestShouldPublishViaGatewayReturnsFalseWhenGatewayUnhealthy(t *testing.T) {
 }
 
 func TestMirrorCatalogDatasetPresent(t *testing.T) {
-	assert.True(t, mirrorCatalogDatasetPresent(map[string]any{
+	assert.True(t, mirrorCatalogDatasetPresent(models.NewPublicFeedObject(map[string]string{
 		"kind":       "catalog_snapshot",
 		"dataset_id": "eval-run-1",
-	}, "eval-run-1"))
-	assert.False(t, mirrorCatalogDatasetPresent(map[string]any{
+	}), "eval-run-1"))
+	assert.False(t, mirrorCatalogDatasetPresent(models.NewPublicFeedObject(map[string]string{
 		"kind":       "catalog_snapshot",
 		"dataset_id": "other-run",
-	}, "eval-run-1"))
-	assert.True(t, mirrorCatalogDatasetPresent(map[string]any{
-		"record": map[string]any{
-			"kind":       "catalog_snapshot",
-			"dataset_id": "nested-run",
-		},
-	}, "nested-run"))
+	}), "eval-run-1"))
+	nested := models.NewPublicFeedObject(map[string]string{
+		"kind":       "catalog_snapshot",
+		"dataset_id": "nested-run",
+	})
+	nestedBytes, err := json.Marshal(nested)
+	require.NoError(t, err)
+	outer := models.PublicFeedObject{"record": nestedBytes}
+	assert.True(t, mirrorCatalogDatasetPresent(outer, "nested-run"))
 }
 
 func TestMirrorProjectionHasDataset(t *testing.T) {
-	projections := []map[string]any{
-		{"kind": "other", "dataset_id": "missing"},
-		{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+	projections := []models.PublicFeedObject{
+		models.NewPublicFeedObject(map[string]string{"kind": "other", "dataset_id": "missing"}),
+		models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"}),
 	}
 	assert.True(t, mirrorProjectionHasDataset(projections, "eval-run-1"))
 	assert.False(t, mirrorProjectionHasDataset(projections, "eval-run-2"))
@@ -168,8 +171,8 @@ func TestHTTPCampaignMirrorProbe_DatasetPresentFromBootstrap(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{
 			Snapshot: models.PublicFeedSnapshot{HighWaterSequence: 1},
-			RecentProjections: []map[string]any{
-				{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+			RecentProjections: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"}),
 			},
 		}))
 	}))
@@ -269,7 +272,7 @@ func TestPublishJSONLViaGateway_ExportsRecords(t *testing.T) {
 	recordsPath := filepath.Join(t.TempDir(), "records.jsonl")
 	recordLine, err := json.Marshal(models.PublicFeedRecordInput{
 		RecordType:  models.PublicFeedRecordTypeProjection,
-		RecordBytes: `{"campaign_id":"campaign-a"}`,
+		RecordBytes: `{"schema_version":"1.3.0","kind":"catalog_snapshot","dataset_id":"campaign-a","quality_state":"live_in_progress","observed_at":"2026-09-21T00:00:00Z"}`,
 	})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(recordsPath, append(recordLine, '\n'), 0o600))
@@ -298,12 +301,14 @@ func TestPublishJSONLViaGateway_ExportsRecords(t *testing.T) {
 func TestFetchPublicMirrorHistory_ReturnsCursorPage(t *testing.T) {
 	historyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "source-1", r.URL.Query().Get("source"))
 		assert.Equal(t, "cursor-1", r.URL.Query().Get("cursor"))
 		assert.Equal(t, "25", r.URL.Query().Get("limit"))
+		assert.Equal(t, "catalog_snapshot", r.URL.Query().Get("kind"))
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
-			Items: []map[string]any{
-				{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+			Items: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"}),
 			},
 			Cursor:  "cursor-2",
 			HasMore: true,
@@ -315,7 +320,7 @@ func TestFetchPublicMirrorHistory_ReturnsCursorPage(t *testing.T) {
 	publicMirrorHistoryURL = historyServer.URL
 	t.Cleanup(func() { publicMirrorHistoryURL = originalHistory })
 
-	page, err := fetchPublicMirrorHistory(context.Background(), nil, "cursor-1", 25)
+	page, err := fetchPublicMirrorHistory(context.Background(), nil, "source-1", "cursor-1", 25)
 	require.NoError(t, err)
 	assert.True(t, page.HasMore)
 	assert.Equal(t, "cursor-2", page.Cursor)
@@ -332,8 +337,8 @@ func TestHTTPCampaignMirrorProbe_DatasetPresentFromHistory(t *testing.T) {
 	historyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
-			Items: []map[string]any{
-				{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"},
+			Items: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"}),
 			},
 		}))
 	}))
@@ -353,4 +358,74 @@ func TestHTTPCampaignMirrorProbe_DatasetPresentFromHistory(t *testing.T) {
 	present, err := probe.DatasetPresent(context.Background(), "eval-run-history")
 	require.NoError(t, err)
 	assert.True(t, present)
+}
+
+func TestHTTPCampaignMirrorProbe_IndexesMirrorOnceForMultipleDatasets(t *testing.T) {
+	var bootstrapRequests atomic.Int32
+	var historyRequests atomic.Int32
+	bootstrapServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bootstrapRequests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{
+			Snapshot: models.PublicFeedSnapshot{HighWaterSequence: 2},
+			RecentProjections: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-recent"}),
+			},
+		}))
+	}))
+	historyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		historyRequests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
+			Items: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"}),
+			},
+		}))
+	}))
+	t.Cleanup(bootstrapServer.Close)
+	t.Cleanup(historyServer.Close)
+
+	originalBootstrap := publicMirrorBootstrapURL
+	originalHistory := publicMirrorHistoryURL
+	publicMirrorBootstrapURL = bootstrapServer.URL
+	publicMirrorHistoryURL = historyServer.URL
+	t.Cleanup(func() {
+		publicMirrorBootstrapURL = originalBootstrap
+		publicMirrorHistoryURL = originalHistory
+	})
+
+	probe := newHTTPCampaignMirrorProbe(context.Background())
+	for datasetID, expected := range map[string]bool{
+		"eval-run-recent":  true,
+		"eval-run-history": true,
+		"eval-run-missing": false,
+	} {
+		present, err := probe.DatasetPresent(context.Background(), datasetID)
+		require.NoError(t, err)
+		assert.Equal(t, expected, present)
+	}
+	assert.Equal(t, int32(1), bootstrapRequests.Load())
+	assert.Equal(t, int32(1), historyRequests.Load())
+}
+
+func TestFetchPublicMirrorBootstrap_RetriesRateLimit(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, constants.ErrPublicFeedRateLimited.Error(), http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{}))
+	}))
+	t.Cleanup(server.Close)
+
+	originalBootstrap := publicMirrorBootstrapURL
+	publicMirrorBootstrapURL = server.URL
+	t.Cleanup(func() { publicMirrorBootstrapURL = originalBootstrap })
+
+	_, err := fetchPublicMirrorBootstrap(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), requests.Load())
 }

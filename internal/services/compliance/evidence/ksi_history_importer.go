@@ -186,7 +186,7 @@ func validCertificationClass(class compliance.CertificationClass) bool {
 
 func validKSIStatus(status compliance.KSIStatus) bool {
 	switch status {
-	case compliance.KSIStatusSatisfied, compliance.KSIStatusNotSatisfied, compliance.KSIStatusNotApplicable:
+	case compliance.KSIStatusSatisfied, compliance.KSIStatusNotSatisfied, compliance.KSIStatusUnverifiable, compliance.KSIStatusNotApplicable:
 		return true
 	default:
 		return false

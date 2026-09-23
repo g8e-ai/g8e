@@ -86,22 +86,35 @@ func newImporterFixture(t *testing.T) *importerFixture {
 // the signed receipt.
 func (f *importerFixture) addSignedReceipt(t *testing.T) (string, *operatorv1.ActionReceipt) {
 	t.Helper()
+	return f.addSignedReceiptWithProtocolChain(t, false)
+}
+
+func (f *importerFixture) addSignedReceiptWithProtocolChain(t *testing.T, includeProtocolChain bool) (string, *operatorv1.ActionReceipt) {
+	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	signerKeyID := hex.EncodeToString(pub)
 	txID := "tx-receipt-1"
+	txHash := "hash-" + txID
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId:    txID,
-		TransactionHash:  "hash-" + txID,
+		TransactionHash:  txHash,
 		SignerKeyId:      signerKeyID,
 		ExecutedAtUnixMs: 1_700_000_001_000,
 	}
-	// Sign the receipt using the governance canonicalization.
+	if includeProtocolChain {
+		receipt.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
+		receipt.L2Status = operatorv1.L2Status_L2_STATUS_NOT_REQUIRED
+		receipt.L3Status = operatorv1.L3Status_L3_STATUS_NOT_REQUIRED
+		receipt.DeterministicStageEvidence = []*operatorv1.DeterministicStageEvidence{
+			{StageId: txID + ":L1", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED, TransactionId: txID, TransactionHash: txHash, InvestigationId: "investigation-1", ParentStageId: txID + ":L4", ActionType: "FILE_EDIT"},
+			{StageId: txID + ":L4", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED, TransactionId: txID, TransactionHash: txHash, InvestigationId: "investigation-1", ActionType: "FILE_EDIT"},
+		}
+	}
 	payload, err := governance.CanonicalizeActionReceipt(receipt)
 	require.NoError(t, err)
 	receipt.Signature = hex.EncodeToString(ed25519.Sign(priv, payload))
 
-	// Build and sign the persistence attestation.
 	attestation := &operatorv1.ReceiptPersistenceAttestation{
 		TransactionId:          receipt.TransactionId,
 		ReceiptSignatureDigest: governance.SignatureDigest([]string{receipt.Signature}),
@@ -121,7 +134,6 @@ func (f *importerFixture) addSignedReceipt(t *testing.T) (string, *operatorv1.Ac
 	ref := "action-receipt:sha256:" + digestHex
 	f.reader.files[runArtifactPath(f.runID, constants.DemoRunReceiptsDirname, digestHex+constants.FileExtJSON)] = receiptBody
 
-	// Write the persistence attestation as a separate artifact.
 	persistenceBody, err := compliancev1.MarshalCanonical(attestation)
 	require.NoError(t, err)
 	persistenceDigest := sha256.Sum256(persistenceBody)
@@ -129,9 +141,13 @@ func (f *importerFixture) addSignedReceipt(t *testing.T) (string, *operatorv1.Ac
 	persistenceRef := "receipt-persistence:sha256:" + persistenceDigestHex
 	f.reader.files[runArtifactPath(f.runID, constants.DemoRunPersistenceDirname, persistenceDigestHex+constants.FileExtJSON)] = persistenceBody
 
-	// Link the result to both the receipt and persistence artifacts.
 	result := f.decodeResult(t)
 	result.ReceiptRefs = append(result.ReceiptRefs, ref, persistenceRef)
+	if includeProtocolChain {
+		chain, chainErr := governance.ValidateDeterministicProtocolChain(receipt)
+		require.NoError(t, chainErr)
+		result.ProtocolChainRefs = append(result.ProtocolChainRefs, chain.ContentReference)
+	}
 	f.encodeResult(t, result)
 
 	return ref, receipt
@@ -350,6 +366,28 @@ func TestDemoRunImporter_Import_LoadsSignedReceipt(t *testing.T) {
 	assert.Equal(t, ArtifactTypeActionReceipt, receiptNode.ArtifactType)
 	assert.Equal(t, VerificationStatusVerified, receiptNode.VerificationStatus)
 	assert.Equal(t, constants.DemoRunVerifierID, receiptNode.VerifierID)
+}
+
+func TestDemoRunImporter_Import_LoadsVerifiedProtocolChain(t *testing.T) {
+	fix := newImporterFixture(t)
+	receiptRef, receipt := fix.addSignedReceiptWithProtocolChain(t, true)
+	chain, err := governance.ValidateDeterministicProtocolChain(receipt)
+	require.NoError(t, err)
+
+	nodes, err := NewDemoRunImporter(fix.reader, fix.runID, fix.source).Import(context.Background())
+	require.NoError(t, err)
+
+	var chainNode *EvidenceNode
+	for idx := range nodes {
+		if nodes[idx].ArtifactID == chain.ContentReference {
+			chainNode = &nodes[idx]
+		}
+	}
+	require.NotNil(t, chainNode)
+	assert.Equal(t, ArtifactTypeProtocolChain, chainNode.ArtifactType)
+	assert.Equal(t, VerificationStatusVerified, chainNode.VerificationStatus)
+	assert.Equal(t, receipt.GetTransactionId(), chainNode.TransactionID)
+	assert.Equal(t, []string{receiptRef}, chainNode.References)
 }
 
 func TestDemoRunImporter_Import_ReceiptReferencesPersistence(t *testing.T) {
@@ -844,7 +882,7 @@ func TestDemoRunImporter_Import_ImportsAndLinksManifestScenarioDefinitions(t *te
 	assert.Equal(t, "g8e.compliance.v1.DemoScenarioDefinition", definitionNode.SchemaRef)
 	assert.Equal(t, fix.demoID, definitionNode.ProducerIdentity)
 	assert.Equal(t, fix.scopeID, definitionNode.ScopeID)
-	assert.Equal(t, fix.runID, definitionNode.RunID)
+	assert.Empty(t, definitionNode.RunID)
 	assert.Equal(t, "scenario-1", definitionNode.ScenarioID)
 	assert.Equal(t, VerificationStatusVerified, definitionNode.VerificationStatus)
 	assert.Equal(t, constants.ComplianceBundleDemoDefinitionsFilename+"#1", definitionNode.BundlePath)

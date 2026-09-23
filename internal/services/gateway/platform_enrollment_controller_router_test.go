@@ -33,6 +33,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -55,6 +56,7 @@ import (
 // middleware chain.
 type platformEnrollmentRouterEnv struct {
 	svc         *GatewayModeService
+	testEnv     *platformEnrollmentTestEnv
 	httpsRouter http.Handler
 	httpRouter  http.Handler
 	enrollSvc   *PlatformEnrollmentService
@@ -77,6 +79,7 @@ func setupPlatformEnrollmentRouterEnv(t *testing.T) *platformEnrollmentRouterEnv
 
 	return &platformEnrollmentRouterEnv{
 		svc:         env.svc,
+		testEnv:     env,
 		httpsRouter: h.buildPublicRouter(),
 		httpRouter:  h.buildHTTPRouter(),
 		enrollSvc:   env.enrollSvc,
@@ -713,11 +716,11 @@ func TestPlatformEnrollmentRouter_CSRValidationRejectsInvalidBody(t *testing.T) 
 	})
 
 	t.Run("invalid component kind returns 400", func(t *testing.T) {
-		body, err := json.Marshal(map[string]interface{}{
-			"component_kind": "unknown",
-			"instance_id":    "x",
-			"hostname":       "x.local",
-			"app":            map[string]string{"csr_pem": "invalid"},
+		body, err := json.Marshal(models.PlatformEnrollmentCreateRequest{
+			ComponentKind: models.PlatformComponentKind("unknown"),
+			InstanceID:    "x",
+			Hostname:      "x.local",
+			App:           &models.PlatformAppCSRPayload{CSRPEM: "invalid"},
 		})
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPlatformEnrollmentRequest, bytes.NewReader(body))
@@ -744,6 +747,7 @@ func TestPlatformEnrollmentRouter_MethodEnforcement(t *testing.T) {
 		{"complete rejects GET", constants.APIPaths.AuthPlatformEnrollmentComplete, http.MethodGet},
 		{"pending rejects POST", constants.APIPaths.AuthPlatformEnrollmentPending, http.MethodPost},
 		{"decision rejects GET", constants.APIPaths.AuthPlatformEnrollmentDecision, http.MethodGet},
+		{"revoke rejects GET", constants.APIPaths.AuthPlatformEnrollmentRevoke, http.MethodGet},
 	}
 
 	for _, tc := range cases {
@@ -759,4 +763,90 @@ func TestPlatformEnrollmentRouter_MethodEnforcement(t *testing.T) {
 				"wrong method must return 405")
 		})
 	}
+}
+
+func postPlatformEnrollmentRevoke(t *testing.T, env *platformEnrollmentRouterEnv, cookie *http.Cookie, requestID string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(models.PlatformEnrollmentRevokeRequest{RequestID: requestID, Reason: "retired"})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPlatformEnrollmentRevoke, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rr := httptest.NewRecorder()
+	env.httpsRouter.ServeHTTP(rr, req)
+	return rr
+}
+
+func TestPlatformEnrollmentRouter_RevokeAuthorizationAndRequestStates(t *testing.T) {
+	env := setupPlatformEnrollmentRouterEnv(t)
+	ownerCookie := createWebSessionCookie(t, env, env.ownerID)
+
+	t.Run("missing identity is rejected", func(t *testing.T) {
+		rr := postPlatformEnrollmentRevoke(t, env, nil, "missing-request")
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+
+	t.Run("non-owner identity is rejected", func(t *testing.T) {
+		secondUser, err := env.userSvc.CreateUser()
+		require.NoError(t, err)
+		rr := postPlatformEnrollmentRevoke(t, env, createWebSessionCookie(t, env, secondUser.ID), "missing-request")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("missing request is not found", func(t *testing.T) {
+		rr := postPlatformEnrollmentRevoke(t, env, ownerCookie, "missing-request")
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	csr, _ := generateAppCSRAndKey(t)
+	pending, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+		ComponentKind: models.PlatformComponentDashboard,
+		InstanceID:    "dashboard-revoke-pending",
+		Hostname:      "dashboard-revoke-pending.local",
+		App:           &models.PlatformAppCSRPayload{CSRPEM: csr},
+	}, "https://gateway.local/console")
+	require.NoError(t, err)
+
+	t.Run("pending request is rejected", func(t *testing.T) {
+		rr := postPlatformEnrollmentRevoke(t, env, ownerCookie, pending.RequestID)
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrPlatformEnrollmentNotApproved.Error())
+	})
+
+	deniedCSR, _ := generateAppCSRAndKey(t)
+	denied, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+		ComponentKind: models.PlatformComponentDashboard,
+		InstanceID:    "dashboard-revoke-denied",
+		Hostname:      "dashboard-revoke-denied.local",
+		App:           &models.PlatformAppCSRPayload{CSRPEM: deniedCSR},
+	}, "https://gateway.local/console")
+	require.NoError(t, err)
+	_, err = env.enrollSvc.Decide(context.Background(), env.ownerID, models.PlatformEnrollmentDecisionRequest{
+		RequestID: denied.RequestID,
+		Decision:  models.PlatformEnrollmentDecisionDeny,
+	})
+	require.NoError(t, err)
+
+	t.Run("denied request is rejected", func(t *testing.T) {
+		rr := postPlatformEnrollmentRevoke(t, env, ownerCookie, denied.RequestID)
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrPlatformEnrollmentRequestDenied.Error())
+	})
+
+	completedCSR, completedKey := generateAppCSRAndKey(t)
+	requestID, token, approved := createAndApproveRequest(t, env.testEnv, models.PlatformComponentDashboard, "dashboard-revoke-completed", "dashboard-revoke-completed.local", completedCSR, "", "")
+	_, err = env.enrollSvc.Complete(context.Background(), token, models.PlatformEnrollmentProofs{App: signCompletionTranscript(t, approved, completedKey)})
+	require.NoError(t, err)
+
+	t.Run("completed and already revoked requests succeed", func(t *testing.T) {
+		for range 2 {
+			rr := postPlatformEnrollmentRevoke(t, env, ownerCookie, requestID)
+			require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+			var response models.PlatformEnrollmentRevokeResponse
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &response))
+			assert.Equal(t, models.PlatformEnrollmentStateRevoked, response.State)
+		}
+	})
 }

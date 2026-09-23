@@ -19,8 +19,8 @@ import (
 
 func TestImportAssignmentResultFromTrace_CompletedHomogeneousRole(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
-	req := homogeneousAssignmentExecutionRequest("primary")
+	trace := completedHomogeneousTrace(t, "primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	evidence, err := BuildAssignmentTraceEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, trace, time.Unix(1_700_000_000, 0).UTC())
 	require.NoError(t, err)
 	result, err := ImportAssignmentResultFromTrace(req, trace, evidence, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
@@ -35,12 +35,12 @@ func TestImportAssignmentResultFromTrace_CompletedHomogeneousRole(t *testing.T) 
 
 func TestImportAssignmentResultFromTrace_RoleNotInvokedIsPartial(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["role_outcome"] = "role_not_invoked"
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, result.GetLifecycleStatus())
@@ -48,14 +48,14 @@ func TestImportAssignmentResultFromTrace_RoleNotInvokedIsPartial(t *testing.T) {
 
 func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithoutModelCallsIsProviderFailed(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["status"] = "failed"
 	trace["role_outcome"] = "role_not_invoked"
 	trace["model_calls"] = []any{}
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED, result.GetLifecycleStatus())
@@ -63,19 +63,20 @@ func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithoutModelCallsIs
 
 func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithModelCallsIsPartial(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["status"] = "failed"
 	trace["role_outcome"] = "role_not_invoked"
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, result.GetLifecycleStatus())
 }
 
-func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionRequest {
+func homogeneousAssignmentExecutionRequest(t *testing.T, role string) AssignmentExecutionRequest {
+	t.Helper()
 	assignment := &evalv1.EvaluationAssignment{
 		AssignmentId: "assignment-1",
 		RunId:        "run-1",
@@ -101,7 +102,7 @@ func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionReque
 			ScenarioID: "instruction-exact-format",
 			UserPrompt: "Reply with exactly: NORTH-STAR-OK",
 		},
-		ScenarioGold:  loadScenarioGold("instruction-exact-format"),
+		ScenarioGold:  loadScenarioGold(t, "instruction-exact-format"),
 		GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		Binding: CampaignExecutionBinding{
 			InferenceOperatorSessionID: "session-1",
@@ -115,9 +116,9 @@ func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionReque
 
 func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["tool_decisions"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"decision_id": "exec-1",
 			"tool_name":   "recursive_grep_search",
 			"selected":    true,
@@ -125,7 +126,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 		},
 	}
 	trace["tool_calls"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"call_id":          "exec-1",
 			"tool_name":        "recursive_grep_search",
 			"arguments_hash":   "a" + repeatHex('a', 63),
@@ -135,7 +136,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 		},
 	}
 	trace["governed_actions"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"binding_id":          "exec-1",
 			"transaction_id":      "exec-1",
 			"operator_id":         "operator-1",
@@ -146,7 +147,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	req.ScenarioTools = ScenarioToolExpectations{ExpectedTools: []string{"recursive_grep_search"}}
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Now().UTC(), func(prefix string) string { return prefix })
 	require.NoError(t, err)
@@ -157,8 +158,8 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 
 func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
-	call := trace["model_calls"].([]any)[0].(map[string]any)
+	trace := completedHomogeneousTrace(t, "primary")
+	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
 	call["usage_reported"] = true
 	call["input_tokens"] = float64(0)
 	call["output_tokens"] = float64(12)
@@ -169,7 +170,7 @@ func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testi
 	call["governed_output_hash"] = "d" + repeatHex('d', 63)
 	call["monotonic_start"] = 10.25
 	call["monotonic_end"] = 11.5
-	trace["policy_decisions"] = []any{map[string]any{
+	trace["policy_decisions"] = []any{EvaluationTrace{
 		"decision_id": "policy-1",
 		"tool_name":   "",
 		"outcome":     "deny",
@@ -179,7 +180,7 @@ func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testi
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 
-	result, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest("primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	result, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	inference := result.GetModelInferences()[0]
 	assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED, inference.GetUsageAvailability())
@@ -199,8 +200,8 @@ func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testi
 
 func TestImportAssignmentResultFromTrace_RejectsUnknownPolicyOutcome(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
-	trace["policy_decisions"] = []any{map[string]any{
+	trace := completedHomogeneousTrace(t, "primary")
+	trace["policy_decisions"] = []any{EvaluationTrace{
 		"decision_id": "policy-1",
 		"tool_name":   "read_file",
 		"outcome":     "maybe",
@@ -209,7 +210,7 @@ func TestImportAssignmentResultFromTrace_RejectsUnknownPolicyOutcome(t *testing.
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	_, err = ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest("primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix })
+	_, err = ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix })
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown outcome")
 }
@@ -235,14 +236,15 @@ func TestDurationSecondsToNanosChecked_RoundsProviderTelemetryFloats(t *testing.
 	}
 }
 
-func completedHomogeneousTrace(role string) map[string]any {
-	trace := map[string]any{
+func completedHomogeneousTrace(t *testing.T, role string) EvaluationTrace {
+	t.Helper()
+	trace := EvaluationTrace{
 		"schema_version":    "1",
 		"chat_execution_id": "exec-1",
 		"status":            "completed",
 		"completed_at":      "2026-09-15T00:00:00+00:00",
 		"role_outcome":      "invoked",
-		"evaluation_context": map[string]any{
+		"evaluation_context": EvaluationTrace{
 			"campaign_id":                "campaign-1",
 			"run_id":                     "run-1",
 			"assignment_id":              "assignment-1",
@@ -253,11 +255,11 @@ func completedHomogeneousTrace(role string) map[string]any {
 			"evaluation_lane":            "model_role",
 			"designated_model_role":      role,
 		},
-		"controlled_role_assignment": map[string]any{
+		"controlled_role_assignment": EvaluationTrace{
 			"designated_model_role": role,
 		},
 		"model_calls": []any{
-			map[string]any{
+			EvaluationTrace{
 				"agent_role":              "sage",
 				"model_role":              role,
 				"provider":                "G8EProvider",
@@ -270,9 +272,7 @@ func completedHomogeneousTrace(role string) map[string]any {
 		},
 	}
 	digest, err := ComputeChatProbeTraceDigest(trace)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	return trace
 }

@@ -9,7 +9,7 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,7 +21,7 @@ import (
 
 func TestGatewaySettingsCmdWithConfig_ConfigLoadError(t *testing.T) {
 	failLoader := func(string) (*config.Config, error) {
-		return nil, errors.New("config load error")
+		return nil, fmt.Errorf("config load error")
 	}
 
 	cmd := gatewaySettingsCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
@@ -38,7 +38,7 @@ func TestGatewaySettingsCmdWithConfig_ClientCreationError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	cmd := gatewaySettingsCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")), newFileSvc)
+	cmd := gatewaySettingsCmdWithConfig(loader, failingClientFactory(fmt.Errorf("client creation error")), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -52,7 +52,7 @@ func TestGatewaySettingsCmdWithConfig_GetRequestError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	client := &mockAPIClient{getErr: errors.New("network error")}
+	client := &mockAPIClient{getErr: fmt.Errorf("network error")}
 	cmd := gatewaySettingsCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)

@@ -49,6 +49,7 @@ var eventToAction = map[EventType]ActionType{
 	EventPlatformEnrollmentIssueRequested:                ActionTypePlatformEnrollmentIssue,
 	EventPlatformEnrollmentPersistPolicyRequested:        ActionTypePlatformEnrollmentPersistPolicy,
 	EventPlatformEnrollmentCreateSessionRequested:        ActionTypePlatformEnrollmentCreateSession,
+	EventPlatformEnrollmentRevokeRequested:               ActionTypePlatformEnrollmentRevoke,
 }
 
 var actionToEvent map[ActionType]EventType

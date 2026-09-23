@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -49,8 +50,7 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := createTestVault(t, fileSvc, privKey)
 
 	cfg := &storage.AuditStoreConfig{
 		DBPath:               "test_audit.db",
@@ -65,14 +65,13 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	return store
 }
 
-// createTestVault creates an unlocked vault in the given directory.
-func createTestVault(t *testing.T, dataDir string, privateKey []byte) *vault.Vault {
+// createTestVault creates an unlocked vault in the runtime tree.
+func createTestVault(t *testing.T, fileSvc fs.RuntimeFileService, privateKey []byte) *vault.Vault {
 	t.Helper()
-	require.NoError(t, os.MkdirAll(dataDir, 0700))
 	header, _, err := vault.NewVaultHeader(privateKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(dataDir))
-	v, err := vault.NewVault(&vault.VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, header.Save(fileSvc))
+	v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	require.NoError(t, v.Unlock(privateKey))
 	t.Cleanup(func() { v.Close() })
@@ -249,9 +248,9 @@ func TestReportVerification_ModifiedSignedFieldFails(t *testing.T) {
 	rows, err := cl.ListCommitments()
 	require.NoError(t, err)
 	var attestation operatorv1.CommitmentAttestation
-	require.NoError(t, json.Unmarshal(rows[0].AttestationJSON, &attestation))
+	require.NoError(t, protojson.Unmarshal(rows[0].AttestationJSON, &attestation))
 	attestation.TargetResource = "/tampered"
-	payload, err := json.Marshal(&attestation)
+	payload, err := protojson.Marshal(&attestation)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE commitment_ledger SET attestation_json = ? WHERE id = 1`, payload)
 	require.NoError(t, err)
@@ -282,13 +281,13 @@ func TestReportVerification_MalformedAuditorKeyIDFails(t *testing.T) {
 	rows, err := cl.ListCommitments()
 	require.NoError(t, err)
 	var attestation operatorv1.CommitmentAttestation
-	require.NoError(t, json.Unmarshal(rows[0].AttestationJSON, &attestation))
+	require.NoError(t, protojson.Unmarshal(rows[0].AttestationJSON, &attestation))
 	attestation.AuditorKeyId = "not-hex"
 	canonical, err := governance.CanonicalizeCommitmentAttestation(&attestation)
 	require.NoError(t, err)
 	hash := sha256.Sum256(canonical)
 	attestation.Hash = hex.EncodeToString(hash[:])
-	payload, err := json.Marshal(&attestation)
+	payload, err := protojson.Marshal(&attestation)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE commitment_ledger SET hash = ?, auditor_key_id = ?, attestation_json = ? WHERE id = 1`, attestation.Hash, attestation.AuditorKeyId, payload)
 	require.NoError(t, err)
@@ -308,9 +307,9 @@ func TestReportVerification_InvalidAuditorSignatureFails(t *testing.T) {
 	rows, err := cl.ListCommitments()
 	require.NoError(t, err)
 	var attestation operatorv1.CommitmentAttestation
-	require.NoError(t, json.Unmarshal(rows[0].AttestationJSON, &attestation))
+	require.NoError(t, protojson.Unmarshal(rows[0].AttestationJSON, &attestation))
 	attestation.Signature = "00"
-	payload, err := json.Marshal(&attestation)
+	payload, err := protojson.Marshal(&attestation)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE commitment_ledger SET signature = ?, attestation_json = ? WHERE id = 1`, attestation.Signature, payload)
 	require.NoError(t, err)

@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -25,7 +25,7 @@ import (
 
 func TestEnrollCmdWithConfig_ConfigLoaderError(t *testing.T) {
 	failLoader := func(string) (*config.Config, error) {
-		return nil, errors.New("config load error")
+		return nil, fmt.Errorf("config load error")
 	}
 
 	cmd := enrollUserCmdWithConfig(failLoader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
@@ -89,7 +89,7 @@ func TestEnrollCmdWithConfig_UsesInjectedConfigLoader(t *testing.T) {
 	called := false
 	loader := func(string) (*config.Config, error) {
 		called = true
-		return nil, errors.New("injected error")
+		return nil, fmt.Errorf("injected error")
 	}
 
 	cmd := enrollUserCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)

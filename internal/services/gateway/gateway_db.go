@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -86,11 +87,17 @@ type CanonicalDBService struct {
 }
 
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.
-// vaultKeyPath is the path to the vault private key file (hex-encoded).
+// vaultKeyPath is an optional explicit vault key path. When empty, the default
+// runtime-relative key under vault/ is used. Absolute paths are treated as
+// explicit external inputs; relative paths resolve through fileSvc.
 // ks is an optional pre-initialized keystore (non-nil for tests to bypass OS keychain,
 // nil for production which creates via OS keychain).
-func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
-	dbPath := filepath.Join(dataDir, constants.DbFilename)
+func OpenCanonicalDBService(logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
+	if fileSvc == nil {
+		return nil, fmt.Errorf("%w: runtime file service", constants.ErrMissingRequiredField)
+	}
+
+	dbPath := fileSvc.Resolve(constants.CanonicalDBRelPath)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
 	db, err := sqliteutil.OpenDB(cfg, logger)
@@ -99,7 +106,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	}
 
 	vaultConfig := &vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  logger,
 	}
 	encryptionVault, err := vault.NewVault(vaultConfig)
@@ -108,26 +115,26 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 		return nil, fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
 	}
 
-	// Resolve vault key path.
-	if vaultKeyPath == "" {
-		vaultKeyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
+	vaultDirAbs := fileSvc.Resolve(constants.VaultDirname)
+	resolvedVaultKeyPath, err := resolveVaultKeyPath(vaultKeyPath, fileSvc)
+	if err != nil {
+		db.Close()
+		return nil, err
 	}
-	if !filepath.IsAbs(vaultKeyPath) {
-		vaultKeyPath = filepath.Join(dataDir, vaultKeyPath)
-	}
+	vaultKeyPath = resolvedVaultKeyPath
 
 	// Auto-initialize vault on first run. If no vault header exists, generate
 	// a random key, create the vault header, and write the key file. This
 	// mirrors the `g8e vault init` CLI command and ensures the vault is always
 	// ready without requiring a separate initialization step — same pattern as
 	// SQLite creating the database file on first open.
-	if !vault.VaultHeaderExists(vaultDir) {
-		relVaultDir, err := fileSvc.Rel(vaultDir)
-		if err != nil {
-			db.Close()
-			return nil, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
-		}
-		if err := fileSvc.MkdirAll(context.Background(), relVaultDir, constants.PermDirPrivate); err != nil {
+	headerExists, err := vault.VaultHeaderExists(fileSvc)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("gateway: check vault header: %w", err)
+	}
+	if !headerExists {
+		if err := fileSvc.MkdirAll(context.Background(), constants.VaultDirname, constants.PermDirPrivate); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
@@ -145,27 +152,21 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
 		}
 
-		if err := header.Save(vaultDir); err != nil {
+		if err := header.Save(fileSvc); err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
 			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
 		}
 
 		keyData := []byte(hex.EncodeToString(initKey) + "\n")
-		relVaultKeyPath, err := fileSvc.Rel(vaultKeyPath)
-		if err != nil {
-			db.Close()
-			vault.SecureZero(initKey)
-			return nil, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
-		}
-		if err := fileSvc.WriteFile(context.Background(), relVaultKeyPath, keyData, constants.PermFilePrivate); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), constants.DefaultVaultKeyRelPath, keyData, constants.PermFilePrivate); err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
 			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
 		}
 
 		vault.SecureZero(initKey)
-		logger.Info("Vault auto-initialized on first run", "vault_dir", vaultDir, "key_path", vaultKeyPath)
+		logger.Info("Vault auto-initialized on first run", "vault_dir", vaultDirAbs, "key_path", vaultKeyPath)
 	}
 
 	// Unlock vault. Encryption is required for secure data storage at rest —
@@ -181,14 +182,14 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	if err := encryptionVault.Unlock(privateKey); err != nil {
 		db.Close()
 		if errors.Is(err, constants.ErrVaultNotInitialized) {
-			return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
+			return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDirAbs)
 		}
 		if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
 			return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
 		}
 		return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
 	}
-	logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
+	logger.Info("Vault unlocked successfully", "vault_dir", vaultDirAbs)
 
 	// Initialize SQLAuditStore for transaction-native audit recording
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
@@ -241,6 +242,17 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 
 	logger.Info("Gateway database initialized", "path", dbPath)
 	return svc, nil
+}
+
+func resolveVaultKeyPath(vaultKeyPath string, fileSvc fs.RuntimeFileService) (string, error) {
+	vaultKeyPath = strings.TrimSpace(vaultKeyPath)
+	if vaultKeyPath == "" {
+		return fileSvc.Resolve(constants.DefaultVaultKeyRelPath), nil
+	}
+	if filepath.IsAbs(vaultKeyPath) {
+		return vaultKeyPath, nil
+	}
+	return fileSvc.Resolve(filepath.ToSlash(vaultKeyPath)), nil
 }
 
 func (s *CanonicalDBService) initStateRoot() error {

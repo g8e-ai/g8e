@@ -23,7 +23,10 @@ import (
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
-const frameworkTestSHA256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+const (
+	frameworkTestSHA256      = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	RegressionMarkerAfterFix = "REGRESSION: AFTER FIX"
+)
 
 func frameworkTestAssertion(id string) *compliancev1.ControlAssertionDefinition {
 	return &compliancev1.ControlAssertionDefinition{
@@ -164,22 +167,31 @@ func frameworkGraderBaseRequest(t *testing.T) evidence.FrameworkGradingRequest {
 	}
 }
 
-func TestGradeFrameworkControls_SatisfiesControlWhenAllAssertionsSatisfied(t *testing.T) {
-	request := frameworkGraderBaseRequest(t)
-	assessments, err := evidence.GradeFrameworkControls(context.Background(), request)
-	require.NoError(t, err)
-	assert.Len(t, assessments, 2)
-	for _, assessment := range assessments {
-		assert.Equal(t, "satisfied", assessment.GetStatus())
-		assert.Equal(t, "L3", assessment.GetEvidenceLevel())
-		assert.NotEmpty(t, assessment.GetMappingRefs())
-		assert.NotEmpty(t, assessment.GetAssertionAssessmentRefs())
-		assert.NoError(t, catalog.ValidateControlAssessment(assessment, "scope-1", request.Frameworks, request.Crosswalks))
+func TestGradeFrameworkControls_DoesNotSatisfyControlFromInsufficientMappings(t *testing.T) {
+	tests := []string{"supporting", "partial"}
+	for _, mappingType := range tests {
+		t.Run(mappingType, func(t *testing.T) {
+			request := frameworkGraderBaseRequest(t)
+			for _, mapping := range request.Crosswalks.GetMappings() {
+				mapping.MappingType = mappingType
+			}
+			assessments, err := evidence.GradeFrameworkControls(context.Background(), request)
+			require.NoError(t, err)
+			assert.Len(t, assessments, 2)
+			for _, assessment := range assessments {
+				assert.Equal(t, "unverifiable", assessment.GetStatus(), RegressionMarkerAfterFix)
+				assert.Equal(t, "L0", assessment.GetEvidenceLevel(), RegressionMarkerAfterFix)
+				assert.NotEmpty(t, assessment.GetMappingRefs())
+				assert.NotEmpty(t, assessment.GetAssertionAssessmentRefs())
+				assert.NoError(t, catalog.ValidateControlAssessment(assessment, "scope-1", request.Frameworks, request.Crosswalks))
+			}
+		})
 	}
 }
 
-func TestGradeFrameworkControls_NotSatisfiedWhenAnyAssertionNotSatisfied(t *testing.T) {
+func TestGradeFrameworkControls_NotSatisfiedWhenAnyFullyMappedAssertionNotSatisfied(t *testing.T) {
 	request := frameworkGraderBaseRequest(t)
+	request.Crosswalks.Mappings[0].MappingType = "full"
 	request.AssertionAssessments[0] = frameworkTestAssessment("G8E-GOV-BLOCK-001", "not_satisfied", "L3")
 	assessments, err := evidence.GradeFrameworkControls(context.Background(), request)
 	require.NoError(t, err)
@@ -205,6 +217,7 @@ func TestGradeFrameworkControls_StatusPrecedenceMatrix(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			request := frameworkGraderBaseRequest(t)
+			request.Crosswalks.Mappings[0].MappingType = "full"
 			request.Crosswalks.Mappings[0].AssertionRefs = append(request.Crosswalks.Mappings[0].AssertionRefs, &compliancev1.VersionedReference{Id: "G8E-GOV-ALLOW-001", Version: "1.0.0"})
 			request.AssertionAssessments[0] = frameworkTestAssessment("G8E-GOV-BLOCK-001", tt.statuses[0], "L3")
 			request.AssertionAssessments[1] = frameworkTestAssessment("G8E-GOV-ALLOW-001", tt.statuses[1], "L3")
@@ -231,6 +244,7 @@ func TestGradeFrameworkControls_CustomerAttestationRequiredWhenAssertionRequires
 	assertions, frameworks, crosswalks := frameworkTestCatalogs(t)
 	frameworks.Frameworks[0].Controls[0].Responsibility = "customer"
 	crosswalks.Mappings[0].Responsibility = "customer"
+	crosswalks.Mappings[0].MappingType = "full"
 	require.NoError(t, catalog.ValidateCatalogSet(assertions, frameworks, crosswalks))
 	request := evidence.FrameworkGradingRequest{
 		ScopeID:     "scope-1",
@@ -291,8 +305,21 @@ func TestGradeFrameworkControls_UnverifiableWhenAllAssertionsUnverifiable(t *tes
 	}
 }
 
+func TestGradeFrameworkControls_UnverifiableWhenFullMappingRequiresHigherEvidenceLevel(t *testing.T) {
+	request := frameworkGraderBaseRequest(t)
+	request.Crosswalks.Mappings[0].MappingType = "full"
+	request.Crosswalks.Mappings[0].RequiredEvidenceLevel = "L4"
+	assessments, err := evidence.GradeFrameworkControls(context.Background(), request)
+	require.NoError(t, err)
+	assessment := findFrameworkAssessmentByControl(t, assessments, "KSI-MLA-07")
+	assert.Equal(t, "unverifiable", assessment.GetStatus(), RegressionMarkerAfterFix)
+	assert.Equal(t, "L0", assessment.GetEvidenceLevel(), RegressionMarkerAfterFix)
+	assert.NotEmpty(t, assessment.GetLimitations())
+}
+
 func TestGradeFrameworkControls_EvidenceLevelIsMinimumAcrossAssertions(t *testing.T) {
 	assertions, frameworks, crosswalks := frameworkTestCatalogs(t)
+	crosswalks.Mappings[0].MappingType = "full"
 	crosswalks.Mappings[0].AssertionRefs = append(crosswalks.Mappings[0].AssertionRefs,
 		&compliancev1.VersionedReference{Id: "G8E-GOV-ALLOW-001", Version: "1.0.0"})
 	require.NoError(t, catalog.ValidateCatalogSet(assertions, frameworks, crosswalks))
@@ -556,23 +583,19 @@ func TestGradeFrameworkControls_MultipleMappingsPerControl(t *testing.T) {
 	assessments, err := evidence.GradeFrameworkControls(context.Background(), request)
 	require.NoError(t, err)
 	require.Len(t, assessments, 1)
-	assert.Equal(t, "not_satisfied", assessments[0].GetStatus())
+	assert.Equal(t, "unverifiable", assessments[0].GetStatus())
 	assert.Len(t, assessments[0].GetMappingRefs(), 2)
 	assert.Len(t, assessments[0].GetAssertionAssessmentRefs(), 2)
 }
 
-func TestGradeFrameworkControls_PartialFailureDoesNotHideNotSatisfied(t *testing.T) {
+func TestGradeFrameworkControls_SupportingNegativeDoesNotBecomeControlVerdict(t *testing.T) {
 	request := frameworkGraderBaseRequest(t)
 	request.AssertionAssessments[0] = frameworkTestAssessment("G8E-GOV-BLOCK-001", "satisfied", "L3")
 	request.AssertionAssessments[1] = frameworkTestAssessment("G8E-GOV-ALLOW-001", "not_satisfied", "L3")
 	assessments, err := evidence.GradeFrameworkControls(context.Background(), request)
 	require.NoError(t, err)
 	for _, assessment := range assessments {
-		if assessment.GetControlId() == "KSI-IAM-05" {
-			assert.Equal(t, "not_satisfied", assessment.GetStatus())
-		} else {
-			assert.Equal(t, "satisfied", assessment.GetStatus())
-		}
+		assert.Equal(t, "unverifiable", assessment.GetStatus(), RegressionMarkerAfterFix)
 	}
 }
 

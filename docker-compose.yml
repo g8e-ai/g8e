@@ -16,6 +16,9 @@ networks:
   g8e-net:
     name: g8e-net
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
 
 volumes:
   g8e-gateway-data:
@@ -58,9 +61,9 @@ services:
     ports:
       - "${G8E_HTTP_PORT:-8080}:8080"
       - "${G8E_HTTPS_PORT:-8443}:8443"
-      - "${G8E_PUBLIC_MIRROR_PRIVATE_PORT:-8081}:8081"
-      - "${G8E_PUBLIC_MIRROR_PUBLIC_PORT:-8082}:8082"
-      - "${G8E_EVAL_EXPLORER_PORT:-5173}:5173"
+      - "127.0.0.1:${G8E_PUBLIC_MIRROR_PRIVATE_PORT:-8081}:8081"
+      - "127.0.0.1:${G8E_PUBLIC_MIRROR_PUBLIC_PORT:-8082}:8082"
+      - "127.0.0.1:${G8E_EVAL_EXPLORER_PORT:-5173}:5173"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
       interval: 10s
@@ -75,11 +78,15 @@ services:
       - "gw"
       - "start"
       - "-f"
+      - "--log"
+      - "info"
       - "--public-spectator"
       - "--public-spectator-private-listen"
       - "0.0.0.0:8081"
       - "--public-spectator-public-listen"
       - "0.0.0.0:8082"
+      - "--public-spectator-trusted-proxy-cidr"
+      - "172.28.0.1/32"
       - "--eval-explorer-listen"
       - "0.0.0.0:5173"
       - "--cors-origin"
@@ -90,7 +97,11 @@ services:
       - "${G8E_HOSTNAME:-localhost}"
       - "--passkey-rp-name"
       - "g8e"
-    restart: "no"
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 16384
+        hard: 16384
     deploy:
       resources:
         limits:
@@ -99,32 +110,6 @@ services:
         reservations:
           cpus: '1'
           memory: 512M
-
-  g8e-eval-observer:
-    profiles: [evaluation]
-    image: g8e-gateway
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        target="/observe/$${G8E_EVAL_TARGET}"
-        if [ -L "$$target" ]; then
-          exit 4
-        fi
-        if [ -f "$$target" ]; then
-          cat "$$target" || exit 5
-          exit 0
-        fi
-        exit 3
-    network_mode: none
-    volumes:
-      - g8e-shared-tmp:/observe:ro
-    read_only: true
-    user: "0:0"
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    restart: "no"
 
   g8e-operator:
     # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
@@ -397,6 +382,8 @@ services:
       - "gw"
       - "start"
       - "-f"
+      - "--log"
+      - "info"
       - "--cors-origin"
       - "http://${G8E_USER_HOSTNAME:-localhost}:${G8E_USER_DASHBOARD_PORT:-3001}"
       - "--passkey-rp-origin"

@@ -32,6 +32,24 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
+type inferenceAcceptanceResultJSON struct {
+	Case            string `json:"case"`
+	ProviderAttempt string `json:"provider_attempt"`
+	Stream          bool   `json:"stream"`
+	Status          string `json:"status"`
+	Error           string `json:"error,omitempty"`
+	ProgressEvents  int    `json:"progress_events,omitempty"`
+	ResultDigest    string `json:"result_digest,omitempty"`
+}
+
+type inferenceAcceptanceOutputJSON struct {
+	OperatorSessionID string                          `json:"operator_session_id"`
+	Model             string                          `json:"model"`
+	Passed            int                             `json:"passed"`
+	Failed            int                             `json:"failed"`
+	Cases             []inferenceAcceptanceResultJSON `json:"cases"`
+}
+
 type inferenceEvalDeps struct {
 	configLoader     func(string) (*config.Config, error)
 	fileSvcFactory   func(string, *slog.Logger) (fs.RuntimeFileService, error)
@@ -80,12 +98,18 @@ func gateInferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: inference operator status: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]string{
-					"operator_id":         selected.OperatorID,
-					"operator_session_id": selected.OperatorSessionID,
-					"status":              selected.Status,
-					"gateway":             cfg.OperatorHTTPURL(),
-					"user_id":             authContext.UserID,
+				payload, err := json.MarshalIndent(struct {
+					OperatorID        string `json:"operator_id"`
+					OperatorSessionID string `json:"operator_session_id"`
+					Status            string `json:"status"`
+					Gateway           string `json:"gateway"`
+					UserID            string `json:"user_id"`
+				}{
+					OperatorID:        selected.OperatorID,
+					OperatorSessionID: selected.OperatorSessionID,
+					Status:            selected.Status,
+					Gateway:           cfg.OperatorHTTPURL(),
+					UserID:            authContext.UserID,
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -183,7 +207,7 @@ func gateInferenceEvalRunCmd(deps inferenceEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			results := make([]map[string]any, 0, len(cases))
+			results := make([]inferenceAcceptanceResultJSON, 0, len(cases))
 			failures := 0
 			for _, acceptanceCase := range cases {
 				probeReq := acceptanceCase.Apply(baseReq)
@@ -192,46 +216,45 @@ func gateInferenceEvalRunCmd(deps inferenceEvalDeps) *cobra.Command {
 				ctx, cancel := context.WithTimeout(cmd.Context(), 6*time.Minute)
 				response, progress, runErr := inferenceEvalExecuteProbe(ctx, appClient, probeReq)
 				cancel()
-				entry := map[string]any{
-					"case":             string(acceptanceCase.ID),
-					"provider_attempt": probeReq.ProviderAttemptID,
-					"stream":           probeReq.Stream,
+				entry := inferenceAcceptanceResultJSON{
+					Case:            string(acceptanceCase.ID),
+					ProviderAttempt: probeReq.ProviderAttemptID,
+					Stream:          probeReq.Stream,
 				}
 				if runErr != nil {
-					entry["status"] = "failed"
-					entry["error"] = runErr.Error()
+					entry.Status = "failed"
+					entry.Error = runErr.Error()
 					failures++
 				} else if err := evaluation.ValidateInferenceProbeStream(probeReq, progress, response); err != nil {
-					entry["status"] = "failed"
-					entry["error"] = err.Error()
+					entry.Status = "failed"
+					entry.Error = err.Error()
 					failures++
 				} else if err := evaluation.ValidateInferenceAcceptanceCase(acceptanceCase.ID, response); err != nil {
-					entry["status"] = "failed"
-					entry["error"] = err.Error()
+					entry.Status = "failed"
+					entry.Error = err.Error()
 					failures++
 				} else {
-					entry["status"] = "passed"
-					entry["progress_events"] = len(progress)
-					entry["result_digest"] = response.GetResult().GetResultDigest()
+					entry.Status = "passed"
+					entry.ProgressEvents = len(progress)
+					entry.ResultDigest = response.GetResult().GetResultDigest()
 				}
 				results = append(results, entry)
 				if output.JSONEnabled(cmd) {
 					continue
 				}
-				status := entry["status"].(string)
-				if status == "passed" {
+				if entry.Status == "passed" {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "PASS %s\n", acceptanceCase.ID)
 				} else {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "FAIL %s: %s\n", acceptanceCase.ID, entry["error"])
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "FAIL %s: %s\n", acceptanceCase.ID, entry.Error)
 				}
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"operator_session_id": selected.OperatorSessionID,
-					"model":               model,
-					"passed":              len(cases) - failures,
-					"failed":              failures,
-					"cases":               results,
+				payload, err := json.MarshalIndent(inferenceAcceptanceOutputJSON{
+					OperatorSessionID: selected.OperatorSessionID,
+					Model:             model,
+					Passed:            len(cases) - failures,
+					Failed:            failures,
+					Cases:             results,
 				}, "", "  ")
 				if err != nil {
 					return err

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -19,11 +18,9 @@ import (
 // and the provided RuntimeFileService for file I/O.
 // Falls back to file-based storage if libsecret is not available.
 func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger) (*Keystore, error) {
-	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
-
 	keyring, err := newLibsecretKeyring()
 	if err != nil {
-		keyring, err = newFileKeyring(secretsDir)
+		keyring, err = newFileKeyring(fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("keystore: initialize file keyring: %w", err)
 		}

@@ -35,36 +35,36 @@ type observerCommandResult struct {
 
 type observerCommandRunner func(ctx context.Context, dir, name string, args ...string) observerCommandResult
 
-type composeTargetObserver struct {
+type composeTargetReader struct {
 	projectDir string
 	run        observerCommandRunner
 	now        func() time.Time
 }
 
-func NewComposeTargetObserver(projectDir string) TargetObserver {
-	return newComposeTargetObserver(projectDir, runObserverCommand, time.Now)
+func NewComposeTargetReader(projectDir string) TargetObserver {
+	return newComposeTargetReader(projectDir, runObserverCommand, time.Now)
 }
 
-func newComposeTargetObserver(projectDir string, run observerCommandRunner, now func() time.Time) *composeTargetObserver {
-	return &composeTargetObserver{projectDir: projectDir, run: run, now: now}
+func newComposeTargetReader(projectDir string, run observerCommandRunner, now func() time.Time) *composeTargetReader {
+	return &composeTargetReader{projectDir: projectDir, run: run, now: now}
 }
 
-func (o *composeTargetObserver) Observe(ctx context.Context, targetResource string) (*TargetState, error) {
+func (o *composeTargetReader) Observe(ctx context.Context, targetResource string) (*TargetState, error) {
 	cleanTarget := filepath.Clean(targetResource)
 	filename := filepath.Base(cleanTarget)
 	if o == nil || o.projectDir == "" || o.run == nil || o.now == nil || !filepath.IsAbs(cleanTarget) || filepath.Dir(cleanTarget) != constants.EvaluationTargetContainerDir || !complianceevidence.ValidPathElement(filename) {
 		return nil, fmt.Errorf("%w: controlled target path and observer dependencies are required", constants.ErrEvaluationObservationUnavailable)
 	}
 	result := o.run(ctx, o.projectDir, constants.DockerExecutable,
-		"compose", "--file", constants.DockerComposeFile, "--profile", constants.DockerEvaluationProfile,
-		"run", "--rm", "--no-deps", "-e", constants.EvaluationObserverTargetEnv+"="+filename, constants.DockerEvaluationObserverService,
+		"compose", "--file", constants.DockerComposeFile, "--file", constants.DockerNativeEvalComposeFile,
+		"run", "--rm", "--no-deps", "-e", constants.EvaluationObserverTargetEnv+"="+filename, constants.DockerNativeTargetReaderService,
 	)
 	observedAt := o.now().UTC()
 	if result.exitCode == constants.EvaluationObserverAbsentExitCode {
 		return &TargetState{ObservedAt: observedAt}, nil
 	}
 	if result.err != nil || result.exitCode != 0 {
-		return nil, fmt.Errorf("%w: compose observer exited with code %d: %s", constants.ErrEvaluationObservationUnavailable, result.exitCode, bytes.TrimSpace(result.stderr))
+		return nil, fmt.Errorf("%w: native target reader exited with code %d: %s", constants.ErrEvaluationObservationUnavailable, result.exitCode, bytes.TrimSpace(result.stderr))
 	}
 	return &TargetState{Present: true, Content: append([]byte(nil), result.stdout...), ObservedAt: observedAt}, nil
 }

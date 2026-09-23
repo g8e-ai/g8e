@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 type BundleArtifactReader interface {
@@ -71,7 +72,13 @@ func VerifyComplianceReportBundle(ctx context.Context, request BundleVerificatio
 		VerifierId:      constants.ComplianceBundleVerifierID,
 		VerifierVersion: constants.ComplianceBundleVerifierVersion,
 	}
-	verifier := bundleVerifier{request: request, report: report, bodies: make(map[string][]byte, len(request.Bundle.GetArtifacts()))}
+	verifier := bundleVerifier{
+		request:                  request,
+		report:                   report,
+		bodies:                   make(map[string][]byte, len(request.Bundle.GetArtifacts())),
+		replayedNodesByAdmission: make(map[string][]evidence.EvidenceNode),
+		operationalAdmissions:    make(map[string]struct{}),
+	}
 	verifier.verify(ctx)
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -89,9 +96,12 @@ func VerifyComplianceReportBundle(ctx context.Context, request BundleVerificatio
 }
 
 type bundleVerifier struct {
-	request BundleVerificationRequest
-	report  *compliancev1.ComplianceVerificationReport
-	bodies  map[string][]byte
+	request                  BundleVerificationRequest
+	report                   *compliancev1.ComplianceVerificationReport
+	bodies                   map[string][]byte
+	replayedNodesByAdmission map[string][]evidence.EvidenceNode
+	operationalAdmissions    map[string]struct{}
+	evaluationDiagnostics    []*compliancev1.AssessmentDiagnostic
 }
 
 func (v *bundleVerifier) verify(ctx context.Context) {
@@ -110,6 +120,7 @@ func (v *bundleVerifier) verify(ctx context.Context) {
 	v.check(constants.ComplianceBundleCheckSignatures, []string{constants.ComplianceBundleManifestPath, constants.ComplianceBundleChecksumsPath}, v.verifySignatures)
 	v.check(constants.ComplianceBundleCheckTypedArtifacts, []string{constants.ComplianceBundleAnalysisPath}, v.verifyTypedArtifacts)
 	v.check(constants.ComplianceBundleCheckSourceVerification, []string{constants.ComplianceBundleSourcesDirname}, func() { v.verifySourceVerificationReports(ctx) })
+	v.check(constants.ComplianceBundleCheckDecisionReplay, []string{constants.ComplianceBundleScopeFilename, constants.ComplianceBundleAnalysisPath}, func() { v.verifyDecisionReplay(ctx) })
 	v.check(constants.ComplianceBundleCheckRenderedFormats, []string{constants.ComplianceBundleAnalysisPath}, v.verifyRenderedFormats)
 }
 
@@ -296,6 +307,22 @@ func (v *bundleVerifier) verifySignatures() {
 
 func (v *bundleVerifier) verifyCanonicalReportSources() {
 	manifest := v.request.Bundle.GetManifest()
+	scope := &compliancev1.AssessmentScope{}
+	if v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		if err := catalog.ValidateAssessmentScope(scope); err != nil {
+			v.fail(err, constants.ComplianceBundleScopeFilename, err.Error())
+		} else {
+			if scope.GetScopeId() != manifest.GetScopeRef() {
+				v.fail(constants.ErrEvidenceScopeMismatch, constants.ComplianceBundleScopeFilename, "protected assessment scope does not match the manifest scope")
+			}
+			scopeBody := v.bodies[constants.ComplianceBundleScopeFilename]
+			digest := sha256.Sum256(scopeBody)
+			if v.request.Bundle.GetAnalysis().GetAssessmentScopeSha256() != hex.EncodeToString(digest[:]) {
+				v.fail(constants.ErrChecksumMismatch, constants.ComplianceBundleAnalysisPath, "analysis assessment-scope digest does not match the protected scope")
+			}
+			v.verifySourceAdmissionBindings(scope)
+		}
+	}
 	assertionPath := manifest.GetAssertionCatalogRef()
 	assertions := &compliancev1.ControlAssertionCatalog{}
 	if !v.decodeCanonicalSource(assertionPath, assertions) {
@@ -334,6 +361,67 @@ func (v *bundleVerifier) verifyCanonicalReportSources() {
 	v.verifyCanonicalSourceProjection(path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleControlAssessmentsFilename), controlAssessments, err)
 	evidenceIndex, err := marshalCanonicalMessages(v.request.Bundle.GetAnalysis().GetEvidenceResources())
 	v.verifyCanonicalSourceProjection(manifest.GetEvidenceIndexRef(), evidenceIndex, err)
+}
+
+func (v *bundleVerifier) verifySourceAdmissionBindings(scope *compliancev1.AssessmentScope) {
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissions[admission.GetAdmissionId()] = admission
+	}
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource.GetSourceAdmissionId() == "" {
+			if evidence.ArtifactType(resource.GetArtifactType()) == evidence.ArtifactTypeDemoDefinition {
+				continue
+			}
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource does not bind a protected source admission")
+			continue
+		}
+		admission := admissions[resource.GetSourceAdmissionId()]
+		if admission == nil {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource does not bind a protected source admission")
+			continue
+		}
+		if admission.GetRunId() != "" && admission.GetRunId() != resource.GetRunId() {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource run does not match its protected source admission")
+		}
+		if len(admission.GetArtifactIds()) == 0 {
+			continue
+		}
+		selected := false
+		for _, artifactID := range admission.GetArtifactIds() {
+			if artifactID == resource.GetArtifactId() {
+				selected = true
+				break
+			}
+		}
+		if !selected {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource is not selected by its protected source admission")
+		}
+	}
+}
+
+func (v *bundleVerifier) protectedAssessmentTime() (time.Time, error) {
+	body, exists := v.bodies[constants.ComplianceBundleScopeFilename]
+	if !exists {
+		return time.Time{}, fmt.Errorf("%w: protected assessment scope is missing", constants.ErrBundleArtifactMissing)
+	}
+	scope := &compliancev1.AssessmentScope{}
+	if err := compliancev1.UnmarshalCanonical(body, scope); err != nil {
+		return time.Time{}, fmt.Errorf("%w: decode protected assessment scope: %w", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	if scope.GetAssessmentAsOf() == nil || scope.GetAssessmentAsOf().CheckValid() != nil {
+		return time.Time{}, fmt.Errorf("%w: protected assessment time is invalid", constants.ErrInvalidEvidenceGraph)
+	}
+	return scope.GetAssessmentAsOf().AsTime(), nil
+}
+
+func replayedNodeMatches(resource *compliancev1.ComplianceEvidenceReference, node *evidence.EvidenceNode) bool {
+	if resource == nil || node == nil {
+		return false
+	}
+	replayed := *node
+	replayed.SourceAdmissionID = resource.GetSourceAdmissionId()
+	return proto.Equal(resource, replayed.ToProto())
 }
 
 func (v *bundleVerifier) decodeCanonicalSource(bundlePath string, message proto.Message) bool {
@@ -392,6 +480,112 @@ func (v *bundleVerifier) verifyTypedArtifacts() {
 	}
 }
 
+type protectedDecisionImporter struct {
+	admissionID string
+	nodes       []evidence.EvidenceNode
+}
+
+func (i protectedDecisionImporter) Import(context.Context) ([]evidence.EvidenceNode, error) {
+	return append([]evidence.EvidenceNode(nil), i.nodes...), nil
+}
+
+func (i protectedDecisionImporter) SourceID() string {
+	return i.admissionID
+}
+
+func (v *bundleVerifier) retainReplayedNodes(nodes []evidence.EvidenceNode) error {
+	pending := make(map[string][]evidence.EvidenceNode)
+	for index := range nodes {
+		node := nodes[index]
+		resource := v.analysisResource(node.ArtifactID)
+		if resource == nil {
+			return fmt.Errorf("%w: replayed evidence %s is absent from the protected analysis", constants.ErrInvalidEvidenceGraph, node.ArtifactID)
+		}
+		if !replayedNodeMatches(resource, &node) {
+			return fmt.Errorf("%w: replayed evidence %s does not match the protected analysis", constants.ErrInvalidEvidenceGraph, node.ArtifactID)
+		}
+		node.SourceAdmissionID = resource.GetSourceAdmissionId()
+		pending[node.SourceAdmissionID] = append(pending[node.SourceAdmissionID], node)
+	}
+	for admissionID, admissionNodes := range pending {
+		v.replayedNodesByAdmission[admissionID] = append(v.replayedNodesByAdmission[admissionID], admissionNodes...)
+	}
+	return nil
+}
+
+func (v *bundleVerifier) analysisResource(artifactID string) *compliancev1.ComplianceEvidenceReference {
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource != nil && resource.GetArtifactId() == artifactID {
+			return resource
+		}
+	}
+	return nil
+}
+
+func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
+	if len(v.report.GetFailures()) > 0 {
+		return
+	}
+	scope := &compliancev1.AssessmentScope{}
+	if !v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		return
+	}
+	assertions := &compliancev1.ControlAssertionCatalog{}
+	if !v.decodeCanonicalSource(v.request.Bundle.GetManifest().GetAssertionCatalogRef(), assertions) {
+		return
+	}
+	frameworks := &compliancev1.FrameworkCatalog{}
+	if !v.decodeCanonicalSource(path.Join(constants.ComplianceBundleFrameworkCatalogsDirname, constants.ComplianceBundleFrameworkCatalogFilename), frameworks) {
+		return
+	}
+	crosswalkRefs := v.request.Bundle.GetManifest().GetCrosswalkRefs()
+	if len(crosswalkRefs) != 1 {
+		v.fail(constants.ErrInvalidEvidenceGraph, constants.ComplianceBundleManifestPath, "decision replay requires exactly one protected crosswalk catalog")
+		return
+	}
+	crosswalks := &compliancev1.ControlCrosswalkCatalog{}
+	if !v.decodeCanonicalSource(crosswalkRefs[0], crosswalks) {
+		return
+	}
+	for _, admission := range scope.GetSourceAdmissions() {
+		if _, exists := v.replayedNodesByAdmission[admission.GetAdmissionId()]; !exists {
+			v.fail(constants.ErrInvalidEvidenceGraph, admission.GetAdmissionId(), "protected source admission has no exact importer replay")
+		}
+	}
+	if len(v.replayedNodesByAdmission) == 0 && len(v.request.Bundle.GetAnalysis().GetEvidenceResources()) > 0 {
+		v.fail(constants.ErrInvalidEvidenceGraph, constants.ComplianceBundleAnalysisPath, "protected analysis has no exact importer replay")
+		return
+	}
+	sharedNodes := append([]evidence.EvidenceNode(nil), v.replayedNodesByAdmission[""]...)
+	sources := make([]GenerationSource, 0, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		nodes := append([]evidence.EvidenceNode(nil), v.replayedNodesByAdmission[admission.GetAdmissionId()]...)
+		nodes = append(nodes, sharedNodes...)
+		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: nodes}})
+	}
+	replayed, err := GenerateComplianceAnalysis(ctx, GenerationRequest{Scope: scope, Sources: sources, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks, Diagnostics: v.evaluationDiagnostics})
+	if err != nil {
+		v.fail(constants.ErrReportVerificationFailed, constants.ComplianceBundleAnalysisPath, fmt.Sprintf("replay canonical compliance analysis: %v", err))
+		return
+	}
+	if !proto.Equal(v.request.Bundle.GetAnalysis(), replayed.Analysis) {
+		v.fail(constants.ErrRendererMismatch, constants.ComplianceBundleAnalysisPath, "canonical analysis does not reproduce from protected scope, catalogs, and verified evidence")
+	}
+	expectedProfiles := make(map[string]*compliancev1.FrameworkProfile, len(v.request.Bundle.GetProfiles()))
+	for _, profile := range v.request.Bundle.GetProfiles() {
+		expectedProfiles[profile.GetProfileId()] = profile
+	}
+	if len(expectedProfiles) != len(replayed.Profiles) {
+		v.fail(constants.ErrRendererMismatch, constants.ComplianceBundleProfilesDirname, "framework profile count does not reproduce from protected analysis")
+		return
+	}
+	for _, profile := range replayed.Profiles {
+		if !proto.Equal(expectedProfiles[profile.GetProfileId()], profile) {
+			v.fail(constants.ErrRendererMismatch, path.Join(constants.ComplianceBundleProfilesDirname, profile.GetProfileId()+constants.FileExtJSON), "framework profile does not reproduce from protected analysis")
+		}
+	}
+}
+
 type evidenceVerificationRoute string
 
 const (
@@ -444,8 +638,10 @@ type demoSourceInventory struct {
 
 func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
 	v.verifyEvidenceArtifactRoutes()
+	v.verifyEvaluationSelectionDiagnostics()
 	v.verifyDemoSourceVerificationReports(ctx)
 	v.verifyEvalSourceVerificationReports(ctx)
+	v.verifyOperationalSources(ctx)
 	v.verifyKSIHistorySources(ctx)
 	v.verifyCommitmentSources(ctx)
 	v.verifyAttestationSources(ctx)
@@ -542,21 +738,118 @@ func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context
 }
 
 type evalSourceInventory struct {
-	verificationReport *compliancev1.ComplianceVerificationReport
-	report             bool
-	evidence           bool
+	admission            *compliancev1.AssessmentSourceAdmission
+	verificationReport   *compliancev1.ComplianceVerificationReport
+	campaignReport       *evalv1.EvaluationVerificationReport
+	campaignInventory    *evalv1.CampaignComplianceSourceInventory
+	report               bool
+	evidence             bool
+	runtimeArtifacts     int
+	runtimeArtifactPaths map[string]struct{}
+}
+
+func (v *bundleVerifier) verifyEvaluationSelectionDiagnostics() {
+	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.EvaluationSelectionDiagnosticsFilename)
+	body, exists := v.bodies[bundlePath]
+	if !exists {
+		return
+	}
+	diagnostics, err := UnmarshalAssessmentDiagnostics(body)
+	if err != nil {
+		v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, err.Error())
+		return
+	}
+	scope := &compliancev1.AssessmentScope{}
+	if !v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		return
+	}
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	selectedEvalAdmissions := make(map[string]string)
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissions[admission.GetAdmissionId()] = admission
+		if admission.GetSourceKind() == constants.EvaluationSourceKindNative {
+			selectedEvalAdmissions[admission.GetAdmissionId()] = "evaluation_candidate_native"
+		}
+		if admission.GetSourceKind() == constants.EvaluationSourceKindCampaign {
+			selectedEvalAdmissions[admission.GetAdmissionId()] = "evaluation_candidate_campaign"
+		}
+	}
+	expectedSeverity := map[string]string{
+		"evaluation_candidate_native":         "info",
+		"evaluation_candidate_campaign":       "info",
+		"evaluation_candidate_incomplete":     "warning",
+		"evaluation_candidate_unsupported":    "warning",
+		"evaluation_candidate_malformed":      "error",
+		"evaluation_candidate_outside_window": "info",
+	}
+	seen := make(map[string]struct{}, len(diagnostics))
+	seenAdmissions := make(map[string]struct{}, len(selectedEvalAdmissions))
+	for _, diagnostic := range diagnostics {
+		runID := diagnostic.GetSubject().GetRunId()
+		severity, supported := expectedSeverity[diagnostic.GetCode()]
+		if diagnostic == nil || !supported || diagnostic.GetSeverity() != severity || runID == "" || diagnostic.GetMessage() == "" {
+			v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, "evaluation selection diagnostic is incomplete or unsupported")
+			return
+		}
+		if _, exists := seen[runID]; exists {
+			v.fail(constants.ErrEvidenceDuplicateID, bundlePath, "evaluation selection diagnostic repeats a run candidate")
+			return
+		}
+		seen[runID] = struct{}{}
+		if diagnostic.GetSourceAdmissionId() != "" {
+			admission := admissions[diagnostic.GetSourceAdmissionId()]
+			if admission == nil || admission.GetRunId() != runID || selectedEvalAdmissions[admission.GetAdmissionId()] != diagnostic.GetCode() {
+				v.fail(constants.ErrEvidenceScopeMismatch, bundlePath, "evaluation selection diagnostic does not match its protected admission")
+				return
+			}
+			seenAdmissions[admission.GetAdmissionId()] = struct{}{}
+		}
+	}
+	for admissionID := range selectedEvalAdmissions {
+		if _, exists := seenAdmissions[admissionID]; !exists {
+			v.fail(constants.ErrEvidenceScopeMismatch, bundlePath, "evaluation selection diagnostics omit a protected eval admission")
+			return
+		}
+	}
+	v.evaluationDiagnostics = diagnostics
 }
 
 func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context) {
-	expectedRuns := make(map[string]struct{})
-	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
-		if resource != nil && resource.GetArtifactType() == string(evidence.ArtifactTypeEvalManifest) && resource.GetRunId() != "" {
-			expectedRuns[resource.GetRunId()] = struct{}{}
+	scope := &compliancev1.AssessmentScope{}
+	if !v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname) + "/"
+		for bundlePath := range v.bodies {
+			if strings.HasPrefix(bundlePath, prefix) {
+				v.fail(constants.ErrUnresolvedReference, bundlePath, "eval source artifact does not bind a protected admission")
+			}
 		}
+		return
 	}
-	inventories := make(map[string]*evalSourceInventory, len(expectedRuns))
-	for runID := range expectedRuns {
-		inventories[runID] = &evalSourceInventory{}
+	admissionsByID := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissionsByID[admission.GetAdmissionId()] = admission
+	}
+	evalAdmissions := make(map[string]struct{})
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource.GetArtifactType() != string(evidence.ArtifactTypeEvalManifest) || resource.GetVerifierId() == constants.DemoRunVerifierID {
+			continue
+		}
+		if admissionsByID[resource.GetSourceAdmissionId()] == nil {
+			v.fail(constants.ErrEvalRunVerificationFailed, path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, resource.GetRunId()), "eval evidence run does not bind a protected source admission")
+			continue
+		}
+		evalAdmissions[resource.GetSourceAdmissionId()] = struct{}{}
+	}
+	inventories := make(map[string]*evalSourceInventory)
+	for _, admission := range scope.GetSourceAdmissions() {
+		_, hasEvalManifest := evalAdmissions[admission.GetAdmissionId()]
+		if hasEvalManifest && (admission.GetSourceKind() == constants.EvaluationSourceKindNative || admission.GetSourceKind() == constants.EvaluationSourceKindCampaign) {
+			key := admission.GetRunId()
+			if admission.GetSourceKind() == constants.EvaluationSourceKindCampaign {
+				key = admission.GetAdmissionId()
+			}
+			inventories[key] = &evalSourceInventory{admission: admission, runtimeArtifactPaths: make(map[string]struct{})}
+		}
 	}
 	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname) + "/"
 	for bundlePath, body := range v.bodies {
@@ -564,57 +857,85 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 			continue
 		}
 		parts := strings.Split(bundlePath, "/")
-		if len(parts) < 4 || parts[0] != constants.ComplianceBundleSourcesDirname || parts[1] != constants.ComplianceBundleSourceEvalsDirname || parts[2] == "" {
+		if len(parts) < 4 || parts[2] == "" {
 			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source path is unsupported")
 			continue
 		}
-		runID := parts[2]
-		inventory, expected := inventories[runID]
-		if !expected {
-			v.fail(constants.ErrUnresolvedReference, bundlePath, "eval source artifact does not bind an analysis evidence run")
+		inventory := inventories[parts[2]]
+		if inventory == nil {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "eval source artifact does not bind a protected admission")
 			continue
 		}
+		campaign := inventory.admission.GetSourceKind() == constants.EvaluationSourceKindCampaign
 		switch parts[3] {
 		case constants.ComplianceBundleSourceVerificationFilename:
-			if len(parts) != 4 {
-				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source verification path is unsupported")
+			if campaign {
+				report := &evalv1.EvaluationVerificationReport{}
+				if err := evalv1.UnmarshalCanonical(body, report); err != nil || report.GetRunId() != inventory.admission.GetRunId() || report.GetVerifierContractVersion() != constants.CampaignVerifierVersion {
+					v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "campaign verification report is invalid")
+				} else {
+					inventory.campaignReport = report
+				}
+			} else {
+				inventory.verificationReport = v.verifySourceVerificationReport(bundlePath, body, inventory.admission.GetRunId(), constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, constants.ErrEvalRunVerificationFailed, "eval")
+			}
+		case constants.CampaignSourceInventoryFilename:
+			if !campaign {
+				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "native eval source cannot carry a campaign inventory")
 				continue
 			}
-			inventory.verificationReport = v.verifySourceVerificationReport(bundlePath, body, runID, constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, constants.ErrEvalRunVerificationFailed, "eval")
+			manifest := &evalv1.CampaignComplianceSourceInventory{}
+			if err := evalv1.UnmarshalCanonical(body, manifest); err != nil {
+				v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, "campaign source inventory is not canonical")
+				continue
+			}
+			if err := validateCampaignSourceInventory(manifest, inventory.admission); err != nil {
+				v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, err.Error())
+			} else {
+				inventory.campaignInventory = manifest
+			}
 		case constants.ComplianceBundleSourceRuntimeDirname:
-			if len(parts) < 5 {
-				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime source path is incomplete")
-				continue
+			if campaign {
+				if len(parts) < 5 {
+					v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "campaign runtime source path is incomplete")
+					continue
+				}
+				runtimePath := strings.Join(parts[4:], "/")
+				if !evidence.ValidRelativePath(runtimePath) {
+					v.fail(constants.ErrPathValidation, bundlePath, "campaign runtime source path is invalid")
+					continue
+				}
+				if _, exists := inventory.runtimeArtifactPaths[runtimePath]; exists {
+					v.fail(constants.ErrEvidenceDuplicateID, bundlePath, "campaign runtime source path is duplicated")
+					continue
+				}
+				inventory.runtimeArtifactPaths[runtimePath] = struct{}{}
+				inventory.runtimeArtifacts++
 			}
-			if len(parts) == 5 && parts[4] == constants.EvaluationReportFilename {
+			if !campaign && len(parts) == 5 && parts[4] == constants.EvaluationReportFilename {
 				inventory.report = true
-				continue
 			}
-			if len(parts) == 5 && parts[4] == constants.EvaluationVerificationFilename {
-				continue
-			}
-			if len(parts) == 6 && parts[4] == constants.EvaluationEvidenceDirname {
+			if !campaign && len(parts) == 6 && parts[4] == constants.EvaluationEvidenceDirname {
 				inventory.evidence = true
-				continue
 			}
-			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime source path is unsupported")
 		default:
 			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source path is unsupported")
 		}
 	}
-	for runID, inventory := range inventories {
-		if inventory.verificationReport == nil {
-			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
-			v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval evidence run lacks a valid independent source verification report")
+	for key, inventory := range inventories {
+		if inventory.admission.GetSourceKind() == constants.EvaluationSourceKindCampaign {
+			if inventory.campaignReport == nil || inventory.campaignInventory == nil || inventory.runtimeArtifacts != len(inventory.campaignInventory.GetArtifacts()) || !campaignRuntimePathsMatchInventory(inventory) {
+				v.fail(constants.ErrEvalRunVerificationFailed, key, "campaign source inventory is incomplete or does not enumerate the protected runtime exactly")
+				continue
+			}
+			v.replayCampaignSourceVerification(ctx, key, inventory)
+			continue
 		}
-		complete := inventory.report && inventory.evidence
-		if !complete {
-			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID)
-			v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval evidence run lacks a complete protected runtime source inventory")
+		if inventory.verificationReport == nil || !inventory.report || !inventory.evidence {
+			v.fail(constants.ErrEvalRunVerificationFailed, key, "eval evidence run lacks a complete protected runtime source inventory")
+			continue
 		}
-		if complete && inventory.verificationReport != nil {
-			v.replayEvalSourceVerification(ctx, runID, inventory.verificationReport)
-		}
+		v.replayEvalSourceVerification(ctx, inventory.admission.GetRunId(), inventory.verificationReport)
 	}
 }
 
@@ -726,11 +1047,8 @@ func (v *bundleVerifier) replayLedgerSource(ctx context.Context, inventory *ledg
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.commitsPath, "replayed ledger inventory does not match the protected analysis evidence count")
 		return
 	}
-	for index := range nodes {
-		resource := inventory.resources[nodes[index].ArtifactID]
-		if resource == nil || !proto.Equal(resource, nodes[index].ToProto()) {
-			v.fail(constants.ErrInvalidEvidenceGraph, nodes[index].BundlePath, "replayed ledger evidence does not match the protected analysis evidence")
-		}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.commitsPath, err.Error())
 	}
 }
 
@@ -820,10 +1138,103 @@ func (v *bundleVerifier) replayBuildConfigSource(ctx context.Context, inventory 
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed build and configuration inventory does not match the protected analysis evidence count")
 		return
 	}
-	for index := range nodes {
-		resource := inventory.resources[nodes[index].ArtifactID]
-		if resource == nil || !proto.Equal(resource, nodes[index].ToProto()) {
-			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed build or configuration evidence does not match the protected analysis evidence")
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
+	}
+}
+
+func (v *bundleVerifier) verifyOperationalSources(ctx context.Context) {
+	scope := &compliancev1.AssessmentScope{}
+	if !v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		return
+	}
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissions[admission.GetAdmissionId()] = admission
+	}
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) || path.Base(bundlePath) != constants.ComplianceOperationalInventoryFilename {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) != 4 || parts[0] != constants.ComplianceBundleSourcesDirname || parts[1] != constants.ComplianceOperationalExportDirname || parts[2] == "" {
+			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "operational source inventory path is unsupported")
+			continue
+		}
+		admissionID := parts[2]
+		admission := admissions[admissionID]
+		if admission == nil {
+			v.fail(constants.ErrEvidenceScopeMismatch, bundlePath, "operational source inventory has no protected source admission")
+			continue
+		}
+		if _, duplicate := v.operationalAdmissions[admissionID]; duplicate {
+			v.fail(constants.ErrEvidenceDuplicateID, bundlePath, "operational source admission has multiple inventories")
+			continue
+		}
+		v.operationalAdmissions[admissionID] = struct{}{}
+		inventory := &evidence.OperationalSourceInventory{}
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(inventory); err != nil {
+			v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, err.Error())
+			continue
+		}
+		sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, admissionID)
+		expectedPaths := map[string]struct{}{bundlePath: {}}
+		validInventory := true
+		for _, artifact := range inventory.Artifacts {
+			if !evidence.ValidRelativePath(artifact.RelativePath) {
+				v.fail(constants.ErrPathValidation, bundlePath, "operational source inventory contains an invalid artifact path")
+				validInventory = false
+				continue
+			}
+			expectedPaths[path.Join(sourceRoot, artifact.RelativePath)] = struct{}{}
+		}
+		for protectedPath := range v.bodies {
+			if strings.HasPrefix(protectedPath, sourceRoot+"/") {
+				if _, expected := expectedPaths[protectedPath]; !expected {
+					v.fail(constants.ErrUnexpectedEvidenceArtifact, protectedPath, "operational source contains an artifact absent from its inventory")
+					validInventory = false
+				}
+			}
+		}
+		for expectedPath := range expectedPaths {
+			if _, present := v.bodies[expectedPath]; !present {
+				v.fail(constants.ErrBundleArtifactMissing, expectedPath, "operational inventory artifact is absent from the protected bundle")
+				validInventory = false
+			}
+		}
+		if !validInventory {
+			continue
+		}
+		if v.request.EvidenceTrust == nil {
+			v.fail(constants.ErrEvidenceTrustNotAssessed, bundlePath, "operational source requires explicit external assessed evidence trust")
+			continue
+		}
+		assessmentAsOf, err := v.protectedAssessmentTime()
+		if err != nil {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+			continue
+		}
+		importer := evidence.NewOperationalExportImporter(&bundledSourceArtifactReader{bodies: v.bodies}, v.request.EvidenceTrust, bundlePath, sourceRoot, scope.GetScopeId(), admission, assessmentAsOf, func() time.Time { return assessmentAsOf })
+		nodes, err := importer.Import(ctx)
+		if err != nil {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+			continue
+		}
+		expectedCount := 0
+		for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+			if resource.GetSourceAdmissionId() == admissionID {
+				expectedCount++
+			}
+		}
+		if len(nodes) != expectedCount {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, "replayed operational inventory does not match the protected analysis evidence count")
+			continue
+		}
+		if err := v.retainReplayedNodes(nodes); err != nil {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
 		}
 	}
 }
@@ -838,6 +1249,9 @@ func (v *bundleVerifier) verifyCommitmentSources(ctx context.Context) {
 	inventories := make(map[string]*commitmentSourceInventory)
 	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
 		if resource == nil || resource.GetArtifactType() != string(evidence.ArtifactTypeCommitment) {
+			continue
+		}
+		if _, operational := v.operationalAdmissions[resource.GetSourceAdmissionId()]; operational {
 			continue
 		}
 		bundlePath := resource.GetBundlePath()
@@ -900,13 +1314,13 @@ func (v *bundleVerifier) replayCommitmentSource(ctx context.Context, inventory *
 		ScenarioID:    resource.GetScenarioId(),
 		TransactionID: resource.GetTransactionId(),
 	}
-	generatedAt := v.request.Bundle.GetManifest().GetGeneratedAt()
-	if generatedAt == nil || generatedAt.CheckValid() != nil {
-		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "commitment replay requires a valid deterministic bundle generation time")
+	assessmentAsOf, err := v.protectedAssessmentTime()
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 		return
 	}
 	reader := &bundledSourceArtifactReader{bodies: v.bodies}
-	nodes, err := evidence.NewCommitmentImporter(reader, v.request.EvidenceTrust, binding, generatedAt.AsTime()).Import(ctx)
+	nodes, err := evidence.NewCommitmentImporter(reader, v.request.EvidenceTrust, binding, assessmentAsOf).Import(ctx)
 	if err != nil {
 		failure := constants.ErrInvalidEvidenceGraph
 		if errors.Is(err, constants.ErrEvidenceTrustNotAssessed) {
@@ -923,8 +1337,8 @@ func (v *bundleVerifier) replayCommitmentSource(ctx context.Context, inventory *
 		v.fail(constants.ErrEvidenceTrustNotAssessed, inventory.path, "commitment signer is not present in external assessed evidence trust")
 		return
 	}
-	if !proto.Equal(resource, nodes[0].ToProto()) {
-		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed commitment does not match the protected analysis evidence")
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 	}
 }
 
@@ -997,9 +1411,9 @@ func (v *bundleVerifier) verifyAttestationSources(ctx context.Context) {
 }
 
 func (v *bundleVerifier) replayAttestationSource(ctx context.Context, inventory *attestationSourceInventory) {
-	generatedAt := v.request.Bundle.GetManifest().GetGeneratedAt()
-	if generatedAt == nil || generatedAt.CheckValid() != nil {
-		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "attestation replay requires a valid deterministic bundle generation time")
+	assessmentAsOf, err := v.protectedAssessmentTime()
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 		return
 	}
 	binding := evidence.AttestationImportBinding{
@@ -1009,7 +1423,7 @@ func (v *bundleVerifier) replayAttestationSource(ctx context.Context, inventory 
 		RunID:     inventory.runID,
 	}
 	reader := &bundledSourceArtifactReader{bodies: v.bodies}
-	nodes, err := evidence.NewAttestationImporter(reader, v.request.EvidenceTrust, binding, generatedAt.AsTime()).Import(ctx)
+	nodes, err := evidence.NewAttestationImporter(reader, v.request.EvidenceTrust, binding, assessmentAsOf).Import(ctx)
 	if err != nil {
 		failure := constants.ErrInvalidEvidenceGraph
 		if errors.Is(err, constants.ErrEvidenceTrustNotAssessed) {
@@ -1023,19 +1437,13 @@ func (v *bundleVerifier) replayAttestationSource(ctx context.Context, inventory 
 		return
 	}
 	for index := range nodes {
-		node := &nodes[index]
-		resource := inventory.resources[node.ArtifactID]
-		if resource == nil {
-			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed attestation is absent from the protected analysis evidence")
-			continue
-		}
-		if node.VerificationStatus == evidence.VerificationStatusUnverified {
+		if nodes[index].VerificationStatus == evidence.VerificationStatusUnverified {
 			v.fail(constants.ErrEvidenceTrustNotAssessed, inventory.path, "attestation signer is not present in external assessed evidence trust")
-			continue
+			return
 		}
-		if !proto.Equal(resource, node.ToProto()) {
-			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed attestation does not match the protected analysis evidence")
-		}
+	}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 	}
 }
 
@@ -1115,8 +1523,8 @@ func (v *bundleVerifier) replayAuditRecordSource(ctx context.Context, inventory 
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed audit record does not produce exactly one evidence resource")
 		return
 	}
-	if !proto.Equal(resource, nodes[0].ToProto()) {
-		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed audit record does not match the protected analysis evidence")
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 	}
 }
 
@@ -1238,12 +1646,8 @@ func (v *bundleVerifier) replayKSIHistorySource(ctx context.Context, inventory *
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, "replayed KSI history does not match the analysis evidence inventory")
 		return
 	}
-	for index := range nodes {
-		resource := inventory.resources[nodes[index].ArtifactID]
-		if resource == nil || !proto.Equal(resource, nodes[index].ToProto()) {
-			v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, "replayed KSI history does not match the protected analysis evidence")
-			return
-		}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, err.Error())
 	}
 }
 
@@ -1311,11 +1715,133 @@ func (v *bundleVerifier) verifySourceVerificationReport(bundlePath string, body 
 	return nil
 }
 
+func (v *bundleVerifier) replayCampaignSourceVerification(ctx context.Context, admissionID string, inventory *evalSourceInventory) {
+	bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, admissionID)
+	for _, artifact := range inventory.campaignInventory.GetArtifacts() {
+		if !evidence.ValidRelativePath(artifact.GetRuntimePath()) {
+			v.fail(constants.ErrPathValidation, artifact.GetRuntimePath(), "campaign runtime path is invalid")
+			return
+		}
+		body, exists := v.bodies[path.Join(bundleRoot, constants.ComplianceBundleSourceRuntimeDirname, artifact.GetRuntimePath())]
+		if !exists {
+			v.fail(constants.ErrBundleArtifactMissing, artifact.GetRuntimePath(), "campaign runtime artifact is missing")
+			return
+		}
+		digest := sha256.Sum256(body)
+		if hex.EncodeToString(digest[:]) != artifact.GetSha256() {
+			v.fail(constants.ErrChecksumMismatch, artifact.GetRuntimePath(), "campaign runtime artifact digest does not match inventory")
+			return
+		}
+	}
+	assessmentAsOf, err := v.protectedAssessmentTime()
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, admissionID, err.Error())
+		return
+	}
+	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: admissionID, sourceDir: constants.ComplianceBundleSourceEvalsDirname, runtimeRoot: constants.PathCurrentDir}
+	run, err := evaluation.NewStore(reader).LoadRun(ctx, inventory.admission.GetRunId())
+	if err != nil {
+		v.fail(constants.ErrEvalRunVerificationFailed, admissionID, fmt.Sprintf("load protected campaign run: %v", err))
+		return
+	}
+	if run.GetCampaignBinding().GetCampaignId() != inventory.campaignInventory.GetCampaignId() {
+		v.fail(constants.ErrEvidenceScopeMismatch, admissionID, "campaign source inventory campaign ID does not match the protected run")
+		return
+	}
+	policy := evaluation.CampaignVerificationPolicy{
+		VerifierReleaseVersion: inventory.campaignReport.GetVerifierReleaseVersion(),
+		ProviderObservation:    campaignProviderPolicy(inventory.campaignInventory.GetProviderObservationPolicy()),
+		ModelProvenance:        campaignProvenancePolicy(inventory.campaignInventory.GetModelProvenancePolicy()),
+		AssessmentTime:         func() time.Time { return assessmentAsOf },
+	}
+	nodes, err := evaluation.NewCampaignImporter(reader, inventory.admission.GetRunId(), policy).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrEvalRunVerificationFailed, admissionID, err.Error())
+		return
+	}
+	if len(nodes) != 1 || !bytes.Equal(nodes[0].CanonicalBytes, v.bodies[path.Join(bundleRoot, constants.ComplianceBundleSourceVerificationFilename)]) {
+		v.fail(constants.ErrEvalRunVerificationFailed, admissionID, "campaign verification does not reproduce from protected source bytes")
+		return
+	}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, admissionID, err.Error())
+	}
+}
+
+func validateCampaignSourceInventory(manifest *evalv1.CampaignComplianceSourceInventory, admission *compliancev1.AssessmentSourceAdmission) error {
+	if manifest == nil || admission == nil || manifest.GetSchemaVersion() != constants.CampaignSourceInventoryVersion || manifest.GetAdmissionId() != admission.GetAdmissionId() || manifest.GetRunId() != admission.GetRunId() || !recognizedCampaignWitnessPolicy(manifest.GetProviderObservationPolicy()) || !recognizedCampaignWitnessPolicy(manifest.GetModelProvenancePolicy()) || !campaignWitnessPoliciesMatchAdmission(manifest, admission) {
+		return fmt.Errorf("campaign source inventory is invalid or does not match the protected source admission")
+	}
+	seenPaths := make(map[string]struct{}, len(manifest.GetArtifacts()))
+	for _, artifact := range manifest.GetArtifacts() {
+		if artifact == nil || !evidence.ValidRelativePath(artifact.GetRuntimePath()) || artifact.GetMediaType() != constants.MediaTypeJSON || len(artifact.GetSha256()) != sha256.Size*2 || strings.ToLower(artifact.GetSha256()) != artifact.GetSha256() {
+			return fmt.Errorf("campaign source inventory contains an incomplete artifact")
+		}
+		if _, err := hex.DecodeString(artifact.GetSha256()); err != nil {
+			return fmt.Errorf("campaign source inventory contains an invalid artifact digest")
+		}
+		if _, exists := seenPaths[artifact.GetRuntimePath()]; exists {
+			return fmt.Errorf("campaign source inventory contains a duplicate runtime path %s", artifact.GetRuntimePath())
+		}
+		seenPaths[artifact.GetRuntimePath()] = struct{}{}
+	}
+	return nil
+}
+
+func campaignRuntimePathsMatchInventory(inventory *evalSourceInventory) bool {
+	if inventory == nil || inventory.campaignInventory == nil || len(inventory.runtimeArtifactPaths) != len(inventory.campaignInventory.GetArtifacts()) {
+		return false
+	}
+	for _, artifact := range inventory.campaignInventory.GetArtifacts() {
+		if _, exists := inventory.runtimeArtifactPaths[artifact.GetRuntimePath()]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func recognizedCampaignWitnessPolicy(policy evalv1.EvaluationWitnessPolicy) bool {
+	return policy == evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM || policy == evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT
+}
+
+func campaignWitnessPolicyFromAdmission(policy compliancev1.AssessmentWitnessPolicy) evalv1.EvaluationWitnessPolicy {
+	if policy == compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT {
+		return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT
+	}
+	if policy == compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM {
+		return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM
+	}
+	return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_UNSPECIFIED
+}
+
+func campaignWitnessPoliciesMatchAdmission(manifest *evalv1.CampaignComplianceSourceInventory, admission *compliancev1.AssessmentSourceAdmission) bool {
+	return manifest != nil && admission != nil && manifest.GetProviderObservationPolicy() == campaignWitnessPolicyFromAdmission(admission.GetProviderObservationPolicy()) && manifest.GetModelProvenancePolicy() == campaignWitnessPolicyFromAdmission(admission.GetModelProvenancePolicy())
+}
+
+func campaignProviderPolicy(policy evalv1.EvaluationWitnessPolicy) evaluation.ProviderObservationPolicy {
+	if policy == evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT {
+		return evaluation.ProviderObservationPolicyStrict
+	}
+	return evaluation.ProviderObservationPolicyInterim
+}
+
+func campaignProvenancePolicy(policy evalv1.EvaluationWitnessPolicy) evaluation.ModelProvenancePolicy {
+	if policy == evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT {
+		return evaluation.ModelProvenancePolicyStrict
+	}
+	return evaluation.ModelProvenancePolicyInterim
+}
+
 func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
 	runtimeRoot := filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, runID)
 	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceEvalsDirname, runtimeRoot: runtimeRoot}
-	replayed, err := evaluation.NewVerifier(reader, evaluation.NewRegistry(), func() time.Time { return expected.GetVerifiedAt().AsTime() }).Verify(ctx, runID)
+	assessmentAsOf, err := v.protectedAssessmentTime()
 	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+		return
+	}
+	replayed, err := evaluation.NewVerifier(reader, evaluation.NewRegistry(), func() time.Time { return assessmentAsOf }).Verify(ctx, runID)
 	if err != nil {
 		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, err.Error())
 		return
@@ -1323,14 +1849,28 @@ func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID
 	matches, matchErr := evidence.CanonicalProtosEqual(expected, replayed)
 	if matchErr != nil || !replayed.GetValid() || !matches {
 		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "replayed eval verification does not match the protected source verification report")
+		return
+	}
+	nodes, err := evaluation.NewEvidenceImporter(reader, runID, func() time.Time { return assessmentAsOf }).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, fmt.Sprintf("replay eval evidence importer: %v", err))
+		return
+	}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
 	}
 }
 
 func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
 	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID)
 	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceDemosDirname, runtimeRoot: runtimeRoot}
-	replayed, err := evidence.VerifyDemoRun(ctx, reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, expected.GetVerifiedAt().AsTime())
+	assessmentAsOf, err := v.protectedAssessmentTime()
 	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+		return
+	}
+	replayed, err := evidence.VerifyDemoRun(ctx, reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, assessmentAsOf)
 	if err != nil {
 		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, err.Error())
 		return
@@ -1338,6 +1878,15 @@ func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID
 	matches, matchErr := evidence.CanonicalProtosEqual(expected, replayed)
 	if matchErr != nil || !replayed.GetValid() || !matches {
 		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, "replayed demo verification does not match the protected source verification report")
+		return
+	}
+	nodes, err := evidence.NewDemoRunImporterAt(reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, func() time.Time { return assessmentAsOf }).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, fmt.Sprintf("replay demo evidence importer: %v", err))
+		return
+	}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
 	}
 }
 
@@ -1394,6 +1943,60 @@ func (r *bundledRuntimeArtifactReader) ReadDir(ctx context.Context, sourcePath s
 		result = append(result, bundledRuntimeDirEntry{name: name, directory: entries[name]})
 	}
 	return result, nil
+}
+
+func (r *bundledRuntimeArtifactReader) FileExists(ctx context.Context, sourcePath string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	bundlePath, ok := r.bundlePath(sourcePath)
+	if !ok {
+		return false, constants.ErrUnexpectedEvidenceArtifact
+	}
+	_, exists := r.bodies[bundlePath]
+	return exists, nil
+}
+
+func (r *bundledRuntimeArtifactReader) MkdirAll(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) CreateRuntimeTree(context.Context) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Stat(context.Context, string) (os.FileInfo, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Lstat(context.Context, string) (os.FileInfo, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) WriteFile(context.Context, string, []byte, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) OpenForAppend(context.Context, string, os.FileMode) (*os.File, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) OpenForRead(context.Context, string) (*os.File, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Remove(context.Context, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) RemoveAll(context.Context, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Rename(context.Context, string, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) EnforceDirPermissions(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) EnforceFilePermissions(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Resolve(sourcePath string) string      { return sourcePath }
+func (r *bundledRuntimeArtifactReader) Rel(sourcePath string) (string, error) { return sourcePath, nil }
+func (r *bundledRuntimeArtifactReader) RelFromAbs(sourcePath string) (string, error) {
+	return sourcePath, nil
 }
 
 func (r *bundledRuntimeArtifactReader) bundlePath(sourcePath string) (string, bool) {
@@ -1469,6 +2072,11 @@ func (s *bundledDemoProvenanceSource) Definitions(ctx context.Context, _ string)
 }
 
 func (v *bundleVerifier) verifyRenderedFormats() {
+	profile, err := ParseBundleProfile(v.request.Bundle.GetManifest().GetBundleProfile())
+	if err != nil {
+		v.fail(constants.ErrRendererMismatch, constants.ComplianceBundleManifestPath, err.Error())
+		return
+	}
 	for _, entry := range v.request.Bundle.GetRenderedFormats() {
 		if entry == nil {
 			continue
@@ -1478,7 +2086,7 @@ func (v *bundleVerifier) verifyRenderedFormats() {
 			v.fail(constants.ErrRendererMismatch, entry.GetBundlePath(), err.Error())
 			continue
 		}
-		rendered, err := RenderComplianceAnalysis(v.request.Bundle.GetAnalysis(), format)
+		rendered, err := renderBundleFormat(v.request.Bundle.GetAnalysis(), format, profile)
 		if err != nil {
 			v.fail(constants.ErrRendererMismatch, entry.GetBundlePath(), err.Error())
 			continue

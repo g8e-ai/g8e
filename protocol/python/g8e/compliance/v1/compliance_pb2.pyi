@@ -10,11 +10,39 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class AssessmentWitnessPolicy(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ASSESSMENT_WITNESS_POLICY_UNSPECIFIED: _ClassVar[AssessmentWitnessPolicy]
+    ASSESSMENT_WITNESS_POLICY_INTERIM: _ClassVar[AssessmentWitnessPolicy]
+    ASSESSMENT_WITNESS_POLICY_STRICT: _ClassVar[AssessmentWitnessPolicy]
+
+class AssessmentContextKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ASSESSMENT_CONTEXT_KIND_UNSPECIFIED: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_CONFIGURATION: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS: _ClassVar[AssessmentContextKind]
+
 class VerificationCheckStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     VERIFICATION_CHECK_STATUS_UNSPECIFIED: _ClassVar[VerificationCheckStatus]
     VERIFICATION_CHECK_STATUS_PASSED: _ClassVar[VerificationCheckStatus]
     VERIFICATION_CHECK_STATUS_FAILED: _ClassVar[VerificationCheckStatus]
+ASSESSMENT_WITNESS_POLICY_UNSPECIFIED: AssessmentWitnessPolicy
+ASSESSMENT_WITNESS_POLICY_INTERIM: AssessmentWitnessPolicy
+ASSESSMENT_WITNESS_POLICY_STRICT: AssessmentWitnessPolicy
+ASSESSMENT_CONTEXT_KIND_UNSPECIFIED: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_CONFIGURATION: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS: AssessmentContextKind
 VERIFICATION_CHECK_STATUS_UNSPECIFIED: VerificationCheckStatus
 VERIFICATION_CHECK_STATUS_PASSED: VerificationCheckStatus
 VERIFICATION_CHECK_STATUS_FAILED: VerificationCheckStatus
@@ -189,8 +217,104 @@ class ComponentInventoryEntry(_message.Message):
     digest: str
     def __init__(self, component_id: _Optional[str] = ..., component_type: _Optional[str] = ..., version: _Optional[str] = ..., digest: _Optional[str] = ...) -> None: ...
 
+class AssessmentSourceAdmission(_message.Message):
+    __slots__ = ("admission_id", "source_kind", "source_version", "source_scope_id", "owner_runtime_boundary", "acquisition_boundary", "run_id", "snapshot_id", "artifact_ids", "verifier_ref", "disclosure_classification", "provider_observation_policy", "model_provenance_policy")
+    ADMISSION_ID_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_KIND_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
+    OWNER_RUNTIME_BOUNDARY_FIELD_NUMBER: _ClassVar[int]
+    ACQUISITION_BOUNDARY_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    SNAPSHOT_ID_FIELD_NUMBER: _ClassVar[int]
+    ARTIFACT_IDS_FIELD_NUMBER: _ClassVar[int]
+    VERIFIER_REF_FIELD_NUMBER: _ClassVar[int]
+    DISCLOSURE_CLASSIFICATION_FIELD_NUMBER: _ClassVar[int]
+    PROVIDER_OBSERVATION_POLICY_FIELD_NUMBER: _ClassVar[int]
+    MODEL_PROVENANCE_POLICY_FIELD_NUMBER: _ClassVar[int]
+    admission_id: str
+    source_kind: str
+    source_version: str
+    source_scope_id: str
+    owner_runtime_boundary: str
+    acquisition_boundary: str
+    run_id: str
+    snapshot_id: str
+    artifact_ids: _containers.RepeatedScalarFieldContainer[str]
+    verifier_ref: VersionedReference
+    disclosure_classification: str
+    provider_observation_policy: AssessmentWitnessPolicy
+    model_provenance_policy: AssessmentWitnessPolicy
+    def __init__(self, admission_id: _Optional[str] = ..., source_kind: _Optional[str] = ..., source_version: _Optional[str] = ..., source_scope_id: _Optional[str] = ..., owner_runtime_boundary: _Optional[str] = ..., acquisition_boundary: _Optional[str] = ..., run_id: _Optional[str] = ..., snapshot_id: _Optional[str] = ..., artifact_ids: _Optional[_Iterable[str]] = ..., verifier_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., disclosure_classification: _Optional[str] = ..., provider_observation_policy: _Optional[_Union[AssessmentWitnessPolicy, str]] = ..., model_provenance_policy: _Optional[_Union[AssessmentWitnessPolicy, str]] = ...) -> None: ...
+
+class AssessmentApplicabilitySelection(_message.Message):
+    __slots__ = ("components", "action_classes", "arms")
+    COMPONENTS_FIELD_NUMBER: _ClassVar[int]
+    ACTION_CLASSES_FIELD_NUMBER: _ClassVar[int]
+    ARMS_FIELD_NUMBER: _ClassVar[int]
+    components: _containers.RepeatedScalarFieldContainer[str]
+    action_classes: _containers.RepeatedScalarFieldContainer[str]
+    arms: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, components: _Optional[_Iterable[str]] = ..., action_classes: _Optional[_Iterable[str]] = ..., arms: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class AssessmentSubjectSelection(_message.Message):
+    __slots__ = ("source_admission_id", "run_id", "attempt_id", "scenario_id", "transaction_id")
+    SOURCE_ADMISSION_ID_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
+    TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
+    source_admission_id: str
+    run_id: str
+    attempt_id: str
+    scenario_id: str
+    transaction_id: str
+    def __init__(self, source_admission_id: _Optional[str] = ..., run_id: _Optional[str] = ..., attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., transaction_id: _Optional[str] = ...) -> None: ...
+
+class AssessmentPopulationSelection(_message.Message):
+    __slots__ = ("subjects",)
+    SUBJECTS_FIELD_NUMBER: _ClassVar[int]
+    subjects: _containers.RepeatedCompositeFieldContainer[AssessmentSubjectSelection]
+    def __init__(self, subjects: _Optional[_Iterable[_Union[AssessmentSubjectSelection, _Mapping]]] = ...) -> None: ...
+
+class AssessmentCoverage(_message.Message):
+    __slots__ = ("selected_subject_count", "assessed_subject_count", "failed_subject_count", "unavailable_subject_count", "unavailable_subjects")
+    SELECTED_SUBJECT_COUNT_FIELD_NUMBER: _ClassVar[int]
+    ASSESSED_SUBJECT_COUNT_FIELD_NUMBER: _ClassVar[int]
+    FAILED_SUBJECT_COUNT_FIELD_NUMBER: _ClassVar[int]
+    UNAVAILABLE_SUBJECT_COUNT_FIELD_NUMBER: _ClassVar[int]
+    UNAVAILABLE_SUBJECTS_FIELD_NUMBER: _ClassVar[int]
+    selected_subject_count: int
+    assessed_subject_count: int
+    failed_subject_count: int
+    unavailable_subject_count: int
+    unavailable_subjects: _containers.RepeatedCompositeFieldContainer[AssessmentSubjectSelection]
+    def __init__(self, selected_subject_count: _Optional[int] = ..., assessed_subject_count: _Optional[int] = ..., failed_subject_count: _Optional[int] = ..., unavailable_subject_count: _Optional[int] = ..., unavailable_subjects: _Optional[_Iterable[_Union[AssessmentSubjectSelection, _Mapping]]] = ...) -> None: ...
+
+class AssessmentDiagnostic(_message.Message):
+    __slots__ = ("code", "severity", "source_admission_id", "subject", "message")
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    SEVERITY_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_ADMISSION_ID_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    code: str
+    severity: str
+    source_admission_id: str
+    subject: AssessmentSubjectSelection
+    message: str
+    def __init__(self, code: _Optional[str] = ..., severity: _Optional[str] = ..., source_admission_id: _Optional[str] = ..., subject: _Optional[_Union[AssessmentSubjectSelection, _Mapping]] = ..., message: _Optional[str] = ...) -> None: ...
+
+class UnavailableAssessmentContext(_message.Message):
+    __slots__ = ("kind", "reason")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    kind: AssessmentContextKind
+    reason: str
+    def __init__(self, kind: _Optional[_Union[AssessmentContextKind, str]] = ..., reason: _Optional[str] = ...) -> None: ...
+
 class AssessmentScope(_message.Message):
-    __slots__ = ("scope_id", "organization_id", "deployment_id", "product_version", "build_identity", "source_revision", "image_digests", "component_inventory", "network_topology_hash", "configuration_hashes", "doctrine_bundle_hashes", "consensus_policy_hashes", "trust_anchor_ids", "cryptographic_mode", "assessment_window_start", "assessment_window_end", "excluded_components", "customer_responsibilities")
+    __slots__ = ("scope_id", "organization_id", "deployment_id", "product_version", "build_identity", "source_revision", "image_digests", "component_inventory", "network_topology_hash", "configuration_hashes", "doctrine_bundle_hashes", "consensus_policy_hashes", "trust_anchor_ids", "cryptographic_mode", "assessment_window_start", "assessment_window_end", "excluded_components", "customer_responsibilities", "active_posture", "source_admissions", "applicability", "selected_population", "assessment_as_of", "unavailable_context")
     SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
     ORGANIZATION_ID_FIELD_NUMBER: _ClassVar[int]
     DEPLOYMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -209,6 +333,12 @@ class AssessmentScope(_message.Message):
     ASSESSMENT_WINDOW_END_FIELD_NUMBER: _ClassVar[int]
     EXCLUDED_COMPONENTS_FIELD_NUMBER: _ClassVar[int]
     CUSTOMER_RESPONSIBILITIES_FIELD_NUMBER: _ClassVar[int]
+    ACTIVE_POSTURE_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_ADMISSIONS_FIELD_NUMBER: _ClassVar[int]
+    APPLICABILITY_FIELD_NUMBER: _ClassVar[int]
+    SELECTED_POPULATION_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_AS_OF_FIELD_NUMBER: _ClassVar[int]
+    UNAVAILABLE_CONTEXT_FIELD_NUMBER: _ClassVar[int]
     scope_id: str
     organization_id: str
     deployment_id: str
@@ -227,7 +357,13 @@ class AssessmentScope(_message.Message):
     assessment_window_end: _timestamp_pb2.Timestamp
     excluded_components: _containers.RepeatedScalarFieldContainer[str]
     customer_responsibilities: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, scope_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., deployment_id: _Optional[str] = ..., product_version: _Optional[str] = ..., build_identity: _Optional[str] = ..., source_revision: _Optional[str] = ..., image_digests: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., component_inventory: _Optional[_Iterable[_Union[ComponentInventoryEntry, _Mapping]]] = ..., network_topology_hash: _Optional[str] = ..., configuration_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., doctrine_bundle_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., consensus_policy_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., trust_anchor_ids: _Optional[_Iterable[str]] = ..., cryptographic_mode: _Optional[str] = ..., assessment_window_start: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., assessment_window_end: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., excluded_components: _Optional[_Iterable[str]] = ..., customer_responsibilities: _Optional[_Iterable[str]] = ...) -> None: ...
+    active_posture: str
+    source_admissions: _containers.RepeatedCompositeFieldContainer[AssessmentSourceAdmission]
+    applicability: AssessmentApplicabilitySelection
+    selected_population: AssessmentPopulationSelection
+    assessment_as_of: _timestamp_pb2.Timestamp
+    unavailable_context: _containers.RepeatedCompositeFieldContainer[UnavailableAssessmentContext]
+    def __init__(self, scope_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., deployment_id: _Optional[str] = ..., product_version: _Optional[str] = ..., build_identity: _Optional[str] = ..., source_revision: _Optional[str] = ..., image_digests: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., component_inventory: _Optional[_Iterable[_Union[ComponentInventoryEntry, _Mapping]]] = ..., network_topology_hash: _Optional[str] = ..., configuration_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., doctrine_bundle_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., consensus_policy_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., trust_anchor_ids: _Optional[_Iterable[str]] = ..., cryptographic_mode: _Optional[str] = ..., assessment_window_start: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., assessment_window_end: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., excluded_components: _Optional[_Iterable[str]] = ..., customer_responsibilities: _Optional[_Iterable[str]] = ..., active_posture: _Optional[str] = ..., source_admissions: _Optional[_Iterable[_Union[AssessmentSourceAdmission, _Mapping]]] = ..., applicability: _Optional[_Union[AssessmentApplicabilitySelection, _Mapping]] = ..., selected_population: _Optional[_Union[AssessmentPopulationSelection, _Mapping]] = ..., assessment_as_of: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., unavailable_context: _Optional[_Iterable[_Union[UnavailableAssessmentContext, _Mapping]]] = ...) -> None: ...
 
 class EvidenceEncryptionMetadata(_message.Message):
     __slots__ = ("algorithm", "key_id", "authorization_scope", "plaintext_sha256", "authenticated_metadata_sha256")
@@ -244,7 +380,7 @@ class EvidenceEncryptionMetadata(_message.Message):
     def __init__(self, algorithm: _Optional[str] = ..., key_id: _Optional[str] = ..., authorization_scope: _Optional[str] = ..., plaintext_sha256: _Optional[str] = ..., authenticated_metadata_sha256: _Optional[str] = ...) -> None: ...
 
 class ComplianceEvidenceReference(_message.Message):
-    __slots__ = ("artifact_id", "artifact_type", "sha256", "media_type", "schema_ref", "producer_identity", "produced_at", "scope_id", "run_id", "attempt_id", "scenario_id", "transaction_id", "verification_status", "verifier_id", "verifier_version", "verified_at", "bundle_path", "encryption")
+    __slots__ = ("artifact_id", "artifact_type", "sha256", "media_type", "schema_ref", "producer_identity", "produced_at", "scope_id", "run_id", "attempt_id", "scenario_id", "transaction_id", "verification_status", "verifier_id", "verifier_version", "verified_at", "bundle_path", "encryption", "source_admission_id")
     ARTIFACT_ID_FIELD_NUMBER: _ClassVar[int]
     ARTIFACT_TYPE_FIELD_NUMBER: _ClassVar[int]
     SHA256_FIELD_NUMBER: _ClassVar[int]
@@ -263,6 +399,7 @@ class ComplianceEvidenceReference(_message.Message):
     VERIFIED_AT_FIELD_NUMBER: _ClassVar[int]
     BUNDLE_PATH_FIELD_NUMBER: _ClassVar[int]
     ENCRYPTION_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_ADMISSION_ID_FIELD_NUMBER: _ClassVar[int]
     artifact_id: str
     artifact_type: str
     sha256: str
@@ -281,10 +418,11 @@ class ComplianceEvidenceReference(_message.Message):
     verified_at: _timestamp_pb2.Timestamp
     bundle_path: str
     encryption: EvidenceEncryptionMetadata
-    def __init__(self, artifact_id: _Optional[str] = ..., artifact_type: _Optional[str] = ..., sha256: _Optional[str] = ..., media_type: _Optional[str] = ..., schema_ref: _Optional[str] = ..., producer_identity: _Optional[str] = ..., produced_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., scope_id: _Optional[str] = ..., run_id: _Optional[str] = ..., attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., transaction_id: _Optional[str] = ..., verification_status: _Optional[str] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., bundle_path: _Optional[str] = ..., encryption: _Optional[_Union[EvidenceEncryptionMetadata, _Mapping]] = ...) -> None: ...
+    source_admission_id: str
+    def __init__(self, artifact_id: _Optional[str] = ..., artifact_type: _Optional[str] = ..., sha256: _Optional[str] = ..., media_type: _Optional[str] = ..., schema_ref: _Optional[str] = ..., producer_identity: _Optional[str] = ..., produced_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., scope_id: _Optional[str] = ..., run_id: _Optional[str] = ..., attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., transaction_id: _Optional[str] = ..., verification_status: _Optional[str] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., bundle_path: _Optional[str] = ..., encryption: _Optional[_Union[EvidenceEncryptionMetadata, _Mapping]] = ..., source_admission_id: _Optional[str] = ...) -> None: ...
 
 class ControlAssertionAssessment(_message.Message):
-    __slots__ = ("assessment_id", "scope_id", "assertion_ref", "status", "evidence_level", "evaluated_at", "verifier_ref", "evidence_refs", "metric_refs", "freshness_status", "failure_reason", "limitations")
+    __slots__ = ("assessment_id", "scope_id", "assertion_ref", "status", "evidence_level", "evaluated_at", "verifier_ref", "evidence_refs", "metric_refs", "freshness_status", "failure_reason", "limitations", "coverage", "diagnostics")
     ASSESSMENT_ID_FIELD_NUMBER: _ClassVar[int]
     SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
     ASSERTION_REF_FIELD_NUMBER: _ClassVar[int]
@@ -297,6 +435,8 @@ class ControlAssertionAssessment(_message.Message):
     FRESHNESS_STATUS_FIELD_NUMBER: _ClassVar[int]
     FAILURE_REASON_FIELD_NUMBER: _ClassVar[int]
     LIMITATIONS_FIELD_NUMBER: _ClassVar[int]
+    COVERAGE_FIELD_NUMBER: _ClassVar[int]
+    DIAGNOSTICS_FIELD_NUMBER: _ClassVar[int]
     assessment_id: str
     scope_id: str
     assertion_ref: VersionedReference
@@ -309,7 +449,9 @@ class ControlAssertionAssessment(_message.Message):
     freshness_status: str
     failure_reason: str
     limitations: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, assessment_id: _Optional[str] = ..., scope_id: _Optional[str] = ..., assertion_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., status: _Optional[str] = ..., evidence_level: _Optional[str] = ..., evaluated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., evidence_refs: _Optional[_Iterable[str]] = ..., metric_refs: _Optional[_Iterable[str]] = ..., freshness_status: _Optional[str] = ..., failure_reason: _Optional[str] = ..., limitations: _Optional[_Iterable[str]] = ...) -> None: ...
+    coverage: AssessmentCoverage
+    diagnostics: _containers.RepeatedCompositeFieldContainer[AssessmentDiagnostic]
+    def __init__(self, assessment_id: _Optional[str] = ..., scope_id: _Optional[str] = ..., assertion_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., status: _Optional[str] = ..., evidence_level: _Optional[str] = ..., evaluated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., evidence_refs: _Optional[_Iterable[str]] = ..., metric_refs: _Optional[_Iterable[str]] = ..., freshness_status: _Optional[str] = ..., failure_reason: _Optional[str] = ..., limitations: _Optional[_Iterable[str]] = ..., coverage: _Optional[_Union[AssessmentCoverage, _Mapping]] = ..., diagnostics: _Optional[_Iterable[_Union[AssessmentDiagnostic, _Mapping]]] = ...) -> None: ...
 
 class FrameworkControlAssessment(_message.Message):
     __slots__ = ("assessment_id", "scope_id", "framework_ref", "control_id", "status", "responsibility", "mapping_refs", "assertion_assessment_refs", "customer_attestation_refs", "evidence_level", "findings", "limitations", "remediation")
@@ -698,7 +840,7 @@ class ControlSection(_message.Message):
     def __init__(self, section_id: _Optional[str] = ..., title: _Optional[str] = ..., responsibility: _Optional[str] = ..., status_filter: _Optional[str] = ..., control_assessment_refs: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ..., control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ...) -> None: ...
 
 class ComplianceAnalysis(_message.Message):
-    __slots__ = ("analysis_id", "analysis_schema_version", "scope_ref", "generated_at", "generator_identity", "generator_version", "evidence_window_completeness", "assertion_assessments", "framework_assessments", "gaps", "evidence_links", "limitations", "findings", "remediation", "sections", "evidence_graph_failures", "evidence_graph_valid", "evidence_resources")
+    __slots__ = ("analysis_id", "analysis_schema_version", "scope_ref", "generated_at", "generator_identity", "generator_version", "evidence_window_completeness", "assertion_assessments", "framework_assessments", "gaps", "evidence_links", "limitations", "findings", "remediation", "sections", "evidence_graph_failures", "evidence_graph_valid", "evidence_resources", "assessment_scope_sha256", "diagnostics")
     ANALYSIS_ID_FIELD_NUMBER: _ClassVar[int]
     ANALYSIS_SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     SCOPE_REF_FIELD_NUMBER: _ClassVar[int]
@@ -717,6 +859,8 @@ class ComplianceAnalysis(_message.Message):
     EVIDENCE_GRAPH_FAILURES_FIELD_NUMBER: _ClassVar[int]
     EVIDENCE_GRAPH_VALID_FIELD_NUMBER: _ClassVar[int]
     EVIDENCE_RESOURCES_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_SCOPE_SHA256_FIELD_NUMBER: _ClassVar[int]
+    DIAGNOSTICS_FIELD_NUMBER: _ClassVar[int]
     analysis_id: str
     analysis_schema_version: str
     scope_ref: str
@@ -735,7 +879,9 @@ class ComplianceAnalysis(_message.Message):
     evidence_graph_failures: _containers.RepeatedScalarFieldContainer[str]
     evidence_graph_valid: bool
     evidence_resources: _containers.RepeatedCompositeFieldContainer[ComplianceEvidenceReference]
-    def __init__(self, analysis_id: _Optional[str] = ..., analysis_schema_version: _Optional[str] = ..., scope_ref: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., generator_identity: _Optional[str] = ..., generator_version: _Optional[str] = ..., evidence_window_completeness: _Optional[_Union[EvidenceWindowCompleteness, _Mapping]] = ..., assertion_assessments: _Optional[_Iterable[_Union[ControlAssertionAssessment, _Mapping]]] = ..., framework_assessments: _Optional[_Iterable[_Union[FrameworkControlAssessment, _Mapping]]] = ..., gaps: _Optional[_Iterable[_Union[ComplianceGap, _Mapping]]] = ..., evidence_links: _Optional[_Iterable[_Union[EvidenceLink, _Mapping]]] = ..., limitations: _Optional[_Iterable[str]] = ..., findings: _Optional[_Iterable[_Union[ComplianceFinding, _Mapping]]] = ..., remediation: _Optional[_Iterable[_Union[ComplianceRemediation, _Mapping]]] = ..., sections: _Optional[_Iterable[_Union[ControlSection, _Mapping]]] = ..., evidence_graph_failures: _Optional[_Iterable[str]] = ..., evidence_graph_valid: _Optional[bool] = ..., evidence_resources: _Optional[_Iterable[_Union[ComplianceEvidenceReference, _Mapping]]] = ...) -> None: ...
+    assessment_scope_sha256: str
+    diagnostics: _containers.RepeatedCompositeFieldContainer[AssessmentDiagnostic]
+    def __init__(self, analysis_id: _Optional[str] = ..., analysis_schema_version: _Optional[str] = ..., scope_ref: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., generator_identity: _Optional[str] = ..., generator_version: _Optional[str] = ..., evidence_window_completeness: _Optional[_Union[EvidenceWindowCompleteness, _Mapping]] = ..., assertion_assessments: _Optional[_Iterable[_Union[ControlAssertionAssessment, _Mapping]]] = ..., framework_assessments: _Optional[_Iterable[_Union[FrameworkControlAssessment, _Mapping]]] = ..., gaps: _Optional[_Iterable[_Union[ComplianceGap, _Mapping]]] = ..., evidence_links: _Optional[_Iterable[_Union[EvidenceLink, _Mapping]]] = ..., limitations: _Optional[_Iterable[str]] = ..., findings: _Optional[_Iterable[_Union[ComplianceFinding, _Mapping]]] = ..., remediation: _Optional[_Iterable[_Union[ComplianceRemediation, _Mapping]]] = ..., sections: _Optional[_Iterable[_Union[ControlSection, _Mapping]]] = ..., evidence_graph_failures: _Optional[_Iterable[str]] = ..., evidence_graph_valid: _Optional[bool] = ..., evidence_resources: _Optional[_Iterable[_Union[ComplianceEvidenceReference, _Mapping]]] = ..., assessment_scope_sha256: _Optional[str] = ..., diagnostics: _Optional[_Iterable[_Union[AssessmentDiagnostic, _Mapping]]] = ...) -> None: ...
 
 class FrameworkProfile(_message.Message):
     __slots__ = ("profile_id", "framework_ref", "profile_version", "generated_at", "analysis_ref", "control_assessments", "limitations")

@@ -1,182 +1,137 @@
 # Development
 
-## Overview
+Last Updated: 2026-09-23
+Version: v2.1.12
 
-The g8e Agentic Ensemble (`g8ee`) is implemented in Python as a FastAPI service situated in-tree under `ensemble/`. It serves as the primary reasoning and decision-making engine for the g8e platform, communicating with the Governance Gateway (`g8eg`) and Governed Operator (`g8eo`) via mTLS, signed `GovernanceEnvelope` transactions, SSE streaming, and pub/sub messaging.
+## Scope and architecture
 
-The ensemble relies on the in-tree `g8e` Python protocol package (`protocol/python/`) as the single source of truth for protocol constants, wire models, enums, and protobuf schemas. See [Protocol Reference](../architecture/protocol.md) for the platform-level protocol specification.
+The g8e Agentic Ensemble (`g8ee`) is an optional Python 3.12+ FastAPI application in `ensemble/`. It owns conversational orchestration, model-provider integration, typed tool execution, investigation and case workflows, application settings, Operator workflow coordination, and application event publication. It is not the Gateway or an Operator and it does not create an execution authority outside the g8e governance paths.
 
-## Setup
+For host operations, g8ee sends a typed `CommandIntent` to the exact selected Operator session through Gateway pub/sub. The Gateway constructs the governed envelope for that relay path, and the target Operator independently performs the required verification and execution. For designated application-record writes, g8ee uses `GovernanceClient` to submit canonical protojson envelopes to the Gateway. Application approvals, Tribunal agreement, model output, memories, reputation, and SSE events do not replace protocol L2 or L3 evidence. See [Ensemble Architecture](architecture.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the complete boundary model.
+
+The FastAPI application is assembled in `ensemble/app/main.py`. Its lifespan loads bootstrap settings, resolves the enrolled g8ee application identity, connects the DB, KV, pub/sub, and blob clients, loads Gateway-backed platform settings, constructs `GovernanceClient` and the domain services, starts lifecycle services, and only then yields readiness. Shutdown stops services, clears provider state, closes transport clients, and closes the document service.
+
+## Repository and dependency ownership
+
+The in-tree `g8e` Python package under `protocol/python/` is the source of truth for shared protocol constants, enums, models, and protobuf-generated Python code. `ensemble/pyproject.toml` resolves the `g8e` dependency to `../protocol/python` through `[tool.uv.sources]`; container builds install the local protocol package before installing `ensemble`. Do not duplicate protocol identifiers in `ensemble/app/` when a shared protocol value exists.
+
+Ensemble-only values live under `ensemble/app/constants/`. These include internal API paths, environment variable names, runtime paths, provider configuration, message-sender identifiers, and mappings that have no protocol equivalent. `app/constants/generated_paths.py` and related generated modules expose values copied from the protocol package; update their source rather than hand-editing generated output.
+
+Generated Python protobuf modules are placed in `protocol/python/g8e/proto/` by the canonical protocol generator. The ensemble Make target does not generate them: `cd ensemble && make proto` runs the generator in check mode and fails when the canonical stubs are stale. To regenerate all language outputs, run `make proto` from the repository root; the Python portion invokes `protocol/python/scripts/generate_protos.py`.
+
+The application model hub is `app.models.base`. It re-exports the protocol `G8eBaseModel`, `UTCDatetime`, Pydantic helpers, and the ensemble lifecycle bases:
+
+- `G8eBaseModel` provides the shared Pydantic/protojson-compatible foundation.
+- `G8eTimestampedModel` adds UTC `created_at` and optional `updated_at` fields plus `update_timestamp()`.
+- `G8eIdentifiableModel` adds a stable UUID4 document identifier and `generate_id()`.
+- `G8eAuditableModel` adds `created_by` and `updated_by` plus `update_audit_info()`.
+- `recursive_serialize()` converts nested models, datetimes, lists, and dictionaries at cache/database boundaries.
+
+`app.models.http_context.RequestContext` extends the protocol request context with `operator_id`, `operator_session_id`, and evaluation context. `G8eHttpContext` validates session exclusivity, requires identity for non-exempt requests, binds context identifiers to the authenticated caller, and validates bound Operator sessions. The middleware and dependency functions in `app/middleware/http_context.py` and `app/dependencies.py` are the owners of request-context extraction and authentication dependencies.
+
+Most application modules import Pydantic types through `app.models.base`; `app/llm/model_evidence.py` currently retains a direct `BaseModel` import. New application models should use the hub and inherit the appropriate typed protocol or ensemble base rather than introducing parallel serialization behavior.
+
+## Local setup
+
+Run these commands from `ensemble/` unless stated otherwise. Python 3.12 or newer is required.
 
 ```bash
-# Navigate to the ensemble directory
 cd ensemble
-
-# Create and activate a Python 3.12+ virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install the in-tree g8e protocol package in editable mode, followed by ensemble dev and test dependencies
 pip install -e ../protocol/python
 pip install -e ".[dev,test,docs]"
-
-# Install pre-commit hooks
 pre-commit install
-
-# Generate Python protobuf stubs from protocol definitions
-make proto
 ```
 
-Alternatively, running `make setup` from the `ensemble/` directory installs the editable protocol package and all dev/test dependencies automatically.
+`make setup` from `ensemble/` installs the editable protocol package and the ensemble `dev` and `test` extras. The `docs` extra is not included by that target; install `.[dev,test,docs]` when working on MkDocs documentation. The root Makefile also uses a repository-root `.venv` for its ensemble targets, so install the editable packages into that environment when using `make ensemble-test` or `make ensemble-lint` from the repository root.
 
-## g8e Package Dependency
-
-g8ee depends on the `g8e` Python package as the single source of truth for protocol constants, enums, and models. In this repository, the version in `protocol/python/` follows the root `VERSION` file, and `ensemble/pyproject.toml` resolves the package through `[tool.uv.sources]` to `../protocol/python`. In container builds, the Dockerfile installs `protocol/python/` before `ensemble/` so dependencies resolve to the local in-tree package without requiring external PyPI distribution.
-
-## Model Hierarchy
-
-Base models are sourced from `g8e.models.base` and re-exported through `app.models.base`, which acts as the central model foundation and Pydantic import hub:
-
-- **`G8eBaseModel`** — Base model from `g8e.models.base`, re-exported via `app.models.base`. Extends Pydantic's `BaseModel` with protojson-compatible serialization (`exclude_none=True` by default) and UTC normalization. All ensemble models inherit from this.
-- **`UTCDatetime`** — Type alias from `g8e.models.base`, re-exported via `app.models.base`. Serializes datetimes to ISO 8601 with a `Z` suffix in UTC canonical form.
-- **`G8eTimestampedModel`** — Base lifecycle model in `app.models.base` adding UTC timestamp fields (`created_at`, `updated_at`) and helper method `update_timestamp()`.
-- **`G8eIdentifiableModel`** — Persisted entity base in `app.models.base` extending `G8eTimestampedModel` with a stable UUID4 document identifier (`id`) and `generate_id(prefix)` helper.
-- **`G8eAuditableModel`** — Actor-tracking base in `app.models.base` extending `G8eIdentifiableModel` with `created_by` and `updated_by` fields and `update_audit_info()` helper.
-- **`recursive_serialize`** — Utility in `app.models.base` for boundary crossing and flattening nested structures with datetime serialization.
-- **Pydantic primitives** (`ConfigDict`, `Field`, `ValidationError`, `field_validator`, `model_validator`, `BaseModel`, `PrivateAttr`, `TypeAdapter`, `ValidationInfo`, `computed_field`) — Re-exported through `app.models.base`. All `from pydantic import` statements across `app/` route through `app.models.base` (except `app/models/base.py` itself).
-
-Ensemble-specific models extend the protocol base models:
-
-- **`RequestContext`** — Subclasses `g8e.models.context.RequestContext` in `app.models.http_context`, adding `operator_id` and `operator_session_id` for governance envelope routing while defaulting `source_component` to `g8ee`.
-- **`G8eHttpContext`** — Standard request context model in `app.models.http_context` handling session mutual exclusivity, identity validation against authenticated callers, and conversion to `RequestContext`.
-- **`BoundOperator`** — Re-exported directly from `g8e.models.context`.
-- **`ChatMessageRequest`** — Defined in `app.models.internal_api` via multiple inheritance: subclasses `g8e.models.internal_api.ChatMessageRequest` and `RequestOverrides` mixin, overriding attachments with typed `list[AttachmentMetadata]`.
-- **`ResourceCreationRequest` and `ChatStartedResponse`** — Directly re-exported from `g8e.models.internal_api`.
-- **Settings models** — Subclasses of protocol definitions from `g8e.models.settings` in `app.models.settings` (`CommandValidationSettings`, `SearchSettings`, `EvalJudgeSettings`, `LLMSettings`, `BatchExecutionSettings`, `G8eeUserSettings`).
-- **SSE wire models** — `SessionEventWire` and `BackgroundEventWire` in `app.models.events` subclass `g8e.models.events` to wrap internal `SessionEvent` and `BackgroundEvent` routing envelopes; all 11 SSE payload classes (`AiProcessingStoppedPayload`, `AIToolLifecyclePayload`, `ChatCitationsReadyPayload`, `ChatErrorPayload`, `ChatProcessingStartedPayload`, `ChatResponseChunkPayload`, `ChatResponseCompletePayload`, `ChatRetryPayload`, `ChatThinkingPayload`, `ChatTurnCompletePayload`, `TriageClarificationQuestionsPayload`) are re-exported from `g8e.models.events`.
-
-## Constants
-
-The in-tree `g8e` Python package is the source of truth for constants and enums shared with the Gateway and Operator. Ensemble modules import collection names, document identifiers, key-value key patterns, channels, intents, prompt identifiers, Gateway API paths, HTTP headers, component names, and protocol enums from `g8e.constants` or `g8e.enums`. The dependency resolves to `protocol/python/` through `ensemble/pyproject.toml` during local development.
-
-`ensemble/app/constants/` also contains values that belong only to the ensemble, including internal API paths, provider configuration, runtime path resolution, environment variable names, conversation sender identifiers, and mappings between protocol events and action types. A value remains local only when the shared protocol has no equivalent. Shared protocol strings are not duplicated locally.
-
-Tests in `ensemble/tests/unit/constants/` verify the ensemble accessors and protocol alignment. `ensemble/tests/test_constants_parity.py` validates the JSON registries in `protocol/constants/` against the ensemble's typed registry models.
-
-## Protobuf Stubs
-
-Generated Python protobuf stubs from the g8e protocol `.proto` definitions are placed in `app/proto/`. This directory is gitignored (generated artifacts, not committed to source control).
-
-- Regenerate with: `make proto` (from `ensemble/` or root)
-- Input proto files: `protocol/proto/g8e/common/v1/common.proto`, `protocol/proto/g8e/operator/v1/operator.proto`, `protocol/proto/g8e/pubsub/v1/pubsub.proto`
-- Output stubs: `common_pb2.py`, `operator_pb2.py`, `pubsub_pb2.py`
-- Re-exported via: `app/proto/__init__.py`
-
-## Development Commands
-
-Ensemble dependencies are installed into a virtualenv, not system Python. Bare `python` or `python3` usually resolves to the system interpreter and fails with missing modules such as `openai`.
-
-Use the Make targets below. They select `ensemble/.venv/bin/python` when that venv exists. For one-off commands, call that interpreter explicitly:
-
-```bash
-ensemble/.venv/bin/python -m pytest tests/unit/services/evaluation/test_trace_service.py -v
-```
-
-The repository root also has a `.venv` used by `make ensemble-test` and `make ensemble-lint`. Keep both venvs current after changing `protocol/python/`:
+After changing `protocol/python/`, refresh the environment used by the command you are running:
 
 ```bash
 pip install -e protocol/python
 pip install -e 'ensemble[dev,test]'
 ```
 
-When working on ensemble code, prefer `cd ensemble && make test|lint|check` over root `make ensemble-test` unless you maintain the root venv deliberately.
+The service reads `.env` with `python-dotenv` at import time without overriding existing environment variables. Local bootstrap settings are assembled by `SettingsService`; verified bootstrap secrets can come from the configured bootstrap material, LLM provider defaults can come from environment variables, and platform settings are loaded through the Gateway-backed cache-aside service. Platform settings take precedence over environment defaults, and request overrides are applied at the user-settings boundary. Do not treat the `/operator-state` mount in the unified Compose deployment as a general host filesystem or execution channel.
 
-### From the Repository Root
+## Development commands
 
-```bash
-# Run Tier 1 + Tier 2 unit and in-process integration tests
-make ensemble-test
-
-# Run Tier 4 external tests (real LLM/API calls, gated on credentials)
-make test-external
-
-# Run Ruff linter and Pyright type checker on the ensemble
-make ensemble-lint
-
-# Build the ensemble container image
-make build-ensemble
-```
-
-### From the `ensemble/` Directory
+The `ensemble/Makefile` selects `ensemble/.venv/bin/python`, `ruff`, and `pyright` when those files exist and otherwise falls back to tools on `PATH`.
 
 ```bash
-# Run tests
-make test
-
-# Run linter and type checker
-make lint
-
-# Auto-format code with Ruff
-make format
-
-# Run format, lint, and test sequentially
-make check
-
-# Clean __pycache__, .pyc, and egg-info artifacts
-make clean
-
-# Generate protobuf stubs
-make proto
+# From ensemble/
+make setup       # Install editable protocol and ensemble dev/test packages
+make test        # Run all tests under tests/
+make lint        # Run Ruff on app/ and Pyright on app/
+make format      # Format app/ and tests/ with Ruff
+make check       # Format, lint, then test
+make proto       # Check canonical Python protobuf stubs
+make clean       # Remove Python caches and egg-info artifacts
 ```
 
-## Coding Standards
-
-- **Linter:** Ruff (`ruff check app tests evals`) configured in `pyproject.toml`
-- **Formatter:** Ruff (`ruff format app tests evals`) with double quotes, 4-space indentation, and 100-character line length
-- **Type checker:** Pyright (`pyright app`) with strict typing rules
-- **Pre-commit:** Enforces Ruff linting, Ruff formatting, and Pyright validation on staged files
-- **Pydantic imports:** All `from pydantic import` statements in `app/` must route through `app.models.base` re-exports (except `app/models/base.py` itself)
-- **Error handling:** Return and check centralized error codes from `app.constants.errors` and raise typed exceptions from `app.errors`
-- **Governance transactions:** All business-critical state mutations (case updates, operator commands, file edits, memories) route through `GovernanceClient` via signed `GovernanceEnvelope` structures
-
-## Dependency Groups
-
-The project specifies dependencies in `ensemble/pyproject.toml` organized into functional optional groups:
-
-- `dev` — Development tools (`ruff`, `pyright`, `pre-commit`)
-- `test` — Testing framework (`pytest`, `pytest-cov`, `pytest-asyncio`, `pytest-mock`, `pytest-timeout`, `pytest-xdist`)
-- `docs` — Documentation tools (`mkdocs`, `mkdocs-material`, `mkdocstrings[python]`)
-- `embeddings` — Optional embedding models (`sentence-transformers`)
+Use the repository-root targets when you need the supported split between local unit/in-process integration tests and external tests:
 
 ```bash
-pip install -e ".[dev,test,docs]"
+make ensemble-test    # tests/unit and tests/integration, excluding external-service markers
+make test-external    # integration tests marked ai_integration, requires_web_search, or requires_api
+make ensemble-lint    # Ruff and Pyright for ensemble/app
+make build-ensemble  # Build g8e-ensemble:<VERSION> from ensemble/Dockerfile
 ```
 
-## Project Conventions
+The root `make ensemble-test` target runs `tests/unit/` and `tests/integration/` with `-m "not ai_integration and not requires_web_search and not requires_api"`. The `make test-external` target runs the marked integration tests and requires the relevant credentials or external services. It is not a unit-test target. The test suite also defines `e2e`, `smoke`, `ai`, `thinking`, `tools`, `operator_wire`, and `requires_operator` markers; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
 
-- Follow existing code patterns — let Ruff and Pyright guide type safety and formatting
-- Reuse existing implementations before writing new code — search `app/` and the in-tree `g8e` package for existing models, utilities, services, and constants; the codebase already contains what most tasks need, so keep additions minimal and extend existing code rather than introducing parallel functionality
-- Never add shims, compatibility wrappers, or duplicate helpers that reinvent existing functionality
-- Keep changes minimal, focused, and covered by tests
-- Add unit tests for new functionality and regression tests for bug fixes
-- Update documentation in `docs/ensemble/` when interfaces or models change
-- Source protocol constants and enums from `g8e.constants` and `g8e.enums` — never hardcode protocol strings
-- Never bypass the 5-layer verification pipeline or commit unstaged mutations directly
+For a focused test, use the environment selected by the target or invoke the ensemble interpreter explicitly:
 
-## Related
+```bash
+ensemble/.venv/bin/python -m pytest tests/unit/services/evaluation/test_trace_service.py -v
+```
 
-- [Platform Developer Guidelines](../devs/devs.md) — g8e platform-wide developer guidelines, coding standards, and conventions
-- [Code Map](../devs/codemap.md) — Platform-wide codebase map and component directory structure
-- [Protocol Reference](../architecture/protocol.md) — Platform-level canonical wire contracts and protobuf schema definitions
-- [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
-- [Governance](governance.md) — Five-layer verification pipeline and envelope validation
-- [Agents](agents.md) — Agent hierarchy, personas, and Tribunal consensus
-- [Prompts](prompts.md) — System prompt assembly and persona templating
-- [Thinking](thinking.md) — L2 consensus, provider reasoning, and thought signatures
-- [PKI & Trust](pki.md) — Public Key Infrastructure, trust bundles, and workload enrollment
-- [Storage](storage.md) — Storage tiers and data sovereignty principles
-- [LLM Providers](llm-providers.md) — Provider implementations and model roles
-- [Server-Sent Events](sse.md) — Real-time event streaming pipeline and Gateway push delivery
-- [Testing](tests.md) — Testing framework, test tiers, and practices
-- [Evals](evals.md) — Benchmark evaluation suite and Judge scoring rubrics
-- [Getting Started](getting-started.md) — Initial setup guide
+Tests use the pytest configuration in `ensemble/pyproject.toml`: strict markers and configuration, automatic asyncio mode, a 60-second timeout, warning-as-error behavior with narrowly scoped SDK exceptions, and coverage configured for `app/`. The repository integration fixtures and the external-service markers are the authority for infrastructure requirements; do not infer test tier solely from a directory name.
+
+## Coding standards
+
+- Use Ruff for linting and formatting. The configured target is Python 3.12, with a 100-character line length and four-space indentation.
+- Use Pyright against `app/`; the project configuration enables strict typing rules.
+- Route new Pydantic imports through `app.models.base` and use typed protocol or application models rather than raw dictionaries for known shapes.
+- Import shared constants, API paths, model types, and enums from the in-tree `g8e` package. Keep values in `app/constants/` only when they are ensemble-owned.
+- Keep service construction and dependency wiring in `ServiceFactory` and its typed `CoreServices`, `DataServices`, `DomainServices`, `OperatorServices`, and `AllServices` containers. Do not create a second production wiring path in a router or provider.
+- Preserve the startup dependency order: bootstrap settings and identity, transport clients, DB/KV/blob handlers, cache-aside service, platform settings, governance and domain services, then lifecycle start hooks.
+- Return or raise the typed errors defined by `app.errors` and use the centralized error codes in `app.constants.errors` for machine-checked failures.
+- Route business-critical application-record mutations through `GovernanceClient`. Do not bypass the Gateway with direct storage writes or treat application approval as protocol authorization.
+- Preserve exact Operator/session binding when constructing command requests. Do not broadcast commands or trust caller-supplied identity headers without authenticated-context validation.
+- Add unit tests for isolated behavior and integration tests for real Gateway, Operator, pub/sub, or provider boundaries. Add a regression test before fixing a bug.
+- Keep documentation under `docs/ensemble/` synchronized when interfaces, models, provider boundaries, lifecycle behavior, or test commands change.
+
+Pre-commit runs the configured Ruff and Pyright checks on staged files. It is an additional local check, not a replacement for the Make targets or the relevant integration tests.
+
+## LLM provider boundary
+
+Provider adapters live under `ensemble/app/llm/providers/`. The current provider implementations are OpenAI, Anthropic, Gemini, Ollama, llama.cpp, the fake test provider, and the governed `g8e` inference provider. Provider selection and role-specific model configuration are typed in `app.models.settings`; the roles are primary, assistant, and lite. Optional Vertex AI Search grounding is represented by `GroundingService` and `WebSearchProvider` when search is enabled.
+
+The `g8e` provider sends governed inference through the Gateway-backed internal HTTP client. Other provider adapters remain application/provider integrations and are not automatically made governed by the fact that the request originated in g8ee. Provider behavior, native network access, and side channels remain outside the g8e execution boundary.
+
+## Service and test wiring
+
+`ServiceFactory.create_all_services()` constructs the production graph in dependency order. It wires the DB, KV, and blob handlers; cache-aside and data services; investigations, memories, reputation, and SSH inventory; authentication and Operator-session services; heartbeat and stale-heartbeat monitoring; event and HTTP services; attachment and grounding services; approval and stream execution; and the typed tool service, agent, and chat pipeline. The chat pipeline creates its evaluation trace service unless one is injected. Production supplies the shared pub/sub client so command and heartbeat services can start with the application lifecycle.
+
+Tests can inject fakes through the service factory and the fixtures under `ensemble/tests/fakes/`. Unit tests should remain isolated from live infrastructure. Integration tests under `ensemble/tests/integration/` cover Gateway-backed cache and settings behavior, pub/sub command dispatch, mTLS inference, SSE event contracts, Operator workflows, and other cross-service paths. The `tests/e2e/` package contains end-to-end test support; its marker and fixture requirements determine whether a live deployment is needed.
+
+## Protobuf and generated artifacts
+
+The protocol definitions consumed by g8ee are maintained under `protocol/proto/g8e/`, including the common, Operator, and pub/sub APIs used by the application. Generated outputs have protocol-package ownership. Do not hand-edit generated Python modules or update an ensemble-only copy to hide protocol drift. Run the owning generator, then run the parity and alignment tests, including `tests/test_constants_parity.py` and the relevant unit tests under `tests/unit/constants/` and `tests/unit/clients/`.
+
+## Related documentation
+
+- [g8ee index](index.md) — Component documentation map and entry points.
+- [Ensemble Architecture](architecture.md) — Component boundaries, runtime, storage, and request flow.
+- [Governance](governance.md) — Five-layer verification and posture semantics.
+- [Agents](agents.md) — Persona hierarchy, Tribunal, Auditor, and Marshal behavior.
+- [Protocol](protocol.md) — Ensemble-facing protocol integration.
+- [LLM Providers](llm-providers.md) — Provider implementations and configuration.
+- [Storage](storage.md) — Gateway-backed storage and restart behavior.
+- [Server-Sent Events](sse.md) — Event delivery and session targeting.
+- [Testing](tests.md) — Component test organization and infrastructure.
+- [Getting Started](getting-started.md) — Local and unified deployment setup.
+- [Platform Developer Guidelines](../devs/devs.md) — Repository-wide coding and testing rules.
+- [Documentation Guide](../devs/docs.md) — Documentation audit, ownership, generation, and validation rules.

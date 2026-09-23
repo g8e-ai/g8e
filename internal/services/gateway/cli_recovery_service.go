@@ -52,6 +52,18 @@ const (
 //     completion to verify proof-of-possession of the CSR private key.
 //   - Only safe token/request prefixes are logged; raw tokens and certificate
 //     material are never logged.
+type cliRecoveryDecisionUpdate struct {
+	State           string `json:"state"`
+	ApprovingUserID string `json:"approving_user_id"`
+	ApprovedAt      string `json:"approved_at,omitempty"`
+	DeniedAt        string `json:"denied_at,omitempty"`
+}
+
+type cliRecoveryCompletionUpdate struct {
+	State       string `json:"state"`
+	CompletedAt string `json:"completed_at"`
+}
+
 type CLIRecoveryService struct {
 	db     *DocumentStoreService
 	logger *slog.Logger
@@ -229,14 +241,18 @@ func (s *CLIRecoveryService) transitionOnApproval(token, userID string, approve 
 		targetState = models.CLIRecoveryStateDenied
 	}
 
-	setFields := map[string]interface{}{
-		"state":             string(targetState),
-		"approving_user_id": userID,
+	decisionUpdate := cliRecoveryDecisionUpdate{
+		State:           string(targetState),
+		ApprovingUserID: userID,
 	}
 	if approve {
-		setFields["approved_at"] = nowStr
+		decisionUpdate.ApprovedAt = nowStr
 	} else {
-		setFields["denied_at"] = nowStr
+		decisionUpdate.DeniedAt = nowStr
+	}
+	setFields, err := json.Marshal(decisionUpdate)
+	if err != nil {
+		return fmt.Errorf("CLI recovery: marshal decision update: %w", err)
 	}
 
 	applied, err := s.db.DocConditionalUpdate(
@@ -320,13 +336,16 @@ func (s *CLIRecoveryService) Complete(token string) (*models.CLIRecoveryRequest,
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
 
+	completionUpdate, err := json.Marshal(cliRecoveryCompletionUpdate{
+		State:       string(models.CLIRecoveryStateCompleted),
+		CompletedAt: nowStr,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("CLI recovery: marshal completion update: %w", err)
+	}
 	applied, err := s.db.DocConditionalUpdate(
 		marshaler.CollectionName(constants.CollectionCLIRecoveryRequests),
-		tokenHash,
-		map[string]interface{}{
-			"state":        string(models.CLIRecoveryStateCompleted),
-			"completed_at": nowStr,
-		},
+		tokenHash, completionUpdate,
 		"state", string(models.CLIRecoveryStateApproved),
 	)
 	if err != nil {
@@ -418,12 +437,16 @@ func (s *CLIRecoveryService) fetchByHash(tokenHash, prefix string) (*models.CLIR
 // decided to treat the request as expired.
 func (s *CLIRecoveryService) expireRequest(req *models.CLIRecoveryRequest, tokenHash, prefix string) {
 	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+	expiryUpdate, err := json.Marshal(struct {
+		State string `json:"state"`
+	}{State: string(models.CLIRecoveryStateExpired)})
+	if err != nil {
+		s.logger.Warn("CLI recovery: failed to marshal expiry update", "error", err, "token_prefix", prefix)
+		return
+	}
 	applied, err := s.db.DocConditionalUpdate(
 		marshaler.CollectionName(constants.CollectionCLIRecoveryRequests),
-		tokenHash,
-		map[string]interface{}{
-			"state": string(models.CLIRecoveryStateExpired),
-		},
+		tokenHash, expiryUpdate,
 		"state", string(req.State),
 	)
 	if err != nil {

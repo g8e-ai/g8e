@@ -130,15 +130,44 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 	if runtimeConfig == nil {
 		return constants.ErrMissingRequiredField
 	}
-	updateBytes, err := json.Marshal(map[string]any{
-		"runtime_config": runtimeConfig,
-		"updated_at":     time.Now().UTC(),
-	})
+	updateBytes, err := json.Marshal(struct {
+		RuntimeConfig *models.RuntimeConfig `json:"runtime_config"`
+		UpdatedAt     time.Time             `json:"updated_at"`
+	}{RuntimeConfig: runtimeConfig, UpdatedAt: time.Now().UTC()})
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 	if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return fmt.Errorf("%w: update operator runtime config: %w", constants.ErrDocumentStoreMarshalDocument, err)
+	}
+	return nil
+}
+
+func (s *RegistrationService) MarkOperatorStopped(operatorID, userID, reason string) error {
+	if operatorID == "" {
+		return constants.ErrRegistrationOperatorIDRequired
+	}
+	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	if err != nil || doc == nil {
+		return fmt.Errorf("%w: %w", constants.ErrRegistrationOperatorNotFound, err)
+	}
+	op, err := s.toOperatorDoc(doc)
+	if err != nil {
+		return err
+	}
+	if op.UserID != userID {
+		return constants.ErrRegistrationOperatorNotBelongToUser
+	}
+	update, err := json.Marshal(struct {
+		Status     string    `json:"status"`
+		UpdatedAt  time.Time `json:"updated_at"`
+		StopReason string    `json:"stop_reason"`
+	}{Status: string(constants.OperatorStatusStopped), UpdatedAt: time.Now().UTC(), StopReason: strings.TrimSpace(reason)})
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
+	}
+	if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, update); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 	return nil
 }

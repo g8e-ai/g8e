@@ -118,6 +118,8 @@ func enrollCmd() *cobra.Command {
 
   deny      Deny a pending platform workload enrollment request.
 
+  revoke    Revoke a completed platform workload enrollment.
+
 Bare ` + "`auth enroll`" + ` (no subcommand) prints this help and exits non-zero.`,
 	}
 	cmd.AddCommand(
@@ -125,6 +127,7 @@ Bare ` + "`auth enroll`" + ` (no subcommand) prints this help and exits non-zero
 		pendingPlatformEnrollmentCmd(),
 		approvePlatformEnrollmentCmd(),
 		denyPlatformEnrollmentCmd(),
+		revokePlatformEnrollmentCmd(),
 	)
 	return cmd
 }

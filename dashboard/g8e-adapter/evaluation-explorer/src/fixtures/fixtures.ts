@@ -22,7 +22,7 @@ import type {
 
 const NOW = '2026-09-14T08:00:00Z';
 const EXPLO_DATASET = 'ds-exploratory-baseline-20260914-r2';
-const VERIFIED_DATASET = 'ds-verified-public-20260914';
+const VERIFIED_DATASET = 'ds-legacy-public-20260914';
 const LIVE_DATASET = 'ds-live-demo-20260914';
 
 export const FIXTURE_DATASET_IDS = {
@@ -73,19 +73,20 @@ export const fixtureCatalogExploratory: CatalogSnapshot = {
 };
 
 export const fixtureCatalogVerified: CatalogSnapshot = {
-  schema_version: '1.2.0',
+  schema_version: '1.5.0',
   kind: 'catalog_snapshot',
   dataset_id: VERIFIED_DATASET,
   dataset_kind: 'verified_public_snapshot',
-  quality_state: 'verified_public',
+  quality_state: 'legacy_unverified',
   observed_at: NOW,
-  source_revision_label: 'docs/evidence/readme/current',
-  title: 'Verified public snapshot (2026-09-14)',
+  source_revision_label: 'docs/evidence/readme/legacy-20260914',
+  title: 'Legacy public snapshot (2026-09-14)',
   description:
-    'Two checksum-bound five-task IFEval runs from the current public snapshot. One scored 4/5 and one scored 3/5. This is a small high-confidence dataset, kept separate from exploratory measurements.',
+    'Two historical five-task IFEval runs that passed the verifier available when they were produced. They have not been re-verified against the current evidence and verification contract.',
   limitations: [
+    'Legacy evidence does not satisfy current-standard verification requirements.',
     'Small scope: two five-task runs only.',
-    'Not merged with exploratory rankings.',
+    'Not merged with current-standard verified rankings.',
   ],
   model_count: 31,
   evaluated_count: 2,
@@ -788,7 +789,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
     schema_version: '1.2.0',
     kind: 'evaluation_completed',
     dataset_id: LIVE_DATASET,
-    quality_state: 'verified_public',
+    quality_state: 'exploratory_partial',
     observed_at: '2026-09-14T08:00:30Z',
     event_id: 'evt-006',
     run_id: 'run-live-demo-20260914',
@@ -890,11 +891,11 @@ export const fixtureLiveEvaluationSummary: EvaluationSummary = {
   headline_metrics: {},
 };
 
-// Verified public snapshot records. The verified dataset has two five-task
+// Legacy public snapshot records. The historical dataset has two five-task
 // IFEval runs (one 4/5, one 3/5) across three evaluated models. Resource
 // observations are absent in this dataset, so token and latency metrics are
 // unavailable with explicit reasons. These fixtures let every route render
-// when the dataset selector switches to "Verified public snapshot".
+// when the dataset selector switches to "Legacy public snapshot".
 const verifiedModels: Array<{
   variant_id: string;
   display_name: string;
@@ -930,12 +931,12 @@ const verifiedModels: Array<{
 ];
 
 export const fixtureVerifiedModelSummaries: ModelSummary[] = verifiedModels.map((m) => ({
-  schema_version: '1.2.0',
+  schema_version: '1.5.0',
   kind: 'model_summary',
   dataset_id: VERIFIED_DATASET,
-  quality_state: 'verified_public',
+  quality_state: 'legacy_unverified',
   observed_at: NOW,
-  source_revision_label: 'docs/evidence/readme/current',
+  source_revision_label: 'docs/evidence/readme/legacy-20260914',
   variant_id: m.variant_id,
   display_name: m.display_name,
   served_model_tag: m.served_model_tag,
@@ -952,14 +953,14 @@ export const fixtureVerifiedModelSummaries: ModelSummary[] = verifiedModels.map(
 }));
 
 export const fixtureVerifiedSuiteSummary: SuiteSummary = {
-  schema_version: '1.2.0',
+  schema_version: '1.5.0',
   kind: 'suite_summary',
   dataset_id: VERIFIED_DATASET,
-  quality_state: 'verified_public',
+  quality_state: 'legacy_unverified',
   observed_at: NOW,
-  source_revision_label: 'docs/evidence/readme/current',
+  source_revision_label: 'docs/evidence/readme/legacy-20260914',
   suite_id: 'ifeval',
-  display_name: 'IFEval (verified)',
+  display_name: 'IFEval (legacy)',
   task_count: 5,
   assignment_count: 10,
   status: 'completed',
@@ -976,20 +977,18 @@ export const fixtureVerifiedSuiteSummary: SuiteSummary = {
 
 export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
   {
-    schema_version: '1.2.0',
+    schema_version: '1.5.0',
     kind: 'evaluation_summary',
     dataset_id: VERIFIED_DATASET,
-    quality_state: 'verified_public',
+    quality_state: 'legacy_unverified',
     observed_at: NOW,
-    source_revision_label: 'docs/evidence/readme/current',
-    run_id: 'run-verified-ifeval-1',
-    campaign_id: 'verified-public-20260914',
+    source_revision_label: 'docs/evidence/readme/legacy-20260914',
+    run_id: 'run-legacy-ifeval-1',
+    campaign_id: 'legacy-public-20260914',
     suite_id: 'ifeval',
     arm: 'ensemble_ungoverned',
     evaluation_unit: 'model',
-    primary_invocation_share: { unavailable_reason: 'not observed in this dataset' },
-    correlated_failure_rate: { unavailable_reason: 'no comparable correlated-failure observations' },
-    benchmark_unavailable_reasons: ['Stack routing and correlated-failure observations were not captured in this snapshot.'],
+    benchmark_unavailable_reasons: ['Scored-inference resource observations were not captured in this snapshot.'],
     model_role_mapping: {
       primary: 'gemma4-e4b',
       assistant: 'gemma4-e2b',
@@ -1003,25 +1002,27 @@ export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
     started_at: '2026-09-13T22:00:00Z',
     ended_at: '2026-09-13T22:30:00Z',
     elapsed_seconds: 1800,
-    verifier_state: 'passed',
-    headline_metrics: { pass_rate: { value: 0.8 } },
-    evidence_link: 'checksum://verified-ifeval-1',
+    verifier_state: 'not_applicable',
+    headline_metrics: {
+      pass_rate: { value: 0.8, unit: 'ratio', observed_count: 5, eligible_count: 5, unavailable_count: 0 },
+      latency_p50_ms: { unavailable_reason: 'historical_not_captured', unit: 'milliseconds', observed_count: 0, eligible_count: 5, unavailable_count: 5 },
+      output_throughput_p50_tokens_per_second: { unavailable_reason: 'historical_not_captured', unit: 'tokens_per_second', observed_count: 0, eligible_count: 5, unavailable_count: 5 },
+    },
+    evidence_link: 'checksum://legacy-ifeval-1',
   },
   {
-    schema_version: '1.2.0',
+    schema_version: '1.5.0',
     kind: 'evaluation_summary',
     dataset_id: VERIFIED_DATASET,
-    quality_state: 'verified_public',
+    quality_state: 'legacy_unverified',
     observed_at: NOW,
-    source_revision_label: 'docs/evidence/readme/current',
-    run_id: 'run-verified-ifeval-2',
-    campaign_id: 'verified-public-20260914',
+    source_revision_label: 'docs/evidence/readme/legacy-20260914',
+    run_id: 'run-legacy-ifeval-2',
+    campaign_id: 'legacy-public-20260914',
     suite_id: 'ifeval',
     arm: 'ensemble_ungoverned',
     evaluation_unit: 'model',
-    primary_invocation_share: { unavailable_reason: 'not observed in this dataset' },
-    correlated_failure_rate: { unavailable_reason: 'no comparable correlated-failure observations' },
-    benchmark_unavailable_reasons: ['Stack routing and correlated-failure observations were not captured in this snapshot.'],
+    benchmark_unavailable_reasons: ['Scored-inference resource observations were not captured in this snapshot.'],
     model_role_mapping: {
       primary: 'gemma4-e4b',
       assistant: 'gemma4-e2b',
@@ -1035,9 +1036,13 @@ export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
     started_at: '2026-09-13T23:00:00Z',
     ended_at: '2026-09-13T23:30:00Z',
     elapsed_seconds: 1800,
-    verifier_state: 'passed',
-    headline_metrics: { pass_rate: { value: 0.6 } },
-    evidence_link: 'checksum://verified-ifeval-2',
+    verifier_state: 'not_applicable',
+    headline_metrics: {
+      pass_rate: { value: 0.6, unit: 'ratio', observed_count: 5, eligible_count: 5, unavailable_count: 0 },
+      latency_p50_ms: { unavailable_reason: 'historical_not_captured', unit: 'milliseconds', observed_count: 0, eligible_count: 5, unavailable_count: 5 },
+      output_throughput_p50_tokens_per_second: { unavailable_reason: 'historical_not_captured', unit: 'tokens_per_second', observed_count: 0, eligible_count: 5, unavailable_count: 5 },
+    },
+    evidence_link: 'checksum://legacy-ifeval-2',
   },
 ];
 
@@ -1048,10 +1053,10 @@ function verifiedAssignment(
   passed: boolean,
 ): AssignmentResult {
   return {
-    schema_version: '1.2.0',
+    schema_version: '1.5.0',
     kind: 'assignment_result',
     dataset_id: VERIFIED_DATASET,
-    quality_state: 'verified_public',
+    quality_state: 'legacy_unverified',
     observed_at: NOW,
     assignment_id: `asg-${runId}-${String(index).padStart(3, '0')}`,
     run_id: runId,
@@ -1074,17 +1079,17 @@ function verifiedAssignment(
 
 // Run 1: 4/5 pass (gemma4-e4b graded 8 tasks across both runs; this run uses 4 e4b + 1 12b)
 export const fixtureVerifiedAssignmentResults: AssignmentResult[] = [
-  verifiedAssignment('run-verified-ifeval-1', 1, 'gemma4-e4b', true),
-  verifiedAssignment('run-verified-ifeval-1', 2, 'gemma4-e4b', true),
-  verifiedAssignment('run-verified-ifeval-1', 3, 'gemma4-e4b', true),
-  verifiedAssignment('run-verified-ifeval-1', 4, 'gemma4-e4b', true),
-  verifiedAssignment('run-verified-ifeval-1', 5, 'gemma4-12b', false),
+  verifiedAssignment('run-legacy-ifeval-1', 1, 'gemma4-e4b', true),
+  verifiedAssignment('run-legacy-ifeval-1', 2, 'gemma4-e4b', true),
+  verifiedAssignment('run-legacy-ifeval-1', 3, 'gemma4-e4b', true),
+  verifiedAssignment('run-legacy-ifeval-1', 4, 'gemma4-e4b', true),
+  verifiedAssignment('run-legacy-ifeval-1', 5, 'gemma4-12b', false),
   // Run 2: 3/5 pass
-  verifiedAssignment('run-verified-ifeval-2', 1, 'gemma4-e4b', true),
-  verifiedAssignment('run-verified-ifeval-2', 2, 'gemma4-e4b', true),
-  verifiedAssignment('run-verified-ifeval-2', 3, 'gemma4-e4b', true),
-  verifiedAssignment('run-verified-ifeval-2', 4, 'gemma4-12b', false),
-  verifiedAssignment('run-verified-ifeval-2', 5, 'gemma4-12b', true),
+  verifiedAssignment('run-legacy-ifeval-2', 1, 'gemma4-e4b', true),
+  verifiedAssignment('run-legacy-ifeval-2', 2, 'gemma4-e4b', true),
+  verifiedAssignment('run-legacy-ifeval-2', 3, 'gemma4-e4b', true),
+  verifiedAssignment('run-legacy-ifeval-2', 4, 'gemma4-12b', false),
+  verifiedAssignment('run-legacy-ifeval-2', 5, 'gemma4-12b', true),
 ];
 
 export const allFixtureSnapshotRecords = [

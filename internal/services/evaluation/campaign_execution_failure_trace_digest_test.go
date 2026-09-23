@@ -26,13 +26,13 @@ func TestRepairAssignmentTraceDigests_RecomputesLegacyDigest(t *testing.T) {
 
 	runID := "run-trace-digest"
 	assignmentID := "assignment-trace-digest"
-	trace := map[string]any{
+	trace := EvaluationTrace{
 		"schema_version":         "1",
 		"chat_execution_id":      "exec-1",
 		"status":                 "completed",
 		"completed_at":           "2026-09-17T03:36:01.016030+00:00",
 		"designated_role_output": "Proposed Action & Safeguard",
-		"evaluation_context": map[string]any{
+		"evaluation_context": EvaluationTrace{
 			"campaign_id":                "eval-smoke-mini",
 			"run_id":                     runID,
 			"assignment_id":              assignmentID,
@@ -44,7 +44,7 @@ func TestRepairAssignmentTraceDigests_RecomputesLegacyDigest(t *testing.T) {
 			"grading_method":             "deterministic",
 		},
 		"model_calls": []any{
-			map[string]any{
+			EvaluationTrace{
 				"agent_role":              "sage",
 				"provider":                "G8EProvider",
 				"model":                   "gemma3:4b",

@@ -10,8 +10,10 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -33,17 +36,18 @@ type campaignOperatorSessions struct {
 }
 
 type campaignExecuteOptions struct {
-	RunID              string
-	Publish            bool
-	Daemon             bool
-	Limit              uint32
-	InferenceSessionID string
-	DataSessionID      string
-	EnsembleURL        string
-	OllamaEndpoint     string
-	NoAutoRefresh      bool
-	JSONOutput         bool
-	ResultOutput       func(*evalv1.EvaluationAssignmentResult)
+	RunID                    string
+	Publish                  bool
+	Daemon                   bool
+	Limit                    uint32
+	InferenceSessionID       string
+	DataSessionID            string
+	EnsembleURL              string
+	OllamaEndpoint           string
+	EnforceProviderResidency bool
+	NoAutoRefresh            bool
+	JSONOutput               bool
+	ResultOutput             func(*evalv1.EvaluationAssignmentResult)
 }
 
 func resolveCampaignOperatorSessions(
@@ -105,9 +109,9 @@ func initializeCampaignRun(
 	if err != nil {
 		return fmt.Errorf("evaluation: campaign init: load CLI identity: %w", err)
 	}
-	inventory, err := evaluation.LoadModelInventoryFreezeFile(plan.InventoryPath)
+	inventory, err := loadEvaluationInventoryFreeze(cmd.Context(), fileSvc, cfg.ProjectRoot, plan.InventoryPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("evaluation: campaign init: load inventory: %w", err)
 	}
 	if inventory.CampaignID != "" && inventory.CampaignID != plan.CampaignID {
 		return fmt.Errorf("evaluation: campaign init: inventory campaign_id mismatch")
@@ -151,7 +155,7 @@ func scheduleHomogeneousCampaignRun(cmd *cobra.Command, deps nativeEvalDeps, run
 	return controller.ScheduleHomogeneousRun(cmd.Context(), runID)
 }
 
-func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignExecuteOptions) (int, error) {
+func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignExecuteOptions) (executed int, runErr error) {
 	if opts.Daemon {
 		opts.Limit = ^uint32(0)
 	} else if opts.Limit == 0 {
@@ -248,12 +252,12 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		OperatorSessionID: dataOperator.OperatorSessionID,
 	}
 	executor := evaluation.NewCampaignChatExecutor(
-		ensembleClient,
+		&campaignChatHarnessClient{client: ensembleClient},
 		persona,
 		dataOperator.OperatorID,
 		dataOperator.OperatorSessionID,
 		store,
-		func(ctx context.Context, fetch func(context.Context) (map[string]any, error)) (map[string]any, error) {
+		func(ctx context.Context, fetch func(context.Context) (evaluation.EvaluationTrace, error)) (evaluation.EvaluationTrace, error) {
 			return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), opts.JSONOutput))
 		},
 		deps.now,
@@ -275,9 +279,28 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		ModelRegistryDigest:        spec.GetModelRegistryDigest(),
 		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
 	}
-	executed := 0
 	if err := preflightProviderObservationDelivery(fileSvc, cfg); err != nil {
 		return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
+	}
+	if opts.EnforceProviderResidency {
+		defer func() {
+			if runErr == nil {
+				return
+			}
+			cleanupErr := releaseCampaignModels(cmd, deps, opts, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec)
+			if cleanupErr == nil {
+				return
+			}
+			cleanupErr = fmt.Errorf("evaluation: campaign execute: release provider models: %w", cleanupErr)
+			runErr = errors.Join(runErr, cleanupErr)
+		}()
+		endpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, selected.OperatorSessionID)
+		if err != nil {
+			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
+		}
+		if err := rejectResidentProviderModels(cmd.Context(), endpoint); err != nil {
+			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
+		}
 	}
 	modelBindings, err := evaluation.CampaignModelBindingsFromSpec(spec)
 	if err != nil {
@@ -328,6 +351,21 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		}
 	}
 	return executed, nil
+}
+
+func rejectResidentProviderModels(ctx context.Context, endpoint string) error {
+	residency, err := inference.ReadProviderResidency(ctx, inference.ProviderResidencyOptions{Endpoint: endpoint})
+	if err != nil {
+		return fmt.Errorf("evaluation: read provider residency: %w", err)
+	}
+	if len(residency.Models) == 0 {
+		return nil
+	}
+	residentTags := make([]string, 0, len(residency.Models))
+	for _, model := range residency.Models {
+		residentTags = append(residentTags, model.Name)
+	}
+	return fmt.Errorf("%w: %s", constants.ErrEvaluationProviderModelsResident, strings.Join(residentTags, ", "))
 }
 
 func releaseCampaignModels(
@@ -395,12 +433,31 @@ func releaseCampaignModels(
 	return nil
 }
 
+type campaignVerificationPublication interface {
+	PublishRunCompletion(context.Context, string, time.Time) (int, error)
+	PublishRunVerification(context.Context, string, *evalv1.EvaluationVerificationReport) (int, error)
+}
+
+type campaignVerificationPublicationFactory func(*cobra.Command, fs.RuntimeFileService) (campaignVerificationPublication, error)
+
 func verifyCampaignRun(
 	cmd *cobra.Command,
 	deps nativeEvalDeps,
 	runID string,
 	requireProviderObservation bool,
 	requireModelProvenance bool,
+	jsonOutput bool,
+) (*evalv1.EvaluationVerificationReport, error) {
+	return verifyCampaignRunWithPublication(cmd, deps, runID, requireProviderObservation, requireModelProvenance, true, jsonOutput)
+}
+
+func verifyCampaignRunWithPublication(
+	cmd *cobra.Command,
+	deps nativeEvalDeps,
+	runID string,
+	requireProviderObservation bool,
+	requireModelProvenance bool,
+	publish bool,
 	jsonOutput bool,
 ) (*evalv1.EvaluationVerificationReport, error) {
 	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
@@ -425,11 +482,11 @@ func verifyCampaignRun(
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
 	}
-	policy := evaluation.ProviderObservationPolicyInterim
+	providerPolicy := evaluation.ProviderObservationPolicyInterim
 	if requireProviderObservation {
-		policy = evaluation.ProviderObservationPolicyStrict
+		providerPolicy = evaluation.ProviderObservationPolicyStrict
 	}
-	verifier = verifier.WithProviderObservationReader(observationReader, policy)
+	verifier = verifier.WithProviderObservationReader(observationReader, providerPolicy)
 	provenanceReader, err := newCampaignModelProvenanceReader(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
@@ -439,14 +496,34 @@ func verifyCampaignRun(
 		provenancePolicy = evaluation.ModelProvenancePolicyStrict
 	}
 	verifier = verifier.WithModelProvenanceReader(provenanceReader, provenancePolicy)
+	if err := evaluation.CaptureCampaignRunWitnessEvidence(cmd.Context(), store, runID, observationReader, provenanceReader); err != nil {
+		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
+	}
 	report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
+	}
+	report, _, err = evaluation.BindStoredCampaignVerificationReport(cmd.Context(), store, report, evaluation.CampaignVerificationPolicy{
+		VerifierReleaseVersion: constants.EvaluationSourceVersion,
+		ProviderObservation:    providerPolicy,
+		ModelProvenance:        provenancePolicy,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
 	}
 	if err := store.SaveCampaignVerification(cmd.Context(), runID, report); err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
 	}
-	publication, pubErr := newCampaignPublicationCoordinator(cmd, fileSvc)
+	if !publish {
+		return report, nil
+	}
+	publicationFactory := deps.campaignPublicationFactory
+	if publicationFactory == nil {
+		publicationFactory = func(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (campaignVerificationPublication, error) {
+			return newCampaignPublicationCoordinator(cmd, fileSvc)
+		}
+	}
+	publication, pubErr := publicationFactory(cmd, fileSvc)
 	if pubErr != nil {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication unavailable: %v\n", pubErr)
 	} else {
@@ -498,12 +575,13 @@ type campaignStartFlowResult struct {
 }
 
 func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaignStartFlowOptions) (*campaignStartFlowResult, error) {
-	cfg, _, err := nativeEvalEnvironment(cmd, deps)
+	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 	if err != nil {
 		return nil, err
 	}
 	plan, err := evaluation.ResolveCampaignStartPlan(evaluation.CampaignStartPlanRequest{
-		ProjectRoot:   cfg.ProjectRoot,
+		Context:       cmd.Context(),
+		FileService:   fileSvc,
 		ModelTag:      opts.ModelTag,
 		ModelTags:     opts.ModelTags,
 		QueueRef:      opts.QueueRef,
@@ -541,7 +619,7 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	if !opts.JSONOutput {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d assignments for run %s\n", assignmentCount, plan.RunID)
 	}
-	if err := persistActiveCampaignRun(cfg.ProjectRoot, plan, startedAt); err != nil {
+	if err := persistActiveCampaignRunWithFileService(cmd.Context(), fileSvc, plan, startedAt); err != nil {
 		return nil, err
 	}
 	result := &campaignStartFlowResult{Plan: plan}
@@ -549,15 +627,16 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 		return result, nil
 	}
 	executed, err := runCampaignExecute(cmd, deps, campaignExecuteOptions{
-		RunID:              plan.RunID,
-		Publish:            opts.Publish,
-		Daemon:             opts.Daemon,
-		InferenceSessionID: sessions.InferenceSessionID,
-		DataSessionID:      sessions.DataSessionID,
-		EnsembleURL:        opts.EnsembleURL,
-		OllamaEndpoint:     opts.OllamaEndpoint,
-		NoAutoRefresh:      opts.NoAutoRefresh,
-		JSONOutput:         opts.JSONOutput,
+		RunID:                    plan.RunID,
+		Publish:                  opts.Publish,
+		Daemon:                   opts.Daemon,
+		InferenceSessionID:       sessions.InferenceSessionID,
+		DataSessionID:            sessions.DataSessionID,
+		EnsembleURL:              opts.EnsembleURL,
+		OllamaEndpoint:           opts.OllamaEndpoint,
+		EnforceProviderResidency: opts.RequireProviderObservation || opts.RequireModelProvenance,
+		NoAutoRefresh:            opts.NoAutoRefresh,
+		JSONOutput:               opts.JSONOutput,
 	})
 	if err != nil {
 		return result, err
@@ -569,7 +648,7 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	if !opts.Verify {
 		return result, nil
 	}
-	report, err := verifyCampaignRun(cmd, deps, plan.RunID, opts.RequireProviderObservation, opts.RequireModelProvenance, opts.JSONOutput)
+	report, err := verifyCampaignRunWithPublication(cmd, deps, plan.RunID, opts.RequireProviderObservation, opts.RequireModelProvenance, opts.Publish, opts.JSONOutput)
 	if err != nil {
 		return result, err
 	}
@@ -585,13 +664,13 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	if report.GetFailureCount() > 0 {
 		return result, constants.ErrEvalRunVerificationFailed
 	}
-	if err := markQueueEntryVerifiedAfterPass(cfg.ProjectRoot, plan, report, opts.RequireProviderObservation && opts.RequireModelProvenance); err != nil {
+	if err := markQueueEntryVerifiedAfterPassWithFileService(cmd.Context(), fileSvc, plan, report, opts.RequireProviderObservation && opts.RequireModelProvenance); err != nil {
 		return result, err
 	}
 	return result, nil
 }
 
-func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, tierA bool) error {
+func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc fs.RuntimeFileService, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, tierA bool) error {
 	if plan == nil || plan.QueueEntry == nil || report == nil {
 		return nil
 	}
@@ -603,7 +682,8 @@ func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.Campai
 		notes = evaluation.TierAVerifyNotes(plan.RunID)
 	}
 	_, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
-		ProjectRoot:   projectRoot,
+		Context:       ctx,
+		FileService:   fileSvc,
 		VariantID:     plan.QueueEntry.VariantID,
 		Status:        "verified",
 		VerifiedRunID: plan.RunID,
@@ -615,17 +695,28 @@ func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.Campai
 	return nil
 }
 
+type campaignStartPlanJSON struct {
+	CampaignID           string   `json:"campaign_id"`
+	RunID                string   `json:"run_id"`
+	InventoryFile        string   `json:"inventory_file"`
+	ModelTags            []string `json:"model_tags"`
+	ModelRegistryDigest  string   `json:"model_registry_digest"`
+	HomogeneousCellCount uint64   `json:"homogeneous_cell_count"`
+	InferenceSession     string   `json:"inference_session"`
+	DataSession          string   `json:"data_session"`
+}
+
 func writeCampaignStartPlan(out io.Writer, plan *evaluation.CampaignStartPlan, sessions campaignOperatorSessions, jsonOutput bool) error {
 	if jsonOutput {
-		payload, err := json.MarshalIndent(map[string]any{
-			"campaign_id":            plan.CampaignID,
-			"run_id":                 plan.RunID,
-			"inventory_file":         plan.InventoryPath,
-			"model_tags":             plan.ModelTags,
-			"model_registry_digest":  plan.RegistryDigest,
-			"homogeneous_cell_count": plan.HomogeneousCellCount,
-			"inference_session":      sessions.InferenceSessionID,
-			"data_session":           sessions.DataSessionID,
+		payload, err := json.MarshalIndent(campaignStartPlanJSON{
+			CampaignID:           plan.CampaignID,
+			RunID:                plan.RunID,
+			InventoryFile:        plan.InventoryPath,
+			ModelTags:            plan.ModelTags,
+			ModelRegistryDigest:  plan.RegistryDigest,
+			HomogeneousCellCount: plan.HomogeneousCellCount,
+			InferenceSession:     sessions.InferenceSessionID,
+			DataSession:          sessions.DataSessionID,
 		}, "", "  ")
 		if err != nil {
 			return err
@@ -646,8 +737,8 @@ func writeCampaignStartPlan(out io.Writer, plan *evaluation.CampaignStartPlan, s
 	return err
 }
 
-func persistActiveCampaignRun(projectRoot string, plan *evaluation.CampaignStartPlan, startedAt time.Time) error {
-	return evaluation.SaveActiveCampaignRun(projectRoot, evaluation.ActiveCampaignRun{
+func persistActiveCampaignRunWithFileService(ctx context.Context, fileSvc fs.RuntimeFileService, plan *evaluation.CampaignStartPlan, startedAt time.Time) error {
+	return evaluation.SaveActiveCampaignRunToRuntime(ctx, fileSvc, evaluation.ActiveCampaignRun{
 		RunID:         plan.RunID,
 		CampaignID:    plan.CampaignID,
 		InventoryFile: plan.InventoryPath,
@@ -656,7 +747,7 @@ func persistActiveCampaignRun(projectRoot string, plan *evaluation.CampaignStart
 	})
 }
 
-func resolveCampaignRunID(cmd *cobra.Command, command, flagValue string, args []string) (string, error) {
+func resolveCampaignRunID(cmd *cobra.Command, deps nativeEvalDeps, command, flagValue string, args []string) (string, error) {
 	if len(args) > 1 {
 		return "", fmt.Errorf("evaluation: campaign %s: accepts at most one run ID argument", command)
 	}
@@ -669,13 +760,9 @@ func resolveCampaignRunID(cmd *cobra.Command, command, flagValue string, args []
 	if flagValue != "" {
 		return flagValue, nil
 	}
-	projectRoot, err := cmd.Flags().GetString("project-root")
-	if err != nil {
-		return "", fmt.Errorf("evaluation: campaign %s: read project root: %w", command, err)
-	}
-	cfg, err := loadConfig(projectRoot)
+	_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 	if err == nil {
-		if active, activeErr := evaluation.LoadActiveCampaignRun(cfg.ProjectRoot); activeErr == nil && active.RunID != "" {
+		if active, activeErr := evaluation.LoadActiveCampaignRunFromRuntime(cmd.Context(), fileSvc); activeErr == nil && active.RunID != "" {
 			return active.RunID, nil
 		}
 	}

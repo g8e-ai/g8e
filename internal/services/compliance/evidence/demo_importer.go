@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -44,11 +45,18 @@ type DemoRunImporter struct {
 // provides access to the runtime tree; the source provides provenance
 // artifacts for manifest verification.
 func NewDemoRunImporter(reader ArtifactReader, runID string, source ProvenanceSource) *DemoRunImporter {
+	return NewDemoRunImporterAt(reader, runID, source, time.Now)
+}
+
+func NewDemoRunImporterAt(reader ArtifactReader, runID string, source ProvenanceSource, nowFunc func() time.Time) *DemoRunImporter {
+	if nowFunc == nil {
+		nowFunc = time.Now
+	}
 	return &DemoRunImporter{
 		reader:  reader,
 		runID:   runID,
 		source:  source,
-		nowFunc: time.Now,
+		nowFunc: nowFunc,
 	}
 }
 
@@ -125,6 +133,12 @@ func (i *DemoRunImporter) Import(ctx context.Context) ([]EvidenceNode, error) {
 	}
 	nodes = append(nodes, receiptNodes...)
 
+	protocolChainNodes, err := i.loadProtocolChains(ctx, results, scopeID, runID)
+	if err != nil {
+		return nil, err
+	}
+	nodes = append(nodes, protocolChainNodes...)
+
 	observationNodes, err := i.loadStateObservations(ctx, results, scopeID, runID)
 	if err != nil {
 		return nil, err
@@ -163,7 +177,6 @@ func (i *DemoRunImporter) loadManifest(ctx context.Context) (*compliancev1.DemoM
 
 func (i *DemoRunImporter) loadDefinitions(ctx context.Context, manifest *compliancev1.DemoManifest) ([]EvidenceNode, map[string]string, error) {
 	scopeID := manifest.GetScopeId()
-	runID := manifest.GetRunId()
 	artifacts, err := i.source.Definitions(ctx, manifest.GetDemoId())
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: load scenario definitions: %w", constants.ErrEvidenceImporterFailed, err)
@@ -197,7 +210,6 @@ func (i *DemoRunImporter) loadDefinitions(ctx context.Context, manifest *complia
 			ProducerIdentity:   manifest.GetDemoId(),
 			ProducedAt:         manifest.GetGeneratedAt().AsTime(),
 			ScopeID:            scopeID,
-			RunID:              runID,
 			ScenarioID:         definition.GetScenarioId(),
 			VerificationStatus: VerificationStatusVerified,
 			VerifierID:         constants.DemoRunVerifierID,
@@ -243,7 +255,7 @@ func (i *DemoRunImporter) loadResults(ctx context.Context, manifest *compliancev
 			return nil, nil, fmt.Errorf("%w: %s#%d: result scenario %s is not in the manifest definition set", constants.ErrUnresolvedReference, path, idx+1, scenarioKey)
 		}
 		results = append(results, scenarioResult)
-		refs := append(append(append([]string{}, scenarioResult.GetReceiptRefs()...), scenarioResult.GetStateObservationRefs()...), scenarioResult.GetMetricRefs()...)
+		refs := append(append(append(append([]string{}, scenarioResult.GetReceiptRefs()...), scenarioResult.GetStateObservationRefs()...), scenarioResult.GetMetricRefs()...), scenarioResult.GetProtocolChainRefs()...)
 		if ok {
 			refs = append(refs, definitionID)
 		}
@@ -295,40 +307,37 @@ func (i *DemoRunImporter) loadReceipts(ctx context.Context, results []*complianc
 	return nodes, nil
 }
 
-func (i *DemoRunImporter) loadReceipt(ctx context.Context, ref, digest string, result *compliancev1.DemoScenarioResult, scopeID, runID string) (EvidenceNode, error) {
+func (i *DemoRunImporter) readReceipt(ctx context.Context, ref, digest string) (*operatorv1.ActionReceipt, []byte, error) {
 	path := i.runPath(constants.DemoRunReceiptsDirname, digest+constants.FileExtJSON)
 	readResult, err := ReadAndDigest(i.reader, ctx, path, constants.DemoRunMaxArtifactBytes)
 	if err != nil {
-		return EvidenceNode{}, fmt.Errorf("%w: %s: %v", constants.ErrEvidenceImporterFailed, ref, err)
+		return nil, nil, fmt.Errorf("%w: %s: %v", constants.ErrEvidenceImporterFailed, ref, err)
 	}
 	if !VerifyDigest(readResult.Bytes, digest) {
-		return EvidenceNode{}, fmt.Errorf("%w: %s: receipt content digest does not match reference", constants.ErrChecksumMismatch, ref)
+		return nil, nil, fmt.Errorf("%w: %s: receipt content digest does not match reference", constants.ErrChecksumMismatch, ref)
 	}
 	receipt := &operatorv1.ActionReceipt{}
 	if err := compliancev1.UnmarshalCanonical(readResult.Bytes, receipt); err != nil {
-		return EvidenceNode{}, fmt.Errorf("%w: %s: %v", constants.ErrEvidenceArtifactMalformed, ref, err)
+		return nil, nil, fmt.Errorf("%w: %s: %v", constants.ErrEvidenceArtifactMalformed, ref, err)
 	}
-	verified := VerificationStatusUnverified
-	verifierID := ""
-	verifierVersion := ""
-	verifiedAt := time.Time{}
-	publicKey, keyErr := SignerPublicKey(receipt.GetSignerKeyId())
-	if keyErr == nil {
-		if sigErr := VerifyReceiptSignature(receipt, publicKey); sigErr == nil {
-			if persistErr := VerifyReceiptPersistence(receipt, publicKey); persistErr == nil {
-				verified = VerificationStatusVerified
-				verifierID = constants.DemoRunVerifierID
-				verifierVersion = constants.DemoRunVerifierVersion
-				verifiedAt = i.nowFunc()
-			}
-		}
+	return receipt, readResult.Bytes, nil
+}
+
+func (i *DemoRunImporter) receiptVerification(receipt *operatorv1.ActionReceipt) (VerificationStatus, string, string, time.Time) {
+	status := VerificationStatusFailed
+	publicKey, err := SignerPublicKey(receipt.GetSignerKeyId())
+	if err == nil && VerifyReceiptSignature(receipt, publicKey) == nil && VerifyReceiptPersistence(receipt, publicKey) == nil {
+		status = VerificationStatusVerified
 	}
-	if verified != VerificationStatusVerified {
-		verified = VerificationStatusFailed
-		verifierID = constants.DemoRunVerifierID
-		verifierVersion = constants.DemoRunVerifierVersion
-		verifiedAt = i.nowFunc()
+	return status, constants.DemoRunVerifierID, constants.DemoRunVerifierVersion, i.nowFunc()
+}
+
+func (i *DemoRunImporter) loadReceipt(ctx context.Context, ref, digest string, result *compliancev1.DemoScenarioResult, scopeID, runID string) (EvidenceNode, error) {
+	receipt, receiptBody, err := i.readReceipt(ctx, ref, digest)
+	if err != nil {
+		return EvidenceNode{}, err
 	}
+	verified, verifierID, verifierVersion, verifiedAt := i.receiptVerification(receipt)
 	persistenceRef := ""
 	if receipt.GetFinalPersistenceAttestation() != nil {
 		attestationBody, _ := compliancev1.MarshalCanonical(receipt.GetFinalPersistenceAttestation())
@@ -355,9 +364,75 @@ func (i *DemoRunImporter) loadReceipt(ctx context.Context, ref, digest string, r
 		VerifierVersion:    verifierVersion,
 		VerifiedAt:         verifiedAt,
 		BundlePath:         filepath.Join(constants.DemoRunReceiptsDirname, digest+constants.FileExtJSON),
-		CanonicalBytes:     readResult.Bytes,
+		CanonicalBytes:     receiptBody,
 		References:         refs,
 	}, nil
+}
+
+func (i *DemoRunImporter) loadProtocolChains(ctx context.Context, results []*compliancev1.DemoScenarioResult, scopeID, runID string) ([]EvidenceNode, error) {
+	nodes := make([]EvidenceNode, 0, len(results))
+	for _, result := range results {
+		declared := make(map[string]struct{}, len(result.GetProtocolChainRefs()))
+		for _, ref := range result.GetProtocolChainRefs() {
+			declared[ref] = struct{}{}
+		}
+		if len(declared) == 0 {
+			continue
+		}
+		matched := make(map[string]struct{}, len(declared))
+		for _, receiptRef := range result.GetReceiptRefs() {
+			_, receiptDigest, ok := ParseExpectedContentReference(receiptRef, constants.ActionReceiptReferencePrefix)
+			if !ok {
+				continue
+			}
+			receipt, _, err := i.readReceipt(ctx, receiptRef, receiptDigest)
+			if err != nil {
+				return nil, err
+			}
+			chain, err := governance.ValidateDeterministicProtocolChain(receipt)
+			if err != nil {
+				continue
+			}
+			if _, ok := declared[chain.ContentReference]; !ok {
+				continue
+			}
+			canonical, err := governance.CanonicalDeterministicStages(chain.Stages)
+			if err != nil {
+				return nil, err
+			}
+			_, digest, ok := ParseExpectedContentReference(chain.ContentReference, constants.DeterministicStagesReferencePrefix)
+			if !ok || !VerifyDigest(canonical, digest) {
+				return nil, fmt.Errorf("%w: %s: deterministic stage digest does not match reference", constants.ErrChecksumMismatch, chain.ContentReference)
+			}
+			status, verifierID, verifierVersion, verifiedAt := i.receiptVerification(receipt)
+			nodes = append(nodes, EvidenceNode{
+				ArtifactID:         chain.ContentReference,
+				ArtifactType:       ArtifactTypeProtocolChain,
+				SHA256:             digest,
+				MediaType:          constants.MediaTypeOctetStream,
+				SchemaRef:          "g8e.operator.v1.DeterministicStageEvidence[]",
+				ProducerIdentity:   receipt.GetSignerKeyId(),
+				ProducedAt:         time.UnixMilli(receipt.GetExecutedAtUnixMs()),
+				ScopeID:            scopeID,
+				RunID:              runID,
+				ScenarioID:         result.GetScenarioRef().GetId(),
+				TransactionID:      receipt.GetTransactionId(),
+				VerificationStatus: status,
+				VerifierID:         verifierID,
+				VerifierVersion:    verifierVersion,
+				VerifiedAt:         verifiedAt,
+				CanonicalBytes:     canonical,
+				References:         []string{receiptRef},
+			})
+			matched[chain.ContentReference] = struct{}{}
+		}
+		for ref := range declared {
+			if _, ok := matched[ref]; !ok {
+				return nil, fmt.Errorf("%w: protocol chain %s is not bound to a signed scenario receipt", constants.ErrUnresolvedReference, ref)
+			}
+		}
+	}
+	return nodes, nil
 }
 
 func (i *DemoRunImporter) loadPersistence(ctx context.Context, ref, digest string, result *compliancev1.DemoScenarioResult, scopeID, runID string) (EvidenceNode, error) {

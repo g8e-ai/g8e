@@ -902,6 +902,7 @@ type PlatformEnrollmentGovernancePayload struct {
 	CertificateSerial      string `protobuf:"bytes,15,opt,name=certificate_serial,json=certificateSerial,proto3" json:"certificate_serial,omitempty"`
 	CertificateFingerprint string `protobuf:"bytes,16,opt,name=certificate_fingerprint,json=certificateFingerprint,proto3" json:"certificate_fingerprint,omitempty"`
 	OwnerUserId            string `protobuf:"bytes,17,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Reason                 string `protobuf:"bytes,18,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -1051,6 +1052,13 @@ func (x *PlatformEnrollmentGovernancePayload) GetCertificateFingerprint() string
 func (x *PlatformEnrollmentGovernancePayload) GetOwnerUserId() string {
 	if x != nil {
 		return x.OwnerUserId
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentGovernancePayload) GetReason() string {
+	if x != nil {
+		return x.Reason
 	}
 	return ""
 }
@@ -1373,7 +1381,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x1ePlatformEnrollmentFingerprints\x12\x10\n" +
 	"\x03app\x18\x01 \x01(\tR\x03app\x12\x1a\n" +
 	"\boperator\x18\x02 \x01(\tR\boperator\x12\x10\n" +
-	"\x03cli\x18\x03 \x01(\tR\x03cli\"\x9b\x06\n" +
+	"\x03cli\x18\x03 \x01(\tR\x03cli\"\xb3\x06\n" +
 	"#PlatformEnrollmentGovernancePayload\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x16\n" +
 	"\x06intent\x18\x02 \x01(\tR\x06intent\x12\x1d\n" +
@@ -1395,7 +1403,8 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\tpolicy_id\x18\x0e \x01(\tR\bpolicyId\x12-\n" +
 	"\x12certificate_serial\x18\x0f \x01(\tR\x11certificateSerial\x127\n" +
 	"\x17certificate_fingerprint\x18\x10 \x01(\tR\x16certificateFingerprint\x12\"\n" +
-	"\rowner_user_id\x18\x11 \x01(\tR\vownerUserId\"\xd2\x02\n" +
+	"\rowner_user_id\x18\x11 \x01(\tR\vownerUserId\x12\x16\n" +
+	"\x06reason\x18\x12 \x01(\tR\x06reason\"\xd2\x02\n" +
 	"&PlatformEnrollmentCompletionTranscript\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\tR\x0fprotocolVersion\x12\x1d\n" +
 	"\n" +

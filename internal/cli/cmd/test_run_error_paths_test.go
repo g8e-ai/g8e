@@ -10,13 +10,14 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -60,7 +61,7 @@ func TestTestCoverageCmd_DelegatesThresholdEnforcementToMakefile(t *testing.T) {
 }
 
 func TestTestCoverageCmd_MakefileFailureWrapsCoverageError(t *testing.T) {
-	runnerErr := errors.New("coverage threshold failed")
+	runnerErr := fmt.Errorf("coverage threshold failed")
 	cmd := testCoverageCmdWithRunner(func(string, ...string) error { return runnerErr })
 
 	err := cmd.RunE(cmd, nil)
@@ -136,7 +137,7 @@ func TestTestE2ECmd_RunFlagAppendsRegexp(t *testing.T) {
 }
 
 func TestTestE2ECmd_NonzeroExitWrapsErrE2ETestsFailed(t *testing.T) {
-	runnerErr := errors.New("child process failed")
+	runnerErr := fmt.Errorf("child process failed")
 	cmd := testE2ECmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -167,6 +168,7 @@ func TestTestSummaryCmd_NoTestVaultReturnsMessage(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(minimalPathsJSON(t)), 0o644))
 
 	cmd := testSummaryCmd()
+	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -183,14 +185,17 @@ func TestTestSummaryCmd_EmptyTestVaultReturnsMessage(t *testing.T) {
 	require.NoError(t, os.MkdirAll(protocolDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(minimalPathsJSON(t)), 0o644))
 
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".g8e", "test-vault"), 0o755))
+	fileSvc, err := fs.NewRuntimeFileService("", nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), constants.TestVaultDirname, constants.PermDirPrivate))
 
 	cmd := testSummaryCmd()
+	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := cmd.RunE(cmd, nil)
+	err = cmd.RunE(cmd, nil)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "No chaos test runs found")
 }
@@ -199,6 +204,36 @@ func TestTestUnitCmd_StructureAndFlags(t *testing.T) {
 	cmd := testUnitCmd()
 	assert.Equal(t, "unit", cmd.Use)
 	assert.NotNil(t, cmd.RunE)
+}
+
+func TestTestUnitCmd_DelegatesToMakefileTarget(t *testing.T) {
+	var captured []string
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.Equal(t, []string{"test-unit"}, captured)
+}
+
+func TestTestUnitCmd_RunnerFailureWrapsUnitError(t *testing.T) {
+	runnerErr := fmt.Errorf("child process failed")
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnitTestsFailed)
+	assert.ErrorIs(t, err, runnerErr)
+}
+
+func TestTestUnitCmd_NonzeroExitWrapsUnitError(t *testing.T) {
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(2, nil, &[]string{}))
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnitTestsFailed)
+	assert.Contains(t, err.Error(), "exit code 2")
 }
 
 func TestTestIntegrationCmd_StructureAndFlags(t *testing.T) {
@@ -250,7 +285,7 @@ func TestTestIntegrationCmd_DefaultOmitsRunFlag(t *testing.T) {
 }
 
 func TestTestIntegrationCmd_RunnerFailureWrapsIntegrationError(t *testing.T) {
-	runnerErr := errors.New("child process failed")
+	runnerErr := fmt.Errorf("child process failed")
 	cmd := testIntegrationCmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
 
 	err := cmd.RunE(cmd, nil)

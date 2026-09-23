@@ -49,6 +49,8 @@ type CampaignStore interface {
 	LoadCampaignSpec(ctx context.Context, campaignID string) (*evalv1.EvaluationCampaignSpec, error)
 	SaveScenarioCatalog(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog) error
 	LoadScenarioCatalog(ctx context.Context, campaignID string) (*evalv1.EvaluationScenarioCatalog, error)
+	SaveScenarioArtifacts(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error
+	LoadScenarioArtifacts(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog) (map[string]ScenarioArtifacts, error)
 	SaveRun(ctx context.Context, run *evalv1.EvaluationRun) error
 	RunExists(ctx context.Context, runID string) (bool, error)
 	LoadRun(ctx context.Context, runID string) (*evalv1.EvaluationRun, error)
@@ -57,7 +59,7 @@ type CampaignStore interface {
 	ListAssignments(ctx context.Context, runID string) ([]*evalv1.EvaluationAssignment, error)
 	AssignmentResultExists(ctx context.Context, runID, assignmentID string) (bool, error)
 	SaveAssignmentTrace(ctx context.Context, runID, assignmentID string, body []byte) error
-	LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (map[string]any, error)
+	LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (EvaluationTrace, error)
 	SaveAssignmentResult(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error
 	LoadAssignmentResult(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignmentResult, error)
 	SaveHeterogeneousStackSet(ctx context.Context, campaignID string, stackSet *HeterogeneousStackSet) error
@@ -110,6 +112,9 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 		return nil, err
 	}
 	if err := c.store.SaveScenarioCatalog(ctx, req.CampaignID, req.Catalog); err != nil {
+		return nil, err
+	}
+	if err := c.store.SaveScenarioArtifacts(ctx, req.CampaignID, req.Catalog, req.ScenarioArtifacts); err != nil {
 		return nil, err
 	}
 	lane := req.Lane

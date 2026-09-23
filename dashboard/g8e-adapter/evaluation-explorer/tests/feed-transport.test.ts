@@ -121,11 +121,18 @@ describe('normalizeStreamRecord', () => {
     expect(JSON.parse(record.record_bytes).kind).toBe('catalog_snapshot');
   });
 
-  it('preserves event record types', () => {
+  it('preserves canonical event record types', () => {
     const eventPayload = { ...fixtureCatalogExploratory, kind: 'evaluation_queued', event_id: 'evt-x', run_id: 'r1', lifecycle_status: 'queued', completed: 0, total: 5 };
     const record = normalizeStreamRecord('event', '9', JSON.stringify(eventPayload));
     expect(record.record_type).toBe('event');
     expect(record.sequence).toBe(9);
+  });
+
+  it('retains an unknown event body as a failed store record', () => {
+    const record = normalizeStreamRecord('event', '9', JSON.stringify({ kind: 'heartbeat' }));
+    const store = new EvalStore();
+    store.acceptProjection(record);
+    expect(store.getState().errors).toContain('decode: unknown record kind "heartbeat"');
   });
 });
 
@@ -323,7 +330,7 @@ describe('cross-dataset keying', () => {
     expect(explo!.dataset_id).toBe(fixtureModelSummaries[0]!.dataset_id);
     expect(verified!.dataset_id).toBe(fixtureVerifiedModelSummaries[0]!.dataset_id);
     expect(explo!.quality_state).toBe('exploratory_partial');
-    expect(verified!.quality_state).toBe('verified_public');
+    expect(verified!.quality_state).toBe('legacy_unverified');
   });
 
   it('recordKey is dataset-first so identical ids coexist', () => {

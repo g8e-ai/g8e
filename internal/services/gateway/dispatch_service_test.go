@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -237,7 +238,7 @@ func TestDispatchService_Dispatch_InvalidOperatorSession(t *testing.T) {
 	svc, _ := newTestDispatchService(t, "root-abc", nil)
 
 	// Override the validator to return an error.
-	svc.auth = &stubOperatorSessionValidator{err: errors.New("session not found")}
+	svc.auth = &stubOperatorSessionValidator{err: fmt.Errorf("session not found")}
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "invalid-session",
@@ -255,7 +256,7 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 	svc := NewDispatchService(
 		logger,
 		broker,
-		&stubStateRootProvider{err: errors.New("state root unavailable")},
+		&stubStateRootProvider{err: fmt.Errorf("state root unavailable")},
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
 		governance.NewL1Doctrine(),

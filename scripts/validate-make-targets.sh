@@ -65,7 +65,7 @@ run_phase() {
 
 # Phase definitions (order matters: build before tests, cleanup last).
 PHASE_HELP="help fmt"
-PHASE_BUILD="build build-linux build-darwin build-windows build-all build-compressed build-fips verify-fips"
+PHASE_BUILD="build build-target build-linux build-darwin build-windows build-all build-compressed build-fips verify-fips"
 PHASE_PROTO="buf-install protoc-install proto generate proto-python proto-force"
 PHASE_LINT="lint-no-embedded-newlines validate-doctrines validate-cosais swagger-generate vulncheck lint"
 PHASE_TEST="test-unit test-integration test test-coverage test-airgap"

@@ -28,6 +28,7 @@ func TestActionTypeIsMutation_MutationTypesReturnTrue(t *testing.T) {
 		ActionTypePlatformEnrollmentIssue,
 		ActionTypePlatformEnrollmentPersistPolicy,
 		ActionTypePlatformEnrollmentCreateSession,
+		ActionTypePlatformEnrollmentRevoke,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown,
 	}
@@ -115,6 +116,7 @@ func TestAllActionTypes_ContainsAllConstants(t *testing.T) {
 		ActionTypePlatformEnrollmentIssue,
 		ActionTypePlatformEnrollmentPersistPolicy,
 		ActionTypePlatformEnrollmentCreateSession,
+		ActionTypePlatformEnrollmentRevoke,
 		ActionTypePortCheck,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown,
@@ -151,6 +153,7 @@ func TestActionTypeIsBootstrapAction_PlatformEnrollmentReturnsTrue(t *testing.T)
 		ActionTypePlatformEnrollmentIssue,
 		ActionTypePlatformEnrollmentPersistPolicy,
 		ActionTypePlatformEnrollmentCreateSession,
+		ActionTypePlatformEnrollmentRevoke,
 	}
 
 	for _, at := range bootstrapActions {

@@ -86,7 +86,7 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 	fileSvc := newTestFileSvc(t)
 	pkiDir := fileSvc.Resolve(constants.PkiDirname)
 
-	db, err := openTestDB(t, dataDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err, "failed to open test database")
 	t.Cleanup(func() { db.Close() })
 
@@ -710,10 +710,9 @@ func TestPKIAuthority_GenerateCRL(t *testing.T) {
 
 func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 	t.Run("Phase5: SignCSR rejects P-384 CSR", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
@@ -739,10 +738,9 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 	})
 
 	t.Run("Phase5: SignCSR accepts P-256 CSR", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
@@ -759,10 +757,9 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 	})
 
 	t.Run("Phase5: All CA and service certs use P-256", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
@@ -790,10 +787,9 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
@@ -824,10 +820,9 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
@@ -844,10 +839,9 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 	})
 
 	t.Run("Phase5: issued/apps directory is created by CreateRuntimeTree", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
@@ -869,10 +863,9 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
@@ -903,10 +896,9 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
-		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
@@ -928,10 +920,9 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 	// initialization. Sharing one DB+PKI instance avoids redundant WAL
 	// checkpoint fsyncs on db.Close(), which can exceed the test timeout on
 	// CI runners with slow disk I/O.
-	dataDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
-	db, err := openTestDB(t, dataDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	sm := newTestSecretManager(t, db.db, fileSvc)

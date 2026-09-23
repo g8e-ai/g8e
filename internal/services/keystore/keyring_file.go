@@ -10,13 +10,15 @@
 package keystore
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 )
 
@@ -24,11 +26,18 @@ import (
 // It is the fallback when no OS-native keyring is available: the libsecret
 // fallback on Linux and the default keyring on Windows.
 type fileKeyring struct {
+	fileSvc       fs.RuntimeFileService
 	masterKeyPath string
 }
 
-func newFileKeyring(secretsDir string) (Keyring, error) {
-	return &fileKeyring{masterKeyPath: filepath.Join(secretsDir, constants.MasterKeyFilename)}, nil
+func newFileKeyring(fileSvc fs.RuntimeFileService) (Keyring, error) {
+	if fileSvc == nil {
+		return nil, fmt.Errorf("file keyring: %w", constants.ErrMissingRequiredField)
+	}
+	return &fileKeyring{
+		fileSvc:       fileSvc,
+		masterKeyPath: filepath.Join(constants.SecretsDirname, constants.MasterKeyFilename),
+	}, nil
 }
 
 func (f *fileKeyring) Name() string {
@@ -36,9 +45,9 @@ func (f *fileKeyring) Name() string {
 }
 
 func (f *fileKeyring) RetrieveMasterKey() ([]byte, error) {
-	data, err := os.ReadFile(f.masterKeyPath)
+	data, err := f.fileSvc.ReadFile(context.Background(), f.masterKeyPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, constants.ErrNotFound) {
 			return nil, constants.ErrKeyStoreKeyNotFound
 		}
 		return nil, fmt.Errorf("read master key file: %w", err)
@@ -65,22 +74,14 @@ func (f *fileKeyring) StoreMasterKey(key []byte) error {
 
 	// Encode as base64 for safe storage
 	encoded := base64.StdEncoding.EncodeToString(key)
-	tmpPath := f.masterKeyPath + constants.TmpFileSuffix
-
-	if err := os.WriteFile(tmpPath, []byte(encoded), constants.PermFilePrivate); err != nil {
+	if err := f.fileSvc.WriteFile(context.Background(), f.masterKeyPath, []byte(encoded), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("write master key file: %w", err)
 	}
-
-	if err := os.Rename(tmpPath, f.masterKeyPath); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("atomic rename master key file: %w", err)
-	}
-
 	return nil
 }
 
 func (f *fileKeyring) DeleteMasterKey() error {
-	if err := os.Remove(f.masterKeyPath); err != nil && !os.IsNotExist(err) {
+	if err := f.fileSvc.Remove(context.Background(), f.masterKeyPath); err != nil {
 		return fmt.Errorf("delete master key file: %w", err)
 	}
 	return nil

@@ -403,8 +403,29 @@ func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing
 	// The user has an active embedded operator session — the canonical
 	// local binding — but the old CLI session predates the binding work
 	// and carries no operator_session_id.
-	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
-		"embedded-sess-refresh", user.ID, user.ID, string(constants.DocIDEmbeddedOperator), string(constants.HeartbeatTypeBootstrap)))
+	now := time.Now().UTC()
+	embeddedBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                string(constants.DocIDEmbeddedOperator),
+		UserID:            user.ID,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeEmbedded,
+		OperatorSessionID: "embedded-sess-refresh",
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.cliSessionSvc.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator), embeddedBytes))
+	staleRemoteBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                "stale-remote-operator",
+		UserID:            user.ID,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		OperatorSessionID: "stale-remote-session",
+		CreatedAt:         now.Add(-48 * time.Hour),
+		UpdatedAt:         now.Add(-48 * time.Hour),
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.cliSessionSvc.db.DocSetWithTimestamps(marshaler.CollectionName(constants.CollectionOperators), "stale-remote-operator", staleRemoteBytes, now.Add(-48*time.Hour), now.Add(-48*time.Hour)))
 	oldSessionID := "refresh-ctrl-unbound-old"
 	persistCLISessionForController(t, c, user.ID, oldSessionID, "")
 

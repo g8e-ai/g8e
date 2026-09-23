@@ -67,6 +67,29 @@ func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userI
 	return nil
 }
 
+func (s *OperatorSessionService) DeactivateOperatorSession(operatorSessionID string) error {
+	if operatorSessionID == "" {
+		return constants.ErrGatewayOperatorSessionIDRequired
+	}
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+	if err != nil {
+		return fmt.Errorf("deactivate operator session: load: %w", err)
+	}
+	if doc == nil {
+		return constants.ErrGatewayOperatorSessionInvalid
+	}
+	update, err := json.Marshal(struct {
+		IsActive bool `json:"is_active"`
+	}{IsActive: false})
+	if err != nil {
+		return fmt.Errorf("deactivate operator session: marshal: %w", err)
+	}
+	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, update); err != nil {
+		return fmt.Errorf("deactivate operator session: update: %w", err)
+	}
+	return nil
+}
+
 // GetActiveSessionForUser returns the active operator session the CLI
 // should bind to for the given user ID, or nil if none exists. Used by the
 // CLI refresh controller to inherit an operator binding when the old CLI

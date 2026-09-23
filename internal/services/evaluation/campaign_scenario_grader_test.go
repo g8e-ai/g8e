@@ -19,7 +19,7 @@ import (
 
 func TestGradeHomogeneousScenario_InstructionExactFormatPassesWithMatchingOutput(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["designated_role_output"] = "READY"
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestGradeHomogeneousScenario_InstructionExactFormatPassesWithMatchingOutput
 
 func TestGradeHomogeneousScenario_InstructionBoundedCountFailsWithWrongWordCount(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("lite")
+	trace := completedHomogeneousTrace(t, "lite")
 	trace["designated_role_output"] = "too many words here now"
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
@@ -78,9 +78,9 @@ func TestGradeHomogeneousScenario_InstructionBoundedCountFailsWithWrongWordCount
 
 func TestGradeHomogeneousScenario_SemanticScenarioUsesImportedTraceGrades(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["semantic_grades"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"grade_id":         "assignment-3:semantic-judge",
 			"criterion_id":     "semantic-judge",
 			"status":           "pass",
@@ -115,7 +115,7 @@ func TestGradeHomogeneousScenario_SemanticScenarioUsesImportedTraceGrades(t *tes
 
 func TestGradeHomogeneousScenario_SemanticScenarioMarksJudgeUnavailable(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	_, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	var gold ScenarioGoldCriteria
@@ -136,9 +136,9 @@ func TestGradeHomogeneousScenario_SemanticScenarioMarksJudgeUnavailable(t *testi
 
 func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["tool_decisions"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"decision_id": "exec-1",
 			"tool_name":   "recursive_grep_search",
 			"selected":    true,
@@ -146,7 +146,7 @@ func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing
 		},
 	}
 	trace["tool_calls"] = []any{
-		map[string]any{
+		EvaluationTrace{
 			"call_id":          "exec-1",
 			"tool_name":        "recursive_grep_search",
 			"arguments_hash":   "a" + repeatHex('a', 63),
@@ -185,7 +185,7 @@ func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing
 
 func TestGradeHomogeneousScenario_PolicyDenySatisfiedWithoutForbiddenToolCall(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest

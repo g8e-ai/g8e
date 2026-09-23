@@ -515,9 +515,8 @@ func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
 func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -1207,6 +1206,7 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
 		CreatedAt:         time.Now().UTC(),
 		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
+		IsActive:          true,
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -1397,6 +1397,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 		ExpiresAt:         time.Now().Add(1 * time.Hour),
 		CreatedAt:         time.Now().UTC(),
 		AbsoluteExpiresAt: time.Now().Add(1 * time.Hour),
+		IsActive:          true,
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
@@ -1562,6 +1563,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 			UserID:            userID,
 			OperatorSessionID: opSessionID,
 			ExpiresAt:         time.Now().Add(1 * time.Hour),
+			IsActive:          true,
 		}
 		cliBytes, _ := json.Marshal(cliDoc)
 		require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))

@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	stdfs "io/fs"
 	"sort"
 	"strings"
 	"time"
@@ -177,18 +178,24 @@ func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ct
 
 // PublishRunAggregates emits explorer evaluation_summary, catalog, model, and
 // methodology snapshot records derived from canonical assignment and result state.
+// A bound, applicable persisted verification report keeps the emitted summary in
+// its verified state so later aggregate revisions cannot regress verification.
 func (c *CampaignPublicationCoordinator) PublishRunAggregates(ctx context.Context, runID string, observedAt time.Time) (int, error) {
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: publish run aggregates: %w", constants.ErrMissingRequiredField)
 	}
-	run, _, _, state, err := c.loadRunAggregateState(ctx, runID)
+	run, assignments, results, state, err := c.loadRunAggregateState(ctx, runID)
 	if err != nil {
 		return 0, err
 	}
 	if state.Scheduled == 0 {
 		return 0, nil
 	}
-	records, err := BuildRunAggregateViewRecords(run, state, observedAt)
+	report, err := c.loadBoundRunVerification(ctx, runID, run, assignments, results)
+	if err != nil {
+		return 0, err
+	}
+	records, err := BuildRunAggregateViewRecords(run, state, report, observedAt)
 	if err != nil {
 		return 0, err
 	}
@@ -222,7 +229,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 		return 0, err
 	}
 	verified := report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
-	if verified && !applicability.Applicable {
+	if !applicability.Applicable {
 		return 0, fmt.Errorf("evaluation: publish run verification: report does not apply to persisted run evidence: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	observedAt := time.Now().UTC()
@@ -309,7 +316,9 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 }
 
 // PublishRunCompletion emits the terminal evaluation_summary and completion
-// aggregate snapshots once every scheduled assignment is settled.
+// aggregate snapshots once every scheduled assignment is settled. A bound,
+// applicable persisted verification report keeps the emitted summary in its
+// verified state so completion revisions cannot regress verification.
 func (c *CampaignPublicationCoordinator) PublishRunCompletion(ctx context.Context, runID string, observedAt time.Time) (int, error) {
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: publish run completion: %w", constants.ErrMissingRequiredField)
@@ -321,7 +330,11 @@ func (c *CampaignPublicationCoordinator) PublishRunCompletion(ctx context.Contex
 	if !RunAggregateComplete(assignments, results, state) {
 		return 0, nil
 	}
-	records, err := BuildRunCompletionViewRecords(run, assignments, results, state, observedAt)
+	report, err := c.loadBoundRunVerification(ctx, runID, run, assignments, results)
+	if err != nil {
+		return 0, err
+	}
+	records, err := BuildRunCompletionViewRecords(run, assignments, results, state, report, observedAt)
 	if err != nil {
 		return 0, err
 	}
@@ -348,12 +361,20 @@ func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context
 }
 
 // PublishRunCatchUpWithVerification republishes one run and, when the persisted
-// verification report passed, emits the post-verify explorer revisions.
+// verification report carries a bound verdict, emits the post-verify explorer
+// revisions. Aggregate and completion revisions inside the catch-up already
+// project the persisted report, so a verified state cannot regress.
 func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) (int, error) {
+	if report != nil && report.GetSchemaVersion() == CampaignSchemaVersion {
+		report = nil
+	}
+	if report != nil && report.GetSchemaVersion() != campaignVerificationSchemaVersion {
+		return 0, fmt.Errorf("evaluation: publish run catch-up with verification: unsupported report schema: %w", constants.ErrEvidenceArtifactMalformed)
+	}
 	if report != nil && report.GetRunId() != runID {
 		return 0, fmt.Errorf("evaluation: publish run catch-up with verification: report run mismatch: %w", constants.ErrEvidenceScopeMismatch)
 	}
-	if report != nil && report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+	if report != nil && report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED {
 		if err := c.validateRunVerificationApplicability(ctx, runID, report); err != nil {
 			return 0, err
 		}
@@ -362,7 +383,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx c
 	if err != nil {
 		return published, err
 	}
-	if report == nil || report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+	if report == nil || report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED {
 		return published, nil
 	}
 	verificationCount, err := c.PublishRunVerification(ctx, runID, report)
@@ -370,6 +391,42 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx c
 		return published, err
 	}
 	return published + verificationCount, nil
+}
+
+// loadBoundRunVerification resolves the persisted run-level verification report
+// for summary construction. A missing or legacy unbound report yields nil. A
+// bound report that fails applicability against persisted run evidence fails
+// closed rather than producing a downgrade.
+func (c *CampaignPublicationCoordinator) loadBoundRunVerification(ctx context.Context, runID string, run *evalv1.EvaluationRun, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) (*evalv1.EvaluationVerificationReport, error) {
+	report, err := c.store.LoadCampaignVerification(ctx, runID)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) || errors.Is(err, stdfs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if report == nil || report.GetSchemaVersion() != campaignVerificationSchemaVersion {
+		return nil, nil
+	}
+	if !boundVerificationMetadataComplete(report) {
+		return nil, fmt.Errorf("evaluation: load bound run verification: persisted report is malformed: %w", constants.ErrEvidenceArtifactMalformed)
+	}
+	spec, err := c.store.LoadCampaignSpec(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: load bound run verification: load campaign spec: %w", err)
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return nil, err
+	}
+	applicability, err := BuildRunVerificationApplicability(run, spec, catalog, assignments, results, report)
+	if err != nil {
+		return nil, err
+	}
+	if !applicability.Applicable {
+		return nil, fmt.Errorf("evaluation: load bound run verification: persisted report does not apply to run evidence: %w", constants.ErrEvidenceScopeMismatch)
+	}
+	return report, nil
 }
 
 func (c *CampaignPublicationCoordinator) validateRunVerificationApplicability(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) error {
@@ -401,8 +458,14 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: publish run catch-up: %w", constants.ErrMissingRequiredField)
 	}
-	if err := c.ensureMirrorCatchUpReady(ctx, runID); err != nil {
+	resetRequired, err := c.mirrorCatchUpResetRequired(ctx, runID)
+	if err != nil {
 		return 0, err
+	}
+	if resetRequired {
+		if err := c.ResetPublicationIdempotency(ctx, runID); err != nil {
+			return 0, err
+		}
 	}
 	run, err := c.store.LoadRun(ctx, runID)
 	if err != nil {
@@ -452,25 +515,22 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	return published + completionCount, nil
 }
 
-func (c *CampaignPublicationCoordinator) ensureMirrorCatchUpReady(ctx context.Context, runID string) error {
+func (c *CampaignPublicationCoordinator) mirrorCatchUpResetRequired(ctx context.Context, runID string) (bool, error) {
 	if c == nil || c.mirrorProbe == nil || runID == "" {
-		return nil
+		return false, nil
 	}
 	present, err := c.mirrorProbe.DatasetPresent(ctx, CampaignDatasetID(runID))
 	if err != nil {
-		return fmt.Errorf("evaluation: publish run catch-up: mirror probe: %w", err)
+		return false, fmt.Errorf("evaluation: publish run catch-up: mirror probe: %w", err)
 	}
 	if present {
-		return nil
+		return false, nil
 	}
 	state, err := c.publicationState.Load(ctx, runID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if len(state.PublishedIdempotency) == 0 {
-		return nil
-	}
-	return c.ResetPublicationIdempotency(ctx, runID)
+	return len(state.PublishedIdempotency) > 0, nil
 }
 
 func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Context, runID string) (*evalv1.EvaluationRun, []*evalv1.EvaluationAssignment, map[string]*evalv1.EvaluationAssignmentResult, *runAggregateState, error) {

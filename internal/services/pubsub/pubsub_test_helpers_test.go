@@ -15,7 +15,9 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // mustMarshalJSON marshals v to json.RawMessage, fatally failing the test on error.
@@ -36,6 +38,15 @@ func mustMarshalProto(t *testing.T, msg proto.Message) []byte {
 		t.Fatalf("failed to marshal proto: %v", err)
 	}
 	return data
+}
+
+func mustNewStruct(t *testing.T, documentJSON string) *structpb.Struct {
+	t.Helper()
+	var document structpb.Struct
+	if err := protojson.Unmarshal([]byte(documentJSON), &document); err != nil {
+		t.Fatalf("failed to unmarshal document JSON: %v", err)
+	}
+	return &document
 }
 
 // mustNewScrubbingSvc creates a scrubbing service for tests, fatally failing on error.

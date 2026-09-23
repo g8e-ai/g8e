@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 This guide covers common contributor setup, build, test, Gateway, authentication, governance, and local deployment failures. Run the commands from the repository root unless a section says otherwise. See the [Getting Started guide](../guides/getting_started.md) for the supported setup sequence, the [Code Map](codemap.md) for implementation ownership, and the [Documentation Guide](docs.md) for the standards used to maintain this page.
 
@@ -140,7 +140,7 @@ For integration fixture failures, inspect the fixture setup, temporary PKI enrol
 
 ### Tier 3 E2E preflight fails
 
-`./g8e test e2e` loads owner credentials from the repository-root `.g8e/` tree and performs bounded preflight checks against Gateway, Ensemble, and Dashboard. It fails non-zero if any of those services is unreachable. A host-only `./g8e gw start` is insufficient for the general E2E suite because it does not start Ensemble or Dashboard.
+`./g8e test e2e` loads owner credentials from the repository-root `.g8e/` tree and performs one bounded preflight health check against the Gateway. Individual tests then check any additional services required by their topology, such as Ensemble or Dashboard. A host-only `./g8e gw start` is sufficient for Gateway-only scenarios but not for scenarios that exercise Ensemble or Dashboard.
 
 For an approved full stack, start the bootstrapped Compose profile according to the [Unified Stack guide](../guides/unified_stack.md), enroll or approve the workloads, and then run the steady-state subset:
 
@@ -148,7 +148,7 @@ For an approved full stack, start the bootstrapped Compose profile according to 
 make test-docker
 ```
 
-Use `./g8e test e2e --run <regexp>` only after preparing the state required by the selected test. Pending, denied, restarted, and approved scenarios are mutually exclusive deployment states. The suite-level preflight still requires Gateway, Ensemble, and Dashboard, so the current E2E entry point cannot successfully run the gateway-only headless scenario even when selected by `--run`.
+Use `./g8e test e2e --run <regexp>` only after preparing the state required by the selected test. Pending, denied, restarted, and approved scenarios are mutually exclusive deployment states. The shared preflight requires only the Gateway; a gateway-only scenario can run with `./g8e gw start`, while scenarios that exercise Ensemble or Dashboard require those services to be running and reachable on their configured ports.
 
 If configuration loading fails before preflight, confirm that `.g8e/credentials`, `.g8e/cli.crt`, `.g8e/cli.key`, and `.g8e/pki/trust/g8eg-ca-bundle.pem` belong to the running Gateway. If the CLI session expired while the certificate remains valid, run:
 
@@ -363,6 +363,30 @@ docker compose restart compliance-dashboard
 ```
 
 Use `./g8e demos scenarios list` and the owning demo README to identify scenario prerequisites. Multiple demo environments use different host-port mappings; inspect each demo's `compose.yml` rather than assuming root ports.
+
+### Unified Compose stack failures
+
+First identify which process is failing. Host-side commands run in the Docker host namespace; `g8e-gateway`, `g8e-operator`, Ensemble, and Dashboard run in separate containers with separate process and network namespaces. The Gateway's embedded Operator executes only inside the Gateway container, while `g8e-operator` executes only inside the Operator container. The root Compose Operator has no Docker socket, host root filesystem, host PID namespace, or host network.
+
+Inspect the stack from the repository root:
+
+```bash
+docker compose ps
+./g8e docker status
+docker compose logs --tail=200 g8e-gateway g8e-operator ensemble dashboard
+```
+
+Use host-published ports from the host (`8080` for Gateway discovery, `8443` for Gateway HTTPS, `8000` for Ensemble, and `3000` for Dashboard). From one Compose container, `localhost` names that same container; use the Compose Gateway name and container ports instead, normally `g8e.local:8080` and `g8e.local:8443`. Do not use a host-published port to infer the container's local endpoint.
+
+If the Gateway is healthy but a workload is absent or repeatedly restarting, check the active profile and its enrollment state. `docker compose up -d` starts only the unprofiled Gateway; start the `bootstrapped` profile after owner enrollment, and add `evaluation` only when `G8E_OLLAMA_ENDPOINT` is set and reachable from the Docker network:
+
+```bash
+docker compose --profile bootstrapped up -d
+docker compose --profile bootstrapped --profile evaluation up -d
+./g8e auth enroll pending
+```
+
+The Gateway owns its PKI and coordination state in the Gateway volume. The remote Operator owns its credentials and local execution evidence in the Operator volume. `docker compose down` preserves these volumes; `docker compose down -v` and `./g8e docker clean` remove them and require owner/workload enrollment again. `./g8e test e2e-full` also tears down with `docker compose down -v`, so do not use it when the current stack state must be retained.
 
 ## Windows-specific failures
 

@@ -21,13 +21,13 @@ import (
 
 func TestCampaignAssignmentVerifier_RecomputesMatchingGrades(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["designated_role_output"] = "READY"
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
-	req.ScenarioGold = loadScenarioGold("instruction-exact-format")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
+	req.ScenarioGold = loadScenarioGold(t, "instruction-exact-format")
 	req.GradingMethod = evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
@@ -47,9 +47,9 @@ func TestCampaignAssignmentVerifier_RecomputesMatchingGrades(t *testing.T) {
 
 func TestCampaignAssignmentVerifier_FailsWhenStoredGradesDrift(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
-	req := homogeneousAssignmentExecutionRequest("primary")
-	req.ScenarioGold = loadScenarioGold("instruction-exact-format")
+	trace := completedHomogeneousTrace(t, "primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
+	req.ScenarioGold = loadScenarioGold(t, "instruction-exact-format")
 	req.GradingMethod = evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
@@ -78,8 +78,8 @@ func TestCampaignAssignmentVerifier_FailsWhenStoredGradesDrift(t *testing.T) {
 
 func TestCampaignAssignmentVerifier_FailsWhenCapturedTelemetryDriftsFromTrace(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
-	call := trace["model_calls"].([]any)[0].(map[string]any)
+	trace := completedHomogeneousTrace(t, "primary")
+	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
 	call["usage_reported"] = true
 	call["input_tokens"] = float64(1)
 	call["output_tokens"] = float64(2)
@@ -88,7 +88,7 @@ func TestCampaignAssignmentVerifier_FailsWhenCapturedTelemetryDriftsFromTrace(t 
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	result.ModelInferences[0].PromptTokens = 99
@@ -108,14 +108,11 @@ func TestCampaignAssignmentVerifier_FailsWhenCapturedTelemetryDriftsFromTrace(t 
 	assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: model inference 0 mismatch")
 }
 
-func loadScenarioGold(scenarioID string) ScenarioGoldCriteria {
+func loadScenarioGold(t *testing.T, scenarioID string) ScenarioGoldCriteria {
+	t.Helper()
 	_, artifacts, err := BuildScenarioCatalog()
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	var gold ScenarioGoldCriteria
-	if err := json.Unmarshal(artifacts[scenarioID].Gold.Body, &gold); err != nil {
-		panic(err)
-	}
+	require.NoError(t, json.Unmarshal(artifacts[scenarioID].Gold.Body, &gold))
 	return gold
 }

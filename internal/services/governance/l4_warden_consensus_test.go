@@ -121,6 +121,7 @@ func TestL4Warden_Consensus_BootstrapActionPassesWithoutL2(t *testing.T) {
 		constants.ActionTypePlatformEnrollmentIssue,
 		constants.ActionTypePlatformEnrollmentPersistPolicy,
 		constants.ActionTypePlatformEnrollmentCreateSession,
+		constants.ActionTypePlatformEnrollmentRevoke,
 	}
 
 	for _, actionType := range bootstrapActions {

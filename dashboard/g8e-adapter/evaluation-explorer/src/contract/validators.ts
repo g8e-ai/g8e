@@ -51,6 +51,7 @@ import {
   PUBLIC_TOOL_OUTCOMES,
   PUBLIC_USAGE_AVAILABILITIES,
   PUBLIC_UNAVAILABLE_REASONS,
+  RUN_METRIC_UNITS,
   SUPPORTED_VIEW_SCHEMA_VERSIONS,
   TERMINAL_STATUSES,
   TOOL_SCORE_DIMENSIONS,
@@ -457,9 +458,39 @@ function assertNativeResult(value: unknown, path: string): void {
   }
 }
 
+function assertRunMetricValue(value: unknown, expectedUnit: string, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['value', 'unit', 'observed_count', 'eligible_count', 'unavailable_count', 'unavailable_reason'], path);
+  assertOptional(value.value, `${path}.value`, assertNumber);
+  if (value.value !== undefined) {
+    assert(value.value >= 0, `${path}.value`, 'must be >= 0');
+    if (expectedUnit === 'ratio') assert(value.value <= 1, `${path}.value`, 'ratio must be <= 1');
+  }
+  assertEnum(value.unit, RUN_METRIC_UNITS, `${path}.unit`);
+  assert(value.unit === expectedUnit, `${path}.unit`, `expected ${expectedUnit}`);
+  assertInteger(value.observed_count, `${path}.observed_count`);
+  assertInteger(value.eligible_count, `${path}.eligible_count`);
+  assertInteger(value.unavailable_count, `${path}.unavailable_count`);
+  assert(value.observed_count >= 0 && value.eligible_count >= 0 && value.unavailable_count >= 0, path, 'coverage counts must be >= 0');
+  assert(value.observed_count + value.unavailable_count === value.eligible_count, path, 'observed_count plus unavailable_count must equal eligible_count');
+  assertOptional(value.unavailable_reason, `${path}.unavailable_reason`, (reason, reasonPath) => assertEnum(reason, PUBLIC_UNAVAILABLE_REASONS, reasonPath));
+  const hasValue = value.value !== undefined;
+  const hasReason = value.unavailable_reason !== undefined;
+  assert(hasValue !== hasReason, path, 'metric requires exactly one value or unavailable_reason');
+  assert(hasValue === (value.observed_count > 0), path, 'metric value requires observed contributors');
+}
+
+function assertCurrentHeadlineMetrics(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['pass_rate', 'latency_p50_ms', 'output_throughput_p50_tokens_per_second'], path);
+  assertRunMetricValue(value.pass_rate, 'ratio', `${path}.pass_rate`);
+  assertRunMetricValue(value.latency_p50_ms, 'milliseconds', `${path}.latency_p50_ms`);
+  assertRunMetricValue(value.output_throughput_p50_tokens_per_second, 'tokens_per_second', `${path}.output_throughput_p50_tokens_per_second`);
+}
+
 export function isEvaluationSummary(value: unknown): asserts value is EvaluationSummary {
   assertObject(value, 'evaluation_summary');
-  rejectUnknown(value, [...ENVELOPE_FIELDS, 'run_id', 'campaign_id', 'suite_id', 'arm', 'evaluation_unit', 'stack_id', 'primary_invocation_share', 'correlated_failure_rate', 'benchmark_unavailable_reasons', 'model_role_mapping', 'lifecycle_state', 'assignment_total', 'assignment_completed', 'assignment_failed', 'terminal_outcomes', 'started_at', 'ended_at', 'elapsed_seconds', 'verifier_state', 'verifier_failure_summary', 'headline_metrics', 'evidence_link', 'native_result'], 'evaluation_summary');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'run_id', 'campaign_id', 'suite_id', 'arm', 'evaluation_unit', 'stack_id', 'primary_invocation_share', 'correlated_failure_rate', 'benchmark_unavailable_reasons', 'model_role_mapping', 'lifecycle_state', 'assignment_total', 'assignment_completed', 'assignment_failed', 'terminal_outcomes', 'started_at', 'ended_at', 'elapsed_seconds', 'verifier_state', 'verifier_failure_summary', 'verification_metadata', 'headline_metrics', 'evidence_link', 'native_result'], 'evaluation_summary');
   assertEnvelope(value, 'evaluation_summary', ['evaluation_summary']);
   assertString(value.run_id, 'evaluation_summary.run_id');
   assertOptional(value.campaign_id, 'evaluation_summary.campaign_id', assertString);
@@ -467,8 +498,19 @@ export function isEvaluationSummary(value: unknown): asserts value is Evaluation
   assertString(value.arm, 'evaluation_summary.arm');
   assertOptional(value.evaluation_unit, 'evaluation_summary.evaluation_unit', (v, p) => assertEnum(v, EVALUATION_UNITS, p));
   assertOptional(value.stack_id, 'evaluation_summary.stack_id', assertString);
-  assertOptionalMetricValue(value.primary_invocation_share, 'evaluation_summary.primary_invocation_share');
-  assertOptionalMetricValue(value.correlated_failure_rate, 'evaluation_summary.correlated_failure_rate');
+  if (value.schema_version === '1.5.0') {
+    assert(value.evaluation_unit !== undefined, 'evaluation_summary.evaluation_unit', 'required for schema 1.5.0');
+    if (value.evaluation_unit === 'model') {
+      assert(value.primary_invocation_share === undefined, 'evaluation_summary.primary_invocation_share', 'not applicable to model evaluations');
+      assert(value.correlated_failure_rate === undefined, 'evaluation_summary.correlated_failure_rate', 'not applicable to model evaluations');
+    } else {
+      if (value.primary_invocation_share !== undefined) assertRunMetricValue(value.primary_invocation_share, 'ratio', 'evaluation_summary.primary_invocation_share');
+      if (value.correlated_failure_rate !== undefined) assertRunMetricValue(value.correlated_failure_rate, 'ratio', 'evaluation_summary.correlated_failure_rate');
+    }
+  } else {
+    assertOptionalMetricValue(value.primary_invocation_share, 'evaluation_summary.primary_invocation_share');
+    assertOptionalMetricValue(value.correlated_failure_rate, 'evaluation_summary.correlated_failure_rate');
+  }
   assertOptional(value.benchmark_unavailable_reasons, 'evaluation_summary.benchmark_unavailable_reasons', assertStringArray);
   if (value.model_role_mapping !== undefined) {
     assertObject(value.model_role_mapping, 'evaluation_summary.model_role_mapping');
@@ -487,7 +529,23 @@ export function isEvaluationSummary(value: unknown): asserts value is Evaluation
   assertOptional(value.elapsed_seconds, 'evaluation_summary.elapsed_seconds', assertNumber);
   assertEnum(value.verifier_state, VERIFIER_STATES, 'evaluation_summary.verifier_state');
   assertOptional(value.verifier_failure_summary, 'evaluation_summary.verifier_failure_summary', assertString);
-  assertObject(value.headline_metrics, 'evaluation_summary.headline_metrics');
+  if (value.schema_version === '1.5.0') {
+    assertCurrentHeadlineMetrics(value.headline_metrics, 'evaluation_summary.headline_metrics');
+    if (value.verifier_state === 'passed' || value.verifier_state === 'failed') {
+      assertPublicVerificationMetadata(value.verification_metadata, 'evaluation_summary.verification_metadata');
+      assertObject(value.verification_metadata, 'evaluation_summary.verification_metadata');
+      assert(value.verification_metadata.provenance === 'bound', 'evaluation_summary.verification_metadata.provenance', 'current verification must be bound');
+      assert(value.verification_metadata.verifier_state === value.verifier_state, 'evaluation_summary.verification_metadata.verifier_state', 'must match summary verifier_state');
+      assertString(value.verification_metadata.verified_at, 'evaluation_summary.verification_metadata.verified_at');
+    } else {
+      assert(value.verification_metadata === undefined, 'evaluation_summary.verification_metadata', 'requires a completed verification result');
+    }
+  } else {
+    assert(value.verifier_state !== 'not_run', 'evaluation_summary.verifier_state', 'not_run requires schema 1.5.0');
+    assert(value.verification_metadata === undefined, 'evaluation_summary.verification_metadata', 'requires schema 1.5.0');
+    assertObject(value.headline_metrics, 'evaluation_summary.headline_metrics');
+    for (const [key, metric] of Object.entries(value.headline_metrics)) assertMetricValue(metric, `evaluation_summary.headline_metrics.${key}`);
+  }
   assertOptional(value.evidence_link, 'evaluation_summary.evidence_link', assertString);
   if (value.native_result !== undefined) {
     assert(value.schema_version === '1.3.0', 'evaluation_summary.schema_version', 'native results require schema 1.3.0');
@@ -670,11 +728,12 @@ function assertPublicEvidenceBindings(value: unknown, path: string): void {
 
 function assertPublicVerificationMetadata(value: unknown, path: string): void {
   assertObject(value, path);
-  rejectUnknown(value, ['provenance', 'verifier_state', 'verifier_release_version', 'verifier_contract_version', 'report_digest', 'population_digest'], path);
+  rejectUnknown(value, ['provenance', 'verifier_state', 'verifier_release_version', 'verifier_contract_version', 'report_digest', 'population_digest', 'verified_at'], path);
   assertEnum(value.provenance, ['bound', 'legacy_unbound'], `${path}.provenance`);
   assertEnum(value.verifier_state, VERIFIER_STATES, `${path}.verifier_state`);
   assertOptional(value.verifier_release_version, `${path}.verifier_release_version`, assertString);
   assertOptional(value.verifier_contract_version, `${path}.verifier_contract_version`, assertString);
+  assertOptional(value.verified_at, `${path}.verified_at`, assertString);
   for (const field of ['report_digest', 'population_digest'] as const) {
     if (value[field] !== undefined) {
       assertString(value[field], `${path}.${field}`);
@@ -740,9 +799,9 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
   assertOptional(value.evaluation_unit, 'assignment_result.evaluation_unit', (v, p) => assertEnum(v, EVALUATION_UNITS, p));
   assertOptional(value.stack_id, 'assignment_result.stack_id', assertString);
   if (value.benchmark_observations !== undefined) assertBenchmarkObservations(value.benchmark_observations, 'assignment_result.benchmark_observations');
-  if (value.schema_version !== '1.4.0') {
+  if (value.schema_version !== '1.4.0' && value.schema_version !== '1.5.0') {
     for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata'] as const) {
-      assert(value[field] === undefined, `assignment_result.${field}`, 'field requires schema 1.4.0');
+      assert(value[field] === undefined, `assignment_result.${field}`, 'field requires schema 1.4.0 or later');
     }
   } else {
     if (value.scenario_summary !== undefined) assertPublicScenarioSummary(value.scenario_summary, 'assignment_result.scenario_summary');

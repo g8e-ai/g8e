@@ -63,3 +63,30 @@ func evidenceReference(body []byte, kind string) *compliancev1.ComplianceEvidenc
 	digest := sha256.Sum256(body)
 	return &compliancev1.ComplianceEvidenceReference{ArtifactId: "artifact-" + kind, ArtifactType: kind, Sha256: hex.EncodeToString(digest[:]), SchemaRef: "schema@1.0.0"}
 }
+
+func TestResolvePublicScenarioContextCopiesBoundScenarioAndArtifacts(t *testing.T) {
+	t.Parallel()
+	input := []byte(`{"fixture":"input"}`)
+	gold := []byte(`{"fixture":"gold"}`)
+	inputRef := evidenceReference(input, "input")
+	goldRef := evidenceReference(gold, "gold")
+	catalogRef := &compliancev1.VersionedReference{Id: "catalog", Version: "1.0.0"}
+	catalog := &evalv1.EvaluationScenarioCatalog{
+		CatalogDigest: "catalog-digest", CatalogRef: catalogRef,
+		Scenarios: []*evalv1.EvaluationScenarioDefinition{{
+			ScenarioId: "scenario-1", ScenarioVersion: "1.0.0", PublicDescription: "Public", GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+			PublicCriteria:            []*evalv1.PublicScenarioCriterion{{CriterionId: "b"}, {CriterionId: "a"}},
+			PublicToolScoreDimensions: []*evalv1.PublicToolScoreDimensionRequirement{{Dimension: evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_TOOL_SELECTION}}, InputFixtureRef: inputRef, GoldCriteriaRef: goldRef,
+		}},
+	}
+	run := &evalv1.EvaluationRun{RunId: "run-1", CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "campaign-1", CampaignDigest: "campaign-digest", CatalogDigest: catalog.GetCatalogDigest(), CatalogRef: catalogRef}}
+	assignment := &evalv1.EvaluationAssignment{AssignmentId: "assignment-1", RunId: "run-1", CampaignId: "campaign-1", ScenarioId: "scenario-1", ScenarioRef: &compliancev1.VersionedReference{Id: "scenario-1", Version: "1.0.0"}}
+	artifacts := map[string]ScenarioArtifacts{"scenario-1": {Input: ScenarioArtifactPair{Body: input, Reference: inputRef}, Gold: ScenarioArtifactPair{Body: gold, Reference: goldRef}}}
+	context, err := ResolvePublicScenarioContext(context.Background(), nil, run, catalog, assignment, artifacts)
+	require.NoError(t, err)
+	assert.Equal(t, "scenario-1", context.ScenarioID)
+	assert.Len(t, context.Criteria, 2)
+	assert.Equal(t, "a", context.Criteria[0].GetCriterionId())
+	assert.Equal(t, "artifact-gold", context.ScenarioReference.GetArtifactId())
+	assert.Equal(t, "catalog", context.CatalogRef.GetId())
+}

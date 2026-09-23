@@ -452,10 +452,8 @@ func (s *PublicPublisherService) BuildBatch(records []models.PublicFeedRecord) (
 		if err := checkProhibitedFields(r.RecordBytes); err != nil {
 			return models.PublicFeedBatch{}, fmt.Errorf("public-feed: build batch: %w", err)
 		}
-		if r.RecordType == models.PublicFeedRecordTypeProjection {
-			if err := publicdisclosure.ValidateAssignmentRecord("", []byte(r.RecordBytes)); err != nil {
-				return models.PublicFeedBatch{}, fmt.Errorf("public-feed: build assignment record: %w", err)
-			}
+		if err := publicdisclosure.ValidatePublicFeedRecord(r.RecordType, []byte(r.RecordBytes)); err != nil {
+			return models.PublicFeedBatch{}, fmt.Errorf("public-feed: build record: %w", err)
 		}
 	}
 
@@ -579,7 +577,10 @@ func (s *PublicPublisherService) ExportBatch(ctx context.Context, records []mode
 	}
 
 	err := s.exportBatchOnce(ctx, records)
-	if err == nil || !isRepairableOutboxError(err) {
+	if err == nil {
+		return nil
+	}
+	if !isRepairableOutboxError(err) {
 		return err
 	}
 	if repairErr := s.RepairOutboxFromSnapshot(ctx); repairErr != nil {
@@ -773,6 +774,12 @@ func (s *PublicPublisherService) sendToMirror(ctx context.Context, origin, inges
 	}
 
 	if !ingestResp.Accepted {
+		if ingestResp.RejectionReason == models.PublicFeedIngestRejectionDuplicateSequence &&
+			ingestResp.SourceID == batch.SourceID &&
+			ingestResp.HighWaterSequence == batch.LastSequence &&
+			ingestResp.FeedChainHash == batch.ContentHash {
+			return nil
+		}
 		return fmt.Errorf("%w: %s", constants.ErrPublicFeedMirrorRejected, ingestResp.RejectionReason)
 	}
 

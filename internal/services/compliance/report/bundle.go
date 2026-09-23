@@ -382,7 +382,7 @@ func validateBundleAssemblyRequest(request BundleAssemblyRequest) error {
 	); err != nil {
 		return fmt.Errorf("%w: manifest reference validation: %w", constants.ErrBundleAssemblyFailed, err)
 	}
-	requiredSourcePaths := append(append([]string{request.AssertionCatalogRef, request.EvidenceIndexRef}, request.CrosswalkRefs...), request.AssessmentRefs...)
+	requiredSourcePaths := append(append([]string{constants.ComplianceBundleScopeFilename, request.AssertionCatalogRef, request.EvidenceIndexRef}, request.CrosswalkRefs...), request.AssessmentRefs...)
 	sourcePaths := make(map[string]struct{}, len(request.SourceArtifacts))
 	for _, source := range request.SourceArtifacts {
 		sourcePaths[source.BundlePath] = struct{}{}

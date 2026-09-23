@@ -15,7 +15,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -31,8 +34,10 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -89,6 +94,311 @@ func (r *bundleArtifactReaderStub) ListFiles(context.Context) ([]string, error) 
 	}
 	sort.Strings(paths)
 	return paths, nil
+}
+
+func TestVerifyComplianceReportBundleRejectsInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name    string
+		request BundleVerificationRequest
+		wantErr error
+	}{
+		{
+			name:    "nil bundle",
+			request: BundleVerificationRequest{Reader: &bundleArtifactReaderStub{}, TrustPolicy: &compliancev1.ComplianceReportTrustPolicy{}, VerifiedAt: time.Unix(1, 0)},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+		{
+			name:    "nil reader",
+			request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{}, TrustPolicy: &compliancev1.ComplianceReportTrustPolicy{}, VerifiedAt: time.Unix(1, 0)},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+		{
+			name:    "nil trust policy",
+			request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{}, Reader: &bundleArtifactReaderStub{}, VerifiedAt: time.Unix(1, 0)},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+		{
+			name:    "zero verification time",
+			request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{}, Reader: &bundleArtifactReaderStub{}, TrustPolicy: &compliancev1.ComplianceReportTrustPolicy{}},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+		{
+			name:    "missing manifest report ID",
+			request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{Manifest: &compliancev1.ComplianceReportManifest{}}, Reader: &bundleArtifactReaderStub{}, TrustPolicy: &compliancev1.ComplianceReportTrustPolicy{}, VerifiedAt: time.Unix(1, 0)},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := VerifyComplianceReportBundle(context.Background(), test.request)
+			assert.ErrorIs(t, err, test.wantErr)
+		})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := VerifyComplianceReportBundle(ctx, BundleVerificationRequest{})
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestBundledSourceArtifactReaderEnforcesContextAndReadOnlyDirectoryBehavior(t *testing.T) {
+	reader := &bundledSourceArtifactReader{bodies: map[string][]byte{"source.json": []byte("body")}}
+	body, err := reader.ReadFile(context.Background(), "source.json")
+	require.NoError(t, err)
+	assert.Equal(t, []byte("body"), body)
+	body[0] = 'x'
+	assert.Equal(t, []byte("body"), reader.bodies["source.json"])
+
+	_, err = reader.ReadFile(context.Background(), "missing.json")
+	assert.ErrorIs(t, err, constants.ErrNotFound)
+	_, err = reader.ReadDir(context.Background(), "")
+	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = reader.ReadFile(ctx, "source.json")
+	assert.ErrorIs(t, err, context.Canceled)
+	_, err = reader.ReadDir(ctx, "")
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestBundledRuntimeArtifactReaderResolvesFilesAndRejectsWrites(t *testing.T) {
+	reader := &bundledRuntimeArtifactReader{
+		bodies: map[string][]byte{
+			"sources/evals/run-1/runtime/data.json":        []byte("data"),
+			"sources/evals/run-1/runtime/nested/file.json": []byte("nested"),
+		},
+		runID:       "run-1",
+		sourceDir:   "evals",
+		runtimeRoot: constants.PathCurrentDir,
+	}
+
+	body, err := reader.ReadFile(context.Background(), filepath.Join(constants.PathCurrentDir, "data.json"))
+	require.NoError(t, err)
+	assert.Equal(t, []byte("data"), body)
+	body[0] = 'x'
+	assert.Equal(t, []byte("data"), reader.bodies["sources/evals/run-1/runtime/data.json"])
+
+	exists, err := reader.FileExists(context.Background(), filepath.Join(constants.PathCurrentDir, "data.json"))
+	require.NoError(t, err)
+	assert.True(t, exists)
+	exists, err = reader.FileExists(context.Background(), filepath.Join(constants.PathCurrentDir, "missing.json"))
+	require.NoError(t, err)
+	assert.False(t, exists)
+
+	entries, err := reader.ReadDir(context.Background(), constants.PathCurrentDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "data.json", entries[0].Name())
+	assert.False(t, entries[0].IsDir())
+	assert.Equal(t, "nested", entries[1].Name())
+	assert.True(t, entries[1].IsDir())
+	assert.Equal(t, os.FileMode(0), entries[0].Type())
+	_, err = entries[0].Info()
+	assert.NoError(t, err)
+
+	_, err = reader.ReadFile(context.Background(), filepath.Join(constants.PathCurrentDir, "..", "outside.json"))
+	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
+	_, err = reader.ReadDir(context.Background(), filepath.Join(constants.PathCurrentDir, "..", "outside"))
+	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
+	_, err = reader.FileExists(context.Background(), filepath.Join(constants.PathCurrentDir, "..", "outside.json"))
+	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
+
+	readOnlyChecks := []func() error{
+		func() error { return reader.MkdirAll(context.Background(), "", 0) },
+		func() error { return reader.CreateRuntimeTree(context.Background()) },
+		func() error { _, err := reader.Stat(context.Background(), ""); return err },
+		func() error { _, err := reader.Lstat(context.Background(), ""); return err },
+		func() error { return reader.WriteFile(context.Background(), "", nil, 0) },
+		func() error { _, err := reader.OpenForAppend(context.Background(), "", 0); return err },
+		func() error { _, err := reader.OpenForRead(context.Background(), ""); return err },
+		func() error { return reader.Remove(context.Background(), "") },
+		func() error { return reader.RemoveAll(context.Background(), "") },
+		func() error { return reader.Rename(context.Background(), "", "") },
+		func() error { return reader.EnforceDirPermissions(context.Background(), "", 0) },
+		func() error { return reader.EnforceFilePermissions(context.Background(), "", 0) },
+	}
+	for _, check := range readOnlyChecks {
+		assert.ErrorIs(t, check(), constants.ErrReadOnlyEvidenceSource)
+	}
+	assert.Equal(t, "path", reader.Resolve("path"))
+	rel, err := reader.Rel("path")
+	require.NoError(t, err)
+	assert.Equal(t, "path", rel)
+	rel, err = reader.RelFromAbs("path")
+	require.NoError(t, err)
+	assert.Equal(t, "path", rel)
+}
+
+func TestCampaignWitnessPoliciesMatchAdmissionRejectsSubstitution(t *testing.T) {
+	admission := &compliancev1.AssessmentSourceAdmission{
+		AdmissionId:               "campaign-source",
+		ProviderObservationPolicy: compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT,
+		ModelProvenancePolicy:     compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM,
+	}
+	manifest := &evalv1.CampaignComplianceSourceInventory{
+		ProviderObservationPolicy: evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT,
+		ModelProvenancePolicy:     evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM,
+	}
+	assert.True(t, campaignWitnessPoliciesMatchAdmission(manifest, admission))
+
+	manifest.ModelProvenancePolicy = evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT
+	assert.False(t, campaignWitnessPoliciesMatchAdmission(manifest, admission))
+}
+
+func TestValidateCampaignSourceInventoryRejectsUnverifiableArtifactLists(t *testing.T) {
+	admission := &compliancev1.AssessmentSourceAdmission{
+		AdmissionId:               "campaign-source",
+		RunId:                     "run-1",
+		SourceKind:                constants.EvaluationSourceKindCampaign,
+		ProviderObservationPolicy: compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM,
+		ModelProvenancePolicy:     compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT,
+	}
+	validDigest := strings.Repeat("a", sha256.Size*2)
+	base := &evalv1.CampaignComplianceSourceInventory{
+		SchemaVersion:             constants.CampaignSourceInventoryVersion,
+		AdmissionId:               admission.GetAdmissionId(),
+		RunId:                     admission.GetRunId(),
+		ProviderObservationPolicy: evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM,
+		ModelProvenancePolicy:     evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT,
+		Artifacts:                 []*evalv1.CampaignComplianceSourceArtifact{{RuntimePath: "data/eval/runs/run-1/run.json", Sha256: validDigest, MediaType: constants.MediaTypeJSON}},
+	}
+	tests := []struct {
+		name   string
+		mutate func(*evalv1.CampaignComplianceSourceInventory)
+	}{
+		{name: "duplicate runtime path", mutate: func(inventory *evalv1.CampaignComplianceSourceInventory) {
+			inventory.Artifacts = append(inventory.Artifacts, proto.Clone(inventory.Artifacts[0]).(*evalv1.CampaignComplianceSourceArtifact))
+		}},
+		{name: "invalid runtime path", mutate: func(inventory *evalv1.CampaignComplianceSourceInventory) {
+			inventory.Artifacts[0].RuntimePath = "../outside.json"
+		}},
+		{name: "invalid digest", mutate: func(inventory *evalv1.CampaignComplianceSourceInventory) {
+			inventory.Artifacts[0].Sha256 = "not-a-digest"
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			inventory := proto.Clone(base).(*evalv1.CampaignComplianceSourceInventory)
+			test.mutate(inventory)
+			require.Error(t, validateCampaignSourceInventory(inventory, admission))
+		})
+	}
+
+	evalInventory := &evalSourceInventory{campaignInventory: base, runtimeArtifactPaths: map[string]struct{}{"data/eval/runs/run-1/run.json": {}}}
+	assert.True(t, campaignRuntimePathsMatchInventory(evalInventory))
+	delete(evalInventory.runtimeArtifactPaths, "data/eval/runs/run-1/run.json")
+	assert.False(t, campaignRuntimePathsMatchInventory(evalInventory))
+}
+
+func TestBundleVerifier_VerifyOperationalSourcesReplaysProtectedInventory(t *testing.T) {
+	assessmentAsOf := time.UnixMilli(1_700_000_100_000).UTC()
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signerKeyID := hex.EncodeToString(publicKey)
+	receipt := &operatorv1.ActionReceipt{TransactionId: "transaction-1", TransactionHash: "hash-1", SignerKeyId: signerKeyID, ExecutedAtUnixMs: assessmentAsOf.Add(-time.Minute).UnixMilli()}
+	payload, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	receiptBody, err := compliancev1.MarshalCanonical(receipt)
+	require.NoError(t, err)
+	scope := validGenerationScope(assessmentAsOf.Add(-time.Hour), assessmentAsOf)
+	scope.AssessmentAsOf = timestamppb.New(assessmentAsOf)
+	admission := scope.SourceAdmissions[0]
+	admission.SourceKind = "operator-audit"
+	admission.SourceVersion = "1.0.0"
+	admission.SourceScopeId = "operator-scope-1"
+	admission.OwnerRuntimeBoundary = "operator-1"
+	admission.AcquisitionBoundary = "operator-local-export"
+	admission.RunId = "run-1"
+	sourceDir := t.TempDir()
+	_, err = evidence.ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{Receipts: []storage.OperationalReceiptSource{{TransactionID: receipt.GetTransactionId(), ExecutedAt: time.UnixMilli(receipt.GetExecutedAtUnixMs()), Body: receiptBody}}}, evidence.OperationalExportRequest{
+		ScopeID:              scope.GetScopeId(),
+		AdmissionID:          admission.GetAdmissionId(),
+		SourceKind:           admission.GetSourceKind(),
+		SourceVersion:        admission.GetSourceVersion(),
+		SourceScopeID:        admission.GetSourceScopeId(),
+		OwnerRuntimeBoundary: admission.GetOwnerRuntimeBoundary(),
+		AcquisitionBoundary:  admission.GetAcquisitionBoundary(),
+		RunID:                admission.GetRunId(),
+		VerifierID:           admission.GetVerifierRef().GetId(),
+		VerifierVersion:      admission.GetVerifierRef().GetVersion(),
+		WindowStart:          scope.GetAssessmentWindowStart().AsTime(),
+		WindowEnd:            scope.GetAssessmentWindowEnd().AsTime(),
+		MaxRows:              10,
+		OutputDir:            sourceDir,
+	})
+	require.NoError(t, err)
+	sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, admission.GetAdmissionId())
+	inventoryPath := path.Join(sourceRoot, constants.ComplianceOperationalInventoryFilename)
+	inventoryBody, err := os.ReadFile(filepath.Join(sourceDir, constants.ComplianceOperationalInventoryFilename))
+	require.NoError(t, err)
+	inventory := &evidence.OperationalSourceInventory{}
+	require.NoError(t, json.Unmarshal(inventoryBody, inventory))
+	bodies := map[string][]byte{inventoryPath: inventoryBody}
+	for _, artifact := range inventory.Artifacts {
+		body, readErr := os.ReadFile(filepath.Join(sourceDir, artifact.RelativePath))
+		require.NoError(t, readErr)
+		bodies[path.Join(sourceRoot, artifact.RelativePath)] = body
+	}
+	trust := &assessedEvidenceSignerStub{keys: map[string]ed25519.PublicKey{signerKeyID: publicKey}}
+	importer := evidence.NewOperationalExportImporter(&bundledSourceArtifactReader{bodies: bodies}, trust, inventoryPath, sourceRoot, scope.GetScopeId(), admission, assessmentAsOf, func() time.Time { return assessmentAsOf })
+	nodes, err := importer.Import(context.Background())
+	require.NoError(t, err)
+	resources := make([]*compliancev1.ComplianceEvidenceReference, 0, len(nodes))
+	for index := range nodes {
+		nodes[index].SourceAdmissionID = admission.GetAdmissionId()
+		resources = append(resources, nodes[index].ToProto())
+	}
+	scopeBody, err := compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	bodies[constants.ComplianceBundleScopeFilename] = scopeBody
+	verifier := &bundleVerifier{
+		request:                  BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{Analysis: &compliancev1.ComplianceAnalysis{EvidenceResources: resources}}, EvidenceTrust: trust},
+		report:                   &compliancev1.ComplianceVerificationReport{},
+		bodies:                   bodies,
+		replayedNodesByAdmission: make(map[string][]evidence.EvidenceNode),
+		operationalAdmissions:    make(map[string]struct{}),
+	}
+
+	verifier.verifyOperationalSources(context.Background())
+
+	assert.Empty(t, verifier.report.GetFailures())
+	assert.Len(t, verifier.replayedNodesByAdmission[admission.GetAdmissionId()], len(nodes))
+	_, routed := verifier.operationalAdmissions[admission.GetAdmissionId()]
+	assert.True(t, routed)
+
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	sourceArtifacts := make([]SourceArtifact, 0, len(bodies)-1)
+	for bundlePath, body := range bodies {
+		if bundlePath == constants.ComplianceBundleScopeFilename {
+			continue
+		}
+		sourceArtifacts = append(sourceArtifacts, SourceArtifact{BundlePath: bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
+	}
+	sort.Slice(sourceArtifacts, func(i, j int) bool { return sourceArtifacts[i].BundlePath < sourceArtifacts[j].BundlePath })
+	reportIdentity := bundleSigningIdentityFixture(t)
+	assembly, err := GenerateSignedComplianceBundle(context.Background(), SignedBundleGenerationRequest{
+		Generation:      GenerationRequest{Scope: scope, Sources: []GenerationSource{{AdmissionID: admission.GetAdmissionId(), Importer: importer}}, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks},
+		Profile:         ProfileRestricted,
+		ReportID:        "operational-report-1",
+		GeneratedAt:     assessmentAsOf.Add(time.Minute),
+		SigningIdentity: reportIdentity,
+		SourceArtifacts: sourceArtifacts,
+	})
+	require.NoError(t, err)
+	bundleBodies := make(map[string][]byte, len(assembly.ArtifactBodies))
+	for _, artifact := range assembly.ArtifactBodies {
+		bundleBodies[artifact.BundlePath] = artifact.Body
+	}
+	reportPublicKey := reportIdentity.privateKey.Public().(ed25519.PublicKey)
+	reportPolicy := &compliancev1.ComplianceReportTrustPolicy{PolicyId: "policy-1", PolicyVersion: "1.0.0", TrustedKeys: []*compliancev1.ComplianceReportTrustedKey{{Metadata: proto.Clone(reportIdentity.metadata).(*compliancev1.ComplianceReportSigningKeyMetadata), PublicKey: hex.EncodeToString(reportPublicKey), AssessmentId: "assessment-1", AssessorIdentity: "assessor-1", AssessedAt: timestamppb.New(assessmentAsOf), AllowedScopeRefs: []string{scope.GetScopeId()}}}}
+
+	verification, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: assembly.Bundle, Reader: &bundleArtifactReaderStub{bodies: bundleBodies}, TrustPolicy: reportPolicy, EvidenceTrust: trust, VerifiedAt: assessmentAsOf.Add(2 * time.Minute)})
+
+	require.NoError(t, err)
+	assert.True(t, verification.GetValid(), verification.GetFailures())
 }
 
 func demoReplaySourceFixture(t *testing.T, runID string, generatedAt time.Time) []SourceArtifact {
@@ -184,37 +494,43 @@ func signedBundleVerificationFixture(t *testing.T) (*compliancev1.ComplianceRepo
 func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*BundleAssemblyRequest)) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
 	t.Helper()
 	request, _ := bundleAssemblyFixture(t)
-	request.Analysis = rendererTestAnalysis()
-	request.Analysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
-		ArtifactId:         string(evidence.ArtifactTypeDemoManifest) + ":sha256:" + strings.Repeat("a", 64),
-		ArtifactType:       string(evidence.ArtifactTypeDemoManifest),
-		Sha256:             strings.Repeat("a", 64),
-		MediaType:          constants.MediaTypeJSON,
-		SchemaRef:          "g8e.compliance.v1.DemoManifest",
-		ProducerIdentity:   "demo-run-1",
-		ProducedAt:         timestamppb.New(request.GeneratedAt),
-		ScopeId:            request.ScopeRef,
-		RunId:              "demo-run-1",
-		VerificationStatus: string(evidence.VerificationStatusVerified),
-		VerifierId:         constants.DemoRunVerifierID,
-		VerifierVersion:    constants.DemoRunVerifierVersion,
-		VerifiedAt:         timestamppb.New(request.GeneratedAt),
-		BundlePath:         path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.DemoRunManifestFilename),
-	}}
-	request.Profiles[0].AnalysisRef = request.Analysis.GetAnalysisId()
-	renderedFormats, err := renderAllFormats(request.Analysis)
-	require.NoError(t, err)
-	request.RenderedFormats = renderedFormats
-	controlAssessmentRef := path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleControlAssessmentsFilename)
-	request.AssessmentRefs = append(request.AssessmentRefs, controlAssessmentRef)
+	bundleGeneratedAt := request.GeneratedAt
+	scope := validGenerationScope(bundleGeneratedAt.Add(-time.Hour), bundleGeneratedAt.Add(2*time.Second))
+	scope.ScopeId = constants.DemoScopeFedRAMP
+	scope.AssessmentAsOf = timestamppb.New(bundleGeneratedAt)
+	request.ScopeRef = constants.DemoScopeFedRAMP
+	scope.SourceAdmissions[0].SourceScopeId = constants.DemoScopeFedRAMP
+	scope.SourceAdmissions[0].RunId = "demo-run-1"
+	demoSourceArtifacts := demoReplaySourceFixture(t, "demo-run-1", bundleGeneratedAt)
+	demoBodies := make(map[string][]byte, len(demoSourceArtifacts))
+	for _, artifact := range demoSourceArtifacts {
+		demoBodies[artifact.BundlePath] = artifact.Body
+	}
+	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, "demo-run-1")
+	demoReader := &bundledRuntimeArtifactReader{bodies: demoBodies, runID: "demo-run-1", sourceDir: constants.ComplianceBundleSourceDemosDirname, runtimeRoot: runtimeRoot}
+	demoSource := &bundledDemoProvenanceSource{bodies: demoBodies, runID: "demo-run-1"}
 	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)
-	request.SourceArtifacts, err = canonicalReportSourceArtifacts(GenerationRequest{Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks}, &GenerationResult{Analysis: request.Analysis})
+	generation := GenerationRequest{Scope: scope, Sources: []GenerationSource{{AdmissionID: "source-1", Importer: evidence.NewDemoRunImporterAt(demoReader, "demo-run-1", demoSource, func() time.Time { return scope.GetAssessmentAsOf().AsTime() })}}, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks}
+	generated, err := GenerateComplianceAnalysis(context.Background(), generation)
+	require.NoError(t, err)
+	require.NotNil(t, generated)
+	request.Analysis = generated.Analysis
+	request.Profiles = generated.Profiles
+	request.FrameworkRefs = request.FrameworkRefs[:0]
+	for _, framework := range frameworks.GetFrameworks() {
+		request.FrameworkRefs = append(request.FrameworkRefs, &compliancev1.VersionedReference{Id: framework.GetFrameworkId(), Version: framework.GetFrameworkVersion()})
+	}
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
+	require.NoError(t, err)
+	controlAssessmentRef := path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleControlAssessmentsFilename)
+	request.AssessmentRefs = append(request.AssessmentRefs, controlAssessmentRef)
+	request.SourceArtifacts, err = canonicalReportSourceArtifacts(generation, generated)
 	require.NoError(t, err)
 	sourceReportBody, err := compliancev1.MarshalCanonical(&compliancev1.ComplianceVerificationReport{
 		ReportId:        "demo-run-1",
 		Valid:           true,
-		VerifiedAt:      timestamppb.New(request.GeneratedAt),
+		VerifiedAt:      timestamppb.New(scope.GetAssessmentAsOf().AsTime()),
 		VerifierId:      constants.DemoRunVerifierID,
 		VerifierVersion: constants.DemoRunVerifierVersion,
 		Checks: []*compliancev1.VerificationCheckResult{evidence.NewVerificationCheckResult(
@@ -227,11 +543,12 @@ func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*Bundl
 	})
 	require.NoError(t, err)
 	demoSourceBase := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1")
-	request.SourceArtifacts = append(request.SourceArtifacts, demoReplaySourceFixture(t, "demo-run-1", request.GeneratedAt)...)
+	request.SourceArtifacts = append(request.SourceArtifacts, demoSourceArtifacts...)
 	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: path.Join(demoSourceBase, constants.ComplianceBundleSourceVerificationFilename), Body: sourceReportBody, MediaType: constants.MediaTypeJSON})
 	if mutate != nil {
 		mutate(&request)
 	}
+	finalizeProtectedScopeFixture(t, &request)
 	result, err := AssembleBundle(request)
 	require.NoError(t, err)
 	identity := bundleSigningIdentityFixture(t)
@@ -255,6 +572,125 @@ func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*Bundl
 		}},
 	}
 	return result.Bundle, reader, policy, request.GeneratedAt.Add(time.Hour)
+}
+
+func finalizeProtectedScopeFixture(t *testing.T, request *BundleAssemblyRequest) {
+	t.Helper()
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(sourceArtifactBody(t, request.SourceArtifacts, constants.ComplianceBundleScopeFilename), scope))
+	admissionsByRun := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissionsByRun[admission.GetRunId()] = admission
+	}
+	changed := false
+	for _, resource := range request.Analysis.GetEvidenceResources() {
+		if resource.GetSourceAdmissionId() != "" || resource.GetArtifactType() == string(evidence.ArtifactTypeDemoDefinition) {
+			continue
+		}
+		admission := admissionsByRun[resource.GetRunId()]
+		if admission == nil {
+			admission = &compliancev1.AssessmentSourceAdmission{
+				AdmissionId:              fmt.Sprintf("source-%d", len(scope.GetSourceAdmissions())+1),
+				SourceKind:               resource.GetArtifactType(),
+				SourceVersion:            "1.0.0",
+				SourceScopeId:            request.ScopeRef,
+				OwnerRuntimeBoundary:     "fixture-owner",
+				AcquisitionBoundary:      "fixture-local",
+				RunId:                    resource.GetRunId(),
+				VerifierRef:              &compliancev1.VersionedReference{Id: constants.ComplianceBundleVerifierID, Version: constants.ComplianceBundleVerifierVersion},
+				DisclosureClassification: constants.ComplianceBundleProfilePublic,
+			}
+			scope.SourceAdmissions = append(scope.SourceAdmissions, admission)
+			admissionsByRun[resource.GetRunId()] = admission
+		}
+		resource.SourceAdmissionId = admission.GetAdmissionId()
+		changed = true
+	}
+	if !changed {
+		return
+	}
+	bodies := make(map[string][]byte, len(request.SourceArtifacts))
+	for _, artifact := range request.SourceArtifacts {
+		bodies[artifact.BundlePath] = artifact.Body
+	}
+	nodesByAdmission := make(map[string][]evidence.EvidenceNode, len(scope.GetSourceAdmissions()))
+	for _, resource := range request.Analysis.GetEvidenceResources() {
+		node, err := fixtureDecisionReplayNode(bodies, resource)
+		require.NoError(t, err)
+		for _, link := range request.Analysis.GetEvidenceLinks() {
+			if link.GetSourceRef() == resource.GetArtifactId() {
+				node.References = append(node.References, link.GetTargetRef())
+			}
+		}
+		sort.Strings(node.References)
+		nodesByAdmission[resource.GetSourceAdmissionId()] = append(nodesByAdmission[resource.GetSourceAdmissionId()], node)
+	}
+	sharedNodes := append([]evidence.EvidenceNode(nil), nodesByAdmission[""]...)
+	sources := make([]GenerationSource, 0, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		nodes := append([]evidence.EvidenceNode(nil), nodesByAdmission[admission.GetAdmissionId()]...)
+		nodes = append(nodes, sharedNodes...)
+		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: nodes}})
+	}
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	generation := GenerationRequest{Scope: scope, Sources: sources, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks}
+	generated, err := GenerateComplianceAnalysis(context.Background(), generation)
+	require.NoError(t, err)
+	require.NotNil(t, generated)
+	request.Analysis = generated.Analysis
+	request.Profiles = generated.Profiles
+	canonicalArtifacts, err := canonicalReportSourceArtifacts(generation, generated)
+	require.NoError(t, err)
+	for _, artifact := range canonicalArtifacts {
+		replaceSourceArtifactBody(t, request.SourceArtifacts, artifact.BundlePath, artifact.Body)
+	}
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
+	require.NoError(t, err)
+}
+
+func fixtureDecisionReplayNode(bodies map[string][]byte, resource *compliancev1.ComplianceEvidenceReference) (evidence.EvidenceNode, error) {
+	if resource == nil || resource.GetProducedAt() == nil || resource.GetProducedAt().CheckValid() != nil || resource.GetVerifiedAt() != nil && resource.GetVerifiedAt().CheckValid() != nil {
+		return evidence.EvidenceNode{}, fmt.Errorf("%w: decision replay evidence reference is incomplete", constants.ErrInvalidEvidenceGraph)
+	}
+	node := evidence.EvidenceNode{
+		ArtifactID:         resource.GetArtifactId(),
+		ArtifactType:       evidence.ArtifactType(resource.GetArtifactType()),
+		SHA256:             resource.GetSha256(),
+		MediaType:          resource.GetMediaType(),
+		SchemaRef:          resource.GetSchemaRef(),
+		ProducerIdentity:   resource.GetProducerIdentity(),
+		ProducedAt:         resource.GetProducedAt().AsTime(),
+		ScopeID:            resource.GetScopeId(),
+		SourceAdmissionID:  resource.GetSourceAdmissionId(),
+		RunID:              resource.GetRunId(),
+		AttemptID:          resource.GetAttemptId(),
+		ScenarioID:         resource.GetScenarioId(),
+		TransactionID:      resource.GetTransactionId(),
+		VerificationStatus: evidence.VerificationStatus(resource.GetVerificationStatus()),
+		VerifierID:         resource.GetVerifierId(),
+		VerifierVersion:    resource.GetVerifierVersion(),
+		BundlePath:         resource.GetBundlePath(),
+	}
+	if resource.GetVerifiedAt() != nil {
+		node.VerifiedAt = resource.GetVerifiedAt().AsTime()
+	}
+	if resource.GetEncryption() != nil {
+		node.Encryption = &evidence.EncryptionMetadata{
+			Algorithm:                   resource.GetEncryption().GetAlgorithm(),
+			KeyID:                       resource.GetEncryption().GetKeyId(),
+			AuthorizationScope:          resource.GetEncryption().GetAuthorizationScope(),
+			PlaintextSHA256:             resource.GetEncryption().GetPlaintextSha256(),
+			AuthenticatedMetadataSHA256: resource.GetEncryption().GetAuthenticatedMetadataSha256(),
+		}
+	}
+	if body, exists := bodies[resource.GetBundlePath()]; exists {
+		digest := sha256.Sum256(body)
+		if hex.EncodeToString(digest[:]) == resource.GetSha256() {
+			node.CanonicalBytes = append([]byte(nil), body...)
+		}
+	}
+	return node, nil
 }
 
 type ksiSourcePaths struct {
@@ -319,8 +755,9 @@ func addKSIHistorySourceFixture(t *testing.T, request *BundleAssemblyRequest) ks
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
+	finalizeProtectedScopeFixture(t, request)
 	return paths
 }
 
@@ -382,8 +819,9 @@ func addCommitmentSourceFixture(t *testing.T, request *BundleAssemblyRequest) co
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
+	finalizeProtectedScopeFixture(t, request)
 	return commitmentSourceFixture{bundlePath: bundlePath, privateKey: privateKey, attestation: attestation, trust: &assessedEvidenceSignerStub{keys: map[string]ed25519.PublicKey{keyID: publicKey}}}
 }
 
@@ -473,8 +911,9 @@ func addAttestationSourceFixture(t *testing.T, request *BundleAssemblyRequest) a
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
+	finalizeProtectedScopeFixture(t, request)
 	return attestationSourceFixture{bundlePath: bundlePath, privateKey: privateKey, record: record, trust: &assessedEvidenceSignerStub{keys: map[string]ed25519.PublicKey{keyID: publicKey}}}
 }
 
@@ -539,8 +978,9 @@ func addAuditSourceFixture(t *testing.T, request *BundleAssemblyRequest) auditSo
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
+	finalizeProtectedScopeFixture(t, request)
 	return auditSourceFixture{bundlePath: bundlePath, event: event}
 }
 
@@ -562,13 +1002,45 @@ func TestVerifyComplianceReportBundle_AcceptsCompleteSignedBundleOffline(t *test
 	assert.Equal(t, constants.ComplianceBundleVerifierID, report.GetVerifierId())
 	assert.Equal(t, constants.ComplianceBundleVerifierVersion, report.GetVerifierVersion())
 	assert.Equal(t, bundle.GetChecksumRoot(), report.GetReproducedChecksumRoot())
-	require.Len(t, report.GetChecks(), 10)
+	require.Len(t, report.GetChecks(), 11)
 	for _, check := range report.GetChecks() {
 		assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED, check.GetStatus())
 		assert.NotEmpty(t, check.GetEvidenceRefs())
 		assert.Equal(t, report.GetVerifierId(), check.GetVerifierId())
 		assert.Equal(t, report.GetVerifierVersion(), check.GetVerifierVersion())
 		assert.Empty(t, check.GetFailures())
+	}
+}
+
+func TestVerifyComplianceReportBundle_RejectsResignedInventedAssertionAssessment(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+		require.NotEmpty(t, request.Analysis.GetAssertionAssessments())
+		request.Analysis.AssertionAssessments[0].EvidenceLevel = "L1"
+		request.Analysis.AnalysisId = ""
+		canonicalAnalysis, err := compliancev1.MarshalCanonical(request.Analysis)
+		require.NoError(t, err)
+		analysisDigest := sha256.Sum256(canonicalAnalysis)
+		request.Analysis.AnalysisId = "compliance-analysis:sha256:" + hex.EncodeToString(analysisDigest[:])
+		analysisID := request.Analysis.GetAnalysisId()
+		for _, profile := range request.Profiles {
+			profile.AnalysisRef = analysisID
+		}
+		assertionAssessments, err := marshalCanonicalMessages(request.Analysis.GetAssertionAssessments())
+		require.NoError(t, err)
+		replaceSourceArtifactBody(t, request.SourceArtifacts, path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename), assertionAssessments)
+		request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
+		require.NoError(t, err)
+	})
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
+	assertVerificationFailure(t, report, constants.ErrRendererMismatch, constants.ComplianceBundleAnalysisPath)
+	for _, check := range report.GetChecks() {
+		if check.GetCheckId() == constants.ComplianceBundleCheckSignatures {
+			assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED, check.GetStatus())
+		}
 	}
 }
 
@@ -667,7 +1139,7 @@ func TestVerifyComplianceReportBundle_RejectsCommitmentAnalysisBindingMutations(
 				evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 				require.NoError(t, err)
 				replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-				request.RenderedFormats, err = renderAllFormats(request.Analysis)
+				request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 				require.NoError(t, err)
 			})
 
@@ -773,7 +1245,7 @@ func TestVerifyComplianceReportBundle_RejectsAttestationAnalysisBindingMutations
 				evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 				require.NoError(t, err)
 				replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-				request.RenderedFormats, err = renderAllFormats(request.Analysis)
+				request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 				require.NoError(t, err)
 			})
 
@@ -801,7 +1273,7 @@ func TestVerifyComplianceReportBundle_RejectsOrphanedAttestationSource(t *testin
 		evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 		require.NoError(t, err)
 		replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-		request.RenderedFormats, err = renderAllFormats(request.Analysis)
+		request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 		require.NoError(t, err)
 	})
 
@@ -878,7 +1350,7 @@ func TestVerifyComplianceReportBundle_RejectsAuditRecordAnalysisBindingMutations
 				evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 				require.NoError(t, err)
 				replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-				request.RenderedFormats, err = renderAllFormats(request.Analysis)
+				request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 				require.NoError(t, err)
 			})
 
@@ -906,7 +1378,7 @@ func TestVerifyComplianceReportBundle_RejectsOrphanedAuditRecordSource(t *testin
 		evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 		require.NoError(t, err)
 		replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-		request.RenderedFormats, err = renderAllFormats(request.Analysis)
+		request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 		require.NoError(t, err)
 	})
 
@@ -1000,6 +1472,9 @@ func signedRestrictedBundleVerificationFixture(t *testing.T, plaintext []byte) (
 	plaintextDigest := sha256.Sum256(plaintext)
 	return signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		request.Profile = ProfileRestricted
+		var err error
+		request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
+		require.NoError(t, err)
 		request.RestrictedArtifacts = []RestrictedArtifact{{
 			BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
 			Body:       []byte(`{"ciphertext":"authenticated"}`),
@@ -1458,13 +1933,13 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
 				bundle.Analysis.EvidenceResources[0].RunId = "other-demo-run"
 			},
-			failureCode:    constants.ErrUnresolvedReference,
+			failureCode:    constants.ErrInvalidEvidenceGraph,
 			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
 		},
 		{
 			name: "missing eval source inventory",
 			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
-				bundle.Analysis.EvidenceResources = append(bundle.Analysis.EvidenceResources, &compliancev1.ComplianceEvidenceReference{ArtifactType: string(evidence.ArtifactTypeEvalManifest), RunId: "eval-run-1"})
+				bundle.Analysis.EvidenceResources = append(bundle.Analysis.EvidenceResources, &compliancev1.ComplianceEvidenceReference{ArtifactId: string(evidence.ArtifactTypeEvalManifest) + ":eval-run-1", ArtifactType: string(evidence.ArtifactTypeEvalManifest), RunId: "eval-run-1"})
 			},
 			failureCode:    constants.ErrEvalRunVerificationFailed,
 			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, "eval-run-1"),
@@ -1553,6 +2028,10 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+			failureSubject := test.failureSubject
+			if failureSubject == constants.ComplianceBundleFrameworkProfileTestPath {
+				failureSubject = path.Join(constants.ComplianceBundleProfilesDirname, bundle.GetProfiles()[0].GetProfileId()+constants.FileExtJSON)
+			}
 			test.mutate(bundle, reader, policy)
 
 			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{
@@ -1570,7 +2049,7 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 				assert.NotEmpty(t, failure.GetCode())
 				assert.NotEmpty(t, failure.GetSubjectRef())
 			}
-			assertVerificationFailure(t, report, test.failureCode, test.failureSubject)
+			assertVerificationFailure(t, report, test.failureCode, failureSubject)
 		})
 	}
 }
@@ -1824,10 +2303,10 @@ func addLedgerReplayFixture(t *testing.T, request *BundleAssemblyRequest) ledger
 		commitsPath: path.Join(base, constants.LedgerCommitsFilename),
 		statePath:   path.Join(base, constants.LedgerStateFilename),
 		commits: []ledgerReplayCommitRecord{
-			{SchemaVersion: constants.LedgerEvidenceSchemaVersion, ProducerIdentity: "gateway-1", CommitHash: strings.Repeat("1", 40), TimestampUTC: "2026-09-06T10:00:00Z", Message: "bootstrap", FilesChanged: 1, DiffStat: "1 file changed"},
-			{SchemaVersion: constants.LedgerEvidenceSchemaVersion, ProducerIdentity: "gateway-1", CommitHash: strings.Repeat("2", 40), ParentHash: strings.Repeat("1", 40), TimestampUTC: "2026-09-06T10:01:00Z", Message: "governed mutation", FilesChanged: 1, DiffStat: "1 file changed"},
+			{SchemaVersion: constants.LedgerEvidenceSchemaVersion, ProducerIdentity: "gateway-1", CommitHash: strings.Repeat("1", 40), TimestampUTC: request.GeneratedAt.Add(-2 * time.Minute).Format(time.RFC3339), Message: "bootstrap", FilesChanged: 1, DiffStat: "1 file changed"},
+			{SchemaVersion: constants.LedgerEvidenceSchemaVersion, ProducerIdentity: "gateway-1", CommitHash: strings.Repeat("2", 40), ParentHash: strings.Repeat("1", 40), TimestampUTC: request.GeneratedAt.Add(-time.Minute).Format(time.RFC3339), Message: "governed mutation", FilesChanged: 1, DiffStat: "1 file changed"},
 		},
-		state: ledgerReplayStateRecord{SchemaVersion: constants.LedgerEvidenceSchemaVersion, ProducerIdentity: "gateway-1", MerkleRoot: strings.Repeat("2", 40), CapturedAtUTC: "2026-09-06T10:02:00Z"},
+		state: ledgerReplayStateRecord{SchemaVersion: constants.LedgerEvidenceSchemaVersion, ProducerIdentity: "gateway-1", MerkleRoot: strings.Repeat("2", 40), CapturedAtUTC: request.GeneratedAt.Format(time.RFC3339)},
 	}
 	commitsBody := marshalJSONLines(t, fixture.commits)
 	stateBody, err := json.Marshal(fixture.state)
@@ -1847,12 +2326,16 @@ func addLedgerReplayFixture(t *testing.T, request *BundleAssemblyRequest) ledger
 	require.NoError(t, err)
 	for index := range nodes {
 		request.Analysis.EvidenceResources = append(request.Analysis.EvidenceResources, nodes[index].ToProto())
+		for _, reference := range nodes[index].References {
+			request.Analysis.EvidenceLinks = append(request.Analysis.EvidenceLinks, &compliancev1.EvidenceLink{SourceRef: nodes[index].ArtifactID, TargetRef: reference, LinkType: "references"})
+		}
 	}
 	request.SourceArtifacts = append(request.SourceArtifacts,
 		SourceArtifact{BundlePath: fixture.commitsPath, Body: commitsBody, MediaType: constants.MediaTypeJSON},
 		SourceArtifact{BundlePath: fixture.statePath, Body: stateBody, MediaType: constants.MediaTypeJSON},
 	)
 	refreshBundleAnalysisArtifacts(t, request)
+	finalizeProtectedScopeFixture(t, request)
 	return fixture
 }
 
@@ -1893,8 +2376,8 @@ func addBuildConfigReplayFixture(t *testing.T, request *BundleAssemblyRequest) b
 	fixture := buildConfigReplayFixture{
 		bundlePath: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, request.ScopeRef, runID, constants.BuildConfigAttestationsFilename),
 		records: []buildConfigReplayRecord{
-			{SchemaVersion: constants.BuildAttestationSchemaVersion, AttestationType: "build", ProducerIdentity: "build-system-1", ProducedAtUTC: "2026-09-06T10:00:00Z", ScopeID: request.ScopeRef, RunID: runID, BuildIdentity: "build-1", SourceRevision: "revision-1", ImageDigests: []buildConfigReplayDigest{{Name: "gateway", SHA256: strings.Repeat("1", 64)}}, ComponentInventory: []buildConfigReplayItem{{ComponentID: "gateway", ComponentType: "service", Version: "2.1.7", Digest: strings.Repeat("2", 64)}}},
-			{SchemaVersion: constants.BuildAttestationSchemaVersion, AttestationType: "configuration", ProducerIdentity: "build-system-1", ProducedAtUTC: "2026-09-06T10:01:00Z", ScopeID: request.ScopeRef, RunID: runID, BuildIdentity: "build-1", SourceRevision: "revision-1", ConfigurationHashes: []buildConfigReplayDigest{{Name: "gateway", SHA256: strings.Repeat("3", 64)}}},
+			{SchemaVersion: constants.BuildAttestationSchemaVersion, AttestationType: "build", ProducerIdentity: "build-system-1", ProducedAtUTC: request.GeneratedAt.Add(-time.Minute).Format(time.RFC3339), ScopeID: request.ScopeRef, RunID: runID, BuildIdentity: "build-1", SourceRevision: "revision-1", ImageDigests: []buildConfigReplayDigest{{Name: "gateway", SHA256: strings.Repeat("1", 64)}}, ComponentInventory: []buildConfigReplayItem{{ComponentID: "gateway", ComponentType: "service", Version: "2.1.7", Digest: strings.Repeat("2", 64)}}},
+			{SchemaVersion: constants.BuildAttestationSchemaVersion, AttestationType: "configuration", ProducerIdentity: "build-system-1", ProducedAtUTC: request.GeneratedAt.Format(time.RFC3339), ScopeID: request.ScopeRef, RunID: runID, BuildIdentity: "build-1", SourceRevision: "revision-1", ConfigurationHashes: []buildConfigReplayDigest{{Name: "gateway", SHA256: strings.Repeat("3", 64)}}},
 		},
 	}
 	body := marshalJSONLines(t, fixture.records)
@@ -1907,6 +2390,7 @@ func addBuildConfigReplayFixture(t *testing.T, request *BundleAssemblyRequest) b
 	}
 	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: fixture.bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
 	refreshBundleAnalysisArtifacts(t, request)
+	finalizeProtectedScopeFixture(t, request)
 	return fixture
 }
 
@@ -1929,7 +2413,7 @@ func refreshBundleAnalysisArtifacts(t *testing.T, request *BundleAssemblyRequest
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename), evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
 }
 
@@ -2019,6 +2503,7 @@ func TestVerifyComplianceReportBundle_RejectsLedgerInventoryAndBindingMutations(
 				}
 			}
 			request.Analysis.EvidenceResources = resources
+			request.Analysis.EvidenceLinks = nil
 			refreshBundleAnalysisArtifacts(t, request)
 		}},
 		{name: "wrong canonical path", mutate: func(t *testing.T, request *BundleAssemblyRequest, _ *ledgerReplayFixture) {

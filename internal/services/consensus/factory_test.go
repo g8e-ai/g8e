@@ -8,6 +8,7 @@
 package consensus
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"os"
@@ -19,23 +20,34 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
+
+func newConsensusTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
+	t.Helper()
+	root := testutil.TempDir(t)
+	fileSvc, err := fs.NewRuntimeFileService(root, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	return fileSvc, fileSvc.Resolve(constants.SecretsDirname)
+}
 
 func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
+	fileSvc, _ := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 	memberAppID := "member-1"
 
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
-	err = SaveMemberKey(secretsDir, consensusID, memberAppID, priv)
+	err = SaveMemberKey(fileSvc, consensusID, memberAppID, priv)
 	require.NoError(t, err)
 
-	provider := NewFileKeyProvider(secretsDir, consensusID)
+	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
 	loadedKey, err := provider.GetMemberKey(memberAppID)
 	require.NoError(t, err)
 
@@ -46,11 +58,12 @@ func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
+	fileSvc, _ := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 
-	provider := NewFileKeyProvider(secretsDir, consensusID)
-	_, err := provider.GetMemberKey("nonexistent-member")
+	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
+	_, err = provider.GetMemberKey("nonexistent-member")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "key file not found")
 }
@@ -58,16 +71,17 @@ func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
+	fileSvc, _ := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 	memberAppID := "member-bad"
 
 	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
-	keyPath := filepath.Join(secretsDir, filename)
-	err := os.WriteFile(keyPath, []byte(hex.EncodeToString([]byte("too-short"))), constants.PermFilePrivate)
+	keyPath := filepath.Join(constants.SecretsDirname, filename)
+	err := fileSvc.WriteFile(context.Background(), keyPath, []byte(hex.EncodeToString([]byte("too-short"))), constants.PermFilePrivate)
 	require.NoError(t, err)
 
-	provider := NewFileKeyProvider(secretsDir, consensusID)
+	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
 	_, err = provider.GetMemberKey(memberAppID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid seed length")
@@ -76,16 +90,17 @@ func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
+	fileSvc, _ := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 	memberAppID := "member-bad-hex"
 
 	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
-	keyPath := filepath.Join(secretsDir, filename)
-	err := os.WriteFile(keyPath, []byte("not-valid-hex!!"), constants.PermFilePrivate)
+	keyPath := filepath.Join(constants.SecretsDirname, filename)
+	err := fileSvc.WriteFile(context.Background(), keyPath, []byte("not-valid-hex!!"), constants.PermFilePrivate)
 	require.NoError(t, err)
 
-	provider := NewFileKeyProvider(secretsDir, consensusID)
+	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
 	_, err = provider.GetMemberKey(memberAppID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "decode seed")
@@ -94,26 +109,26 @@ func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := filepath.Join(testutil.TempDir(t), "nested", "secrets")
+	fileSvc, _ := newConsensusTestFileService(t)
 	consensusID := "test-consensus"
 	memberAppID := "member-1"
 
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
-	err = SaveMemberKey(secretsDir, consensusID, memberAppID, priv)
+	err = SaveMemberKey(fileSvc, consensusID, memberAppID, priv)
 	require.NoError(t, err)
 
 	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
-	keyPath := filepath.Join(secretsDir, filename)
+	keyPath := filepath.Join(constants.SecretsDirname, filename)
 
-	info, err := os.Stat(keyPath)
+	info, err := fileSvc.Stat(context.Background(), keyPath)
 	require.NoError(t, err)
 	if runtime.GOOS != "windows" {
 		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "key file should have private permissions")
 	}
 
-	seedHex, err := os.ReadFile(keyPath)
+	seedHex, err := fileSvc.ReadFile(context.Background(), keyPath)
 	require.NoError(t, err)
 
 	seed, err := hex.DecodeString(string(seedHex))
@@ -127,7 +142,7 @@ func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 func TestFileKeyProvider_MultipleMembers(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
+	fileSvc, _ := newConsensusTestFileService(t)
 	consensusID := "multi-consensus"
 
 	members := []string{"member-0", "member-1", "member-2"}
@@ -137,12 +152,13 @@ func TestFileKeyProvider_MultipleMembers(t *testing.T) {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 
-		err = SaveMemberKey(secretsDir, consensusID, appID, priv)
+		err = SaveMemberKey(fileSvc, consensusID, appID, priv)
 		require.NoError(t, err)
 		savedKeys[appID] = priv
 	}
 
-	provider := NewFileKeyProvider(secretsDir, consensusID)
+	provider, err := NewFileKeyProvider(fileSvc, consensusID)
+	require.NoError(t, err)
 	for _, appID := range members {
 		loadedKey, err := provider.GetMemberKey(appID)
 		require.NoError(t, err)

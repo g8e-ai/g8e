@@ -1,5 +1,8 @@
 # Governance
 
+Last Updated: 2026-09-23
+Version: v2.1.12
+
 ## Scope
 
 The g8e Agentic Ensemble (`g8ee`) is an optional first-party client of the g8e governance platform. It generates and evaluates operational intent, but it remains outside the trusted execution boundary. Tribunal agreement, Auditor review, application risk classification, and user approval inside g8ee do not authorize a platform transaction by themselves.
@@ -32,11 +35,11 @@ Tribunal voting is application-level model agreement. It does not produce the Ed
 
 ### Command risk and audit
 
-When a response analyzer is configured, Marshal evaluates the winning command before the Auditor. An unavailable model, empty response, analysis error, or inconclusive command-risk result inside that analyzer becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback so Sage can propose a safer alternative; a second high-risk result for the same investigation reports an agent conflict and requires human intervention. If no response analyzer is configured, g8ee skips this stage.
+When a response analyzer is configured, Marshal evaluates the winning command before the Auditor. An unavailable lite model, empty response, analysis error, or inconclusive command-risk result becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback so Sage can propose a safer alternative; a second high-risk result for the same investigation reports an agent conflict and requires human intervention. If no response analyzer is configured, g8ee skips this stage.
 
-When enabled, the Auditor reviews the winning command and anonymized alternatives after Marshal risk analysis. It can accept the winner, revise it, or select another candidate. A successful audit creates a reputation commitment; failure to create that commitment stops the verdict.
+When enabled, the Auditor reviews the winning command and anonymized alternatives after Marshal risk analysis. It can accept the winner, revise it, or select another candidate, and it validates a selected or revised command against the deterministic safety rules. A passing audit creates a reputation commitment; failure to create that commitment stops the verdict. When the Auditor is disabled, g8ee accepts the Tribunal winner without this model-review stage or reputation commitment.
 
-File writes and replacements use a separate file-risk analysis and g8ee approval flow before dispatch. A file-risk analysis failure is logged and the operation continues to the approval gate. Error analysis classifies failed commands and controls bounded retry or escalation. These application approval and retry decisions are distinct from L3 Notary authorization.
+File writes and replacements use a separate file-risk analysis and g8ee approval flow before dispatch. A file-risk analysis failure is logged and the operation continues to the approval gate; an analysis that marks the operation unsafe blocks it. Error analysis classifies failed commands and controls bounded retry or escalation. These application approval and retry decisions are distinct from L3 Notary authorization.
 
 See [Agents](agents.md) for the complete persona roster and [Architecture](architecture.md) for the ensemble workflow.
 
@@ -67,7 +70,7 @@ The Gateway posture is selected at startup with `--posture <doctrine|consensus|r
 | `ratify` | Required | Not required | Required |
 | `notary` | Required | Required | Required |
 
-Optional L2 and L3 evidence is verified when the required verifier is available and recorded when valid, but its absence does not gate a posture that does not require it. Platform enrollment bootstrap actions are exempt from the L2 requirement that they establish.
+Optional L2 and L3 evidence is verified when present and recorded when valid, but its absence does not gate a posture that does not require it. This distinction applies to platform verification; g8ee's direct envelope builder does not create protocol L2 votes or a valid L3 authorization proof.
 
 The ingress path matters. A posture does not cause every transport to acquire missing proofs automatically. g8ee must use a path that coordinates the required proofs or submit an envelope that already contains them.
 
@@ -94,11 +97,11 @@ Use Gateway MCP or A2A when the Gateway must coordinate protocol consensus or hu
 
 For governed platform records such as cases, investigations, memories, and agent activity, g8ee uses its `GovernanceClient` to submit a complete envelope to the synchronous governance endpoint. This is a privileged, Operator-credential path in the unified deployment, not the normal public app ingress.
 
-The client obtains the current state root, serializes the typed payload, generates replay and expiry fields, binds requestor and acting-app attribution into the transaction hash, and submits canonical JSON over mTLS. The Gateway binds the envelope identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process L4 Warden and L5 Actuator.
+The client obtains the current state root when the caller does not provide one, serializes the typed payload, generates replay and expiry fields, binds requestor, acting-app, Operator, session, and application identifiers into the transaction hash, and submits canonical JSON over mTLS. The Gateway binds the envelope identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process L4 Warden and L5 Actuator.
 
 The client serializes submissions to reduce state-root races. If the Gateway rejects a submission because another transaction changed the state root, the client fetches the new root, rebuilds the envelope, and retries up to three times after the initial attempt.
 
-This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path therefore succeeds only when the active posture does not require proofs absent from the envelope, which is normally `doctrine` for g8ee's current platform-record submissions.
+This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. The optional `agent_ids` argument only populates the envelope's `consensus_set_id`; it does not turn Tribunal members into enrolled protocol signers or attach votes. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path therefore succeeds only when the active posture does not require proofs absent from the envelope, which is normally `doctrine` for g8ee's current platform-record submissions.
 
 A successful submission returns a signed `ActionReceipt`. `GovernanceClient` exposes receipt-signature verification using the configured Actuator public key, but submission does not invoke that verification automatically.
 

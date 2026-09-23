@@ -10,7 +10,7 @@ package gateway
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -496,7 +496,7 @@ func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 		{name: "provider response invalid", dispatchErr: constants.ErrInferenceProviderResponseInvalid, wantStatus: http.StatusBadGateway},
 		{name: "unknown remote outcome", dispatchErr: constants.ErrInferenceOutcomeUnknown, wantStatus: http.StatusGatewayTimeout},
 		{name: "caller deadline exceeded", dispatchErr: context.DeadlineExceeded, wantStatus: http.StatusGatewayTimeout},
-		{name: "unexpected internal error", dispatchErr: errors.New("sql: connection refused at internal/db/store.go:123"), wantStatus: http.StatusInternalServerError},
+		{name: "unexpected internal error", dispatchErr: fmt.Errorf("sql: connection refused at internal/db/store.go:123"), wantStatus: http.StatusInternalServerError},
 	}
 
 	for _, tt := range tests {
@@ -521,7 +521,7 @@ func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 }
 
 func TestInferenceDispatchController_InternalErrorIsPublicSafe(t *testing.T) {
-	dispatcher := &stubInferenceCommandDispatcher{err: errors.New("pq: password authentication failed for user \"gateway\"")}
+	dispatcher := &stubInferenceCommandDispatcher{err: fmt.Errorf("pq: password authentication failed for user \"gateway\"")}
 	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
@@ -615,7 +615,7 @@ type failingFlushWriter struct {
 
 func (w *failingFlushWriter) Write(p []byte) (int, error) {
 	if w.failOnWrite {
-		return 0, errors.New("client disconnected")
+		return 0, fmt.Errorf("client disconnected")
 	}
 	return w.ResponseWriter.Write(p)
 }

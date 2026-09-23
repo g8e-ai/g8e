@@ -10,7 +10,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -85,7 +85,7 @@ func TestRemoteModelProvenanceClient_Load_ReturnsGatewayWindow(t *testing.T) {
 
 func TestRemoteModelProvenanceClient_Load_PropagatesGatewayErrors(t *testing.T) {
 	t.Parallel()
-	apiClient := &mockAPIClient{getErr: errors.New("network down")}
+	apiClient := &mockAPIClient{getErr: fmt.Errorf("network down")}
 	remote := &remoteModelProvenanceClient{client: apiClient}
 
 	_, err := remote.Load(context.Background(), "attempt-1")

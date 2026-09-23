@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -32,15 +33,16 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
+	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -148,7 +150,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if b.db != nil {
 		db = b.db
 	} else {
-		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
+		db, err = OpenCanonicalDBService(logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
@@ -254,7 +256,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- Suspended transaction service ---
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               paths.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
+		DBPath:               b.fileSvc.Resolve(constants.SuspendedTransactionDBRelPath),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -304,7 +306,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if consensusSvc == nil && cfg.Gateway.Posture.RequiresL2() && cfg.Gateway.ConsensusID != "" {
 		policy, err := consensusStore.GetConsensus(cfg.Gateway.ConsensusID)
 		if err == nil && policy != nil {
-			fileProvider := consensus.NewFileKeyProvider(cfg.Gateway.SecretsDir, cfg.Gateway.ConsensusID)
+			fileProvider, err := consensus.NewFileKeyProvider(b.fileSvc, cfg.Gateway.ConsensusID)
+			if err != nil {
+				return nil, fmt.Errorf("gateway: create consensus file key provider: %w", err)
+			}
 			keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
 				if key, err := fileProvider.GetMemberKey(appID); err == nil {
 					return key, nil
@@ -332,6 +337,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 			PKI:              pki,
 			CLISessions:      cliSessionSvc,
 			OperatorSessions: operatorSessionSvc,
+			Connections:      wsHandler,
 			Posture:          string(cfg.Gateway.Posture),
 		}
 		govCore := pubsub.GovernanceCoreDeps{
@@ -342,9 +348,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 			SignerStore:       signerStore,
 			Doctrine:          doctrine,
 		}
-		execSvc := execution.NewExecutionService(cfg, logger)
-		fileEditSvc := execution.NewFileEditService(cfg, logger)
-		loopbackClient := pubsub.NewInProcessPubSubClient(wsHandler)
+		embeddedOperatorLogger := logger.With(logging.ComponentKey, logging.ComponentEmbeddedOperator)
+		execSvc := execution.NewExecutionService(cfg, embeddedOperatorLogger)
+		fileEditSvc := execution.NewFileEditService(cfg, embeddedOperatorLogger)
+		loopbackClient := pubsub.NewInProcessPubSubClient(wsHandler, embeddedOperatorLogger)
 
 		govModeDeps := &pubsub.GatewayModeDeps{
 			GovernanceCoreDeps:     govCore,
@@ -359,7 +366,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		cmdSvc, err = pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
 			CommandServiceConfig: pubsub.CommandServiceConfig{
 				Config:             cfg,
-				Logger:             logger,
+				Logger:             embeddedOperatorLogger,
 				Execution:          execSvc,
 				FileEdit:           fileEditSvc,
 				PubSubClient:       loopbackClient,
@@ -527,6 +534,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		if cfg.Gateway.PublicBaseURL != "" {
 			spectatorCfg.PublicBaseURL = cfg.Gateway.PublicBaseURL
 		}
+		spectatorCfg.TrustedProxyCIDRs = cfg.Gateway.PublicSpectatorTrustedProxyCIDRs
 		spectator, err := NewPublicSpectatorRuntime(spectatorCfg, b.fileSvc, logger)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: initialize public spectator: %w", err)
@@ -668,6 +676,24 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
 	modelProvenanceDeps.ProvenanceCoordinator = ls.modelProvenanceCoord
 
+	g8eReader, err := g8ebinaries.OpenReader(constants.G8eBinariesDir)
+	if err != nil {
+		return fmt.Errorf("gateway: initialize g8e-binary reader: %w", err)
+	}
+	if !g8eReader.HasManifest() {
+		executable, execErr := os.Executable()
+		if execErr != nil {
+			return fmt.Errorf("gateway: resolve executable for g8e-binary reader: %w", execErr)
+		}
+		adjacentReader, readerErr := g8ebinaries.OpenReader(filepath.Join(filepath.Dir(executable), constants.BinDirname))
+		if readerErr != nil {
+			return fmt.Errorf("gateway: initialize adjacent g8e-binary reader: %w", readerErr)
+		}
+		if adjacentReader.HasManifest() {
+			g8eReader = adjacentReader
+		}
+	}
+
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:    cfg,
 		Logger: logger,
@@ -679,6 +705,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			AppEnrollment: appEnrollment,
 			Registration:  reg,
 			Responder:     ls.responder,
+			G8eReader:     g8eReader,
 		},
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:        cfg,
@@ -712,7 +739,6 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			CLISessionSvc:      cliSessionSvc,
 			OperatorSessionSvc: operatorSessionSvc,
 			Responder:          ls.responder,
-			ActuatorKeyReader:  &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath},
 		},
 		CLIRecoveryControllerDeps: CLIRecoveryControllerDeps{
 			Cfg:                cfg,
@@ -778,6 +804,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Logger:    logger,
 			Reg:       reg,
 			Auth:      auth,
+			Dispatch:  ls.dispatchSvc,
 			Responder: ls.responder,
 		},
 		DispatchControllerDeps: DispatchControllerDeps{
@@ -1088,6 +1115,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GatewayModeDeps {
 		PKI:              ls.pki,
 		CLISessions:      ls.cliSessionSvc,
 		OperatorSessions: ls.operatorSessionSvc,
+		Connections:      ls.pubsub,
 		Posture:          string(ls.cfg.Gateway.Posture),
 	}
 

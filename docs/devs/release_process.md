@@ -1,6 +1,7 @@
 # g8e Release Process
 
-Last Updated: 2026-09-21
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 The primary purpose of a release is to inventory every change since the last release and ensure that all affected documentation accurately reflects the current state of the code. Version bumps and CHANGELOG entries follow this documentation reconciliation; they do not replace it.
 
@@ -8,7 +9,13 @@ The [Developer Guidelines](devs.md) define the repository-wide engineering rules
 
 The protocol Go and Python packages and the platform binary share the same version number. There are no independently versioned protocol releases.
 
-> **`make release` handles version syncing, tagging, and pushing.** It does NOT build binaries, run lint or tests, or create GitHub releases; CI and GitHub Actions workflows handle those. Release prep changes are committed and opened as a PR; after merge, pull main and run `make release` to tag and push. See [Release Workflow](#release-workflow).
+> **`make release` handles version syncing, tagging, and pushing.** It does not build binaries, run lint or tests, or create GitHub releases. Pull-request and main-branch CI validate the candidate; tag-triggered GitHub Actions workflows build and publish the release artifacts. Release prep changes are committed and opened as a PR; after merge, pull `main` and run `make release` to tag and push. See [Release Workflow](#release-workflow).
+
+## Release Prerequisites
+
+The release owner needs a checkout of the merged `main` branch, a clean working tree, permission to push both release tags to `origin`, and credentials for the required GitHub Actions and PyPI publication paths. Release preparation also requires the repository's Go, Python, Node, Buf, and `uv` tooling needed by `make proto` and the applicable verification gates. Confirm the candidate version with `cat VERSION`.
+
+Do not run `make release` from a feature branch or before the release-preparation changes are merged. The target creates and pushes tags, which starts external GitHub Actions workflows. If version synchronization makes the working tree dirty, stop, commit the synchronized Python files through the normal PR process, regenerate `ensemble/uv.lock` with `make proto` when required, and retry only after the merge.
 
 ## Release Checklist
 
@@ -26,15 +33,16 @@ Release work is split between the **agent** (PR prep) and the **release owner** 
 1. Receive the release owner's complete change inventory and inspect the current working tree as the source of truth for current behavior
 2. Map every change to the full documentation catalog, then audit each affected document end to end against its owning current code, configuration, schema, generator, test, or scope-bound evidence
 3. Update every inaccurate or incomplete affected document and all related current-state cross-links, record the audit, and write `docs/release_notes/vX.Y.x/vX.Y.Z.md`; defer document metadata until the release version is set
-4. Generate the compliance evidence artifacts as part of agent prep: establish or use the release assessment binding, run `g8e compliance release-evidence` with the release version, output directory, assessment binding, and evidence-window flags, and retain the generated Markdown and CSV in `docs/release_notes/vX.Y.x/` (see [Compliance Evidence Generation](#compliance-evidence-generation)). The agent owns this generation step; do not defer it to the release owner or leave placeholder release notes.
-5. Set `VERSION` to `vX.Y.Z`, finalize metadata for every edited document, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix). Then run `make proto` to regenerate the downstream `ensemble/uv.lock` file, which depends on `g8e` through the in-tree protocol package, so CI's version sync and locked-environment checks pass on the PR
-6. Run the read-only [Verification](#verification) checks (all steps should pass, including step 4)
-7. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree back to the release owner.
+4. Set `VERSION` to `vX.Y.Z`, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix). Run `make proto` to regenerate the downstream `ensemble/uv.lock` and required protocol output before capturing release-candidate build evidence. Preserve these completed steps when resuming preparation with unchanged inputs.
+5. Generate the first-party compliance bundle from actual scoped evidence, prepare the assessed signing-trust inputs outside the bundle, verify it, and run `g8e compliance release-evidence <bundle>` to produce the release Markdown and CSV. Complete [Clean Offline Acceptance](#clean-offline-acceptance) when the signed report contract or verifier changed. The agent owns generation; the release owner or delegated engineering assessor supplies the actual signer assessment, not an invented third-party approval.
+6. Link the generated evidence and record its scope and verification results in the release notes. Finalize edited-document metadata after reconciliation and final review.
+7. Complete the [Verification](#verification) checks and applicable [Large Release Gates](#large-release-gates). Carry forward recorded passing results that still cover the candidate; rerun only checks invalidated by subsequent changes.
+8. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree, retained bundle and trust locations, and verification results back to the release owner.
 
 **Release owner (release range, commits, merges, tags, pushes):**
 1. Establish the previous-to-current release range, provide the complete change and changed-file inventory to the agent, and identify any release-specific evidence requirements
 2. Review the prepared code, documentation reconciliation record, release notes, and verification results, then `git add`, `git commit`, `git push`, and open the PR on GitHub
-3. Merge the PR on GitHub
+3. Merge the PR on GitHub after required PR checks pass
 4. Wait for CI on `main` to pass (lint, tests, version sync checks)
 5. `git checkout main && git pull` locally
 6. Run `make release` — this re-syncs the Python package files from `VERSION` (a no-op if the agent already synced them), then creates and pushes the `vX.Y.Z` and `protocol/vX.Y.Z` tags
@@ -48,8 +56,8 @@ Work through the [Standard Checklist Template](#standard-checklist-template) in 
 
 1. **[Change Inventory](#change-inventory)** — Release owner establishes the range and categorizes every change. Everything else depends on this.
 2. **[Documentation Reconciliation](#documentation-reconciliation)** — Map changes through the full [Documentation Catalog](docs.md#documentation-catalog); audit every affected document end to end.
-3. **[Release Notes](#release-notes)** and **[Compliance Evidence Generation](#compliance-evidence-generation)** — Permanent record and per-release compliance artifacts.
-4. **[Version-Bearing Files](#version-bearing-files)** — Set `VERSION`, sync Python files, run `make proto`, update `CHANGELOG.md`.
+3. **[Release Notes](#release-notes)** and **[Version-Bearing Files](#version-bearing-files)** — Draft the permanent record, set `VERSION`, sync Python files, run `make proto`, and update `CHANGELOG.md`.
+4. **[Compliance Evidence Generation](#compliance-evidence-generation)** — Capture actual scoped evidence for the candidate, establish first-party signing trust, generate and verify the public bundle, and project the release artifacts.
 5. **[Verification](#verification)** — Read-only checks that supplement the audit record.
 6. **[Separation of Duties](#separation-of-duties)** — Agent stops at handoff; release owner commits, merges, and runs `make release`.
 7. **[Release Workflow](#release-workflow)** — Tag push and GitHub Actions asset publication.
@@ -153,7 +161,7 @@ This is the core work of a release. The change inventory from the previous secti
 
 Start with the [Developer Guidelines](devs.md), then walk every category in the [Documentation Catalog](docs.md#documentation-catalog). The catalog is the authoritative inventory; this release process does not maintain a second list that can drift. For each release change, consider all of these ownership classes:
 
-- Repository entry points, contribution and security policy, legal surfaces, and the generated root README.
+- Repository entry points, contribution and security policy, legal surfaces, and the handwritten root README.
 - Platform concept, architecture, guide, reference, developer, diagram, demo, adapter, Dashboard, Ensemble, and protocol documentation.
 - Component READMEs, indexes, contribution guides, changelogs, examples, and package documentation.
 - Protobuf comments and generated API references, Swagger annotations and generated OpenAPI, JSON registries and schemas, compliance catalogs, native evaluation evidence, signed compliance evidence, and website output.
@@ -189,7 +197,7 @@ The release notes file should mirror the CHANGELOG entry but can be more detaile
 
 #### Release Notes Template
 
-Use the same `## [X.Y.Z] - YYYY-MM-DD` header as the CHANGELOG (no `v` prefix in the bracket). Only include the subsections that apply to the release; most releases use 2-4 of these, not all of them.
+Use `## [X.Y.Z] - YYYY-MM-DD` for the release notes header, with the same version and date as the CHANGELOG table row and no `v` prefix in the bracket. Only include the subsections that apply to the release; most releases use 2-4 of these, not all of them.
 
 ```markdown
 ## [X.Y.Z] - YYYY-MM-DD
@@ -247,107 +255,141 @@ Use the same `## [X.Y.Z] - YYYY-MM-DD` header as the CHANGELOG (no `v` prefix in
 
 ## Compliance Evidence Generation
 
-Every release generates a per-release compliance evidence artifact that captures demonstrated technical control operation at the release boundary. The artifact is produced by `g8e compliance release-evidence` and lives alongside the release notes in `docs/release_notes/vX.Y.x/`.
+Every release requires a complete, verified, signed public report bundle and its generated Markdown and CSV projections. The agent produces them during release preparation. This is a first-party engineering assessment, not a requirement to obtain an independent audit, certification, or third-party approval.
 
-### What it captures
+### Required trust inputs
 
-The command runs three currently-available compliance evidence sources and renders them into a single markdown report and a CSV:
+**External trust means trust supplied separately from, and outside, the report bundle. It does not mean a third-party assessor.** The release owner or delegated engineering assessor records the actual first-party signer assessment. Independent offline verification means reproducing the bundle's evidence and decisions without the original runtime; it does not confer external attestation.
 
-1. **KSI evaluation** — evaluates class C against the live runtime stores (audit store, git ledger, commitment ledger) under the caller-declared scope, run, assertion-assessment set, and evidence window, then records the per-KSI status, method count, and last-validated timestamp. When the runtime stores are unavailable, the report records the gap honestly rather than inventing a passing result.
-2. **KSI history snapshot inventory** — reads previously persisted KSI evaluation snapshots from `.g8e/data/compliance/ksi-history/` and records the snapshot count and time range. Release-evidence aggregation is read-only and does not persist its current KSI evaluation as a history snapshot.
-3. **Demo-run verification** — runs `g8e compliance demo-run verify <run-id>` for each persisted demo evidence run (or for explicit run IDs passed via `--demo-run`) and records the verification result, failure count, verifier ID and version, reproduced checksum root, and verified-at timestamp.
+| Input | Requirement | Purpose |
+| --- | --- | --- |
+| Report-signing identity | Required for generation | Dedicated Ed25519 private key and canonical `ComplianceReportSigningKeyMetadata`; purpose `compliance-report-bundle`, public-key digest, and validity interval |
+| Report trust policy (`--trust-policy`) | Required for verification and projection | Canonical `ComplianceReportTrustPolicy` outside the bundle; binds the assessed public key, assessment ID, assessor identity, assessment time, validity, and exact allowed scope |
+| Source-evidence trust policy (`--evidence-trust`) | Required when represented source evidence needs assessed signer trust, including commitment and customer or assessor attestation evidence | Canonical `ComplianceEvidenceTrustPolicy` outside the bundle at a distinct path from report trust; binds the actual source signers to the assessed scope and time |
 
-`g8e compliance report generate` produces signed bundles with canonical cross-framework analysis, OSCAL and other deterministic renderers, protected source inventories, and independent offline replay. `g8e compliance report verify` authenticates report signatures through external report trust and separately authenticates represented commitment and customer or assessor attestation signers through external evidence trust. When a release plan requires clean offline acceptance, the acceptance record identifies the exact candidate, bundle checksum root, external trust digests, isolated network-disabled environment, command status, canonical verification-report digest, and rejected mutation classes. The per-release `compliance release-evidence` artifact remains the release-process summary of KSI, KSI-history, and demo evidence; it does not substitute for a signed report bundle and does not claim certification, accreditation, authorization, legal compliance, or recurring operating effectiveness. See the [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md) document for the current bundle contract and remaining limits.
+A locally generated signing key is valid input when its identity, purpose, scope, and trust assessment are actually established and recorded. Key generation alone is not a trust assessment. Keep private keys out of the bundle, public artifacts, logs, and repository commits. Supplying a policy outside the bundle never turns first-party evidence into evidence-level L5 external attestation. See [Offline Trust and Replay](../reference/compliance-evidence.md#offline-trust-and-replay-contract) for the verifier contract.
 
-### Output files
+### Release-eligible bundle
 
-Two files are written into the output directory (typically `docs/release_notes/vX.Y.x/`):
+A bundle is eligible for release projection when all of these conditions hold:
 
-| File | Format | Purpose |
-|------|--------|---------|
-| `vX.Y.Z-compliance-evidence.md` | Markdown | Readable report with summary table, KSI evaluation table, KSI history summary, demo-run verification table, and claim boundaries |
-| `vX.Y.Z-compliance-evidence.csv` | CSV | One row per evidence item (KSI results and demo-run verifications) with columns: `evidence_type`, `identifier`, `status`, `valid`, `method_count`, `last_validated`, `failure_count`, `verifier_id`, `verifier_version`, `checksum_root`, `evaluated_at` |
+1. Its protected `AssessmentScope` identifies the target product version and the actual source admissions, runtime owners, acquisition boundaries, verifier versions, applicability, selected population, posture, evidence window, and assessment-as-of time.
+2. Required context is present or explicitly declared unavailable with typed reasons. Posture-required authorization policies are present; unavailable context does not replace required authorization or native proof.
+3. Every admitted source is reviewed and explicitly classified public, and generation uses `--profile public`.
+4. The complete bundle includes its protected source bytes, scope, catalogs, analysis, checksums, signatures, and deterministic renderings. Required trust inputs authenticate the applicable report and source signers.
+5. Offline verification returns a valid report with zero verification failures. When the signed report contract or verifier changed, the candidate also passes [Clean Offline Acceptance](#clean-offline-acceptance).
+6. The protected product version matches `VERSION`, allowing the conventional `v` prefix, and release claims stay within the demonstrated assessment scope.
 
-### Command
+**Bundle validity and assertion outcomes are separate.** A valid report can contain `not_satisfied`, `unverifiable`, or `not_applicable` assertions. The standard release gate requires authentic evidence and reproducible decisions, not every assertion passing, a minimum compliance score, or full framework coverage. A release-specific requirement for a particular demonstrated outcome must be stated explicitly in the release inventory and supported by its evidence.
+
+Select actual available evidence: persisted demo or evaluation runs, bounded operational exports, or supported standalone sources such as build/configuration records. A new campaign is not a prerequisite for every release report. Fresh build/configuration evidence supports only that narrower assessment; it does not replace missing runtime or campaign proof. Preserve negative outcomes and selected-population gaps. Missing or invalid explicitly selected source artifacts are generation or verification failures, not permission to fabricate replacements or relabel another run.
+
+### Generate, verify, and project
+
+Complete version synchronization and required generation before capturing candidate build evidence. Then:
+
+1. Capture or retain the selected source bytes and create the canonical protected scope with product version `X.Y.Z`. Populate real contextual evidence or typed unavailable declarations.
+2. Prepare the signing identity and assessed trust inputs described above. Use existing scope-eligible inputs or establish new first-party inputs; do not wait for an unrelated external audit.
+3. Generate a new immutable report bundle with the explicit public profile.
+4. Verify the complete bundle against the separate trust inputs. Perform clean offline acceptance when required.
+5. Project the verified bundle into the release directory and compare both output files with its canonical renderings.
+6. Retain the complete bundle, public trust inputs, and verification record outside disposable runtime state. Record their locations and digests for handoff; Markdown and CSV alone are not a replayable bundle.
+
+Set `SCOPE`, `REPORT_ID`, `SIGNING_METADATA`, `SIGNING_PRIVATE_KEY`, and `REPORT_TRUST` to the actual scope path, immutable report ID, signing-input paths, and report-trust path. Define the Bash array `SOURCE_ARGS` for the sources admitted by the scope:
+
+| Selected source | `SOURCE_ARGS` example |
+| --- | --- |
+| Operational export | `SOURCE_ARGS=(--source "$SOURCE_DIR")` |
+| Persisted evaluation run | `SOURCE_ARGS=(--eval-run "$RUN_ID")` |
+| Persisted demo run | `SOURCE_ARGS=(--demo-run "$RUN_ID")` |
+| Build/configuration records | `SOURCE_ARGS=(--build-run-id "$BUILD_RUN_ID" --build-config-attestations "$BUILD_CONFIG")` |
+
+Combine source flags only when the protected scope admits those sources. Consult `./g8e compliance report generate --help` for the remaining standalone source flags. Set `EVIDENCE_TRUST_ARGS=()` when source-evidence trust is not required; otherwise set `EVIDENCE_TRUST_ARGS=(--evidence-trust "$EVIDENCE_TRUST")` using the distinct assessed source-trust policy.
 
 ```bash
-export RELEASE_SCOPE_ID='<assessment-scope-id>'
-export RELEASE_RUN_ID='<assessment-run-id>'
-export ASSERTION_ASSESSMENT_ID='<consumed-assertion-assessment-id>'
-export EVIDENCE_WINDOW_START_UNIX_MS='<inclusive-start-unix-ms>'
-export EVIDENCE_WINDOW_END_UNIX_MS='<inclusive-end-unix-ms>'
-
-g8e compliance release-evidence \
-  --version vX.Y.Z \
-  --out docs/release_notes/vX.Y.x/ \
-  --class C \
-  --scope-id "${RELEASE_SCOPE_ID}" \
-  --run-id "${RELEASE_RUN_ID}" \
-  --assertion-assessment-id "${ASSERTION_ASSESSMENT_ID}" \
-  --evidence-window-start-unix-ms "${EVIDENCE_WINDOW_START_UNIX_MS}" \
-  --evidence-window-end-unix-ms "${EVIDENCE_WINDOW_END_UNIX_MS}"
+./g8e compliance report generate \
+  --scope "$SCOPE" \
+  --report-id "$REPORT_ID" \
+  --profile public \
+  --signing-metadata "$SIGNING_METADATA" \
+  --signing-private-key "$SIGNING_PRIVATE_KEY" \
+  "${SOURCE_ARGS[@]}" \
+  "${EVIDENCE_TRUST_ARGS[@]}"
 ```
 
-The scope ID, run ID, assertion-assessment IDs, and inclusive evidence window are declared by the release assessment and must identify the actual assessment context. Repeat the assertion-assessment, attempt, scenario, and action flags for every identifier admitted into that context. Evidence references carrying an identifier outside these allowlists or a timestamp outside the declared window fail closed.
+Set `BUNDLE` to the complete bundle descriptor path printed by generation, not to a Markdown report or analysis file. Require verification to succeed before projection:
 
-Flags:
+```bash
+./g8e compliance report verify "$BUNDLE" \
+  --trust-policy "$REPORT_TRUST" \
+  "${EVIDENCE_TRUST_ARGS[@]}"
+```
 
-- `--version` (required): Release version with `v` prefix (e.g. `v2.1.5`).
-- `--out` (required): Output directory for the markdown report and CSV. Typically `docs/release_notes/vX.Y.x/`.
-- `--scope-id` (required): Assessment scope ID bound to every KSI result.
-- `--run-id` (required): Assessment run ID bound to every KSI result.
-- `--assertion-assessment-id` (required, repeatable): Assertion-assessment ID consumed by the KSI evaluation. At least one is required.
-- `--evidence-window-start-unix-ms` (required): Inclusive start of the declared evidence collection interval in Unix milliseconds.
-- `--evidence-window-end-unix-ms` (required): Inclusive end of the declared evidence collection interval in Unix milliseconds.
-- `--attempt-id`: Attempt ID admitted into the assertion-assessment scope. Repeatable.
-- `--scenario-id`: Scenario ID admitted into the assertion-assessment scope. Repeatable.
-- `--action-id`: Action or transaction ID admitted into the assertion-assessment scope. Repeatable.
-- `--class`: FedRAMP 20x certification class (A, B, C, D). Defaults to `C`.
-- `--catalog`: Path to KSI catalog JSON. Defaults to `docs/reference/ksi-catalog.json`.
-- `--demo-run`: Demo run ID to verify. Repeatable. When omitted, all persisted runs under `.g8e/data/compliance/demo-evidence/` are verified.
-- `--project-root`: Project root for demo provenance verification. Defaults to cwd.
-- `--fail-closed`: Exit nonzero if any KSI is not satisfied, KSI evaluation is unavailable, or any demo run is invalid. Use this in CI gates; do not use it during release prep when the runtime stores may not have live governance data.
+After any required clean offline acceptance, project the bundle:
 
-### When to run it
+```bash
+RELEASE_VERSION=$(cat VERSION)
+RELEASE_DIR="docs/release_notes/${RELEASE_VERSION%.*}.x"
 
-The **agent runs compliance evidence generation during PR prep**, after writing the release notes and before finalizing version-bearing files (see the [Standard Checklist Template](#standard-checklist-template) agent-prep order). The command needs the release version string, which is determined during the change inventory, and writes into the release notes directory, which is created with the release notes. The agent establishes or consumes the release assessment scope, run, assertion-assessment set, and inclusive evidence window for that release; the release owner reviews the generated artifacts but does not generate them as a substitute for agent prep.
+./g8e compliance release-evidence "$BUNDLE" \
+  --trust-policy "$REPORT_TRUST" \
+  "${EVIDENCE_TRUST_ARGS[@]}" \
+  --out "$RELEASE_DIR"
+```
 
-The command reads runtime evidence from the `.g8e/` tree of the deployment it runs against. For release prep, run it against a deployment with current demo evidence persisted (e.g. after `./g8e demos scenarios run` has produced evidence-grade demo runs). If no demo evidence is persisted, the report records "No demo runs persisted" — this is an honest gap, not a failure.
+The projection command derives the output version from the protected scope; it does not compare that version with the working tree's `VERSION`. Perform that comparison during preparation. The command verifies the complete bundle before copying its canonical public renderings. It does not collect evidence, execute workloads, regrade assertions, accept a release-version override, or relabel restricted sources as public. Invalid bundles, missing required trust, restricted profiles, and invalid protected versions fail before projection writes.
 
-### Release notes cross-reference
+### Output files and release notes
 
-Add a `### Compliance Evidence` subsection to the release notes file pointing to the generated artifact:
+| Required file | Contents |
+| --- | --- |
+| `docs/release_notes/vX.Y.x/vX.Y.Z-compliance-evidence.md` | Canonical public Markdown: native assertion outcomes, coverage, content-addressed proof references, conservative external alignment, diagnostic counts, and claim boundaries |
+| `docs/release_notes/vX.Y.x/vX.Y.Z-compliance-evidence.csv` | Canonical public CSV: analysis, assertions, framework controls, proof digests, and diagnostic summaries |
+
+Public projections exclude source-local identities, runtime paths, free-form diagnostics, limitations, and source bodies. Preserve their bytes; explain the assessment scope and evidence limits in the release notes rather than editing generated output. These projections do not claim certification, accreditation, authorization, legal compliance, or recurring operating effectiveness.
+
+Add a `### Compliance Evidence` subsection linking both files, identifying the actual assessment scope and first-party trust, and recording the verification result. Use this link format and add the scope-specific facts:
 
 ```markdown
 ### Compliance Evidence
 
-Per-release compliance evidence for vX.Y.Z is in [vX.Y.Z-compliance-evidence.md](vX.Y.Z-compliance-evidence.md) with a machine-readable [CSV](vX.Y.Z-compliance-evidence.csv). The report captures KSI evaluation, KSI history, and demo-run verification at the release boundary.
+Per-release compliance evidence for vX.Y.Z is in [vX.Y.Z-compliance-evidence.md](vX.Y.Z-compliance-evidence.md) with a machine-readable [CSV](vX.Y.Z-compliance-evidence.csv). These files are canonical projections of the verified public first-party compliance bundle.
 ```
+
+### Clean Offline Acceptance
+
+This additional acceptance is required when the signed compliance report contract or verifier changes. It is artifact verification, not a requirement to rerun the platform test matrix.
+
+1. Use the identified release-candidate binary in a fresh network-disabled environment. Mount only the complete bundle and required public trust inputs read-only alongside the candidate. Do not mount the source workspace, developer runtime, or signing private key.
+2. Run `compliance report verify <bundle> --trust-policy <report-trust>` with `--evidence-trust <source-trust>` only when required. Require exit status zero, `valid: true`, and zero verification failures.
+3. In separate copied bundles, mutate protected source content, protected assessment scope, a rendered output, and a report signature. Require each mutation to fail verification with a nonzero exit and the corresponding integrity or replay failure. Leave the accepted original unchanged.
+4. Record the candidate digest, bundle descriptor digest, checksum root, trust-policy digests, verifier identity/version, isolation settings, successful verification output, and rejected mutation classes in the release acceptance record. Link or summarize that record in the release notes.
+
+A missing mandatory artifact, an invalid bundle, missing required signer trust, an unsupported release claim, or a failed required offline acceptance blocks handoff. An accurately reported unavailable assertion does not by itself block handoff.
 
 ---
 
 ## Large Release Gates
 
-Use this section when a release spans multiple subsystems, new user-facing surfaces, or owner-operated acceptance paths. **Not every item applies to every release** — the change inventory determines which gates are in scope. Automated test matrix and code gates are release blockers; owner-operated, live-stack, and optional eval-demo gates are not unless the release notes claim they were demonstrated.
+Use this section when a release spans multiple subsystems, new user-facing surfaces, or owner-operated acceptance paths. Record which gates apply and why in the release tracker. The mandatory compliance artifacts and required clean offline acceptance cannot be deferred as optional live demonstrations.
 
-| Gate | When required | Reference |
-|------|---------------|-----------|
-| Full automated test matrix | Any platform, ensemble, dashboard, or protocol surface changed | `./g8e test *`, ensemble `make test`/`make lint`, adapter npm scripts |
-| Native eval acceptance | Native evaluation runtime behavior changed **and** release notes claim a live boundary run | [Native Evaluation Acceptance](#native-evaluation-acceptance) |
-| Eval campaign live demo | Release notes or compliance prose claim a completed live campaign (verify + publish) | Release notes, `docs/ensemble/evals.md` — **not required** for code-only eval infrastructure releases |
-| Owner-operated browser gates | Browser-scoped observe API, WebAuthn, CORS, SSE, or adapter contract pack changed | Release notes owner-operated section — defer with honest gaps when not run |
-| Builder acceptance | Contract pack or generator-neutral frontend path changed | `dashboard/g8e-adapter/contract-pack/` — defer when not run |
-| Cross-platform trust | `gw connect`, trust installation, or certificate flows changed | Release notes security section — defer when not run |
-| Clean offline acceptance | Signed compliance report contract or verifier changed | [Standard Checklist Template](#standard-checklist-template), release notes |
-| E2E with owner credentials | CLI or gateway flows requiring enrolled identity changed | `./g8e test e2e` — defer when not run |
+| Gate | Requirement | Reference |
+| --- | --- | --- |
+| Passing automated test matrix | Required for changed platform, Ensemble, Dashboard, adapter, Explorer, or protocol surfaces; retain applicable completed results and run only outstanding or invalidated checks | [Testing Guide](tests.md), component test commands |
+| Native eval acceptance | Support any claimed live boundary result with the accepted run; rerun when changed runtime behavior invalidates that claim | [Native Evaluation Acceptance](#native-evaluation-acceptance) |
+| Eval campaign acceptance | Support any claimed completed campaign with its exact verify/publish evidence; a new campaign is not required for a code-only infrastructure release | [Ensemble Evaluations](../ensemble/evals.md) |
+| Clean offline acceptance | Required when the signed compliance report contract or verifier changed | [Clean Offline Acceptance](#clean-offline-acceptance) |
+| Owner-operated browser, builder, cross-platform trust, and credentialed E2E acceptance | Required when the release claims the corresponding result or the release owner explicitly requires it; otherwise record the unperformed acceptance as deferred | Relevant component guide and release notes |
 
-Record owner-operated and human gates in the release notes (`### Deferred` or a dedicated acceptance subsection) when they cannot be satisfied before tag. Do not claim passing results that were not demonstrated. **Do not block ship on optional live eval demos** unless release notes explicitly assert they completed.
+Retain command, candidate/input identity, and result records for completed checks. Do not rerun a passing suite merely because release documentation or a tracker is being finalized. Rerun a check only when relevant code, build inputs, configuration, or environment changed enough to invalidate its result. Required CI checks still apply to the merge and release workflow.
+
+Keep live claims tied to their exact evidence and record unperformed owner-operated acceptance in the release notes. Do not turn an optional demo, full model rollout, or third-party audit into an unstated release prerequisite.
 
 ---
 
 ## Native Evaluation Acceptance
 
-A release that changes native evaluation runtime behavior runs the Go-native `core-execution-boundary` suite against a healthy unified stack with one active remote Operator. Documentation-only changes and isolated unit-test changes do not require another mutation run when an accepted runtime result already covers the unchanged implementation.
+When the release claims a live native execution-boundary result, retain an accepted Go-native `core-execution-boundary` run covering the relevant implementation. If native evaluation runtime changes invalidate that result, run the suite against a healthy unified stack with one active remote Operator before retaining the claim. Documentation-only changes and isolated unit-test changes do not require another mutation run when accepted evidence still covers the implementation.
 
 ```bash
 ./g8e eval boundary run
@@ -370,7 +412,7 @@ After the change inventory and documentation reconciliation are complete, bump t
 | # | File | How It's Updated | Format |
 |---|------|-----------------|--------|
 | 1 | `VERSION` | **Manual** (agent, PR prep): set to new version | `vX.Y.Z\n` (with trailing newline, no trailing spaces) |
-| 2 | `CHANGELOG.md` | **Manual** (agent, PR prep): add a table row to the major-version section | `\| X.Y.Z \| YYYY-MM-DD \| ... \|` (no `v` prefix) |
+| 2 | `CHANGELOG.md` | **Manual** (agent, PR prep): add a table row to the minor-version section | `\| X.Y.Z \| YYYY-MM-DD \| ... \|` (no `v` prefix) |
 | 3 | `protocol/python/pyproject.toml` | **Manual** (agent, PR prep): set to match `VERSION` so CI passes; `make release` re-syncs after merge as a no-op safety net | `version = "X.Y.Z"` (no `v` prefix) |
 | 4 | `protocol/python/g8e/__init__.py` | **Manual** (agent, PR prep): set to match `VERSION` so CI passes; `make release` re-syncs after merge as a no-op safety net | `__version__ = "X.Y.Z"` (no `v` prefix) |
 | 5 | `protocol/python/uv.lock` | **Manual** (agent, PR prep): set the editable `g8e` package entry to match `VERSION` so locked environments remain usable; `make release` re-syncs after merge as a no-op safety net | `version = "X.Y.Z"` under `name = "g8e"` (no `v` prefix) |
@@ -380,9 +422,9 @@ After the change inventory and documentation reconciliation are complete, bump t
 
 #### CHANGELOG.md Format
 
-The CHANGELOG is a table-based index. Each major version has a section (`## vX.Y.x`) containing a table of releases. Detailed content lives in the per-release notes files, not in the CHANGELOG itself.
+The CHANGELOG is a table-based index. Each minor-version series has a section (`## vX.Y.x`) containing a table of releases. Detailed content lives in the per-release notes files, not in the CHANGELOG itself.
 
-If a major-version section already exists, add a new row at the top of the table. If this is a new major version, add a new section after the `---` separator.
+If the minor-version section already exists, add a new row at the top of the table. For a new minor-version series, add a new section after the `---` separator.
 
 ```markdown
 ## vX.Y.x
@@ -422,9 +464,9 @@ The Go protocol code is part of the root module `github.com/g8e-ai/g8e/v2`. Ther
 The following files read the version dynamically from `VERSION` at build time and do **not** require manual updates:
 
 - `Makefile`: Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files, tags, and pushes (GitHub Actions workflows create the release)
-- `Dockerfile`: Builds via `make build-all`, which reads `VERSION` from the file at build time (no version build arg)
+- `Dockerfile`: Builds via `make build-target` for the image platform, which reads `VERSION` from the file at build time (no version build arg)
 - `docker-compose.yml`: References build context, not version
-- `.github/workflows/*.yml`: Triggered by git tags, no hardcoded version. CI includes a version sync check that fails if Python files don't match `VERSION`.
+- Release workflows under `.github/workflows/`: Triggered by their release tags and derive the release version from the tag. The separate build-and-test workflow includes a version sync check that fails if Python files don't match `VERSION`.
 
 ---
 
@@ -435,7 +477,7 @@ The [Documentation Guide metadata rule](docs.md#end-to-end-audit-workflow) gover
 - A document that is edited for any reason is first reviewed end to end and reconciled with related current-state documentation.
 - After the audit, generated-output refresh, cross-link review, and focused validation are complete, update the document's existing `Last Updated`, `Version`, or `Document Version` fields while preserving its format.
 - Use the exact `vX.Y.Z` value from `VERSION` for `Version:` fields. Preserve a document's established no-`v` format only where that format already exists.
-- Do not add metadata to generated files whose source or evidence manifest owns version identity, including the root `README.md` and generated protobuf or OpenAPI references.
+- Do not add metadata to generated files whose source or evidence manifest owns version identity, including generated protobuf or OpenAPI references. Preserve the handwritten root `README.md`'s existing metadata format.
 - Do not blanket-bump untouched documents. A document evaluated for impact but not edited keeps its existing metadata.
 - Historical release notes and evidence artifacts retain the release, run, cutoff, and schema versions they describe.
 
@@ -455,21 +497,23 @@ Copy this template into a version-specific working tracker when starting a relea
 
 - [ ] **Change inventory** — Complete inventory for the release range (see [Change Inventory](#change-inventory))
 - [ ] **Documentation reconciliation** — Catalog walk, end-to-end audits, cross-links, validation, reconciliation record (see [Documentation Reconciliation](#documentation-reconciliation))
-- [ ] **Release notes** — `docs/release_notes/vX.Y.x/vX.Y.Z.md` (see [Release Notes](#release-notes))
-- [ ] **Compliance evidence** — `vX.Y.Z-compliance-evidence.md` + `.csv`; release notes cross-reference (see [Compliance Evidence Generation](#compliance-evidence-generation))
-- [ ] **Clean offline acceptance** — When required: network-disabled report verification with rejected mutation classes recorded
+- [ ] **Release notes draft** — `docs/release_notes/vX.Y.x/vX.Y.Z.md` reflects the change inventory (see [Release Notes](#release-notes))
 - [ ] **`VERSION`** — Set to `vX.Y.Z`
 - [ ] **Python package sync** — `pyproject.toml`, `g8e/__init__.py`, `protocol/python/uv.lock` → `X.Y.Z`
-- [ ] **Downstream lockfile** — `make proto` → `ensemble/uv.lock`
-- [ ] **`CHANGELOG.md`** — Row under the major-version section
+- [ ] **Downstream lockfile and generated protocol** — Required `make proto` output, including `ensemble/uv.lock`, is current
+- [ ] **`CHANGELOG.md`** — Row under the minor-version section
+- [ ] **Scoped evidence and trust** — Actual protected sources, explicit context or unavailable declarations, assessed first-party report trust outside the bundle, and distinct source-evidence trust when required
+- [ ] **Signed public bundle** — Complete retained bundle passes offline verification and its protected product version matches `VERSION`
+- [ ] **Clean offline acceptance** — When the signed report contract or verifier changed: network-disabled verification and rejected mutation classes recorded (see [Clean Offline Acceptance](#clean-offline-acceptance))
+- [ ] **Compliance projections** — Canonical `vX.Y.Z-compliance-evidence.md` and `.csv` generated, compared with the bundle, and linked from release notes with actual scope, trust, and verification results
 - [ ] **Document metadata** — Finalized on every edited document only (see [Documentation Metadata](#documentation-metadata))
-- [ ] **Verification** — [Verification](#verification) checks pass
-- [ ] **Agent handoff** — No commit, push, PR, or `make release` by the agent
+- [ ] **Verification** — [Verification](#verification) checks complete; relevant passing results retained without redundant suite reruns
+- [ ] **Agent handoff** — Prepared tree, audit record, retained bundle and trust locations, and verification results delivered; no commit, push, PR, or `make release` by the agent
 
 #### Large-release gates (when applicable)
 
-- [ ] **Automated test matrix** — `./g8e test unit`, `./g8e test integration`, `./g8e test lint`, `./g8e test coverage`, ensemble `make test` / `make lint`, adapter `npm test` / `npm run lint` / contract-pack check
-- [ ] Complete every other applicable gate from [Large Release Gates](#large-release-gates), or record an honest deferral in release notes
+- [ ] **Automated test matrix** — Record passing results for the applicable Go and component suites listed in the [Testing Guide](tests.md); reuse completed results covering unchanged inputs
+- [ ] **Claim-dependent acceptance** — Support each claimed live result with its exact evidence; record unperformed optional owner-operated acceptance as deferred (see [Large Release Gates](#large-release-gates))
 
 #### Release owner (commit, merge, tag)
 
@@ -484,7 +528,9 @@ Five files need manual version edits during PR prep: `VERSION`, `CHANGELOG.md`, 
 
 ## Verification
 
-After making all updates, run these checks to catch missed generated output and version synchronization. They supplement, but cannot prove, the required full-document audits. Before running them, the release owner compares the complete changed-file inventory with the documentation reconciliation record and rejects the release if any affected catalog surface, owning source, related-document check, final reread, metadata update, or focused validation is missing. These commands are read-only.
+After preparation, inspect version synchronization, release artifacts, cross-links, and the documentation reconciliation record. Compare the complete changed-file inventory with the audit record and resolve any missing affected surface, owning source, related-document check, final reread, metadata update, or focused validation before handoff. These inspections supplement the audit and retained test results; they do not require another full test run.
+
+The following commands are read-only inspection examples, not an all-success shell script. Searches can legitimately return no matches or identify unchanged historical metadata; classify their output rather than treating every match or nonzero search exit as a release failure.
 
 ```bash
 RELEASE_VERSION=$(cat VERSION)        # e.g. v1.3.1
@@ -545,19 +591,35 @@ grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" do
 
 If step 4 shows a mismatch, sync all three Python version entries to `VERSION` before handoff. If step 4b shows a mismatch, run `make proto` to regenerate the downstream lockfile. Steps 5 and 6 intentionally show older metadata for untouched documents; compare only the release owner's complete edited-document list, and confirm metadata was updated after each document's audit. Replace the step 7 placeholder identifiers with every renamed or removed identifier from the change inventory and resolve all current-state matches. Classify step 8 matches before changing them so historical and evidence versions remain intact. None of these searches replaces the documented catalog walk, source verification, related-document reconciliation, or final end-to-end read.
 
+Also require the compliance files to exist and match the verified bundle. Set `BUNDLE` to the retained descriptor used in [Compliance Evidence Generation](#compliance-evidence-generation), confirm its protected product version matches `VERSION`, and run:
+
+```bash
+: "${BUNDLE:?Set BUNDLE to the verified release bundle descriptor}"
+RELEASE_VERSION=$(cat VERSION)
+RELEASE_DIR="docs/release_notes/${RELEASE_VERSION%.*}.x"
+BUNDLE_DIR=$(dirname "$BUNDLE")
+
+test -s "$RELEASE_DIR/$RELEASE_VERSION-compliance-evidence.md"
+test -s "$RELEASE_DIR/$RELEASE_VERSION-compliance-evidence.csv"
+cmp "$RELEASE_DIR/$RELEASE_VERSION-compliance-evidence.md" "$BUNDLE_DIR/report.md"
+cmp "$RELEASE_DIR/$RELEASE_VERSION-compliance-evidence.csv" "$BUNDLE_DIR/report.csv"
+```
+
+Require each artifact check to succeed. Confirm the release-note links resolve and the retained verification record identifies this exact candidate, bundle, and trust. File existence or byte equality alone does not replace signed-bundle verification.
+
 ---
 
 ## Release Workflow
 
-The `make release` target handles version syncing, tagging, and pushing in a single step. CI handles lint, tests, and version sync verification on PRs. GitHub Actions workflows handle release creation and asset uploads.
+The `make release` target handles version syncing, tagging, and pushing in a single step. CI handles lint, tests, and version sync verification on PRs. GitHub Actions workflows handle release creation and asset uploads. The current target checks release-note existence but does not generate or verify compliance artifacts, run offline acceptance, audit documentation, or enforce the required branch and CI state. Complete those gates before the release owner invokes it.
 
 ### `make release`: Tag and Push
 
 > **Run this on the merged main branch**, not on a feature branch. The tags must point at the merge commit on main. **`make release` is run by the release owner, not by the agent preparing the PR.** The agent's work ends at handoff; the release owner commits, merges, waits for CI on `main` to pass, pulls `main` locally, and then runs `make release`.
 
-1. Syncs `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock` from `VERSION` (if already in sync, no changes are made). It does NOT regenerate the downstream `ensemble/uv.lock` — that is regenerated by `make proto` during PR prep.
-2. Verifies working tree is clean (fails if Python files were out of sync; commit synced files and go through the PR process first)
-3. Verifies release notes file exists at `docs/release_notes/vX.Y.x/vX.Y.Z.md`
+1. Syncs `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock` from `VERSION` (if already in sync, no changes are made). It does not regenerate the downstream `ensemble/uv.lock` — that is regenerated by `make proto` during PR prep.
+2. Checks for a clean working tree after synchronization. If synchronization changed a Python file, the target stops with a dirty tree; commit the synchronized files and go through the PR process before retrying.
+3. Verifies the release notes file exists at `docs/release_notes/vX.Y.x/vX.Y.Z.md`
 4. Verifies tags `vX.Y.Z` and `protocol/vX.Y.Z` don't already exist
 5. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
 6. Pushes both tags to origin
@@ -583,7 +645,7 @@ For critical security issues or production bugs:
 
 1. Apply the minimal fix necessary to the appropriate branch
 2. Inventory the changes, map them through the [Developer Guidelines](devs.md) and complete [Documentation Catalog](docs.md#documentation-catalog), and perform the same full-document audit, related-document reconciliation, validation, and metadata-finalization gates as a normal release
-3. Set `VERSION`, sync the Python package files to match, run `make proto` to regenerate the downstream `uv.lock` files, update `CHANGELOG.md`, write release notes, and generate compliance evidence with the release version, output directory, assessment binding, and evidence-window flags documented in [Compliance Evidence Generation](#compliance-evidence-generation)
+3. Set `VERSION`, sync the Python package files, run required protocol generation, update `CHANGELOG.md`, and write release notes. Generate and verify the signed public bundle with the target version and evidence window protected in `AssessmentScope`, then project it with `--out`, `--trust-policy`, and conditional `--evidence-trust` as documented in [Compliance Evidence Generation](#compliance-evidence-generation). Complete clean offline acceptance when required.
 4. Hand off to the release owner, who commits, pushes, opens and merges the PR; after CI on `main` passes, pulls main locally, and runs `make release` to re-sync the Python files (no-op), tag, and push; GitHub Actions workflows create the release and upload assets
 
 ---

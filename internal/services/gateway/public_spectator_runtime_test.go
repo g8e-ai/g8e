@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -35,11 +36,13 @@ func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
 		PrivateListenAddress:  "127.0.0.1:" + privatePort,
 		PublicListenAddress:   "127.0.0.1:" + publicPort,
 		ExplorerListenAddress: "",
+		TrustedProxyCIDRs:     []string{"172.28.0.1/32"},
 	}, fileSvc, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(ctx))
 
 	waitForBootstrap(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
+	require.Len(t, runtime.mirror.trustedProxyNetworks, 1)
 
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stopCancel()
@@ -69,6 +72,123 @@ func TestPublicSpectatorRuntime_StartsDedicatedExplorerListener(t *testing.T) {
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stopCancel()
 	require.NoError(t, runtime.Stop(stopCtx))
+}
+
+func TestValidatePublicFeedSourceID_RejectsPathComponents(t *testing.T) {
+	for _, sourceID := range []string{"../source", "source/id", ".", "source id"} {
+		t.Run(sourceID, func(t *testing.T) {
+			assert.ErrorIs(t, ValidatePublicFeedSourceID(sourceID), constants.ErrPublicFeedSourceIDInvalid)
+		})
+	}
+}
+
+func TestTransitionLocalPublicFeed_ArchivesPublisherStateAndStartsFreshSource(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	ctx := context.Background()
+	oldConfig, err := EnsureLocalPublicFeed(ctx, fileSvc, "source-old", "http://127.0.0.1:8081")
+	require.NoError(t, err)
+	oldKey, err := fileSvc.ReadFile(ctx, constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	oldToken, err := fileSvc.ReadFile(ctx, constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedOutboxPath, []byte("old-outbox\n"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedSnapshotPath, []byte("old-snapshot\n"), constants.PermFilePrivate))
+
+	newConfig, err := TransitionLocalPublicFeed(ctx, fileSvc, "source-new")
+	require.NoError(t, err)
+	assert.Equal(t, "source-new", newConfig.SourceID)
+	assert.Equal(t, oldConfig.MirrorOrigin, newConfig.MirrorOrigin)
+	assert.NotEqual(t, oldConfig.SigningKeyID, newConfig.SigningKeyID)
+	archivedPaths, err := PublicFeedArchivePathsFor(oldConfig.SourceID)
+	require.NoError(t, err)
+
+	archivedConfigBytes, err := fileSvc.ReadFile(ctx, archivedPaths.ExportConfig)
+	require.NoError(t, err)
+	var archivedConfig models.PublicExportConfig
+	require.NoError(t, json.Unmarshal(archivedConfigBytes, &archivedConfig))
+	assert.Equal(t, oldConfig, archivedConfig)
+	archivedKey, err := fileSvc.ReadFile(ctx, archivedPaths.SigningKey)
+	require.NoError(t, err)
+	assert.Equal(t, oldKey, archivedKey)
+	archivedToken, err := fileSvc.ReadFile(ctx, archivedPaths.IngestToken)
+	require.NoError(t, err)
+	assert.Equal(t, oldToken, archivedToken)
+	archivedOutbox, err := fileSvc.ReadFile(ctx, archivedPaths.Outbox)
+	require.NoError(t, err)
+	assert.Equal(t, "old-outbox\n", string(archivedOutbox))
+	archivedSnapshot, err := fileSvc.ReadFile(ctx, archivedPaths.Snapshot)
+	require.NoError(t, err)
+	assert.Equal(t, "old-snapshot\n", string(archivedSnapshot))
+
+	newKey, err := fileSvc.ReadFile(ctx, constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, oldKey, newKey)
+	newToken, err := fileSvc.ReadFile(ctx, constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, oldToken, newToken)
+	outboxExists, err := fileSvc.FileExists(ctx, constants.PublicFeedOutboxPath)
+	require.NoError(t, err)
+	assert.False(t, outboxExists)
+	snapshotExists, err := fileSvc.FileExists(ctx, constants.PublicFeedSnapshotPath)
+	require.NoError(t, err)
+	assert.False(t, snapshotExists)
+}
+
+func TestTransitionLocalPublicFeed_MigratesLegacyArchiveWithoutDiscardingIt(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	ctx := context.Background()
+	activeConfig, err := EnsureLocalPublicFeed(ctx, fileSvc, "source-current", "http://127.0.0.1:8081")
+	require.NoError(t, err)
+	legacyConfig := activeConfig
+	legacyConfig.SourceID = "source-legacy"
+	legacyConfigBytes, err := json.Marshal(legacyConfig)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedLegacyArchiveExportConfigPath, legacyConfigBytes, constants.PermFilePrivate))
+	activeKey, err := fileSvc.ReadFile(ctx, constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedLegacyArchiveSigningKeyPath, activeKey, constants.PermFilePrivate))
+	activeToken, err := fileSvc.ReadFile(ctx, constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedLegacyArchiveIngestTokenPath, activeToken, constants.PermFilePrivate))
+
+	_, err = TransitionLocalPublicFeed(ctx, fileSvc, "source-next")
+	require.NoError(t, err)
+	legacyPaths, err := PublicFeedArchivePathsFor("source-legacy")
+	require.NoError(t, err)
+	legacyBody, err := fileSvc.ReadFile(ctx, legacyPaths.ExportConfig)
+	require.NoError(t, err)
+	assert.Equal(t, string(legacyConfigBytes), string(legacyBody))
+	currentPaths, err := PublicFeedArchivePathsFor("source-current")
+	require.NoError(t, err)
+	_, err = fileSvc.ReadFile(ctx, currentPaths.ExportConfig)
+	assert.NoError(t, err)
+}
+
+func TestTransitionLocalPublicFeed_PreservesEveryImmutableGeneration(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	ctx := context.Background()
+	_, err := EnsureLocalPublicFeed(ctx, fileSvc, "source-one", "http://127.0.0.1:8081")
+	require.NoError(t, err)
+
+	_, err = TransitionLocalPublicFeed(ctx, fileSvc, "source-two")
+	require.NoError(t, err)
+	firstGeneration, err := PublicFeedArchivePathsFor("source-one")
+	require.NoError(t, err)
+	firstConfig, err := fileSvc.ReadFile(ctx, firstGeneration.ExportConfig)
+	require.NoError(t, err)
+
+	_, err = TransitionLocalPublicFeed(ctx, fileSvc, "source-three")
+	require.NoError(t, err)
+	secondGeneration, err := PublicFeedArchivePathsFor("source-two")
+	require.NoError(t, err)
+	secondConfig, err := fileSvc.ReadFile(ctx, secondGeneration.ExportConfig)
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, firstConfig)
+	assert.NotEmpty(t, secondConfig)
+	assert.NotEqual(t, firstGeneration.Root, secondGeneration.Root)
+	_, err = TransitionLocalPublicFeed(ctx, fileSvc, "source-one")
+	assert.ErrorIs(t, err, constants.ErrPublicFeedArchiveGenerationExists)
 }
 
 func TestValidatePublicMirrorListenAddresses_RejectsDuplicate(t *testing.T) {

@@ -56,16 +56,28 @@ describe('isTerminalFailure', () => {
 });
 
 describe('qualityStateLabel', () => {
-  it('labels verified_public', () => {
-    expect(qualityStateLabel('verified_public')).toBe('Verified public');
+  it('labels verified_public as current-standard verification', () => {
+    expect(qualityStateLabel('verified_public')).toBe('Current-standard verified');
+  });
+
+  it('labels exploratory_verified as run-scoped verification', () => {
+    expect(qualityStateLabel('exploratory_verified')).toBe('Run-scoped verification passed');
   });
 
   it('labels not_evaluated', () => {
     expect(qualityStateLabel('not_evaluated')).toBe('Not evaluated');
   });
 
-  it('labels exploratory_partial', () => {
-    expect(qualityStateLabel('exploratory_partial')).toBe('Exploratory · partial');
+  it('labels exploratory_partial as not fully verified', () => {
+    expect(qualityStateLabel('exploratory_partial')).toBe('Not fully verified');
+  });
+
+  it('labels legacy_unverified as not verified to current standards', () => {
+    expect(qualityStateLabel('legacy_unverified')).toBe('Legacy · not current-standard verified');
+  });
+
+  it('labels live_in_progress as unverified', () => {
+    expect(qualityStateLabel('live_in_progress')).toBe('In progress · unverified');
   });
 });
 

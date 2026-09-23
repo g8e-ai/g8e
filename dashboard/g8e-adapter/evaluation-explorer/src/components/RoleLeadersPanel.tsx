@@ -16,22 +16,7 @@ import type { CatalogSnapshot, ModelRole, ModelSummary, QualityState } from '../
 import { qualityStateLabel, qualityStateTone } from '../utils/feed-state';
 
 function agentStatus(state: QualityState): { label: string; tone: string } {
-  const tone = qualityStateTone(state);
-  switch (state) {
-    case 'verified_public':
-    case 'exploratory_verified':
-      return { label: 'Verified', tone };
-    case 'exploratory_partial':
-      return { label: 'Partial', tone };
-    case 'live_in_progress':
-      return { label: 'Running', tone };
-    case 'terminal_failed':
-      return { label: 'Failed', tone };
-    case 'dead_evidence':
-      return { label: 'Dead evidence', tone };
-    default:
-      return { label: qualityStateLabel(state), tone };
-  }
+  return { label: qualityStateLabel(state), tone: qualityStateTone(state) };
 }
 
 function RoleLeaderCell({ role }: { role: ModelRole }) {

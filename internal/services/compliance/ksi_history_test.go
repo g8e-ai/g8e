@@ -59,7 +59,7 @@ func TestKSIHistoryStore_SaveAndListRoundTrip(t *testing.T) {
 			},
 			{
 				ID:                  "KSI-SVC-05",
-				Status:              KSIStatusNotSatisfied,
+				Status:              KSIStatusUnverifiable,
 				Outcome:             KSIOutcomeInvalidEvidence,
 				LastValidatedUnixMs: now,
 				MethodCount:         2,

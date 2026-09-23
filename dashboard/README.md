@@ -28,7 +28,7 @@ npm run dev
 
 A fresh runtime directory causes the dashboard to submit a platform enrollment request and wait before opening port `3000`. Decide the exact request through the Gateway console or with the repository-root `./g8e auth enroll pending`, `./g8e auth enroll approve <request-id> --yes`, or `./g8e auth enroll deny <request-id> --yes` commands. After approval, the dashboard stores its identity under `G8E_RUNTIME_DIR` and serves the application at `http://localhost:3000`.
 
-`G8E_GATEWAY_URL` is the HTTPS Gateway origin used by the browser. `G8E_GATEWAY_HTTP_URL` is the plain-HTTP Gateway origin used by the Node.js startup enrollment flow. See [Dashboard development](../docs/dashboard/development.md) for source organization and detailed setup guidance.
+`G8E_GATEWAY_URL` is the HTTPS Gateway origin used by the browser. `G8E_GATEWAY_HTTP_URL` is the plain-HTTP Gateway origin used by the Node.js startup enrollment flow. See [Dashboard development](../docs/dashboard/devs.md) for source organization and detailed setup guidance.
 
 ## Current runtime scope
 

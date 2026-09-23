@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -344,7 +344,7 @@ func TestAuditReceiptsCmd_ConfigLoadFailure(t *testing.T) {
 	t.Run("receipts fails when config load fails", func(t *testing.T) {
 		originalLoad := configLoad
 		configLoad = func(string) (*config.Config, error) {
-			return nil, errors.New("config load failed")
+			return nil, fmt.Errorf("config load failed")
 		}
 		defer func() { configLoad = originalLoad }()
 
@@ -585,7 +585,7 @@ func TestAuditExportCmd_ErrorPaths(t *testing.T) {
 	t.Run("export fails when config load fails", func(t *testing.T) {
 		originalLoad := configLoad
 		configLoad = func(string) (*config.Config, error) {
-			return nil, errors.New("config load failed")
+			return nil, fmt.Errorf("config load failed")
 		}
 		defer func() { configLoad = originalLoad }()
 
@@ -636,7 +636,7 @@ func TestAuditReportCmd_ErrorPaths(t *testing.T) {
 	t.Run("report fails when config load fails", func(t *testing.T) {
 		originalLoad := configLoad
 		configLoad = func(string) (*config.Config, error) {
-			return nil, errors.New("config load failed")
+			return nil, fmt.Errorf("config load failed")
 		}
 		defer func() { configLoad = originalLoad }()
 
@@ -670,7 +670,7 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 	t.Run("events fails when config load fails", func(t *testing.T) {
 		originalLoad := configLoad
 		configLoad = func(string) (*config.Config, error) {
-			return nil, errors.New("config load failed")
+			return nil, fmt.Errorf("config load failed")
 		}
 		defer func() { configLoad = originalLoad }()
 
@@ -740,7 +740,7 @@ func TestAuditSummaryCmd_ErrorPaths(t *testing.T) {
 	t.Run("summary fails when config load fails", func(t *testing.T) {
 		originalLoad := configLoad
 		configLoad = func(string) (*config.Config, error) {
-			return nil, errors.New("config load failed")
+			return nil, fmt.Errorf("config load failed")
 		}
 		defer func() { configLoad = originalLoad }()
 

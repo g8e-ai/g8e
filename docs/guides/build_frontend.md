@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ---
 
@@ -34,12 +34,24 @@ The g8e Gateway ships with an embedded, single-file vanilla JavaScript console S
 
 ## Prerequisites
 
-- g8e Gateway running and healthy
-- Frontend application served from a known origin (e.g., `https://your-app.example.com`, `http://localhost:3003`)
+- g8e Gateway running and healthy, or permission to let `./g8e gw connect <frontend-origin>` start or restart the local Gateway
+- Frontend application served from a known top-level origin (e.g., `https://your-app.example.com`, `http://localhost:3003`)
 - Gateway started with `--cors-origin` and `--passkey-rp-origin` flags matching the frontend origin
 - Browser supports WebAuthn (all modern Chrome, Firefox, Safari, Edge)
 - Browser trusts the gateway's HTTPS certificate; the gateway session cookie is always `Secure`
 - Frontend runs in a WebAuthn secure context (HTTPS, or the browser's localhost exception for local development)
+
+### Serving and deployment requirements
+
+Build the UI as a top-level browser SPA and serve it from the exact origin configured in the Gateway. For this direct-browser integration, the browser calls the Gateway directly using the absolute Gateway HTTPS origin; do not move requests through an edge function, server-side proxy, service worker, or iframe relay. A hosted deployment needs publicly trusted HTTPS on the frontend and Gateway origins. A local deployment can use loopback HTTP for the frontend, but the Gateway remains HTTPS and the browser must trust its certificate.
+
+For a same-computer local frontend, run:
+
+```bash
+./g8e gw connect http://localhost:3003
+```
+
+Replace the origin with the actual scheme, host, and port. The command validates the origin, derives the exact-host RP ID, starts or restarts the Gateway with matching CORS and passkey settings when needed, requests consent before installing local trust, and verifies Gateway HTTPS and CORS. Open the frontend in a top-level browser tab after the command succeeds; an embedded builder preview or iframe can block loopback and WebAuthn permissions. `gw connect` cannot verify browser-controlled local-network permission or third-party-cookie acceptance.
 
 ---
 
@@ -531,18 +543,17 @@ See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for the runti
 
 ---
 
-## In-Tree Dashboard (g8ed) Server-to-Server mTLS Enrollment
+## In-Tree Dashboard (g8ed) Distinction
 
-The previous sections cover browser-based frontends that authenticate via WebAuthn passkeys and session cookies. The in-tree dashboard (`g8ed`, `dashboard/`) is a special case: its **browser SPA** still authenticates via WebAuthn passkeys (unchanged), but its **container** also holds its own mTLS app identity for prepared server-to-server gateway clients, mirroring the ensemble's enrollment model. `server.js` does not currently construct those clients. The two identity surfaces are independent — the browser never presents the container's mTLS cert, and the container never holds the browser's session cookie.
+The previous sections describe an external browser frontend that calls the Gateway directly. The in-tree dashboard (`g8ed`, `dashboard/`) is a separate first-party static host with two independent identity surfaces: its browser is intended to use Gateway WebAuthn and the Gateway-issued session cookie, while its container obtains an owner-approved mTLS application identity at startup. The browser never presents the container's mTLS certificate, and the container never holds the browser's session cookie.
 
-### Enrollment
+The current g8ed interface is not a complete implementation of the browser contract above. Existing browser sessions can be restored and logged out, but passkey registration and sign-in are not operational because the current sign-in flow omits the Gateway-required user identifier. Its retained chat, Operator, approval, audit, settings, and terminal modules also do not have active API handlers in the running static host. Its legacy SSE client uses the relative `/api/v1/sse/events` polling path and expects a different event envelope, so it is not a working direct Gateway stream in the standard separate-origin deployment.
 
-The dashboard container enrolls at startup via the owner-approved platform enrollment protocol, the same protocol the ensemble uses. The `AppEnrollmentService` (`dashboard/services/infra/app-enrollment-service.js`) implements the nine-step resumable sequence mirroring the ensemble's `ensemble/app/services/infra/app_enrollment_service.py`:
+### Container enrollment
 
-- `loadIdentity()` — read path. Requires the existing certificate and key files, parses the certificate, rejects certificates within 7 days of expiry, and extracts the SPIFFE `app_id` from the URI SAN. It does not contact the gateway. This reuse path does not revalidate the key match or trust chain.
-- `enroll()` — write path. Loads any persisted pending attempt; if none exists, generates an ECDSA P-256 key and CSR, fetches the CA bundle from the gateway's plain-HTTP discovery surface, submits a platform enrollment request with the CSR and system fingerprint, persists pending state (private key, requester token, request ID, CSR fingerprints, and expiry) to `pki/pending-enrollment/dashboard.json` with `0600` permissions, polls status with bounded backoff, signs the canonical completion transcript, validates the returned identity against the pinned trust material, expected SANs, public key, and component kind, and writes the credentials. On restart with a pending attempt, it resumes the same request without generating new keys.
+The dashboard container enrolls at startup through the owner-approved platform enrollment protocol, but the running static host does not use the resulting certificate for Gateway API requests. The `AppEnrollmentService` (`dashboard/services/infra/app-enrollment-service.js`) loads an existing identity when valid or performs resumable enrollment when it is missing, expired, or near expiry. Enrollment generates the key and CSR locally, discovers the CA bundle through the Gateway's plain-HTTP surface, submits the platform enrollment request, persists pending state to `pki/pending-enrollment/dashboard.json` with `0600` permissions, resumes an unexpired request after restart, and writes the approved credentials to the dashboard runtime tree.
 
-The enrollment is resumable and idempotent: on restart with a valid, non-near-expiry cert, the reuse path short-circuits. On restart while a platform enrollment request is pending, the service loads the persisted pending state and resumes polling the same request. On enrollment failure, the dashboard container exits non-zero (fail-closed) so Docker's healthcheck and restart policy surface the failure. The enrolled credentials persist across container restarts in the `g8e-dashboard-data` named volume. See [auth.md](../architecture/auth.md) §1.5 for the owner-approved platform enrollment protocol.
+The dashboard fails closed when enrollment fails and persists its credentials and pending state in the `g8e-dashboard-data` named volume in the unified Compose deployment. The identity reuse path validates the certificate expiry and SPIFFE application identity; it does not revalidate the private-key match or trust chain. See [Authentication and Authorization](../architecture/auth.md#platform-enrollment) for the platform enrollment protocol and [Dashboard (g8ed)](../architecture/dashboard.md) for the current capability status.
 
 ### Environment Variables
 
@@ -565,7 +576,7 @@ The dashboard's runtime tree mirrors the ensemble's layout so the gateway-side c
 
 ### Browser vs Container Identity
 
-The dashboard's browser SPA and container identity remain independent: the browser uses gateway-direct WebAuthn and session cookies, while `runStartupEnrollment()` resolves the container's mTLS identity before `server.js` starts the static host. `server.js` does not construct server-to-server gateway clients with that identity.
+The dashboard's browser SPA and container identity remain independent: the browser is intended to use gateway-direct WebAuthn and session cookies, while `runStartupEnrollment()` resolves the container's mTLS identity before `server.js` starts the static host. `server.js` does not construct server-to-server gateway clients with that identity, and the current browser registration and sign-in paths are not operational.
 
 The current `dashboard/public/js/components/auth.js` and `dashboard/public/js/utils/sse-connection-manager.js` do not fully match the gateway browser contract documented above: the auth code reads challenge options without the `publicKey` wrapper, attempts authentication without the required `user_id`, serializes verification credentials in a nested browser shape instead of the gateway's flat model, and the SSE manager opens `EventSource` on the JSON polling endpoint rather than `/api/v1/sse/stream`. Treat the embedded `/console/` implementation and the gateway request models as canonical until those dashboard paths are aligned.
 

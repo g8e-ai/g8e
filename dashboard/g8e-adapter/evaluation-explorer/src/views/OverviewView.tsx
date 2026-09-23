@@ -8,22 +8,18 @@
 // nothing on this page is decorative.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
-  G8E_REPO_URL,
-  PLATFORM_CONTACT_CALENDLY,
   PLATFORM_CONTACT_EMAIL,
-  PLATFORM_FLOW_STEPS,
   PLATFORM_LEDE,
+  PLATFORM_OVERVIEW_LEDE,
   PLATFORM_OVERVIEW_PORTFOLIO_NOTE,
 } from '../content/platform';
-import { useActiveDatasetId } from '../state/dataset';
-import { recordKey, useStoreState } from '../state/store';
+import { useDatasetOptions } from '../state/dataset';
+import { useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
-import { DatasetSelector } from '../components/DatasetSelector';
 import { LiveEventStream } from '../components/LiveEventStream';
 import {
-  ProgressBar,
   ReconcilePlaceholder,
   StreamStatusIndicator,
   formatNumber,
@@ -33,7 +29,7 @@ import {
   type FeedConnectionState,
   type StreamConnectionState,
 } from '../utils/feed-state';
-import { campaignTerminalProgress, recentCampaignRows } from './derived';
+import { recentCampaignRows, roleLabel } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
 import type {
   CatalogSnapshot,
@@ -42,72 +38,46 @@ import type {
   SuiteSummary,
 } from '../contract/types';
 
-function shortRunId(runId: string): string {
-  return runId.length > 14 ? `…${runId.slice(-12)}` : runId;
-}
-
 function shortCampaignLabel(label: string): string {
   return label.length > 22 ? `…${label.slice(-20)}` : label;
 }
 
-function PlatformFlowStep({ step }: { step: (typeof PLATFORM_FLOW_STEPS)[number] }) {
-  return (
-    <li className={step.id === 'g8e' ? 'sys-platform-step-accent' : undefined}>
-      <div className="sys-platform-flow-content">
-        <strong>{step.label}</strong>
-        <span>{step.detail}</span>
-      </div>
-    </li>
-  );
+function capitalize(value: string): string {
+  return value.length > 0 ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
 }
 
-function PlatformFlowArrow({ direction }: { direction: 'h' | 'hl' | 'v' }) {
-  const arrow = direction === 'h' ? '→' : direction === 'hl' ? '←' : '↓';
-
-  return (
-    <li
-      className={`sys-platform-flow-arrow sys-platform-flow-arrow-${direction}`}
-      aria-hidden="true"
-    >
-      {arrow}
-    </li>
-  );
+function campaignStatusLabel(run: EvaluationSummary | undefined): string {
+  if (!run) return 'Awaiting data';
+  if (run.lifecycle_state === 'completed') return 'Complete';
+  return capitalize(run.lifecycle_state);
 }
 
-function PlatformFlow() {
-  const [home, g8e, mirror, page] = PLATFORM_FLOW_STEPS;
-
-  return (
-    <div className="sys-platform-flow-wrap">
-      <p className="sys-platform-flow-heading" aria-hidden="true">Outbound only</p>
-      <ol className="sys-platform-flow sys-platform-flow-grid" aria-label="Platform data flow, outbound only">
-        <PlatformFlowStep step={home} />
-        <PlatformFlowArrow direction="h" />
-        <PlatformFlowStep step={g8e} />
-        <PlatformFlowArrow direction="v" />
-        <PlatformFlowStep step={page} />
-        <PlatformFlowArrow direction="hl" />
-        <PlatformFlowStep step={mirror} />
-      </ol>
-    </div>
-  );
+function verificationLabel(run: EvaluationSummary | undefined, catalog: CatalogSnapshot): string {
+  if (run?.verifier_state === 'failed' || catalog.verifier_failed_count > 0) return 'Verification failed';
+  if (run?.verifier_state === 'passed') return 'Verification passed';
+  if (run?.lifecycle_state === 'running' || run?.lifecycle_state === 'queued') return 'Verification pending';
+  return 'Verification not applicable';
 }
 
-function CoverageBar({ label, done, total }: { label: string; done: number; total: number }) {
-  const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
-  return (
-    <div className="usage-row">
-      <div className="usage-label">
-        <span>{label}</span>
-        <span>
-          {formatNumber(done)} / {formatNumber(total)}
-        </span>
-      </div>
-      <div className="usage-track">
-        <div className="usage-fill" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
+function lastMatchingEvent(events: LiveEvent[], predicate: (event: LiveEvent) => boolean): LiveEvent | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event && predicate(event)) return event;
+  }
+  return undefined;
+}
+
+function latestAssignmentActivity(events: LiveEvent[]) {
+  const latest = lastMatchingEvent(events, (event) => event.assignment_id !== undefined);
+  if (!latest?.assignment_id) return undefined;
+  const matching = events.filter((event) => event.assignment_id === latest.assignment_id);
+  return {
+    assignmentId: latest.assignment_id,
+    taskId: lastMatchingEvent(matching, (event) => event.task_id !== undefined)?.task_id,
+    variantId: lastMatchingEvent(matching, (event) => event.variant_id !== undefined)?.variant_id,
+    role: lastMatchingEvent(matching, (event) => event.role !== undefined)?.role,
+    stageLabel: lastMatchingEvent(matching, (event) => event.stage_label !== undefined)?.stage_label,
+  };
 }
 
 type SystemOverviewPanelProps = {
@@ -115,7 +85,6 @@ type SystemOverviewPanelProps = {
   evaluations: EvaluationSummary[];
   suites: SuiteSummary[];
   events: LiveEvent[];
-  activeDatasetId: string;
   connection: FeedConnectionState;
   streamConnection: StreamConnectionState;
   isReconciling: boolean;
@@ -127,25 +96,29 @@ function SystemOverviewPanel({
   evaluations,
   suites,
   events,
-  activeDatasetId,
   connection,
   streamConnection,
   isReconciling,
 }: SystemOverviewPanelProps) {
-  const completedRuns = evaluations.filter((e) => e.lifecycle_state === 'completed').length;
   const assignmentDone = evaluations.reduce(
-    (sum, e) => sum + e.assignment_completed + e.assignment_failed,
+    (sum, evaluation) => sum + evaluation.assignment_completed + evaluation.assignment_failed,
     0,
   );
-  const assignmentTotal = evaluations.reduce((sum, e) => sum + e.assignment_total, 0);
-
-  const latestEvent = events.length > 0 ? events[events.length - 1] : undefined;
-  const currentRun = useStoreState((state) =>
-    latestEvent ? state.evaluations.get(recordKey(latestEvent.dataset_id, latestEvent.run_id)) : undefined,
-  );
-  const currentSuite = currentRun
-    ? suites.find((s) => s.suite_id === currentRun.suite_id)
+  const assignmentFailed = evaluations.reduce((sum, evaluation) => sum + evaluation.assignment_failed, 0);
+  const assignmentTotal = evaluations.reduce((sum, evaluation) => sum + evaluation.assignment_total, 0);
+  const assignmentPercent = assignmentTotal > 0 ? Math.min(100, Math.round((assignmentDone / assignmentTotal) * 100)) : 0;
+  const latestEvent = events[events.length - 1];
+  const eventRun = latestEvent
+    ? evaluations.find((evaluation) => evaluation.run_id === latestEvent.run_id)
     : undefined;
+  const orderedEvaluations = [...evaluations].sort((a, b) => b.observed_at.localeCompare(a.observed_at));
+  const currentRun = eventRun
+    ?? orderedEvaluations.find((evaluation) => evaluation.lifecycle_state === 'running' || evaluation.lifecycle_state === 'queued')
+    ?? orderedEvaluations[0];
+  const currentSuite = currentRun ? suites.find((suite) => suite.suite_id === currentRun.suite_id) : undefined;
+  const currentRunEvents = currentRun ? events.filter((event) => event.run_id === currentRun.run_id) : [];
+  const activity = latestAssignmentActivity(currentRunEvents);
+  const verification = catalog ? verificationLabel(currentRun, catalog) : undefined;
 
   return (
     <section className="panel sys-panel" aria-label="System overview">
@@ -158,27 +131,15 @@ function SystemOverviewPanel({
       </div>
 
       <div className="sys-platform">
+        <p className="sys-platform-lede">{PLATFORM_OVERVIEW_LEDE}</p>
+        <h3 className="sys-platform-heading">Need help with AI governance and security?</h3>
         <p className="sys-platform-lede">{PLATFORM_LEDE}</p>
-        <PlatformFlow />
         <div className="sys-platform-cta">
           <p className="sys-platform-cta-note">{PLATFORM_OVERVIEW_PORTFOLIO_NOTE}</p>
           <div className="sys-platform-links">
-            <a
-              className="sys-platform-cta-hire"
-              href={PLATFORM_CONTACT_CALENDLY}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Book a Time
-            </a>
-            <a
-              className="sys-platform-cta-run"
-              href={G8E_REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Run this yourself
-            </a>
+            <Link className="sys-platform-cta-architecture" to="/methodology#architecture">
+              Architecture Overview
+            </Link>
             <span className="sys-platform-email-label">Email:</span>
             <a className="sys-platform-email" href={`mailto:${PLATFORM_CONTACT_EMAIL}`}>
               {PLATFORM_CONTACT_EMAIL}
@@ -188,54 +149,101 @@ function SystemOverviewPanel({
       </div>
 
       <div className="sys-campaign">
-        <h3 className="sys-section-title">Active campaign</h3>
-        <DatasetSelector activeId={activeDatasetId} />
-        {catalog ? <p className="panel-note">{catalog.title}</p> : null}
-
-        {isReconciling ? (
-          <ReconcilePlaceholder label="Loading feed history…" />
-        ) : catalog ? (
-          <div className="usage-list" aria-label="Dataset coverage">
-            <CoverageBar label="Models evaluated" done={catalog.evaluated_count} total={catalog.model_count} />
-            <CoverageBar label="Suites verified" done={catalog.verifier_passed_count} total={catalog.suite_count} />
-            <CoverageBar label="Runs completed" done={completedRuns} total={evaluations.length} />
-            <CoverageBar label="Assignments done" done={assignmentDone} total={assignmentTotal} />
-          </div>
-        ) : null}
-      </div>
-
-      <div className="task-card">
-        <div className="panel-head">
-          <h3>Current task</h3>
-          {currentRun ? (
-            <Link to={`/evaluations/${currentRun.dataset_id}/${currentRun.run_id}`} className="panel-link">
-              View run →
-            </Link>
-          ) : null}
-        </div>
-        {isReconciling ? (
-          <ReconcilePlaceholder label="Loading current task…" />
-        ) : currentRun && latestEvent ? (
-          <>
-            <p className="task-title">{currentSuite?.display_name ?? currentRun.suite_id}</p>
-            <p className="task-sub">
-              {shortRunId(currentRun.run_id)} · {currentRun.lifecycle_state}
-            </p>
-            <ProgressBar
-              completed={campaignTerminalProgress(currentRun).done}
-              total={campaignTerminalProgress(currentRun).total}
-              label="Assignment progress"
+        <div className="campaign-section-head">
+          <h3 className="sys-section-title">Active campaign</h3>
+          {currentRun?.lifecycle_state === 'running' ? (
+            <StreamStatusIndicator
+              streamConnection={streamConnection}
+              feedConnection={connection}
+              className="campaign-status"
             />
-            <div className="task-chips">
-              <code className="stream-chip">{currentRun.arm}</code>
-              <code className="stream-chip">{currentRun.suite_id}</code>
-              {currentRun.started_at ? (
-                <span className="task-started">Started {formatRelativeTime(currentRun.started_at)}</span>
+          ) : (
+            <span className={`campaign-status status-${currentRun?.lifecycle_state ?? 'neutral'}`}>
+              <span className="status-dot" aria-hidden="true" />
+              {campaignStatusLabel(currentRun)}
+            </span>
+          )}
+        </div>
+
+        {catalog ? (
+          <>
+            <div className="campaign-identity">
+              <div>
+                <h4>{catalog.title}</h4>
+                <p>{catalog.description}</p>
+              </div>
+            </div>
+
+            {currentRun ? (
+              <div className="campaign-run-context">
+                <span>{currentSuite?.display_name ?? currentRun.suite_id}</span>
+                <span aria-hidden="true">·</span>
+                <code>{currentRun.arm}</code>
+              </div>
+            ) : null}
+
+            <div className="campaign-progress">
+              <div className="campaign-progress-head">
+                <strong>{formatNumber(assignmentDone)} of {formatNumber(assignmentTotal)} assignments complete</strong>
+                <strong>{assignmentPercent}%</strong>
+              </div>
+              <div
+                className="campaign-progress-track"
+                role="progressbar"
+                aria-label="Campaign assignment progress"
+                aria-valuenow={assignmentDone}
+                aria-valuemin={0}
+                aria-valuemax={assignmentTotal || 1}
+                aria-valuetext={`${assignmentDone} of ${assignmentTotal} assignments complete`}
+              >
+                <div className="campaign-progress-fill" style={{ width: `${assignmentPercent}%` }} />
+              </div>
+              <div className="campaign-progress-meta">
+                <span>{currentRun?.started_at ? `Started ${formatRelativeTime(currentRun.started_at)}` : 'Start time unavailable'}</span>
+                <span className={assignmentFailed > 0 ? 'campaign-failures' : undefined}>{formatNumber(assignmentFailed)} failed</span>
+              </div>
+            </div>
+
+            <ul className="campaign-scope" aria-label="Campaign scope and verification">
+              <li><strong>{formatNumber(catalog.model_count)}</strong> {catalog.model_count === 1 ? 'model' : 'models'}</li>
+              <li><strong>{formatNumber(catalog.suite_count)}</strong> {catalog.suite_count === 1 ? 'suite' : 'suites'}</li>
+              <li className={verification === 'Verification failed' ? 'campaign-verification-failed' : undefined}>
+                {verification}
+              </li>
+            </ul>
+
+            {currentRun && activity ? (
+              <div className="campaign-activity" aria-live="polite">
+                <h4>{currentRun.lifecycle_state === 'running' ? 'Now evaluating' : 'Latest activity'}</h4>
+                <div className="campaign-activity-primary">
+                  {activity.variantId ? (
+                    <Link to={`/models/${currentRun.dataset_id}/${activity.variantId}`}>{activity.variantId}</Link>
+                  ) : (
+                    <span>Model unavailable</span>
+                  )}
+                  <span aria-hidden="true">·</span>
+                  <span>{activity.taskId ?? activity.assignmentId}</span>
+                </div>
+                <div className="campaign-activity-meta">
+                  {activity.stageLabel ? <span>{capitalize(activity.stageLabel.replaceAll('_', ' '))}</span> : null}
+                  {activity.role ? <span>{roleLabel(activity.role)} role</span> : null}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="campaign-actions">
+              {currentRun ? (
+                <Link to={`/evaluations/${currentRun.dataset_id}/${currentRun.run_id}`} className="campaign-primary-action">
+                  View Details
+                </Link>
               ) : null}
+              <Link to="/methodology" className="campaign-secondary-action">Methodology</Link>
             </div>
           </>
+        ) : isReconciling ? (
+          <ReconcilePlaceholder label="Loading feed history…" />
         ) : (
-          <p className="panel-empty">No evaluation has been observed yet.</p>
+          <p className="panel-empty">No campaign has been observed yet.</p>
         )}
       </div>
     </section>
@@ -255,34 +263,83 @@ function RecentCampaigns({
     [catalogs, evaluations],
   );
   return (
-    <section className="panel" aria-label="Recent campaigns">
-      <div className="panel-head">
-        <h2>Recent campaigns</h2>
+    <section className="panel campaign-evidence-panel" aria-label="Campaign evidence">
+      <div className="panel-head campaign-evidence-head">
+        <div>
+          <h2>Campaign evidence</h2>
+          <p className="panel-note">Terminal assignment coverage for the latest public datasets.</p>
+        </div>
         <Link to="/evaluations" className="panel-link">
-          View all campaigns →
+          Explore all →
         </Link>
       </div>
+      <ul className="campaign-legend" aria-label="Assignment outcome legend">
+        <li><span className="campaign-legend-swatch campaign-legend-completed" />Completed</li>
+        <li><span className="campaign-legend-swatch campaign-legend-failed" />Failed</li>
+        <li><span className="campaign-legend-swatch campaign-legend-remaining" />Remaining</li>
+      </ul>
       {recent.length === 0 ? (
         <p className="panel-empty">No campaigns recorded yet.</p>
       ) : (
-        <ul className="mini-runs">
+        <ul className="campaign-evidence-list">
           {recent.map((campaign) => {
             const status = campaign.lifecycleState ?? campaign.qualityState;
             const href = campaign.runId
               ? `/evaluations/${campaign.datasetId}/${campaign.runId}`
               : `/?dataset=${campaign.datasetId}`;
+            const terminal = campaign.assignmentCompleted + campaign.assignmentFailed;
+            const total = Math.max(campaign.assignmentTotal, terminal);
+            const completedWidth = total > 0 ? (campaign.assignmentCompleted / total) * 100 : 0;
+            const failedWidth = total > 0 ? (campaign.assignmentFailed / total) * 100 : 0;
+            const verification = campaign.verifierState === 'passed'
+              ? 'Verification passed'
+              : campaign.verifierState === 'failed'
+                ? 'Verification failed'
+                : campaign.lifecycleState === 'running' || campaign.lifecycleState === 'queued'
+                  ? 'Verification pending'
+                  : campaign.verifierState === 'not_applicable'
+                    ? 'Verification not applicable'
+                    : 'Verification not run';
             return (
-              <li key={campaign.datasetId}>
-                <Link to={href} className="mini-run">
-                  <code className="mini-run-id" title={campaign.label}>
+              <li key={campaign.datasetId} className="campaign-evidence-row">
+                <div className="campaign-evidence-title-row">
+                  <Link to={href} className="campaign-evidence-title" title={campaign.label}>
                     {shortCampaignLabel(campaign.label)}
-                  </code>
-                  <span className="mini-run-name">{campaign.detail}</span>
-                  <span className="mini-run-when">
-                    {formatRelativeTime(campaign.observedAt)}
+                  </Link>
+                  <span className="campaign-evidence-time">{formatRelativeTime(campaign.observedAt)}</span>
+                </div>
+                <div className="campaign-evidence-meta">
+                  <span>{campaign.detail}</span>
+                  <span className={`campaign-evidence-state status-${status}`}>
+                    <span className="status-dot" aria-hidden="true" />
+                    {campaign.lifecycleState ? capitalize(campaign.lifecycleState) : capitalize(campaign.qualityState.replaceAll('_', ' '))}
                   </span>
-                  <span className={`status-dot status-${status}`} aria-label={status} />
-                </Link>
+                </div>
+                {campaign.runId && total > 0 ? (
+                  <>
+                    <div
+                      className="campaign-outcome-track"
+                      role="progressbar"
+                      aria-label={`${campaign.label} assignment outcomes`}
+                      aria-valuemin={0}
+                      aria-valuemax={total}
+                      aria-valuenow={terminal}
+                      aria-valuetext={`${campaign.assignmentCompleted} completed, ${campaign.assignmentFailed} failed, ${total - terminal} remaining`}
+                    >
+                      <span className="campaign-outcome-completed" style={{ width: `${completedWidth}%` }} />
+                      <span className="campaign-outcome-failed" style={{ width: `${failedWidth}%` }} />
+                    </div>
+                    <div className="campaign-evidence-foot">
+                      <span>{formatNumber(terminal)} / {formatNumber(total)} terminal</span>
+                      <span className={campaign.verifierState === 'failed' ? 'campaign-verification-failed' : undefined}>{verification}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="campaign-evidence-foot campaign-evidence-foot-unavailable">
+                    <span>Run-level outcomes unavailable</span>
+                    <span>{verification}</span>
+                  </div>
+                )}
               </li>
             );
           })}
@@ -292,7 +349,7 @@ function RecentCampaigns({
   );
 }
 
-/** Anonymous public mirror endpoints as downloadable artifacts. */
+/** Public-safe evaluation datasets, contract, and raw mirror endpoints. */
 function DownloadsPanel() {
   const [origin, setOrigin] = useState<string | null>(null);
 
@@ -310,51 +367,81 @@ function DownloadsPanel() {
     };
   }, []);
 
-  const items = [
-    { label: 'Feed bootstrap', format: 'JSON', href: origin ? `${origin}/bootstrap` : undefined },
-    { label: 'Feed history', format: 'JSON pages', href: origin ? `${origin}/history` : undefined },
-    { label: 'Proof catalog', format: 'JSON', href: origin ? `${origin}/proof-catalog` : undefined },
-    { label: 'Live event stream', format: 'SSE', href: origin ? `${origin}/stream` : undefined },
-    { label: 'View schema descriptor', format: 'JSON', href: descriptorUrl },
+  const resources = [
+    {
+      label: 'Campaign summaries',
+      eyebrow: 'Analyze runs',
+      description: 'Run identity, lifecycle, terminal outcomes, headline metrics, and verifier disposition.',
+      format: 'JSON · paginated',
+      href: origin ? `${origin}/history?kind=evaluation_summary&cursor=0&limit=500` : undefined,
+    },
+    {
+      label: 'Assignment results',
+      eyebrow: 'Analyze tasks',
+      description: 'Scenario outcomes, closed grades, grouped activity, bounded resources, and evidence bindings.',
+      format: 'JSON · paginated',
+      href: origin ? `${origin}/history?kind=assignment_result&cursor=0&limit=500` : undefined,
+    },
+    {
+      label: 'View schema',
+      eyebrow: 'Integrate',
+      description: 'Versioned record kinds, enums, public field allowlist, and prohibited private fields.',
+      format: 'JSON · v1.5',
+      href: descriptorUrl,
+    },
   ];
 
   return (
-    <section className="panel" id="downloads" aria-label="Download data">
+    <section className="panel public-data-panel" id="downloads" aria-label="Public data and APIs">
       <div className="panel-head">
         <div>
-          <h2>Download data</h2>
-          <p className="panel-note">Everything the mirror publishes is open.</p>
+          <h2>Public data &amp; APIs</h2>
+          <p className="panel-note">Use the same anonymous, public-safe projection that powers this page.</p>
         </div>
       </div>
-      <ul className="dl-list">
-        {items.map((item) => (
-          <li key={item.label} className="dl-item">
-            {item.href ? (
-              <a href={item.href} target="_blank" rel="noopener noreferrer">
-                {item.label}
+      <p className="public-boundary-note">
+        Includes aggregate results, closed grade metadata, bounded resource metrics, verification state, and approved content bindings. Prompts, outputs, identities, paths, and receipt bodies stay private.
+      </p>
+      <ul className="public-resource-grid">
+        {resources.map((resource) => (
+          <li key={resource.label}>
+            {resource.href ? (
+              <a className="public-resource-card" href={resource.href} target="_blank" rel="noopener noreferrer">
+                <span className="public-resource-eyebrow">{resource.eyebrow}</span>
+                <strong>{resource.label}</strong>
+                <span className="public-resource-description">{resource.description}</span>
+                <span className="public-resource-format">{resource.format}<span aria-hidden="true"> ↗</span></span>
               </a>
             ) : (
-              <span>{item.label}</span>
+              <div className="public-resource-card public-resource-disabled">
+                <span className="public-resource-eyebrow">{resource.eyebrow}</span>
+                <strong>{resource.label}</strong>
+                <span className="public-resource-description">Mirror origin unavailable.</span>
+                <span className="public-resource-format">{resource.format}</span>
+              </div>
             )}
-            <span className="dl-format">{item.format}</span>
           </li>
         ))}
       </ul>
-      {origin ? (
-        <a className="dl-browse" href={`${origin}/bootstrap`} target="_blank" rel="noopener noreferrer">
-          Browse the public feed →
-        </a>
-      ) : (
-        <p className="panel-empty">Mirror origin unavailable.</p>
-      )}
+      <div className="public-api-strip">
+        <span className="public-api-label">Raw mirror endpoints</span>
+        {origin ? (
+          <>
+            <a href={`${origin}/history?cursor=0&limit=500`} target="_blank" rel="noopener noreferrer">History <code>JSON</code></a>
+            <a href={`${origin}/bootstrap`} target="_blank" rel="noopener noreferrer">Bootstrap <code>JSON</code></a>
+            <a href={`${origin}/proof-catalog`} target="_blank" rel="noopener noreferrer">Proofs <code>JSON</code></a>
+            <a href={`${origin}/stream`} target="_blank" rel="noopener noreferrer">Live updates <code>SSE</code></a>
+          </>
+        ) : (
+          <span className="public-api-unavailable">Mirror origin unavailable</span>
+        )}
+      </div>
     </section>
   );
 }
 
 export function OverviewView() {
-  const [params] = useSearchParams();
-  const routeDataset = params.get('dataset') ?? undefined;
-  const activeDatasetId = useActiveDatasetId(routeDataset);
+  const activeDatasetId = useDatasetOptions().find((option) => option.available && option.kind === 'live_run')?.id ?? '';
   const catalog = useStoreState((state) => state.catalogs.get(activeDatasetId));
   const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
   const evaluations = useStoreState((state) =>
@@ -385,7 +472,6 @@ export function OverviewView() {
           evaluations={evaluations}
           suites={suites}
           events={events}
-          activeDatasetId={activeDatasetId}
           connection={connection}
           streamConnection={streamConnection}
           isReconciling={isReconciling}

@@ -27,63 +27,14 @@ export const SPONSORSHIP_USES = [
 
 export const PLATFORM_SOLO_NOTE = 'Solo operator · home-PC hardware · live pipeline';
 
+export const PLATFORM_OVERVIEW_LEDE =
+  'This site is a live deployment of the g8e AI governance suite, not a separate benchmark product. Evaluations run through the governed execution path and publish public-safe results to this Explorer.';
+
 export const PLATFORM_LEDE =
-  'OpenDevOps.ai is a one-person project running real evaluation campaigns on consumer hardware — open-source SLMs scored through the full g8e agent stack, not isolated API calls. Only signed snapshots leave the host.';
-
-export const PLATFORM_MEASUREMENT_SUMMARY =
-  'Each candidate model is scored in every g8e role — Primary, Assistant, and Lite — across 25 frozen agent scenarios. The goal is per-role metrics (pass rate, tool selection, throughput, escalation) to identify the strongest open models, then compare those picks against single-LLM baselines.';
-
-export const PLATFORM_PORTFOLIO_NOTE =
-  'This explorer is a live portfolio piece — the same pipeline I use for production evals, plus the public mirror UI I built on top. I am available for contract work on governed AI, evaluation infrastructure, and read-only observability surfaces.';
-
-export const PLATFORM_FLOW_STEPS = [
-  {
-    id: 'workstation',
-    label: 'Home PC',
-    detail: 'Docker + Ollama',
-  },
-  {
-    id: 'g8e',
-    label: 'g8e stack',
-    detail: 'g8eg · g8eo · eval',
-  },
-  {
-    id: 'mirror',
-    label: 'Public mirror',
-    detail: 'SSE mirror',
-  },
-  {
-    id: 'browser',
-    label: 'This page',
-    detail: 'Portfolio viewer',
-  },
-] as const;
+  "I bring 30 years in data protection and systems integration, plus hands-on delivery across zero-trust agent runtimes, multi-agent orchestration, LLM-as-judge evaluations, adversarial red teaming, and CI regression detection. Point me in a direction, I'll take care of it.";
 
 export const PLATFORM_OVERVIEW_PORTFOLIO_NOTE =
-  'Live portfolio piece — looking to join a team, available for contracts on governed AI and eval infrastructure.';
-
-export const G8E_STACK_COMPONENTS = [
-  {
-    id: 'gateway',
-    label: 'g8eg · Gateway',
-    detail: 'Policy admission, routing, public mirror, and the Cloudflare tunnel origin on this workstation.',
-  },
-  {
-    id: 'operator',
-    label: 'g8eo · Operator',
-    detail: 'Host-bound execution boundary — tools, filesystem, and signed evidence on the managed host.',
-  },
-  {
-    id: 'ensemble',
-    label: 'g8ee · Ensemble',
-    detail: 'Production multi-agent chat path that turns evaluation scenarios into governed inference and tool calls.',
-  },
-  {
-    id: 'eval',
-    label: 'g8e eval',
-    detail: 'Native campaign orchestration, rubric grading, and signed report bundles for every run you see here.',
-  },
-] as const;
+  'Available for roles and select consulting engagements in agentic AI security, governance, evaluation infrastructure, and trustworthy production systems.';
 
 export const WORKSTATION_SPECS = [
   { label: 'CPU', value: 'Intel Core i9-13900K' },
@@ -132,19 +83,14 @@ export const G8E_MEASURED_TOGETHER = [
   'Governed inference dispatch to Ollama — never a direct provider API shortcut',
   'Host-bound tool, filesystem, and process execution through the Data Operator boundary',
   'Rubric pass/fail, tool scorecards, escalation disposition, and timing telemetry when observed',
-  'Signed campaign evidence with explicit quality states — live, exploratory, or verified',
+  'Signed campaign evidence with explicit current-standard, run-scoped, incomplete, legacy, live, and failed quality states',
 ] as const;
 
 export const G8E_CAMPAIGN_OPERATORS = [
   {
     role: 'Gateway (g8eg)',
     wire: 'PDP',
-    detail: 'Admits envelopes, enforces L1–L3, routes inference and tool work to bound Operator sessions, coordinates provider-boundary observation.',
-  },
-  {
-    role: 'Data Operator',
-    wire: 'g8eo',
-    detail: 'Governed host boundary for model-originated tools, filesystem, and process actions during scenarios.',
+    detail: 'Admits envelopes, enforces L1–L3, routes inference and tool work to bound Operator sessions, coordinates provider-boundary observation and model provenance attestation.',
   },
   {
     role: 'Inference Operator',
@@ -152,8 +98,18 @@ export const G8E_CAMPAIGN_OPERATORS = [
     detail: 'Sole scored path to the approved Ollama provider — L4/L5 inference PEP on the campaign host.',
   },
   {
+    role: 'Provenance Operator',
+    wire: 'g8eo',
+    detail: 'Independent storage-side model weight attestor — hashes manifests and blobs at the model storage site and binds digest evidence to inference attempts.',
+  },
+  {
     role: 'Observer Operator',
     wire: 'g8eo',
     detail: 'Read-only provider-boundary witness on the GPU host — binds hardware samples to inference attempts without mutation authority.',
+  },
+  {
+    role: 'Data Operator',
+    wire: 'g8eo',
+    detail: 'Governed host boundary for model-originated tools, filesystem, and process actions during scenarios.',
   },
 ] as const;

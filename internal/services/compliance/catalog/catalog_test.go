@@ -103,10 +103,17 @@ func TestValidateAssertionCatalogRejectsInvalidRecords(t *testing.T) {
 		{name: "invalid responsibility", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].Responsibility = "vendor" }},
 		{name: "unknown evidence level", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].MinimumEvidenceLevel = "L9" }},
 		{name: "unknown missing evidence policy", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].MissingEvidencePolicy = "pass" }},
+		{name: "absence-driven not applicable policy", mutate: func(c *compliancev1.ControlAssertionCatalog) {
+			c.Assertions[0].MissingEvidencePolicy = "not_applicable"
+		}},
 		{name: "missing action classes", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].ApplicableActionClasses = nil }},
 		{name: "missing applicable arms", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].ApplicableArms = nil }},
 		{name: "missing grader references", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].RequiredGraderRefs = nil }},
 		{name: "missing verifier references", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].RequiredVerifierRefs = nil }},
+		{name: "unknown evidence type", mutate: func(c *compliancev1.ControlAssertionCatalog) {
+			c.Assertions[0].RequiredEvidenceTypes = []string{"artifact_presence"}
+		}},
+		{name: "unknown passing rule", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].PassingRule = "any_present" }},
 		{name: "duplicate component scope", mutate: func(c *compliancev1.ControlAssertionCatalog) {
 			c.Assertions[0].ComponentScope = append(c.Assertions[0].ComponentScope, c.Assertions[0].ComponentScope[0])
 		}},
@@ -303,11 +310,56 @@ func TestLoadCanonicalCatalogsResolveAllReferences(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, catalog.ValidateCatalogSet(assertions, frameworks, crosswalks))
 
+	assert.Equal(t, "2.0.0", assertions.GetCatalogVersion())
 	for _, id := range []string{"G8E-GOV-BLOCK-001", "G8E-AU-RECEIPT-001", "G8E-CM-STATE-001"} {
-		assert.NotNil(t, catalog.FindAssertion(assertions, id, "1.0.0"), id)
+		assert.NotNil(t, catalog.FindAssertion(assertions, id, "2.0.0"), id)
 	}
 	assert.NotNil(t, catalog.FindFramework(frameworks, "fedramp-20x", "CR26-2026-06-24"))
 	assert.NotNil(t, catalog.FindFramework(frameworks, "nist-sp-800-53", "rev5"))
+}
+
+func TestLoadCanonicalAssertionCatalogDefinesTruthfulNativeClaims(t *testing.T) {
+	assertions, _, _, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+
+	tests := []struct {
+		assertionID       string
+		level             string
+		components        []string
+		evidenceTypes     []string
+		graderIDs         []string
+		verifierIDs       []string
+		forbiddenEvidence string
+	}{
+		{assertionID: "G8E-GOV-BLOCK-001", level: "L3", components: []string{"gateway", "operator"}, evidenceTypes: []string{"deterministic_stage", "state_observation"}, graderIDs: []string{"policy_outcome", "protocol_chain"}, verifierIDs: []string{"deterministic_stage_chain", "state_observation"}, forbiddenEvidence: "action_receipt"},
+		{assertionID: "G8E-AU-RECEIPT-001", level: "L2", components: []string{"gateway", "operator"}, evidenceTypes: []string{"action_receipt"}, graderIDs: []string{"receipt_integrity"}, verifierIDs: []string{"receipt_integrity"}},
+		{assertionID: "G8E-AU-PERSIST-001", level: "L2", components: []string{"gateway", "operator"}, evidenceTypes: []string{"action_receipt", "final_persistence_attestation"}, graderIDs: []string{"receipt_persistence"}, verifierIDs: []string{"receipt_integrity", "receipt_persistence"}},
+		{assertionID: "G8E-AU-COMMIT-001", level: "L2", components: []string{"gateway", "operator"}, evidenceTypes: []string{"commitment"}, graderIDs: []string{"commitment_attestation"}, verifierIDs: []string{"commitment_attestation"}, forbiddenEvidence: "ledger_commit"},
+		{assertionID: "G8E-CM-STATE-001", level: "L3", components: []string{"operator", "actuator"}, evidenceTypes: []string{"state_observation", "metric"}, graderIDs: []string{"independent_state"}, verifierIDs: []string{"state_observation", "eval_metric"}},
+		{assertionID: "G8E-IA-MTLS-001", level: "L3", components: []string{"gateway", "operator"}, evidenceTypes: []string{"identity_attestation", "state_observation", "metric"}, graderIDs: []string{"authenticated_operation"}, verifierIDs: []string{"identity_attestation", "state_observation", "eval_metric"}},
+		{assertionID: "G8E-IA-NOTARY-001", level: "L2", components: []string{"gateway", "operator"}, evidenceTypes: []string{"deterministic_stage", "attestation"}, graderIDs: []string{"protocol_chain"}, verifierIDs: []string{"deterministic_stage_chain", "notary_proof"}},
+		{assertionID: "G8E-CRYPTO-FIPS-001", level: "L2", components: []string{"gateway", "operator"}, evidenceTypes: []string{"build_attestation", "runtime_attestation"}, graderIDs: []string{"fips_mode"}, verifierIDs: []string{"build_provenance", "runtime_fips"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.assertionID, func(t *testing.T) {
+			assertion := catalog.FindAssertion(assertions, tt.assertionID, "2.0.0")
+			require.NotNil(t, assertion)
+			assert.Equal(t, tt.level, assertion.GetMinimumEvidenceLevel())
+			assert.ElementsMatch(t, tt.components, assertion.GetComponentScope())
+			assert.ElementsMatch(t, tt.evidenceTypes, assertion.GetRequiredEvidenceTypes())
+			assert.ElementsMatch(t, tt.graderIDs, referenceIDs(assertion.GetRequiredGraderRefs()))
+			assert.ElementsMatch(t, tt.verifierIDs, referenceIDs(assertion.GetRequiredVerifierRefs()))
+			assert.NotContains(t, assertion.GetRequiredEvidenceTypes(), tt.forbiddenEvidence)
+		})
+	}
+}
+
+func referenceIDs(refs []*compliancev1.VersionedReference) []string {
+	ids := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		ids = append(ids, ref.GetId())
+	}
+	return ids
 }
 
 func TestLoadDemoScenarioCatalogResolvesAssertionAndFrameworkReferences(t *testing.T) {

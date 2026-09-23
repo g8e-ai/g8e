@@ -31,10 +31,14 @@ func TestOperatorModelReleaseCmd_UsesEmbeddedOllamaClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/api/generate", r.URL.Path)
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"model":       request.Model,
-			"done":        true,
-			"done_reason": "unload",
+		require.NoError(t, json.NewEncoder(w).Encode(struct {
+			Model      string `json:"model"`
+			Done       bool   `json:"done"`
+			DoneReason string `json:"done_reason"`
+		}{
+			Model:      request.Model,
+			Done:       true,
+			DoneReason: "unload",
 		}))
 	}))
 	t.Cleanup(server.Close)

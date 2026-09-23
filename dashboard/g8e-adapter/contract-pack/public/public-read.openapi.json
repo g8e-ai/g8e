@@ -258,7 +258,6 @@
   },
   "x-models": {
     "public_feed_batch": {
-      "_description": "A signed append-only batch binding source, protocol version, schema version, monotonic sequence range, prior-batch hash, record hashes, generated time, content hash, signing key ID, and Ed25519 signature. The first batch carries a fixed zero hash for previous_batch_hash. The mirror rejects any batch whose first sequence is less than or equal to the last accepted sequence.",
       "content_hash": {
         "description": "SHA-256 over the canonical encoding of all record hashes and batch metadata (64-char hex)",
         "required": true,
@@ -324,7 +323,6 @@
       }
     },
     "public_feed_bootstrap": {
-      "_description": "One bounded initial snapshot for public first paint. Contains the feed snapshot, current source freshness, recent projections, and proof catalog summary. SSE provides incremental change notifications after the snapshot.",
       "generated_at": {
         "description": "UTC timestamp when the bootstrap was produced",
         "format": "iso8601",
@@ -368,7 +366,6 @@
       }
     },
     "public_feed_cursor_page": {
-      "_description": "Cursor-paginated page of public records (projections, events, or proof manifests). Uses stable cursors and bounded page sizes (1-100, default 20). Anonymous reads are bounded by the rate policy.",
       "cursor": {
         "description": "Opaque cursor for the next page. Omitted when there are no more results.",
         "required": false,
@@ -395,7 +392,6 @@
       }
     },
     "public_feed_record": {
-      "_description": "One record in a signed batch. A record is a serialized projection or event payload with its SHA-256 content hash. The record type identifies whether it is a live projection, an event payload, a proof manifest, or a key revocation record.",
       "record_bytes": {
         "description": "Canonical JSON bytes of the record, UTF-8 encoded",
         "required": true,
@@ -424,7 +420,6 @@
       }
     },
     "public_feed_snapshot": {
-      "_description": "A snapshot binding the high-water sequence (the last accepted sequence) and the feed-chain hash (the content hash of the last accepted batch). A public client reconciles against the snapshot to establish a consistent cursor.",
       "batch_count": {
         "description": "Total number of accepted batches",
         "required": true,
@@ -471,7 +466,6 @@
       }
     },
     "public_proof_catalog": {
-      "_description": "The full public proof catalog listing every available proof package artifact. Served as a bounded anonymous read. Public retention uses append-only tombstones rather than rewriting history.",
       "entries": {
         "description": "Catalog entries for every available proof artifact",
         "items": "public_proof_catalog_entry",
@@ -491,7 +485,6 @@
       }
     },
     "public_proof_catalog_entry": {
-      "_description": "One entry in the public proof catalog. Each artifact is served under an immutable content-addressed identity derived from its SHA-256. Catalog metadata includes filename, media type, bytes, SHA-256, signature and trust metadata, campaign and run source, generated time, classification, verification command, and immutable URL.",
       "artifact_id": {
         "description": "Content-addressed artifact identifier (derived from SHA-256)",
         "required": true,
@@ -553,7 +546,6 @@
       }
     },
     "public_proof_catalog_summary": {
-      "_description": "Summary of the public proof catalog for bootstrap responses. Carries the total artifact count, total byte size, and the most recent generation time.",
       "artifact_count": {
         "description": "Total number of proof artifacts in the catalog",
         "required": true,
@@ -572,7 +564,6 @@
       }
     },
     "public_proof_manifest": {
-      "_description": "Root manifest for a public proof package. Binds the proof root SHA-256, campaign identity, verified index generation hash, artifact count, artifact catalog, verifier instructions, and generation time. A network-disabled verifier reproduces the root from the manifest and the listed artifacts.",
       "artifact_count": {
         "description": "Number of artifacts in the proof package",
         "required": true,

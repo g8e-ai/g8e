@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -160,7 +161,10 @@ var publicMirrorHistoryURL string
 var gatewayHealthCheck func() bool
 
 type httpCampaignMirrorProbe struct {
-	client *http.Client
+	client     *http.Client
+	mu         sync.Mutex
+	indexed    bool
+	datasetIDs map[string]struct{}
 }
 
 func newHTTPCampaignMirrorProbe(ctx context.Context) evaluation.CampaignMirrorProbe {
@@ -171,36 +175,62 @@ func (p *httpCampaignMirrorProbe) DatasetPresent(ctx context.Context, datasetID 
 	if p == nil || datasetID == "" {
 		return false, fmt.Errorf("campaign mirror probe: missing dataset id")
 	}
-	bootstrap, err := fetchPublicMirrorBootstrap(ctx)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.indexed {
+		if err := p.indexDatasets(ctx); err != nil {
+			return false, err
+		}
+	}
+	_, present := p.datasetIDs[datasetID]
+	return present, nil
+}
+
+func (p *httpCampaignMirrorProbe) indexDatasets(ctx context.Context) error {
+	bootstrap, err := fetchPublicMirrorBootstrapWithClient(ctx, p.client)
 	if err != nil {
-		return false, err
+		return err
 	}
+	p.datasetIDs = make(map[string]struct{})
+	indexMirrorDatasets(p.datasetIDs, bootstrap.RecentProjections)
 	if bootstrap.Snapshot.HighWaterSequence == 0 {
-		return false, nil
-	}
-	if mirrorProjectionHasDataset(bootstrap.RecentProjections, datasetID) {
-		return true, nil
+		p.indexed = true
+		return nil
 	}
 	cursor := ""
 	for page := 0; page < 32; page++ {
-		history, err := fetchPublicMirrorHistory(ctx, p.client, cursor, 100)
+		history, err := fetchPublicMirrorHistory(ctx, p.client, bootstrap.Snapshot.SourceID, cursor, 100)
 		if err != nil {
-			return false, err
+			return err
 		}
-		for _, item := range history.Items {
-			if mirrorProjectionHasDataset([]map[string]any{item}, datasetID) {
-				return true, nil
-			}
-		}
+		indexMirrorDatasets(p.datasetIDs, history.Items)
 		if !history.HasMore || history.Cursor == "" {
-			break
+			p.indexed = true
+			return nil
 		}
 		cursor = history.Cursor
 	}
-	return false, nil
+	return fmt.Errorf("campaign mirror probe: history exceeds 3200 retained records: %w", constants.ErrPublicFeedHistoryIncomplete)
 }
 
-func mirrorProjectionHasDataset(projections []map[string]any, datasetID string) bool {
+func indexMirrorDatasets(datasetIDs map[string]struct{}, projections []models.PublicFeedObject) {
+	for _, item := range projections {
+		kind, _ := item.StringField("kind")
+		if kind == "catalog_snapshot" {
+			if datasetID, ok := item.StringField("dataset_id"); ok && datasetID != "" {
+				datasetIDs[datasetID] = struct{}{}
+			}
+		}
+		if recordBytes, ok := item["record"]; ok {
+			var record models.PublicFeedObject
+			if err := json.Unmarshal(recordBytes, &record); err == nil {
+				indexMirrorDatasets(datasetIDs, []models.PublicFeedObject{record})
+			}
+		}
+	}
+}
+
+func mirrorProjectionHasDataset(projections []models.PublicFeedObject, datasetID string) bool {
 	for _, item := range projections {
 		if mirrorCatalogDatasetPresent(item, datasetID) {
 			return true
@@ -209,20 +239,23 @@ func mirrorProjectionHasDataset(projections []map[string]any, datasetID string) 
 	return false
 }
 
-func mirrorCatalogDatasetPresent(item map[string]any, datasetID string) bool {
-	if item == nil {
-		return false
+func mirrorCatalogDatasetPresent(item models.PublicFeedObject, datasetID string) bool {
+	kind, _ := item.StringField("kind")
+	if kind == "catalog_snapshot" {
+		if currentDatasetID, ok := item.StringField("dataset_id"); ok && currentDatasetID == datasetID {
+			return true
+		}
 	}
-	if item["kind"] == "catalog_snapshot" && item["dataset_id"] == datasetID {
-		return true
-	}
-	if record, ok := item["record"].(map[string]any); ok {
-		return mirrorCatalogDatasetPresent(record, datasetID)
+	if recordBytes, ok := item["record"]; ok {
+		var record models.PublicFeedObject
+		if err := json.Unmarshal(recordBytes, &record); err == nil {
+			return mirrorCatalogDatasetPresent(record, datasetID)
+		}
 	}
 	return false
 }
 
-func fetchPublicMirrorHistory(ctx context.Context, client *http.Client, cursor string, limit int) (models.PublicFeedCursorPage, error) {
+func fetchPublicMirrorHistory(ctx context.Context, client *http.Client, sourceID, cursor string, limit int) (models.PublicFeedCursorPage, error) {
 	historyURL := publicMirrorHistoryURL
 	if historyURL == "" {
 		historyURL = fmt.Sprintf("http://127.0.0.1:%d/history", constants.PublicSpectatorPublicPort)
@@ -232,17 +265,21 @@ func fetchPublicMirrorHistory(ctx context.Context, client *http.Client, cursor s
 		return models.PublicFeedCursorPage{}, err
 	}
 	query := req.URL.Query()
+	if sourceID != "" {
+		query.Set("source", sourceID)
+	}
 	if cursor != "" {
 		query.Set("cursor", cursor)
 	}
 	if limit > 0 {
 		query.Set("limit", fmt.Sprintf("%d", limit))
 	}
+	query.Set("kind", "catalog_snapshot")
 	req.URL.RawQuery = query.Encode()
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Second} //nolint:gosec
 	}
-	resp, err := client.Do(req)
+	resp, err := doPublicMirrorRead(ctx, client, req, "public mirror history")
 	if err != nil {
 		return models.PublicFeedCursorPage{}, err
 	}
@@ -258,6 +295,10 @@ func fetchPublicMirrorHistory(ctx context.Context, client *http.Client, cursor s
 }
 
 func fetchPublicMirrorBootstrap(ctx context.Context) (models.PublicFeedBootstrap, error) {
+	return fetchPublicMirrorBootstrapWithClient(ctx, &http.Client{Timeout: 5 * time.Second}) //nolint:gosec
+}
+
+func fetchPublicMirrorBootstrapWithClient(ctx context.Context, client *http.Client) (models.PublicFeedBootstrap, error) {
 	bootstrapURL := publicMirrorBootstrapURL
 	if bootstrapURL == "" {
 		bootstrapURL = fmt.Sprintf("http://127.0.0.1:%d/bootstrap", constants.PublicSpectatorPublicPort)
@@ -266,8 +307,7 @@ func fetchPublicMirrorBootstrap(ctx context.Context) (models.PublicFeedBootstrap
 	if err != nil {
 		return models.PublicFeedBootstrap{}, err
 	}
-	client := &http.Client{Timeout: 5 * time.Second} //nolint:gosec
-	resp, err := client.Do(req)
+	resp, err := doPublicMirrorRead(ctx, client, req, "public mirror bootstrap")
 	if err != nil {
 		return models.PublicFeedBootstrap{}, err
 	}
@@ -280,6 +320,46 @@ func fetchPublicMirrorBootstrap(ctx context.Context) (models.PublicFeedBootstrap
 		return models.PublicFeedBootstrap{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 	return bootstrap, nil
+}
+
+func doPublicMirrorRead(ctx context.Context, client *http.Client, req *http.Request, operation string) (*http.Response, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusTooManyRequests {
+			return resp, nil
+		}
+		_ = resp.Body.Close()
+		if attempt == 1 {
+			return nil, fmt.Errorf("%s: status %d: %w", operation, resp.StatusCode, constants.ErrPublicFeedRateLimited)
+		}
+		if err := waitForPublicMirrorRetry(ctx, resp.Header.Get("Retry-After")); err != nil {
+			return nil, err
+		}
+	}
+	return nil, constants.ErrPublicFeedMaxRetriesExceeded
+}
+
+func waitForPublicMirrorRetry(ctx context.Context, retryAfter string) error {
+	delay := time.Second
+	if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds >= 0 {
+		delay = time.Duration(seconds) * time.Second
+	} else if retryAt, err := http.ParseTime(retryAfter); err == nil {
+		delay = time.Until(retryAt)
+		if delay < 0 {
+			delay = 0
+		}
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("public mirror rate-limit wait: %w", ctx.Err())
+	case <-timer.C:
+		return nil
+	}
 }
 
 func newCampaignFeedExporter(cmd context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) (evaluation.CampaignFeedExporter, error) {

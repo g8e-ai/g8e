@@ -32,6 +32,7 @@ var APIPaths = struct {
 	OperatorsReauth   string `json:"operators_reauth"`
 	OperatorsSession  string `json:"operators_session"`
 	OperatorsCommands string `json:"operators_commands"`
+	OperatorsStop     string `json:"operators_stop"`
 	// Inference dispatch route (g8ellama). Platform-internal endpoint on the
 	// User Gateway that the ensemble chat pipeline calls to dispatch a
 	// governed inference request to the Inference Node.
@@ -93,6 +94,7 @@ var APIPaths = struct {
 	AuthPlatformEnrollmentComplete           string `json:"auth_platform_enrollment_complete"`
 	AuthPlatformEnrollmentPending            string `json:"auth_platform_enrollment_pending"`
 	AuthPlatformEnrollmentDecision           string `json:"auth_platform_enrollment_decision"`
+	AuthPlatformEnrollmentRevoke             string `json:"auth_platform_enrollment_revoke"`
 	AuthCLIRecoveryRequest                   string `json:"auth_cli_recovery_request"`
 	AuthCLIRecoveryStatus                    string `json:"auth_cli_recovery_status"`
 	AuthCLIRecoveryApprove                   string `json:"auth_cli_recovery_approve"`
@@ -205,6 +207,7 @@ var APIPaths = struct {
 	OperatorsReauth:                      "/api/v1/operators/reauth",
 	OperatorsSession:                     "/api/v1/operators/session/",
 	OperatorsCommands:                    "/api/v1/operators/commands",
+	OperatorsStop:                        "/api/v1/operators/stop",
 	InferenceDispatch:                    "/api/v1/inference/dispatch",
 	InferenceProviderObservations:        "/api/v1/inference/provider-observations/",
 	InferenceModelProvenanceAttestations: "/api/v1/inference/model-provenance/attestations/",
@@ -263,6 +266,7 @@ var APIPaths = struct {
 	AuthPlatformEnrollmentComplete:           "/api/v1/auth/platform-enrollments/complete",
 	AuthPlatformEnrollmentPending:            "/api/v1/auth/platform-enrollments/pending",
 	AuthPlatformEnrollmentDecision:           "/api/v1/auth/platform-enrollments/decision",
+	AuthPlatformEnrollmentRevoke:             "/api/v1/auth/platform-enrollments/revoke",
 	AuthCLIRecoveryRequest:                   "/api/v1/auth/cli/recovery/request",
 	AuthCLIRecoveryStatus:                    "/api/v1/auth/cli/recovery/status",
 	AuthCLIRecoveryApprove:                   "/api/v1/auth/cli/recovery/approve",

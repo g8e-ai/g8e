@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -198,11 +199,10 @@ func TestReplayStore_Prune(t *testing.T) {
 func TestReplayStore_NewStore_NilConfig(t *testing.T) {
 	t.Parallel()
 
-	logger := testutil.NewTestLogger()
-	rs, err := NewSQLReplayStore(nil, logger)
-	require.NoError(t, err)
-	assert.NotNil(t, rs)
-	assert.NotNil(t, rs.config)
+	rs, err := NewSQLReplayStore(nil, testutil.NewTestLogger())
+	require.Error(t, err)
+	assert.Nil(t, rs)
+	assert.ErrorIs(t, err, constants.ErrStorageConfigRequired)
 }
 
 func TestReplayStore_Close_NilStore(t *testing.T) {

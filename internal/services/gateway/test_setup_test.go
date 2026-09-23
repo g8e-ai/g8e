@@ -12,7 +12,6 @@ package gateway
 import (
 	"context"
 	"log/slog"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -90,11 +89,10 @@ func newTestKeystoreWithKeyring(tb testing.TB, fileSvc fs.RuntimeFileService, lo
 // openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
 // with an in-memory keyring so callers don't need to manage a keystore.
 // Vault auto-initializes on first open; the keystore is for secret operations.
-func openTestDB(t *testing.T, dataDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, error) {
+func openTestDB(t *testing.T, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, error) {
 	t.Helper()
 	ks := newTestKeystore(t, fileSvc, logger)
-	vaultDir := fileSvc.Resolve(constants.VaultDirname)
-	return OpenCanonicalDBService(dataDir, vaultDir, logger, "", ks, fileSvc)
+	return OpenCanonicalDBService(logger, "", ks, fileSvc)
 }
 
 // setupTestInfrastructure creates common test infrastructure for gateway tests.
@@ -105,13 +103,11 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	logger := testutil.NewTestLogger()
 
 	fileSvc := newTestFileSvc(t)
-	dbDir := testutil.TempDir(t)
-	pkiDir := testutil.TempDir(t)
 	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
 
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -142,7 +138,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
+		DBPath:               fileSvc.Resolve(constants.SuspendedTransactionDBRelPath),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -190,8 +186,8 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		Reg:                reg,
 		Passkey:            passkeyHandler,
 		SuspendedStore:     suspendedTxService,
-		DBDir:              dbDir,
-		PKIDir:             pkiDir,
+		DBDir:              fileSvc.Resolve(constants.DataDirname),
+		PKIDir:             fileSvc.Resolve(constants.PkiDirname),
 		SecretsDir:         secretsDir,
 	}
 }

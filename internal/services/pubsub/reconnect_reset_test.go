@@ -10,7 +10,7 @@ package pubsub
 import (
 	"context"
 	"crypto/ed25519"
-	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -73,7 +73,7 @@ func TestListenForCommands_SubscribeSuccessResetsAttempts(t *testing.T) {
 
 	mockClient := &subscribeCloseImmediatelyClient{
 		failCount: 2,
-		failErr:   errors.New("connection refused"),
+		failErr:   fmt.Errorf("connection refused"),
 	}
 
 	svc, err := NewOperatorPubSubService(CommandServiceConfig{
@@ -124,7 +124,7 @@ func TestListenForCommands_ContextCancellationExitsImmediately(t *testing.T) {
 
 	mockClient := &subscribeCloseImmediatelyClient{
 		failCount: 100,
-		failErr:   errors.New("connection refused"),
+		failErr:   fmt.Errorf("connection refused"),
 	}
 
 	svc, err := NewOperatorPubSubService(CommandServiceConfig{

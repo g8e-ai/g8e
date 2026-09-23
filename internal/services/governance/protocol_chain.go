@@ -126,17 +126,24 @@ func NormalizeDeterministicStages(receipt *operatorv1.ActionReceipt) ([]*operato
 }
 
 func DeterministicStagesContentAddress(stages []*operatorv1.DeterministicStageEvidence) (string, error) {
-	hasher := sha256.New()
+	canonical, err := CanonicalDeterministicStages(stages)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(canonical)
+	return constants.DeterministicStagesReferencePrefix + ":sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func CanonicalDeterministicStages(stages []*operatorv1.DeterministicStageEvidence) ([]byte, error) {
+	var canonical []byte
 	for _, stage := range stages {
 		encoded, err := compliancev1.MarshalCanonical(stage)
 		if err != nil {
-			return "", fmt.Errorf("%w: canonicalize deterministic stage evidence: %w", constants.ErrInvalidEvidenceGraph, err)
+			return nil, fmt.Errorf("%w: canonicalize deterministic stage evidence: %w", constants.ErrInvalidEvidenceGraph, err)
 		}
-		if _, err := hasher.Write(encoded); err != nil {
-			return "", fmt.Errorf("%w: hash deterministic stage evidence: %w", constants.ErrInvalidEvidenceGraph, err)
-		}
+		canonical = append(canonical, encoded...)
 	}
-	return "deterministic-stages:sha256:" + hex.EncodeToString(hasher.Sum(nil)), nil
+	return canonical, nil
 }
 
 func deterministicStageKindIndex(kind operatorv1.DeterministicStageKind) int {

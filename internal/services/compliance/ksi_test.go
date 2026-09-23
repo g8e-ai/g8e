@@ -217,6 +217,27 @@ func TestMinimumMethodsForClass(t *testing.T) {
 	assert.Equal(t, 4, MinimumMethodsForClass(ClassD))
 }
 
+func TestKSIOutcomeStatusDistinguishesMeasuredFailuresFromUnverifiableEvidence(t *testing.T) {
+	tests := []struct {
+		name    string
+		outcome KSIOutcome
+		status  KSIStatus
+	}{
+		{name: "satisfied", outcome: KSIOutcomeSatisfied, status: KSIStatusSatisfied},
+		{name: "method failure", outcome: KSIOutcomeMethodFailure, status: KSIStatusNotSatisfied},
+		{name: "invalid evidence", outcome: KSIOutcomeInvalidEvidence, status: KSIStatusUnverifiable},
+		{name: "stale evidence", outcome: KSIOutcomeStaleEvidence, status: KSIStatusUnverifiable},
+		{name: "unsupported automation", outcome: KSIOutcomeUnsupportedAutomation, status: KSIStatusUnverifiable},
+		{name: "customer attestation required", outcome: KSIOutcomeCustomerAttestationRequired, status: KSIStatusUnverifiable},
+		{name: "not applicable", outcome: KSIOutcomeNotApplicable, status: KSIStatusNotApplicable},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.status, test.outcome.Status())
+		})
+	}
+}
+
 // TestKSI_IsStale detects stale KSIs based on validation cycle.
 func TestKSI_IsStale(t *testing.T) {
 	now := time.Now()

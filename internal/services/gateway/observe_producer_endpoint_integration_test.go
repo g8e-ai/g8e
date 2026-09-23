@@ -758,7 +758,7 @@ func TestObserveProducerEndpoint_NonAppMTLSCallerRejected(t *testing.T) {
 func seedCLISessionForProducer(t *testing.T, infra *TestInfrastructure, userID string) (string, *x509.Certificate) {
 	t.Helper()
 	cliSessionID := "cli-session-producer"
-	body, err := json.Marshal(&models.CLISession{ID: cliSessionID, UserID: userID, ExpiresAt: time.Now().Add(time.Hour)})
+	body, err := json.Marshal(&models.CLISession{ID: cliSessionID, UserID: userID, ExpiresAt: time.Now().Add(time.Hour), IsActive: true})
 	require.NoError(t, err)
 	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, body))
 	return cliSessionID, cliMTLSCert(t, userID, cliSessionID)
@@ -1061,7 +1061,7 @@ func TestObserveProducerEndpoint_AgentStateResponseTyped(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 	assert.True(t, resp.Accepted)
 	// The response body must contain only {"accepted":true}.
-	var raw map[string]any
+	var raw map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &raw))
 	assert.Len(t, raw, 1, "response must have exactly one field")
 	assert.Contains(t, raw, "accepted")

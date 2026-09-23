@@ -179,6 +179,9 @@ type GatewayConfig struct {
 	EvalExplorerAddr string
 	// EvalExplorerRoot overrides the built explorer dist directory.
 	EvalExplorerRoot string
+	// PublicSpectatorTrustedProxyCIDRs identifies proxies allowed to provide
+	// exactly one validated CF-Connecting-IP visitor address.
+	PublicSpectatorTrustedProxyCIDRs []string
 
 	// Distributed lock retry configuration
 	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)

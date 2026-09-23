@@ -23,7 +23,7 @@ import (
 // revocation-check failure must not match ErrCertParseFailed (the original
 // double-%w bug made errors.Is return true for an unrelated classification).
 func TestRevocationCheckErrorWrapping_SemanticallyCorrect(t *testing.T) {
-	revocationErr := errors.New("certificate revoked: serial 0xabc")
+	revocationErr := fmt.Errorf("certificate revoked: serial 0xabc")
 	wrapped := fmt.Errorf("gateway: auth: verify certificate: %w: %s", revocationErr, constants.ErrCertRevocationCheckFailed)
 
 	assert.True(t, errors.Is(wrapped, revocationErr), "real cause must be unwrappable via errors.Is")

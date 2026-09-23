@@ -20,13 +20,23 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	_ "modernc.org/sqlite"
 )
 
+func newCampaignExportFileService(t *testing.T) fs.RuntimeFileService {
+	t.Helper()
+	fileSvc, err := fs.NewRuntimeFileService(t.TempDir(), nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	return fileSvc
+}
+
 func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
-	files := newCampaignMemoryFileService()
+	files := newCampaignExportFileService(t)
 	store := NewStore(files)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
 	req := testCampaignInitRequest(t)
@@ -58,7 +68,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, executed)
 
-	outputDir := filepath.Join(t.TempDir(), "export")
+	outputDir := constants.EvaluationCampaignExportDirname
 	exporter := NewCampaignExporter(func() time.Time { return time.Unix(1_700_000_100, 0).UTC() })
 	report, err := exporter.ExportRun(context.Background(), store, files, req.RunID, outputDir)
 	require.NoError(t, err)
@@ -66,7 +76,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	assert.Equal(t, req.RunID, report.RunID)
 	assert.Equal(t, uint32(3), report.AssignmentCount)
 	assert.Equal(t, uint32(1), report.TerminalResultCount)
-	assert.Len(t, report.Files, 7)
+	assert.Len(t, report.Files, 8)
 	var assignmentFile CampaignExportFile
 	for _, file := range report.Files {
 		if file.Name == "assignments.jsonl" {
@@ -76,7 +86,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	}
 	assert.Equal(t, uint32(1), assignmentFile.RecordCount)
 
-	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "assignments.jsonl"))
+	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, constants.EvaluationAssignmentsJSONLFilename))
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(string(assignmentsJSONL)), "\n")
 	require.Len(t, lines, 1)
@@ -88,14 +98,14 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	assert.NotContains(t, lines[0], "prompt")
 	assert.NotContains(t, lines[0], "raw_output")
 
-	runSummaryBody, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "run_summary.json"))
+	runSummaryBody, err := files.ReadFile(context.Background(), filepath.Join(outputDir, constants.EvaluationRunSummaryFilename))
 	require.NoError(t, err)
-	var runSummary map[string]any
+	var runSummary campaignRunSummaryExport
 	require.NoError(t, json.Unmarshal(runSummaryBody, &runSummary))
-	assert.Equal(t, req.RunID, runSummary["run_id"])
-	assert.Equal(t, truncated.GetCatalogDigest(), runSummary["catalog_digest"])
+	assert.Equal(t, req.RunID, runSummary.RunID)
+	assert.Equal(t, truncated.GetCatalogDigest(), runSummary.CatalogDigest)
 
-	db, err := sql.Open("sqlite", filepath.Join(outputDir, "campaign_export.sqlite"))
+	db, err := sql.Open("sqlite", files.Resolve(filepath.Join(outputDir, constants.EvaluationCampaignExportSQLiteFilename)))
 	require.NoError(t, err)
 	defer db.Close()
 	var assignmentCount int
@@ -104,6 +114,31 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	var modelSummaryCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM model_summaries`).Scan(&modelSummaryCount))
 	assert.Equal(t, 3, modelSummaryCount)
+}
+
+func TestBuildCampaignExportSchemaDocumentUsesTypedFileAndTableContracts(t *testing.T) {
+	document := buildCampaignExportSchemaDocument()
+	body, err := json.Marshal(document)
+	require.NoError(t, err)
+
+	var decoded struct {
+		SchemaVersion string `json:"schema_version"`
+		Files         map[string]struct {
+			Format string `json:"format"`
+			Tables []struct {
+				Name       string          `json:"name"`
+				PrimaryKey json.RawMessage `json:"primary_key"`
+			} `json:"tables"`
+		} `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(body, &decoded))
+	assert.Equal(t, campaignExportSchemaVersion, decoded.SchemaVersion)
+	assert.Equal(t, "json", decoded.Files[constants.EvaluationRunSummaryFilename].Format)
+
+	sqliteSchema := decoded.Files[constants.EvaluationCampaignExportSQLiteFilename]
+	require.Len(t, sqliteSchema.Tables, 3)
+	assert.JSONEq(t, `"run_id"`, string(sqliteSchema.Tables[0].PrimaryKey))
+	assert.JSONEq(t, `["variant_id","role"]`, string(sqliteSchema.Tables[2].PrimaryKey))
 }
 
 func TestCampaignExporter_JSONLUsesCanonicalProtoJSONAndRichExtensions(t *testing.T) {
@@ -168,7 +203,7 @@ func TestCampaignExporter_ExportRunRequiresRunID(t *testing.T) {
 }
 
 func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
-	files := newCampaignMemoryFileService()
+	files := newCampaignExportFileService(t)
 	store := NewStore(files)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
 	req := testCampaignInitRequest(t)
@@ -233,25 +268,85 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	report.ModelRegistryDigest = spec.GetModelRegistryDigest()
 	require.NoError(t, store.SaveCampaignVerification(context.Background(), req.RunID, report))
 
-	outputDir := filepath.Join(t.TempDir(), "export-verified")
+	aggregateState, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	expectedAggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, report, time.Unix(1_700_000_300, 0).UTC())
+	require.NoError(t, err)
+	var expectedEvaluationSummaryBody []byte
+	for _, record := range expectedAggregateRecords {
+		var header struct {
+			Kind string `json:"kind"`
+		}
+		require.NoError(t, json.Unmarshal(record.Body, &header))
+		if header.Kind == "evaluation_summary" {
+			expectedEvaluationSummaryBody = record.Body
+			break
+		}
+	}
+	require.NotEmpty(t, expectedEvaluationSummaryBody)
+
+	outputDir := constants.EvaluationCampaignExportDirname
 	exporter := NewCampaignExporter(func() time.Time { return time.Unix(1_700_000_300, 0).UTC() })
 	exportReport, err := exporter.ExportRun(context.Background(), store, files, req.RunID, outputDir)
 	require.NoError(t, err)
 	require.NotNil(t, exportReport)
 	assert.Equal(t, uint32(3), exportReport.TerminalResultCount)
 
+	evaluationSummaryJSON, err := files.ReadFile(context.Background(), filepath.Join(outputDir, constants.CampaignExportEvaluationSummaryFilename))
+	require.NoError(t, err)
+	var evaluationSummary struct {
+		SchemaVersion   string `json:"schema_version"`
+		Kind            string `json:"kind"`
+		VerifierState   string `json:"verifier_state"`
+		HeadlineMetrics struct {
+			PassRate struct {
+				Unit             string `json:"unit"`
+				ObservedCount    uint32 `json:"observed_count"`
+				EligibleCount    uint32 `json:"eligible_count"`
+				UnavailableCount uint32 `json:"unavailable_count"`
+			} `json:"pass_rate"`
+			LatencyP50MS struct {
+				Unit              string `json:"unit"`
+				UnavailableReason string `json:"unavailable_reason"`
+			} `json:"latency_p50_ms"`
+			OutputThroughputP50 struct {
+				Unit              string `json:"unit"`
+				UnavailableReason string `json:"unavailable_reason"`
+			} `json:"output_throughput_p50_tokens_per_second"`
+		} `json:"headline_metrics"`
+		VerificationMetadata struct {
+			ReportDigest     string `json:"report_digest"`
+			PopulationDigest string `json:"population_digest"`
+		} `json:"verification_metadata"`
+	}
+	require.NoError(t, json.Unmarshal(evaluationSummaryJSON, &evaluationSummary))
+	assert.JSONEq(t, string(expectedEvaluationSummaryBody), string(evaluationSummaryJSON))
+	assert.Equal(t, "1.5.0", evaluationSummary.SchemaVersion)
+	assert.Equal(t, "evaluation_summary", evaluationSummary.Kind)
+	assert.Equal(t, "passed", evaluationSummary.VerifierState)
+	assert.Equal(t, "ratio", evaluationSummary.HeadlineMetrics.PassRate.Unit)
+	assert.Equal(t, uint32(3), evaluationSummary.HeadlineMetrics.PassRate.ObservedCount)
+	assert.Equal(t, uint32(3), evaluationSummary.HeadlineMetrics.PassRate.EligibleCount)
+	assert.Equal(t, uint32(0), evaluationSummary.HeadlineMetrics.PassRate.UnavailableCount)
+	assert.Equal(t, "milliseconds", evaluationSummary.HeadlineMetrics.LatencyP50MS.Unit)
+	assert.Equal(t, "no_scored_calls", evaluationSummary.HeadlineMetrics.LatencyP50MS.UnavailableReason)
+	assert.Equal(t, "tokens_per_second", evaluationSummary.HeadlineMetrics.OutputThroughputP50.Unit)
+	assert.Equal(t, "no_scored_calls", evaluationSummary.HeadlineMetrics.OutputThroughputP50.UnavailableReason)
+	assert.Equal(t, report.GetReportDigestRef().GetSha256(), evaluationSummary.VerificationMetadata.ReportDigest)
+	assert.Equal(t, report.GetVerifiedPopulationDigest(), evaluationSummary.VerificationMetadata.PopulationDigest)
+
 	modelSummariesJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "model_summaries.jsonl"))
 	require.NoError(t, err)
 	modelLines := strings.Split(strings.TrimSpace(string(modelSummariesJSONL)), "\n")
 	require.Len(t, modelLines, 3)
 	for _, line := range modelLines {
-		var ms map[string]any
+		var ms modelSummaryRecord
 		require.NoError(t, json.Unmarshal([]byte(line), &ms))
-		assert.Equal(t, "exploratory_verified", ms["quality_state"])
-		assert.Equal(t, CampaignDatasetID(req.RunID), ms["dataset_id"])
+		assert.Equal(t, "exploratory_verified", ms.QualityState)
+		assert.Equal(t, CampaignDatasetID(req.RunID), ms.DatasetID)
 	}
 
-	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "assignments.jsonl"))
+	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, constants.EvaluationAssignmentsJSONLFilename))
 	require.NoError(t, err)
 	assignmentLines := strings.Split(strings.TrimSpace(string(assignmentsJSONL)), "\n")
 	require.Len(t, assignmentLines, 3)

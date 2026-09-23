@@ -83,6 +83,65 @@ the requesting workload and is never exposed through this command.`,
 	)
 }
 
+func revokePlatformEnrollmentCmd() *cobra.Command {
+	return revokePlatformEnrollmentCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
+}
+
+func revokePlatformEnrollmentCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	clientFactory apiClientFactory,
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+) *cobra.Command {
+	var reason string
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   "revoke <request-id>",
+		Short: "Revoke a completed platform workload enrollment via mTLS",
+		Long:  "Revoke a completed dashboard, ensemble, or operator enrollment by its enrollment request ID. The gateway revokes issued certificates and disables the corresponding policy and sessions immediately.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			request := models.PlatformEnrollmentRevokeRequest{RequestID: strings.TrimSpace(args[0]), Reason: strings.TrimSpace(reason)}
+			if err := request.Validate(); err != nil {
+				return fmt.Errorf("enroll revoke: %w", err)
+			}
+			if !yes {
+				cmd.Printf("Revoke platform enrollment %s? (y/N): ", request.RequestID)
+				response, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+				response = strings.TrimSpace(strings.ToLower(response))
+				if response != "y" && response != "yes" {
+					cmd.Println("Aborted.")
+					return nil
+				}
+			}
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			client, err := clientFactory(fileSvc, cfg)
+			if err != nil {
+				return fmt.Errorf("enroll revoke: create API client: %w", err)
+			}
+			body, err := client.Post(constants.APIPaths.AuthPlatformEnrollmentRevoke, request)
+			if err != nil {
+				return fmt.Errorf("enroll revoke: post revocation: %w", err)
+			}
+			var response models.PlatformEnrollmentRevokeResponse
+			if err := json.Unmarshal(body, &response); err != nil {
+				return fmt.Errorf("enroll revoke: parse response: %w", err)
+			}
+			cmd.Printf("Platform enrollment %s revoked (%s).\n", response.RequestID, response.ComponentKind)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&reason, "reason", "", "Optional bounded revocation reason")
+	cmd.Flags().BoolVar(&yes, "yes", false, "Skip the interactive confirmation prompt")
+	return cmd
+}
+
 func approvePlatformEnrollmentCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	clientFactory apiClientFactory,

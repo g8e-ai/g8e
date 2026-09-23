@@ -87,6 +87,58 @@ func TestOperatorRunCmdWithConfig_OperatorNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "no operator found with session id")
 }
 
+func TestOperatorStopCmdWithConfig_SendsTargetedShutdown(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	sessionID := "4881d566-90a9-44c9-9e3e-c6bb51e07f5c"
+	listBody, err := json.Marshal(models.OperatorSlotResponse{
+		Success: true,
+		Operators: []models.OperatorDocumentGo{{
+			ID: "op-a", OperatorSessionID: sessionID, OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive,
+		}},
+	})
+	require.NoError(t, err)
+	stopBody, err := json.Marshal(models.StopOperatorResponse{Success: true, OperatorID: "op-a", OperatorSessionID: sessionID})
+	require.NoError(t, err)
+	mockClient := &mockAPIClient{getResp: listBody, postResp: stopBody}
+
+	cmd := operatorStopCmdWithConfig(configLoaderFor(cfg), mockClientFactory(mockClient), fileSvcFactoryFor(fileSvc))
+	cmd.SetArgs([]string{sessionID, "--reason", "maintenance"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+	require.Len(t, mockClient.postCalls, 1)
+	assert.Equal(t, constants.APIPaths.OperatorsStop, mockClient.postCalls[0].path)
+	request := mockClient.postCalls[0].body.(models.StopOperatorRequest)
+	assert.Equal(t, sessionID, request.OperatorSessionID)
+	assert.Equal(t, "maintenance", request.Reason)
+	assert.Contains(t, buf.String(), "Stop requested")
+}
+
+func TestOperatorStopCmdWithConfig_RejectsEmbeddedOperator(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	listBody, err := json.Marshal(models.OperatorSlotResponse{
+		Success: true,
+		Operators: []models.OperatorDocumentGo{{
+			ID: string(constants.DocIDEmbeddedOperator), OperatorSessionID: "embedded-session", OperatorType: constants.OperatorTypeEmbedded, Status: constants.OperatorStatusActive,
+		}},
+	})
+	require.NoError(t, err)
+	mockClient := &mockAPIClient{getResp: listBody}
+	cmd := operatorStopCmdWithConfig(configLoaderFor(cfg), mockClientFactory(mockClient), fileSvcFactoryFor(fileSvc))
+	cmd.SetArgs([]string{"embedded-session"})
+
+	err = cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrOperatorStopEmbedded)
+	assert.Empty(t, mockClient.postCalls)
+}
+
 func TestDedupeOperatorSessionIDs(t *testing.T) {
 	ids := dedupeOperatorSessionIDs([]string{
 		"4881d566-90a9-44c9-9e3e-c6bb51e07f5c",

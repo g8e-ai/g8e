@@ -8,21 +8,22 @@
 package vault
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // Vault manages the encrypted LFAA data store.
 // It handles initialization, unlocking, re-keying, and provides
 // the DEK for database encryption operations.
 type Vault struct {
-	dataDir string
+	fileSvc fs.RuntimeFileService
 	dbPath  string
 	logger  *slog.Logger
 
@@ -35,8 +36,8 @@ type Vault struct {
 
 // VaultConfig holds configuration for vault initialization
 type VaultConfig struct {
-	// DataDir is the directory where vault data is stored
-	DataDir string
+	// FileSvc owns the runtime tree containing vault headers and databases.
+	FileSvc fs.RuntimeFileService
 
 	// Logger for vault operations
 	Logger *slog.Logger
@@ -48,8 +49,8 @@ func NewVault(config *VaultConfig) (*Vault, error) {
 	if config == nil {
 		return nil, constants.ErrVaultConfigRequired
 	}
-	if config.DataDir == "" {
-		return nil, constants.ErrVaultDataDirRequired
+	if config.FileSvc == nil {
+		return nil, fmt.Errorf("vault: %w", constants.ErrVaultDataDirRequired)
 	}
 
 	logger := config.Logger
@@ -58,8 +59,8 @@ func NewVault(config *VaultConfig) (*Vault, error) {
 	}
 
 	v := &Vault{
-		dataDir: config.DataDir,
-		dbPath:  filepath.Join(config.DataDir, constants.DbFilename),
+		fileSvc: config.FileSvc,
+		dbPath:  filepath.Join(constants.DataDirname, constants.DbFilename),
 		logger:  logger,
 	}
 
@@ -76,7 +77,7 @@ func (v *Vault) Unlock(privateKey []byte) error {
 		return constants.ErrVaultAlreadyOpen
 	}
 
-	header, err := LoadVaultHeader(v.dataDir)
+	header, err := LoadVaultHeader(v.fileSvc)
 	if err != nil {
 		if errors.Is(err, constants.ErrVaultHeaderNotFound) {
 			return constants.ErrVaultNotInitialized
@@ -97,7 +98,7 @@ func (v *Vault) Unlock(privateKey []byte) error {
 	v.unlocked = true
 
 	v.logger.Info("Vault unlocked",
-		"data_dir", v.dataDir,
+		"runtime_dir", v.fileSvc.Resolve(constants.VaultDirname),
 		"key_fingerprint", header.KeyFingerprint[:8]+"...")
 
 	return nil
@@ -113,7 +114,7 @@ func (v *Vault) Rekey(oldPrivateKey, newPrivateKey []byte) error {
 	header := v.header
 	if header == nil {
 		var err error
-		header, err = LoadVaultHeader(v.dataDir)
+		header, err = LoadVaultHeader(v.fileSvc)
 		if err != nil {
 			if errors.Is(err, constants.ErrVaultHeaderNotFound) {
 				return constants.ErrVaultNotInitialized
@@ -126,7 +127,7 @@ func (v *Vault) Rekey(oldPrivateKey, newPrivateKey []byte) error {
 		return fmt.Errorf("failed to rekey vault: %w", err)
 	}
 
-	if err := header.Save(v.dataDir); err != nil {
+	if err := header.Save(v.fileSvc); err != nil {
 		return fmt.Errorf("failed to save rekeyed vault header: %w", err)
 	}
 
@@ -135,7 +136,7 @@ func (v *Vault) Rekey(oldPrivateKey, newPrivateKey []byte) error {
 	}
 
 	v.logger.Info("Vault rekeyed",
-		"data_dir", v.dataDir,
+		"runtime_dir", v.fileSvc.Resolve(constants.VaultDirname),
 		"new_key_fingerprint", header.KeyFingerprint[:8]+"...")
 
 	return nil
@@ -170,7 +171,8 @@ func (v *Vault) IsUnlocked() bool {
 
 // IsInitialized returns whether the vault has been initialized (header exists).
 func (v *Vault) IsInitialized() bool {
-	return VaultHeaderExists(v.dataDir)
+	exists, err := VaultHeaderExists(v.fileSvc)
+	return err == nil && exists
 }
 
 // GetDEK returns the Data Encryption Key for database encryption.
@@ -243,15 +245,15 @@ func (v *Vault) Decrypt(ciphertext []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// GetDataDir returns the vault's data directory.
+// GetDataDir returns the absolute runtime vault directory.
 func (v *Vault) GetDataDir() string {
-	return v.dataDir
+	return v.fileSvc.Resolve(constants.VaultDirname)
 }
 
 // VerifyIntegrity checks the vault's integrity by attempting to unwrap the DEK.
 // Returns nil if the vault is healthy, error otherwise.
 func (v *Vault) VerifyIntegrity(privateKey []byte) error {
-	header, err := LoadVaultHeader(v.dataDir)
+	header, err := LoadVaultHeader(v.fileSvc)
 	if err != nil {
 		return fmt.Errorf("header load failed: %w", err)
 	}
@@ -282,16 +284,19 @@ func (v *Vault) Reset(confirmDestroy bool) error {
 	v.unlocked = false
 	v.header = nil
 
-	if err := DeleteVaultHeader(v.dataDir); err != nil {
+	if err := DeleteVaultHeader(v.fileSvc); err != nil {
 		return fmt.Errorf("failed to delete vault header: %w", err)
 	}
 
-	if err := os.Remove(v.dbPath); err != nil && !os.IsNotExist(err) {
-		v.logger.Warn("Failed to delete database file", string(constants.ConnectionStateError), err)
+	for _, relPath := range []string{
+		v.dbPath,
+		v.dbPath + constants.SQLiteWALSuffix,
+		v.dbPath + constants.SQLiteSHMSuffix,
+	} {
+		if err := v.fileSvc.Remove(context.Background(), relPath); err != nil {
+			return fmt.Errorf("failed to delete vault database artifact %s: %w", relPath, err)
+		}
 	}
-
-	os.Remove(v.dbPath + constants.SQLiteWALSuffix)
-	os.Remove(v.dbPath + constants.SQLiteSHMSuffix)
 
 	v.logger.Info("Vault reset complete - all data destroyed")
 

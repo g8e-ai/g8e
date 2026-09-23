@@ -22,11 +22,20 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
+
+func newReportingTestFileSvc(t *testing.T, baseDir string) fs.RuntimeFileService {
+	t.Helper()
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	return fileSvc
+}
 
 // ---------------------------------------------------------------------------
 // reportReceipts
@@ -533,16 +542,15 @@ func TestReportLedgerCommits_NilLedger(t *testing.T) {
 
 func TestOpenVault_NoKeyPath_ReturnsLockedVault(t *testing.T) {
 	tempDir := testutil.TempDir(t)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	fileSvc := newReportingTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
+	require.NoError(t, header.Save(fileSvc))
 
-	v, unlocked := openVault(vaultDir, "", testutil.NewTestLogger())
+	v, unlocked := openVault(fileSvc, "", testutil.NewTestLogger())
 	assert.NotNil(t, v)
 	assert.False(t, unlocked)
 	t.Cleanup(func() { v.Close() })
@@ -550,16 +558,15 @@ func TestOpenVault_NoKeyPath_ReturnsLockedVault(t *testing.T) {
 
 func TestOpenVault_KeyFileNotFound(t *testing.T) {
 	tempDir := testutil.TempDir(t)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	fileSvc := newReportingTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
+	require.NoError(t, header.Save(fileSvc))
 
-	v, unlocked := openVault(vaultDir, filepath.Join(tempDir, "nonexistent.key"), testutil.NewTestLogger())
+	v, unlocked := openVault(fileSvc, filepath.Join(tempDir, "nonexistent.key"), testutil.NewTestLogger())
 	assert.NotNil(t, v)
 	assert.False(t, unlocked)
 	t.Cleanup(func() { v.Close() })
@@ -567,19 +574,18 @@ func TestOpenVault_KeyFileNotFound(t *testing.T) {
 
 func TestOpenVault_InvalidKeyEncoding(t *testing.T) {
 	tempDir := testutil.TempDir(t)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	fileSvc := newReportingTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
+	require.NoError(t, header.Save(fileSvc))
 
 	keyPath := filepath.Join(tempDir, "bad.key")
 	require.NoError(t, os.WriteFile(keyPath, []byte("not-valid-hex\n"), 0600))
 
-	v, unlocked := openVault(vaultDir, keyPath, testutil.NewTestLogger())
+	v, unlocked := openVault(fileSvc, keyPath, testutil.NewTestLogger())
 	assert.NotNil(t, v)
 	assert.False(t, unlocked)
 	t.Cleanup(func() { v.Close() })
@@ -587,20 +593,19 @@ func TestOpenVault_InvalidKeyEncoding(t *testing.T) {
 
 func TestOpenVault_ValidKey(t *testing.T) {
 	tempDir := testutil.TempDir(t)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	fileSvc := newReportingTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
+	require.NoError(t, header.Save(fileSvc))
 
 	keyHex := hex.EncodeToString(privKey)
 	keyPath := filepath.Join(tempDir, "vault.key")
 	require.NoError(t, os.WriteFile(keyPath, []byte(keyHex), 0600))
 
-	v, unlocked := openVault(vaultDir, keyPath, testutil.NewTestLogger())
+	v, unlocked := openVault(fileSvc, keyPath, testutil.NewTestLogger())
 	assert.NotNil(t, v)
 	assert.True(t, unlocked)
 	t.Cleanup(func() { v.Close() })

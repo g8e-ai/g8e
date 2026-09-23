@@ -824,6 +824,28 @@ message EvaluationAssignmentResult {
   optional uint64 scored_inference_span_nanos = 26;
 }
 
+enum EvaluationWitnessPolicy {
+  EVALUATION_WITNESS_POLICY_UNSPECIFIED = 0;
+  EVALUATION_WITNESS_POLICY_INTERIM = 1;
+  EVALUATION_WITNESS_POLICY_STRICT = 2;
+}
+
+message CampaignComplianceSourceArtifact {
+  string runtime_path = 1;
+  string sha256 = 2;
+  string media_type = 3;
+}
+
+message CampaignComplianceSourceInventory {
+  string schema_version = 1;
+  string admission_id = 2;
+  string run_id = 3;
+  string campaign_id = 4;
+  EvaluationWitnessPolicy provider_observation_policy = 5;
+  EvaluationWitnessPolicy model_provenance_policy = 6;
+  repeated CampaignComplianceSourceArtifact artifacts = 7;
+}
+
 // EvaluationVerificationReport independently verifies one run or assignment.
 message EvaluationVerificationReport {
   string schema_version = 1;
@@ -843,6 +865,8 @@ message EvaluationVerificationReport {
   string campaign_digest = 15;
   string catalog_digest = 16;
   string model_registry_digest = 17;
+  EvaluationWitnessPolicy provider_observation_policy = 18;
+  EvaluationWitnessPolicy model_provenance_policy = 19;
 }
 
 message EvaluationVerifiedPopulationEntry {

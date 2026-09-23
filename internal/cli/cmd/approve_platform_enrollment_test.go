@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -60,6 +60,33 @@ func samplePendingResponse() models.PlatformEnrollmentPendingResponse {
 			},
 		},
 	}
+}
+
+func TestRevokePlatformEnrollmentCmdWithConfig_PostsRequestID(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	responseBody, err := json.Marshal(models.PlatformEnrollmentRevokeResponse{
+		RequestID:     "req-operator-001",
+		ComponentKind: models.PlatformComponentOperator,
+		State:         models.PlatformEnrollmentStateRevoked,
+	})
+	require.NoError(t, err)
+	mockClient := &mockAPIClient{postResp: responseBody}
+
+	cmd := revokePlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), mockClientFactory(mockClient), fileSvcFactoryFor(nil))
+	cmd.Flags().Set("yes", "true")
+	cmd.Flags().Set("reason", "host retired")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err = cmd.RunE(cmd, []string{"req-operator-001"})
+	require.NoError(t, err)
+	require.Len(t, mockClient.postCalls, 1)
+	assert.Equal(t, constants.APIPaths.AuthPlatformEnrollmentRevoke, mockClient.postCalls[0].path)
+	request := mockClient.postCalls[0].body.(models.PlatformEnrollmentRevokeRequest)
+	assert.Equal(t, "req-operator-001", request.RequestID)
+	assert.Equal(t, "host retired", request.Reason)
+	assert.Contains(t, buf.String(), "revoked")
 }
 
 // --- enroll approve command tests ---
@@ -229,7 +256,7 @@ func TestApprovePlatformEnrollmentCmd_RequestNotFoundReturnsError(t *testing.T) 
 func TestApprovePlatformEnrollmentCmd_GetErrorReturnsWrappedError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
-	getErr := errors.New("network failure")
+	getErr := fmt.Errorf("network failure")
 	mockClient := &mockAPIClient{getErr: getErr}
 
 	cmd := approvePlatformEnrollmentCmdWithConfig(
@@ -253,7 +280,7 @@ func TestApprovePlatformEnrollmentCmd_PostErrorReturnsWrappedError(t *testing.T)
 	pendingBody, err := json.Marshal(samplePendingResponse())
 	require.NoError(t, err)
 
-	postErr := errors.New("post failure")
+	postErr := fmt.Errorf("post failure")
 	mockClient := &mockAPIClient{getResp: pendingBody, postErr: postErr}
 
 	cmd := approvePlatformEnrollmentCmdWithConfig(
@@ -437,7 +464,7 @@ func TestPendingPlatformEnrollmentCmd_EmptyListPrintsMessage(t *testing.T) {
 func TestPendingPlatformEnrollmentCmd_GetErrorReturnsWrappedError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
-	getErr := errors.New("network failure")
+	getErr := fmt.Errorf("network failure")
 	mockClient := &mockAPIClient{getErr: getErr}
 
 	cmd := pendingPlatformEnrollmentCmdWithConfig(
@@ -500,7 +527,7 @@ func TestPendingPlatformEnrollmentCmd_InvalidJSONReturnsError(t *testing.T) {
 func TestPendingPlatformEnrollmentCmd_ClientFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
-	clientErr := errors.New("client factory boom")
+	clientErr := fmt.Errorf("client factory boom")
 	factory := func(_ fs.RuntimeFileService, _ *config.Config) (apiClient, error) {
 		return nil, clientErr
 	}
@@ -521,7 +548,7 @@ func TestPendingPlatformEnrollmentCmd_ClientFactoryError(t *testing.T) {
 func TestApprovePlatformEnrollmentCmd_ClientFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
-	clientErr := errors.New("client factory boom")
+	clientErr := fmt.Errorf("client factory boom")
 	factory := func(_ fs.RuntimeFileService, _ *config.Config) (apiClient, error) {
 		return nil, clientErr
 	}
@@ -582,7 +609,7 @@ func TestApprovePlatformEnrollmentCmd_InvalidDecisionJSONReturnsError(t *testing
 // TestApprovePlatformEnrollmentCmd_ConfigLoaderError verifies that a config
 // load failure is returned directly.
 func TestApprovePlatformEnrollmentCmd_ConfigLoaderError(t *testing.T) {
-	cfgErr := errors.New("config load error")
+	cfgErr := fmt.Errorf("config load error")
 	loader := func(string) (*config.Config, error) { return nil, cfgErr }
 
 	cmd := approvePlatformEnrollmentCmdWithConfig(
@@ -599,7 +626,7 @@ func TestApprovePlatformEnrollmentCmd_ConfigLoaderError(t *testing.T) {
 // TestPendingPlatformEnrollmentCmd_ConfigLoaderError verifies that a config
 // load failure is returned directly.
 func TestPendingPlatformEnrollmentCmd_ConfigLoaderError(t *testing.T) {
-	cfgErr := errors.New("config load error")
+	cfgErr := fmt.Errorf("config load error")
 	loader := func(string) (*config.Config, error) { return nil, cfgErr }
 
 	cmd := pendingPlatformEnrollmentCmdWithConfig(

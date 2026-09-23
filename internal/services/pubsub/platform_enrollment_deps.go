@@ -26,7 +26,9 @@ import (
 type PlatformEnrollmentDocStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 	DocGet(collection, id string) (*models.Document, error)
-	DocConditionalUpdate(collection, id string, setFields map[string]interface{}, conditionField string, conditionValue interface{}) (bool, error)
+	DocConditionalUpdate(collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error)
+	DocUpdate(collection, id string, data json.RawMessage) (*models.Document, error)
+	DocDelete(collection, id string) error
 }
 
 // PlatformEnrollmentPKI is the PKI subset required by the platform
@@ -38,6 +40,7 @@ type PlatformEnrollmentPKI interface {
 	SignPlatformAppCSR(csrPEM, appName, userID string) (certPEM, chainPEM string, err error)
 	SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID, gatewayID string) (certPEM, chainPEM string, err error)
 	GatewayTrustBundle() ([]byte, error)
+	RevokeCertificate(serial string, reason string) error
 }
 
 // PlatformEnrollmentCLISessions is the CLI-session subset required by the
@@ -45,6 +48,7 @@ type PlatformEnrollmentPKI interface {
 // gateway.CLISessionService.
 type PlatformEnrollmentCLISessions interface {
 	PersistCLISession(cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error
+	DeactivateCLISession(sessionID string) error
 }
 
 // PlatformEnrollmentOperatorSessions is the operator-session subset
@@ -52,6 +56,11 @@ type PlatformEnrollmentCLISessions interface {
 // gateway.OperatorSessionService.
 type PlatformEnrollmentOperatorSessions interface {
 	PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error
+	DeactivateOperatorSession(operatorSessionID string) error
+}
+
+type PlatformEnrollmentConnections interface {
+	DisconnectIdentity(spiffeID string) int
 }
 
 // PlatformEnrollmentDeps bundles the gateway-side dependencies required
@@ -67,6 +76,7 @@ type PlatformEnrollmentDeps struct {
 	PKI              PlatformEnrollmentPKI
 	CLISessions      PlatformEnrollmentCLISessions
 	OperatorSessions PlatformEnrollmentOperatorSessions
+	Connections      PlatformEnrollmentConnections
 	Posture          string
 }
 
@@ -77,12 +87,60 @@ func platformEnrollmentCollection() string {
 	return marshaler.CollectionName(constants.CollectionPlatformEnrollments)
 }
 
+func loadPlatformEnrollmentOrganization(deps PlatformEnrollmentDeps, userID string) (*models.User, *models.Organization, error) {
+	userDoc, err := deps.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: load user %s: %w", userID, err)
+	}
+	if userDoc == nil {
+		return nil, nil, constants.ErrUserNotFound
+	}
+	userData, err := json.Marshal(userDoc.Data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: marshal user %s: %w", userID, err)
+	}
+	var user models.User
+	if err := json.Unmarshal(userData, &user); err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: decode user %s: %w", userID, err)
+	}
+	user.ID = userDoc.ID
+	if user.OrganizationID == "" {
+		return nil, nil, constants.ErrOrganizationIDRequired
+	}
+	organizationDoc, err := deps.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOrganizations), user.OrganizationID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: load organization %s: %w", user.OrganizationID, err)
+	}
+	if organizationDoc == nil {
+		return nil, nil, constants.ErrOrganizationNotFound
+	}
+	organizationData, err := json.Marshal(organizationDoc.Data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: marshal organization %s: %w", user.OrganizationID, err)
+	}
+	var organization models.Organization
+	if err := json.Unmarshal(organizationData, &organization); err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: decode organization %s: %w", user.OrganizationID, err)
+	}
+	organization.ID = organizationDoc.ID
+	member := organization.OwnerUserID == user.ID
+	for _, memberUserID := range organization.MemberUserIDs {
+		member = member || memberUserID == user.ID
+	}
+	if organization.ID != user.OrganizationID || !member {
+		return nil, nil, constants.ErrOrganizationMembershipInvalid
+	}
+	return &user, &organization, nil
+}
+
 // loadPlatformEnrollmentRequest reads a persisted enrollment request by
 // ID and decodes it into the typed model. Returns (nil, nil) when the
 // request does not exist so the caller can distinguish not-found from
 // decode errors.
 func loadPlatformEnrollmentRequest(ctx context.Context, deps PlatformEnrollmentDeps, requestID string) (*models.PlatformEnrollmentRequest, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("platform enrollment: check request context: %w", err)
+	}
 	if requestID == "" {
 		return nil, nil
 	}

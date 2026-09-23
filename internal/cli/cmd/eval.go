@@ -47,18 +47,19 @@ type nativeEvalStore interface {
 }
 
 type nativeEvalDeps struct {
-	configLoader      func(string) (*config.Config, error)
-	fileSvcFactory    func(string, *slog.Logger) (fs.RuntimeFileService, error)
-	createRuntimeTree func(context.Context, fs.RuntimeFileService) error
-	clientFactory     nativeEvalClientFactory
-	authLoader        nativeEvalAuthLoader
-	laneFactory       func(*harnessclient.Client, fs.RuntimeFileService, harnessclient.Persona) evaluation.PlatformLane
-	observerFactory   func(string) evaluation.TargetObserver
-	runnerFactory     func(evaluation.PlatformLane, evaluation.TargetObserver, evaluation.ReportStore, func() time.Time, func(string) string) nativeEvalRunner
-	storeFactory      func(fs.RuntimeFileService) nativeEvalStore
-	verifierFactory   func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier
-	now               func() time.Time
-	newID             func() string
+	configLoader               func(string) (*config.Config, error)
+	fileSvcFactory             func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	createRuntimeTree          func(context.Context, fs.RuntimeFileService) error
+	clientFactory              nativeEvalClientFactory
+	authLoader                 nativeEvalAuthLoader
+	laneFactory                func(*harnessclient.Client, fs.RuntimeFileService, harnessclient.Persona) evaluation.PlatformLane
+	observerFactory            func(string) evaluation.TargetObserver
+	runnerFactory              func(evaluation.PlatformLane, evaluation.TargetObserver, evaluation.ReportStore, func() time.Time, func(string) string) nativeEvalRunner
+	storeFactory               func(fs.RuntimeFileService) nativeEvalStore
+	verifierFactory            func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier
+	campaignPublicationFactory campaignVerificationPublicationFactory
+	now                        func() time.Time
+	newID                      func() string
 }
 
 func evalCmd() *cobra.Command {
@@ -71,13 +72,16 @@ func evalCmd() *cobra.Command {
 		laneFactory: func(client *harnessclient.Client, fileSvc fs.RuntimeFileService, persona harnessclient.Persona) evaluation.PlatformLane {
 			return evaluation.NewCommandLane(client, evaluation.NewStore(fileSvc), persona, 0, 0)
 		},
-		observerFactory: evaluation.NewComposeTargetObserver,
+		observerFactory: evaluation.NewComposeTargetReader,
 		runnerFactory: func(lane evaluation.PlatformLane, observer evaluation.TargetObserver, store evaluation.ReportStore, now func() time.Time, newID func(string) string) nativeEvalRunner {
 			return evaluation.NewRunner(evaluation.NewRegistry(), lane, observer, store, now, newID)
 		},
 		storeFactory: func(fileSvc fs.RuntimeFileService) nativeEvalStore { return evaluation.NewStore(fileSvc) },
 		verifierFactory: func(fileSvc fs.RuntimeFileService, now func() time.Time) nativeEvalVerifier {
 			return evaluation.NewVerifier(fileSvc, evaluation.NewRegistry(), now)
+		},
+		campaignPublicationFactory: func(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (campaignVerificationPublication, error) {
+			return newCampaignPublicationCoordinator(cmd, fileSvc)
 		},
 		now:   time.Now,
 		newID: uuid.NewString,
@@ -296,7 +300,7 @@ func nativeEvalDeployment(cfg *config.Config, authContext *auth.ClientAuthContex
 		DeploymentId:        runID,
 		TopologyRef:         &compliancev1.VersionedReference{Id: evaluation.TopologyID, Version: evaluation.TopologyVersion},
 		ControlledTarget:    target,
-		IndependentObserver: constants.DockerEvaluationObserverService,
+		IndependentObserver: constants.DockerNativeTargetReaderService,
 		RuntimeBoundaries: []*evalv1.EvaluationRuntimeBoundary{
 			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_EVALUATOR, ProcessIdentity: "host-side g8e eval process", RuntimeNamespace: "Docker host workspace", Endpoint: cfg.OperatorHTTPURL(), AuthenticatedIdentity: authContext.UserID},
 			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_GATEWAY, ProcessIdentity: constants.DockerGatewayContainer, RuntimeNamespace: "Gateway container", PersistentStore: "Gateway runtime volume", Endpoint: cfg.OperatorHTTPURL(), AuthenticatedIdentity: authContext.CLISessionID},

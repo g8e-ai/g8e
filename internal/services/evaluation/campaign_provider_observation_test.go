@@ -200,18 +200,15 @@ func TestMarshalAssignmentResultProjectionEnvelope_IncludesToolScorecard(t *test
 	require.NoError(t, err)
 	envelope := CampaignProjectionEnvelope{}
 	require.NoError(t, json.Unmarshal(body, &envelope))
-	record := map[string]any{}
+	record := publicAssignmentRecordEnvelope{}
 	require.NoError(t, json.Unmarshal(envelope.Record, &record))
-	benchmark, ok := record["benchmark_observations"].(map[string]any)
+	require.NotNil(t, record.BenchmarkObservations)
+	require.Len(t, record.BenchmarkObservations.GradeSummaries, 1)
+	selection, ok := record.BenchmarkObservations.ToolScorecard["tool_selection"]
 	require.True(t, ok)
-	summaries, ok := benchmark["grade_summaries"].([]any)
-	require.True(t, ok)
-	require.Len(t, summaries, 1)
-	scorecard, ok := benchmark["tool_scorecard"].(map[string]any)
-	require.True(t, ok)
-	selection, ok := scorecard["tool_selection"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, 0.0, selection["value"])
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Value)
+	assert.Equal(t, 0.0, *selection.Value)
 }
 
 func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_InterimMissingWindow(t *testing.T) {
@@ -229,6 +226,10 @@ func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_
 	failures, unavailable := reader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyInterim)
 	assert.Empty(t, failures)
 	assert.Equal(t, []string{"source_not_captured"}, unavailable)
+}
+
+type publicAssignmentRecordEnvelope struct {
+	BenchmarkObservations *PublicBenchmarkObservations `json:"benchmark_observations"`
 }
 
 type stubProviderObservationRemote struct {
@@ -288,6 +289,47 @@ func TestCampaignProviderObservationReaderWithRemote_LoadsGatewayEvidenceOnLocal
 	assert.Empty(t, unavailable)
 }
 
+func TestCampaignProviderObservationReader_CaptureAssignmentEvidencePersistsGatewayEvidence(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	attempt := &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: "attempt-captured",
+		TransactionId:     "transaction-captured",
+		Status:            operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
+		StartedAtUnixMs:   time.Unix(1_700_000_000, 0).UnixMilli(),
+		CompletedAtUnixMs: time.Unix(1_700_000_010, 0).UnixMilli(),
+	}
+	window := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          attempt.GetProviderAttemptId(),
+		ObserverId:                 "observer-test",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(time.Unix(1_700_000_000, 0).UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(time.Unix(1_700_000_010, 0).UnixNano()),
+		AttemptStartedAtUnixMs:     attempt.GetStartedAtUnixMs(),
+		AttemptCompletedAtUnixMs:   attempt.GetCompletedAtUnixMs(),
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
+			ObservedAtUnixNanos:        uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+			GpuUtilizationAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			GpuUtilizationPercent:      10,
+		}},
+	}
+	digest, err := provider_observer.ComputeObservationDigest(window)
+	require.NoError(t, err)
+	window.ObservationDigest = digest
+	reader, err := NewCampaignProviderObservationReaderWithRemote(fileSvc, &stubProviderObservationRemote{window: window, attempt: attempt})
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{ModelInferences: []*evalv1.ModelInferenceRecord{{ProviderAttemptId: attempt.GetProviderAttemptId()}}}
+
+	require.NoError(t, reader.CaptureAssignmentEvidence(ctx, result))
+	localReader, err := NewCampaignProviderObservationReader(fileSvc)
+	require.NoError(t, err)
+	failures, unavailable := localReader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyStrict)
+	assert.Empty(t, failures)
+	assert.Empty(t, unavailable)
+}
+
 func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_StrictMissingWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -321,15 +363,13 @@ func TestMarshalAssignmentResultProjectionEnvelope_IncludesBenchmarkObservations
 	require.NoError(t, err)
 	envelope := CampaignProjectionEnvelope{}
 	require.NoError(t, json.Unmarshal(body, &envelope))
-	record := map[string]any{}
+	record := publicAssignmentRecordEnvelope{}
 	require.NoError(t, json.Unmarshal(envelope.Record, &record))
-	benchmark, ok := record["benchmark_observations"].(map[string]any)
-	require.True(t, ok)
-	gpu, ok := benchmark["gpu"].(map[string]any)
-	require.True(t, ok)
-	peak, ok := gpu["vram_peak_bytes"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, 4096.0, peak["value"])
+	require.NotNil(t, record.BenchmarkObservations)
+	require.NotNil(t, record.BenchmarkObservations.GPU)
+	require.NotNil(t, record.BenchmarkObservations.GPU.VRAMPeakBytes)
+	require.NotNil(t, record.BenchmarkObservations.GPU.VRAMPeakBytes.Value)
+	assert.Equal(t, 4096.0, *record.BenchmarkObservations.GPU.VRAMPeakBytes.Value)
 }
 
 func TestCampaignRunVerifier_WithReaders(t *testing.T) {

@@ -274,21 +274,31 @@ func TestBuildComplianceAnalysis_EvidenceWindowCompleteWhenAllSatisfied(t *testi
 	assert.Empty(t, completeness.GetStaleEvidenceRefs())
 }
 
-func TestBuildComplianceAnalysis_EvidenceWindowPartialWhenSomeSatisfied(t *testing.T) {
+func TestBuildComplianceAnalysis_EvidenceWindowCompleteForFreshNegativeMeasurement(t *testing.T) {
 	request := analysisBaseRequest(t)
-	request.AssertionAssessments[1] = analysisTestAssertionAssessment("G8E-PRIV-001", "not_satisfied", "fresh", "missing evidence")
+	request.AssertionAssessments[1] = analysisTestAssertionAssessment("G8E-PRIV-001", "not_satisfied", "fresh", "reproduced negative measurement")
 	analysis, err := evidence.BuildComplianceAnalysis(context.Background(), request)
 	require.NoError(t, err)
 	completeness := analysis.GetEvidenceWindowCompleteness()
 	assert.Equal(t, int32(2), completeness.GetExpectedEvidenceCount())
+	assert.Equal(t, int32(2), completeness.GetActualEvidenceCount(), RegressionMarkerAfterFix)
+	assert.Equal(t, "complete", completeness.GetCompletenessStatus(), RegressionMarkerAfterFix)
+}
+
+func TestBuildComplianceAnalysis_EvidenceWindowPartialWhenEvidenceUnavailable(t *testing.T) {
+	request := analysisBaseRequest(t)
+	request.AssertionAssessments[1] = analysisTestAssertionAssessment("G8E-PRIV-001", "unverifiable", "incomplete", "required evidence is unavailable")
+	analysis, err := evidence.BuildComplianceAnalysis(context.Background(), request)
+	require.NoError(t, err)
+	completeness := analysis.GetEvidenceWindowCompleteness()
 	assert.Equal(t, int32(1), completeness.GetActualEvidenceCount())
 	assert.Equal(t, "partial", completeness.GetCompletenessStatus())
 }
 
-func TestBuildComplianceAnalysis_EvidenceWindowEmptyWhenNoneSatisfied(t *testing.T) {
+func TestBuildComplianceAnalysis_EvidenceWindowEmptyWhenAllEvidenceUnavailable(t *testing.T) {
 	request := analysisBaseRequest(t)
-	request.AssertionAssessments[0] = analysisTestAssertionAssessment("G8E-GOV-BLOCK-001", "not_satisfied", "fresh", "missing evidence")
-	request.AssertionAssessments[1] = analysisTestAssertionAssessment("G8E-PRIV-001", "unverifiable", "fresh", "")
+	request.AssertionAssessments[0] = analysisTestAssertionAssessment("G8E-GOV-BLOCK-001", "unverifiable", "incomplete", "required evidence is unavailable")
+	request.AssertionAssessments[1] = analysisTestAssertionAssessment("G8E-PRIV-001", "unverifiable", "stale", "required evidence is stale")
 	analysis, err := evidence.BuildComplianceAnalysis(context.Background(), request)
 	require.NoError(t, err)
 	completeness := analysis.GetEvidenceWindowCompleteness()
@@ -589,8 +599,8 @@ func TestBuildComplianceAnalysis_CanonicalVectorIsPinned(t *testing.T) {
 	canonical, err := compliancev1.MarshalCanonical(analysis)
 	require.NoError(t, err)
 	digest := sha256.Sum256(canonical)
-	assert.Equal(t, "compliance-analysis:sha256:e5d4e0ac1f0e77824da524a8ab3be075208166e5a6e8f3ba7ad6a23ea1d9f74d", analysis.GetAnalysisId())
-	assert.Equal(t, "bf692fbb7f0852907a4806cc90eb4fd35b6b8d301abc2b9006248257bc138308", hex.EncodeToString(digest[:]))
+	assert.Equal(t, "compliance-analysis:sha256:6778405082262bc68803dd7a280d2733a326a0de009b0f8fa24baeaf4736e00d", analysis.GetAnalysisId())
+	assert.Equal(t, "eeed4e6bae6ebfb6115be032d71a40e7f128c15225298cbc8871b405afb21a51", hex.EncodeToString(digest[:]))
 }
 
 func TestBuildComplianceAnalysis_CanonicalBytesIgnoreInputOrdering(t *testing.T) {

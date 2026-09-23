@@ -72,6 +72,13 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 	return nil
 }
 
+func (rr *PubSubResultsService) PublishShutdownAcknowledgement(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
+	if err := rr.publishResultEnvelopeUniversal(ctx, constants.Event.Operator.ShutdownAcknowledged, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
+		return fmt.Errorf("pubsub: publish shutdown acknowledgement: %w", err)
+	}
+	return nil
+}
+
 // PublishFileEditResult publishes file edit result via Operator pub/sub.
 func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
 	eventType := rr.determineEventStatus(result, constants.Event.Operator.FileEdit.Completed, constants.Event.Operator.FileEdit.Failed)

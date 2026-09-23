@@ -60,6 +60,12 @@ type OperatorPubSubClient struct {
 	pubWs  *websocket.Conn // persistent WebSocket for publishing
 }
 
+func closeWebSocket(logger *slog.Logger, ws *websocket.Conn, operation string) {
+	if err := ws.Close(); err != nil {
+		logger.Warn("failed to close pub/sub WebSocket", "operation", operation, "error", err)
+	}
+}
+
 // NewOperatorPubSubClient creates a client that connects to a Operator pub/sub endpoint.
 // baseURL must use wss:// scheme — plaintext ws:// is never permitted.
 // serverName overrides the TLS SNI hostname; pass an empty string when the
@@ -80,7 +86,7 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger, ce
 
 	tlsCfg, err := certsTLSConfig.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrPubSubTLSConfig, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrPubSubTLSConfig, err)
 	}
 	if serverName != "" {
 		tlsCfg.ServerName = serverName
@@ -119,7 +125,9 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 	ws, resp, err := dialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
 		if resp != nil {
-			resp.Body.Close()
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				c.logger.Warn("failed to close pub/sub dial response body", "error", closeErr)
+			}
 		}
 		statusCode := 0
 		if resp != nil {
@@ -130,7 +138,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 			string(constants.ConnectionStateError), err,
 			"http_status", statusCode,
 			"tls_enabled", c.tlsConfig != nil)
-		return nil, fmt.Errorf("%w (http_status=%d): %v", constants.ErrPubSubConnect, statusCode, err)
+		return nil, fmt.Errorf("%w (http_status=%d): %w", constants.ErrPubSubConnect, statusCode, err)
 	}
 
 	c.logger.Info("operator pub/sub WebSocket connected",
@@ -142,11 +150,24 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 		Action:  constants.PubSubActionSubscribe,
 		Channel: channel,
 	}
-	subBytes, _ := proto.Marshal(&subMsg)
-	_ = ws.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
+	subBytes, err := proto.Marshal(&subMsg)
+	if err != nil {
+		if closeErr := ws.Close(); closeErr != nil {
+			c.logger.Warn("failed to close pub/sub subscription socket", "error", closeErr)
+		}
+		return nil, fmt.Errorf("%w (%s): marshal subscription: %v", constants.ErrPubSubSubscribe, channel, err)
+	}
+	if err := ws.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout)); err != nil {
+		if closeErr := ws.Close(); closeErr != nil {
+			c.logger.Warn("failed to close pub/sub subscription socket", "error", closeErr)
+		}
+		return nil, fmt.Errorf("%w (%s): set write deadline: %v", constants.ErrPubSubSubscribe, channel, err)
+	}
 	if err := ws.WriteMessage(websocket.BinaryMessage, subBytes); err != nil {
-		ws.Close()
-		return nil, fmt.Errorf("%w (%s): %v", constants.ErrPubSubSubscribe, channel, err)
+		if closeErr := ws.Close(); closeErr != nil {
+			c.logger.Warn("failed to close pub/sub subscription socket", "error", closeErr)
+		}
+		return nil, fmt.Errorf("%w (%s): %w", constants.ErrPubSubSubscribe, channel, err)
 	}
 
 	// Block until the broker confirms the subscription is registered. Frames
@@ -154,8 +175,10 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 	// are buffered and replayed into the output channel once the goroutine starts.
 	var pending [][]byte
 	if err := c.waitForSubscribedACK(ctx, ws, channel, &pending); err != nil {
-		ws.Close()
-		return nil, fmt.Errorf("%w (%s): %v", constants.ErrPubSubSubscriptionACK, channel, err)
+		if closeErr := ws.Close(); closeErr != nil {
+			c.logger.Warn("failed to close pub/sub subscription socket", "error", closeErr)
+		}
+		return nil, fmt.Errorf("%w (%s): %w", constants.ErrPubSubSubscriptionACK, channel, err)
 	}
 
 	out := make(chan []byte, 64)
@@ -167,7 +190,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 
 	go func() {
 		defer close(out)
-		defer ws.Close()
+		defer closeWebSocket(c.logger, ws, "subscription end")
 
 		// Close the WebSocket when the context is cancelled so that
 		// ws.ReadMessage unblocks immediately. Without this, a cancelled
@@ -178,7 +201,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 		go func() {
 			select {
 			case <-ctx.Done():
-				ws.Close()
+				closeWebSocket(c.logger, ws, "subscription cancellation")
 			case <-stop:
 			}
 		}()
@@ -216,8 +239,14 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 // closes before the ACK arrives.
 func (c *OperatorPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websocket.Conn, channel string, pending *[][]byte) error {
 	const ackTimeout = 5 * time.Second
-	_ = ws.SetReadDeadline(time.Now().Add(ackTimeout))
-	defer func() { _ = ws.SetReadDeadline(time.Time{}) }()
+	if err := ws.SetReadDeadline(time.Now().Add(ackTimeout)); err != nil {
+		return fmt.Errorf("set subscription ACK read deadline: %w", err)
+	}
+	defer func() {
+		if err := ws.SetReadDeadline(time.Time{}); err != nil {
+			c.logger.Warn("failed to clear subscription ACK read deadline", "error", err)
+		}
+	}()
 
 	// Close the WebSocket when the context is cancelled so that ws.ReadMessage
 	// unblocks immediately rather than waiting for the ackTimeout to expire.
@@ -226,7 +255,7 @@ func (c *OperatorPubSubClient) waitForSubscribedACK(ctx context.Context, ws *web
 	go func() {
 		select {
 		case <-ctx.Done():
-			ws.Close()
+			closeWebSocket(c.logger, ws, "subscription ACK cancellation")
 		case <-stop:
 		}
 	}()
@@ -237,7 +266,7 @@ func (c *OperatorPubSubClient) waitForSubscribedACK(ctx context.Context, ws *web
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return fmt.Errorf("%w: %v", constants.ErrPubSubConnectionError, err)
+			return fmt.Errorf("%w: %w", constants.ErrPubSubConnectionError, err)
 		}
 
 		var event pubsubv1.PubSubEvent
@@ -274,9 +303,11 @@ func (c *OperatorPubSubClient) connectPubWs() error {
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
-			resp.Body.Close()
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				c.logger.Warn("failed to close pub/sub publish dial response body", "error", closeErr)
+			}
 		}
-		return fmt.Errorf("%w: %v", constants.ErrPubSubPublishConnect, err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubPublishConnect, err)
 	}
 	c.logger.Info("operator pub/sub WebSocket connected",
 		"url", wsURL,
@@ -309,21 +340,37 @@ func (c *OperatorPubSubClient) Publish(ctx context.Context, channel string, data
 	}
 	msgBytes, err := proto.Marshal(&msg)
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrPubSubMarshalPayload, err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubMarshalPayload, err)
 	}
 
-	_ = c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
+	if err := c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout)); err != nil {
+		if closeErr := c.pubWs.Close(); closeErr != nil {
+			c.logger.Warn("failed to close pub/sub publish socket", "error", closeErr)
+		}
+		c.pubWs = nil
+		return fmt.Errorf("%w: set write deadline: %v", constants.ErrPubSubPublish, err)
+	}
 	if err := c.pubWs.WriteMessage(websocket.BinaryMessage, msgBytes); err != nil {
-		c.pubWs.Close()
+		if closeErr := c.pubWs.Close(); closeErr != nil {
+			c.logger.Warn("failed to close pub/sub publish socket", "error", closeErr)
+		}
 		c.pubWs = nil
 		if err := c.connectPubWs(); err != nil {
-			return fmt.Errorf("%w: %v", constants.ErrPubSubPublishReconnect, err)
+			return fmt.Errorf("%w: %w", constants.ErrPubSubPublishReconnect, err)
 		}
-		_ = c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
-		if err := c.pubWs.WriteMessage(websocket.BinaryMessage, msgBytes); err != nil {
-			c.pubWs.Close()
+		if err := c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout)); err != nil {
+			if closeErr := c.pubWs.Close(); closeErr != nil {
+				c.logger.Warn("failed to close pub/sub publish socket", "error", closeErr)
+			}
 			c.pubWs = nil
-			return fmt.Errorf("%w: %v", constants.ErrPubSubPublish, err)
+			return fmt.Errorf("%w: set reconnect write deadline: %v", constants.ErrPubSubPublishReconnect, err)
+		}
+		if err := c.pubWs.WriteMessage(websocket.BinaryMessage, msgBytes); err != nil {
+			if closeErr := c.pubWs.Close(); closeErr != nil {
+				c.logger.Warn("failed to close pub/sub publish socket", "error", closeErr)
+			}
+			c.pubWs = nil
+			return fmt.Errorf("%w: %w", constants.ErrPubSubPublish, err)
 		}
 	}
 
@@ -337,7 +384,7 @@ func (c *OperatorPubSubClient) Close() {
 	defer c.mu.Unlock()
 	c.closed = true
 	if c.pubWs != nil {
-		c.pubWs.Close()
+		closeWebSocket(c.logger, c.pubWs, "client close")
 		c.pubWs = nil
 	}
 }

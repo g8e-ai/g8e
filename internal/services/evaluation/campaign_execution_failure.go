@@ -10,7 +10,6 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -286,7 +285,7 @@ func (c *CampaignController) recoverTerminalAssignmentResult(ctx context.Context
 			}
 		}
 	}
-	recoveredErr := errors.New("recovered terminal assignment without persisted result")
+	recoveredErr := constants.ErrEvaluationRecoveredResultMissing
 	if traceErr != nil {
 		recoveredErr = fmt.Errorf("%w: %v", recoveredErr, traceErr)
 	}

@@ -112,8 +112,11 @@ var gradeToToolScorecardDimension = map[string]string{
 // CampaignProviderObservationReader loads provider-boundary observation windows
 // and governed provider-attempt records for campaign verification.
 type CampaignProviderObservationReader struct {
-	windows  provider_observer.WindowStore
-	attempts inference.AttemptStore
+	windows       provider_observer.WindowStore
+	attempts      inference.AttemptStore
+	localWindows  provider_observer.WindowStore
+	localAttempts inference.AttemptStore
+	remote        ProviderObservationRemote
 }
 
 // NewCampaignProviderObservationReader constructs one read-only provider
@@ -143,7 +146,48 @@ func NewCampaignProviderObservationReaderWithRemote(fileSvc fs.RuntimeFileServic
 		windows = &fallbackProviderObservationWindows{local: localWindows, remote: remote}
 		attempts = &fallbackProviderObservationAttempts{local: localAttempts, remote: remote}
 	}
-	return &CampaignProviderObservationReader{windows: windows, attempts: attempts}, nil
+	return &CampaignProviderObservationReader{windows: windows, attempts: attempts, localWindows: localWindows, localAttempts: localAttempts, remote: remote}, nil
+}
+
+func (r *CampaignProviderObservationReader) CaptureAssignmentEvidence(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error {
+	if r == nil || result == nil || r.remote == nil {
+		return nil
+	}
+	for _, inferenceRecord := range scoredModelInferences(result) {
+		attemptID := inferenceRecord.GetProviderAttemptId()
+		if attemptID == "" {
+			continue
+		}
+		_, windowErr := r.localWindows.Load(ctx, attemptID)
+		if windowErr != nil && !isProviderEvidenceNotFound(windowErr) {
+			return fmt.Errorf("evaluation: capture provider observation window: %w", windowErr)
+		}
+		_, attemptErr := r.localAttempts.Get(ctx, attemptID)
+		if attemptErr != nil && !isProviderEvidenceNotFound(attemptErr) {
+			return fmt.Errorf("evaluation: capture provider attempt: %w", attemptErr)
+		}
+		if windowErr == nil && attemptErr == nil {
+			continue
+		}
+		window, attempt, err := r.remote.Load(ctx, attemptID)
+		if err != nil {
+			if isProviderEvidenceNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("evaluation: capture provider evidence: %w", err)
+		}
+		if attemptErr != nil {
+			if err := r.localAttempts.Import(ctx, attempt); err != nil {
+				return fmt.Errorf("evaluation: persist provider attempt: %w", err)
+			}
+		}
+		if windowErr != nil {
+			if err := r.localWindows.Save(ctx, window); err != nil {
+				return fmt.Errorf("evaluation: persist provider observation window: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 type fallbackProviderObservationWindows struct {
@@ -174,6 +218,10 @@ type fallbackProviderObservationAttempts struct {
 
 func (s *fallbackProviderObservationAttempts) Begin(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error {
 	return s.local.Begin(ctx, record)
+}
+
+func (s *fallbackProviderObservationAttempts) Import(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error {
+	return s.local.Import(ctx, record)
 }
 
 func (s *fallbackProviderObservationAttempts) Complete(ctx context.Context, providerAttemptID, resultDigest string) error {
@@ -421,18 +469,8 @@ func toolScorecardMetricFromGrade(grade *evalv1.DeterministicGrade) *PublicMetri
 	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL:
 		return publicMetricValue(grade.GetScore())
-	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE:
-		detail := grade.GetDetail()
-		if detail == "" {
-			detail = "criterion unavailable"
-		}
-		return &PublicMetricValue{UnavailableReason: detail}
 	default:
-		detail := grade.GetDetail()
-		if detail == "" {
-			detail = publicVerdictStatus(grade.GetStatus())
-		}
-		return &PublicMetricValue{UnavailableReason: detail}
+		return &PublicMetricValue{UnavailableReason: "source_unavailable"}
 	}
 }
 

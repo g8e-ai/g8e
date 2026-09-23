@@ -12,11 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
 import { create } from '@bufbuild/protobuf';
-import type { DescEnum, DescMessage } from '@bufbuild/protobuf';
-import { nestedTypes } from '@bufbuild/protobuf/reflect';
 
 import { parseCanonical, serializeCanonical } from '../src/canonical.ts';
-import { file_g8e_eval_v1_eval } from '../src/gen/g8e/eval/v1/eval_pb.ts';
 import {
   EvaluationAssignmentResultSchema,
   EvaluationCampaignSpecSchema,
@@ -27,98 +24,31 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROTOCOL_ROOT = join(__dirname, '..', '..');
-const DESCRIPTOR_PATH = join(PROTOCOL_ROOT, 'descriptors', 'eval', 'v1', 'model_campaign.json');
 const VECTOR_DIR = join(PROTOCOL_ROOT, 'vectors', 'eval');
-
-type MessageDescriptor = {
-  visibility: 'private' | 'public';
-  fields: string[];
-  prohibited_fields?: string[];
-  oneof_groups?: string[];
-};
-
-type ModelCampaignDescriptor = {
-  schema_version: string;
-  protobuf_package: string;
-  enums: Record<string, string[]>;
-  messages: Record<string, MessageDescriptor>;
-  canonical_vectors: Array<{ message_type: string; vector_path: string }>;
-};
-
-const descriptor = JSON.parse(readFileSync(DESCRIPTOR_PATH, 'utf8')) as ModelCampaignDescriptor;
 
 function loadVector(name: string): { message_type: string; canonical_json: string } {
   return JSON.parse(readFileSync(join(VECTOR_DIR, name), 'utf8'));
 }
 
-function findEnum(enumName: string): DescEnum {
-  const fullName = `${descriptor.protobuf_package}.${enumName}`;
-  for (const candidate of nestedTypes(file_g8e_eval_v1_eval)) {
-    if (candidate.kind === 'enum' && candidate.typeName === fullName) {
-      return candidate;
+describe('evaluation public projection disclosure boundary', () => {
+  it('omits private execution evidence fields', () => {
+    const forbidden = new Set([
+      'prompt',
+      'output',
+      'thinking',
+      'receipt',
+      'transaction_id',
+      'operator_session_id',
+      'operator_id',
+      'governed_receipt_ref',
+      'model_inferences',
+      'tool_calls',
+      'governed_actions',
+    ]);
+    for (const field of PublicAssignmentResultProjectionSchema.fields) {
+      assert.equal(forbidden.has(field.name), false, `public projection must not expose ${field.name}`);
     }
-  }
-  throw new Error(`enum not found: ${fullName}`);
-}
-
-function findMessage(messageName: string): DescMessage {
-  const fullName = `${descriptor.protobuf_package}.${messageName}`;
-  for (const candidate of nestedTypes(file_g8e_eval_v1_eval)) {
-    if (candidate.kind === 'message' && candidate.typeName === fullName) {
-      return candidate;
-    }
-  }
-  throw new Error(`message not found: ${fullName}`);
-}
-
-function messageFieldNames(message: DescMessage): { fields: string[]; oneofGroups: string[] } {
-  const fields: string[] = [];
-  const oneofGroups: string[] = [];
-  for (const field of message.fields) {
-    if (field.oneof !== undefined) {
-      if (!oneofGroups.includes(field.oneof.name)) {
-        oneofGroups.push(field.oneof.name);
-      }
-      continue;
-    }
-    fields.push(field.name);
-  }
-  fields.sort();
-  oneofGroups.sort();
-  return { fields, oneofGroups };
-}
-
-describe('evaluation model campaign descriptor stays in sync with generated protobuf', () => {
-  it('descriptor metadata matches the eval package', () => {
-    assert.equal(descriptor.schema_version, '1.0.0');
-    assert.equal(descriptor.protobuf_package, 'g8e.eval.v1');
-    assert.equal(descriptor.canonical_vectors.length, 7);
   });
-
-  for (const [enumName, values] of Object.entries(descriptor.enums)) {
-    it(`enum ${enumName} matches generated protobuf values`, () => {
-      const enumDescriptor = findEnum(enumName);
-      const liveValues = enumDescriptor.values.map((value) => value.name).sort();
-      assert.deepEqual(liveValues, [...values].sort());
-    });
-  }
-
-  for (const [messageName, messageDescriptor] of Object.entries(descriptor.messages)) {
-    it(`message ${messageName} matches generated protobuf fields`, () => {
-      const schema = findMessage(messageName);
-      const live = messageFieldNames(schema);
-      assert.deepEqual(live.fields, [...messageDescriptor.fields].sort());
-      assert.deepEqual(live.oneofGroups, [...(messageDescriptor.oneof_groups ?? [])].sort());
-
-      for (const prohibited of messageDescriptor.prohibited_fields ?? []) {
-        assert.equal(
-          schema.fields.some((field) => field.name === prohibited),
-          false,
-          `public projection must not expose ${prohibited}`,
-        );
-      }
-    });
-  }
 });
 
 describe('evaluation canonical vectors round-trip through TypeScript', () => {

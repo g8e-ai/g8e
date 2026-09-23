@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
-	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -31,7 +31,7 @@ import (
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
-var errFactory = errors.New("factory boom")
+var errFactory = fmt.Errorf("factory boom")
 
 // panickingTrustInstaller is a mock auth.SystemTrustInstaller that panics on
 // every method call. Used in factory-error tests to prove that downstream
@@ -74,6 +74,17 @@ func TestPublicConfigSetCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 	cmd := publicConfigSetCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
 	cmd.SetArgs([]string{"--mirror-origin", "https://mirror.example"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicSourceTransitionCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicSourceTransitionCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd.SetArgs([]string{"--source-id", "deployment-new", "--yes"})
 
 	err := cmd.Execute()
 	require.Error(t, err)
@@ -168,6 +179,21 @@ func TestDenyPlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
 	cmd := denyPlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"req-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestRevokePlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	cmd := revokePlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+	cmd.Flags().Set("yes", "true")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -574,7 +600,68 @@ func TestEnrollUserCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
+func TestPublicRepairOutboxCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicRepairOutboxCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 // --- Operator commands (session 18) ---
+
+func TestOperatorStopCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	cmd := operatorStopCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"session-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestOperatorBindCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	bindClientFactory := func(*config.Config) operatorBindClient {
+		panic("bind client factory should not be called when fileSvcFactory fails")
+	}
+	cmd := operatorBindCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), bindClientFactory, failingFileSvcFactory(errFactory))
+
+	err := cmd.RunE(cmd, []string{"list"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestOperatorShowCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := operatorShowCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+
+	err := cmd.RunE(cmd, []string{"operator-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestOperatorRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	clientFactory := func(fs.RuntimeFileService, *config.Config, time.Duration) (apiClient, error) {
+		panic("operator run client factory should not be called when fileSvcFactory fails")
+	}
+	cmd := operatorRunCmdWithConfig(configLoaderFor(cfg), clientFactory, failingFileSvcFactory(errFactory))
+	require.NoError(t, cmd.Flags().Set("cmd", "printf test"))
+
+	err := cmd.RunE(cmd, []string{"operator-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
 
 func TestOperatorListCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
@@ -705,34 +792,13 @@ func TestComplianceReportGenerateCmdWithConfig_FileSvcFactoryError(t *testing.T)
 		func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 			panic("signing identity should not be loaded when fileSvcFactory fails")
 		},
+		time.Now,
 	)
-	require.NoError(t, cmd.Flags().Set("scope-id", "scope-1"))
-	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", "1700000000000"))
-	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", "1700000001000"))
+	require.NoError(t, cmd.Flags().Set("scope", constants.ComplianceBundleScopeFilename))
 	require.NoError(t, cmd.Flags().Set("demo-run", "any-run"))
 	require.NoError(t, cmd.Flags().Set("report-id", "report-1"))
 	require.NoError(t, cmd.Flags().Set("signing-metadata", constants.ComplianceReportSigningMetadataTestFilename))
 	require.NoError(t, cmd.Flags().Set("signing-private-key", constants.ComplianceReportSigningPrivateKeyTestFilename))
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
-}
-
-func TestComplianceReleaseEvidenceCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	cmd := complianceReleaseEvidenceCmdWithConfig(
-		failingFileSvcFactory(errFactory),
-		func(string) evidence.ProvenanceSource {
-			panic("provenance source should not be created when fileSvcFactory fails")
-		},
-	)
-	require.NoError(t, cmd.Flags().Set("version", "v2.1.3"))
-	require.NoError(t, cmd.Flags().Set("out", t.TempDir()))
-	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
-	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

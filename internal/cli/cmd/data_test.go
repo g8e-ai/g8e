@@ -660,7 +660,10 @@ func TestDataDocFilterEdgeCases(t *testing.T) {
 	})
 
 	t.Run("DocFilter with complex value (object)", func(t *testing.T) {
-		complexValue := map[string]interface{}{"nested": "value", "number": 42}
+		complexValue := struct {
+			Nested string `json:"nested"`
+			Number int    `json:"number"`
+		}{Nested: "value", Number: 42}
 		valueBytes, err := json.Marshal(complexValue)
 		require.NoError(t, err)
 

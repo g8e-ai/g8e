@@ -99,28 +99,50 @@ func TestIsInferenceOperatorPendingRequest(t *testing.T) {
 	assert.True(t, isInferenceOperatorPendingRequest(&inferenceReq))
 }
 
-func TestNextDockerInitApprovalSlot(t *testing.T) {
-	assert.Equal(t, 1, nextDockerInitApprovalSlot(nil))
-	assert.Equal(t, 2, nextDockerInitApprovalSlot(map[int]struct{}{1: {}}))
-	assert.Equal(t, 0, nextDockerInitApprovalSlot(map[int]struct{}{1: {}, 2: {}, 3: {}, 4: {}}))
-}
-
 func TestSelectDockerInitApprovalCandidate(t *testing.T) {
-	inference := models.PlatformEnrollmentPendingRequest{
-		RequestID:     "inf-1",
-		ComponentKind: models.PlatformComponentOperator,
-		Hostname:      "inference-operator",
+	tests := []struct {
+		name    string
+		pending []models.PlatformEnrollmentPendingRequest
+		wantID  string
+	}{
+		{
+			name: "data operator precedes inference operator",
+			pending: []models.PlatformEnrollmentPendingRequest{
+				{RequestID: "inf-1", ComponentKind: models.PlatformComponentOperator, Hostname: "inference-operator"},
+				{RequestID: "op-1", ComponentKind: models.PlatformComponentOperator, Hostname: "g8e-operator"},
+			},
+			wantID: "op-1",
+		},
+		{
+			name: "existing data operator does not block dashboard",
+			pending: []models.PlatformEnrollmentPendingRequest{
+				{RequestID: "ensemble-1", ComponentKind: models.PlatformComponentEnsemble},
+				{RequestID: "dashboard-1", ComponentKind: models.PlatformComponentDashboard},
+			},
+			wantID: "dashboard-1",
+		},
+		{
+			name: "unrelated request is not auto-approved",
+			pending: []models.PlatformEnrollmentPendingRequest{
+				{RequestID: "other-1", ComponentKind: models.PlatformComponentKind("other")},
+			},
+		},
+		{
+			name: "no requests returns nil",
+		},
 	}
-	dataOp := models.PlatformEnrollmentPendingRequest{
-		RequestID:     "op-1",
-		ComponentKind: models.PlatformComponentOperator,
-		Hostname:      "g8e-operator",
-	}
-	pending := []models.PlatformEnrollmentPendingRequest{inference, dataOp}
 
-	assert.Nil(t, selectDockerInitApprovalCandidate(pending, 2))
-	assert.Equal(t, "op-1", selectDockerInitApprovalCandidate(pending, 1).RequestID)
-	assert.Equal(t, "inf-1", selectDockerInitApprovalCandidate(pending, 4).RequestID)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := selectDockerInitApprovalCandidate(tc.pending)
+			if tc.wantID == "" {
+				assert.Nil(t, candidate)
+				return
+			}
+			require.NotNil(t, candidate)
+			assert.Equal(t, tc.wantID, candidate.RequestID)
+		})
+	}
 }
 
 func TestPlatformEnrollmentApprovalRank(t *testing.T) {

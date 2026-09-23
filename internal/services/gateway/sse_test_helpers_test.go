@@ -101,9 +101,7 @@ func seedOperatorDoc(t *testing.T, h *HTTPHandler, opID, userID, operatorSession
 // seedUserDoc inserts a user document with active status into the DocStore.
 func seedUserDoc(t *testing.T, h *HTTPHandler, userID string) {
 	t.Helper()
-	userBytes, err := json.Marshal(map[string]interface{}{
-		"status": string(constants.UserStatusActive),
-	})
+	userBytes, err := json.Marshal(models.User{Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	err = h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)

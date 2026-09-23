@@ -44,8 +44,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.DataBlobs, http.HandlerFunc(h.dataController.handleBlob))
 
 	// Console SPA (public, no auth required)
-	consoleHandler := console.Handler()
-	mux.Handle(constants.APIPaths.ConsolePrefix, http.StripPrefix(strings.TrimSuffix(constants.APIPaths.ConsolePrefix, "/"), consoleHandler))
+	consoleHandler, err := console.Handler()
+	if err != nil {
+		h.logger.Error("failed to initialize console handler", "error", err)
+	} else {
+		mux.Handle(constants.APIPaths.ConsolePrefix, http.StripPrefix(strings.TrimSuffix(constants.APIPaths.ConsolePrefix, "/"), consoleHandler))
+	}
 
 	// Landing page and health
 	mux.HandleFunc(constants.APIPaths.Landing, h.healthController.handleLandingPage)
@@ -71,6 +75,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentPending, h.platformEnrollmentController.handlePlatformEnrollmentPending)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentDecision, h.platformEnrollmentController.handlePlatformEnrollmentDecision)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRevoke, h.platformEnrollmentController.handlePlatformEnrollmentRevoke)
 
 	// CLI rotation — mTLS-protected; the caller's identity is derived from
 	// the verified CLI certificate. NOT registered on buildHTTPRouter
@@ -148,6 +153,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// mTLS-only routes (merged from buildRouter)
 	mux.HandleFunc(constants.APIPaths.DataSettings, h.dataController.handleDataSettings)
 	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
+	mux.HandleFunc(constants.APIPaths.OperatorsStop, h.operatorController.handleStopOperator)
 	mux.HandleFunc(constants.APIPaths.OperatorsValidate, h.operatorController.handleValidateOperatorSession)
 	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleTerminateOperator))
 	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)
@@ -312,7 +318,7 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, h.platformEnrollmentController.handlePlatformEnrollmentStatus)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
 
-	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
+	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleG8eBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 

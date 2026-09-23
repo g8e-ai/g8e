@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,6 +49,10 @@ func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyHandler, *WebSessionSer
 	return handler, webSessionSvc, user
 }
 
+type passkeyErrorResponse struct {
+	Error string `json:"error"`
+}
+
 func TestPasskeyRegisterChallenge(t *testing.T) {
 	cfg := passkeyHandlerConfig{source: sourceJWT, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
 
@@ -57,7 +62,7 @@ func TestPasskeyRegisterChallenge(t *testing.T) {
 		body       any
 		ctxUserID  string
 		wantStatus int
-		wantJSON   func(t *testing.T, body map[string]any)
+		wantJSON   func(t *testing.T, body passkeyErrorResponse)
 	}{
 		{
 			name:       "rejects non-POST",
@@ -70,8 +75,8 @@ func TestPasskeyRegisterChallenge(t *testing.T) {
 			method:     http.MethodPost,
 			body:       map[string]string{},
 			wantStatus: http.StatusBadRequest,
-			wantJSON: func(t *testing.T, body map[string]any) {
-				assert.Contains(t, body["error"], "user_id")
+			wantJSON: func(t *testing.T, body passkeyErrorResponse) {
+				assert.Contains(t, body.Error, "user_id")
 			},
 		},
 		{
@@ -106,7 +111,7 @@ func TestPasskeyRegisterChallenge(t *testing.T) {
 
 			assert.Equal(t, tc.wantStatus, rr.Code)
 			if tc.wantJSON != nil {
-				var body map[string]any
+				var body passkeyErrorResponse
 				require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
 				tc.wantJSON(t, body)
 			}
@@ -126,10 +131,10 @@ func TestPasskeyRegisterChallenge(t *testing.T) {
 		handler(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]any
+		var resp models.PasskeyRegisterChallengeResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.True(t, resp["success"].(bool))
-		assert.NotNil(t, resp["options"])
+		assert.True(t, resp.Success)
+		assert.NotNil(t, resp.Options)
 	})
 }
 
@@ -595,9 +600,9 @@ func TestPasskeyHandler_RegisterChallenge_CLIEnrollmentFlow(t *testing.T) {
 	// The user already exists (the CLI created it via `auth enroll user`), so
 	// HasAnyUsers() is true and the handler returns 400 user_id required.
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
-	var resp map[string]any
+	var resp passkeyErrorResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.Contains(t, resp["error"], "user_id")
+	assert.Contains(t, resp.Error, "user_id")
 	// user.ID is referenced to avoid an unused-variable lint; it is the
 	// user that the CLI created and that the broken flow failed to bind.
 	_ = user
@@ -683,13 +688,13 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 		require.NoError(t, err)
 		// Overwrite the persisted token with an expires_at in the past so
 		// ValidateAndConsumeToken rejects it as expired.
-		expiredDoc, err := json.Marshal(map[string]any{
-			"token":          tok.Token,
-			"user_id":        user.ID,
-			"cli_session_id": "cli-exp-1",
-			"created_at":     "2020-01-01T00:00:00Z",
-			"expires_at":     "2020-01-01T00:00:00Z",
-			"consumed":       false,
+		expiredDoc, err := json.Marshal(models.EnrollmentToken{
+			Token:        tok.Token,
+			UserID:       user.ID,
+			CLISessionID: "cli-exp-1",
+			CreatedAt:    time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+			ExpiresAt:    time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+			Consumed:     false,
 		})
 		require.NoError(t, err)
 		require.NoError(t, db.GetDocStore().DocSet(
@@ -733,9 +738,9 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 		handler(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		var resp map[string]any
+		var resp passkeyErrorResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Contains(t, resp["error"], "enrollment_token")
+		assert.Contains(t, resp.Error, "enrollment_token")
 	})
 
 	t.Run("invalid token returns 401", func(t *testing.T) {
@@ -791,14 +796,16 @@ func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
 	// a 400 (not a 200 success=false). This pins the contract: the
 	// enrollment-token flow returns proper 4xx errors, never the old
 	// 200-OK-on-error anti-pattern.
-	body, err := json.Marshal(map[string]any{
-		"enrollment_token": tok.Token,
-		"attestation_response": map[string]any{
-			"id":                "fake-id",
-			"rawId":             "fake-rawId",
-			"type":              "webauthn.create",
-			"clientDataJSON":    "fake",
-			"attestationObject": "fake",
+	body, err := json.Marshal(struct {
+		EnrollmentToken     string                             `json:"enrollment_token"`
+		AttestationResponse models.WebAuthnAttestationResponse `json:"attestation_response"`
+	}{
+		EnrollmentToken: tok.Token,
+		AttestationResponse: models.WebAuthnAttestationResponse{
+			ID:                "fake-id",
+			RawID:             "fake-rawId",
+			ClientDataJSON:    "fake",
+			AttestationObject: "fake",
 		},
 	})
 	require.NoError(t, err)

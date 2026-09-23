@@ -12,6 +12,7 @@ package gateway
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -53,7 +54,7 @@ type mirrorTestEnv struct {
 func newMirrorTestEnv(t *testing.T) *mirrorTestEnv {
 	t.Helper()
 	fileSvc := newProducerFileSvc(t)
-	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc))
+	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc), PublicMirrorConfig{})
 	require.NoError(t, err)
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -105,18 +106,9 @@ func (e *mirrorTestEnv) buildBatch(records []models.PublicFeedRecord, prevHash s
 	return batch
 }
 
-// makeRecord creates a valid public feed record from a projection dict.
-func (e *mirrorTestEnv) makeRecord(seq int64, proj map[string]any) models.PublicFeedRecord {
-	e.t.Helper()
-	recordBytes, err := json.Marshal(proj)
-	require.NoError(e.t, err)
-	recordHash := sha256.Sum256(recordBytes)
-	return models.PublicFeedRecord{
-		Sequence:    seq,
-		RecordType:  models.PublicFeedRecordTypeProjection,
-		RecordHash:  hex.EncodeToString(recordHash[:]),
-		RecordBytes: string(recordBytes),
-	}
+// makeRecord creates a valid public feed record from a projection object.
+func (e *mirrorTestEnv) makeRecord(seq int64, proj models.PublicFeedObject) models.PublicFeedRecord {
+	return projectionRecordFromObject(e.t, seq, proj)
 }
 
 func (e *mirrorTestEnv) makeProofIngestRequest(filename string, content []byte) models.PublicProofIngestRequest {
@@ -222,7 +214,7 @@ func TestMirror_IngestAuth_RejectsMissingToken(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	env.mirror.SetIngestAuthToken("secret-token-123")
 
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 
 	reqBody := models.PublicIngestRequest{Batch: batch}
@@ -240,7 +232,7 @@ func TestMirror_IngestAuth_AcceptsWithValidToken(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	env.mirror.SetIngestAuthToken("secret-token-123")
 
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 
 	reqBody := models.PublicIngestRequest{Batch: batch}
@@ -259,19 +251,96 @@ func TestMirror_IngestAuth_AcceptsWithValidToken(t *testing.T) {
 	assert.Equal(t, int64(1), ingestResp.HighWaterSequence)
 }
 
-func TestPublicMirrorClientIDUsesCloudflareAddressFromLoopbackConnector(t *testing.T) {
+func TestPublicMirrorClientIDUsesCloudflareAddressFromConfiguredProxy(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc), PublicMirrorConfig{
+		TrustedProxyCIDRs: []string{"172.28.0.1/32"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, mirror.SetAnonymousReadRateLimit(1, time.Minute))
+
+	handler := mirror.PublicHandler()
 	request := httptest.NewRequest(http.MethodGet, "/snapshot", nil)
-	request.RemoteAddr = "127.0.0.1:32000"
+	request.RemoteAddr = "172.28.0.1:32000"
 	request.Header.Set("CF-Connecting-IP", "192.0.2.20")
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, first.Code)
 
-	assert.Equal(t, "192.0.2.20", publicMirrorClientID(request))
+	request = httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "172.28.0.1:32001"
+	request.Header.Set("CF-Connecting-IP", "192.0.2.21")
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, second.Code)
 
-	request.RemoteAddr = "198.51.100.4:32000"
-	assert.Equal(t, "198.51.100.4", publicMirrorClientID(request))
+	request = httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "198.51.100.4:32002"
+	request.Header.Set("CF-Connecting-IP", "192.0.2.22")
+	untrusted := httptest.NewRecorder()
+	handler.ServeHTTP(untrusted, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, untrusted.Code)
 
-	request.RemoteAddr = "127.0.0.1:32000"
-	request.Header.Set("CF-Connecting-IP", "not-an-ip")
-	assert.Equal(t, "127.0.0.1", publicMirrorClientID(request))
+	request = httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "198.51.100.4:32003"
+	request.Header.Set("CF-Connecting-IP", "192.0.2.23")
+	untrusted = httptest.NewRecorder()
+	handler.ServeHTTP(untrusted, request)
+	assert.Equal(t, http.StatusTooManyRequests, untrusted.Code)
+
+	request = httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "172.28.0.1:32004"
+	request.Header.Add("CF-Connecting-IP", "192.0.2.24")
+	request.Header.Add("CF-Connecting-IP", "192.0.2.25")
+	assert.Equal(t, "172.28.0.1", mirror.publicMirrorClientID(request))
+}
+
+func TestNewPublicMirrorServerRejectsInvalidTrustedProxyCIDR(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	_, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc), PublicMirrorConfig{
+		TrustedProxyCIDRs: []string{"not-a-cidr"},
+	})
+	assert.ErrorIs(t, err, constants.ErrPublicFeedTrustedProxyConfig)
+}
+
+func TestPublicMirrorClientIDRejectsNonUnicastForwardedAddresses(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc), PublicMirrorConfig{
+		TrustedProxyCIDRs: []string{"172.28.0.1/32"},
+	})
+	require.NoError(t, err)
+
+	for _, forwardedAddress := range []string{"127.0.0.1", "::1", "0.0.0.0", "224.0.0.1"} {
+		t.Run(forwardedAddress, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+			request.RemoteAddr = "172.28.0.1:32000"
+			request.Header.Set("CF-Connecting-IP", forwardedAddress)
+			assert.Equal(t, "172.28.0.1", mirror.publicMirrorClientID(request))
+		})
+	}
+}
+
+func TestMirror_AnonymousReadRateLimitExpiresClientWindowsAndCompactsExpiryQueue(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	require.NoError(t, env.mirror.SetAnonymousReadRateLimit(1, time.Minute))
+	now := time.Now().UTC()
+	env.mirror.now = func() time.Time { return now }
+
+	request := httptest.NewRequest(http.MethodGet, "/snapshot?source="+env.sourceID, nil)
+	request.RemoteAddr = "198.51.100.10:32000"
+	response := httptest.NewRecorder()
+	env.mirror.PublicHandler().ServeHTTP(response, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, response.Code)
+
+	now = now.Add(time.Minute)
+	request = httptest.NewRequest(http.MethodGet, "/snapshot?source="+env.sourceID, nil)
+	request.RemoteAddr = "198.51.100.10:32001"
+	response = httptest.NewRecorder()
+	env.mirror.PublicHandler().ServeHTTP(response, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, response.Code)
+	assert.Len(t, env.mirror.anonymousRateClients, 1)
+	assert.Len(t, env.mirror.anonymousRateExpirations, 1)
+	assert.Zero(t, env.mirror.anonymousRateExpiryHead)
 }
 
 func TestMirror_AnonymousReadRateLimitRejectsAndResetsPerClientWindow(t *testing.T) {
@@ -307,7 +376,7 @@ func TestMirror_AnonymousReadRateLimitRejectsAndResetsPerClientWindow(t *testing
 // rejects a batch with a tampered signature.
 func TestMirror_Signature_RejectsTamperedSignature(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 
 	// Tamper with the signature.
@@ -324,7 +393,7 @@ func TestMirror_Signature_RejectsTamperedSignature(t *testing.T) {
 // batch signed by an unknown key.
 func TestMirror_Signature_RejectsUnknownKey(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	batch.SigningKeyID = "unknown-key"
 
@@ -339,7 +408,7 @@ func TestMirror_Signature_RejectsRevokedKey(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
 
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 
 	_, resp := env.sendIngest(batch)
@@ -357,13 +426,13 @@ func TestMirror_HashChain_RejectsWrongPreviousHash(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	// First batch accepted.
-	records1 := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
+	records1 := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
 
 	// Second batch with wrong previous hash.
-	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"campaign_id": "c1"})}
+	records2 := []models.PublicFeedRecord{env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch2 := env.buildBatch(records2, "deadbeef00000000000000000000000000000000000000000000000000000000")
 	_, resp2 := env.sendIngest(batch2)
 	assert.False(t, resp2.Accepted)
@@ -376,13 +445,13 @@ func TestMirror_HashChain_AcceptsCorrectChain(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	// First batch.
-	records1 := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records1 := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
 
 	// Second batch chained to first.
-	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"v": "2"})}
+	records2 := []models.PublicFeedRecord{env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"v": "2"}))}
 	batch2 := env.buildBatch(records2, batch1.ContentHash)
 	_, resp2 := env.sendIngest(batch2)
 	assert.True(t, resp2.Accepted)
@@ -392,12 +461,12 @@ func TestMirror_HashChain_AcceptsCorrectChain(t *testing.T) {
 
 func TestMirror_RestartRecoversAcceptedStateAndContinuesHashChain(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records1 := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
+	records1 := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
 
-	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 	require.NoError(t, err)
 	server2 := httptest.NewServer(mirror2.Handler())
 	t.Cleanup(server2.Close)
@@ -422,7 +491,7 @@ func TestMirror_RestartRecoversAcceptedStateAndContinuesHashChain(t *testing.T) 
 	assert.Equal(t, 1, batchCount)
 	assert.Equal(t, 1, recordCount)
 
-	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"campaign_id": "c1"})}
+	records2 := []models.PublicFeedRecord{env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch2 := env.buildBatch(records2, batch1.ContentHash)
 	requestBody, err = json.Marshal(models.PublicIngestRequest{Batch: batch2})
 	require.NoError(t, err)
@@ -440,7 +509,7 @@ func TestMirror_RetentionPrunesOldestHistoryAndRecoversChain(t *testing.T) {
 	require.NoError(t, env.mirror.SetMaxRetainedBatches(2))
 	previousHash := constants.PublicFeedZeroHashHex
 	for sequence := int64(1); sequence <= 3; sequence++ {
-		batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(sequence, map[string]any{"sequence": sequence})}, previousHash)
+		batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(sequence, projectionWithInt64Field("sequence", sequence))}, previousHash)
 		_, response := env.sendIngest(batch)
 		require.True(t, response.Accepted)
 		previousHash = batch.ContentHash
@@ -456,10 +525,10 @@ func TestMirror_RetentionPrunesOldestHistoryAndRecoversChain(t *testing.T) {
 	assert.Equal(t, int64(2), state.Records[0].Sequence)
 	env.mirror.mu.RUnlock()
 
-	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 	require.NoError(t, err)
 	require.NoError(t, mirror2.SetMaxRetainedBatches(2))
-	batch4 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(4, map[string]any{"sequence": 4})}, previousHash)
+	batch4 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(4, projectionWithInt64Field("sequence", 4))}, previousHash)
 	_, err = mirror2.validateBatch(batch4)
 	require.NoError(t, err)
 	require.NoError(t, mirror2.acceptBatch(context.Background(), batch4))
@@ -484,7 +553,7 @@ func TestMirror_RestartRejectsNullDurableSourceState(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, env.fileSvc.WriteFile(ctx, constants.PublicMirrorStatePath, stateBytes, constants.PermFilePrivate))
 
-	_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)
@@ -492,14 +561,38 @@ func TestMirror_RestartRejectsNullDurableSourceState(t *testing.T) {
 
 func TestMirror_RestartRejectsCorruptDurableState(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}, constants.PublicFeedZeroHashHex)
+	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}, constants.PublicFeedZeroHashHex)
 	_, response := env.sendIngest(batch)
 	require.True(t, response.Accepted)
 	require.NoError(t, env.fileSvc.WriteFile(context.Background(), constants.PublicMirrorStatePath, []byte("{invalid\n"), constants.PermFilePrivate))
 
-	_, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	_, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)
+}
+
+func TestMirror_RegisterSourceKeyMakesNewSourceActiveWithoutRemovingArchivedSource(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	oldBatch := env.buildBatch([]models.PublicFeedRecord{
+		env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"dataset_id": "dataset-old"})),
+	}, constants.PublicFeedZeroHashHex)
+	_, response := env.sendIngest(oldBatch)
+	require.True(t, response.Accepted)
+
+	newPublicKey, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, env.mirror.RegisterSourceKey(context.Background(), "source-new", "key-new", newPublicKey))
+
+	var active models.PublicFeedBootstrap
+	assert.Equal(t, http.StatusOK, env.getJSON("/bootstrap", &active))
+	assert.Equal(t, "source-new", active.Snapshot.SourceID)
+	assert.Zero(t, active.Snapshot.HighWaterSequence)
+
+	var archived models.PublicFeedBootstrap
+	assert.Equal(t, http.StatusOK, env.getJSON("/bootstrap?source="+env.sourceID, &archived))
+	assert.Equal(t, env.sourceID, archived.Snapshot.SourceID)
+	assert.Equal(t, oldBatch.LastSequence, archived.Snapshot.HighWaterSequence)
+	assert.Equal(t, oldBatch.ContentHash, archived.Snapshot.FeedChainHash)
 }
 
 // ---------------------------------------------------------------------------
@@ -513,27 +606,29 @@ func TestMirror_Sequence_RejectsOutOfOrder(t *testing.T) {
 
 	// First batch with sequences 1-3.
 	records1 := []models.PublicFeedRecord{
-		env.makeRecord(1, map[string]any{"v": "1"}),
-		env.makeRecord(2, map[string]any{"v": "2"}),
-		env.makeRecord(3, map[string]any{"v": "3"}),
+		env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"})),
+		env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"v": "2"})),
+		env.makeRecord(3, models.NewPublicFeedObject(map[string]string{"v": "3"})),
 	}
 	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
 
 	// Second batch starting at sequence 2 (overlap).
-	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"v": "2b"})}
+	records2 := []models.PublicFeedRecord{env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"v": "2b"}))}
 	batch2 := env.buildBatch(records2, batch1.ContentHash)
 	_, resp2 := env.sendIngest(batch2)
 	assert.False(t, resp2.Accepted)
 	assert.Equal(t, models.PublicFeedIngestRejectionDuplicateSequence, resp2.RejectionReason)
+	assert.Equal(t, batch1.LastSequence, resp2.HighWaterSequence)
+	assert.Equal(t, batch1.ContentHash, resp2.FeedChainHash)
 }
 
 // TestMirror_Sequence_RejectsFirstBatchNonZeroPrevHash verifies that the
 // first batch for a source must carry the zero hash as previous_batch_hash.
 func TestMirror_Sequence_RejectsFirstBatchNonZeroPrevHash(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, "abcdef0000000000000000000000000000000000000000000000000000000000")
 	_, resp := env.sendIngest(batch)
 	assert.False(t, resp.Accepted)
@@ -548,7 +643,7 @@ func TestMirror_Sequence_RejectsFirstBatchNonZeroPrevHash(t *testing.T) {
 // already-accepted identical batch returns the durable high-water state.
 func TestMirror_Idempotency_DuplicateBatchAccepted(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 
 	_, resp1 := env.sendIngest(batch)
@@ -567,11 +662,11 @@ func TestMirror_Idempotency_DuplicateBatchAccepted(t *testing.T) {
 
 func TestMirror_Idempotency_DifferentBatchForAcceptedRangeRejectsEquivocation(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	batch1 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	batch1 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}, constants.PublicFeedZeroHashHex)
 	_, response := env.sendIngest(batch1)
 	require.True(t, response.Accepted)
 
-	batch2 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "different"})}, constants.PublicFeedZeroHashHex)
+	batch2 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "different"}))}, constants.PublicFeedZeroHashHex)
 	_, response = env.sendIngest(batch2)
 	assert.False(t, response.Accepted)
 	assert.Equal(t, models.PublicFeedIngestRejectionEquivocation, response.RejectionReason)
@@ -587,7 +682,7 @@ func TestMirror_OversizedBatch_RejectsTooManyRecords(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	records := make([]models.PublicFeedRecord, constants.PublicFeedBatchMaxRecords+1)
 	for i := range records {
-		records[i] = env.makeRecord(int64(i+1), map[string]any{"i": i})
+		records[i] = env.makeRecord(int64(i+1), projectionWithInt64Field("i", int64(i)))
 	}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
@@ -603,7 +698,7 @@ func TestMirror_OversizedBatch_RejectsTooManyRecords(t *testing.T) {
 // batch where a record hash does not match the computed hash.
 func TestMirror_RecordHash_RejectsMismatch(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 
 	// Tamper with the record hash.
@@ -627,10 +722,10 @@ func TestMirror_RecordHash_RejectsMismatch(t *testing.T) {
 // rejects a batch containing prohibited fields in a record payload.
 func TestMirror_Disclosure_RejectsProhibitedFields(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{
 		"campaign_id": "c1",
 		"api_key":     "should-not-be-here",
-	})}
+	}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
 	assert.False(t, resp.Accepted)
@@ -648,9 +743,9 @@ func TestMirror_Bootstrap_ReturnsSnapshotAndProjections(t *testing.T) {
 
 	// Ingest a few projection records.
 	records := []models.PublicFeedRecord{
-		env.makeRecord(1, map[string]any{"campaign_id": "c1", "variant_id": "v1"}),
-		env.makeRecord(2, map[string]any{"campaign_id": "c1", "variant_id": "v2"}),
-		env.makeRecord(3, map[string]any{"campaign_id": "c1", "variant_id": "v3"}),
+		env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1", "variant_id": "v1"})),
+		env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1", "variant_id": "v2"})),
+		env.makeRecord(3, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1", "variant_id": "v3"})),
 	}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
@@ -685,7 +780,7 @@ func TestMirror_Bootstrap_EmptySourceReturnsOffline(t *testing.T) {
 // returns the current high-water sequence and feed-chain hash.
 func TestMirror_Snapshot_ReturnsHighWater(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, ingestResp := env.sendIngest(batch)
 	require.True(t, ingestResp.Accepted)
@@ -695,6 +790,23 @@ func TestMirror_Snapshot_ReturnsHighWater(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, int64(1), snap.HighWaterSequence)
 	assert.Equal(t, batch.ContentHash, snap.FeedChainHash)
+	assert.Equal(t, 1, snap.BatchCount)
+}
+
+func TestMirror_Snapshot_ReturnsRetainedCheckpoint(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	first := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}, constants.PublicFeedZeroHashHex)
+	_, ingestResp := env.sendIngest(first)
+	require.True(t, ingestResp.Accepted)
+	second := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"v": "2"}))}, first.ContentHash)
+	_, ingestResp = env.sendIngest(second)
+	require.True(t, ingestResp.Accepted)
+
+	var snap models.PublicFeedSnapshot
+	status := env.getJSON("/snapshot?source="+env.sourceID+"&sequence=1", &snap)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, int64(1), snap.HighWaterSequence)
+	assert.Equal(t, first.ContentHash, snap.FeedChainHash)
 	assert.Equal(t, 1, snap.BatchCount)
 }
 
@@ -710,7 +822,7 @@ func TestMirror_History_CursorPagination(t *testing.T) {
 	// Ingest 5 records.
 	records := make([]models.PublicFeedRecord, 5)
 	for i := range records {
-		records[i] = env.makeRecord(int64(i+1), map[string]any{"i": i})
+		records[i] = env.makeRecord(int64(i+1), projectionWithInt64Field("i", int64(i)))
 	}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
@@ -747,7 +859,7 @@ func TestMirror_History_BoundedPageSize(t *testing.T) {
 	// Ingest 10 records.
 	records := make([]models.PublicFeedRecord, 10)
 	for i := range records {
-		records[i] = env.makeRecord(int64(i+1), map[string]any{"i": i})
+		records[i] = env.makeRecord(int64(i+1), projectionWithInt64Field("i", int64(i)))
 	}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
@@ -757,7 +869,62 @@ func TestMirror_History_BoundedPageSize(t *testing.T) {
 	var page models.PublicFeedCursorPage
 	status := env.getJSON("/history?source="+env.sourceID+"&limit=1000", &page)
 	assert.Equal(t, http.StatusOK, status)
-	assert.LessOrEqual(t, page.Limit, 100)
+	assert.Equal(t, 500, page.Limit)
+}
+
+func TestMirror_History_CompressesGzipResponse(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "title": strings.Repeat("evaluation ", 100)}))}
+	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
+	_, ingestResp := env.sendIngest(batch)
+	require.True(t, ingestResp.Accepted)
+
+	req, err := http.NewRequest(http.MethodGet, env.server.URL+"/history?source="+env.sourceID, nil)
+	require.NoError(t, err)
+	req.Header.Set("Accept-Encoding", "gzip")
+	resp, err := env.client.Do(req)
+	require.NoError(t, err)
+	t.Cleanup(func() { resp.Body.Close() })
+	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+
+	reader, err := gzip.NewReader(resp.Body)
+	require.NoError(t, err)
+	t.Cleanup(func() { reader.Close() })
+	var page models.PublicFeedCursorPage
+	require.NoError(t, json.NewDecoder(reader).Decode(&page))
+	require.Len(t, page.Items, 1)
+}
+
+func TestMirror_History_FiltersByRecordKindBeforePagination(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	records := []models.PublicFeedRecord{
+		env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"kind": "assignment_result", "dataset_id": "eval-run-1"})),
+		env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"})),
+		env.makeRecord(3, models.NewPublicFeedObject(map[string]string{"kind": "assignment_result", "dataset_id": "eval-run-2"})),
+		env.makeRecord(4, models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-2"})),
+	}
+	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
+	_, resp := env.sendIngest(batch)
+	require.True(t, resp.Accepted)
+
+	var first models.PublicFeedCursorPage
+	status := env.getJSON("/history?source="+env.sourceID+"&kind=catalog_snapshot&limit=1", &first)
+	assert.Equal(t, http.StatusOK, status)
+	require.Len(t, first.Items, 1)
+	datasetID, ok := first.Items[0].StringField("dataset_id")
+	require.True(t, ok)
+	assert.Equal(t, "eval-run-1", datasetID)
+	assert.True(t, first.HasMore)
+	assert.Equal(t, "2", first.Cursor)
+
+	var second models.PublicFeedCursorPage
+	status = env.getJSON("/history?source="+env.sourceID+"&kind=catalog_snapshot&cursor="+first.Cursor+"&limit=1", &second)
+	assert.Equal(t, http.StatusOK, status)
+	require.Len(t, second.Items, 1)
+	datasetID, ok = second.Items[0].StringField("dataset_id")
+	require.True(t, ok)
+	assert.Equal(t, "eval-run-2", datasetID)
+	assert.False(t, second.HasMore)
 }
 
 // ---------------------------------------------------------------------------
@@ -791,7 +958,7 @@ func TestMirror_CORS_OptionsReturnsNoContent(t *testing.T) {
 // include CORS headers (server-to-server only).
 func TestMirror_CORS_IngestHasNoCORS(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	reqBody := models.PublicIngestRequest{Batch: batch}
 	bodyBytes, _ := json.Marshal(reqBody)
@@ -811,8 +978,8 @@ func TestMirror_SSE_ReplaysExistingRecords(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	records := []models.PublicFeedRecord{
-		env.makeRecord(1, map[string]any{"v": "1"}),
-		env.makeRecord(2, map[string]any{"v": "2"}),
+		env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"})),
+		env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"v": "2"})),
 	}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
@@ -853,7 +1020,7 @@ func TestMirror_SSE_DeliversFirstBatchToExplicitSourceSubscriber(t *testing.T) {
 	require.NoError(t, err)
 	defer streamResponse.Body.Close()
 
-	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}, constants.PublicFeedZeroHashHex)
 	require.NoError(t, env.mirror.acceptBatch(ctx, batch))
 
 	scanner := bufio.NewScanner(streamResponse.Body)
@@ -900,9 +1067,9 @@ func TestMirror_SSE_ResumesFromSinceID(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	records := []models.PublicFeedRecord{
-		env.makeRecord(1, map[string]any{"v": "1"}),
-		env.makeRecord(2, map[string]any{"v": "2"}),
-		env.makeRecord(3, map[string]any{"v": "3"}),
+		env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"})),
+		env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"v": "2"})),
+		env.makeRecord(3, models.NewPublicFeedObject(map[string]string{"v": "3"})),
 	}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
@@ -939,7 +1106,7 @@ func TestMirror_SSE_ReplayTruncatesAtLimit(t *testing.T) {
 
 	records := make([]models.PublicFeedRecord, 4)
 	for i := range records {
-		records[i] = env.makeRecord(int64(i+1), map[string]any{"v": i + 1})
+		records[i] = env.makeRecord(int64(i+1), projectionWithInt64Field("v", int64(i+1)))
 	}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
@@ -980,7 +1147,7 @@ func TestMirror_StaleSource_ReportsStaleFreshness(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	// Ingest a batch first.
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
 	require.True(t, resp.Accepted)
@@ -998,7 +1165,7 @@ func TestMirror_StaleSource_ReportsStaleFreshness(t *testing.T) {
 // TestMirror_FreshnessDerivesFromLastAcceptedBatchTime verifies every elapsed-time freshness boundary.
 func TestMirror_FreshnessDerivesFromLastAcceptedBatchTime(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}, constants.PublicFeedZeroHashHex)
 	_, response := env.sendIngest(batch)
 	require.True(t, response.Accepted)
 	require.NoError(t, env.mirror.SetFreshnessWindows(time.Second, 2*time.Second, 3*time.Second))
@@ -1028,7 +1195,7 @@ func TestMirror_FreshnessDerivesFromLastAcceptedBatchTime(t *testing.T) {
 func TestMirror_IntentionallyStopped_BootstrapReportsTerminalFreshness(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
 	require.True(t, resp.Accepted)
@@ -1109,7 +1276,7 @@ func TestMirror_KeyRotation_AcceptsNewKey(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	// First batch with old key.
-	records1 := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records1 := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
@@ -1124,7 +1291,7 @@ func TestMirror_KeyRotation_AcceptsNewKey(t *testing.T) {
 	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
 
 	// Second batch with new key.
-	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"v": "2"})}
+	records2 := []models.PublicFeedRecord{env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"v": "2"}))}
 	batch2 := models.PublicFeedBatch{
 		ProtocolVersion:   constants.PublicFeedProtocolVersion,
 		SchemaVersion:     constants.PublicFeedSchemaVersion,
@@ -1152,7 +1319,7 @@ func TestMirror_KeyRotation_OldKeyRejectedAfterRevocation(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	// First batch with old key.
-	records1 := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records1 := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
@@ -1164,7 +1331,7 @@ func TestMirror_KeyRotation_OldKeyRejectedAfterRevocation(t *testing.T) {
 	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
 
 	// Try to send with old key.
-	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"v": "2"})}
+	records2 := []models.PublicFeedRecord{env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"v": "2"}))}
 	batch2 := env.buildBatch(records2, batch1.ContentHash)
 	_, resp2 := env.sendIngest(batch2)
 	assert.False(t, resp2.Accepted)
@@ -1188,13 +1355,13 @@ func TestMirror_MultiSource_IsolatesSources(t *testing.T) {
 	require.NoError(t, env.mirror.RegisterSourceKey(context.Background(), source2ID, key2ID, pub2))
 
 	// Ingest to source 1.
-	records1 := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"s": "1"})}
+	records1 := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"s": "1"}))}
 	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
 
 	// Ingest to source 2 (independent sequence space).
-	records2Bytes, _ := json.Marshal(map[string]any{"s": "2"})
+	records2Bytes := []byte(`{"schema_version":"1.3.0","kind":"catalog_snapshot","dataset_id":"source-2-dataset","quality_state":"live_in_progress","observed_at":"2026-09-21T00:00:00Z","source_marker":"2"}`)
 	records2Hash := sha256.Sum256(records2Bytes)
 	records2 := []models.PublicFeedRecord{{
 		Sequence:    1,
@@ -1353,7 +1520,7 @@ func TestMirror_RestartRecoversProofCatalogArtifactAndKeyRevocation(t *testing.T
 	artifactID := proofRequest.Artifacts[0].ArtifactID
 	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
 
-	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 	require.NoError(t, err)
 	server2 := httptest.NewServer(mirror2.Handler())
 	t.Cleanup(server2.Close)
@@ -1365,7 +1532,7 @@ func TestMirror_RestartRecoversProofCatalogArtifactAndKeyRevocation(t *testing.T
 	assert.Equal(t, http.StatusOK, response.StatusCode)
 	assert.Equal(t, content, body)
 
-	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}, constants.PublicFeedZeroHashHex)
 	requestBody, err := json.Marshal(models.PublicIngestRequest{Batch: batch})
 	require.NoError(t, err)
 	response, err = server2.Client().Post(server2.URL+"/ingest", "application/json", bytes.NewReader(requestBody))
@@ -1413,7 +1580,7 @@ func TestMirror_RestartRejectsCorruptDurableProofMetadata(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, env.fileSvc.WriteFile(ctx, constants.PublicMirrorStatePath, stateBytes, constants.PermFilePrivate))
 
-			_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+			_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)
@@ -1491,15 +1658,15 @@ func TestMirror_FullCycle_IngestThenRead(t *testing.T) {
 
 	// Ingest two batches.
 	records1 := []models.PublicFeedRecord{
-		env.makeRecord(1, map[string]any{"campaign_id": "c1", "variant_id": "v1"}),
-		env.makeRecord(2, map[string]any{"campaign_id": "c1", "variant_id": "v2"}),
+		env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1", "variant_id": "v1"})),
+		env.makeRecord(2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1", "variant_id": "v2"})),
 	}
 	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
 
 	records2 := []models.PublicFeedRecord{
-		env.makeRecord(3, map[string]any{"campaign_id": "c1", "variant_id": "v3"}),
+		env.makeRecord(3, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1", "variant_id": "v3"})),
 	}
 	batch2 := env.buildBatch(records2, batch1.ContentHash)
 	_, resp2 := env.sendIngest(batch2)
@@ -1530,11 +1697,11 @@ func TestMirror_FullCycle_IngestThenRead(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestMirror_RecordType_AcceptsEventRecords verifies that the mirror accepts
-// event-type records in addition to projections.
+// canonical explorer live-event records in addition to projections.
 func TestMirror_RecordType_AcceptsEventRecords(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
-	eventBytes, _ := json.Marshal(map[string]any{"event_type": "eval.cycle.started", "cycle_id": "cyc-1"})
+	eventBytes := []byte(`{"schema_version":"1.3.0","kind":"assignment_started","dataset_id":"ds-live-run-1","quality_state":"live_in_progress","observed_at":"2026-09-21T00:00:00Z","event_id":"event-1","run_id":"run-1","lifecycle_status":"running","completed":0,"total":1}`)
 	eventHash := sha256.Sum256(eventBytes)
 	records := []models.PublicFeedRecord{{
 		Sequence:    1,
@@ -1547,12 +1714,44 @@ func TestMirror_RecordType_AcceptsEventRecords(t *testing.T) {
 	assert.True(t, resp.Accepted)
 }
 
+func TestMirror_RecordType_RejectsUnknownEventKindWithoutAdvancingSequence(t *testing.T) {
+	env := newMirrorTestEnv(t)
+
+	eventBytes := []byte(`{"kind":"heartbeat"}`)
+	eventHash := sha256.Sum256(eventBytes)
+	batch := env.buildBatch([]models.PublicFeedRecord{{
+		Sequence:    1,
+		RecordType:  models.PublicFeedRecordTypeEvent,
+		RecordHash:  hex.EncodeToString(eventHash[:]),
+		RecordBytes: string(eventBytes),
+	}}, constants.PublicFeedZeroHashHex)
+	_, resp := env.sendIngest(batch)
+
+	assert.False(t, resp.Accepted)
+	var snapshot models.PublicFeedSnapshot
+	env.getJSON("/snapshot?source="+env.sourceID, &snapshot)
+	assert.Zero(t, snapshot.HighWaterSequence)
+}
+
 // TestMirror_RecordType_AcceptsProofManifestRecords verifies that the mirror
 // accepts proof_manifest-type records.
 func TestMirror_RecordType_AcceptsProofManifestRecords(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
-	manifestBytes, _ := json.Marshal(map[string]any{"proof_root": "abc123", "campaign_id": "c1"})
+	manifestBytes, _ := json.Marshal(models.PublicProofManifest{
+		SchemaVersion:               constants.PublicProofManifestSchemaVersion,
+		ProofRootSHA256:             strings.Repeat("a", 64),
+		CampaignID:                  "c1",
+		CampaignRevision:            "rev1",
+		VerifiedIndexGenerationHash: strings.Repeat("b", 64),
+		VerificationOK:              true,
+		ArtifactCount:               1,
+		Artifacts:                   []models.PublicProofCatalogEntry{{ArtifactID: strings.Repeat("c", 64)}},
+		VerifierInstructions:        "verify",
+		GeneratedAt:                 time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC),
+		SigningKeyID:                "key-1",
+		Signature:                   strings.Repeat("d", 128),
+	})
 	manifestHash := sha256.Sum256(manifestBytes)
 	records := []models.PublicFeedRecord{{
 		Sequence:    1,
@@ -1661,7 +1860,7 @@ func TestMirror_EmptySource_SnapshotReturnsZero(t *testing.T) {
 // hash.
 func TestMirror_ContentHashMismatch_RejectsTamperedContentHash(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 
 	// Tamper with the content hash.
@@ -1682,7 +1881,7 @@ func TestMirror_Bootstrap_IncludesProofCatalogSummary(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	// Ingest a batch.
-	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
+	records := []models.PublicFeedRecord{env.makeRecord(1, models.NewPublicFeedObject(map[string]string{"v": "1"}))}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
 	require.True(t, resp.Accepted)
@@ -1711,7 +1910,7 @@ func TestMirror_History_CursorIsOpaqueSequence(t *testing.T) {
 	// Ingest 10 records.
 	records := make([]models.PublicFeedRecord, 10)
 	for i := range records {
-		records[i] = env.makeRecord(int64(i+1), map[string]any{"i": i})
+		records[i] = env.makeRecord(int64(i+1), projectionWithInt64Field("i", int64(i)))
 	}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
@@ -1732,6 +1931,7 @@ func TestMirror_History_CursorIsOpaqueSequence(t *testing.T) {
 
 	// Verify no overlap: page2 items should start after page1's last item.
 	page1LastSeq, _ := strconv.ParseInt(page1.Cursor, 10, 64)
-	page2FirstItem := page2.Items[0]["sequence"].(float64)
-	assert.Greater(t, int64(page2FirstItem), page1LastSeq)
+	var page2FirstSeq int64
+	require.NoError(t, json.Unmarshal(page2.Items[0]["sequence"], &page2FirstSeq))
+	assert.Greater(t, page2FirstSeq, page1LastSeq)
 }

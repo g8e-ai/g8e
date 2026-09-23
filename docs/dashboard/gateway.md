@@ -1,10 +1,10 @@
 # Gateway Integration
 
-The dashboard separates static application delivery from Gateway access. Its Node.js process serves the browser application over HTTP, while the browser sends supported authentication requests directly to the Gateway over HTTPS. The dashboard container also enrolls its own workload identity during startup, but that identity is separate from browser authentication.
+The dashboard separates static application delivery from Gateway access. Its Node.js and Express process serves the browser application over plain HTTP, while the browser sends supported authentication, session, and passkey requests directly to the Gateway over HTTPS. The dashboard container also enrolls its own workload identity during startup, but that identity is separate from browser authentication.
 
 ## Runtime Boundaries
 
-The dashboard requires `G8E_GATEWAY_URL` before it starts. It publishes that browser-facing origin as runtime configuration, with no hardcoded fallback, and includes the same origin in the browser Content Security Policy. Browser requests to the configured Gateway include credentials so the browser can send the Gateway-issued HttpOnly session cookie; the dashboard does not create bearer tokens, API keys, or replacement session headers for those requests.
+The dashboard requires `G8E_GATEWAY_URL` before it starts. It publishes that browser-facing origin through the no-cache `/g8e-config.js` endpoint, with no hardcoded fallback, and includes the same origin in the browser Content Security Policy. Browser requests to the configured Gateway include credentials so the browser can send the Gateway-issued HttpOnly session cookie; the dashboard does not create bearer tokens, API keys, or replacement session headers for those requests.
 
 The Node.js process is a static application host, not an API proxy. It does not provide live handlers for the retained operator, chat, approval, device-link, audit, settings, console, metrics, system, or documentation requests that the browser still directs to the dashboard origin. Those interfaces remain visible in parts of the application but are not operational in the current runtime.
 
@@ -14,7 +14,7 @@ The Node.js process is a static application host, not an API proxy. It does not 
 | --- | --- |
 | Session restoration | Operational. On page load, the dashboard asks the Gateway for the current user and public web-session identifier. A valid Gateway cookie restores the in-memory dashboard session. |
 | Logout | Operational. The dashboard asks the Gateway to invalidate the cookie-backed session, disconnects event handling, and clears local session state. |
-| Passkey registration and sign-in | The browser calls the Gateway directly, but the normal dashboard sign-in flow does not currently supply the user identifier required by the Gateway. Interactive sign-in and first-passkey setup are therefore not operational. See [Authentication](auth.md#current-passkey-limitation). |
+| Passkey registration and sign-in | The browser calls the Gateway directly, but the normal dashboard sign-in flow sends an empty authentication-challenge request while the Gateway requires a user identifier. The follow-up first-passkey setup form therefore cannot be reached through the normal flow, and interactive sign-in and setup are not operational. See [Authentication](auth.md#current-passkey-limitation). |
 | Passkey management | The current dashboard has no active controls for listing or revoking passkeys. |
 | Server-sent events | Not operational. The browser uses a relative URL that resolves against the static dashboard host, selects the Gateway polling endpoint instead of its live stream, and expects a different event envelope from the Gateway stream. See [Server-Sent Events](sse.md#current-url-resolution-constraint). |
 | Operator, chat, approvals, audit, settings, and console features | These requests target the dashboard origin, where the static host provides no API implementation. They are not operational in the current runtime. |
@@ -37,22 +37,22 @@ The dashboard landing page uses `G8E_GATEWAY_URL` to generate binary download an
 
 ## Container Startup
 
-The container entrypoint waits for the Gateway's plain-HTTP health surface before starting Node.js. The dashboard then loads an existing `g8ed` workload certificate or enrolls a new one through the plain-HTTP bootstrap surface. A missing `G8E_GATEWAY_URL`, an unavailable health surface, an unexpected identity-read failure, or a failed enrollment prevents the static host from starting.
+The container entrypoint waits for the Gateway's plain-HTTP health surface for up to 30 attempts at two-second intervals before starting Node.js. The dashboard then loads an existing `g8ed` workload certificate or resumes or creates an owner-approved enrollment through the plain-HTTP bootstrap surface. Enrollment submission retries for up to 30 minutes while the Gateway owner bootstrap completes. A missing `G8E_GATEWAY_URL`, an unavailable health surface, an unexpected identity-read failure, a denied request, or a failed enrollment prevents the static host from starting.
 
-The enrolled workload identity is stored below `G8E_RUNTIME_DIR`. The current static host does not use it for server-to-server Gateway requests, and it never exposes the certificate or private key to the browser. See [Startup Enrollment](architecture.md#startup-enrollment) and [PKI & Trust](../ensemble/pki.md) for the enrollment and certificate lifecycle.
+The enrolled workload identity is stored below `G8E_RUNTIME_DIR`. The current static host does not use it for server-to-server Gateway requests, and it never exposes the certificate or private key to the browser. See [Authentication](auth.md#container-startup-enrollment) and [PKI & Trust](../ensemble/pki.md) for the enrollment and certificate lifecycle.
 
 ## Configuration
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `G8E_GATEWAY_URL` | Yes | None | Browser-reachable HTTPS Gateway origin and allowed browser connection destination |
-| `G8E_GATEWAY_HTTP_URL` | When the workload identity requires enrollment or renewal | None | Container-reachable plain-HTTP Gateway bootstrap origin |
-| `G8E_RUNTIME_DIR` | Yes | None | Writable, persistent root for pending and installed workload identity material |
+| `G8E_GATEWAY_HTTP_URL` | When enrollment or renewal is needed | None | Container-reachable plain-HTTP Gateway bootstrap origin; the enrollment service fails closed when this is unset |
+| `G8E_RUNTIME_DIR` | Yes | None | Writable, persistent root for pending and installed workload identity material; identity resolution fails when this is unset |
 | `GATEWAY_HEALTH_URL` | No | `http://g8eg:8080` | Container-reachable plain-HTTP Gateway health origin |
 | `GATEWAY_HEALTH_PATH` | No | `/api/v1/health` | Gateway health path polled before dashboard startup |
 | `PORT` | No | `3000` | Dashboard static host port |
 
-The unified Docker deployment sets `G8E_GATEWAY_URL` from the browser-reachable hostname and HTTPS port. It uses the internal `g8eg` network alias for `G8E_GATEWAY_HTTP_URL` and `GATEWAY_HEALTH_URL`, and persists `G8E_RUNTIME_DIR` in the dashboard data volume.
+The unified Docker deployment publishes the dashboard on host port `G8E_DASHBOARD_PORT` (default `3000`) and sets `G8E_GATEWAY_URL` from `G8E_HOSTNAME` and `G8E_HTTPS_PORT` (defaults `localhost` and `8443`). It uses the internal `g8eg` network alias for `G8E_GATEWAY_HTTP_URL` and `GATEWAY_HEALTH_URL`, and persists `G8E_RUNTIME_DIR=/data` in the `g8e-dashboard-data` volume. The Gateway is configured separately with the dashboard origin through `--cors-origin` and `--passkey-rp-origin`.
 
 ## Troubleshooting
 

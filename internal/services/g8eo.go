@@ -12,6 +12,7 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/httpclient"
-	"github.com/g8e-ai/g8e/v2/internal/paths"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
@@ -142,13 +142,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// This must be initialized before storage services to provide keystore for encrypted token storage
 
 	// Initialize CanonicalDBService for canonical state root calculation
-	// This ensures outbound mode uses the same state root schema as gateway mode
-	dataDir := paths.Infra.DataDir
-	vaultKeyPath := vs.config.VaultKeyPath
-	if vaultKeyPath == "" {
-		vaultKeyPath = paths.Infra.VaultKeyPath
-	}
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
+	// This ensures outbound mode uses the same state root schema as gateway mode.
+	gatewayDB, err := gateway.OpenCanonicalDBService(vs.logger, vs.config.VaultKeyPath, vs.keystore, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}
@@ -172,7 +167,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize ExecutionVaultService for execution log and file diff storage
 	executionVaultConfig := storage.DefaultExecutionVaultConfig()
-	executionVaultConfig.DBPath = paths.Infra.ExecutionVaultDBPath
+	executionVaultConfig.DBPath = vs.fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.ExecutionVaultDBFilename))
 	executionVaultConfig.MaxDBSizeMB = vs.config.ExecutionVaultMaxSizeMB
 	executionVaultConfig.RetentionDays = vs.config.ExecutionVaultRetentionDays
 	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, encryptionVault)
@@ -188,7 +183,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize SuspendedTransactionService for L3 approval workflow
 	suspendedTxConfig := storage.DefaultSuspendedTransactionConfig()
-	suspendedTxConfig.DBPath = paths.Infra.SuspendedTransactionsDBPath
+	suspendedTxConfig.DBPath = vs.fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.SuspendedTxFilename))
 	vs.suspendedTxStore, err = storage.NewSuspendedTransactionService(suspendedTxConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
@@ -247,7 +242,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Initialize P0 Transaction Gate infrastructure (replay protection and state root verification)
 	// ReplayStore is mandatory for fail-closed replay protection
 	replayStoreConfig := storage.DefaultReplayStoreConfig()
-	replayStoreConfig.DBPath = paths.Infra.ReplayStoreDBPath
+	replayStoreConfig.DBPath = vs.fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.ReplayStoreDBFilename))
 	replayStore, err := storage.NewSQLReplayStore(replayStoreConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDatabaseReplay, err)
@@ -304,8 +299,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	// Load trusted L2 signers from filesystem
-	trustedSignersDir := paths.Infra.TrustedSignersDir
-	signerStore, err := governance.NewFilesystemSignerStore(trustedSignersDir, vs.logger)
+	trustedSignersDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrustedSigners)
+	signerStore, err := governance.NewFilesystemSignerStore(vs.fileSvc, trustedSignersDir, vs.logger)
 	if err != nil {
 		return fmt.Errorf("%w: failed to load trusted signers: %w", constants.ErrPathNotFound, err)
 	}

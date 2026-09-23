@@ -224,6 +224,28 @@ func TestMockOperatorPubSubClient_Reset(t *testing.T) {
 	})
 }
 
+func TestMockOperatorPubSubClient_ErrorConfiguration(t *testing.T) {
+	t.Parallel()
+	client := NewMockOperatorPubSubClient()
+
+	client.SetPublishError(true)
+	err := client.Publish(context.Background(), "test-channel", []byte("message"))
+	require.Error(t, err)
+
+	client.SetPublishError(false)
+	require.NoError(t, client.Publish(context.Background(), "test-channel", []byte("message")))
+
+	subscribeErr := context.Canceled
+	client.SetSubscribeError(subscribeErr)
+	_, err = client.Subscribe(context.Background(), "test-channel")
+	require.ErrorIs(t, err, subscribeErr)
+
+	client.SetSubscribeError(nil)
+	ch, err := client.Subscribe(context.Background(), "test-channel")
+	require.NoError(t, err)
+	require.NotNil(t, ch)
+}
+
 func TestMockOperatorPubSubClient_Close(t *testing.T) {
 	t.Run("closes subscriber channels", func(t *testing.T) {
 		t.Parallel()

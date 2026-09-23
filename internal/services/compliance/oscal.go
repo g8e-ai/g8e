@@ -323,7 +323,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 // framework control assessments become findings, and every evidence anchor
 // resolves to a typed content-addressed resource in back matter.
 func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.ComplianceAnalysis) (*OSCALAssessmentResults, error) {
-	if err := validateOSCALAnalysis(analysis); err != nil {
+	if err := ValidateAnalysis(analysis); err != nil {
 		return nil, err
 	}
 
@@ -356,9 +356,9 @@ func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.Complia
 				Title:            "Compliance Assessment for " + analysis.GetScopeRef(),
 				Description:      "Canonical cross-framework compliance analysis " + analysis.GetAnalysisId(),
 				Start:            generatedAt,
-				Props:            []OSCALProp{{Name: "g8e-scope-id", Value: analysis.GetScopeRef()}},
+				Props:            oscalAnalysisProps(analysis),
 				LocalDefinitions: &OSCALLocalDefinitions{Components: buildOSCALAssessmentSubjects(analysis)},
-				ReviewedControls: buildOSCALReviewedControls(findings),
+				ReviewedControls: buildOSCALReviewedControls(analysis),
 				Observations:     observations,
 				Findings:         findings,
 			}},
@@ -382,7 +382,7 @@ func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.Complia
 	return document, nil
 }
 
-func validateOSCALAnalysis(analysis *compliancev1.ComplianceAnalysis) error {
+func ValidateAnalysis(analysis *compliancev1.ComplianceAnalysis) error {
 	if analysis == nil {
 		return fmt.Errorf("%w: nil compliance analysis", constants.ErrValidationFailed)
 	}
@@ -457,11 +457,49 @@ func validateOSCALAssessmentResults(document *OSCALAssessmentResults) error {
 	return nil
 }
 
-func buildOSCALReviewedControls(findings []OSCALFinding) *OSCALReviewedControls {
-	seen := make(map[string]struct{}, len(findings))
-	controls := make([]OSCALControlID, 0, len(findings))
-	for _, finding := range findings {
-		controlID := finding.Target.TargetID
+func oscalAnalysisProps(analysis *compliancev1.ComplianceAnalysis) []OSCALProp {
+	props := []OSCALProp{{Name: "g8e-analysis-id", Value: analysis.GetAnalysisId()}, {Name: "g8e-scope-id", Value: analysis.GetScopeRef()}}
+	if digest := analysis.GetAssessmentScopeSha256(); digest != "" {
+		props = append(props, OSCALProp{Name: "g8e-assessment-scope-sha256", Value: digest})
+	}
+	for _, diagnostic := range analysis.GetDiagnostics() {
+		props = append(props, OSCALProp{Name: "g8e-diagnostic", Value: diagnostic.GetCode() + ":" + diagnostic.GetSeverity() + ":" + diagnostic.GetMessage()})
+	}
+	for _, assessment := range sortedFrameworkAssessmentsForOSCAL(analysis) {
+		props = append(props,
+			OSCALProp{Name: "g8e-framework-status", Value: frameworkAssessmentValue(assessment)},
+			OSCALProp{Name: "g8e-framework-evidence-level", Value: assessment.GetEvidenceLevel()},
+			OSCALProp{Name: "g8e-framework-responsibility", Value: assessment.GetResponsibility()},
+		)
+	}
+	return props
+}
+
+func frameworkAssessmentValue(assessment *compliancev1.FrameworkControlAssessment) string {
+	return oscalVersionedReferenceValue(assessment.GetFrameworkRef()) + "/" + assessment.GetControlId() + ":" + assessment.GetStatus()
+}
+
+func oscalVersionedReferenceValue(reference *compliancev1.VersionedReference) string {
+	if reference == nil {
+		return ""
+	}
+	if reference.GetVersion() == "" {
+		return reference.GetId()
+	}
+	return reference.GetId() + "@" + reference.GetVersion()
+}
+
+func sortedFrameworkAssessmentsForOSCAL(analysis *compliancev1.ComplianceAnalysis) []*compliancev1.FrameworkControlAssessment {
+	assessments := append([]*compliancev1.FrameworkControlAssessment(nil), analysis.GetFrameworkAssessments()...)
+	sort.Slice(assessments, func(i, j int) bool { return assessments[i].GetAssessmentId() < assessments[j].GetAssessmentId() })
+	return assessments
+}
+
+func buildOSCALReviewedControls(analysis *compliancev1.ComplianceAnalysis) *OSCALReviewedControls {
+	seen := make(map[string]struct{}, len(analysis.GetFrameworkAssessments()))
+	controls := make([]OSCALControlID, 0, len(analysis.GetFrameworkAssessments()))
+	for _, assessment := range sortedFrameworkAssessmentsForOSCAL(analysis) {
+		controlID := assessment.GetControlId()
 		if _, exists := seen[controlID]; exists {
 			continue
 		}
@@ -630,7 +668,7 @@ func buildOSCALObservations(analysis *compliancev1.ComplianceAnalysis, resourceI
 			Title:       "Assertion " + assessment.GetAssertionRef().GetId() + " Assessment",
 			Description: fmt.Sprintf("%s at evidence level %s with %s evidence", assessment.GetStatus(), assessment.GetEvidenceLevel(), assessment.GetFreshnessStatus()),
 			Methods:     []string{"TEST"},
-			Props:       []OSCALProp{{Name: "g8e-verifier", Value: methodID}},
+			Props:       oscalAssertionProps(assessment, methodID),
 			Collected:   assessment.GetEvaluatedAt().AsTime().UTC().Format(time.RFC3339),
 			Subjects: []OSCALSubject{{
 				SubjectUUID: oscalAssessmentSubjectUUID(analysis.GetAnalysisId(), assessment),
@@ -641,6 +679,21 @@ func buildOSCALObservations(analysis *compliancev1.ComplianceAnalysis, resourceI
 		})
 	}
 	return observations, nil
+}
+
+func oscalAssertionProps(assessment *compliancev1.ControlAssertionAssessment, methodID string) []OSCALProp {
+	props := []OSCALProp{{Name: "g8e-verifier", Value: methodID}, {Name: "g8e-status", Value: assessment.GetStatus()}, {Name: "g8e-evidence-level", Value: assessment.GetEvidenceLevel()}, {Name: "g8e-freshness", Value: assessment.GetFreshnessStatus()}, {Name: "g8e-coverage", Value: coverageValue(assessment.GetCoverage())}}
+	for _, diagnostic := range assessment.GetDiagnostics() {
+		props = append(props, OSCALProp{Name: "g8e-diagnostic", Value: diagnostic.GetCode() + ":" + diagnostic.GetSeverity()})
+	}
+	return props
+}
+
+func coverageValue(coverage *compliancev1.AssessmentCoverage) string {
+	if coverage == nil {
+		return "not-recorded"
+	}
+	return fmt.Sprintf("%d selected, %d assessed, %d failed, %d unavailable", coverage.GetSelectedSubjectCount(), coverage.GetAssessedSubjectCount(), coverage.GetFailedSubjectCount(), coverage.GetUnavailableSubjectCount())
 }
 
 func oscalAssessmentSubjectUUID(analysisID string, assessment *compliancev1.ControlAssertionAssessment) string {
@@ -667,6 +720,9 @@ func buildOSCALFindings(analysis *compliancev1.ComplianceAnalysis) ([]OSCALFindi
 			if _, exists := assertionAssessments[assertionRef]; !exists {
 				return nil, fmt.Errorf("%w: framework assessment %s assertion %s", constants.ErrUnresolvedReference, assessment.GetAssessmentId(), assertionRef)
 			}
+		}
+		if !oscalDeterminedFrameworkStatus(assessment.GetStatus()) {
+			continue
 		}
 		findings = append(findings, OSCALFinding{
 			UUID:        generateUUID("finding", analysis.GetAnalysisId(), assessment.GetAssessmentId(), assessment.GetFrameworkRef().GetId(), assessment.GetFrameworkRef().GetVersion(), assessment.GetControlId()),
@@ -695,13 +751,15 @@ func parseOSCALContentAddress(address string) (string, string, bool) {
 	return parts[0], parts[2], true
 }
 
+func oscalDeterminedFrameworkStatus(status string) bool {
+	return status == "satisfied" || status == "not_satisfied"
+}
+
 func oscalFindingStatus(status string) string {
-	switch status {
-	case "satisfied":
+	if status == "satisfied" {
 		return "satisfied"
-	default:
-		return "not-satisfied"
 	}
+	return "not-satisfied"
 }
 
 // generateUUID derives a deterministic RFC 4122 UUID v5 from a record kind and length-delimited canonical identities.

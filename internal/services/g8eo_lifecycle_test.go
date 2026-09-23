@@ -11,25 +11,22 @@ package services
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
-	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,20 +49,11 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	// Initialize paths with test directory
 	require.NoError(t, paths.InitWithBase(cfg.WorkDir))
 
-	// Initialize vault for encryption (required since storage refactor)
-	vaultDir := paths.Infra.VaultDir
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
-	testKey := []byte("g8e_test_abc123xyz789_TEST_KEY_1")
-	keyPath := filepath.Join(vaultDir, "key")
-	require.NoError(t, os.WriteFile(keyPath, []byte(hex.EncodeToString(testKey)), 0600))
-	header, dek, err := vault.NewVaultHeader(testKey)
+	fileSvc, err := fs.NewRuntimeFileService(cfg.WorkDir, testutil.NewVerboseTestLogger(t))
 	require.NoError(t, err)
-	vault.SecureZero(dek)
-	require.NoError(t, header.Save(vaultDir))
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
 	// Initialize keystore with in-memory keyring for the master key (required for gateway database)
-	fileSvc, secretsDir := keystoretest.NewTestFileService(t)
-	_ = secretsDir
 	testBackend := keystoretest.NewMemoryKeyring()
 	ks, err := keystore.NewWithKeyringAndFS(testutil.NewVerboseTestLogger(t), testBackend, fileSvc)
 	require.NoError(t, err)

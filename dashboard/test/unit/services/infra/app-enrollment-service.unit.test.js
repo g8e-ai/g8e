@@ -418,6 +418,38 @@ describe('AppEnrollmentService', () => {
             await expect(fs.access(pendingPath)).rejects.toThrow();
         });
 
+        it('submits a new request when persisted pending state has expired', async () => {
+            const pendingDir = path.join(_runtimeDir, 'pki', 'pending-enrollment');
+            await fs.mkdir(pendingDir, { recursive: true });
+            const pendingPath = path.join(pendingDir, 'dashboard.json');
+            const { keyPem: expiredKeyPem } = await _selfSignedCert({ days: 365, appName: 'expired-key' });
+            await fs.writeFile(pendingPath, JSON.stringify({
+                request_id: 'expired-req',
+                token: 'expired-token',
+                fingerprint: 'expired-fingerprint',
+                key_pem: expiredKeyPem,
+                expires_at: new Date(Date.now() - 60_000).toISOString(),
+                instance_id: 'dashboard-expired',
+            }), { mode: 0o600 });
+
+            const { certPem } = await _selfSignedCert({ days: 365 });
+            const fetchSpy = _mockEnrollmentFetch({
+                requestId: 'replacement-req',
+                token: 'replacement-token',
+                appCert: certPem,
+            });
+
+            const identity = await new AppEnrollmentService({
+                instanceId: 'dashboard-replacement',
+                hostname: 'test.local',
+            }).enroll();
+
+            expect(identity.app_id).toBe('spiffe://g8e.local/app/g8ed');
+            const requestCalls = fetchSpy.mock.calls.filter(c => String(c[0]).includes('/platform-enrollments/request'));
+            expect(requestCalls).toHaveLength(1);
+            await expect(fs.access(pendingPath)).rejects.toThrow();
+        });
+
         it('throws ConfigurationError when enrollment request is rejected', async () => {
             vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
                 const urlStr = String(url);

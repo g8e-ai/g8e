@@ -1,8 +1,8 @@
 # Compliance Alignment
 
-**Document Version:** 2.1.9
-**Last Updated:** 2026-09-19
-**Platform:** g8e v2.1.9
+**Document Version:** 2.1.12
+**Last Updated:** 2026-09-23
+**Platform:** g8e v2.1.12
 **Maintained by:** Lateralus Labs, LLC.
 
 ## Purpose and claim boundary
@@ -37,11 +37,11 @@ The proof-backed reporting path separates collection, verification, grading, ana
 
 1. Read-only importers decode persisted demo, eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence.
 2. The evidence graph validates canonical digests, content addresses, references, prohibited cycles, assessed trust, encryption metadata, freshness, and scope, run, attempt, scenario, transaction, and evidence-window binding.
-3. `assertion_assessment@1.0.0` evaluates atomic assertions only from verified, scope-bound evidence.
+3. `assertion_assessment@2.2.0` evaluates each selected subject independently from verified, scope-bound evidence, enforces compatible run, attempt, scenario, and transaction bindings, derives achieved evidence strength from reproduced checks, and preserves known negative measurements when other selected subjects are unavailable.
 4. `framework_assessment@1.0.0` projects assertion assessments through the reviewed crosswalk without changing the underlying assertion outcomes.
 5. `BuildComplianceAnalysis` creates the canonical cross-framework analysis, including evidence-window completeness, gaps, evidence links, limitations, findings, remediation, evidence resources, and explicit responsibility and outcome sections.
 6. `BuildFrameworkProfiles` projects the canonical control assessments into one deterministic profile per catalog framework without re-grading or changing their outcomes.
-7. The shared renderer emits canonical JSON, OSCAL JSON, Markdown, HTML, and CLI views from the same analysis.
+7. The shared renderer emits canonical JSON, CSV, OSCAL JSON, Markdown, HTML, and CLI views from the same analysis.
 
 Implementation boundaries are in [`internal/services/compliance/evidence/`](../../internal/services/compliance/evidence/), [`internal/services/compliance/report/`](../../internal/services/compliance/report/), and [`internal/services/compliance/oscal.go`](../../internal/services/compliance/oscal.go). The [Proof-Backed Compliance Evidence](./compliance-evidence.md) reference explains evidence levels, persisted evidence, independent verification, and remaining bundle work.
 
@@ -53,7 +53,7 @@ Generated assertion and control assessments use typed outcomes rather than prose
 | --- | --- |
 | `satisfied` | Verified eligible evidence satisfies the complete declared rule for the assessed scope and window |
 | `not_satisfied` | Verified evidence measures a failure of the declared rule |
-| `not_applicable` | The typed applicability or missing-evidence policy excludes the assertion or control from satisfaction |
+| `not_applicable` | An explicit typed applicability selection excludes the assertion for the assessed component, action class, or arm |
 | `unverifiable` | Required evidence is missing, stale, malformed, unsupported, ambiguous, untrusted, or otherwise cannot support a result |
 | `customer_attestation_required` | Platform evidence cannot satisfy the customer- or assessor-operated requirement |
 
@@ -69,19 +69,18 @@ g8e compliance evidence-graph verify \
   --eval-run <eval-run-id>
 ```
 
-Generate and persist a signed report bundle from an explicit scope and evidence window. Repeat `--demo-run` and `--eval-run` as needed, select the `public` or `restricted` profile, and supply the dedicated compliance-report signing identity:
+Generate and persist a signed report bundle from a protected scope. Repeat `--demo-run`, `--eval-run`, and `--source` as needed, and supply the dedicated compliance-report signing identity. Generation defaults to the owner-local `restricted` profile; select `--profile public` only when every admitted source is affirmatively public-safe:
 
 ```bash
 g8e compliance report generate \
-  --scope-id <scope-id> \
-  --demo-run <demo-run-id> \
+  --scope <assessment-scope.json> \
   --eval-run <eval-run-id> \
-  --window-start-unix-ms <inclusive-start> \
-  --window-end-unix-ms <inclusive-end> \
+  --source <operational-source-directory> \
   --report-id <report-id> \
-  --profile public \
+  --profile restricted \
   --signing-metadata <signing-metadata.json> \
-  --signing-private-key <signing-private-key.hex>
+  --signing-private-key <signing-private-key.hex> \
+  --evidence-trust <assessed-evidence-trust.json>
 ```
 
 Verify the persisted bundle independently with external assessed report trust and, when signed source evidence is represented, separately assessed evidence-signer trust:
@@ -98,7 +97,7 @@ Verify one persisted demo run independently:
 g8e compliance demo-run verify <run-id>
 ```
 
-`compliance report generate` reads persisted demo and eval evidence plus explicit KSI, commitment, customer or assessor attestation, audit, ledger, and build/configuration inputs without mutating assessed state. It copies exact source bytes into canonical protected paths, assembles canonical analysis, framework profiles, and rendered formats into an immutable signed bundle, persists protected bodies, and writes the canonical descriptor last. `compliance report verify` is read-only and offline: it requires report trust outside the bundle, independently requires evidence-signer trust for represented signed sources, verifies directory integrity, protected bodies, checksum roots, and both signatures, replays every represented source route through the registered verifier or importer, compares reproduced evidence with signed analysis, and reproduces every renderer. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the network-disabled environment, exact candidate and trust digests, successful verification report, and rejected source, renderer, and signature mutations.
+`compliance report generate` reads persisted demo and eval evidence plus explicit operational, KSI, commitment, customer or assessor attestation, audit, ledger, and build/configuration inputs without mutating assessed state. It copies exact source bytes into canonical protected paths, assembles canonical analysis, framework profiles, and rendered formats into an immutable signed bundle, persists protected bodies, and writes the canonical descriptor last. `compliance report verify` is read-only and offline: it requires report trust outside the bundle, independently requires evidence-signer trust for represented signed sources, verifies directory integrity, protected bodies, checksum roots, and both signatures, replays every represented source route through the registered verifier or importer, compares reproduced evidence with signed analysis, and reproduces every renderer according to the protected bundle profile. Public Markdown and CSV are allowlisted release projections rather than full source-context views. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the network-disabled environment, exact candidate and trust digests, successful verification report, and rejected source, renderer, and signature mutations.
 
 ## Generated artifacts
 
@@ -117,7 +116,7 @@ Assessment results belong in generated artifacts, not this document. The reposit
 - [v2.1.4 release evidence (CSV)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.csv)
 - [Current public README evidence index](../evidence/readme/current/index.json)
 
-The release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs. They predate the current signed report-bundle implementation and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. Each generated artifact carries its own release, generation time, scope-related inputs, and claim boundaries; later evidence does not rewrite an earlier result.
+The retained historical release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs. They predate the current signed report-bundle projection path and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. New release projections are generated only from a verified public bundle and carry the protected assessment scope's release version, analysis identity, source limitations, and claim boundaries; later evidence does not rewrite an earlier result.
 
 ## Responsibility boundaries
 
@@ -129,7 +128,7 @@ The framework catalog records responsibility per control. Generated reports pres
 - **Inherited:** satisfaction depends on an external provider or inherited control with explicit assessed evidence.
 - **Assessor:** an independent assessor or authority supplies the acceptance decision or attestation.
 
-Public reports contain references and safe projections, not restricted plaintext. Restricted evidence uses authenticated encryption metadata, explicit authorization scope, and independently verified digests. A packaged public key is not trusted by inclusion; assessed trust metadata establishes verifier and signer trust.
+Report generation defaults to an owner-local `restricted` bundle. A public bundle requires every protected source admission to be affirmatively classified public and cannot contain a restricted artifact. Its release Markdown and CSV are separate allowlisted projections: they retain assessment outcomes, coverage, content-addressed proof digests, verifier identities, and diagnostic counts while omitting source-local identities, runtime paths, free-form diagnostics, limitations, and source bodies. Restricted evidence uses authenticated encryption metadata, explicit authorization scope, and independently verified digests. A packaged public key is not trusted by inclusion; assessed trust metadata establishes verifier and signer trust.
 
 ## Interpreting alignment
 

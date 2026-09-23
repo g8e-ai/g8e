@@ -15,12 +15,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -34,8 +33,15 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -44,14 +50,14 @@ func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compl
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	digest := sha256.Sum256(publicKey)
-	createdAt := time.Unix(1_699_999_900, 0).UTC()
+	createdAt := time.Now().UTC().Add(-time.Hour)
 	metadata := &compliancev1.ComplianceReportSigningKeyMetadata{
 		KeyId:           "report-key-1",
 		Algorithm:       constants.ComplianceReportSignatureAlgorithm,
 		Purpose:         constants.ComplianceReportSigningPurpose,
 		PublicKeySha256: hex.EncodeToString(digest[:]),
 		CreatedAt:       timestamppb.New(createdAt),
-		ExpiresAt:       timestamppb.New(createdAt.Add(time.Hour)),
+		ExpiresAt:       timestamppb.New(createdAt.Add(24 * time.Hour)),
 	}
 	identity, err := compliancereport.NewComplianceReportSigningIdentity(metadata, privateKey)
 	require.NoError(t, err)
@@ -83,6 +89,70 @@ func complianceReportSigningIdentityLoaderForTest(t *testing.T) complianceReport
 	}
 }
 
+func writeComplianceAssessmentScopeForTest(t *testing.T, scopeID string, runIDs []string, assessmentAsOf time.Time) string {
+	t.Helper()
+	admissions := make([]*compliancev1.AssessmentSourceAdmission, 0, len(runIDs))
+	for index, runID := range runIDs {
+		admissions = append(admissions, &compliancev1.AssessmentSourceAdmission{
+			AdmissionId:              fmt.Sprintf("source-%d", index+1),
+			SourceKind:               constants.EvaluationSourceKindNative,
+			SourceVersion:            constants.EvaluationSourceVersion,
+			SourceScopeId:            scopeID,
+			OwnerRuntimeBoundary:     "evaluation-owner",
+			AcquisitionBoundary:      "owner-local-run",
+			RunId:                    runID,
+			VerifierRef:              &compliancev1.VersionedReference{Id: constants.EvalRunVerifierID, Version: constants.EvalRunVerifierVersion},
+			DisclosureClassification: constants.ComplianceBundleProfileRestricted,
+		})
+	}
+	scope := &compliancev1.AssessmentScope{
+		ScopeId:               scopeID,
+		OrganizationId:        "org-1",
+		DeploymentId:          "deployment-1",
+		ProductVersion:        "2.1.12",
+		BuildIdentity:         "build-1",
+		SourceRevision:        "revision-1",
+		ComponentInventory:    []*compliancev1.ComponentInventoryEntry{{ComponentId: "operator-1", ComponentType: "operator", Version: "2.1.12", Digest: strings.Repeat("a", 64)}},
+		NetworkTopologyHash:   strings.Repeat("b", 64),
+		ConfigurationHashes:   []*compliancev1.NamedDigest{{Name: "operator-1", Sha256: strings.Repeat("c", 64)}},
+		DoctrineBundleHashes:  []*compliancev1.NamedDigest{{Name: "doctrine", Sha256: strings.Repeat("d", 64)}},
+		TrustAnchorIds:        []string{"root-1"},
+		CryptographicMode:     "standard",
+		AssessmentWindowStart: timestamppb.New(assessmentAsOf.Add(-time.Hour)),
+		AssessmentWindowEnd:   timestamppb.New(assessmentAsOf),
+		ActivePosture:         constants.PostureDoctrine,
+		SourceAdmissions:      admissions,
+		Applicability:         &compliancev1.AssessmentApplicabilitySelection{Components: []string{"operator"}, ActionClasses: []string{"governed_mutation"}, Arms: []string{"governed"}},
+		SelectedPopulation:    &compliancev1.AssessmentPopulationSelection{},
+		AssessmentAsOf:        timestamppb.New(assessmentAsOf),
+	}
+	body, err := compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	scopePath := filepath.Join(t.TempDir(), constants.ComplianceBundleScopeFilename)
+	require.NoError(t, os.WriteFile(scopePath, body, constants.PermFilePrivate))
+	return scopePath
+}
+
+func markAssessmentContextUnavailable(scope *compliancev1.AssessmentScope) {
+	scope.BuildIdentity = ""
+	scope.SourceRevision = ""
+	scope.ImageDigests = nil
+	scope.ComponentInventory = nil
+	scope.NetworkTopologyHash = ""
+	scope.ConfigurationHashes = nil
+	scope.DoctrineBundleHashes = nil
+	scope.TrustAnchorIds = nil
+	scope.UnavailableContext = []*compliancev1.UnavailableAssessmentContext{
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY, Reason: "build provenance was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION, Reason: "source revision evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY, Reason: "component inventory evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY, Reason: "network topology evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION, Reason: "configuration evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES, Reason: "doctrine bundle evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS, Reason: "trust-anchor evidence was not captured"},
+	}
+}
+
 func configureComplianceReportGenerateCommand(t *testing.T, cmd *cobra.Command) {
 	t.Helper()
 	require.NoError(t, cmd.Flags().Set("report-id", "report-1"))
@@ -93,13 +163,11 @@ func configureComplianceReportGenerateCommand(t *testing.T, cmd *cobra.Command) 
 func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte, error) {
 	t.Helper()
 	fileSvc, _ := newCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
-	windowStart := time.Unix(1_699_999_999, 0).UTC()
-	windowEnd := time.Unix(1_700_000_100, 0).UTC()
-	require.NoError(t, cmd.Flags().Set("scope-id", evidence.EvalScopeID("evidence-graph-suite")))
-	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(windowStart.UnixMilli(), 10)))
-	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(windowEnd.UnixMilli(), 10)))
+	assessmentAsOf := time.Unix(1_700_000_100, 0).UTC()
+	scopePath := writeComplianceAssessmentScopeForTest(t, evidence.EvalScopeID("evidence-graph-suite"), evalRuns, assessmentAsOf)
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
 	for _, runID := range evalRuns {
 		require.NoError(t, cmd.Flags().Set("eval-run", runID))
 	}
@@ -107,6 +175,14 @@ func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte
 	cmd.SetOut(&output)
 	cmd.SetErr(&output)
 	return bytes.TrimSpace(output.Bytes()), cmd.RunE(cmd, nil)
+}
+
+func TestComplianceReportGenerateCmdWithConfig_DefaultsToRestrictedProfile(t *testing.T) {
+	cmd := complianceReportGenerateCmdWithConfig(failingFileSvcFactory(errFactory), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+
+	profile := cmd.Flags().Lookup("profile")
+	require.NotNil(t, profile)
+	assert.Equal(t, string(compliancereport.ProfileRestricted), profile.DefValue)
 }
 
 func TestComplianceReportCmd_ContainsGenerateAndVerifySubcommands(t *testing.T) {
@@ -148,6 +224,55 @@ func TestBuildStandaloneReportSources_ProtectsReplayableLedgerAndBuildConfigurat
 	assert.Equal(t, buildBody, artifacts[2].Body)
 }
 
+func TestBuildOperationalReportSources_BindsProtectedAdmissionAndBundlePaths(t *testing.T) {
+	assessmentAsOf := time.UnixMilli(1_700_000_100_000).UTC()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	signerKeyID := hex.EncodeToString(publicKey)
+	receipt := &operatorv1.ActionReceipt{TransactionId: "transaction-1", TransactionHash: "hash-1", SignerKeyId: signerKeyID, ExecutedAtUnixMs: assessmentAsOf.Add(-time.Minute).UnixMilli()}
+	payload, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	receiptBody, err := compliancev1.MarshalCanonical(receipt)
+	require.NoError(t, err)
+	sourceDir := t.TempDir()
+	_, err = evidence.ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{Receipts: []storage.OperationalReceiptSource{{TransactionID: receipt.GetTransactionId(), ExecutedAt: time.UnixMilli(receipt.GetExecutedAtUnixMs()), Body: receiptBody}}}, evidence.OperationalExportRequest{
+		ScopeID:              "scope-1",
+		AdmissionID:          "source-1",
+		SourceKind:           "operator-audit",
+		SourceVersion:        "1.0.0",
+		SourceScopeID:        "operator-scope-1",
+		OwnerRuntimeBoundary: "operator-1",
+		AcquisitionBoundary:  "operator-local-export",
+		RunID:                "run-1",
+		VerifierID:           "operational-export",
+		VerifierVersion:      "1.0.0",
+		WindowStart:          assessmentAsOf.Add(-time.Hour),
+		WindowEnd:            assessmentAsOf,
+		MaxRows:              10,
+		OutputDir:            sourceDir,
+	})
+	require.NoError(t, err)
+	admission := &compliancev1.AssessmentSourceAdmission{AdmissionId: "source-1", SourceKind: "operator-audit", SourceVersion: "1.0.0", SourceScopeId: "operator-scope-1", OwnerRuntimeBoundary: "operator-1", AcquisitionBoundary: "operator-local-export", RunId: "run-1", VerifierRef: &compliancev1.VersionedReference{Id: "operational-export", Version: "1.0.0"}}
+	scope := &compliancev1.AssessmentScope{ScopeId: "scope-1", SourceAdmissions: []*compliancev1.AssessmentSourceAdmission{admission}}
+	trust := &assessedEvidenceTrust{keys: map[string]ed25519.PublicKey{signerKeyID: publicKey}}
+
+	sources, artifacts, err := buildOperationalReportSources(context.Background(), []string{sourceDir}, scope, trust, assessmentAsOf)
+
+	require.NoError(t, err)
+	require.Len(t, sources, 1)
+	assert.Equal(t, "source-1", sources[0].AdmissionID)
+	require.Len(t, artifacts, 2)
+	for _, artifact := range artifacts {
+		assert.True(t, strings.HasPrefix(artifact.BundlePath, path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1")))
+	}
+	nodes, err := sources[0].Importer.Import(context.Background())
+	require.NoError(t, err)
+	require.Len(t, nodes, 1)
+	assert.Equal(t, evidence.VerificationStatusVerified, nodes[0].VerificationStatus)
+	assert.True(t, strings.HasPrefix(nodes[0].BundlePath, path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1")))
+}
+
 type standaloneAttestationRecord struct {
 	SchemaVersion    string   `json:"schema_version"`
 	AttestationID    string   `json:"attestation_id"`
@@ -176,8 +301,8 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	keyID := hex.EncodeToString(publicKey)
 	trust := &assessedEvidenceTrust{keys: map[string]ed25519.PublicKey{keyID: publicKey}}
 
-	binding := compliance.EvaluationBinding{ScopeID: scopeID, RunID: "ksi-run-1", WindowStartUnixMs: 1_699_999_000_000, WindowEndUnixMs: 1_700_001_000_000, EvaluatorID: constants.KSIEvaluatorID, EvaluatorVersion: constants.KSIEvaluatorVersion, MethodDefinitionID: constants.KSIMethodDefinitionVersion, AssertionAssessments: compliance.AssertionAssessmentScope{AssessmentIDs: []string{"assessment-1"}, AttemptIDs: []string{"attempt-1"}, ScenarioIDs: []string{"scenario-1"}, ActionIDs: []string{"action-1"}}}
-	ksi := compliance.KSIResultSet{Class: compliance.ClassC, EvaluatedAtMs: 1_700_000_000_000, Binding: binding, Results: []compliance.KSIResult{{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, Outcome: compliance.KSIOutcomeSatisfied, LastValidatedUnixMs: 1_699_999_999_000, MethodCount: 1, Binding: binding}}}
+	binding := compliance.EvaluationBinding{ScopeID: scopeID, RunID: "ksi-run-1", WindowStartUnixMs: verifiedAt.Add(-time.Hour).UnixMilli(), WindowEndUnixMs: verifiedAt.UnixMilli(), EvaluatorID: constants.KSIEvaluatorID, EvaluatorVersion: constants.KSIEvaluatorVersion, MethodDefinitionID: constants.KSIMethodDefinitionVersion, AssertionAssessments: compliance.AssertionAssessmentScope{AssessmentIDs: []string{"assessment-1"}, AttemptIDs: []string{"attempt-1"}, ScenarioIDs: []string{"scenario-1"}, ActionIDs: []string{"action-1"}}}
+	ksi := compliance.KSIResultSet{Class: compliance.ClassC, EvaluatedAtMs: verifiedAt.UnixMilli(), Binding: binding, Results: []compliance.KSIResult{{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, Outcome: compliance.KSIOutcomeSatisfied, LastValidatedUnixMs: verifiedAt.Add(-time.Second).UnixMilli(), MethodCount: 1, Binding: binding}}}
 	ksiResultsBody, err := json.Marshal(ksi)
 	require.NoError(t, err)
 	ksiHistoryBody := append(append([]byte(nil), ksiResultsBody...), '\n')
@@ -186,7 +311,7 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, os.WriteFile(ksiHistoryPath, ksiHistoryBody, constants.PermFileReadOnly))
 	require.NoError(t, os.WriteFile(ksiResultsPath, ksiResultsBody, constants.PermFileReadOnly))
 
-	commitment := &operatorv1.CommitmentAttestation{TransactionId: "transaction-1", TransactionHash: strings.Repeat("1", 64), PriorCommitmentHash: strings.Repeat("2", 64), StateRootAtCommit: strings.Repeat("3", 64), L2SignatureDigest: strings.Repeat("4", 64), WardenIntentSignatureDigest: strings.Repeat("5", 64), HumanSignatureDigest: strings.Repeat("6", 64), ActionType: "FILE_EDIT", TargetResource: constants.DemosTargetDataDir, CommittedAtUnixMs: 1_700_000_000_000, AuditorKeyId: keyID}
+	commitment := &operatorv1.CommitmentAttestation{TransactionId: "transaction-1", TransactionHash: strings.Repeat("1", 64), PriorCommitmentHash: strings.Repeat("2", 64), StateRootAtCommit: strings.Repeat("3", 64), L2SignatureDigest: strings.Repeat("4", 64), WardenIntentSignatureDigest: strings.Repeat("5", 64), HumanSignatureDigest: strings.Repeat("6", 64), ActionType: "FILE_EDIT", TargetResource: constants.DemosTargetDataDir, CommittedAtUnixMs: verifiedAt.Add(-time.Second).UnixMilli(), AuditorKeyId: keyID}
 	commitmentPayload, err := governance.CanonicalizeCommitmentAttestation(commitment)
 	require.NoError(t, err)
 	commitmentDigest := sha256.Sum256(commitmentPayload)
@@ -260,10 +385,11 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	reportPublicKey, reportPrivateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	reportKeyDigest := sha256.Sum256(reportPublicKey)
-	reportMetadata := &compliancev1.ComplianceReportSigningKeyMetadata{KeyId: "complete-report-key-1", Algorithm: constants.ComplianceReportSignatureAlgorithm, Purpose: constants.ComplianceReportSigningPurpose, PublicKeySha256: hex.EncodeToString(reportKeyDigest[:]), CreatedAt: timestamppb.New(verifiedAt.Add(-time.Hour)), ExpiresAt: timestamppb.New(verifiedAt.Add(time.Hour))}
+	reportGeneratedAt := time.Now().UTC()
+	reportMetadata := &compliancev1.ComplianceReportSigningKeyMetadata{KeyId: "complete-report-key-1", Algorithm: constants.ComplianceReportSignatureAlgorithm, Purpose: constants.ComplianceReportSigningPurpose, PublicKeySha256: hex.EncodeToString(reportKeyDigest[:]), CreatedAt: timestamppb.New(reportGeneratedAt.Add(-time.Hour)), ExpiresAt: timestamppb.New(reportGeneratedAt.Add(time.Hour))}
 	reportIdentity, err := compliancereport.NewComplianceReportSigningIdentity(reportMetadata, reportPrivateKey)
 	require.NoError(t, err)
-	reportPolicy := &compliancev1.ComplianceReportTrustPolicy{PolicyId: "complete-report-policy-1", PolicyVersion: "1.0.0", TrustedKeys: []*compliancev1.ComplianceReportTrustedKey{{Metadata: reportMetadata, PublicKey: hex.EncodeToString(reportPublicKey), AssessmentId: "report-assessment-1", AssessorIdentity: "assessor-1", AssessedAt: timestamppb.New(verifiedAt.Add(-time.Hour)), AllowedScopeRefs: []string{scopeID}}}}
+	reportPolicy := &compliancev1.ComplianceReportTrustPolicy{PolicyId: "complete-report-policy-1", PolicyVersion: "1.0.0", TrustedKeys: []*compliancev1.ComplianceReportTrustedKey{{Metadata: reportMetadata, PublicKey: hex.EncodeToString(reportPublicKey), AssessmentId: "report-assessment-1", AssessorIdentity: "assessor-1", AssessedAt: timestamppb.New(reportGeneratedAt.Add(-time.Hour)), AllowedScopeRefs: []string{scopeID}}}}
 	publicKeyDigest := sha256.Sum256(publicKey)
 	evidencePolicy := &compliancev1.ComplianceEvidenceTrustPolicy{
 		PolicyId:      "evidence-policy-1",
@@ -286,11 +412,10 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, os.WriteFile(evidencePolicyPath, evidencePolicyBody, constants.PermFileReadOnly))
 	generateCmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 		return reportIdentity, nil
-	})
+	}, func() time.Time { return reportGeneratedAt })
 	configureComplianceReportGenerateCommand(t, generateCmd)
-	require.NoError(t, generateCmd.Flags().Set("scope-id", scopeID))
-	require.NoError(t, generateCmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(time.UnixMilli(1_699_999_000_000).UnixMilli(), 10)))
-	require.NoError(t, generateCmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(verifiedAt.UnixMilli(), 10)))
+	scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{"ksi-run-1", "commitment-run-1", "attestation-run-1", "audit-run-1", "ledger-run-1", "build-run-1"}, verifiedAt)
+	require.NoError(t, generateCmd.Flags().Set("scope", scopePath))
 	for name, value := range map[string]string{
 		"evidence-trust": evidencePolicyPath, "ksi-run-id": "ksi-run-1", "ksi-history": ksiHistoryPath, "ksi-results": ksiResultsPath,
 		"commitment-run-id": "commitment-run-1", "commitment": commitmentPath, "attestation-run-id": "attestation-run-1", "attestations": attestationPath,
@@ -308,12 +433,12 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, err)
 	reportPolicyPath := filepath.Join(root, constants.ComplianceReportTrustPolicyTestFilename)
 	require.NoError(t, os.WriteFile(reportPolicyPath, reportPolicyBody, constants.PermFileReadOnly))
-	verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return verifiedAt })
+	verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return reportGeneratedAt.Add(time.Minute) })
 	require.NoError(t, verifyCmd.Flags().Set("trust-policy", reportPolicyPath))
 	require.NoError(t, verifyCmd.Flags().Set("evidence-trust", evidencePolicyPath))
 	var verified bytes.Buffer
 	verifyCmd.SetOut(&verified)
-	require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorPath}))
+	require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorPath}), verified.String())
 	verificationReport := &compliancev1.ComplianceVerificationReport{}
 	require.NoError(t, compliancev1.UnmarshalCanonical(bytes.TrimSpace(verified.Bytes()), verificationReport))
 	assert.True(t, verificationReport.GetValid(), verificationReport.GetFailures())
@@ -342,13 +467,11 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 				return evidence.NewDemoDirectoryProvenanceSource(projectRoot)
 			}, func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 				return identity, nil
-			})
+			}, time.Now)
 			configureComplianceReportGenerateCommand(t, cmd)
-			windowStart := time.Unix(1_699_999_999, 0).UTC()
-			windowEnd := time.Unix(1_700_000_100, 0).UTC()
-			require.NoError(t, cmd.Flags().Set("scope-id", scopeID))
-			require.NoError(t, cmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(windowStart.UnixMilli(), 10)))
-			require.NoError(t, cmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(windowEnd.UnixMilli(), 10)))
+			assessmentAsOf := time.Unix(1_700_000_100, 0).UTC()
+			scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{runID}, assessmentAsOf)
+			require.NoError(t, cmd.Flags().Set("scope", scopePath))
 			require.NoError(t, cmd.Flags().Set("demo-run", runID))
 			var output bytes.Buffer
 			cmd.SetOut(&output)
@@ -358,7 +481,8 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 			require.NoError(t, err)
 			trustPath := filepath.Join(t.TempDir(), constants.ComplianceReportTrustPolicyTestFilename)
 			require.NoError(t, os.WriteFile(trustPath, trustBody, constants.PermFilePublic))
-			verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return windowEnd })
+			verificationTime := time.Now().UTC().Add(time.Minute)
+			verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return verificationTime })
 			require.NoError(t, verifyCmd.Flags().Set("trust-policy", trustPath))
 			verifyCmd.SetOut(io.Discard)
 			require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorAbsolutePath}))
@@ -379,7 +503,7 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 				Bundle:      bundle,
 				Reader:      &complianceBundleRootReader{root: root},
 				TrustPolicy: policy,
-				VerifiedAt:  windowEnd,
+				VerifiedAt:  verificationTime,
 			})
 
 			require.NoError(t, err)
@@ -420,11 +544,10 @@ func TestBuildDemoVerificationArtifacts_EmbedsValidExistingVerifierResult(t *tes
 
 func TestComplianceReportGenerateCmdWithConfig_RejectsUnsupportedProfile(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
-	require.NoError(t, cmd.Flags().Set("scope-id", "scope-1"))
-	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", "1700000000000"))
-	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", "1700000001000"))
+	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{"run-1"}, time.Unix(1_700_000_001, 0).UTC())
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
 	require.NoError(t, cmd.Flags().Set("eval-run", "run-1"))
 	require.NoError(t, cmd.Flags().Set("profile", "confidential"))
 
@@ -449,17 +572,417 @@ func TestComplianceReportGenerateCmdWithConfig_FailsClosedOnImporterFailure(t *t
 	assert.Empty(t, body)
 }
 
-func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidEvidenceWindow(t *testing.T) {
+func TestComplianceReportGenerateCmdWithConfig_RejectsIncompleteCampaignSource(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
-	require.NoError(t, cmd.Flags().Set("scope-id", "scope-1"))
-	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", "1700000001000"))
-	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", "1700000000000"))
+	runID := "campaign-run"
+	require.NoError(t, evaluation.NewStore(fileSvc).SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion: evaluation.CampaignSchemaVersion,
+		RunId:         runID,
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "campaign-1",
+		},
+	}))
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+	configureComplianceReportGenerateCommand(t, cmd)
+	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{runID}, time.Unix(1_700_000_001, 0).UTC())
+	scopeBody, err := os.ReadFile(scopePath)
+	require.NoError(t, err)
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
+	scope.SourceAdmissions[0].SourceKind = constants.EvaluationSourceKindCampaign
+	scope.SourceAdmissions[0].SourceVersion = constants.EvaluationSourceVersion
+	scope.SourceAdmissions[0].VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
+	scopeBody, err = compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFileReadOnly))
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
+	require.NoError(t, cmd.Flags().Set("eval-run", runID))
+
+	err = cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, constants.ErrUnsupportedVerifier)
+	assert.Contains(t, err.Error(), "campaign")
+}
+
+func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	req := evaluationTestCampaignInitRequest(t)
+	controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	_, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
+	require.NoError(t, err)
+	assessmentAsOf := time.Now().UTC()
+	require.NoError(t, evaluation.NewStore(fileSvc).SaveReport(context.Background(), &evalv1.EvaluationReport{
+		SchemaVersion: evaluation.RegistryVersion,
+		Run: &evalv1.EvaluationRun{
+			SchemaVersion: evaluation.RegistryVersion,
+			RunId:         "unsupported-candidate",
+			SuiteRef:      &compliancev1.VersionedReference{Id: "unsupported-suite", Version: "1.0.0"},
+		},
+	}))
+	require.NoError(t, evaluation.NewStore(fileSvc).SaveReport(context.Background(), &evalv1.EvaluationReport{
+		SchemaVersion: evaluation.RegistryVersion,
+		Run: &evalv1.EvaluationRun{
+			SchemaVersion: evaluation.RegistryVersion,
+			RunId:         "outside-window-candidate",
+			SuiteRef:      &compliancev1.VersionedReference{Id: evaluation.CoreExecutionBoundarySuiteID, Version: evaluation.CoreExecutionBoundarySuiteVersion},
+			StartedAt:     timestamppb.New(time.Unix(1_600_000_000, 0).UTC()),
+			CompletedAt:   timestamppb.New(time.Unix(1_600_000_100, 0).UTC()),
+		},
+	}))
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), path.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, "incomplete-candidate"), constants.PermDirStandard))
+	scopeID := constants.EvalScopePrefix + req.CampaignID
+	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+		return identity, nil
+	}, func() time.Time { return assessmentAsOf })
+	configureComplianceReportGenerateCommand(t, cmd)
+	scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{req.RunID}, assessmentAsOf)
+	scopeBody, err := os.ReadFile(scopePath)
+	require.NoError(t, err)
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
+	scope.SourceAdmissions[0].SourceKind = constants.EvaluationSourceKindCampaign
+	scope.SourceAdmissions[0].VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
+	scope.SourceAdmissions[0].ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	scope.SourceAdmissions[0].ModelProvenancePolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	markAssessmentContextUnavailable(scope)
+	scopeBody, err = compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFilePrivate))
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
+	require.NoError(t, cmd.Flags().Set("eval-run", req.RunID))
+	require.NoError(t, cmd.Flags().Set("discover-eval-runs", "true"))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	require.NoError(t, cmd.RunE(cmd, nil))
+	descriptorPath, err := fileSvc.Rel(strings.TrimSpace(output.String()))
+	require.NoError(t, err)
+	descriptorBody, err := fileSvc.ReadFile(context.Background(), descriptorPath)
+	require.NoError(t, err)
+	bundle := &compliancev1.ComplianceReportBundle{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
+	selectionDiagnostics := make(map[string]*compliancev1.AssessmentDiagnostic)
+	for _, diagnostic := range bundle.GetAnalysis().GetDiagnostics() {
+		if strings.HasPrefix(diagnostic.GetCode(), "evaluation_candidate_") {
+			selectionDiagnostics[diagnostic.GetSubject().GetRunId()] = diagnostic
+		}
+	}
+	require.Contains(t, selectionDiagnostics, req.RunID)
+	assert.Equal(t, scope.SourceAdmissions[0].GetAdmissionId(), selectionDiagnostics[req.RunID].GetSourceAdmissionId())
+	require.Contains(t, selectionDiagnostics, "unsupported-candidate")
+	assert.Equal(t, "evaluation_candidate_unsupported", selectionDiagnostics["unsupported-candidate"].GetCode())
+	assert.Equal(t, "warning", selectionDiagnostics["unsupported-candidate"].GetSeverity())
+	assert.Equal(t, "evaluation candidate is unsupported: native evaluation suite or schema is unsupported", selectionDiagnostics["unsupported-candidate"].GetMessage())
+	require.Contains(t, selectionDiagnostics, "incomplete-candidate")
+	assert.Equal(t, "evaluation_candidate_incomplete", selectionDiagnostics["incomplete-candidate"].GetCode())
+	assert.Equal(t, "warning", selectionDiagnostics["incomplete-candidate"].GetSeverity())
+	require.Contains(t, selectionDiagnostics, "outside-window-candidate")
+	assert.Equal(t, "evaluation_candidate_outside_window", selectionDiagnostics["outside-window-candidate"].GetCode())
+	assert.Equal(t, "info", selectionDiagnostics["outside-window-candidate"].GetSeverity())
+	inventoryPath := path.Join(path.Dir(descriptorPath), constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, scope.SourceAdmissions[0].AdmissionId, constants.CampaignSourceInventoryFilename)
+	inventoryBody, err := fileSvc.ReadFile(context.Background(), inventoryPath)
+	require.NoError(t, err)
+	inventory := &evalv1.CampaignComplianceSourceInventory{}
+	require.NoError(t, evalv1.UnmarshalCanonical(inventoryBody, inventory))
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT, inventory.GetProviderObservationPolicy())
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT, inventory.GetModelProvenancePolicy())
+	trustBody, err := compliancev1.MarshalCanonical(policy)
+	require.NoError(t, err)
+	trustPath := filepath.Join(t.TempDir(), constants.ComplianceReportTrustPolicyTestFilename)
+	require.NoError(t, os.WriteFile(trustPath, trustBody, constants.PermFilePublic))
+	verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return assessmentAsOf.Add(time.Minute) })
+	require.NoError(t, verifyCmd.Flags().Set("trust-policy", trustPath))
+	var verificationOutput bytes.Buffer
+	verifyCmd.SetOut(&verificationOutput)
+	require.NoError(t, verifyCmd.RunE(verifyCmd, []string{strings.TrimSpace(output.String())}), verificationOutput.String())
+}
+
+type campaignComplianceWitnessExecutor struct {
+	store *evaluation.Store
+	now   time.Time
+}
+
+func (e *campaignComplianceWitnessExecutor) ExecuteAssignment(ctx context.Context, req evaluation.AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
+	role := "primary"
+	trace := map[string]any{
+		"schema_version":    "1",
+		"chat_execution_id": "exec-1",
+		"status":            "completed",
+		"completed_at":      e.now.Format(time.RFC3339),
+		"role_outcome":      "invoked",
+		"evaluation_context": map[string]any{
+			"campaign_id":                req.Assignment.GetCampaignId(),
+			"run_id":                     req.Assignment.GetRunId(),
+			"assignment_id":              req.Assignment.GetAssignmentId(),
+			"evaluation_attempt_id":      req.AttemptID,
+			"scenario_id":                req.Assignment.GetScenarioId(),
+			"model_registry_digest":      req.Binding.ModelRegistryDigest,
+			"target_operator_session_id": req.Binding.InferenceOperatorSessionID,
+			"evaluation_lane":            "model_role",
+			"designated_model_role":      role,
+		},
+		"controlled_role_assignment": map[string]any{"designated_model_role": role},
+		"model_calls": []any{map[string]any{
+			"agent_role":              "sage",
+			"model_role":              role,
+			"provider":                "G8EProvider",
+			"governed_transaction_id": "tx-1",
+			"governed_result_digest":  strings.Repeat("a", sha256.Size*2),
+			"provider_attempt_id":     req.AttemptID,
+			"normalized_request_hash": strings.Repeat("b", sha256.Size*2),
+			"output_hash":             strings.Repeat("c", sha256.Size*2),
+		}},
+	}
+	digest, err := evaluation.ComputeChatProbeTraceDigest(trace)
+	if err != nil {
+		return nil, err
+	}
+	trace["trace_digest"] = digest
+	traceBody, err := json.Marshal(trace)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.store.SaveAssignmentTrace(ctx, req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), traceBody); err != nil {
+		return nil, err
+	}
+	evidenceRef, err := evaluation.BuildAssignmentTraceEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, trace, e.now)
+	if err != nil {
+		return nil, err
+	}
+	return evaluation.ImportAssignmentResultFromTrace(req, trace, evidenceRef, e.now, func(prefix string) string { return prefix + "-1" })
+}
+
+type campaignComplianceBundleFixture struct {
+	fileSvc      fs.RuntimeFileService
+	bundle       *compliancev1.ComplianceReportBundle
+	bundleDir    string
+	policy       *compliancev1.ComplianceReportTrustPolicy
+	verifiedAt   time.Time
+	admissionID  string
+	attemptID    string
+	verification *evalv1.EvaluationVerificationReport
+}
+
+func generateCampaignComplianceBundleFixture(t *testing.T, includeWitnesses bool) campaignComplianceBundleFixture {
+	t.Helper()
+	ctx := context.Background()
+	fileSvc, _ := newCmdTestEnv(t)
+	store := evaluation.NewStore(fileSvc)
+	executedAt := time.Unix(1_700_000_000, 0).UTC()
+	executor := &campaignComplianceWitnessExecutor{store: store, now: executedAt}
+	controller := evaluation.NewCampaignController(store, executor, func() time.Time { return executedAt }, func(prefix string) string { return prefix + "-1" })
+	req := evaluationTestCampaignInitRequest(t)
+	catalog := req.Catalog
+	truncated := &evalv1.EvaluationScenarioCatalog{SchemaVersion: catalog.GetSchemaVersion(), CatalogRef: catalog.GetCatalogRef(), Scenarios: catalog.GetScenarios()[:1]}
+	catalogDigest, err := evaluation.ComputeScenarioCatalogDigest(truncated)
+	require.NoError(t, err)
+	truncated.CatalogDigest = catalogDigest
+	req.Catalog = truncated
+	_, err = controller.InitializeCampaign(ctx, req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(ctx, req.RunID)
+	require.NoError(t, err)
+	result, executed, err := controller.ExecuteNextAssignment(ctx, req.RunID, evaluation.CampaignExecutionBinding{
+		InferenceOperatorSessionID: req.InferenceOperatorSessionID,
+		DataOperatorID:             "data-operator",
+		DataOperatorSessionID:      req.DataOperatorSessionID,
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+	}, req.ScenarioArtifacts)
+	require.NoError(t, err)
+	require.True(t, executed)
+	require.Len(t, result.GetModelInferences(), 1)
+	attemptID := result.GetModelInferences()[0].GetProviderAttemptId()
+	require.NotEmpty(t, attemptID)
+	if includeWitnesses {
+		persistCampaignComplianceWitnesses(t, fileSvc, result.GetModelInferences()[0], executedAt)
+	}
+	assessmentAsOf := time.Now().UTC()
+	scopeID := constants.EvalScopePrefix + req.CampaignID
+	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+		return identity, nil
+	}, func() time.Time { return assessmentAsOf })
+	configureComplianceReportGenerateCommand(t, cmd)
+	scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{req.RunID}, assessmentAsOf)
+	scopeBody, err := os.ReadFile(scopePath)
+	require.NoError(t, err)
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
+	admission := scope.SourceAdmissions[0]
+	admission.SourceKind = constants.EvaluationSourceKindCampaign
+	admission.VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
+	admission.ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	admission.ModelProvenancePolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	scopeBody, err = compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFilePrivate))
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
+	require.NoError(t, cmd.Flags().Set("eval-run", req.RunID))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	require.NoError(t, cmd.RunE(cmd, nil))
+	descriptor := strings.TrimSpace(output.String())
+	descriptorPath, err := fileSvc.Rel(descriptor)
+	require.NoError(t, err)
+	descriptorBody, err := fileSvc.ReadFile(ctx, descriptorPath)
+	require.NoError(t, err)
+	bundle := &compliancev1.ComplianceReportBundle{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
+	bundleDir := path.Dir(descriptorPath)
+	verificationPath := path.Join(bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, admission.GetAdmissionId(), constants.ComplianceBundleSourceVerificationFilename)
+	verificationBody, err := fileSvc.ReadFile(ctx, verificationPath)
+	require.NoError(t, err)
+	verification := &evalv1.EvaluationVerificationReport{}
+	require.NoError(t, evalv1.UnmarshalCanonical(verificationBody, verification))
+	return campaignComplianceBundleFixture{fileSvc: fileSvc, bundle: bundle, bundleDir: bundleDir, policy: policy, verifiedAt: assessmentAsOf.Add(time.Minute), admissionID: admission.GetAdmissionId(), attemptID: attemptID, verification: verification}
+}
+
+func persistCampaignComplianceWitnesses(t *testing.T, fileSvc fs.RuntimeFileService, inferenceRecord *evalv1.ModelInferenceRecord, observedAt time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	attemptID := inferenceRecord.GetProviderAttemptId()
+	attemptStore, err := inference.NewAttemptStore(fileSvc)
+	require.NoError(t, err)
+	startedAt := observedAt.UnixMilli()
+	completedAt := observedAt.Add(time.Second).UnixMilli()
+	require.NoError(t, attemptStore.Begin(ctx, &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: attemptID,
+		TransactionId:     "tx-1",
+		Status:            operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
+		StartedAtUnixMs:   startedAt,
+		CompletedAtUnixMs: completedAt,
+		ResultDigest:      strings.Repeat("a", sha256.Size*2),
+	}))
+	observation := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          attemptID,
+		ObserverId:                 "observer-1",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(observedAt.UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(observedAt.Add(time.Second).UnixNano()),
+		AttemptStartedAtUnixMs:     startedAt,
+		AttemptCompletedAtUnixMs:   completedAt,
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
+			ObservedAtUnixNanos:        uint64(observedAt.Add(time.Millisecond).UnixNano()),
+			GpuUtilizationAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			GpuUtilizationPercent:      10,
+			HostRamAvailability:        evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			HostRamUsedBytes:           1024,
+		}},
+	}
+	observationDigest, err := provider_observer.ComputeObservationDigest(observation)
+	require.NoError(t, err)
+	observation.ObservationDigest = observationDigest
+	observationStore, err := provider_observer.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, observationStore.Save(ctx, observation))
+	modelDigest := inferenceRecord.GetModelVariant().GetModelDigest()
+	provenance := &evalv1.ModelProvenanceAttestationWindow{
+		SchemaVersion:              model_provenance.SchemaVersion,
+		ProviderAttemptId:          attemptID,
+		ProvenanceOperatorId:       "provenance-1",
+		ServedModelTag:             inferenceRecord.GetModelVariant().GetServedModelTag(),
+		ExpectedModelDigest:        modelDigest,
+		ObservedModelDigest:        modelDigest,
+		ManifestDigest:             strings.Repeat("d", sha256.Size*2),
+		ManifestVerificationStatus: evalv1.ModelManifestVerificationStatus_MODEL_MANIFEST_VERIFICATION_STATUS_UNSIGNED,
+		AttestedAtUnixMs:           completedAt,
+		DigestMatch:                true,
+	}
+	provenanceDigest, err := model_provenance.ComputeAttestationDigest(provenance)
+	require.NoError(t, err)
+	provenance.AttestationDigest = provenanceDigest
+	provenanceStore, err := model_provenance.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, provenanceStore.Save(ctx, provenance))
+}
+
+func verifyCampaignComplianceBundleFixture(t *testing.T, fixture campaignComplianceBundleFixture) *compliancev1.ComplianceVerificationReport {
+	t.Helper()
+	root, err := os.OpenRoot(fixture.fileSvc.Resolve(fixture.bundleDir))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, root.Close()) })
+	report, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{
+		Bundle: fixture.bundle, Reader: &complianceBundleRootReader{root: root}, TrustPolicy: fixture.policy, VerifiedAt: fixture.verifiedAt,
+	})
+	require.NoError(t, err)
+	return report
+}
+
+func TestComplianceReportGenerateCmdWithConfig_StrictCampaignMissingWitnessesRemainFailedOffline(t *testing.T) {
+	fixture := generateCampaignComplianceBundleFixture(t, false)
+
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, fixture.verification.GetStatus())
+	assert.Contains(t, strings.Join(fixture.verification.GetFailureReasons(), "\n"), "missing provider-boundary observation window")
+	assert.Contains(t, strings.Join(fixture.verification.GetFailureReasons(), "\n"), "missing model provenance attestation window")
+	assert.True(t, verifyCampaignComplianceBundleFixture(t, fixture).GetValid())
+}
+
+func TestComplianceReportGenerateCmdWithConfig_CampaignWitnessMutationsFailOfflineReplay(t *testing.T) {
+	tests := []struct {
+		name        string
+		runtimePath func(string) string
+		remove      bool
+	}{
+		{name: "tampered provider attempt", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname, attemptID+constants.FileExtJSON)
+		}},
+		{name: "missing provider attempt", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname, attemptID+constants.FileExtJSON)
+		}, remove: true},
+		{name: "tampered provider observation", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceProviderObserverDirname, constants.InferenceProviderObserverWindowsDirname, attemptID+constants.FileExtJSON)
+		}},
+		{name: "missing provider observation", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceProviderObserverDirname, constants.InferenceProviderObserverWindowsDirname, attemptID+constants.FileExtJSON)
+		}, remove: true},
+		{name: "tampered model provenance", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceModelProvenanceDirname, constants.InferenceModelProvenanceWindowsDirname, attemptID+constants.FileExtJSON)
+		}},
+		{name: "missing model provenance", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceModelProvenanceDirname, constants.InferenceModelProvenanceWindowsDirname, attemptID+constants.FileExtJSON)
+		}, remove: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := generateCampaignComplianceBundleFixture(t, true)
+			assert.True(t, verifyCampaignComplianceBundleFixture(t, fixture).GetValid())
+			sourcePath := path.Join(fixture.bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, fixture.admissionID, constants.ComplianceBundleSourceRuntimeDirname, test.runtimePath(fixture.attemptID))
+			if test.remove {
+				require.NoError(t, fixture.fileSvc.Remove(context.Background(), sourcePath))
+			} else {
+				require.NoError(t, fixture.fileSvc.WriteFile(context.Background(), sourcePath, []byte(`{}`), constants.PermFilePrivate))
+			}
+
+			report := verifyCampaignComplianceBundleFixture(t, fixture)
+			assert.False(t, report.GetValid())
+			assert.NotEmpty(t, report.GetFailures())
+		})
+	}
+}
+
+func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidProtectedAssessmentWindow(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+	configureComplianceReportGenerateCommand(t, cmd)
+	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{"run-1"}, time.Unix(1_700_000_001, 0).UTC())
+	scopeBody, err := os.ReadFile(scopePath)
+	require.NoError(t, err)
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
+	scope.AssessmentWindowStart = scope.AssessmentWindowEnd
+	scopeBody, err = compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFileReadOnly))
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
 	require.NoError(t, cmd.Flags().Set("eval-run", "run-1"))
 
-	err := cmd.RunE(cmd, nil)
+	err = cmd.RunE(cmd, nil)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 }
 
 func TestComplianceReportVerifyCmdWithConfig_PrintsTypedValidReport(t *testing.T) {
@@ -531,7 +1054,7 @@ func TestComplianceReportVerifyCmdWithConfig_ReturnsFailureAfterPrintingInvalidR
 }
 
 func TestComplianceReportVerifyCmdWithConfig_PropagatesReaderCloseFailure(t *testing.T) {
-	closeErr := errors.New("close failed")
+	closeErr := fmt.Errorf("close failed")
 	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
 	cmd := complianceReportVerifyCmdWithConfig(
 		func(context.Context, string, string, string) (complianceReportBundleInput, error) {
