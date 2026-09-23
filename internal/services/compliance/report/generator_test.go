@@ -315,6 +315,7 @@ func TestGenerateComplianceAnalysis_RejectsImporterFailureBeforeGrading(t *testi
 	assert.False(t, result.GraphReport.Valid)
 	require.Len(t, result.GraphReport.ImporterErrors, 1)
 	assert.Contains(t, result.GraphReport.ImporterErrors[0].Error, importErr.Error())
+	assert.Contains(t, err.Error(), importErr.Error())
 }
 
 func TestAssessmentDiagnosticsCanonicalRoundTripAndMalformedInputs(t *testing.T) {

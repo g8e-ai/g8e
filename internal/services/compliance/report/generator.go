@@ -350,7 +350,7 @@ func GenerateComplianceAnalysis(ctx context.Context, request GenerationRequest) 
 	graph, graphReport := evidence.BuildAndValidateGraph(ctx, importers, windowStart, windowEnd, evaluatedAt)
 	result := &GenerationResult{GraphReport: graphReport}
 	if !graphReport.Valid {
-		return result, fmt.Errorf("%w: evidence graph verification failed", constants.ErrReportVerificationFailed)
+		return result, fmt.Errorf("%w: evidence graph verification failed: %s", constants.ErrReportVerificationFailed, graphReport.String())
 	}
 	scopeID := request.Scope.GetScopeId()
 	for graphScopeID := range graphReport.NodesByScope {
