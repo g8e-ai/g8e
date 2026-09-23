@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,7 +133,7 @@ func TestApproveRecoveryCmd_UnexpectedStateReturnsError(t *testing.T) {
 func TestApproveRecoveryCmd_PostErrorReturnsWrappedError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
-	postErr := errors.New("network failure")
+	postErr := fmt.Errorf("network failure")
 	mockClient := &mockAPIClient{postErr: postErr}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(_ fs.RuntimeFileService, _ *config.Config) (apiClient, error) { return mockClient, nil }

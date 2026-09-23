@@ -15,7 +15,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1055,7 +1054,7 @@ func TestComplianceReportVerifyCmdWithConfig_ReturnsFailureAfterPrintingInvalidR
 }
 
 func TestComplianceReportVerifyCmdWithConfig_PropagatesReaderCloseFailure(t *testing.T) {
-	closeErr := errors.New("close failed")
+	closeErr := fmt.Errorf("close failed")
 	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
 	cmd := complianceReportVerifyCmdWithConfig(
 		func(context.Context, string, string, string) (complianceReportBundleInput, error) {

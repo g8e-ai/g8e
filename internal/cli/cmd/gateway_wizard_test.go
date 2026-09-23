@@ -9,7 +9,7 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,7 +63,7 @@ func TestGatewayStartCmd_InteractiveCancelDoesNotStart(t *testing.T) {
 }
 
 func TestGatewayStartCmd_InteractiveErrorDoesNotStart(t *testing.T) {
-	wizardErr := errors.New("wizard crashed")
+	wizardErr := fmt.Errorf("wizard crashed")
 	fakeRunner := func(opts wizard.Options) (wizard.Result, error) {
 		return wizard.Result{}, wizardErr
 	}

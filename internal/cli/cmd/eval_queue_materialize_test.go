@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -125,7 +125,9 @@ func writeTestFrozenInventory(t *testing.T, root, relPath string, variants ...*e
 		require.NoError(t, err)
 		bodies = append(bodies, raw)
 	}
-	payload, err := json.Marshal(map[string]any{"variants": bodies})
+	payload, err := json.Marshal(struct {
+		Variants []json.RawMessage `json:"variants"`
+	}{Variants: bodies})
 	require.NoError(t, err)
 	if relPath == evaluation.DefaultModelInventoryRelPath {
 		fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
@@ -202,7 +204,7 @@ func TestFinishCampaignQueueRun_TextAndJSON(t *testing.T) {
 	output.Reset()
 	command.SetOut(&output)
 	result = campaignQueueRunResult{Planned: 2, Succeeded: 1, Failed: 1}
-	err := finishCampaignQueueRun(command, "/queue/path", result, errors.New("boom"))
+	err := finishCampaignQueueRun(command, "/queue/path", result, fmt.Errorf("boom"))
 	require.Error(t, err)
 	var payload campaignQueueRunResult
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))

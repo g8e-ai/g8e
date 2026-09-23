@@ -262,7 +262,6 @@ func TestScheduleHomogeneousCampaignRun_RequiresInitializedRun(t *testing.T) {
 	plan, err := evaluation.ResolveCampaignStartPlan(evaluation.CampaignStartPlanRequest{
 		Context:     context.Background(),
 		FileService: fileSvc,
-		ProjectRoot: root,
 		ModelTag:    "qwen3:4b",
 		Now:         deps.now().UTC(),
 	})

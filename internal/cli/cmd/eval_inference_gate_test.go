@@ -589,8 +589,8 @@ func TestReconcileVerifiedCampaignMirrorFromDockerInit_RestoresQueue(t *testing.
 			VerifiedRunID: run.GetRunId(),
 		}},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
-	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, queue))
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
 	cfg, err := deps.configLoader(root)
 	require.NoError(t, err)

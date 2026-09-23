@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -115,7 +115,7 @@ func TestTUI_ConfigLoadFailure(t *testing.T) {
 	t.Run("returns error when config loader fails", func(t *testing.T) {
 		deps := stubTUIDeps(t, nil)
 		deps.configLoader = func(string) (*config.Config, error) {
-			return nil, errors.New("config disk read failure")
+			return nil, fmt.Errorf("config disk read failure")
 		}
 		cmd := tuiCmdWithDeps(deps)
 		cmd.SetArgs([]string{})
@@ -131,7 +131,7 @@ func TestTUI_GatewayNotReachable(t *testing.T) {
 	t.Run("returns wrapped error when gateway is not reachable", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
-		gwErr := errors.New("connection refused")
+		gwErr := fmt.Errorf("connection refused")
 		deps.checkOperatorRunning = func(*config.Config) error {
 			return gwErr
 		}
@@ -162,7 +162,7 @@ func TestTUI_GatewayNotReachableReportsDockerState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := setupTUITestConfig(t)
 			deps := stubTUIDeps(t, cfg)
-			gwErr := errors.New("connection refused")
+			gwErr := fmt.Errorf("connection refused")
 			deps.checkOperatorRunning = func(*config.Config) error { return gwErr }
 			deps.inspectDockerGateway = func(context.Context) (dockerContainerState, error) {
 				return tc.state, tc.inspectErr
@@ -192,7 +192,7 @@ func TestTUI_CredentialLoadFailure(t *testing.T) {
 	t.Run("returns wrapped ErrFailedToLoadCredentials when loadCredentials errors", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
-		credErr := errors.New("corrupt credentials file")
+		credErr := fmt.Errorf("corrupt credentials file")
 		deps.loadCredentials = func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
 			return nil, credErr
 		}
@@ -227,7 +227,7 @@ func TestTUI_BuildMTLSClientFailure(t *testing.T) {
 	t.Run("returns error when BuildMTLSClient fails", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
-		tlsErr := errors.New("cert file missing")
+		tlsErr := fmt.Errorf("cert file missing")
 		deps.buildMTLSClient = func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
 			return nil, tlsErr
 		}
@@ -291,7 +291,7 @@ func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
 	t.Run("returns error from tui.Run", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
-		runErr := errors.New("tui crashed")
+		runErr := fmt.Errorf("tui crashed")
 		deps.tuiRun = func(context.Context, tui.Options) error {
 			return runErr
 		}

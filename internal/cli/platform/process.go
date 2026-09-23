@@ -9,6 +9,7 @@ package platform
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -229,6 +230,13 @@ func (pm *ProcessManager) copyBinaryToBinDir() (string, error) {
 	}
 	if closeErr != nil {
 		return "", fmt.Errorf("%w: close executable: %w", constants.ErrBinaryCopyFailed, closeErr)
+	}
+	existing, readErr := pm.fileSvc.ReadFile(context.Background(), relPath)
+	if readErr == nil && bytes.Equal(existing, data) {
+		return destPath, nil
+	}
+	if readErr != nil && !errors.Is(readErr, constants.ErrNotFound) {
+		return "", fmt.Errorf("%w: read runtime executable: %w", constants.ErrBinaryCopyFailed, readErr)
 	}
 	if err := pm.fileSvc.WriteFile(context.Background(), relPath, data, constants.PermFileExecutable); err != nil {
 		return "", fmt.Errorf("%w: write runtime executable: %w", constants.ErrBinaryCopyFailed, err)

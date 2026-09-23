@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -167,6 +168,7 @@ func TestTestSummaryCmd_NoTestVaultReturnsMessage(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(minimalPathsJSON(t)), 0o644))
 
 	cmd := testSummaryCmd()
+	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -183,14 +185,17 @@ func TestTestSummaryCmd_EmptyTestVaultReturnsMessage(t *testing.T) {
 	require.NoError(t, os.MkdirAll(protocolDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(minimalPathsJSON(t)), 0o644))
 
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".g8e", "test-vault"), 0o755))
+	fileSvc, err := fs.NewRuntimeFileService("", nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), constants.TestVaultDirname, constants.PermDirPrivate))
 
 	cmd := testSummaryCmd()
+	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := cmd.RunE(cmd, nil)
+	err = cmd.RunE(cmd, nil)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "No chaos test runs found")
 }

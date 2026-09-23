@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +33,7 @@ func saveTestCredentials(t *testing.T, fileSvc fs.RuntimeFileService, cfg *confi
 
 func TestOperatorListCmdWithConfig_ConfigLoadError(t *testing.T) {
 	failLoader := func(string) (*config.Config, error) {
-		return nil, errors.New("config load error")
+		return nil, fmt.Errorf("config load error")
 	}
 
 	cmd := operatorListCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
@@ -51,7 +51,7 @@ func TestOperatorListCmdWithConfig_ClientCreationError(t *testing.T) {
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	cmd := operatorListCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")), fileSvcFactoryFor(fileSvc))
+	cmd := operatorListCmdWithConfig(loader, failingClientFactory(fmt.Errorf("client creation error")), fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -66,7 +66,7 @@ func TestOperatorListCmdWithConfig_GetRequestError(t *testing.T) {
 	saveTestCredentials(t, fileSvc, cfg, "user-001")
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	client := &mockAPIClient{getErr: errors.New("network error")}
+	client := &mockAPIClient{getErr: fmt.Errorf("network error")}
 	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -202,15 +202,15 @@ func TestOperatorListCmdWithConfig_JSONOutputIncludesRuntimeFlags(t *testing.T) 
 	err := cmd.RunE(cmd, nil)
 	require.NoError(t, err)
 
-	var payload struct {
-		Operators []map[string]any `json:"operators"`
-	}
+	var payload operatorListOutput
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &payload))
 	require.Len(t, payload.Operators, 2)
-	assert.Equal(t, "data-session", payload.Operators[0]["operator_session_id"])
-	assert.Equal(t, false, payload.Operators[0]["inference_enabled"])
-	assert.Equal(t, "infer-session", payload.Operators[1]["operator_session_id"])
-	assert.Equal(t, true, payload.Operators[1]["inference_enabled"])
+	assert.Equal(t, "data-session", payload.Operators[0].OperatorSessionID)
+	require.NotNil(t, payload.Operators[0].InferenceEnabled)
+	assert.False(t, *payload.Operators[0].InferenceEnabled)
+	assert.Equal(t, "infer-session", payload.Operators[1].OperatorSessionID)
+	require.NotNil(t, payload.Operators[1].InferenceEnabled)
+	assert.True(t, *payload.Operators[1].InferenceEnabled)
 }
 
 func TestOperatorListCmdWithConfig_SendsUserIDQueryParameter(t *testing.T) {

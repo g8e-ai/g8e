@@ -31,9 +31,13 @@ func TestEnsureProviderModelsAbsent_RejectsResidentModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/ps", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"models": []map[string]string{{"name": "granite4.2:3b"}},
-		}))
+		require.NoError(t, json.NewEncoder(w).Encode(struct {
+			Models []struct {
+				Name string `json:"name"`
+			} `json:"models"`
+		}{Models: []struct {
+			Name string `json:"name"`
+		}{{Name: "granite4.2:3b"}}}))
 	}))
 	t.Cleanup(server.Close)
 

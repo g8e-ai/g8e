@@ -51,11 +51,11 @@ func TestWriteCampaignStartPlan_TextAndJSON(t *testing.T) {
 
 	var jsonOut bytes.Buffer
 	require.NoError(t, writeCampaignStartPlan(&jsonOut, plan, sessions, true))
-	var payload map[string]any
+	var payload campaignStartPlanJSON
 	require.NoError(t, json.Unmarshal(jsonOut.Bytes(), &payload))
-	assert.Equal(t, "eval-init-qwen3-4b", payload["campaign_id"])
-	assert.Equal(t, "run-123", payload["run_id"])
-	assert.Equal(t, "inference-session-1", payload["inference_session"])
+	assert.Equal(t, "eval-init-qwen3-4b", payload.CampaignID)
+	assert.Equal(t, "run-123", payload.RunID)
+	assert.Equal(t, "inference-session-1", payload.InferenceSession)
 }
 
 func TestPersistActiveCampaignRun_WritesMarker(t *testing.T) {

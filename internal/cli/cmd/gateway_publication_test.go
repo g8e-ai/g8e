@@ -307,8 +307,8 @@ func TestFetchPublicMirrorHistory_ReturnsCursorPage(t *testing.T) {
 		assert.Equal(t, "catalog_snapshot", r.URL.Query().Get("kind"))
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
-			Items: []map[string]any{
-				{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+			Items: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"}),
 			},
 			Cursor:  "cursor-2",
 			HasMore: true,
@@ -337,8 +337,8 @@ func TestHTTPCampaignMirrorProbe_DatasetPresentFromHistory(t *testing.T) {
 	historyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
-			Items: []map[string]any{
-				{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"},
+			Items: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"}),
 			},
 		}))
 	}))
@@ -377,8 +377,8 @@ func TestHTTPCampaignMirrorProbe_IndexesMirrorOnceForMultipleDatasets(t *testing
 		historyRequests.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
-			Items: []map[string]any{
-				{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"},
+			Items: []models.PublicFeedObject{
+				models.NewPublicFeedObject(map[string]string{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"}),
 			},
 		}))
 	}))

@@ -59,7 +59,7 @@ func testUnitCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 		Short: "Run Tier 1 (Unit) tests",
 		Long:  `Run unit tests without any build tags. These tests use mocks/stubs and have no external dependencies (no files, network, or DB).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Running Tier 1 (Unit) tests...")
+			fmt.Println("make test-unit")
 
 			// Delegate to the Makefile so the CLI and repository test target share
 			// package exclusions, race settings, cache settings, and timeouts.

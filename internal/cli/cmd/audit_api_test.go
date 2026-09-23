@@ -9,7 +9,7 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var errMockNetwork = errors.New("network failure")
+var errMockNetwork = fmt.Errorf("network failure")
 
 func setupAuditAPITestEnv(t *testing.T) *config.Config {
 	t.Helper()

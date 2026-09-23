@@ -13,7 +13,7 @@ import (
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
+	"fmt"
 	"runtime"
 	"testing"
 
@@ -47,7 +47,7 @@ func TestApproveCmdStructure(t *testing.T) {
 func TestApproveCmdWithConfig(t *testing.T) {
 	t.Run("approve fails when config load fails", func(t *testing.T) {
 		failLoader := func(string) (*config.Config, error) {
-			return nil, errors.New("config load error")
+			return nil, fmt.Errorf("config load error")
 		}
 		cmd := approveCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
@@ -131,7 +131,7 @@ func TestApproveCmdWithValidKeyFile(t *testing.T) {
 func TestEnrollCmdWithConfigErrorPaths(t *testing.T) {
 	t.Run("enroll fails when config load fails", func(t *testing.T) {
 		failLoader := func(string) (*config.Config, error) {
-			return nil, errors.New("config load error")
+			return nil, fmt.Errorf("config load error")
 		}
 		cmd := enrollUserCmdWithConfig(failLoader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 		var buf bytes.Buffer

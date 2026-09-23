@@ -125,14 +125,13 @@ func TestRunVersion_JSONEmitsProvenanceFields(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, runVersion(&buf, vi, false, true))
 
-	var out map[string]any
+	var out versionJSON
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
-	assert.Equal(t, "2.1.8", out["version"])
-	assert.Equal(t, "abc123", out["build_id"])
-	assert.Equal(t, "deadbeef"+strings.Repeat("0", 32), out["source_revision"])
-	assert.Equal(t, "a"+strings.Repeat("1", 63), out["source_tree_state_hash"])
-	_, hasFIPS := out["fips140"]
-	assert.False(t, hasFIPS, "fips140 must be omitted unless --fips is passed")
+	assert.Equal(t, "2.1.8", out.Version)
+	assert.Equal(t, "abc123", out.BuildID)
+	assert.Equal(t, "deadbeef"+strings.Repeat("0", 32), out.SourceRevision)
+	assert.Equal(t, "a"+strings.Repeat("1", 63), out.SourceTreeStateHash)
+	assert.Nil(t, out.FIPS140, "fips140 must be omitted unless --fips is passed")
 }
 
 func TestRunVersion_JSONOmitsUnstampedSentinels(t *testing.T) {
@@ -144,17 +143,15 @@ func TestRunVersion_JSONOmitsUnstampedSentinels(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, runVersion(&buf, vi, false, true))
 
-	var out map[string]any
+	var out versionJSON
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
-	_, hasRev := out["source_revision"]
-	_, hasHash := out["source_tree_state_hash"]
 	// A test binary carries no ldflags stamp; source_revision may still be
 	// populated from toolchain VCS info, but a sentinel or malformed value
 	// must never be emitted.
-	if hasRev {
-		assert.NotEqual(t, string(constants.SystemHealthUnknown), out["source_revision"])
+	if out.SourceRevision != "" {
+		assert.NotEqual(t, string(constants.SystemHealthUnknown), out.SourceRevision)
 	}
-	assert.False(t, hasHash, "malformed tree-state hash must be omitted, not emitted")
+	assert.Empty(t, out.SourceTreeStateHash, "malformed tree-state hash must be omitted, not emitted")
 }
 
 func TestRunVersion_JSONPrefersStampedRevisionOverVCS(t *testing.T) {
@@ -162,9 +159,9 @@ func TestRunVersion_JSONPrefersStampedRevisionOverVCS(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, runVersion(&buf, vi, false, true))
 
-	var out map[string]any
+	var out versionJSON
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
-	assert.Equal(t, "stamped-revision", out["source_revision"])
+	assert.Equal(t, "stamped-revision", out.SourceRevision)
 }
 
 func TestEffectiveSourceRevision_FallsBackForUnstampedValues(t *testing.T) {
@@ -188,12 +185,12 @@ func TestRunVersion_JSONFIPSIncludesModuleBlock(t *testing.T) {
 	var buf bytes.Buffer
 	err := runVersion(&buf, vi, true, true)
 
-	var out map[string]any
+	var out versionJSON
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
-	fipsBlock, hasFIPS := out["fips140"].(map[string]any)
-	require.True(t, hasFIPS, "--json --fips must include the fips140 block")
-	assert.Contains(t, fipsBlock, "enabled")
-	assert.Contains(t, fipsBlock, "module_version")
+	require.NotNil(t, out.FIPS140, "--json --fips must include the fips140 block")
+	assert.Equal(t, fips140.Enabled(), out.FIPS140.Enabled)
+	assert.Equal(t, fips140.Enforced(), out.FIPS140.Enforced)
+	assert.Equal(t, fips140.Version(), out.FIPS140.ModuleVersion)
 
 	if !fips140.Enabled() {
 		require.Error(t, err)

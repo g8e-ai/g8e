@@ -135,7 +135,7 @@ func setupTestVaultWithKey(t *testing.T, fileSvc fs.RuntimeFileService, privKey 
 	require.NoError(t, os.MkdirAll(vaultDir, constants.PermDirPrivate))
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
+	require.NoError(t, header.Save(fileSvc))
 
 	vaultKeyRel := constants.SecretsDirname + "/" + constants.VaultKeyFilename
 	hexKey := hex.EncodeToString(privKey)

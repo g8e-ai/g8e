@@ -86,14 +86,10 @@ func TestCampaignEvalList_JSON(t *testing.T) {
 	rootCmd.SetArgs([]string{"eval", "campaign", "list", "--project-root", root})
 	require.NoError(t, rootCmd.Execute())
 
-	var payload map[string]any
+	var payload campaignListOutput
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
-	campaigns, ok := payload["campaigns"].([]any)
-	require.True(t, ok)
-	require.NotEmpty(t, campaigns)
-	first, ok := campaigns[0].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, active.CampaignID, first["campaign_id"])
+	require.NotEmpty(t, payload.Campaigns)
+	assert.Equal(t, active.CampaignID, payload.Campaigns[0].CampaignID)
 }
 
 func TestCampaignEvalShow_AfterPrepare(t *testing.T) {
@@ -126,10 +122,10 @@ func TestCampaignEvalShow_JSON(t *testing.T) {
 	rootCmd.SetArgs([]string{"eval", "campaign", "show", "--project-root", root, active.RunID})
 	require.NoError(t, rootCmd.Execute())
 
-	var payload map[string]any
+	var payload campaignShowOutput
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
-	assert.Equal(t, active.RunID, payload["run_id"])
-	assert.Equal(t, active.CampaignID, payload["campaign_id"])
+	assert.Equal(t, active.RunID, payload.RunID)
+	assert.Equal(t, active.CampaignID, payload.CampaignID)
 }
 
 func TestCampaignEvalStatus_AfterPrepare(t *testing.T) {

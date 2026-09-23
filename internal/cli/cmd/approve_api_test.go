@@ -15,7 +15,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -227,7 +226,7 @@ func TestApproveCmd_SSE_Success_GetError(t *testing.T) {
 	withEndpointOverride(t, srv.URL)
 
 	mockClient := &mockAPIClient{
-		getErr: errors.New("network failure"),
+		getErr: fmt.Errorf("network failure"),
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }

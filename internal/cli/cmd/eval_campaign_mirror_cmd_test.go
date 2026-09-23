@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -75,8 +74,10 @@ func TestReconcileVerifiedCampaignMirrorQueue_LoadsQueueAndRestores(t *testing.T
 			VerifiedRunID: run.GetRunId(),
 		}},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
-	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, queue))
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
 	reconciler := evaluation.NewCampaignMirrorReconciler(coordinator, store, probe)
 	result, err := reconcileVerifiedCampaignMirrorQueue(context.Background(), root, reconciler, time.Minute, nil)
@@ -212,8 +213,8 @@ func TestCampaignEvalMirrorRestoreQueue_ViaCLI(t *testing.T) {
 			VerifiedRunID: run.GetRunId(),
 		}},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
-	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, queue))
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
 	command := evalCmdWithConfig(deps)
 	var output, progress bytes.Buffer
@@ -238,8 +239,10 @@ func TestCampaignEvalMirrorRestoreQueue_JSONReturnsFailureWhenRunsFail(t *testin
 			VerifiedRunID: "run-blocked",
 		}},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
-	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, queue))
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
 	command := evalCmdWithConfig(deps)
 	rootCmd := globalJSONRoot(t, command)
@@ -248,7 +251,7 @@ func TestCampaignEvalMirrorRestoreQueue_JSONReturnsFailureWhenRunsFail(t *testin
 	var output bytes.Buffer
 	rootCmd.SetOut(&output)
 	rootCmd.SetArgs([]string{"eval", "campaign", "mirror", "restore", "--project-root", root, "--queue", "--run-timeout", "1ns"})
-	err := rootCmd.Execute()
+	err = rootCmd.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "1 run(s) failed")
 

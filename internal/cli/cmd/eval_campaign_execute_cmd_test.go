@@ -36,6 +36,12 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+type campaignInventoryFreezeJSON struct {
+	CampaignID          string            `json:"campaign_id"`
+	ModelRegistryDigest string            `json:"model_registry_digest"`
+	Variants            []json.RawMessage `json:"variants"`
+}
+
 func TestCampaignEvalExecute_RejectsPreflightWhenGatewayUnhealthy(t *testing.T) {
 	withGatewayHealthCheck(t, false)
 	root, deps, _, cleanup := setupCampaignOrchestrateEnv(t)
@@ -135,12 +141,11 @@ func TestCampaignEvalExecute_JSONOutput(t *testing.T) {
 	})
 	require.NoError(t, rootCmd.Execute())
 
-	var payload map[string]any
+	var payload campaignExecuteOutput
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
-	assert.Equal(t, runID, payload["run_id"])
-	assert.Equal(t, float64(1), payload["executed"])
-	assert.Contains(t, payload, "remaining")
-	assert.NotEmpty(t, payload["results"])
+	assert.Equal(t, runID, payload.RunID)
+	assert.Equal(t, 1, payload.Executed)
+	assert.NotEmpty(t, payload.Results)
 }
 
 func prepareUnscheduledCampaignRun(t *testing.T, root string, deps nativeEvalDeps) string {
@@ -156,10 +161,10 @@ func prepareUnscheduledCampaignRun(t *testing.T, root string, deps nativeEvalDep
 	rawVariant, err := protojson.Marshal(variant)
 	require.NoError(t, err)
 	inventoryPath := filepath.Join(root, "inventory-freeze.json")
-	payload, err := json.Marshal(map[string]any{
-		"campaign_id":           inventory.CampaignID,
-		"model_registry_digest": inventory.RegistryDigest,
-		"variants":              []json.RawMessage{rawVariant},
+	payload, err := json.Marshal(campaignInventoryFreezeJSON{
+		CampaignID:          inventory.CampaignID,
+		ModelRegistryDigest: inventory.RegistryDigest,
+		Variants:            []json.RawMessage{rawVariant},
 	})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(inventoryPath, payload, 0o600))
@@ -205,10 +210,10 @@ func TestCampaignEvalSchedule_JSONOutput(t *testing.T) {
 	rootCmd.SetArgs([]string{"eval", "campaign", "schedule", "--project-root", root, runID})
 	require.NoError(t, rootCmd.Execute())
 
-	var payload map[string]any
+	var payload campaignScheduleOutput
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
-	assert.Equal(t, runID, payload["run_id"])
-	assert.NotZero(t, payload["assignment_count"])
+	assert.Equal(t, runID, payload.RunID)
+	assert.NotZero(t, payload.AssignmentCount)
 }
 
 func prepareUnscheduledCampaignRunWithVariants(t *testing.T, root string, deps nativeEvalDeps, variants []*evalv1.ModelVariant) string {
@@ -222,10 +227,10 @@ func prepareUnscheduledCampaignRunWithVariants(t *testing.T, root string, deps n
 		rawVariants = append(rawVariants, raw)
 	}
 	inventoryPath := filepath.Join(root, "inventory-freeze.json")
-	payload, err := json.Marshal(map[string]any{
-		"campaign_id":           inventory.CampaignID,
-		"model_registry_digest": inventory.RegistryDigest,
-		"variants":              rawVariants,
+	payload, err := json.Marshal(campaignInventoryFreezeJSON{
+		CampaignID:          inventory.CampaignID,
+		ModelRegistryDigest: inventory.RegistryDigest,
+		Variants:            rawVariants,
 	})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(inventoryPath, payload, 0o600))

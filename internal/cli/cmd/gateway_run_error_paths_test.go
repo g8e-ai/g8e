@@ -9,7 +9,7 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +45,7 @@ func TestGatewayStopCmd_NoConfigReturnsError(t *testing.T) {
 
 	originalLoader := configLoad
 	configLoad = func(string) (*config.Config, error) {
-		return nil, errors.New("no config")
+		return nil, fmt.Errorf("no config")
 	}
 	t.Cleanup(func() { configLoad = originalLoader })
 
@@ -63,7 +63,7 @@ func TestGatewayStatusCmd_NoConfigReturnsError(t *testing.T) {
 
 	originalLoader := configLoad
 	configLoad = func(string) (*config.Config, error) {
-		return nil, errors.New("no config")
+		return nil, fmt.Errorf("no config")
 	}
 	t.Cleanup(func() { configLoad = originalLoader })
 
@@ -93,7 +93,7 @@ func TestGatewayResetCmd_NoConfigReturnsError(t *testing.T) {
 
 	originalLoader := configLoad
 	configLoad = func(string) (*config.Config, error) {
-		return nil, errors.New("no config")
+		return nil, fmt.Errorf("no config")
 	}
 	t.Cleanup(func() { configLoad = originalLoader })
 
@@ -112,7 +112,7 @@ func TestGatewayCleanCmd_NoConfigReturnsError(t *testing.T) {
 
 	originalLoader := configLoad
 	configLoad = func(string) (*config.Config, error) {
-		return nil, errors.New("no config")
+		return nil, fmt.Errorf("no config")
 	}
 	t.Cleanup(func() { configLoad = originalLoader })
 

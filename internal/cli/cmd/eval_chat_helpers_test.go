@@ -9,7 +9,7 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,10 +25,10 @@ func TestChatAcceptReporter_WritesEnabledMessages(t *testing.T) {
 	reporter.writeSetup(2, "qwen3:4b", "inf-1", "data-1", "http://127.0.0.1:8000")
 	reporter.caseStart(1, 2, "case-a", "assign-1", "attempt-1")
 	reporter.chatSubmitted("case-a", "investigation-1")
-	reporter.chatSubmitFailed(errors.New("submit failed"))
+	reporter.chatSubmitFailed(fmt.Errorf("submit failed"))
 	reporter.traceWaiting()
-	reporter.traceFetchRetrying(errors.New("pending"), 2*time.Second)
-	reporter.traceFetchFailed(errors.New("lookup failed"))
+	reporter.traceFetchRetrying(fmt.Errorf("pending"), 2*time.Second)
+	reporter.traceFetchFailed(fmt.Errorf("lookup failed"))
 
 	text := output.String()
 	assert.Contains(t, text, "Phase 1A chat acceptance")
