@@ -266,14 +266,20 @@ func TestPlatformEnrollmentIssuingRollback_LeaseExpiresBeforeArtifactsCommitted(
 	// simulating a crash that left the request in the issuing state with
 	// an expired lease and no committed artifacts.
 	leaseExpiry := time.Now().UTC().Add(-time.Second)
+	leaseUpdate, err := json.Marshal(struct {
+		State                string    `json:"state"`
+		IssuanceLeaseOwner   string    `json:"issuance_lease_owner"`
+		IssuanceLeaseExpires time.Time `json:"issuance_lease_expires_at"`
+		LastTransitionAt     time.Time `json:"last_transition_at"`
+	}{
+		State:                string(models.PlatformEnrollmentStateIssuing),
+		IssuanceLeaseOwner:   "crashed-owner",
+		IssuanceLeaseExpires: leaseExpiry,
+		LastTransitionAt:     time.Now().UTC(),
+	})
+	require.NoError(t, err)
 	applied, err := env.docStore.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), approved.ID,
-		map[string]interface{}{
-			"state":                     string(models.PlatformEnrollmentStateIssuing),
-			"issuance_lease_owner":      "crashed-owner",
-			"issuance_lease_expires_at": leaseExpiry,
-			"last_transition_at":        time.Now().UTC(),
-		},
+		platformEnrollmentCollectionName(), approved.ID, leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
 	require.NoError(t, err)
@@ -321,15 +327,22 @@ func TestPlatformEnrollmentIssuingRollback_ExpiredLeaseWithExpiredRequest(t *tes
 	// Acquire the lease with an expired expiry AND backdate the request
 	// past its TTL.
 	pastTime := time.Now().UTC().Add(-time.Hour)
+	leaseUpdate, err := json.Marshal(struct {
+		State                string    `json:"state"`
+		IssuanceLeaseOwner   string    `json:"issuance_lease_owner"`
+		IssuanceLeaseExpires time.Time `json:"issuance_lease_expires_at"`
+		ExpiresAt            time.Time `json:"expires_at"`
+		LastTransitionAt     time.Time `json:"last_transition_at"`
+	}{
+		State:                string(models.PlatformEnrollmentStateIssuing),
+		IssuanceLeaseOwner:   "crashed-owner",
+		IssuanceLeaseExpires: pastTime,
+		ExpiresAt:            pastTime,
+		LastTransitionAt:     time.Now().UTC(),
+	})
+	require.NoError(t, err)
 	applied, err := env.docStore.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), approved.ID,
-		map[string]interface{}{
-			"state":                     string(models.PlatformEnrollmentStateIssuing),
-			"issuance_lease_owner":      "crashed-owner",
-			"issuance_lease_expires_at": pastTime,
-			"expires_at":                pastTime,
-			"last_transition_at":        time.Now().UTC(),
-		},
+		platformEnrollmentCollectionName(), approved.ID, leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
 	require.NoError(t, err)
@@ -355,9 +368,9 @@ func TestPlatformEnrollmentIssuingRollback_ExpiredLeaseWithExpiredRequest(t *tes
 // condition field "id" is stripped from the stored data by DocSet.
 func backdateExpiry(t *testing.T, env *platformEnrollmentTestEnv, requestID string, pastTime time.Time) {
 	t.Helper()
-	updateBytes, err := json.Marshal(map[string]interface{}{
-		"expires_at": pastTime,
-	})
+	updateBytes, err := json.Marshal(struct {
+		ExpiresAt time.Time `json:"expires_at"`
+	}{ExpiresAt: pastTime})
 	require.NoError(t, err)
 	_, err = env.docStore.DocUpdate(platformEnrollmentCollectionName(), requestID, updateBytes)
 	require.NoError(t, err)

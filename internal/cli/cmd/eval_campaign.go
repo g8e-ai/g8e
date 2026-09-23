@@ -25,6 +25,145 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+type campaignInitOutput struct {
+	CampaignID          string `json:"campaign_id"`
+	RunID               string `json:"run_id"`
+	CatalogDigest       string `json:"catalog_digest"`
+	ModelRegistryDigest string `json:"model_registry_digest"`
+	ModelCount          int    `json:"model_count"`
+	ScenarioCount       int    `json:"scenario_count"`
+	ProjectRoot         string `json:"project_root"`
+}
+
+type campaignListOutput struct {
+	Campaigns []campaignListCampaign `json:"campaigns"`
+}
+
+type campaignListCampaign struct {
+	CampaignID             string            `json:"campaign_id"`
+	ModelCount             int               `json:"model_count"`
+	ScenarioCount          uint32            `json:"scenario_count"`
+	RepetitionCount        uint32            `json:"repetition_count"`
+	ModelRegistryDigest    string            `json:"model_registry_digest"`
+	CatalogDigest          string            `json:"catalog_digest"`
+	HasHeterogeneousStacks bool              `json:"has_heterogeneous_stacks"`
+	Runs                   []campaignListRun `json:"runs"`
+}
+
+type campaignListRun struct {
+	RunID               string `json:"run_id"`
+	Status              string `json:"status"`
+	ExpectedAssignments uint64 `json:"expected_assignments"`
+	Queued              uint32 `json:"queued"`
+	Running             uint32 `json:"running"`
+	Terminal            uint32 `json:"terminal"`
+}
+
+type campaignStacksOutput struct {
+	CampaignID           string `json:"campaign_id"`
+	GenerationRule       string `json:"generation_rule"`
+	Seed                 uint64 `json:"seed"`
+	SetDigest            string `json:"set_digest"`
+	StackCount           int    `json:"stack_count"`
+	HypothesisStackCount uint32 `json:"hypothesis_stack_count"`
+	CoverageStackCount   uint32 `json:"coverage_stack_count"`
+}
+
+type campaignScheduleOutput struct {
+	RunID           string `json:"run_id"`
+	AssignmentCount int    `json:"assignment_count"`
+	Heterogeneous   bool   `json:"heterogeneous"`
+}
+
+type campaignExecuteResult struct {
+	AssignmentID string `json:"assignment_id"`
+	Status       string `json:"status"`
+	ResultDigest string `json:"result_digest"`
+}
+
+type campaignExecuteOutput struct {
+	RunID     string                  `json:"run_id"`
+	Executed  int                     `json:"executed"`
+	Remaining int64                   `json:"remaining"`
+	Results   []campaignExecuteResult `json:"results"`
+}
+
+type campaignPublishOutput struct {
+	RunID            string `json:"run_id"`
+	PublishedRecords int    `json:"published_records"`
+	Force            bool   `json:"force"`
+}
+
+type campaignVerifyOutput struct {
+	RunID          string   `json:"run_id"`
+	Status         string   `json:"status"`
+	FailureCount   uint32   `json:"failure_count"`
+	FailureReasons []string `json:"failure_reasons"`
+}
+
+type campaignAccountOutput struct {
+	RunID                 string            `json:"run_id"`
+	Complete              bool              `json:"complete"`
+	ExpectedCells         uint64            `json:"expected_cells"`
+	ScheduledAssignments  uint32            `json:"scheduled_assignments"`
+	Queued                uint32            `json:"queued"`
+	Running               uint32            `json:"running"`
+	Terminal              uint32            `json:"terminal"`
+	Stopped               uint32            `json:"stopped"`
+	DispositionCounts     map[string]uint32 `json:"disposition_counts"`
+	MissingCells          []string          `json:"missing_cells"`
+	DuplicateIdentities   []string          `json:"duplicate_identities"`
+	ExtraAssignments      []string          `json:"extra_assignments"`
+	TerminalWithoutResult []string          `json:"terminal_without_result"`
+	ResultWithoutTerminal []string          `json:"result_without_terminal"`
+	FailureReasons        []string          `json:"failure_reasons"`
+	AccountedAt           string            `json:"accounted_at"`
+}
+
+type campaignRepairOutput struct {
+	RunID   string `json:"run_id"`
+	Count   int    `json:"repaired_trace_digests,omitempty"`
+	Results int    `json:"repaired_results,omitempty"`
+}
+
+type campaignExportOutput struct {
+	RunID               string                          `json:"run_id"`
+	CampaignID          string                          `json:"campaign_id"`
+	OutputDir           string                          `json:"output_dir"`
+	ExportedAt          string                          `json:"exported_at"`
+	AssignmentCount     uint32                          `json:"assignment_count"`
+	TerminalResultCount uint32                          `json:"terminal_result_count"`
+	Files               []evaluation.CampaignExportFile `json:"files"`
+}
+
+type campaignShowOutput struct {
+	RunID                  string `json:"run_id"`
+	CampaignID             string `json:"campaign_id"`
+	StartedAt              string `json:"started_at"`
+	Lane                   string `json:"lane"`
+	ModelCount             int    `json:"model_count"`
+	ScenarioCount          uint32 `json:"scenario_count"`
+	RepetitionCount        uint32 `json:"repetition_count"`
+	ModelRegistryDigest    string `json:"model_registry_digest"`
+	CatalogDigest          string `json:"catalog_digest"`
+	HasHeterogeneousStacks bool   `json:"has_heterogeneous_stacks"`
+	ExpectedAssignments    uint64 `json:"expected_assignments"`
+	Queued                 uint32 `json:"queued"`
+	Running                uint32 `json:"running"`
+	Terminal               uint32 `json:"terminal"`
+	NextAssignmentID       string `json:"next_assignment_id"`
+}
+
+type campaignStatusOutput struct {
+	RunID               string `json:"run_id"`
+	CampaignID          string `json:"campaign_id"`
+	ExpectedAssignments uint64 `json:"expected_assignments"`
+	Queued              uint32 `json:"queued"`
+	Running             uint32 `json:"running"`
+	Terminal            uint32 `json:"terminal"`
+	NextAssignmentID    string `json:"next_assignment_id"`
+}
+
 func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "campaign",
@@ -102,14 +241,14 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign init: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"campaign_id":           campaignID,
-					"run_id":                runID,
-					"catalog_digest":        catalog.GetCatalogDigest(),
-					"model_registry_digest": inventory.RegistryDigest,
-					"model_count":           len(inventory.Variants),
-					"scenario_count":        len(catalog.GetScenarios()),
-					"project_root":          cfg.ProjectRoot,
+				payload, err := json.MarshalIndent(campaignInitOutput{
+					CampaignID:          campaignID,
+					RunID:               runID,
+					CatalogDigest:       catalog.GetCatalogDigest(),
+					ModelRegistryDigest: inventory.RegistryDigest,
+					ModelCount:          len(inventory.Variants),
+					ScenarioCount:       len(catalog.GetScenarios()),
+					ProjectRoot:         cfg.ProjectRoot,
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -158,34 +297,34 @@ func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign list: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				entries := make([]map[string]any, 0, len(campaigns))
+				entries := make([]campaignListCampaign, 0, len(campaigns))
 				for _, campaign := range campaigns {
-					runEntries := make([]map[string]any, 0, len(campaign.RunIDs))
+					runEntries := make([]campaignListRun, 0, len(campaign.RunIDs))
 					for _, row := range rows {
 						if row.CampaignID != campaign.CampaignID {
 							continue
 						}
-						runEntries = append(runEntries, map[string]any{
-							"run_id":               row.RunID,
-							"status":               row.Status,
-							"expected_assignments": row.ExpectedAssignments,
-							"queued":               row.Queued,
-							"running":              row.Running,
-							"terminal":             row.Terminal,
+						runEntries = append(runEntries, campaignListRun{
+							RunID:               row.RunID,
+							Status:              row.Status,
+							ExpectedAssignments: row.ExpectedAssignments,
+							Queued:              row.Queued,
+							Running:             row.Running,
+							Terminal:            row.Terminal,
 						})
 					}
-					entries = append(entries, map[string]any{
-						"campaign_id":              campaign.CampaignID,
-						"model_count":              campaign.ModelCount,
-						"scenario_count":           campaign.ScenarioCount,
-						"repetition_count":         campaign.RepetitionCount,
-						"model_registry_digest":    campaign.ModelRegistryDigest,
-						"catalog_digest":           campaign.CatalogDigest,
-						"has_heterogeneous_stacks": campaign.HasHeterogeneousStacks,
-						"runs":                     runEntries,
+					entries = append(entries, campaignListCampaign{
+						CampaignID:             campaign.CampaignID,
+						ModelCount:             campaign.ModelCount,
+						ScenarioCount:          campaign.ScenarioCount,
+						RepetitionCount:        campaign.RepetitionCount,
+						ModelRegistryDigest:    campaign.ModelRegistryDigest,
+						CatalogDigest:          campaign.CatalogDigest,
+						HasHeterogeneousStacks: campaign.HasHeterogeneousStacks,
+						Runs:                   runEntries,
 					})
 				}
-				payload, err := json.MarshalIndent(map[string]any{"campaigns": entries}, "", "  ")
+				payload, err := json.MarshalIndent(campaignListOutput{Campaigns: entries}, "", "  ")
 				if err != nil {
 					return err
 				}
@@ -304,14 +443,14 @@ func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign stacks generate: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"campaign_id":            campaignID,
-					"generation_rule":        stackSet.GenerationRule,
-					"seed":                   stackSet.Seed,
-					"set_digest":             stackSet.SetDigest,
-					"stack_count":            len(stackSet.Stacks),
-					"hypothesis_stack_count": stackSet.Coverage.HypothesisStackCount,
-					"coverage_stack_count":   stackSet.Coverage.CoverageStackCount,
+				payload, err := json.MarshalIndent(campaignStacksOutput{
+					CampaignID:           campaignID,
+					GenerationRule:       stackSet.GenerationRule,
+					Seed:                 stackSet.Seed,
+					SetDigest:            stackSet.SetDigest,
+					StackCount:           len(stackSet.Stacks),
+					HypothesisStackCount: stackSet.Coverage.HypothesisStackCount,
+					CoverageStackCount:   stackSet.Coverage.CoverageStackCount,
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -372,7 +511,7 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign schedule: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "assignment_count": count, "heterogeneous": heterogeneous}, "", "  ")
+				payload, err := json.MarshalIndent(campaignScheduleOutput{RunID: runID, AssignmentCount: count, Heterogeneous: heterogeneous}, "", "  ")
 				if err != nil {
 					return err
 				}
@@ -413,7 +552,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			results := make([]map[string]any, 0)
+			results := make([]campaignExecuteResult, 0)
 			executed, err := runCampaignExecute(cmd, deps, campaignExecuteOptions{
 				RunID:              runID,
 				Publish:            publish,
@@ -427,10 +566,10 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 				JSONOutput:         output.JSONEnabled(cmd),
 				ResultOutput: func(result *evalv1.EvaluationAssignmentResult) {
 					if output.JSONEnabled(cmd) && !daemon {
-						results = append(results, map[string]any{
-							"assignment_id": result.GetAssignmentId(),
-							"status":        result.GetLifecycleStatus().String(),
-							"result_digest": result.GetResultDigest(),
+						results = append(results, campaignExecuteResult{
+							AssignmentID: result.GetAssignmentId(),
+							Status:       result.GetLifecycleStatus().String(),
+							ResultDigest: result.GetResultDigest(),
 						})
 					}
 				},
@@ -451,11 +590,11 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 				if remaining < 0 {
 					remaining = 0
 				}
-				payload, err := json.MarshalIndent(map[string]any{
-					"run_id":    runID,
-					"executed":  executed,
-					"remaining": remaining,
-					"results":   results,
+				payload, err := json.MarshalIndent(campaignExecuteOutput{
+					RunID:     runID,
+					Executed:  executed,
+					Remaining: remaining,
+					Results:   results,
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -516,10 +655,10 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign publish: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"run_id":            runID,
-					"published_records": count,
-					"force":             force,
+				payload, err := json.MarshalIndent(campaignPublishOutput{
+					RunID:            runID,
+					PublishedRecords: count,
+					Force:            force,
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -593,11 +732,11 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 				return err
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"run_id":          runID,
-					"status":          report.GetStatus().String(),
-					"failure_count":   report.GetFailureCount(),
-					"failure_reasons": report.GetFailureReasons(),
+				payload, err := json.MarshalIndent(campaignVerifyOutput{
+					RunID:          runID,
+					Status:         report.GetStatus().String(),
+					FailureCount:   report.GetFailureCount(),
+					FailureReasons: report.GetFailureReasons(),
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -651,23 +790,23 @@ func campaignEvalAccountCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign account: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"run_id":                  runID,
-					"complete":                report.Complete,
-					"expected_cells":          report.ExpectedCells,
-					"scheduled_assignments":   report.ScheduledAssignments,
-					"queued":                  report.QueuedCount,
-					"running":                 report.RunningCount,
-					"terminal":                report.TerminalCount,
-					"stopped":                 report.StoppedCount,
-					"disposition_counts":      report.DispositionCounts,
-					"missing_cells":           report.MissingCells,
-					"duplicate_identities":    report.DuplicateIdentities,
-					"extra_assignments":       report.ExtraAssignments,
-					"terminal_without_result": report.TerminalWithoutResult,
-					"result_without_terminal": report.ResultWithoutTerminal,
-					"failure_reasons":         report.FailureReasons,
-					"accounted_at":            report.AccountedAt.Format(time.RFC3339),
+				payload, err := json.MarshalIndent(campaignAccountOutput{
+					RunID:                 runID,
+					Complete:              report.Complete,
+					ExpectedCells:         report.ExpectedCells,
+					ScheduledAssignments:  report.ScheduledAssignments,
+					Queued:                report.QueuedCount,
+					Running:               report.RunningCount,
+					Terminal:              report.TerminalCount,
+					Stopped:               report.StoppedCount,
+					DispositionCounts:     report.DispositionCounts,
+					MissingCells:          report.MissingCells,
+					DuplicateIdentities:   report.DuplicateIdentities,
+					ExtraAssignments:      report.ExtraAssignments,
+					TerminalWithoutResult: report.TerminalWithoutResult,
+					ResultWithoutTerminal: report.ResultWithoutTerminal,
+					FailureReasons:        report.FailureReasons,
+					AccountedAt:           report.AccountedAt.Format(time.RFC3339),
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -723,14 +862,14 @@ func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign export: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"run_id":                report.RunID,
-					"campaign_id":           report.CampaignID,
-					"output_dir":            report.OutputDir,
-					"exported_at":           report.ExportedAt.Format(time.RFC3339),
-					"assignment_count":      report.AssignmentCount,
-					"terminal_result_count": report.TerminalResultCount,
-					"files":                 report.Files,
+				payload, err := json.MarshalIndent(campaignExportOutput{
+					RunID:               report.RunID,
+					CampaignID:          report.CampaignID,
+					OutputDir:           report.OutputDir,
+					ExportedAt:          report.ExportedAt.Format(time.RFC3339),
+					AssignmentCount:     report.AssignmentCount,
+					TerminalResultCount: report.TerminalResultCount,
+					Files:               report.Files,
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -795,7 +934,7 @@ func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign repair trace-digests: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "repaired_trace_digests": repaired}, "", "  ")
+				payload, err := json.MarshalIndent(campaignRepairOutput{RunID: runID, Count: repaired}, "", "  ")
 				if err != nil {
 					return err
 				}
@@ -836,7 +975,7 @@ func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign repair results: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "repaired_results": repaired}, "", "  ")
+				payload, err := json.MarshalIndent(campaignRepairOutput{RunID: runID, Results: repaired}, "", "  ")
 				if err != nil {
 					return err
 				}
@@ -880,22 +1019,22 @@ func campaignEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
 				startedAt = summary.Run.GetStartedAt().AsTime().Format(time.RFC3339)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"run_id":                   runID,
-					"campaign_id":              campaignID,
-					"started_at":               startedAt,
-					"lane":                     summary.Run.GetLane().String(),
-					"model_count":              len(spec.GetModelRegistry()),
-					"scenario_count":           spec.GetScenarioCount(),
-					"repetition_count":         spec.GetRepetitionCount(),
-					"model_registry_digest":    spec.GetModelRegistryDigest(),
-					"catalog_digest":           spec.GetCatalogDigest(),
-					"has_heterogeneous_stacks": hasHeterogeneousStacks,
-					"expected_assignments":     summary.ExpectedAssignment,
-					"queued":                   summary.QueuedCount,
-					"running":                  summary.RunningCount,
-					"terminal":                 summary.TerminalCount,
-					"next_assignment_id":       summary.NextAssignmentID,
+				payload, err := json.MarshalIndent(campaignShowOutput{
+					RunID:                  runID,
+					CampaignID:             campaignID,
+					StartedAt:              startedAt,
+					Lane:                   summary.Run.GetLane().String(),
+					ModelCount:             len(spec.GetModelRegistry()),
+					ScenarioCount:          spec.GetScenarioCount(),
+					RepetitionCount:        spec.GetRepetitionCount(),
+					ModelRegistryDigest:    spec.GetModelRegistryDigest(),
+					CatalogDigest:          spec.GetCatalogDigest(),
+					HasHeterogeneousStacks: hasHeterogeneousStacks,
+					ExpectedAssignments:    summary.ExpectedAssignment,
+					Queued:                 summary.QueuedCount,
+					Running:                summary.RunningCount,
+					Terminal:               summary.TerminalCount,
+					NextAssignmentID:       summary.NextAssignmentID,
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -948,14 +1087,14 @@ func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign status: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"run_id":               runID,
-					"campaign_id":          summary.Run.GetCampaignBinding().GetCampaignId(),
-					"expected_assignments": summary.ExpectedAssignment,
-					"queued":               summary.QueuedCount,
-					"running":              summary.RunningCount,
-					"terminal":             summary.TerminalCount,
-					"next_assignment_id":   summary.NextAssignmentID,
+				payload, err := json.MarshalIndent(campaignStatusOutput{
+					RunID:               runID,
+					CampaignID:          summary.Run.GetCampaignBinding().GetCampaignId(),
+					ExpectedAssignments: summary.ExpectedAssignment,
+					Queued:              summary.QueuedCount,
+					Running:             summary.RunningCount,
+					Terminal:            summary.TerminalCount,
+					NextAssignmentID:    summary.NextAssignmentID,
 				}, "", "  ")
 				if err != nil {
 					return err

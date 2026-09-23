@@ -9,6 +9,7 @@ package scrubbing
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -29,26 +30,28 @@ func TestScrubSlice(t *testing.T) {
 	config := &Config{Enabled: true, StrictMode: false}
 	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
-	input := []interface{}{
-		"password=secret123",
-		map[string]interface{}{"api_key": "sk-abc123"},
-		[]interface{}{"nested=secret", 42},
-		12345,
+	input := []json.RawMessage{
+		json.RawMessage(`"password=secret123"`),
+		json.RawMessage(`{"api_key":"sk-abc123"}`),
+		json.RawMessage(`["nested=secret",42]`),
+		json.RawMessage(`12345`),
 	}
 
 	result := service.scrubSlice(input)
 	require.Len(t, result, 4)
-	assert.NotContains(t, result[0], "secret123")
-	assert.IsType(t, map[string]interface{}{}, result[1])
-	assert.IsType(t, []interface{}{}, result[2])
-	assert.Equal(t, 12345, result[3])
+	assert.NotContains(t, string(result[0]), "secret123")
+	var object map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(result[1], &object))
+	var array []json.RawMessage
+	require.NoError(t, json.Unmarshal(result[2], &array))
+	assert.JSONEq(t, `12345`, string(result[3]))
 }
 
 func TestScrubSlice_Empty(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
-	result := service.scrubSlice([]interface{}{})
+	result := service.scrubSlice([]json.RawMessage{})
 	assert.Empty(t, result)
 }
 

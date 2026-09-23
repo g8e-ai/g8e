@@ -517,12 +517,7 @@ func TestScrubbingService_ValidateNoLeakage(t *testing.T) {
 	})
 }
 
-// TestScrubbingService_ScrubMap exercises the schema-less ScrubMap boundary. The
-// map[string]interface{} test fixtures and nested type assertions below mirror
-// ScrubMap's production signature, which deliberately uses map[string]interface{}
-// because it handles arbitrary JSON payloads from external sources where the
-// schema is unknown by design (see boundary.go ScrubMap NOTE). This is the
-// schema-less passthrough exception to the "no map[string]interface{}" rule.
+// TestScrubbingService_ScrubMap exercises the arbitrary JSON ScrubMap boundary.
 func TestScrubbingService_ScrubMap(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
@@ -532,16 +527,16 @@ func TestScrubbingService_ScrubMap(t *testing.T) {
 		config := &Config{Enabled: true, StrictMode: false}
 		service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
-		data := map[string]interface{}{
-			"ip":    "192.168.1.1",
-			"email": "user@test.com",
-			"count": 42,
+		data := map[string]json.RawMessage{
+			"ip":    json.RawMessage(`"192.168.1.1"`),
+			"email": json.RawMessage(`"user@test.com"`),
+			"count": json.RawMessage(`42`),
 		}
 
 		scrubbed := service.ScrubMap(data)
-		assert.Equal(t, "192.168.1.1", scrubbed["ip"].(string))
-		assert.Contains(t, scrubbed["email"].(string), "[EMAIL]")
-		assert.Equal(t, 42, scrubbed["count"])
+		assert.JSONEq(t, `"192.168.1.1"`, string(scrubbed["ip"]))
+		assert.JSONEq(t, `"[EMAIL]"`, string(scrubbed["email"]))
+		assert.JSONEq(t, `42`, string(scrubbed["count"]))
 	})
 
 	t.Run("preserves IPs in nested maps in non-strict mode", func(t *testing.T) {
@@ -549,30 +544,38 @@ func TestScrubbingService_ScrubMap(t *testing.T) {
 		config := &Config{Enabled: true, StrictMode: false}
 		service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
-		data := map[string]interface{}{
-			"server": map[string]interface{}{
-				"host": "192.168.1.1",
-				"port": 5432,
-			},
+		data := map[string]json.RawMessage{
+			"server": json.RawMessage(`{"host":"192.168.1.1","port":5432}`),
 		}
 
 		scrubbed := service.ScrubMap(data)
-		nested := scrubbed["server"].(map[string]interface{})
-		assert.Equal(t, "192.168.1.1", nested["host"].(string))
-		assert.Equal(t, 5432, nested["port"])
+		var nested map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(scrubbed["server"], &nested))
+		assert.JSONEq(t, `"192.168.1.1"`, string(nested["host"]))
+		assert.JSONEq(t, `5432`, string(nested["port"]))
 	})
 
 	t.Run("scrubs sensitive keys in strict mode", func(t *testing.T) {
 		t.Parallel()
 		service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
-		data := map[string]interface{}{
-			"password": "secret123",
-			"balance":  1000,
+		data := map[string]json.RawMessage{
+			"password": json.RawMessage(`"secret123"`),
+			"balance":  json.RawMessage(`1000`),
 		}
 
 		scrubbed := service.ScrubMap(data)
-		assert.Equal(t, "[VALUE]", scrubbed["balance"])
+		assert.JSONEq(t, `"[VALUE]"`, string(scrubbed["balance"]))
+	})
+
+	t.Run("replaces invalid JSON values without exposing them", func(t *testing.T) {
+		t.Parallel()
+		service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
+
+		scrubbed := service.ScrubMap(map[string]json.RawMessage{
+			"payload": json.RawMessage("not-json"),
+		})
+		assert.JSONEq(t, `"[UNKNOWN_TYPE]"`, string(scrubbed["payload"]))
 	})
 }
 
@@ -1005,16 +1008,27 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 		payload := []byte(`{"key": "value ` + token + `", "nested": {"data": "` + token + `"}}`)
 		result, err := service.RehydratePayload(context.Background(), payload)
 		require.NoError(t, err)
-		// Parse the result to verify rehydration. parsed is map[string]interface{}
-		// because RehydratePayload returns arbitrary JSON whose schema is unknown by
-		// design (see boundary.go RehydratePayload doc comment) - schema-less
-		// passthrough exception to the "no map[string]interface{}" rule.
-		var parsed map[string]interface{}
+		var parsed map[string]json.RawMessage
 		err = json.Unmarshal(result, &parsed)
 		require.NoError(t, err)
-		assert.Equal(t, "value secret", parsed["key"])
-		nested := parsed["nested"].(map[string]interface{})
-		assert.Equal(t, "secret", nested["data"])
+
+		var key string
+		require.NoError(t, json.Unmarshal(parsed["key"], &key))
+		assert.Equal(t, "value secret", key)
+
+		var nested map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(parsed["nested"], &nested))
+		var data string
+		require.NoError(t, json.Unmarshal(nested["data"], &data))
+		assert.Equal(t, "secret", data)
+	})
+
+	t.Run("JSON scalar types remain unchanged", func(t *testing.T) {
+		t.Parallel()
+		payload := []byte(`{"count":42,"enabled":true,"missing":null,"values":[1,false,null]}`)
+		result, err := service.RehydratePayload(context.Background(), payload)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(payload), string(result))
 	})
 }
 

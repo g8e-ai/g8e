@@ -33,6 +33,41 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
+type platformEnrollmentApprovedUpdate struct {
+	State                string     `json:"state"`
+	IssuanceLeaseOwner   string     `json:"issuance_lease_owner"`
+	IssuanceLeaseExpires *time.Time `json:"issuance_lease_expires_at"`
+	LastTransitionAt     time.Time  `json:"last_transition_at"`
+}
+
+type platformEnrollmentExpiredUpdate struct {
+	State            string    `json:"state"`
+	LastTransitionAt time.Time `json:"last_transition_at"`
+}
+
+func marshalPlatformEnrollmentApprovedUpdate(now time.Time) (json.RawMessage, error) {
+	data, err := json.Marshal(platformEnrollmentApprovedUpdate{
+		State:                string(models.PlatformEnrollmentStateApproved),
+		IssuanceLeaseExpires: nil,
+		LastTransitionAt:     now,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal approved platform enrollment update: %w", err)
+	}
+	return data, nil
+}
+
+func marshalPlatformEnrollmentExpiredUpdate(now time.Time) (json.RawMessage, error) {
+	data, err := json.Marshal(platformEnrollmentExpiredUpdate{
+		State:            string(models.PlatformEnrollmentStateExpired),
+		LastTransitionAt: now,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal expired platform enrollment update: %w", err)
+	}
+	return data, nil
+}
+
 // PlatformEnrollmentService owns the platform workload enrollment
 // lifecycle: request creation/deduplication/quotas, owner decisions,
 // issuance leases, idempotent component issuance, reconciliation of
@@ -576,19 +611,23 @@ func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *mod
 	// Acquire the issuance lease: approved -> issuing with lease owner
 	// and lease expiry. A concurrent completion attempt loses the
 	// conditional update and fails closed.
+	leaseUpdate, err := json.Marshal(struct {
+		State                string    `json:"state"`
+		IssuanceLeaseOwner   string    `json:"issuance_lease_owner"`
+		IssuanceLeaseExpires time.Time `json:"issuance_lease_expires_at"`
+		LastTransitionAt     time.Time `json:"last_transition_at"`
+	}{
+		State:                string(models.PlatformEnrollmentStateIssuing),
+		IssuanceLeaseOwner:   leaseOwner,
+		IssuanceLeaseExpires: leaseExpiry,
+		LastTransitionAt:     time.Now().UTC(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: marshal issuance lease: %w", err)
+	}
 	applied, err := s.db.DocConditionalUpdate(
 		platformEnrollmentCollectionName(), req.ID,
-		struct {
-			State                string    `json:"state"`
-			IssuanceLeaseOwner   string    `json:"issuance_lease_owner"`
-			IssuanceLeaseExpires time.Time `json:"issuance_lease_expires_at"`
-			LastTransitionAt     time.Time `json:"last_transition_at"`
-		}{
-			State:                string(models.PlatformEnrollmentStateIssuing),
-			IssuanceLeaseOwner:   leaseOwner,
-			IssuanceLeaseExpires: leaseExpiry,
-			LastTransitionAt:     time.Now().UTC(),
-		},
+		leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
 	if err != nil {
@@ -726,14 +765,13 @@ func (s *PlatformEnrollmentService) ReconcileExpiredLeases() error {
 			s.expireRequest(req)
 			continue
 		}
+		leaseRecoveryUpdate, err := marshalPlatformEnrollmentApprovedUpdate(now)
+		if err != nil {
+			s.logger.Warn("platform enrollment: reconcile: marshal rollback failed", "request_id", req.ID, "error", err)
+			continue
+		}
 		applied, err := s.db.DocConditionalUpdate(
-			platformEnrollmentCollectionName(), req.ID,
-			map[string]interface{}{
-				"state":                     string(models.PlatformEnrollmentStateApproved),
-				"issuance_lease_owner":      "",
-				"issuance_lease_expires_at": nil,
-				"last_transition_at":        now,
-			},
+			platformEnrollmentCollectionName(), req.ID, leaseRecoveryUpdate,
 			"state", string(models.PlatformEnrollmentStateIssuing),
 		)
 		if err != nil {
@@ -928,14 +966,13 @@ func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action c
 // a retry can re-acquire the lease. Failures are logged; the caller
 // has already decided to return an error.
 func (s *PlatformEnrollmentService) rollbackLease(requestID string) {
+	update, err := marshalPlatformEnrollmentApprovedUpdate(time.Now().UTC())
+	if err != nil {
+		s.logger.Error("platform enrollment: marshal rollback lease failed", "request_id", requestID, "error", err)
+		return
+	}
 	applied, err := s.db.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), requestID,
-		map[string]interface{}{
-			"state":                     string(models.PlatformEnrollmentStateApproved),
-			"issuance_lease_owner":      "",
-			"issuance_lease_expires_at": nil,
-			"last_transition_at":        time.Now().UTC(),
-		},
+		platformEnrollmentCollectionName(), requestID, update,
 		"state", string(models.PlatformEnrollmentStateIssuing),
 	)
 	if err != nil {
@@ -951,12 +988,13 @@ func (s *PlatformEnrollmentService) rollbackLease(requestID string) {
 // to the expired state. Failures are logged; the caller has already
 // decided to treat the request as expired.
 func (s *PlatformEnrollmentService) expireRequest(req *models.PlatformEnrollmentRequest) {
+	update, err := marshalPlatformEnrollmentExpiredUpdate(time.Now().UTC())
+	if err != nil {
+		s.logger.Warn("platform enrollment: marshal expire failed", "request_id", req.ID, "error", err)
+		return
+	}
 	applied, err := s.db.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), req.ID,
-		map[string]interface{}{
-			"state":              string(models.PlatformEnrollmentStateExpired),
-			"last_transition_at": time.Now().UTC(),
-		},
+		platformEnrollmentCollectionName(), req.ID, update,
 		"state", string(req.State),
 	)
 	if err != nil {

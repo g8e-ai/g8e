@@ -44,6 +44,26 @@ type chatEvalDeps struct {
 	newID                func() string
 }
 
+type chatAcceptanceCaseResult struct {
+	Case                string `json:"case"`
+	AssignmentID        string `json:"assignment_id"`
+	EvaluationAttemptID string `json:"evaluation_attempt_id"`
+	CaseID              string `json:"case_id,omitempty"`
+	InvestigationID     string `json:"investigation_id,omitempty"`
+	Status              string `json:"status"`
+	Error               string `json:"error,omitempty"`
+	TraceDigest         string `json:"trace_digest,omitempty"`
+	ModelCalls          int    `json:"model_calls,omitempty"`
+}
+
+type chatAcceptanceOutput struct {
+	OperatorSessionID string                     `json:"operator_session_id"`
+	Model             string                     `json:"model"`
+	Passed            int                        `json:"passed"`
+	Failed            int                        `json:"failed"`
+	Cases             []chatAcceptanceCaseResult `json:"cases"`
+}
+
 func gateChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	shared := chatEvalDeps{
 		configLoader:         deps.configLoader,
@@ -126,7 +146,7 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 			reporter := newChatAcceptReporter(cmd.OutOrStdout(), output.JSONEnabled(cmd))
 			reporter.writeSetup(len(cases), model, selected.OperatorSessionID, dataOperator.OperatorSessionID, resolvedEnsembleURL)
 
-			results := make([]map[string]any, 0, len(cases))
+			results := make([]chatAcceptanceCaseResult, 0, len(cases))
 			failures := 0
 			for caseIndex, acceptanceCase := range cases {
 				assignmentID := deps.newID()
@@ -171,50 +191,49 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 				}
 				cancel()
 
-				entry := map[string]any{
-					"case":                  string(acceptanceCase.ID),
-					"assignment_id":         probeReq.AssignmentID,
-					"evaluation_attempt_id": probeReq.EvaluationAttemptID,
+				entry := chatAcceptanceCaseResult{
+					Case:                string(acceptanceCase.ID),
+					AssignmentID:        probeReq.AssignmentID,
+					EvaluationAttemptID: probeReq.EvaluationAttemptID,
 				}
 				if chatResp != nil {
-					entry["case_id"] = chatResp.CaseID
-					entry["investigation_id"] = chatResp.InvestigationID
+					entry.CaseID = chatResp.CaseID
+					entry.InvestigationID = chatResp.InvestigationID
 				}
 				if runErr != nil {
-					entry["status"] = "failed"
-					entry["error"] = runErr.Error()
+					entry.Status = "failed"
+					entry.Error = runErr.Error()
 					failures++
 				} else if err := evaluation.ValidateChatProbeTrace(probeReq, trace); err != nil {
-					entry["status"] = "failed"
-					entry["error"] = err.Error()
+					entry.Status = "failed"
+					entry.Error = err.Error()
 					failures++
 				} else if err := evaluation.ValidateChatAcceptanceCase(acceptanceCase.ID, probeReq, trace); err != nil {
-					entry["status"] = "failed"
-					entry["error"] = err.Error()
+					entry.Status = "failed"
+					entry.Error = err.Error()
 					failures++
 				} else {
-					entry["status"] = "passed"
-					entry["trace_digest"] = trace["trace_digest"]
-					entry["model_calls"] = len(trace["model_calls"].([]any))
+					entry.Status = "passed"
+					entry.TraceDigest, _ = trace["trace_digest"].(string)
+					entry.ModelCalls = len(trace["model_calls"].([]any))
 				}
 				results = append(results, entry)
 				if output.JSONEnabled(cmd) {
 					continue
 				}
-				status := entry["status"].(string)
-				if status == "passed" {
+				if entry.Status == "passed" {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "PASS %s\n", acceptanceCase.ID)
 				} else {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "FAIL %s: %s\n", acceptanceCase.ID, entry["error"])
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "FAIL %s: %s\n", acceptanceCase.ID, entry.Error)
 				}
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"operator_session_id": selected.OperatorSessionID,
-					"model":               model,
-					"passed":              len(cases) - failures,
-					"failed":              failures,
-					"cases":               results,
+				payload, err := json.MarshalIndent(chatAcceptanceOutput{
+					OperatorSessionID: selected.OperatorSessionID,
+					Model:             model,
+					Passed:            len(cases) - failures,
+					Failed:            failures,
+					Cases:             results,
 				}, "", "  ")
 				if err != nil {
 					return err

@@ -26,7 +26,7 @@ import (
 type PlatformEnrollmentDocStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 	DocGet(collection, id string) (*models.Document, error)
-	DocConditionalUpdate(collection, id string, setFields map[string]interface{}, conditionField string, conditionValue interface{}) (bool, error)
+	DocConditionalUpdate(collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error)
 	DocUpdate(collection, id string, data json.RawMessage) (*models.Document, error)
 	DocDelete(collection, id string) error
 }

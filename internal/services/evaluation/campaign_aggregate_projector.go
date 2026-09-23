@@ -19,6 +19,8 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+type CampaignViewJSON map[string]any
+
 const (
 	explorerViewSchemaVersion = "1.5.0"
 	campaignSourceRevision    = "g8e-eval-campaign"
@@ -380,7 +382,7 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 		Body:           summaryBody,
 	})
 
-	var catalogRecord map[string]any
+	var catalogRecord CampaignViewJSON
 	if settled {
 		catalogRecord = buildCompletedCatalogSnapshotRecord(datasetID, runID, observed, state)
 	} else {
@@ -402,7 +404,7 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 	sort.Strings(keys)
 	for _, key := range keys {
 		bucket := state.VariantRoles[key]
-		var modelRecord map[string]any
+		var modelRecord CampaignViewJSON
 		if settled {
 			modelRecord = buildCompletedModelSummaryRecord(datasetID, observed, bucket)
 		} else {
@@ -418,7 +420,7 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 		})
 	}
 
-	var methodologyRecord map[string]any
+	var methodologyRecord CampaignViewJSON
 	if settled {
 		methodologyRecord = buildCompletedMethodologySnapshotRecord(datasetID, observed)
 	} else {
@@ -503,8 +505,8 @@ func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*eva
 	return records, nil
 }
 
-func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) map[string]any {
-	return map[string]any{
+func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) CampaignViewJSON {
+	return CampaignViewJSON{
 		"schema_version":         explorerViewSchemaVersion,
 		"kind":                   "catalog_snapshot",
 		"dataset_id":             datasetID,
@@ -529,14 +531,14 @@ func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runA
 	}
 }
 
-func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) map[string]any {
+func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) CampaignViewJSON {
 	scheduled := bucket.Scheduled
 	terminal := bucket.Terminal
 	coverage := 0.0
 	if scheduled > 0 {
 		coverage = float64(terminal) / float64(scheduled)
 	}
-	record := map[string]any{
+	record := CampaignViewJSON{
 		"schema_version":         explorerViewSchemaVersion,
 		"kind":                   "model_summary",
 		"dataset_id":             datasetID,
@@ -553,7 +555,7 @@ func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAg
 	}
 	if terminal > 0 {
 		passEstimate := float64(bucket.Passed) / float64(terminal)
-		record["pass_rate"] = map[string]any{
+		record["pass_rate"] = CampaignViewJSON{
 			"estimate":    passEstimate,
 			"lower":       passEstimate,
 			"upper":       passEstimate,
@@ -566,7 +568,7 @@ func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAg
 	return record
 }
 
-func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) map[string]any {
+func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) CampaignViewJSON {
 	record := buildCatalogSnapshotRecord(datasetID, runID, observedAt, state)
 	record["quality_state"] = qualityStateForCompletedAggregate(state)
 	record["description"] = "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. The campaign matrix is complete; values remain provisional until verification runs."
@@ -578,7 +580,7 @@ func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, st
 	return record
 }
 
-func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) map[string]any {
+func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) CampaignViewJSON {
 	record := buildModelSummaryRecord(datasetID, observedAt, bucket)
 	if bucket.Scheduled > 0 && bucket.Terminal >= bucket.Scheduled {
 		record["quality_state"] = "exploratory_partial"
@@ -586,7 +588,7 @@ func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *vari
 	return record
 }
 
-func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) map[string]any {
+func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) CampaignViewJSON {
 	record := buildMethodologySnapshotRecord(datasetID, observedAt)
 	record["quality_state"] = "exploratory_partial"
 	record["limitations"] = []string{
@@ -1012,8 +1014,8 @@ func buildModelRoleMapping(state *runAggregateState) map[string]string {
 	return mapping
 }
 
-func buildMethodologySnapshotRecord(datasetID, observedAt string) map[string]any {
-	return map[string]any{
+func buildMethodologySnapshotRecord(datasetID, observedAt string) CampaignViewJSON {
+	return CampaignViewJSON{
 		"schema_version":        explorerViewSchemaVersion,
 		"kind":                  "methodology_snapshot",
 		"dataset_id":            datasetID,
@@ -1021,7 +1023,7 @@ func buildMethodologySnapshotRecord(datasetID, observedAt string) map[string]any
 		"observed_at":           observedAt,
 		"source_revision_label": campaignSourceRevision,
 		"metric_definitions":    methodologyMetricDefinitions(),
-		"suite_definitions": []map[string]any{
+		"suite_definitions": []CampaignViewJSON{
 			{
 				"suite_id":     standardSuiteID,
 				"display_name": "Standard 25",
@@ -1041,8 +1043,8 @@ func catalogSnapshotLimitations() []string {
 	}
 }
 
-func methodologyMetricDefinitions() []map[string]any {
-	return []map[string]any{
+func methodologyMetricDefinitions() []CampaignViewJSON {
+	return []CampaignViewJSON{
 		{
 			"key":                    "pass_rate",
 			"name":                   "Pass rate",

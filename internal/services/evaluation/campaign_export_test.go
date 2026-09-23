@@ -91,10 +91,10 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 
 	runSummaryBody, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "run_summary.json"))
 	require.NoError(t, err)
-	var runSummary map[string]any
+	var runSummary campaignRunSummaryExport
 	require.NoError(t, json.Unmarshal(runSummaryBody, &runSummary))
-	assert.Equal(t, req.RunID, runSummary["run_id"])
-	assert.Equal(t, truncated.GetCatalogDigest(), runSummary["catalog_digest"])
+	assert.Equal(t, req.RunID, runSummary.RunID)
+	assert.Equal(t, truncated.GetCatalogDigest(), runSummary.CatalogDigest)
 
 	db, err := sql.Open("sqlite", filepath.Join(outputDir, "campaign_export.sqlite"))
 	require.NoError(t, err)
@@ -105,6 +105,31 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	var modelSummaryCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM model_summaries`).Scan(&modelSummaryCount))
 	assert.Equal(t, 3, modelSummaryCount)
+}
+
+func TestBuildCampaignExportSchemaDocumentUsesTypedFileAndTableContracts(t *testing.T) {
+	document := buildCampaignExportSchemaDocument()
+	body, err := json.Marshal(document)
+	require.NoError(t, err)
+
+	var decoded struct {
+		SchemaVersion string `json:"schema_version"`
+		Files         map[string]struct {
+			Format string `json:"format"`
+			Tables []struct {
+				Name       string          `json:"name"`
+				PrimaryKey json.RawMessage `json:"primary_key"`
+			} `json:"tables"`
+		} `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(body, &decoded))
+	assert.Equal(t, campaignExportSchemaVersion, decoded.SchemaVersion)
+	assert.Equal(t, "json", decoded.Files[constants.EvaluationRunSummaryFilename].Format)
+
+	sqliteSchema := decoded.Files[constants.EvaluationCampaignExportSQLiteFilename]
+	require.Len(t, sqliteSchema.Tables, 3)
+	assert.JSONEq(t, `"run_id"`, string(sqliteSchema.Tables[0].PrimaryKey))
+	assert.JSONEq(t, `["variant_id","role"]`, string(sqliteSchema.Tables[2].PrimaryKey))
 }
 
 func TestCampaignExporter_JSONLUsesCanonicalProtoJSONAndRichExtensions(t *testing.T) {

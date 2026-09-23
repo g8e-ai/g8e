@@ -1050,14 +1050,20 @@ func TestPlatformEnrollmentService_ExpiredLeaseRecovery(t *testing.T) {
 
 	// Manually acquire the issuance lease with an already-expired expiry.
 	leaseExpiry := time.Now().UTC().Add(-time.Second)
+	leaseUpdate, err := json.Marshal(struct {
+		State                string    `json:"state"`
+		IssuanceLeaseOwner   string    `json:"issuance_lease_owner"`
+		IssuanceLeaseExpires time.Time `json:"issuance_lease_expires_at"`
+		LastTransitionAt     time.Time `json:"last_transition_at"`
+	}{
+		State:                string(models.PlatformEnrollmentStateIssuing),
+		IssuanceLeaseOwner:   "crashed-owner",
+		IssuanceLeaseExpires: leaseExpiry,
+		LastTransitionAt:     time.Now().UTC(),
+	})
+	require.NoError(t, err)
 	applied, err := env.docStore.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), approved.ID,
-		map[string]interface{}{
-			"state":                     string(models.PlatformEnrollmentStateIssuing),
-			"issuance_lease_owner":      "crashed-owner",
-			"issuance_lease_expires_at": leaseExpiry,
-			"last_transition_at":        time.Now().UTC(),
-		},
+		platformEnrollmentCollectionName(), approved.ID, leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
 	require.NoError(t, err)
@@ -1093,14 +1099,20 @@ func TestPlatformEnrollmentService_LiveLeaseReturnsRetryAfter(t *testing.T) {
 
 	// Manually acquire the lease with a future expiry.
 	leaseExpiry := time.Now().UTC().Add(constants.PlatformEnrollmentIssuanceLeaseTTL)
+	leaseUpdate, err := json.Marshal(struct {
+		State                string    `json:"state"`
+		IssuanceLeaseOwner   string    `json:"issuance_lease_owner"`
+		IssuanceLeaseExpires time.Time `json:"issuance_lease_expires_at"`
+		LastTransitionAt     time.Time `json:"last_transition_at"`
+	}{
+		State:                string(models.PlatformEnrollmentStateIssuing),
+		IssuanceLeaseOwner:   "active-owner",
+		IssuanceLeaseExpires: leaseExpiry,
+		LastTransitionAt:     time.Now().UTC(),
+	})
+	require.NoError(t, err)
 	applied, err := env.docStore.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), approved.ID,
-		map[string]interface{}{
-			"state":                     string(models.PlatformEnrollmentStateIssuing),
-			"issuance_lease_owner":      "active-owner",
-			"issuance_lease_expires_at": leaseExpiry,
-			"last_transition_at":        time.Now().UTC(),
-		},
+		platformEnrollmentCollectionName(), approved.ID, leaseUpdate,
 		"state", string(models.PlatformEnrollmentStateApproved),
 	)
 	require.NoError(t, err)
@@ -1258,11 +1270,12 @@ func TestPlatformEnrollmentService_CleanupRemovesTerminalRequestsPastRetention(t
 	// Manually backdate the last_transition_at past the retention window.
 	stored := loadStoredRequest(t, env, createResp.RequestID)
 	oldTransition := time.Now().UTC().Add(-(constants.PlatformEnrollmentCleanupRetention + time.Hour))
+	backdateUpdate, err := json.Marshal(struct {
+		LastTransitionAt time.Time `json:"last_transition_at"`
+	}{LastTransitionAt: oldTransition})
+	require.NoError(t, err)
 	_, err = env.docStore.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), createResp.RequestID,
-		map[string]interface{}{
-			"last_transition_at": oldTransition,
-		},
+		platformEnrollmentCollectionName(), createResp.RequestID, backdateUpdate,
 		"state", string(models.PlatformEnrollmentStateDenied),
 	)
 	require.NoError(t, err)
@@ -1297,11 +1310,12 @@ func TestPlatformEnrollmentService_CleanupPreservesCompletedRequests(t *testing.
 
 	// Backdate the completed request past retention.
 	oldTransition := time.Now().UTC().Add(-(constants.PlatformEnrollmentCleanupRetention + time.Hour))
+	backdateUpdate, err := json.Marshal(struct {
+		LastTransitionAt time.Time `json:"last_transition_at"`
+	}{LastTransitionAt: oldTransition})
+	require.NoError(t, err)
 	_, err = env.docStore.DocConditionalUpdate(
-		platformEnrollmentCollectionName(), requestID,
-		map[string]interface{}{
-			"last_transition_at": oldTransition,
-		},
+		platformEnrollmentCollectionName(), requestID, backdateUpdate,
 		"state", string(models.PlatformEnrollmentStateCompleted),
 	)
 	require.NoError(t, err)

@@ -80,6 +80,18 @@ type CLISessionFields struct {
 	LoginMethod       string
 }
 
+type cliSessionDeactivationUpdate struct {
+	IsActive bool `json:"is_active"`
+}
+
+func marshalCLISessionDeactivationUpdate() (json.RawMessage, error) {
+	data, err := json.Marshal(cliSessionDeactivationUpdate{IsActive: false})
+	if err != nil {
+		return nil, fmt.Errorf("marshal CLI session deactivation: %w", err)
+	}
+	return data, nil
+}
+
 // DeactivateCLISession atomically marks a CLI session inactive by setting
 // is_active=false via DocConditionalUpdate. Only an active session can be
 // deactivated; an already-deactivated session returns
@@ -106,13 +118,15 @@ func (s *CLISessionService) DeactivateCLISession(sessionID string) error {
 	if !existing.IsActive {
 		return constants.ErrCLISessionAlreadyDeactivated
 	}
+	deactivationUpdate, err := marshalCLISessionDeactivationUpdate()
+	if err != nil {
+		return err
+	}
 
 	applied, err := s.db.DocConditionalUpdate(
 		marshaler.CollectionName(constants.CollectionCLISessions),
 		sessionID,
-		struct {
-			IsActive bool `json:"is_active"`
-		}{IsActive: false},
+		deactivationUpdate,
 		"is_active", true,
 	)
 	if err != nil {
@@ -221,12 +235,14 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 	// 3. Atomically deactivate the old session. Competing replacements or
 	//    explicit DeactivateCLISession calls flip is_active to false; our
 	//    conditional update only succeeds while it is still true.
+	deactivationUpdate, err := marshalCLISessionDeactivationUpdate()
+	if err != nil {
+		return nil, err
+	}
 	applied, err := s.db.DocConditionalUpdate(
 		marshaler.CollectionName(constants.CollectionCLISessions),
 		oldSessionID,
-		struct {
-			IsActive bool `json:"is_active"`
-		}{IsActive: false},
+		deactivationUpdate,
 		"is_active", true,
 	)
 	if err != nil {
@@ -308,6 +324,10 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 	//    is the proof of identity, not the old session's state). A store
 	//    error on deactivation IS an error — we do not want two active
 	//    sessions for the same cert.
+	deactivationUpdate, err := marshalCLISessionDeactivationUpdate()
+	if err != nil {
+		return nil, err
+	}
 	if oldSessionID != "" {
 		oldDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
 		if err != nil {
@@ -322,9 +342,7 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 				applied, err := s.db.DocConditionalUpdate(
 					marshaler.CollectionName(constants.CollectionCLISessions),
 					oldSessionID,
-					struct {
-						IsActive bool `json:"is_active"`
-					}{IsActive: false},
+					deactivationUpdate,
 					"is_active", true,
 				)
 				if err != nil {
@@ -385,6 +403,10 @@ func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, 
 	if fields.UserID == "" {
 		return nil, fmt.Errorf("unbind CLI session: missing user")
 	}
+	deactivationUpdate, err := marshalCLISessionDeactivationUpdate()
+	if err != nil {
+		return nil, err
+	}
 
 	if oldSessionID != "" {
 		oldDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
@@ -400,9 +422,7 @@ func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, 
 				applied, err := s.db.DocConditionalUpdate(
 					marshaler.CollectionName(constants.CollectionCLISessions),
 					oldSessionID,
-					struct {
-						IsActive bool `json:"is_active"`
-					}{IsActive: false},
+					deactivationUpdate,
 					"is_active", true,
 				)
 				if err != nil {

@@ -8,6 +8,7 @@
 package scrubbing
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -541,56 +542,70 @@ func (s *ScrubbingService) ScrubCommandResult(result *CommandResult) *ScrubbedRe
 	return scrubbed
 }
 
-// ScrubMap scrubs all string values in a map recursively.
-// NOTE: Uses map[string]interface{} because this is a boundary layer that must handle
-// arbitrary JSON payloads from external sources (cloud AI, command outputs) where the
-// schema is unknown by design. This is an intentional exception to the "no map[string]interface{}"
-// rule for known shapes - the shapes here are explicitly unknown.
-func (s *ScrubbingService) ScrubMap(data map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+// ScrubMap scrubs all string values in an arbitrary JSON object recursively.
+// json.RawMessage is the explicit serialization boundary because callers provide
+// external JSON whose schema is unknown by design.
+func (s *ScrubbingService) ScrubMap(data map[string]json.RawMessage) map[string]json.RawMessage {
+	result := make(map[string]json.RawMessage, len(data))
 	for key, value := range data {
 		scrubbedKey := s.scrubKeyName(key)
-		switch v := value.(type) {
-		case string:
-			result[scrubbedKey] = s.ScrubText(v)
-		case map[string]interface{}:
-			result[scrubbedKey] = s.ScrubMap(v)
-		case []interface{}:
-			result[scrubbedKey] = s.scrubSlice(v)
-		case int, int64, float64, bool:
-			// Numeric and boolean values are generally safe
-			// but in strict mode, we might want to obscure them
-			if s.config.StrictMode && s.isLikelySensitiveKey(key) {
-				result[scrubbedKey] = "[VALUE]"
-			} else {
-				result[scrubbedKey] = v
-			}
-		default:
-			result[scrubbedKey] = "[UNKNOWN_TYPE]"
-		}
+		result[scrubbedKey] = s.scrubJSONValue(key, value)
 	}
 	return result
 }
 
-// scrubSlice scrubs all elements in a slice. Uses []interface{} because this is
-// a boundary-layer helper for ScrubMap that walks arbitrary JSON arrays from
-// external sources (cloud AI, command outputs) where the schema is unknown by
-// design. See the ScrubMap NOTE for the full rationale.
-func (s *ScrubbingService) scrubSlice(data []interface{}) []interface{} {
-	result := make([]interface{}, len(data))
+func (s *ScrubbingService) scrubJSONValue(key string, value json.RawMessage) json.RawMessage {
+	if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return append(json.RawMessage(nil), value...)
+	}
+
+	var text string
+	if err := json.Unmarshal(value, &text); err == nil {
+		return json.RawMessage(strconv.Quote(s.ScrubText(text)))
+	}
+
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(value, &object); err == nil {
+		return marshalScrubbedMap(s.ScrubMap(object))
+	}
+
+	var array []json.RawMessage
+	if err := json.Unmarshal(value, &array); err == nil {
+		return marshalScrubbedSlice(s.scrubSlice(array))
+	}
+
+	if s.config.StrictMode && s.isLikelySensitiveKey(key) {
+		return json.RawMessage(strconv.Quote("[VALUE]"))
+	}
+	if json.Valid(value) {
+		return append(json.RawMessage(nil), value...)
+	}
+	return json.RawMessage(strconv.Quote("[UNKNOWN_TYPE]"))
+}
+
+// scrubSlice scrubs all elements in an arbitrary JSON array recursively.
+func (s *ScrubbingService) scrubSlice(data []json.RawMessage) []json.RawMessage {
+	result := make([]json.RawMessage, len(data))
 	for i, item := range data {
-		switch v := item.(type) {
-		case string:
-			result[i] = s.ScrubText(v)
-		case map[string]interface{}:
-			result[i] = s.ScrubMap(v)
-		case []interface{}:
-			result[i] = s.scrubSlice(v)
-		default:
-			result[i] = v
-		}
+		result[i] = s.scrubJSONValue("", item)
 	}
 	return result
+}
+
+func marshalScrubbedMap(value map[string]json.RawMessage) json.RawMessage {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return json.RawMessage(strconv.Quote("[UNKNOWN_TYPE]"))
+	}
+	return data
+}
+
+func marshalScrubbedSlice(value []json.RawMessage) json.RawMessage {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return json.RawMessage(strconv.Quote("[UNKNOWN_TYPE]"))
+	}
+	return data
 }
 
 // scrubKeyName sanitizes key names that might contain sensitive info
@@ -929,50 +944,56 @@ func (s *ScrubbingService) RehydrateText(ctx context.Context, input string) stri
 }
 
 // RehydratePayload recursively rehydrates all string values in a JSON payload.
-// Uses interface{} internally because the payload is arbitrary JSON from
-// external sources (cloud AI responses, governed MCP payloads) where the schema
-// is unknown by design. This is the same schema-less passthrough exception as
-// ScrubMap; a typed model cannot represent an externally-defined JSON shape.
+// json.RawMessage preserves arbitrary JSON shapes without introducing an
+// untyped object model at this serialization boundary.
 func (s *ScrubbingService) RehydratePayload(ctx context.Context, payload []byte) ([]byte, error) {
 	if len(payload) == 0 {
 		return payload, nil
 	}
 
-	// Try to parse as JSON first
-	var data interface{}
+	var data json.RawMessage
 	if err := json.Unmarshal(payload, &data); err != nil {
-		// Not JSON, try text rehydration
 		return []byte(s.RehydrateText(ctx, string(payload))), nil
 	}
 
-	rehydrated := s.rehydrateValueRecursive(ctx, data)
-	return json.Marshal(rehydrated)
+	return s.rehydrateJSONValue(ctx, data)
 }
 
-// rehydrateValueRecursive walks an arbitrary JSON value tree (decoded via
-// json.Unmarshal into interface{}) and rehydrates every string leaf. Uses
-// interface{} and map[string]interface{} because the value tree comes from
-// external JSON with no known schema. See the ScrubMap NOTE for the full
-// rationale.
-func (s *ScrubbingService) rehydrateValueRecursive(ctx context.Context, val interface{}) interface{} {
-	switch v := val.(type) {
-	case string:
-		return s.RehydrateText(ctx, v)
-	case map[string]interface{}:
-		newMap := make(map[string]interface{}, len(v))
-		for k, v2 := range v {
-			newMap[k] = s.rehydrateValueRecursive(ctx, v2)
-		}
-		return newMap
-	case []interface{}:
-		newSlice := make([]interface{}, len(v))
-		for i, v2 := range v {
-			newSlice[i] = s.rehydrateValueRecursive(ctx, v2)
-		}
-		return newSlice
-	default:
-		return v
+func (s *ScrubbingService) rehydrateJSONValue(ctx context.Context, value json.RawMessage) ([]byte, error) {
+	if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return append([]byte(nil), value...), nil
 	}
+
+	var text string
+	if err := json.Unmarshal(value, &text); err == nil {
+		return json.Marshal(s.RehydrateText(ctx, text))
+	}
+
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(value, &object); err == nil {
+		for key, child := range object {
+			rehydrated, err := s.rehydrateJSONValue(ctx, child)
+			if err != nil {
+				return nil, fmt.Errorf("scrubbing: rehydrate object field %q: %w", key, err)
+			}
+			object[key] = rehydrated
+		}
+		return json.Marshal(object)
+	}
+
+	var array []json.RawMessage
+	if err := json.Unmarshal(value, &array); err == nil {
+		for index, child := range array {
+			rehydrated, err := s.rehydrateJSONValue(ctx, child)
+			if err != nil {
+				return nil, fmt.Errorf("scrubbing: rehydrate array element %d: %w", index, err)
+			}
+			array[index] = rehydrated
+		}
+		return json.Marshal(array)
+	}
+
+	return append([]byte(nil), value...), nil
 }
 
 // GetTokenForValue registers a sensitive value and returns a unique token for it.

@@ -484,6 +484,7 @@ const (
 	TestVaultDirname               = "test-vault"
 	TestSecretManagerDBFilename    = "secret_manager_test.db"
 	TestCommitmentLedgerDBFilename = "commitment_ledger_test.db"
+	TestGatewayDatabaseFilename    = "gateway_test.db"
 	TestCertFilename               = "test-cert.pem"
 	TestKeyFilename                = "test-key.pem"
 

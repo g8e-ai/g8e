@@ -10,11 +10,10 @@ package gateway
 import (
 	"context"
 	"crypto/ed25519"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -26,10 +25,12 @@ import (
 // unlocked vault for testing EncryptedKVAdapter.
 func setupEncryptedKVTest(t *testing.T) (*KVStoreService, *vault.Vault) {
 	t.Helper()
-	dir := testutil.TempDir(t)
+	fileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	logger := testutil.NewTestLogger()
 
-	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(filepath.Join(dir, "test.db")), logger)
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(fileSvc.Resolve(constants.TestGatewayDatabaseFilename)), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -38,17 +39,16 @@ func setupEncryptedKVTest(t *testing.T) (*KVStoreService, *vault.Vault) {
 
 	kv := NewKVStoreService(db, logger)
 
-	vaultDir := filepath.Join(dir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), constants.VaultDirname, constants.PermDirPrivate))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
+	require.NoError(t, header.Save(fileSvc))
 
-	v, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
+	v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: logger})
 	require.NoError(t, err)
 	require.NoError(t, v.Unlock(privKey))
 	t.Cleanup(func() { v.Close() })
@@ -82,15 +82,16 @@ func TestEncryptedKVAdapter_SetLockedVault(t *testing.T) {
 	kv, _ := setupEncryptedKVTest(t)
 
 	// Create a locked vault (no unlock)
-	dir := testutil.TempDir(t)
-	vaultDir := filepath.Join(dir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	lockedFileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, lockedFileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, lockedFileSvc.MkdirAll(context.Background(), constants.VaultDirname, constants.PermDirPrivate))
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
-	lockedVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, header.Save(lockedFileSvc))
+	lockedVault, err := vault.NewVault(&vault.VaultConfig{FileSvc: lockedFileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	t.Cleanup(func() { lockedVault.Close() })
 
@@ -108,15 +109,16 @@ func TestEncryptedKVAdapter_GetLockedVault(t *testing.T) {
 	require.NoError(t, adapter.KVSet(ctx, "key", "value", 0))
 
 	// Create a locked vault and swap it in
-	dir := testutil.TempDir(t)
-	vaultDir := filepath.Join(dir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	lockedFileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, lockedFileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, lockedFileSvc.MkdirAll(context.Background(), constants.VaultDirname, constants.PermDirPrivate))
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
-	lockedVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, header.Save(lockedFileSvc))
+	lockedVault, err := vault.NewVault(&vault.VaultConfig{FileSvc: lockedFileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	t.Cleanup(func() { lockedVault.Close() })
 
@@ -159,15 +161,16 @@ func TestEncryptedKVAdapter_ScanPrefixLockedVault(t *testing.T) {
 	require.NoError(t, adapter.KVSet(ctx, "prefix:key1", "val1", 0))
 
 	// Create a locked vault
-	dir := testutil.TempDir(t)
-	vaultDir := filepath.Join(dir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	lockedFileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, lockedFileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, lockedFileSvc.MkdirAll(context.Background(), constants.VaultDirname, constants.PermDirPrivate))
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
-	lockedVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, header.Save(lockedFileSvc))
+	lockedVault, err := vault.NewVault(&vault.VaultConfig{FileSvc: lockedFileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	t.Cleanup(func() { lockedVault.Close() })
 

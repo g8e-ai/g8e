@@ -8,7 +8,6 @@
 package pubsub
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -96,34 +95,20 @@ func BuildUniversalResultEnvelope(
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// Populate IntentData for JSON-first protocol (using JSON marshaling for simplicity during transition)
-	var intentData map[string]interface{}
-	jsonBytes, err := json.Marshal(payload)
+	// Build the intent data directly from canonical protojson so the envelope
+	// carries the same field names and values as the public protocol surface.
+	intentDataStruct := &structpb.Struct{}
+	intentJSON, err := protojson.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload intent data: %w", err)
 	}
-	if err := json.Unmarshal(jsonBytes, &intentData); err != nil {
+	if err := protojson.Unmarshal(intentJSON, intentDataStruct); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal payload intent data: %w", err)
 	}
 
-	// Inject canonical payload_type for consumer discriminator-based parsing (e.g., agent Pydantic)
-	if intentData != nil {
-		if _, ok := intentData["payload_type"]; !ok {
-			intentData["payload_type"] = mapProtoToPayloadType(payload)
-		}
-	}
-
-	// Convert map to structpb.Struct for GovernanceEnvelope
-	var intentDataStruct *structpb.Struct
-	if intentData != nil {
-		structBytes, err := json.Marshal(intentData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal payload intent struct: %w", err)
-		}
-		intentDataStruct = &structpb.Struct{}
-		if err := protojson.Unmarshal(structBytes, intentDataStruct); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal payload intent struct: %w", err)
-		}
+	// Inject canonical payload_type for consumer discriminator-based parsing (e.g., agent Pydantic).
+	if _, ok := intentDataStruct.Fields["payload_type"]; !ok {
+		intentDataStruct.Fields["payload_type"] = structpb.NewStringValue(mapProtoToPayloadType(payload))
 	}
 
 	env := &commonv1.GovernanceEnvelope{

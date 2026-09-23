@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -200,27 +201,65 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 	return scanDocument(collection, id, string(dataJSON), createdAtStr, nowStr)
 }
 
-// DocConditionalUpdate atomically updates a document's JSON fields only if the
+type documentUpdateField struct {
+	Name  string
+	Value json.RawMessage
+}
+
+func decodeDocumentUpdateFields(data json.RawMessage) ([]documentUpdateField, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, fmt.Errorf("read object start: %w", err)
+	}
+	if delimiter, ok := token.(json.Delim); !ok || delimiter != '{' {
+		return nil, fmt.Errorf("expected JSON object")
+	}
+
+	var fields []documentUpdateField
+	for decoder.More() {
+		nameToken, err := decoder.Token()
+		if err != nil {
+			return nil, fmt.Errorf("read field name: %w", err)
+		}
+		name, ok := nameToken.(string)
+		if !ok || name == "" {
+			return nil, fmt.Errorf("field name is not a non-empty string")
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, fmt.Errorf("read field %q: %w", name, err)
+		}
+		fields = append(fields, documentUpdateField{Name: name, Value: value})
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, fmt.Errorf("read object end: %w", err)
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("update object is empty")
+	}
+	return fields, nil
+}
+
+// DocConditionalUpdate atomically updates a typed JSON object only if the
 // existing data satisfies a JSON path condition. This prevents TOCTOU races by
 // performing the check and write in a single SQL statement.
 // Returns (true, nil) if the update was applied, (false, nil) if the condition
 // was not met or the document was not found.
-func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFields map[string]interface{}, conditionField string, conditionValue interface{}) (bool, error) {
+func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFields json.RawMessage, conditionField string, conditionValue interface{}) (bool, error) {
+	updates, err := decodeDocumentUpdateFields(setFields)
+	if err != nil {
+		return false, fmt.Errorf("gateway: document store: conditional update: decode fields: %w", err)
+	}
+
 	now := time.Now().UTC()
 	nowStr := timesvc.FormatTimestamp(now)
 
-	// Build json_set chain for each field to set.
-	// Values are wrapped in json(?) so that Go true/false become JSON booleans
-	// (not integers 1/0) and strings are properly quoted in the JSON document.
 	dataExpr := "data"
 	args := []interface{}{}
-	for field, val := range setFields {
-		jsonVal, err := json.Marshal(val)
-		if err != nil {
-			return false, fmt.Errorf("gateway: document store: conditional update: marshal value: %w", err)
-		}
+	for _, update := range updates {
 		dataExpr = "json_set(" + dataExpr + ", ?, json(?))"
-		args = append(args, "$."+field, string(jsonVal))
+		args = append(args, "$."+update.Name, string(update.Value))
 	}
 
 	query := "UPDATE documents SET data = " + dataExpr + ", updated_at = ? WHERE collection = ? AND id = ? AND json_extract(data, ?) = ?"

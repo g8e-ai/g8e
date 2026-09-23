@@ -44,8 +44,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.DataBlobs, http.HandlerFunc(h.dataController.handleBlob))
 
 	// Console SPA (public, no auth required)
-	consoleHandler := console.Handler()
-	mux.Handle(constants.APIPaths.ConsolePrefix, http.StripPrefix(strings.TrimSuffix(constants.APIPaths.ConsolePrefix, "/"), consoleHandler))
+	consoleHandler, err := console.Handler()
+	if err != nil {
+		h.logger.Error("failed to initialize console handler", "error", err)
+	} else {
+		mux.Handle(constants.APIPaths.ConsolePrefix, http.StripPrefix(strings.TrimSuffix(constants.APIPaths.ConsolePrefix, "/"), consoleHandler))
+	}
 
 	// Landing page and health
 	mux.HandleFunc(constants.APIPaths.Landing, h.healthController.handleLandingPage)

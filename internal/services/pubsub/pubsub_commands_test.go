@@ -646,14 +646,13 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 				return fmt.Errorf("document not found")
 			},
 		}
-		updates, err := structpb.NewStruct(map[string]interface{}{"title": "updated"})
-		require.NoError(t, err)
+		updates := mustNewStruct(t, `{"title":"updated"}`)
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
 			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: updates, Merge: true}),
 		}
-		_, err = f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "pubsub: document update: doc merge")
 	})
@@ -661,11 +660,7 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 	t.Run("persists document replace via DocReplace with canonical protojson when merge is false", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		updates, err := structpb.NewStruct(map[string]interface{}{
-			"title":  "test case",
-			"status": "open",
-		})
-		require.NoError(t, err)
+		updates := mustNewStruct(t, `{"title":"test case","status":"open"}`)
 		mock := &testutil.ConfigurableMockGovernedDocStore{}
 		f.Svc.governedDocStore = mock
 		msg := &PubSubCommandMessage{
@@ -682,19 +677,16 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 		assert.Equal(t, "cases", call.Collection)
 		assert.Equal(t, "case-1", call.ID)
 		// Canonical protojson preserves field names from the Struct.
-		var parsed map[string]interface{}
-		require.NoError(t, json.Unmarshal(call.Data, &parsed))
-		assert.Equal(t, "test case", parsed["title"])
-		assert.Equal(t, "open", parsed["status"])
+		var parsed structpb.Struct
+		require.NoError(t, protojson.Unmarshal(call.Data, &parsed))
+		assert.Equal(t, "test case", parsed.Fields["title"].GetStringValue())
+		assert.Equal(t, "open", parsed.Fields["status"].GetStringValue())
 	})
 
 	t.Run("persists document merge via DocMerge when merge is true", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		updates, err := structpb.NewStruct(map[string]interface{}{
-			"title": "updated title",
-		})
-		require.NoError(t, err)
+		updates := mustNewStruct(t, `{"title":"updated title"}`)
 		mock := &testutil.ConfigurableMockGovernedDocStore{}
 		f.Svc.governedDocStore = mock
 		msg := &PubSubCommandMessage{
@@ -710,9 +702,9 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 		call := mock.DocMergeCalls[0]
 		assert.Equal(t, "cases", call.Collection)
 		assert.Equal(t, "case-1", call.ID)
-		var parsed map[string]interface{}
-		require.NoError(t, json.Unmarshal(call.Fields, &parsed))
-		assert.Equal(t, "updated title", parsed["title"])
+		var parsed structpb.Struct
+		require.NoError(t, protojson.Unmarshal(call.Fields, &parsed))
+		assert.Equal(t, "updated title", parsed.Fields["title"].GetStringValue())
 	})
 
 	t.Run("persists document update with empty updates as empty object", func(t *testing.T) {
@@ -1204,24 +1196,22 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			// Set up TestSQLAuditStore with encryption at rest for this subtest
 			tmpDir := testutil.TempDir(t)
-			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
 
-			require.NoError(t, os.MkdirAll(vaultDir, 0700))
 			logger := testutil.NewTestLogger()
+			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			header, _, err := vault.NewVaultHeader(vaultPrivKey)
 			require.NoError(t, err)
-			require.NoError(t, header.Save(vaultDir))
+			require.NoError(t, header.Save(fileSvc))
 			testVault, err := vault.NewVault(&vault.VaultConfig{
-				DataDir: vaultDir,
+				FileSvc: fileSvc,
 				Logger:  logger,
 			})
 			require.NoError(t, err)
 			require.NoError(t, testVault.Unlock(vaultPrivKey))
 			defer testVault.Close()
 
-			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
 				DBPath:                    "g8e.db",
@@ -1274,24 +1264,22 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			// Set up TestSQLAuditStore with encryption at rest for this subtest
 			tmpDir := testutil.TempDir(t)
-			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
 
-			require.NoError(t, os.MkdirAll(vaultDir, 0700))
 			logger := testutil.NewTestLogger()
+			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			header, _, err := vault.NewVaultHeader(vaultPrivKey)
 			require.NoError(t, err)
-			require.NoError(t, header.Save(vaultDir))
+			require.NoError(t, header.Save(fileSvc))
 			testVault, err := vault.NewVault(&vault.VaultConfig{
-				DataDir: vaultDir,
+				FileSvc: fileSvc,
 				Logger:  logger,
 			})
 			require.NoError(t, err)
 			require.NoError(t, testVault.Unlock(vaultPrivKey))
 			defer testVault.Close()
 
-			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
 				DBPath:                    "g8e.db",
@@ -1343,24 +1331,22 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			// Set up TestSQLAuditStore with encryption at rest for this subtest
 			tmpDir := testutil.TempDir(t)
-			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
 
-			require.NoError(t, os.MkdirAll(vaultDir, 0700))
 			logger := testutil.NewTestLogger()
+			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			header, _, err := vault.NewVaultHeader(vaultPrivKey)
 			require.NoError(t, err)
-			require.NoError(t, header.Save(vaultDir))
+			require.NoError(t, header.Save(fileSvc))
 			testVault, err := vault.NewVault(&vault.VaultConfig{
-				DataDir: vaultDir,
+				FileSvc: fileSvc,
 				Logger:  logger,
 			})
 			require.NoError(t, err)
 			require.NoError(t, testVault.Unlock(vaultPrivKey))
 			defer testVault.Close()
 
-			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
 				DBPath:                    "g8e.db",
@@ -1435,24 +1421,22 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 		// Set up TestSQLAuditStore with encryption at rest for this subtest
 		tmpDir := testutil.TempDir(t)
-		vaultDir := filepath.Join(tmpDir, "vault")
 		vaultPrivKey := make([]byte, 32)
 		_, _ = rand.Read(vaultPrivKey)
 
-		require.NoError(t, os.MkdirAll(vaultDir, 0700))
 		logger := testutil.NewTestLogger()
+		fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 		header, _, err := vault.NewVaultHeader(vaultPrivKey)
 		require.NoError(t, err)
-		require.NoError(t, header.Save(vaultDir))
+		require.NoError(t, header.Save(fileSvc))
 		testVault, err := vault.NewVault(&vault.VaultConfig{
-			DataDir: vaultDir,
+			FileSvc: fileSvc,
 			Logger:  logger,
 		})
 		require.NoError(t, err)
 		require.NoError(t, testVault.Unlock(vaultPrivKey))
 		defer testVault.Close()
 
-		fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 		gitPath, _ := exec.LookPath("git")
 		avCfg := &storagetest.TestSQLAuditStoreConfig{
 			DBPath:                    "g8e.db",

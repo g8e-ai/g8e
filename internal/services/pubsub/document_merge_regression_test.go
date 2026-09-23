@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // inMemoryGovernedDocStore is a faithful in-memory implementation of
@@ -127,15 +126,7 @@ func TestHandleDocumentUpdateSync_MergePreservesUntouchedFields(t *testing.T) {
 	f.Svc.governedDocStore = docStore
 
 	// Step 1: Create a complete investigation document via merge=false.
-	fullUpdates, err := structpb.NewStruct(map[string]interface{}{
-		"case_id":       "case-abc-123",
-		"user_id":       "user-xyz-789",
-		"sentinel_mode": true,
-		"case_title":    "Create a file at /tmp/g8e-smoke-test.txt",
-		"status":        "open",
-		"history":       []interface{}{"created"},
-	})
-	require.NoError(t, err)
+	fullUpdates := mustNewStruct(t, `{"case_id":"case-abc-123","user_id":"user-xyz-789","sentinel_mode":true,"case_title":"Create a file at /tmp/g8e-smoke-test.txt","status":"open","history":["created"]}`)
 	createMsg := &PubSubCommandMessage{
 		EventType: constants.EventAppInvestigationCreated,
 		ID:        "msg-create",
@@ -152,11 +143,7 @@ func TestHandleDocumentUpdateSync_MergePreservesUntouchedFields(t *testing.T) {
 
 	// Step 2: Apply a title-only merge=true update (simulates the concurrent
 	// _generate_and_update_title flow that caused Bug 10).
-	mergeUpdates, err := structpb.NewStruct(map[string]interface{}{
-		"case_title": "Generated Title: Create a file",
-		"history":    []interface{}{"created", "title_generated"},
-	})
-	require.NoError(t, err)
+	mergeUpdates := mustNewStruct(t, `{"case_title":"Generated Title: Create a file","history":["created","title_generated"]}`)
 	mergeMsg := &PubSubCommandMessage{
 		EventType: constants.EventAppInvestigationUpdated,
 		ID:        "msg-merge",
@@ -200,13 +187,7 @@ func TestHandleDocumentUpdateSync_ReplaceOverwritesAllFields(t *testing.T) {
 	f.Svc.governedDocStore = docStore
 
 	// Create initial document.
-	initial, err := structpb.NewStruct(map[string]interface{}{
-		"case_id":    "case-1",
-		"user_id":    "user-1",
-		"case_title": "Initial title",
-		"status":     "open",
-	})
-	require.NoError(t, err)
+	initial := mustNewStruct(t, `{"case_id":"case-1","user_id":"user-1","case_title":"Initial title","status":"open"}`)
 	createMsg := &PubSubCommandMessage{
 		EventType: constants.EventAppCaseCreated,
 		ID:        "msg-1",
@@ -221,10 +202,7 @@ func TestHandleDocumentUpdateSync_ReplaceOverwritesAllFields(t *testing.T) {
 	require.NoError(t, err)
 
 	// Replace with a smaller document (merge=false).
-	replacement, err := structpb.NewStruct(map[string]interface{}{
-		"case_title": "Replaced title",
-	})
-	require.NoError(t, err)
+	replacement := mustNewStruct(t, `{"case_title":"Replaced title"}`)
 	replaceMsg := &PubSubCommandMessage{
 		EventType: constants.EventAppCaseUpdated,
 		ID:        "msg-2",
@@ -258,10 +236,7 @@ func TestHandleDocumentDeleteSync_RemovesDocument(t *testing.T) {
 	f.Svc.governedDocStore = docStore
 
 	// Create a document.
-	updates, err := structpb.NewStruct(map[string]interface{}{
-		"case_title": "To be deleted",
-	})
-	require.NoError(t, err)
+	updates := mustNewStruct(t, `{"case_title":"To be deleted"}`)
 	createMsg := &PubSubCommandMessage{
 		EventType: constants.EventAppCaseCreated,
 		ID:        "msg-1",
@@ -305,10 +280,7 @@ func TestHandleDocumentUpdateSync_MergeFailsOnMissingDocument(t *testing.T) {
 	f := newPubsubFixture(t)
 	f.Svc.governedDocStore = docStore
 
-	mergeUpdates, err := structpb.NewStruct(map[string]interface{}{
-		"case_title": "Updated title for nonexistent",
-	})
-	require.NoError(t, err)
+	mergeUpdates := mustNewStruct(t, `{"case_title":"Updated title for nonexistent"}`)
 	mergeMsg := &PubSubCommandMessage{
 		EventType: constants.EventAppInvestigationUpdated,
 		ID:        "msg-1",

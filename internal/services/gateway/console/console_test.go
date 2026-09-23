@@ -13,10 +13,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandler_ServesStaticContent(t *testing.T) {
-	handler := Handler()
+	handler, err := Handler()
+	require.NoError(t, err)
 
 	tests := []struct {
 		name       string

@@ -31,6 +31,64 @@ import (
 
 const campaignExportSchemaVersion = "1.1.0"
 
+type campaignRunSummaryExport struct {
+	SchemaVersion            string   `json:"schema_version"`
+	RecordType               string   `json:"record_type"`
+	RunID                    string   `json:"run_id"`
+	CampaignID               string   `json:"campaign_id"`
+	Lane                     string   `json:"lane"`
+	CatalogID                string   `json:"catalog_id"`
+	CatalogVersion           string   `json:"catalog_version"`
+	CatalogDigest            string   `json:"catalog_digest"`
+	CampaignDigest           string   `json:"campaign_digest,omitempty"`
+	ModelRegistryDigest      string   `json:"model_registry_digest"`
+	ExportedAt               string   `json:"exported_at"`
+	ScheduledAssignments     uint32   `json:"scheduled_assignments"`
+	TerminalAssignments      uint32   `json:"terminal_assignments"`
+	PassedAssignments        uint32   `json:"passed_assignments"`
+	FailedAssignments        uint32   `json:"failed_assignments"`
+	ModelCount               uint32   `json:"model_count"`
+	PopulationComplete       bool     `json:"population_complete"`
+	ExpectedCells            uint64   `json:"expected_cells"`
+	PopulationFailureReasons []string `json:"population_failure_reasons"`
+}
+
+type campaignExportSchemaTable struct {
+	Name       string                   `json:"name"`
+	PrimaryKey campaignExportPrimaryKey `json:"primary_key"`
+}
+
+type campaignExportPrimaryKey []string
+
+func (key campaignExportPrimaryKey) MarshalJSON() ([]byte, error) {
+	if len(key) == 1 {
+		return json.Marshal(key[0])
+	}
+	return json.Marshal([]string(key))
+}
+
+type campaignExportSchemaFile struct {
+	Format      string                      `json:"format"`
+	Description string                      `json:"description"`
+	Tables      []campaignExportSchemaTable `json:"tables,omitempty"`
+}
+
+type campaignExportSchemaDocument struct {
+	SchemaVersion string                              `json:"schema_version"`
+	Description   string                              `json:"description"`
+	Files         map[string]campaignExportSchemaFile `json:"files"`
+}
+
+type campaignModelSummaryIdentity struct {
+	VariantID string `json:"variant_id"`
+	Role      string `json:"role"`
+}
+
+type campaignModelSummaryFallback struct {
+	Role      string `json:"role"`
+	VariantID string `json:"variant_id"`
+}
+
 // CampaignExportFile describes one artifact written by ExportRun.
 type CampaignExportFile struct {
 	Name        string `json:"name"`
@@ -622,73 +680,55 @@ func buildCampaignRunSummaryExport(
 	exportedAt time.Time,
 	population *CampaignPopulationReport,
 	aggregate *runAggregateState,
-) map[string]any {
-	summary := map[string]any{
-		"schema_version":             campaignExportSchemaVersion,
-		"record_type":                "run_summary",
-		"run_id":                     run.GetRunId(),
-		"campaign_id":                run.GetCampaignBinding().GetCampaignId(),
-		"lane":                       run.GetLane().String(),
-		"catalog_id":                 catalog.GetCatalogRef().GetId(),
-		"catalog_version":            catalog.GetCatalogRef().GetVersion(),
-		"catalog_digest":             catalog.GetCatalogDigest(),
-		"model_registry_digest":      spec.GetModelRegistryDigest(),
-		"exported_at":                exportedAt.Format(time.RFC3339Nano),
-		"scheduled_assignments":      aggregate.Scheduled,
-		"terminal_assignments":       aggregate.Terminal,
-		"passed_assignments":         aggregate.Passed,
-		"failed_assignments":         aggregate.Failed,
-		"model_count":                aggregate.ModelCount,
-		"population_complete":        population.Complete,
-		"expected_cells":             population.ExpectedCells,
-		"population_failure_reasons": population.FailureReasons,
+) campaignRunSummaryExport {
+	summary := campaignRunSummaryExport{
+		SchemaVersion:            campaignExportSchemaVersion,
+		RecordType:               "run_summary",
+		RunID:                    run.GetRunId(),
+		CampaignID:               run.GetCampaignBinding().GetCampaignId(),
+		Lane:                     run.GetLane().String(),
+		CatalogID:                catalog.GetCatalogRef().GetId(),
+		CatalogVersion:           catalog.GetCatalogRef().GetVersion(),
+		CatalogDigest:            catalog.GetCatalogDigest(),
+		ModelRegistryDigest:      spec.GetModelRegistryDigest(),
+		ExportedAt:               exportedAt.Format(time.RFC3339Nano),
+		ScheduledAssignments:     aggregate.Scheduled,
+		TerminalAssignments:      aggregate.Terminal,
+		PassedAssignments:        aggregate.Passed,
+		FailedAssignments:        aggregate.Failed,
+		ModelCount:               aggregate.ModelCount,
+		PopulationComplete:       population.Complete,
+		ExpectedCells:            population.ExpectedCells,
+		PopulationFailureReasons: population.FailureReasons,
 	}
 	if binding := run.GetCampaignBinding(); binding != nil {
-		summary["campaign_digest"] = binding.GetCampaignDigest()
+		summary.CampaignDigest = binding.GetCampaignDigest()
 	}
 	return summary
 }
 
-func buildCampaignExportSchemaDocument() map[string]any {
-	return map[string]any{
-		"schema_version": campaignExportSchemaVersion,
-		"description":    "Disclosure-safe campaign export bundle derived from public projections.",
-		"files": map[string]any{
-			constants.EvaluationExportSchemaFilename: map[string]string{
-				"format":      "json",
-				"description": "This schema document.",
-			},
-			constants.EvaluationRunSummaryFilename: map[string]string{
-				"format":      "json",
-				"description": "Run-level metadata, catalog/registry digests, and aggregate counters.",
-			},
-			constants.CampaignExportEvaluationSummaryFilename: map[string]string{
-				"format":      "json",
-				"description": "Explorer evaluation_summary projection with typed headline metrics and bound verification metadata.",
-			},
-			constants.EvaluationAssignmentsJSONLFilename: map[string]string{
-				"format":      "jsonl",
-				"description": "One named export wrapper per terminal assignment containing canonical protobuf JSON under projection plus approved benchmark_observations and resource_summary extensions.",
-			},
-			constants.EvaluationModelSummariesJSONLFilename: map[string]string{
-				"format":      "jsonl",
-				"description": "One explorer model_summary snapshot per variant-role bucket.",
-			},
-			constants.EvaluationAssignmentsCSVFilename: map[string]string{
-				"format":      "csv",
-				"description": "Tabular assignment results with disclosure-safe benchmark columns.",
-			},
-			constants.EvaluationModelSummariesCSVFilename: map[string]string{
-				"format":      "csv",
-				"description": "Tabular model-role aggregate counters.",
-			},
-			"campaign_export.sqlite": map[string]any{
-				"format":      "sqlite",
-				"description": "Relational export with export_metadata, assignment_results, and model_summaries tables.",
-				"tables": []map[string]any{
-					{"name": "export_metadata", "primary_key": "run_id"},
-					{"name": "assignment_results", "primary_key": "assignment_id"},
-					{"name": "model_summaries", "primary_key": []string{"variant_id", "role"}},
+func buildCampaignExportSchemaDocument() campaignExportSchemaDocument {
+	file := func(format, description string) campaignExportSchemaFile {
+		return campaignExportSchemaFile{Format: format, Description: description}
+	}
+	return campaignExportSchemaDocument{
+		SchemaVersion: campaignExportSchemaVersion,
+		Description:   "Disclosure-safe campaign export bundle derived from public projections.",
+		Files: map[string]campaignExportSchemaFile{
+			constants.EvaluationExportSchemaFilename:          file("json", "This schema document."),
+			constants.EvaluationRunSummaryFilename:            file("json", "Run-level metadata, catalog/registry digests, and aggregate counters."),
+			constants.CampaignExportEvaluationSummaryFilename: file("json", "Explorer evaluation_summary projection with typed headline metrics and bound verification metadata."),
+			constants.EvaluationAssignmentsJSONLFilename:      file("jsonl", "One named export wrapper per terminal assignment containing canonical protobuf JSON under projection plus approved benchmark_observations and resource_summary extensions."),
+			constants.EvaluationModelSummariesJSONLFilename:   file("jsonl", "One explorer model_summary snapshot per variant-role bucket."),
+			constants.EvaluationAssignmentsCSVFilename:        file("csv", "Tabular assignment results with disclosure-safe benchmark columns."),
+			constants.EvaluationModelSummariesCSVFilename:     file("csv", "Tabular model-role aggregate counters."),
+			constants.EvaluationCampaignExportSQLiteFilename: {
+				Format:      "sqlite",
+				Description: "Relational export with export_metadata, assignment_results, and model_summaries tables.",
+				Tables: []campaignExportSchemaTable{
+					{Name: "export_metadata", PrimaryKey: campaignExportPrimaryKey{"run_id"}},
+					{Name: "assignment_results", PrimaryKey: campaignExportPrimaryKey{"assignment_id"}},
+					{Name: "model_summaries", PrimaryKey: campaignExportPrimaryKey{"variant_id", "role"}},
 				},
 			},
 		},
@@ -1025,13 +1065,11 @@ INSERT INTO assignment_results (
 	sort.Strings(keys)
 	summaryByKey := map[string][]byte{}
 	for _, raw := range modelSummaries {
-		var body map[string]any
+		var body campaignModelSummaryIdentity
 		if err := json.Unmarshal(raw, &body); err != nil {
-			return err
+			return fmt.Errorf("evaluation: export campaign run: decode model summary identity: %w", err)
 		}
-		variantID, _ := body["variant_id"].(string)
-		role, _ := body["role"].(string)
-		summaryByKey[variantID+":"+role] = raw
+		summaryByKey[body.VariantID+":"+body.Role] = raw
 	}
 	for _, key := range keys {
 		bucket := aggregate.VariantRoles[key]
@@ -1039,15 +1077,16 @@ INSERT INTO assignment_results (
 		if bucket.Scheduled > 0 {
 			coverage = float64(bucket.Terminal) / float64(bucket.Scheduled)
 		}
-		var passEstimate any
+		var passEstimate *float64
 		if bucket.Terminal > 0 {
-			passEstimate = float64(bucket.Passed) / float64(bucket.Terminal)
+			estimate := float64(bucket.Passed) / float64(bucket.Terminal)
+			passEstimate = &estimate
 		}
 		summaryJSON := string(summaryByKey[key])
 		if summaryJSON == "" {
-			fallback, err := json.Marshal(map[string]any{
-				"variant_id": bucket.VariantID,
-				"role":       bucket.Role,
+			fallback, err := json.Marshal(campaignModelSummaryFallback{
+				Role:      bucket.Role,
+				VariantID: bucket.VariantID,
 			})
 			if err != nil {
 				return err

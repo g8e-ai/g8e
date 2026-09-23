@@ -38,6 +38,51 @@ import (
 // decision, actor user ID, and resulting document/session IDs. CSR PEM,
 // token hashes, and private keys never appear in summaries or audit
 // records.
+type platformEnrollmentDecisionUpdate struct {
+	State              string    `json:"state"`
+	ApprovedByUserID   string    `json:"approved_by_user_id"`
+	DecidedAt          time.Time `json:"decided_at"`
+	DecisionReason     string    `json:"decision_reason"`
+	DecisionEnvelopeID string    `json:"decision_envelope_id"`
+	DecisionReceiptID  string    `json:"decision_receipt_id"`
+	LastTransitionAt   time.Time `json:"last_transition_at"`
+}
+
+type platformEnrollmentIssueRollbackUpdate struct {
+	State            string    `json:"state"`
+	LastTransitionAt time.Time `json:"last_transition_at"`
+}
+
+type platformEnrollmentCompletionUpdate struct {
+	State                  string                                     `json:"state"`
+	Issued                 *models.PlatformEnrollmentCompleteResponse `json:"issued"`
+	CompletedAt            time.Time                                  `json:"completed_at"`
+	LastTransitionAt       time.Time                                  `json:"last_transition_at"`
+	IssuanceEnvelopeID     string                                     `json:"issuance_envelope_id"`
+	IssuanceReceiptID      string                                     `json:"issuance_receipt_id"`
+	CertificateSerial      string                                     `json:"certificate_serial"`
+	CertificateFingerprint string                                     `json:"certificate_fingerprint"`
+	OperatorID             string                                     `json:"operator_id,omitempty"`
+	OperatorSessionID      string                                     `json:"operator_session_id,omitempty"`
+	CLISessionID           string                                     `json:"cli_session_id,omitempty"`
+}
+
+type platformEnrollmentRevocationUpdate struct {
+	State                string    `json:"state"`
+	RevokedAt            time.Time `json:"revoked_at"`
+	RevokedByUserID      string    `json:"revoked_by_user_id"`
+	RevocationReason     string    `json:"revocation_reason"`
+	RevocationEnvelopeID string    `json:"revocation_envelope_id"`
+	RevocationReceiptID  string    `json:"revocation_receipt_id"`
+	LastTransitionAt     time.Time `json:"last_transition_at"`
+}
+
+type platformOperatorTerminationUpdate struct {
+	Status            string    `json:"status"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	TerminationReason string    `json:"termination_reason"`
+}
+
 type PlatformEnrollmentHandler struct {
 	deps   PlatformEnrollmentDeps
 	logger platformEnrollmentLogger
@@ -164,14 +209,17 @@ func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSu
 	}
 
 	now := time.Now().UTC()
-	setFields := map[string]interface{}{
-		"state":                string(targetState),
-		"approved_by_user_id":  actorUserID,
-		"decided_at":           now,
-		"decision_reason":      "",
-		"decision_envelope_id": msg.ID,
-		"decision_receipt_id":  msg.ID,
-		"last_transition_at":   now,
+	setFields, err := json.Marshal(platformEnrollmentDecisionUpdate{
+		State:              string(targetState),
+		ApprovedByUserID:   actorUserID,
+		DecidedAt:          now,
+		DecisionReason:     "",
+		DecisionEnvelopeID: msg.ID,
+		DecisionReceiptID:  msg.ID,
+		LastTransitionAt:   now,
+	})
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: marshal decision %s: %w", requestID, err)
 	}
 	applied, err := h.deps.DocStore.DocConditionalUpdate(
 		platformEnrollmentCollection(), requestID, setFields, "state", string(models.PlatformEnrollmentStatePending),
@@ -239,43 +287,44 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 	if err != nil {
 		// Roll back issuing -> approved so a retry can re-acquire. A
 		// failed signing must not permanently consume approval.
-		_, rollbackErr := h.deps.DocStore.DocConditionalUpdate(
-			platformEnrollmentCollection(), requestID,
-			map[string]interface{}{
-				"state":              string(models.PlatformEnrollmentStateApproved),
-				"last_transition_at": time.Now().UTC(),
-			},
-			"state", string(models.PlatformEnrollmentStateIssuing),
-		)
-		if rollbackErr != nil {
-			h.logger.Error("platform enrollment: rollback issuing failed",
-				"request_id", requestID, "error", rollbackErr)
+		rollbackUpdate, marshalErr := json.Marshal(platformEnrollmentIssueRollbackUpdate{
+			State:            string(models.PlatformEnrollmentStateApproved),
+			LastTransitionAt: time.Now().UTC(),
+		})
+		if marshalErr != nil {
+			h.logger.Error("platform enrollment: marshal rollback failed", "request_id", requestID, "error", marshalErr)
+		} else {
+			_, rollbackErr := h.deps.DocStore.DocConditionalUpdate(
+				platformEnrollmentCollection(), requestID, rollbackUpdate,
+				"state", string(models.PlatformEnrollmentStateIssuing),
+			)
+			if rollbackErr != nil {
+				h.logger.Error("platform enrollment: rollback issuing failed",
+					"request_id", requestID, "error", rollbackErr)
+			}
 		}
 		return "", fmt.Errorf("platform enrollment: issue %s: %w", requestID, err)
 	}
 
 	// Persist the issued response, generated IDs, cert metadata, and
 	// transition issuing -> completed in a single conditional update.
-	completionFields := map[string]interface{}{
-		"state":                   string(models.PlatformEnrollmentStateCompleted),
-		"issued":                  issued,
-		"completed_at":            time.Now().UTC(),
-		"last_transition_at":      time.Now().UTC(),
-		"issuance_envelope_id":    msg.ID,
-		"issuance_receipt_id":     msg.ID,
-		"certificate_serial":      certSerial,
-		"certificate_fingerprint": certFingerprint,
+	completedAt := time.Now().UTC()
+	completionFields, err := json.Marshal(platformEnrollmentCompletionUpdate{
+		State:                  string(models.PlatformEnrollmentStateCompleted),
+		Issued:                 issued,
+		CompletedAt:            completedAt,
+		LastTransitionAt:       completedAt,
+		IssuanceEnvelopeID:     msg.ID,
+		IssuanceReceiptID:      msg.ID,
+		CertificateSerial:      certSerial,
+		CertificateFingerprint: certFingerprint,
+		OperatorID:             operatorID,
+		OperatorSessionID:      operatorSessionID,
+		CLISessionID:           cliSessionID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: marshal completion %s: %w", requestID, err)
 	}
-	if operatorID != "" {
-		completionFields["operator_id"] = operatorID
-	}
-	if operatorSessionID != "" {
-		completionFields["operator_session_id"] = operatorSessionID
-	}
-	if cliSessionID != "" {
-		completionFields["cli_session_id"] = cliSessionID
-	}
-
 	applied, err := h.deps.DocStore.DocConditionalUpdate(
 		platformEnrollmentCollection(), requestID, completionFields,
 		"state", string(models.PlatformEnrollmentStateIssuing),
@@ -561,10 +610,10 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		if err := h.deps.OperatorSessions.DeactivateOperatorSession(req.OperatorSessionID); err != nil {
 			return "", fmt.Errorf("platform enrollment: deactivate operator session: %w", err)
 		}
-		update, err := json.Marshal(map[string]any{
-			"status":             string(constants.OperatorStatusTerminated),
-			"updated_at":         time.Now().UTC(),
-			"termination_reason": reason,
+		update, err := json.Marshal(platformOperatorTerminationUpdate{
+			Status:            string(constants.OperatorStatusTerminated),
+			UpdatedAt:         time.Now().UTC(),
+			TerminationReason: reason,
 		})
 		if err != nil {
 			return "", fmt.Errorf("platform enrollment: marshal operator revocation: %w", err)
@@ -578,17 +627,20 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		return "", constants.ErrPlatformEnrollmentInvalidComponent
 	}
 	now := time.Now().UTC()
+	revocationUpdate, err := json.Marshal(platformEnrollmentRevocationUpdate{
+		State:                string(models.PlatformEnrollmentStateRevoked),
+		RevokedAt:            now,
+		RevokedByUserID:      payload.GetActorUserId(),
+		RevocationReason:     reason,
+		RevocationEnvelopeID: msg.ID,
+		RevocationReceiptID:  msg.ID,
+		LastTransitionAt:     now,
+	})
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: marshal revocation %s: %w", requestID, err)
+	}
 	applied, err := h.deps.DocStore.DocConditionalUpdate(
-		platformEnrollmentCollection(), requestID,
-		map[string]interface{}{
-			"state":                  string(models.PlatformEnrollmentStateRevoked),
-			"revoked_at":             now,
-			"revoked_by_user_id":     payload.GetActorUserId(),
-			"revocation_reason":      reason,
-			"revocation_envelope_id": msg.ID,
-			"revocation_receipt_id":  msg.ID,
-			"last_transition_at":     now,
-		},
+		platformEnrollmentCollection(), requestID, revocationUpdate,
 		"state", string(models.PlatformEnrollmentStateCompleted),
 	)
 	if err != nil {

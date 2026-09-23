@@ -111,13 +111,17 @@ func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.
 	// This prevents TOCTOU races where concurrent callers both read consumed=false.
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339Nano)
+	consumptionUpdate, err := json.Marshal(struct {
+		Consumed   bool   `json:"consumed"`
+		ConsumedAt string `json:"consumed_at"`
+	}{Consumed: true, ConsumedAt: nowStr})
+	if err != nil {
+		return nil, fmt.Errorf("marshal enrollment token consumption update: %w", err)
+	}
 	applied, err := s.db.DocConditionalUpdate(
 		marshaler.CollectionName(constants.CollectionEnrollmentTokens),
 		token,
-		struct {
-			Consumed   bool   `json:"consumed"`
-			ConsumedAt string `json:"consumed_at"`
-		}{Consumed: true, ConsumedAt: nowStr},
+		consumptionUpdate,
 		"consumed", 0,
 	)
 	if err != nil {
