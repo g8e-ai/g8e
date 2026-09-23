@@ -87,6 +87,52 @@ func platformEnrollmentCollection() string {
 	return marshaler.CollectionName(constants.CollectionPlatformEnrollments)
 }
 
+func loadPlatformEnrollmentOrganization(deps PlatformEnrollmentDeps, userID string) (*models.User, *models.Organization, error) {
+	userDoc, err := deps.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: load user %s: %w", userID, err)
+	}
+	if userDoc == nil {
+		return nil, nil, constants.ErrUserNotFound
+	}
+	userData, err := json.Marshal(userDoc.Data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: marshal user %s: %w", userID, err)
+	}
+	var user models.User
+	if err := json.Unmarshal(userData, &user); err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: decode user %s: %w", userID, err)
+	}
+	user.ID = userDoc.ID
+	if user.OrganizationID == "" {
+		return nil, nil, constants.ErrOrganizationIDRequired
+	}
+	organizationDoc, err := deps.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOrganizations), user.OrganizationID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: load organization %s: %w", user.OrganizationID, err)
+	}
+	if organizationDoc == nil {
+		return nil, nil, constants.ErrOrganizationNotFound
+	}
+	organizationData, err := json.Marshal(organizationDoc.Data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: marshal organization %s: %w", user.OrganizationID, err)
+	}
+	var organization models.Organization
+	if err := json.Unmarshal(organizationData, &organization); err != nil {
+		return nil, nil, fmt.Errorf("platform enrollment: decode organization %s: %w", user.OrganizationID, err)
+	}
+	organization.ID = organizationDoc.ID
+	member := organization.OwnerUserID == user.ID
+	for _, memberUserID := range organization.MemberUserIDs {
+		member = member || memberUserID == user.ID
+	}
+	if organization.ID != user.OrganizationID || !member {
+		return nil, nil, constants.ErrOrganizationMembershipInvalid
+	}
+	return &user, &organization, nil
+}
+
 // loadPlatformEnrollmentRequest reads a persisted enrollment request by
 // ID and decodes it into the typed model. Returns (nil, nil) when the
 // request does not exist so the caller can distinguish not-found from

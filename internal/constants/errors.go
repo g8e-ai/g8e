@@ -9,6 +9,12 @@ package constants
 
 import "errors"
 
+var (
+	ErrOrganizationIDRequired        = errors.New("organization_id required")
+	ErrOrganizationNotFound          = errors.New("organization not found")
+	ErrOrganizationMembershipInvalid = errors.New("organization membership invalid")
+)
+
 // Standard platform errors
 var (
 	ErrUserNotFound                 = errors.New("user not found")

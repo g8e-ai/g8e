@@ -426,6 +426,18 @@ type LocalOSUser struct {
 // is the gateway owner and admin. Admin authorization is enforced via
 // UserService.IsFirstUser (the first human enrollee is the admin); there is
 // no ephemeral bootstrap-user concept.
+type Organization struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name,omitempty"`
+	OwnerUserID   string    `json:"owner_user_id"`
+	MemberUserIDs []string  `json:"member_user_ids,omitempty"`
+	PlanType      string    `json:"plan_type,omitempty"`
+	MaxOperators  int       `json:"max_operators,omitempty"`
+	MaxUsers      int       `json:"max_users,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type User struct {
 	ID                 string              `json:"id"`
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`

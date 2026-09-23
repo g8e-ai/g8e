@@ -363,19 +363,23 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	if req.Operator == nil {
 		return nil, "", "", "", "", "", constants.ErrPlatformEnrollmentInvalidPayload
 	}
+	user, organization, err := loadPlatformEnrollmentOrganization(h.deps, actorUserID)
+	if err != nil {
+		return nil, "", "", "", "", "", err
+	}
 	operatorID := uuid.NewString()
 	operatorSessionID := uuid.NewString()
 	cliSessionID := uuid.NewString()
 	now := time.Now().UTC()
 
 	operatorCertPEM, operatorChainPEM, err := h.deps.PKI.SignCSR(
-		req.Operator.OperatorCSRPEM, constants.LeafTypeOperator, "", operatorID, "", operatorSessionID, "",
+		req.Operator.OperatorCSRPEM, constants.LeafTypeOperator, organization.ID, operatorID, "", operatorSessionID, "",
 	)
 	if err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("sign operator csr: %w", err)
 	}
 	cliCertPEM, cliCertChainPEM, err := h.deps.PKI.SignCSR(
-		req.Operator.CLICSRPEM, constants.LeafTypeCLI, "", "", "", cliSessionID, "",
+		req.Operator.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "",
 	)
 	if err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("sign cli csr: %w", err)
@@ -388,7 +392,8 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	// can discover and manage the platform-enrolled operator.
 	operatorDoc := &models.OperatorDocumentGo{
 		ID:                operatorID,
-		UserID:            actorUserID,
+		UserID:            user.ID,
+		OrganizationID:    organization.ID,
 		Component:         constants.ComponentNameG8EO,
 		Name:              req.Hostname,
 		Status:            constants.OperatorStatusActive,
@@ -618,19 +623,23 @@ func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg
 	if actorUserID == "" {
 		return "", constants.ErrPlatformEnrollmentInvalidDecision
 	}
+	user, organization, err := loadPlatformEnrollmentOrganization(h.deps, actorUserID)
+	if err != nil {
+		return "", err
+	}
 
 	// Persist the CLI session bound to the approving owner's user_id.
 	// The cert fingerprint/serial come from the payload (populated by
 	// the enrollment service from the ISSUE handler outputs).
 	if err := h.deps.CLISessions.PersistCLISession(
-		cliSessionID, operatorSessionID, actorUserID,
+		cliSessionID, operatorSessionID, user.ID,
 		"", payload.GetCertificateFingerprint(), payload.GetCertificateSerial(),
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {
 		return "", fmt.Errorf("platform enrollment: persist cli session: %w", err)
 	}
 	if err := h.deps.OperatorSessions.PersistOperatorSession(
-		operatorSessionID, actorUserID, "", operatorID,
+		operatorSessionID, user.ID, organization.ID, operatorID,
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {
 		return "", fmt.Errorf("platform enrollment: persist operator session: %w", err)

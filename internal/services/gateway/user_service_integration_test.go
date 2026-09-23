@@ -38,6 +38,17 @@ func TestUserService_CreateUser_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, newUser)
 		require.Equal(t, constants.UserStatusActive, newUser.Status)
+		require.NotEmpty(t, newUser.OrganizationID)
+		organization, err := db.GetDocStore().DocGet(marshaler.CollectionName(constants.CollectionOrganizations), newUser.OrganizationID)
+		require.NoError(t, err)
+		require.NotNil(t, organization)
+		organizationData, err := json.Marshal(organization.ForWire())
+		require.NoError(t, err)
+		var organizationRecord models.Organization
+		require.NoError(t, json.Unmarshal(organizationData, &organizationRecord))
+		require.Equal(t, newUser.OrganizationID, organizationRecord.ID)
+		require.Equal(t, newUser.ID, organizationRecord.OwnerUserID)
+		require.Equal(t, []string{newUser.ID}, organizationRecord.MemberUserIDs)
 
 		// Verify local OS user info is stored
 		currentUser, err := user.Current()

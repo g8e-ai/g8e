@@ -530,6 +530,10 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	// document was found by resp.Operator.OperatorID, which proves the ID
 	// was correctly generated and used as the document key.
 	assert.Equal(t, env.ownerID, op.UserID, "operator doc must carry the approving owner's user_id")
+	owner, err := env.userSvc.GetByID(env.ownerID)
+	require.NoError(t, err)
+	require.NotNil(t, owner)
+	assert.Equal(t, owner.OrganizationID, op.OrganizationID, "operator doc must carry the approving owner's organization_id")
 	assert.False(t, op.IsSlot, "platform-enrolled operators are not slots")
 	assert.Equal(t, constants.OperatorStatusActive, op.Status)
 	assert.True(t, op.Claimed)
@@ -553,6 +557,7 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	var opSession models.OperatorSession
 	require.NoError(t, json.Unmarshal(opSessBytes, &opSession))
 	assert.Equal(t, env.ownerID, opSession.UserID, "operator session must carry the approving owner's user_id")
+	assert.Equal(t, owner.OrganizationID, opSession.OrganizationID, "operator session must carry the approving owner's organization_id")
 
 	// Verify the stored request is completed with approval provenance.
 	stored := loadStoredRequest(t, env, requestID)
@@ -561,6 +566,28 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	assert.NotEmpty(t, stored.OperatorID)
 	assert.NotEmpty(t, stored.OperatorSessionID)
 	assert.NotEmpty(t, stored.CLISessionID)
+}
+
+func TestPlatformEnrollmentService_OperatorIssuanceRejectsMissingOrganization(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	owner, err := env.userSvc.GetByID(env.ownerID)
+	require.NoError(t, err)
+	require.NotNil(t, owner)
+	require.NotEmpty(t, owner.OrganizationID)
+	require.NoError(t, env.docStore.DocDelete(marshaler.CollectionName(constants.CollectionOrganizations), owner.OrganizationID))
+
+	operatorCSR, operatorKey, cliCSR, cliKey := generateOperatorCSRsAndKeys(t)
+	requestID, token, approved := createAndApproveRequest(t, env,
+		models.PlatformComponentOperator, "operator-missing-organization", "operator.local",
+		"", operatorCSR, cliCSR)
+	_, err = env.enrollSvc.Complete(context.Background(), token, models.PlatformEnrollmentProofs{
+		Operator: signCompletionTranscript(t, approved, operatorKey),
+		CLI:      signCompletionTranscript(t, approved, cliKey),
+	})
+	require.ErrorIs(t, err, constants.ErrOrganizationNotFound)
+	stored := loadStoredRequest(t, env, requestID)
+	assert.Equal(t, models.PlatformEnrollmentStateApproved, stored.State)
+	assert.Empty(t, stored.OperatorID)
 }
 
 // TestPlatformEnrollmentService_OperatorIssuanceIsDiscoverableViaListUserOperators
