@@ -33,9 +33,12 @@ func MaterializeInitCampaignInventory(req MaterializeInitCampaignInventoryReques
 	if req.Variant == nil || req.FileService == nil {
 		return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: %w", constants.ErrMissingRequiredField)
 	}
-	inventoryRelDir := req.InventoryRelDir
+	inventoryRelDir := filepath.ToSlash(strings.TrimSpace(req.InventoryRelDir))
 	if inventoryRelDir == "" {
 		inventoryRelDir = DefaultCampaignInventoryRelDirname
+	}
+	if filepath.IsAbs(inventoryRelDir) || inventoryRelDir == ".." || strings.HasPrefix(inventoryRelDir, "../") {
+		return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: inventory directory must be runtime-relative")
 	}
 	campaignID := CampaignIDForVariant(req.Variant)
 	freeze, err := MaterializeModelRegistry(campaignID, []*evalv1.ModelVariant{req.Variant})

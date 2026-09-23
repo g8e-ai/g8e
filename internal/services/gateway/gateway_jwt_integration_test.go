@@ -39,6 +39,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+type jwtErrorResponse struct {
+	Error string `json:"error"`
+}
+
 type mockEnvelopeProcessor struct {
 	Captured []byte
 }
@@ -565,10 +569,10 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, res.StatusCode, "Should allow first-credential registration via JWT")
 
-		var respBody map[string]interface{}
-		json.NewDecoder(res.Body).Decode(&respBody)
-		assert.True(t, respBody["success"].(bool))
-		assert.NotNil(t, respBody["options"])
+		var respBody models.PasskeyRegisterChallengeResponse
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&respBody))
+		assert.True(t, respBody.Success)
+		assert.NotNil(t, respBody.Options)
 	})
 
 	t.Run("JIT user with zero credentials rejected with expired JWT", func(t *testing.T) {
@@ -854,9 +858,9 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 		assert.Equal(t, http.StatusForbidden, res.StatusCode, "Should reject JWT-only registration when user already has credentials")
 
-		var respBody map[string]interface{}
-		json.NewDecoder(res.Body).Decode(&respBody)
-		assert.Contains(t, respBody["error"], "first-credential registration only")
+		var respBody jwtErrorResponse
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&respBody))
+		assert.Contains(t, respBody.Error, "first-credential registration only")
 	})
 }
 

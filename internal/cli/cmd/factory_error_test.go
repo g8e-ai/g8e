@@ -600,6 +600,16 @@ func TestEnrollUserCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
+func TestPublicRepairOutboxCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicRepairOutboxCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 // --- Operator commands (session 18) ---
 
 func TestOperatorStopCmdWithConfig_FileSvcFactoryError(t *testing.T) {
@@ -611,6 +621,43 @@ func TestOperatorStopCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, []string{"session-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestOperatorBindCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	bindClientFactory := func(*config.Config) operatorBindClient {
+		panic("bind client factory should not be called when fileSvcFactory fails")
+	}
+	cmd := operatorBindCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), bindClientFactory, failingFileSvcFactory(errFactory))
+
+	err := cmd.RunE(cmd, []string{"list"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestOperatorShowCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := operatorShowCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+
+	err := cmd.RunE(cmd, []string{"operator-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestOperatorRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	clientFactory := func(fs.RuntimeFileService, *config.Config, time.Duration) (apiClient, error) {
+		panic("operator run client factory should not be called when fileSvcFactory fails")
+	}
+	cmd := operatorRunCmdWithConfig(configLoaderFor(cfg), clientFactory, failingFileSvcFactory(errFactory))
+	require.NoError(t, cmd.Flags().Set("cmd", "printf test"))
+
+	err := cmd.RunE(cmd, []string{"operator-001"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)

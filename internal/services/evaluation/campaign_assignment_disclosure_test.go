@@ -15,7 +15,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -27,16 +26,18 @@ func TestValidatePublicAssignmentRecordAcceptsHistoricalAndEnrichedRecords(t *te
 	tests := []struct {
 		name       string
 		version    string
-		extensions map[string]any
+		extensions PublicAssignmentRecordExtensions
 	}{
 		{name: "historical", version: campaignProjectionEnvelopeHistoricalVersion},
 		{
 			name:    "enriched",
 			version: campaignProjectionEnvelopeEnrichedVersion,
-			extensions: map[string]any{
-				"resource_summary": map[string]any{
-					"latency_ms": map[string]any{"value": 0},
-					"retries":    map[string]any{"unavailable_reason": "no_scored_calls"},
+			extensions: PublicAssignmentRecordExtensions{
+				ResourceSummary: &PublicResourceSummary{
+					LatencyMS: PublicResourceMetric{Value: float64Pointer(0)},
+					Retries: PublicResourceMetric{
+						UnavailableReason: evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS,
+					},
 				},
 			},
 		},
@@ -54,7 +55,7 @@ func TestValidatePublicAssignmentRecordRejectsMalformedAssignmentGrammar(t *test
 	tests := []struct {
 		name       string
 		version    string
-		extensions map[string]any
+		extensions PublicAssignmentRecordExtensions
 		mutate     func(map[string]any)
 		want       error
 	}{
@@ -69,9 +70,9 @@ func TestValidatePublicAssignmentRecordRejectsMalformedAssignmentGrammar(t *test
 		{
 			name:    "private grade detail",
 			version: campaignProjectionEnvelopeEnrichedVersion,
-			extensions: map[string]any{
-				"benchmark_observations": map[string]any{
-					"grade_summaries": []any{map[string]any{"criterion_id": "criterion", "detail": "private grader output"}},
+			extensions: PublicAssignmentRecordExtensions{
+				BenchmarkObservations: &PublicBenchmarkObservations{
+					GradeSummaries: []PublicGradeSummary{{CriterionID: "criterion", Detail: "private grader output"}},
 				},
 			},
 			want: constants.ErrPublicFeedRestrictedField,
@@ -79,8 +80,8 @@ func TestValidatePublicAssignmentRecordRejectsMalformedAssignmentGrammar(t *test
 		{
 			name:    "historical enriched extension",
 			version: campaignProjectionEnvelopeHistoricalVersion,
-			extensions: map[string]any{
-				"resource_summary": map[string]any{"latency_ms": map[string]any{"value": 1}},
+			extensions: PublicAssignmentRecordExtensions{
+				ResourceSummary: &PublicResourceSummary{LatencyMS: PublicResourceMetric{Value: float64Pointer(1)}},
 			},
 			want: constants.ErrEvidenceSchemaMismatch,
 		},
@@ -96,14 +97,17 @@ func TestValidatePublicAssignmentRecordRejectsMalformedAssignmentGrammar(t *test
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body := assignmentEnvelope(t, tt.version, projection, tt.extensions)
-			var envelope map[string]any
+			var envelope CampaignProjectionEnvelope
 			require.NoError(t, json.Unmarshal(body, &envelope))
-			record := envelope["record"].(map[string]any)
+			var record map[string]any
+			require.NoError(t, json.Unmarshal(envelope.Record, &record))
 			if tt.mutate != nil {
 				tt.mutate(record)
 			}
-			envelope["record"] = record
-			body, err := json.Marshal(envelope)
+			recordBody, err := json.Marshal(record)
+			require.NoError(t, err)
+			envelope.Record = recordBody
+			body, err = json.Marshal(envelope)
 			require.NoError(t, err)
 			err = ValidatePublicAssignmentRecord("", body)
 			require.Error(t, err)
@@ -117,7 +121,7 @@ func TestValidatePublicAssignmentRecordLeavesOtherPublicProjectionsToGeneralVali
 	assert.Error(t, ValidatePublicAssignmentRecord("", []byte(`{"schema_version":"1.1.0","message_type":"UnknownCampaignRecord","record":{}}`)))
 }
 
-func validDisclosureProjection(t *testing.T) map[string]any {
+func validDisclosureProjection(t *testing.T) *evalv1.PublicAssignmentResultProjection {
 	t.Helper()
 	digest := sha256.Sum256([]byte("result"))
 	projection := &evalv1.PublicAssignmentResultProjection{
@@ -130,28 +134,34 @@ func validDisclosureProjection(t *testing.T) map[string]any {
 		SummaryStatus:    evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		ResultDigest:     hex.EncodeToString(digest[:]),
 	}
-	encoded, err := (protojson.MarshalOptions{UseProtoNames: true}).Marshal(projection)
-	require.NoError(t, err)
-	var record map[string]any
-	require.NoError(t, json.Unmarshal(encoded, &record))
-	return record
+	return projection
 }
 
-func assignmentEnvelope(t *testing.T, version string, projection map[string]any, extensions map[string]any) []byte {
+func assignmentEnvelope(t *testing.T, version string, projection *evalv1.PublicAssignmentResultProjection, extensions PublicAssignmentRecordExtensions) []byte {
 	t.Helper()
-	record := make(map[string]any, len(projection)+len(extensions))
-	for key, value := range projection {
-		record[key] = value
+	projectionBody, err := evalv1.MarshalCanonical(projection)
+	require.NoError(t, err)
+	fields := make(map[string]json.RawMessage)
+	require.NoError(t, json.Unmarshal(projectionBody, &fields))
+	extensionBody, err := json.Marshal(extensions)
+	require.NoError(t, err)
+	extensionFields := make(map[string]json.RawMessage)
+	require.NoError(t, json.Unmarshal(extensionBody, &extensionFields))
+	for key, value := range extensionFields {
+		fields[key] = value
 	}
-	for key, value := range extensions {
-		record[key] = value
-	}
-	body, err := json.Marshal(map[string]any{
-		"schema_version":  version,
-		"message_type":    publicMessageTypeAssignmentResult,
-		"idempotency_key": "run-1:assignment-1:result",
-		"record":          record,
+	recordBody, err := json.Marshal(fields)
+	require.NoError(t, err)
+	body, err := json.Marshal(CampaignProjectionEnvelope{
+		SchemaVersion:  version,
+		MessageType:    publicMessageTypeAssignmentResult,
+		IdempotencyKey: "run-1:assignment-1:result",
+		Record:         recordBody,
 	})
 	require.NoError(t, err)
 	return body
+}
+
+func float64Pointer(value float64) *float64 {
+	return &value
 }

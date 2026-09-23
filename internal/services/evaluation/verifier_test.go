@@ -184,10 +184,10 @@ func buildValidVerifierFixture(t *testing.T) *verifierFixture {
 	require.NoError(t, err)
 	dispatchRespBody, err := json.Marshal(client.DispatchCommandResponse{Success: true, TransactionID: fix.receipt.TransactionId})
 	require.NoError(t, err)
-	signerRespBody, err := json.Marshal(map[string]any{
-		"id":             fix.signerKeyID,
-		"public_key_hex": fix.signerKeyID,
-		"enabled":        true,
+	signerRespBody, err := json.Marshal(models.TrustedSigner{
+		ID:        fix.signerKeyID,
+		PublicKey: fix.signerKeyID,
+		Enabled:   true,
 	})
 	require.NoError(t, err)
 	allowedExchanges := []client.Exchange{
@@ -715,10 +715,10 @@ func TestVerifier_MutationMatrix(t *testing.T) {
 
 		// 16. signer response missing or disabled
 		{name: "signer response disabled", mutate: func(t *testing.T, fix *verifierFixture) {
-			signerRespBody, err := json.Marshal(map[string]any{
-				"id":             fix.signerKeyID,
-				"public_key_hex": fix.signerKeyID,
-				"enabled":        false,
+			signerRespBody, err := json.Marshal(models.TrustedSigner{
+				ID:        fix.signerKeyID,
+				PublicKey: fix.signerKeyID,
+				Enabled:   false,
 			})
 			require.NoError(t, err)
 			allowedExchanges := []client.Exchange{

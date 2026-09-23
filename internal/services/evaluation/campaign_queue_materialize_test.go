@@ -10,19 +10,22 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func writeFrozenVariants(t *testing.T, root, relPath string, variants ...*evalv1.ModelVariant) {
+type frozenVariantsPayload struct {
+	Variants []json.RawMessage `json:"variants"`
+}
+
+func writeFrozenVariants(t *testing.T, fileSvc fs.RuntimeFileService, relPath string, variants ...*evalv1.ModelVariant) {
 	t.Helper()
 	bodies := make([]json.RawMessage, 0, len(variants))
 	for _, variant := range variants {
@@ -30,11 +33,9 @@ func writeFrozenVariants(t *testing.T, root, relPath string, variants ...*evalv1
 		require.NoError(t, err)
 		bodies = append(bodies, raw)
 	}
-	path := filepath.Join(root, relPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	payload, err := json.Marshal(map[string]any{"variants": bodies})
+	payload, err := json.Marshal(frozenVariantsPayload{Variants: bodies})
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(path, payload, 0o600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, payload, constants.PermFilePrivate))
 }
 
 func TestMaterializeInitCampaignInventory(t *testing.T) {
@@ -78,7 +79,10 @@ func TestMaterializeInitCampaignInventory_RejectsAbsoluteDirectory(t *testing.T)
 
 func TestInitCampaignQueueMaterializeAndMerge(t *testing.T) {
 	root := t.TempDir()
-	writeFrozenVariants(t, root, DefaultModelInventoryRelPath,
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	writeFrozenVariants(t, fileSvc, DefaultModelInventoryRelPath,
 		&evalv1.ModelVariant{VariantId: "gemma3-4b", ServedModelTag: "gemma3:4b", ModelDigest: "d1", ProviderClass: "ollama"},
 		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "d2", ProviderClass: "ollama"},
 	)
@@ -88,13 +92,10 @@ func TestInitCampaignQueueMaterializeAndMerge(t *testing.T) {
 			{VariantID: "gemma3-4b", ServedModelTag: "gemma3:4b", Status: "verified", VerifiedRunID: "run-1", Notes: "keep"},
 		},
 	}
-	writeFrozenVariants(t, root, DefaultBaseModelInventoryRelPath,
+	writeFrozenVariants(t, fileSvc, DefaultBaseModelInventoryRelPath,
 		&evalv1.ModelVariant{VariantId: "gemma3-4b", ServedModelTag: "gemma3:4b", ModelDigest: "d1", ProviderClass: "ollama"},
 		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "d2", ProviderClass: "ollama"},
 	)
-	fileSvc, err := fs.NewRuntimeFileService(root, nil)
-	require.NoError(t, err)
-	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	require.NoError(t, SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, DefaultInitCampaignQueueRelPath, existing))
 	result, err := InitCampaignQueue(InitCampaignQueueRequest{
 		Context:             context.Background(),

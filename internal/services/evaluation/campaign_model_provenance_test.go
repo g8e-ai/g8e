@@ -21,7 +21,8 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func testModelProvenanceWindow(providerAttemptID string) *evalv1.ModelProvenanceAttestationWindow {
+func testModelProvenanceWindow(t *testing.T, providerAttemptID string) *evalv1.ModelProvenanceAttestationWindow {
+	t.Helper()
 	digest := strings.Repeat("a", 64)
 	window := &evalv1.ModelProvenanceAttestationWindow{
 		SchemaVersion:              model_provenance.SchemaVersion,
@@ -36,9 +37,7 @@ func testModelProvenanceWindow(providerAttemptID string) *evalv1.ModelProvenance
 		DigestMatch:                true,
 	}
 	attestationDigest, err := model_provenance.ComputeAttestationDigest(window)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	window.AttestationDigest = attestationDigest
 	return window
 }
@@ -58,7 +57,7 @@ func TestVerifyModelProvenanceWindow_StrictPolicy_RequiresWindow(t *testing.T) {
 
 func TestVerifyModelProvenanceWindow_StrictPolicy_RequiresDigestMatch(t *testing.T) {
 	t.Parallel()
-	window := testModelProvenanceWindow("attempt-1")
+	window := testModelProvenanceWindow(t, "attempt-1")
 	window.DigestMatch = false
 	attestationDigest, err := model_provenance.ComputeAttestationDigest(window)
 	require.NoError(t, err)
@@ -71,7 +70,7 @@ func TestVerifyModelProvenanceWindow_StrictPolicy_RequiresDigestMatch(t *testing
 
 func TestVerifyModelProvenanceWindow_ExpectedDigestMismatch(t *testing.T) {
 	t.Parallel()
-	window := testModelProvenanceWindow("attempt-1")
+	window := testModelProvenanceWindow(t, "attempt-1")
 	err := VerifyModelProvenanceWindow(window, strings.Repeat("c", 64), ModelProvenancePolicyInterim)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expected digest mismatch")
@@ -83,7 +82,7 @@ func TestLocalModelProvenanceReader_LoadRoundTrip(t *testing.T) {
 	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
 	store, err := model_provenance.NewWindowStore(fileSvc)
 	require.NoError(t, err)
-	window := testModelProvenanceWindow("attempt-1")
+	window := testModelProvenanceWindow(t, "attempt-1")
 	require.NoError(t, store.Save(ctx, window))
 
 	reader, err := NewLocalModelProvenanceReader(fileSvc)
@@ -108,7 +107,7 @@ func TestCampaignModelProvenanceReader_CaptureAssignmentEvidencePersistsGatewayE
 	t.Parallel()
 	ctx := context.Background()
 	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
-	window := testModelProvenanceWindow("attempt-captured")
+	window := testModelProvenanceWindow(t, "attempt-captured")
 	reader, err := NewCampaignModelProvenanceReaderWithRemote(fileSvc, &stubModelProvenanceRemote{window: window})
 	require.NoError(t, err)
 	result := &evalv1.EvaluationAssignmentResult{ModelInferences: []*evalv1.ModelInferenceRecord{{ProviderAttemptId: window.GetProviderAttemptId(), ModelVariant: &evalv1.ModelVariant{ModelDigest: window.GetExpectedModelDigest()}}}}
@@ -145,7 +144,7 @@ func TestCampaignModelProvenanceReader_VerifyAssignmentModelProvenance_StrictDig
 	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
 	store, err := model_provenance.NewWindowStore(fileSvc)
 	require.NoError(t, err)
-	window := testModelProvenanceWindow("attempt-1")
+	window := testModelProvenanceWindow(t, "attempt-1")
 	require.NoError(t, store.Save(ctx, window))
 	reader, err := NewCampaignModelProvenanceReader(fileSvc)
 	require.NoError(t, err)

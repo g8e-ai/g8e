@@ -20,7 +20,7 @@ import (
 func TestImportAssignmentResultFromTrace_CompletedHomogeneousRole(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	evidence, err := BuildAssignmentTraceEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, trace, time.Unix(1_700_000_000, 0).UTC())
 	require.NoError(t, err)
 	result, err := ImportAssignmentResultFromTrace(req, trace, evidence, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
@@ -40,7 +40,7 @@ func TestImportAssignmentResultFromTrace_RoleNotInvokedIsPartial(t *testing.T) {
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, result.GetLifecycleStatus())
@@ -55,7 +55,7 @@ func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithoutModelCallsIs
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED, result.GetLifecycleStatus())
@@ -69,13 +69,14 @@ func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithModelCallsIsPar
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, result.GetLifecycleStatus())
 }
 
-func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionRequest {
+func homogeneousAssignmentExecutionRequest(t *testing.T, role string) AssignmentExecutionRequest {
+	t.Helper()
 	assignment := &evalv1.EvaluationAssignment{
 		AssignmentId: "assignment-1",
 		RunId:        "run-1",
@@ -146,7 +147,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	req.ScenarioTools = ScenarioToolExpectations{ExpectedTools: []string{"recursive_grep_search"}}
 	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Now().UTC(), func(prefix string) string { return prefix })
 	require.NoError(t, err)
@@ -179,7 +180,7 @@ func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testi
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 
-	result, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest("primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	result, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	inference := result.GetModelInferences()[0]
 	assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED, inference.GetUsageAvailability())
@@ -209,7 +210,7 @@ func TestImportAssignmentResultFromTrace_RejectsUnknownPolicyOutcome(t *testing.
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	_, err = ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest("primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix })
+	_, err = ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix })
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown outcome")
 }

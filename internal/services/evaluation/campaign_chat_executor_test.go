@@ -45,7 +45,7 @@ func TestCampaignChatExecutor_ImportsCompletedTrace(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	traceStore := &stubCampaignTraceStore{}
-	client := &stubCampaignChatClient{trace: completedHomogeneousTrace("primary")}
+	client := &stubCampaignChatClient{trace: completedHomogeneousTrace(t, "primary")}
 	executor := NewCampaignChatExecutor(
 		client,
 		harnessclient.Persona{ID: "campaign-cli", UserID: "user-1", CLISessionID: "cli-1"},
@@ -58,7 +58,7 @@ func TestCampaignChatExecutor_ImportsCompletedTrace(t *testing.T) {
 		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
 		func(prefix string) string { return prefix + "-1" },
 	)
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := executor.ExecuteAssignment(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, result.GetLifecycleStatus())
