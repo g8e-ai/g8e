@@ -80,36 +80,37 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, records, 4)
 
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "1.5.0", summary["schema_version"])
-	assert.Equal(t, "evaluation_summary", summary["kind"])
-	assert.Equal(t, "model", summary["evaluation_unit"])
-	assert.Equal(t, "completed", summary["lifecycle_state"])
-	assert.Equal(t, "exploratory_partial", summary["quality_state"])
-	assert.Equal(t, float64(50), summary["elapsed_seconds"])
+	assert.Equal(t, "1.5.0", summary.SchemaVersion)
+	assert.Equal(t, "evaluation_summary", summary.Kind)
+	assert.Equal(t, "model", summary.EvaluationUnit)
+	assert.Equal(t, "completed", summary.LifecycleState)
+	assert.Equal(t, "exploratory_partial", summary.QualityState)
+	require.NotNil(t, summary.ElapsedSeconds)
+	assert.Equal(t, 50.0, *summary.ElapsedSeconds)
 
-	catalog := map[string]any{}
+	var catalog catalogSnapshotRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &catalog))
-	assert.Equal(t, "1.5.0", catalog["schema_version"])
-	assert.Equal(t, "catalog_snapshot", catalog["kind"])
-	assert.Equal(t, "ds-live-run-1", catalog["dataset_id"])
-	assert.Equal(t, float64(1), catalog["assignment_count"])
-	assert.Equal(t, float64(1), catalog["provider_request_count"])
+	assert.Equal(t, "1.5.0", catalog.SchemaVersion)
+	assert.Equal(t, "catalog_snapshot", catalog.Kind)
+	assert.Equal(t, "ds-live-run-1", catalog.DatasetID)
+	assert.Equal(t, uint32(1), catalog.AssignmentCount)
+	assert.Equal(t, uint32(1), catalog.ProviderRequestCount)
 
-	model := map[string]any{}
+	var model modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[2].Body, &model))
-	assert.Equal(t, "1.5.0", model["schema_version"])
-	assert.Equal(t, "model_summary", model["kind"])
-	assert.Equal(t, "qwen3-4b", model["variant_id"])
-	assert.Equal(t, "primary", model["role"])
-	assert.Equal(t, "Qwen3 4b", model["display_name"])
-	assert.Equal(t, "qwen3:4b", model["served_model_tag"])
+	assert.Equal(t, "1.5.0", model.SchemaVersion)
+	assert.Equal(t, "model_summary", model.Kind)
+	assert.Equal(t, "qwen3-4b", model.VariantID)
+	assert.Equal(t, "primary", model.Role)
+	assert.Equal(t, "Qwen3 4b", model.DisplayName)
+	assert.Equal(t, "qwen3:4b", model.ServedModelTag)
 
-	methodology := map[string]any{}
+	var methodology methodologySnapshotRecord
 	require.NoError(t, json.Unmarshal(records[3].Body, &methodology))
-	assert.Equal(t, "1.5.0", methodology["schema_version"])
-	assert.Equal(t, "methodology_snapshot", methodology["kind"])
+	assert.Equal(t, "1.5.0", methodology.SchemaVersion)
+	assert.Equal(t, "methodology_snapshot", methodology.Kind)
 }
 
 func TestBuildRunAggregateViewRecordsPartialProgress(t *testing.T) {
@@ -138,10 +139,10 @@ func TestBuildRunAggregateViewRecordsPartialProgress(t *testing.T) {
 	records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
 	require.NoError(t, err)
 
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "running", summary["lifecycle_state"])
-	assert.Equal(t, "live_in_progress", summary["quality_state"])
+	assert.Equal(t, "running", summary.LifecycleState)
+	assert.Equal(t, "live_in_progress", summary.QualityState)
 }
 
 func TestBuildRunCompletionViewRecords(t *testing.T) {
@@ -176,21 +177,22 @@ func TestBuildRunCompletionViewRecords(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, records, 5)
 
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "evaluation_summary", summary["kind"])
-	assert.IsType(t, map[string]any{}, summary["model_role_mapping"])
-	assert.Equal(t, "completed", summary["lifecycle_state"])
-	assert.Equal(t, float64(100), summary["elapsed_seconds"])
-	assert.Equal(t, float64(2), summary["assignment_total"])
-	assert.Equal(t, float64(1), summary["assignment_completed"])
-	assert.Equal(t, float64(1), summary["assignment_failed"])
-	assert.Equal(t, "exploratory_partial", summary["quality_state"])
+	assert.Equal(t, "evaluation_summary", summary.Kind)
+	assert.NotNil(t, summary.ModelRoleMapping)
+	assert.Equal(t, "completed", summary.LifecycleState)
+	require.NotNil(t, summary.ElapsedSeconds)
+	assert.Equal(t, 100.0, *summary.ElapsedSeconds)
+	assert.Equal(t, uint32(2), summary.AssignmentTotal)
+	assert.Equal(t, uint32(1), summary.AssignmentCompleted)
+	assert.Equal(t, uint32(1), summary.AssignmentFailed)
+	assert.Equal(t, "exploratory_partial", summary.QualityState)
 
-	catalog := map[string]any{}
+	var catalog catalogSnapshotRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &catalog))
-	assert.Equal(t, "catalog_snapshot", catalog["kind"])
-	assert.Equal(t, "exploratory_partial", catalog["quality_state"])
+	assert.Equal(t, "catalog_snapshot", catalog.Kind)
+	assert.Equal(t, "exploratory_partial", catalog.QualityState)
 }
 
 func TestBuildRunVerificationViewRecords(t *testing.T) {
@@ -238,19 +240,20 @@ func TestBuildRunVerificationViewRecords(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, records, 2)
 
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "passed", summary["verifier_state"])
-	assert.Equal(t, "exploratory_verified", summary["quality_state"])
+	assert.Equal(t, "passed", summary.VerifierState)
+	assert.Equal(t, "exploratory_verified", summary.QualityState)
 
-	model := map[string]any{}
+	var model modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &model))
-	assert.Equal(t, "model_summary", model["kind"])
-	assert.Equal(t, "exploratory_verified", model["quality_state"])
-	assert.Equal(t, "qwen3-4b", model["variant_id"])
-	assert.Equal(t, "primary", model["role"])
-	assert.Equal(t, float64(1), model["evaluation_coverage"])
-	assert.Equal(t, float64(1), model["pass_rate"].(map[string]any)["denominator"])
+	assert.Equal(t, "model_summary", model.Kind)
+	assert.Equal(t, "exploratory_verified", model.QualityState)
+	assert.Equal(t, "qwen3-4b", model.VariantID)
+	assert.Equal(t, "primary", model.Role)
+	assert.Equal(t, 1.0, model.EvaluationCoverage)
+	require.NotNil(t, model.PassRate)
+	assert.Equal(t, uint32(1), model.PassRate.Denominator)
 }
 
 func TestBuildRunVerificationViewRecordsEligibility(t *testing.T) {
@@ -331,14 +334,14 @@ func TestBuildRunVerificationViewRecordsEmitsEveryEligibleVariantRole(t *testing
 	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
 	require.NoError(t, err)
 	require.Len(t, records, 3)
-	firstModel := map[string]any{}
-	secondModel := map[string]any{}
+	var firstModel, secondModel modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &firstModel))
 	require.NoError(t, json.Unmarshal(records[2].Body, &secondModel))
-	assert.Equal(t, "exploratory_verified", firstModel["quality_state"])
-	assert.Equal(t, "exploratory_verified", secondModel["quality_state"])
-	assert.Equal(t, float64(0), secondModel["pass_rate"].(map[string]any)["estimate"])
-	assert.NotEqual(t, firstModel["variant_id"], secondModel["variant_id"])
+	assert.Equal(t, "exploratory_verified", firstModel.QualityState)
+	assert.Equal(t, "exploratory_verified", secondModel.QualityState)
+	require.NotNil(t, secondModel.PassRate)
+	assert.Equal(t, 0.0, secondModel.PassRate.Estimate)
+	assert.NotEqual(t, firstModel.VariantID, secondModel.VariantID)
 }
 
 func TestBuildRunVerificationViewRecordsBoundFailurePublishesPartialModelRevisions(t *testing.T) {
@@ -348,9 +351,9 @@ func TestBuildRunVerificationViewRecordsBoundFailurePublishesPartialModelRevisio
 	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
 	require.NoError(t, err)
 	require.Len(t, records, 2)
-	model := map[string]any{}
+	var model modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &model))
-	assert.Equal(t, "exploratory_partial", model["quality_state"])
+	assert.Equal(t, "exploratory_partial", model.QualityState)
 }
 
 func TestBoundVerificationRevisionKeysAreReportScoped(t *testing.T) {
@@ -423,10 +426,12 @@ func TestCampaignPublicationCoordinatorPublishRunAggregates(t *testing.T) {
 
 	var aggregateKinds []string
 	for _, record := range exporter.records {
-		payload := map[string]any{}
+		var payload struct {
+			Kind string `json:"kind"`
+		}
 		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &payload))
-		if kind, ok := payload["kind"].(string); ok {
-			aggregateKinds = append(aggregateKinds, kind)
+		if payload.Kind != "" {
+			aggregateKinds = append(aggregateKinds, payload.Kind)
 		}
 	}
 	assert.Contains(t, aggregateKinds, "evaluation_summary")
@@ -729,13 +734,13 @@ func TestBuildRunAggregateViewRecordsVerifierStates(t *testing.T) {
 		StartedAt:       timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
 		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "eval-smoke-mini"},
 	}
-	decodeSummary := func(t *testing.T, records []CampaignViewRecord) map[string]any {
+	decodeSummary := func(t *testing.T, records []CampaignViewRecord) *evaluationSummaryRecord {
 		t.Helper()
 		for _, record := range records {
-			payload := map[string]any{}
+			var payload evaluationSummaryRecord
 			require.NoError(t, json.Unmarshal(record.Body, &payload))
-			if payload["kind"] == "evaluation_summary" {
-				return payload
+			if payload.Kind == "evaluation_summary" {
+				return &payload
 			}
 		}
 		return nil
@@ -745,8 +750,8 @@ func TestBuildRunAggregateViewRecordsVerifierStates(t *testing.T) {
 		records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
 		require.NoError(t, err)
 		summary := decodeSummary(t, records)
-		assert.Equal(t, "not_run", summary["verifier_state"])
-		assert.Nil(t, summary["verification_metadata"])
+		assert.Equal(t, "not_run", summary.VerifierState)
+		assert.Nil(t, summary.VerificationMetadata)
 	})
 
 	t.Run("bound pass reports verified state and metadata", func(t *testing.T) {
@@ -754,17 +759,16 @@ func TestBuildRunAggregateViewRecordsVerifierStates(t *testing.T) {
 		records, err := BuildRunAggregateViewRecords(run, state, report, time.Unix(1_700_000_050, 0).UTC())
 		require.NoError(t, err)
 		summary := decodeSummary(t, records)
-		assert.Equal(t, "passed", summary["verifier_state"])
-		assert.Equal(t, "exploratory_verified", summary["quality_state"])
-		metadata, ok := summary["verification_metadata"].(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "bound", metadata["provenance"])
-		assert.Equal(t, "passed", metadata["verifier_state"])
-		assert.Equal(t, "v2.1.10", metadata["verifier_release_version"])
-		assert.Equal(t, "2.0.0", metadata["verifier_contract_version"])
-		assert.Equal(t, strings.Repeat("a", 64), metadata["report_digest"])
-		assert.Equal(t, strings.Repeat("b", 64), metadata["population_digest"])
-		assert.Equal(t, "2023-11-14T22:16:40Z", metadata["verified_at"])
+		assert.Equal(t, "passed", summary.VerifierState)
+		assert.Equal(t, "exploratory_verified", summary.QualityState)
+		require.NotNil(t, summary.VerificationMetadata)
+		assert.Equal(t, "bound", summary.VerificationMetadata.Provenance)
+		assert.Equal(t, "passed", summary.VerificationMetadata.VerifierState)
+		assert.Equal(t, "v2.1.10", summary.VerificationMetadata.VerifierReleaseVersion)
+		assert.Equal(t, "2.0.0", summary.VerificationMetadata.VerifierContractVersion)
+		assert.Equal(t, strings.Repeat("a", 64), summary.VerificationMetadata.ReportDigest)
+		assert.Equal(t, strings.Repeat("b", 64), summary.VerificationMetadata.PopulationDigest)
+		assert.Equal(t, "2023-11-14T22:16:40Z", summary.VerificationMetadata.VerifiedAt)
 	})
 
 	t.Run("bound failure reports failed state", func(t *testing.T) {
@@ -773,11 +777,10 @@ func TestBuildRunAggregateViewRecordsVerifierStates(t *testing.T) {
 		records, err := BuildRunAggregateViewRecords(run, state, report, time.Unix(1_700_000_050, 0).UTC())
 		require.NoError(t, err)
 		summary := decodeSummary(t, records)
-		assert.Equal(t, "failed", summary["verifier_state"])
-		assert.Equal(t, "assignment assign-1: missing window", summary["verifier_failure_summary"])
-		metadata, ok := summary["verification_metadata"].(map[string]any)
-		require.True(t, ok)
-		assert.Equal(t, "failed", metadata["verifier_state"])
+		assert.Equal(t, "failed", summary.VerifierState)
+		assert.Equal(t, "assignment assign-1: missing window", summary.VerifierFailureSummary)
+		require.NotNil(t, summary.VerificationMetadata)
+		assert.Equal(t, "failed", summary.VerificationMetadata.VerifierState)
 	})
 
 	t.Run("malformed bound report fails closed", func(t *testing.T) {
@@ -807,33 +810,30 @@ func TestBuildRunAggregateViewRecordsHeadlineMetricsShape(t *testing.T) {
 	}
 	records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
 	require.NoError(t, err)
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	headline, ok := summary["headline_metrics"].(map[string]any)
-	require.True(t, ok)
-	require.Len(t, headline, 3)
 
-	passRate, ok := headline["pass_rate"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "ratio", passRate["unit"])
-	assert.Equal(t, 1.0, passRate["value"])
-	assert.Equal(t, 1.0, passRate["observed_count"])
-	assert.Equal(t, 1.0, passRate["eligible_count"])
-	assert.Equal(t, 0.0, passRate["unavailable_count"])
+	passRate := summary.HeadlineMetrics.PassRate
+	assert.Equal(t, "ratio", passRate.Unit)
+	require.NotNil(t, passRate.Value)
+	assert.Equal(t, 1.0, *passRate.Value)
+	assert.Equal(t, uint32(1), passRate.ObservedCount)
+	assert.Equal(t, uint32(1), passRate.EligibleCount)
+	assert.Equal(t, uint32(0), passRate.UnavailableCount)
 
-	latency, ok := headline["latency_p50_ms"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "milliseconds", latency["unit"])
-	assert.Equal(t, 200.0, latency["value"])
-	assert.Equal(t, 1.0, latency["observed_count"])
-	assert.Equal(t, 1.0, latency["eligible_count"])
+	latency := summary.HeadlineMetrics.LatencyP50MS
+	assert.Equal(t, "milliseconds", latency.Unit)
+	require.NotNil(t, latency.Value)
+	assert.Equal(t, 200.0, *latency.Value)
+	assert.Equal(t, uint32(1), latency.ObservedCount)
+	assert.Equal(t, uint32(1), latency.EligibleCount)
 
-	throughput, ok := headline["output_throughput_p50_tokens_per_second"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "tokens_per_second", throughput["unit"])
-	assert.Equal(t, 10.0, throughput["value"])
-	assert.Equal(t, 1.0, throughput["observed_count"])
-	assert.Equal(t, 1.0, throughput["eligible_count"])
+	throughput := summary.HeadlineMetrics.OutputThroughputP50
+	assert.Equal(t, "tokens_per_second", throughput.Unit)
+	require.NotNil(t, throughput.Value)
+	assert.Equal(t, 10.0, *throughput.Value)
+	assert.Equal(t, uint32(1), throughput.ObservedCount)
+	assert.Equal(t, uint32(1), throughput.EligibleCount)
 }
 
 func homogeneousAssignment(assignmentID, variantID string, role evalv1.ModelCampaignRole) *evalv1.EvaluationAssignment {

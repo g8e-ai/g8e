@@ -24,6 +24,24 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 )
 
+type providerObserverRunJSON struct {
+	ObserverID     string `json:"observer_id"`
+	SampleInterval int    `json:"sample_interval"`
+	PollInterval   int    `json:"poll_interval"`
+	Collector      string `json:"collector"`
+	WindowsDir     string `json:"windows_dir"`
+}
+
+type providerObserverVerifyJSON struct {
+	ProviderAttemptID string   `json:"provider_attempt_id"`
+	Complete          bool     `json:"complete"`
+	SampleCount       int      `json:"sample_count"`
+	GPUReported       bool     `json:"gpu_reported"`
+	HostRAMReported   bool     `json:"host_ram_reported"`
+	ClockSkewNanos    int64    `json:"clock_skew_nanos"`
+	FailureReasons    []string `json:"failure_reasons"`
+}
+
 func providerObserverEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "provider-observer",
@@ -67,12 +85,12 @@ func providerObserverRunCmd(deps nativeEvalDeps) *cobra.Command {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"observer_id":     observerID,
-					"sample_interval": sampleIntervalMS,
-					"poll_interval":   pollIntervalMS,
-					"collector":       "nvidia-smi+proc-meminfo",
-					"windows_dir":     constants.InferenceProviderObserverDirname + "/" + constants.InferenceProviderObserverWindowsDirname,
+				payload, err := json.MarshalIndent(providerObserverRunJSON{
+					ObserverID:     observerID,
+					SampleInterval: sampleIntervalMS,
+					PollInterval:   pollIntervalMS,
+					Collector:      "nvidia-smi+proc-meminfo",
+					WindowsDir:     constants.InferenceProviderObserverDirname + "/" + constants.InferenceProviderObserverWindowsDirname,
 				}, "", "  ")
 				if err != nil {
 					return err
@@ -133,14 +151,14 @@ func providerObserverVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: provider observer verify: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"provider_attempt_id": report.ProviderAttemptID,
-					"complete":            report.Complete,
-					"sample_count":        report.SampleCount,
-					"gpu_reported":        report.GPUReported,
-					"host_ram_reported":   report.HostRAMReported,
-					"clock_skew_nanos":    report.ClockSkewNanos,
-					"failure_reasons":     report.FailureReasons,
+				payload, err := json.MarshalIndent(providerObserverVerifyJSON{
+					ProviderAttemptID: report.ProviderAttemptID,
+					Complete:          report.Complete,
+					SampleCount:       report.SampleCount,
+					GPUReported:       report.GPUReported,
+					HostRAMReported:   report.HostRAMReported,
+					ClockSkewNanos:    report.ClockSkewNanos,
+					FailureReasons:    report.FailureReasons,
 				}, "", "  ")
 				if err != nil {
 					return err

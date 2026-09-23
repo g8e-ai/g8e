@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func modelsEvalCmd(deps nativeEvalDeps) *cobra.Command {
@@ -128,15 +129,15 @@ func modelsEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: inventory list: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				rows := make([]map[string]string, 0, len(variants))
+				rows := make([]modelInventoryVariantJSON, 0, len(variants))
 				for _, variant := range variants {
-					rows = append(rows, map[string]string{
-						"served_model_tag": variant.GetServedModelTag(),
-						"variant_id":       variant.GetVariantId(),
-						"model_digest":     variant.GetModelDigest(),
+					rows = append(rows, modelInventoryVariantJSON{
+						ServedModelTag: variant.GetServedModelTag(),
+						VariantID:      variant.GetVariantId(),
+						ModelDigest:    variant.GetModelDigest(),
 					})
 				}
-				payload, err := json.MarshalIndent(map[string]any{"variants": rows}, "", "  ")
+				payload, err := json.MarshalIndent(modelInventoryListJSON{Variants: rows}, "", "  ")
 				if err != nil {
 					return err
 				}
@@ -268,6 +269,20 @@ type inventoryMaterializeLine struct {
 	InventoryFile  string `json:"inventory_file"`
 }
 
+type modelInventoryVariantJSON struct {
+	ServedModelTag string `json:"served_model_tag"`
+	VariantID      string `json:"variant_id"`
+	ModelDigest    string `json:"model_digest"`
+}
+
+type modelInventoryListJSON struct {
+	Variants []modelInventoryVariantJSON `json:"variants"`
+}
+
+type inventoryMaterializeResultJSON struct {
+	Inventories []inventoryMaterializeLine `json:"inventories"`
+}
+
 func loadEvaluationInventoryVariants(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) ([]*evalv1.ModelVariant, error) {
 	explicitPath = strings.TrimSpace(explicitPath)
 	if explicitPath == "" {
@@ -310,7 +325,7 @@ func loadEvaluationInventoryFreeze(ctx context.Context, fileSvc fs.RuntimeFileSe
 
 func writeInventoryMaterializeResult(cmd *cobra.Command, lines []inventoryMaterializeLine, jsonOutput bool) error {
 	if jsonOutput {
-		payload, err := json.MarshalIndent(map[string]any{"inventories": lines}, "", "  ")
+		payload, err := json.MarshalIndent(inventoryMaterializeResultJSON{Inventories: lines}, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -350,12 +365,12 @@ func modelInventoryFreezeJSON(freeze *evaluation.ModelInventoryFreeze) ([]byte, 
 		variants = append(variants, body)
 	}
 	payload := struct {
-		CampaignID           string            `json:"campaign_id"`
-		ModelRegistryDigest  string            `json:"model_registry_digest"`
-		ModelCount           int               `json:"model_count"`
-		HomogeneousCellCount uint64            `json:"homogeneous_cell_count"`
-		Variants             []json.RawMessage `json:"variants"`
-		InferenceVariants    any               `json:"variants_inference"`
+		CampaignID           string                              `json:"campaign_id"`
+		ModelRegistryDigest  string                              `json:"model_registry_digest"`
+		ModelCount           int                                 `json:"model_count"`
+		HomogeneousCellCount uint64                              `json:"homogeneous_cell_count"`
+		Variants             []json.RawMessage                   `json:"variants"`
+		InferenceVariants    []*operatorv1.InferenceModelVariant `json:"variants_inference"`
 	}{
 		CampaignID:           freeze.CampaignID,
 		ModelRegistryDigest:  freeze.RegistryDigest,

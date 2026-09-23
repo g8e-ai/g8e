@@ -252,35 +252,33 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 	assert.Greater(t, count, 0)
 	assert.Greater(t, len(exporter.records), before)
 
-	var summary map[string]any
+	var summary evaluationSummaryRecord
 	for _, record := range exporter.records[len(exporter.records)-count:] {
-		var payload map[string]any
+		var payload evaluationSummaryRecord
 		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &payload))
-		if payload["kind"] == "evaluation_summary" {
+		if payload.Kind == "evaluation_summary" {
 			summary = payload
 			break
 		}
 	}
-	require.NotNil(t, summary)
-	assert.Equal(t, "passed", summary["verifier_state"])
+	assert.Equal(t, "evaluation_summary", summary.Kind)
+	assert.Equal(t, "passed", summary.VerifierState)
 
-	modelSummaries := make([]map[string]any, 0)
+	modelSummaries := make([]modelSummaryRecord, 0)
 	for _, record := range exporter.records[len(exporter.records)-count:] {
-		var payload map[string]any
+		var payload modelSummaryRecord
 		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &payload))
-		if payload["kind"] == "model_summary" {
+		if payload.Kind == "model_summary" {
 			modelSummaries = append(modelSummaries, payload)
 		}
 	}
 	require.Len(t, modelSummaries, 3)
 	roles := make(map[string]struct{}, len(modelSummaries))
 	for _, modelSummary := range modelSummaries {
-		assert.Equal(t, "exploratory_verified", modelSummary["quality_state"])
-		assert.Equal(t, CampaignDatasetID(run.GetRunId()), modelSummary["dataset_id"])
-		assert.NotEmpty(t, modelSummary["variant_id"])
-		role, ok := modelSummary["role"].(string)
-		require.True(t, ok)
-		roles[role] = struct{}{}
+		assert.Equal(t, "exploratory_verified", modelSummary.QualityState)
+		assert.Equal(t, CampaignDatasetID(run.GetRunId()), modelSummary.DatasetID)
+		assert.NotEmpty(t, modelSummary.VariantID)
+		roles[modelSummary.Role] = struct{}{}
 	}
 	assert.Equal(t, map[string]struct{}{"assistant": {}, "lite": {}, "primary": {}}, roles)
 
@@ -542,13 +540,13 @@ func bindPersistedVerificationReport(t *testing.T, store *Store, run *evalv1.Eva
 	return report
 }
 
-func evaluationSummaries(t *testing.T, records []CampaignPublicFeedRecord) []map[string]any {
+func evaluationSummaries(t *testing.T, records []CampaignPublicFeedRecord) []evaluationSummaryRecord {
 	t.Helper()
-	summaries := make([]map[string]any, 0)
+	summaries := make([]evaluationSummaryRecord, 0)
 	for _, record := range records {
-		payload := map[string]any{}
+		var payload evaluationSummaryRecord
 		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &payload))
-		if payload["kind"] == "evaluation_summary" {
+		if payload.Kind == "evaluation_summary" {
 			summaries = append(summaries, payload)
 		}
 	}
@@ -571,7 +569,7 @@ func TestPublishRunCatchUpPreservesBoundVerificationState(t *testing.T) {
 	require.Greater(t, count, 0)
 	preVerify := evaluationSummaries(t, exporter.records)
 	require.NotEmpty(t, preVerify)
-	assert.Equal(t, "not_run", preVerify[len(preVerify)-1]["verifier_state"])
+	assert.Equal(t, "not_run", preVerify[len(preVerify)-1].VerifierState)
 
 	report := bindPersistedVerificationReport(t, store, run, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS)
 	_, err = coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
@@ -584,12 +582,11 @@ func TestPublishRunCatchUpPreservesBoundVerificationState(t *testing.T) {
 	summaries := evaluationSummaries(t, exporter.records)
 	require.NotEmpty(t, summaries)
 	latest := summaries[len(summaries)-1]
-	assert.Equal(t, "passed", latest["verifier_state"])
-	metadata, ok := latest["verification_metadata"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "bound", metadata["provenance"])
-	assert.Equal(t, report.GetReportDigestRef().GetSha256(), metadata["report_digest"])
-	assert.Equal(t, report.GetVerifiedPopulationDigest(), metadata["population_digest"])
+	assert.Equal(t, "passed", latest.VerifierState)
+	require.NotNil(t, latest.VerificationMetadata)
+	assert.Equal(t, "bound", latest.VerificationMetadata.Provenance)
+	assert.Equal(t, report.GetReportDigestRef().GetSha256(), latest.VerificationMetadata.ReportDigest)
+	assert.Equal(t, report.GetVerifiedPopulationDigest(), latest.VerificationMetadata.PopulationDigest)
 }
 
 // Regression: a bound failed report remains visible as failed through
@@ -629,9 +626,8 @@ func TestPublishRunAggregatesProjectsBoundFailure(t *testing.T) {
 	summaries := evaluationSummaries(t, exporter.records)
 	require.NotEmpty(t, summaries)
 	latest := summaries[len(summaries)-1]
-	assert.Equal(t, "failed", latest["verifier_state"])
-	metadata, ok := latest["verification_metadata"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "bound", metadata["provenance"])
-	assert.Equal(t, "failed", metadata["verifier_state"])
+	assert.Equal(t, "failed", latest.VerifierState)
+	require.NotNil(t, latest.VerificationMetadata)
+	assert.Equal(t, "bound", latest.VerificationMetadata.Provenance)
+	assert.Equal(t, "failed", latest.VerificationMetadata.VerifierState)
 }

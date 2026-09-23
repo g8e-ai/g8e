@@ -9,7 +9,7 @@ package evaluation
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -198,7 +198,7 @@ func TestFormationRunnerSkipsProvenanceForDelegatedPrimary(t *testing.T) {
 type formationOOMExecutor struct{}
 
 func (formationOOMExecutor) ExecuteRole(_ context.Context, _ FormationRoleRequest) (FormationRoleResult, error) {
-	return FormationRoleResult{}, errors.New("CUDA out of memory")
+	return FormationRoleResult{}, fmt.Errorf("CUDA out of memory")
 }
 
 func TestFormationRunnerFailsBenchmarkOnOOM(t *testing.T) {

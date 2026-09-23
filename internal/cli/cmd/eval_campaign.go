@@ -65,8 +65,8 @@ type campaignStacksOutput struct {
 	Seed                 uint64 `json:"seed"`
 	SetDigest            string `json:"set_digest"`
 	StackCount           int    `json:"stack_count"`
-	HypothesisStackCount uint32 `json:"hypothesis_stack_count"`
-	CoverageStackCount   uint32 `json:"coverage_stack_count"`
+	HypothesisStackCount int    `json:"hypothesis_stack_count"`
+	CoverageStackCount   int    `json:"coverage_stack_count"`
 }
 
 type campaignScheduleOutput struct {

@@ -9,7 +9,7 @@ package gateway
 
 import (
 	"database/sql"
-	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -156,7 +156,7 @@ func TestReplayStoreService_ReserveNonce_QueryError(t *testing.T) {
 		queryRowWithRetryFunc: func(query string, args ...any) rowScanner {
 			row := &mockRow{
 				scanFunc: func(dest ...any) error {
-					return errors.New("database connection failed")
+					return fmt.Errorf("database connection failed")
 				},
 			}
 			return row
@@ -186,7 +186,7 @@ func TestReplayStoreService_ReserveNonce_InsertError(t *testing.T) {
 			return row
 		},
 		execWithRetryFunc: func(query string, args ...any) (sql.Result, error) {
-			return nil, errors.New("insert failed")
+			return nil, fmt.Errorf("insert failed")
 		},
 	}
 
@@ -214,7 +214,7 @@ func TestReplayStoreService_ReserveNonce_ConcurrentInsert(t *testing.T) {
 		},
 		execWithRetryFunc: func(query string, args ...any) (sql.Result, error) {
 			// Simulate unique constraint violation (concurrent insert)
-			return nil, errors.New("UNIQUE constraint failed: nonces.nonce")
+			return nil, fmt.Errorf("UNIQUE constraint failed: nonces.nonce")
 		},
 	}
 
@@ -250,7 +250,7 @@ func TestReplayStoreService_FinalizeNonce_Error(t *testing.T) {
 
 	mockDB := &mockReplayStoreDB{
 		execWithRetryFunc: func(query string, args ...any) (sql.Result, error) {
-			return nil, errors.New("update failed")
+			return nil, fmt.Errorf("update failed")
 		},
 	}
 
@@ -286,7 +286,7 @@ func TestReplayStoreService_ReleaseNonce_Error(t *testing.T) {
 
 	mockDB := &mockReplayStoreDB{
 		execWithRetryFunc: func(query string, args ...any) (sql.Result, error) {
-			return nil, errors.New("delete failed")
+			return nil, fmt.Errorf("delete failed")
 		},
 	}
 
@@ -321,7 +321,7 @@ func TestReplayStoreService_CleanupExpiredNonces_Error(t *testing.T) {
 
 	mockDB := &mockReplayStoreDB{
 		execWithRetryFunc: func(query string, args ...any) (sql.Result, error) {
-			return nil, errors.New("cleanup failed")
+			return nil, fmt.Errorf("cleanup failed")
 		},
 	}
 

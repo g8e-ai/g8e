@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -98,7 +98,7 @@ func TestRunMCPStdioProxy_ConfigLoadError(t *testing.T) {
 
 		originalLoad := configLoad
 		configLoad = func(string) (*config.Config, error) {
-			return nil, errors.New("no config on disk")
+			return nil, fmt.Errorf("no config on disk")
 		}
 		t.Cleanup(func() { configLoad = originalLoad })
 
@@ -118,7 +118,7 @@ func TestStartGatewayIfNeeded_ConfigLoadError(t *testing.T) {
 
 		originalLoad := configLoad
 		configLoad = func(string) (*config.Config, error) {
-			return nil, errors.New("no config on disk")
+			return nil, fmt.Errorf("no config on disk")
 		}
 		t.Cleanup(func() { configLoad = originalLoad })
 
@@ -136,7 +136,7 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 
 		originalLoad := configLoad
 		configLoad = func(string) (*config.Config, error) {
-			return nil, errors.New("no config")
+			return nil, fmt.Errorf("no config")
 		}
 		t.Cleanup(func() { configLoad = originalLoad })
 

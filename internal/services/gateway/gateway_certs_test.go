@@ -19,7 +19,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"errors"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"os"
@@ -45,7 +45,7 @@ func (m *mockSecretManager) GetCAPrivateKey(caType string) ([]byte, error) {
 	if m.getKeyFunc != nil {
 		return m.getKeyFunc(caType)
 	}
-	return nil, errors.New("mock secret manager: key not found")
+	return nil, fmt.Errorf("mock secret manager: key not found")
 }
 
 func (m *mockSecretManager) StoreCAPrivateKey(caType string, keyDER []byte) error {
@@ -59,7 +59,7 @@ func (m *mockSecretManager) GetServicePrivateKey(serviceName string) ([]byte, er
 	if m.getServiceKeyFunc != nil {
 		return m.getServiceKeyFunc(serviceName)
 	}
-	return nil, errors.New("mock secret manager: service key not found")
+	return nil, fmt.Errorf("mock secret manager: service key not found")
 }
 
 func (m *mockSecretManager) StoreServicePrivateKey(serviceName string, keyDER []byte) error {

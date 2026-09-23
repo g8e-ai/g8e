@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -60,7 +60,7 @@ func TestTestCoverageCmd_DelegatesThresholdEnforcementToMakefile(t *testing.T) {
 }
 
 func TestTestCoverageCmd_MakefileFailureWrapsCoverageError(t *testing.T) {
-	runnerErr := errors.New("coverage threshold failed")
+	runnerErr := fmt.Errorf("coverage threshold failed")
 	cmd := testCoverageCmdWithRunner(func(string, ...string) error { return runnerErr })
 
 	err := cmd.RunE(cmd, nil)
@@ -136,7 +136,7 @@ func TestTestE2ECmd_RunFlagAppendsRegexp(t *testing.T) {
 }
 
 func TestTestE2ECmd_NonzeroExitWrapsErrE2ETestsFailed(t *testing.T) {
-	runnerErr := errors.New("child process failed")
+	runnerErr := fmt.Errorf("child process failed")
 	cmd := testE2ECmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -211,7 +211,7 @@ func TestTestUnitCmd_DelegatesToMakefileTarget(t *testing.T) {
 }
 
 func TestTestUnitCmd_RunnerFailureWrapsUnitError(t *testing.T) {
-	runnerErr := errors.New("child process failed")
+	runnerErr := fmt.Errorf("child process failed")
 	cmd := testUnitCmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
 
 	err := cmd.RunE(cmd, nil)
@@ -280,7 +280,7 @@ func TestTestIntegrationCmd_DefaultOmitsRunFlag(t *testing.T) {
 }
 
 func TestTestIntegrationCmd_RunnerFailureWrapsIntegrationError(t *testing.T) {
-	runnerErr := errors.New("child process failed")
+	runnerErr := fmt.Errorf("child process failed")
 	cmd := testIntegrationCmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
 
 	err := cmd.RunE(cmd, nil)

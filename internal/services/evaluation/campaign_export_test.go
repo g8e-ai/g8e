@@ -331,10 +331,10 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	modelLines := strings.Split(strings.TrimSpace(string(modelSummariesJSONL)), "\n")
 	require.Len(t, modelLines, 3)
 	for _, line := range modelLines {
-		var ms map[string]any
+		var ms modelSummaryRecord
 		require.NoError(t, json.Unmarshal([]byte(line), &ms))
-		assert.Equal(t, "exploratory_verified", ms["quality_state"])
-		assert.Equal(t, CampaignDatasetID(req.RunID), ms["dataset_id"])
+		assert.Equal(t, "exploratory_verified", ms.QualityState)
+		assert.Equal(t, CampaignDatasetID(req.RunID), ms.DatasetID)
 	}
 
 	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "assignments.jsonl"))

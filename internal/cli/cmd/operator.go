@@ -32,18 +32,18 @@ import (
 )
 
 type operatorListEntry struct {
-	OperatorID                      string `json:"operator_id"`
-	OperatorSessionID               string `json:"operator_session_id"`
-	OperatorType                    string `json:"operator_type"`
-	Status                          string `json:"status"`
-	Component                       string `json:"component"`
-	Hostname                        string `json:"hostname,omitempty"`
-	Name                            string `json:"name,omitempty"`
-	InferenceEnabled                *bool  `json:"inference_enabled,omitempty"`
-	InferenceOllamaEndpoint         string `json:"inference_ollama_endpoint,omitempty"`
-	ProviderBoundaryObserverEnabled *bool  `json:"provider_boundary_observer_enabled,omitempty"`
-	ProvenanceOperatorEnabled       *bool  `json:"provenance_operator_enabled,omitempty"`
-	ProvenanceModelStorageRoot      string `json:"provenance_operator_model_storage_root,omitempty"`
+	OperatorID                      string                   `json:"operator_id"`
+	OperatorSessionID               string                   `json:"operator_session_id"`
+	OperatorType                    constants.OperatorType   `json:"operator_type"`
+	Status                          constants.OperatorStatus `json:"status"`
+	Component                       constants.ComponentName  `json:"component"`
+	Hostname                        string                   `json:"hostname,omitempty"`
+	Name                            string                   `json:"name,omitempty"`
+	InferenceEnabled                *bool                    `json:"inference_enabled,omitempty"`
+	InferenceOllamaEndpoint         string                   `json:"inference_ollama_endpoint,omitempty"`
+	ProviderBoundaryObserverEnabled *bool                    `json:"provider_boundary_observer_enabled,omitempty"`
+	ProvenanceOperatorEnabled       *bool                    `json:"provenance_operator_enabled,omitempty"`
+	ProvenanceModelStorageRoot      string                   `json:"provenance_operator_model_storage_root,omitempty"`
 }
 
 type operatorListOutput struct {

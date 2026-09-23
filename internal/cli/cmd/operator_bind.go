@@ -44,13 +44,13 @@ type operatorBindOutput struct {
 }
 
 type operatorBindingEntry struct {
-	CLISessionID      string `json:"cli_session_id"`
-	OperatorID        string `json:"operator_id"`
-	OperatorSessionID string `json:"operator_session_id"`
-	OperatorType      string `json:"operator_type"`
-	Status            string `json:"status"`
-	Hostname          string `json:"hostname,omitempty"`
-	Name              string `json:"name,omitempty"`
+	CLISessionID      string                   `json:"cli_session_id"`
+	OperatorID        string                   `json:"operator_id"`
+	OperatorSessionID string                   `json:"operator_session_id"`
+	OperatorType      constants.OperatorType   `json:"operator_type"`
+	Status            constants.OperatorStatus `json:"status"`
+	Hostname          string                   `json:"hostname,omitempty"`
+	Name              string                   `json:"name,omitempty"`
 }
 
 type operatorBindListOutput struct {

@@ -9,7 +9,7 @@ package evaluation
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -68,7 +68,7 @@ func TestComposeTargetReader_ObservesPresentAndAbsentControlledTargetState(t *te
 }
 
 func TestComposeTargetReader_FailsClosedForInvalidTargetAndCommandFailure(t *testing.T) {
-	errCommand := errors.New("command failed")
+	errCommand := fmt.Errorf("command failed")
 	tests := []struct {
 		name      string
 		target    string
