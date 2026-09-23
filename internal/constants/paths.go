@@ -345,11 +345,11 @@ const (
 	BinaryImageNameWindows = "g8e.exe"
 )
 
-// G8eBinariesDir is the image-baked directory in the Docker runtime image
-// where all platform binaries (g8e-linux-amd64, g8e-darwin-arm64, etc.) are
-// placed by the Dockerfile. The gateway serves them via the
-// /.well-known/g8e/bin/{filename} endpoint. This path is outside the .g8e/
-// volume mount so it is always present regardless of volume state.
+// G8eBinariesDir is the optional image-baked directory for a complete
+// cross-platform binary manifest. Standard runtime images contain only /g8e;
+// custom distribution images can populate this directory for the Gateway's
+// /.well-known/g8e/bin/{filename} endpoint. The path remains outside .g8e/
+// runtime state.
 const (
 	G8eBinariesDir                  = "/opt/g8e/bin"
 	G8eBinariesManifestFilename     = "g8e-binaries.json"

@@ -63,7 +63,7 @@ The binary is self-contained, but the running Operator is stateful. It creates a
 | Target | Result |
 | --- | --- |
 | `make build` | Builds the current OS and architecture, writes `bin/g8e-<os>-<arch>`, and copies the host binary to the repository root. |
-| `make build-all` | Builds Linux amd64/arm64/386, Windows amd64/arm64, and Darwin amd64/arm64 binaries with SHA-256 checksum files. Linux variants use the pinned FIPS module. |
+| `make build-all` | Builds Linux amd64/arm64/386, Windows amd64/arm64, and Darwin amd64/arm64 binaries, rewrites portable SHA-256 sidecars, and publishes `bin/g8e-binaries.json` last after the complete matrix validates. Linux variants use the pinned FIPS module. |
 | `make build-linux` | Builds `bin/g8e-linux-{amd64,arm64,386}` and checksum files. |
 | `make build-windows` | Builds `bin/g8e-windows-{amd64,arm64}.exe` and checksum files. |
 | `make build-darwin` | Builds `bin/g8e-darwin-{amd64,arm64}` and checksum files. |

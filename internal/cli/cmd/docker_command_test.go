@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"errors"
@@ -431,16 +432,46 @@ func (r *fakeDockerBinaryRunner) RemoveContainer(context.Context, string) error 
 func TestExportDockerRuntimeBinary_WritesExecutable(t *testing.T) {
 	tmpDir := t.TempDir()
 	destination := filepath.Join(tmpDir, "g8e")
+	executable := []byte("runtime-binary")
+	var archive bytes.Buffer
+	writer := tar.NewWriter(&archive)
+	require.NoError(t, writer.WriteHeader(&tar.Header{Name: "g8e", Mode: int64(constants.PermFileExecutable), Size: int64(len(executable)), Typeflag: tar.TypeReg}))
+	_, err := writer.Write(executable)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
 	runner := &fakeDockerBinaryRunner{
 		image:     dockerImage{ID: "sha256:image"},
 		container: "container-id",
-		binary:    []byte("runtime-binary"),
+		binary:    archive.Bytes(),
 	}
 
-	err := exportDockerRuntimeBinary(t.Context(), runner, "g8e-gateway", destination)
+	err = exportDockerRuntimeBinary(t.Context(), runner, "g8e-gateway", destination)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(destination)
 	require.NoError(t, err)
-	assert.Equal(t, []byte("runtime-binary"), data)
+	assert.Equal(t, executable, data)
+}
+
+func TestExportDockerRuntimeBinary_RejectsTruncatedArchive(t *testing.T) {
+	tmpDir := t.TempDir()
+	destination := filepath.Join(tmpDir, "g8e")
+	var archive bytes.Buffer
+	writer := tar.NewWriter(&archive)
+	require.NoError(t, writer.WriteHeader(&tar.Header{Name: "g8e", Mode: int64(constants.PermFileExecutable), Size: 1, Typeflag: tar.TypeReg}))
+	_, err := writer.Write([]byte("x"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	truncatedArchive := archive.Bytes()[:512]
+	runner := &fakeDockerBinaryRunner{
+		image:     dockerImage{ID: "sha256:image"},
+		container: "container-id",
+		binary:    truncatedArchive,
+	}
+
+	err = exportDockerRuntimeBinary(t.Context(), runner, "g8e-gateway", destination)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryArchive)
+	_, statErr := os.Stat(destination)
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }

@@ -84,13 +84,14 @@ GOTOOLCHAIN=local GOFLAGS=-mod=vendor make build
 GOTOOLCHAIN=local GOFLAGS=-mod=vendor make build-all
 ```
 
-`make build` requires `dashboard/g8e-adapter/evaluation-explorer/dist/index.html`, writes `bin/g8e-<os>-<arch>` (with `.exe` on Windows), writes a neighboring `.sha256` file, and copies the host binary to `./g8e`. `make build-all` writes binaries and checksums for Linux amd64, arm64, and 386; Windows amd64 and arm64; and Darwin amd64 and arm64. Go 1.26.6 must already be installed when `GOTOOLCHAIN=local` is set; this prevents Go's automatic toolchain selection from downloading another toolchain. `make test-airgap` runs `go build -mod=vendor ./...` and static checks for the demo manifest, demo image pin patterns, and demo Python references; it does not verify image completeness, runtime egress, or offline Docker builds.
+`make build` requires `dashboard/g8e-adapter/evaluation-explorer/dist/index.html`, writes `bin/g8e-<os>-<arch>` (with `.exe` on Windows), writes a neighboring `.sha256` file, and copies the host binary to `./g8e`. `make build-all` writes binaries and portable checksum sidecars for Linux amd64, arm64, and 386; Windows amd64 and arm64; and Darwin amd64 and arm64, then publishes `bin/g8e-binaries.json` only after the complete matrix validates. Go 1.26.6 must already be installed when `GOTOOLCHAIN=local` is set; this prevents Go's automatic toolchain selection from downloading another toolchain. `make test-airgap` runs `go build -mod=vendor ./...` and static checks for the demo manifest, demo image pin patterns, and demo Python references; it does not verify image completeness, runtime egress, or offline Docker builds.
 
-Transfer the target binary, its checksum, and any custom doctrine directory through the approved media-transfer process. Preserve the generated `bin/` path because the checksum file records that relative filename. Verify the checksum on the target before installation:
+Transfer the target binary, its checksum, the complete manifest when using a full matrix, and any custom doctrine directory through the approved media-transfer process. The checksum sidecars produced by `make build-all` name artifact basenames, so verify them from the directory containing the transferred artifacts before installation:
 
 ```bash
-sha256sum -c bin/g8e-linux-amd64.sha256
-install -m 0755 bin/g8e-linux-amd64 ./g8e
+cd bin
+sha256sum -c g8e-linux-amd64.sha256
+install -m 0755 g8e-linux-amd64 ../g8e
 ```
 
 Start and enroll a local-only Gateway with:

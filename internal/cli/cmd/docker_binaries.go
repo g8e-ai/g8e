@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -151,7 +152,7 @@ func buildDockerImagesAndExport(ctx context.Context, buildArgs []string, profile
 	return nil
 }
 
-func exportDockerRuntimeBinary(ctx context.Context, runner dockerBinaryRunner, image, destination string) error {
+func exportDockerRuntimeBinary(ctx context.Context, runner dockerBinaryRunner, image, destination string) (err error) {
 	if strings.TrimSpace(image) == "" || strings.TrimSpace(destination) == "" {
 		return fmt.Errorf("%w: image and destination are required", constants.ErrG8eBinaryExport)
 	}
@@ -164,15 +165,30 @@ func exportDockerRuntimeBinary(ctx context.Context, runner dockerBinaryRunner, i
 		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
 	}
 	defer func() {
-		_ = runner.RemoveContainer(ctx, container)
+		cleanupErr := runner.RemoveContainer(ctx, container)
+		if err == nil && cleanupErr != nil {
+			err = fmt.Errorf("%w: cleanup export container: %w", constants.ErrG8eBinaryExport, cleanupErr)
+		}
 	}()
 
-	var binary bytes.Buffer
-	if err := runner.CopyContainerPath(ctx, container, dockerRuntimeBinaryPath, &binary); err != nil {
+	var archive bytes.Buffer
+	if err := runner.CopyContainerPath(ctx, container, dockerRuntimeBinaryPath, &archive); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
 	}
-	if binary.Len() == 0 {
-		return fmt.Errorf("%w: runtime binary %q is empty", constants.ErrG8eBinaryExport, dockerRuntimeBinaryPath)
+	reader := tar.NewReader(&archive)
+	header, err := reader.Next()
+	if err != nil {
+		return fmt.Errorf("%w: read runtime binary archive: %w", constants.ErrG8eBinaryArchive, err)
+	}
+	if header.Name != filepath.Base(dockerRuntimeBinaryPath) || !header.FileInfo().Mode().IsRegular() || header.Size <= 0 {
+		return fmt.Errorf("%w: invalid runtime binary entry %q", constants.ErrG8eBinaryArchive, header.Name)
+	}
+	var binary bytes.Buffer
+	if _, err := io.CopyN(&binary, reader, header.Size); err != nil {
+		return fmt.Errorf("%w: read runtime binary: %w", constants.ErrG8eBinaryArchive, err)
+	}
+	if _, err := reader.Next(); err != io.EOF {
+		return fmt.Errorf("%w: runtime binary archive contains additional entries", constants.ErrG8eBinaryArchive)
 	}
 	staging := destination + ".new"
 	if err := os.WriteFile(staging, binary.Bytes(), constants.PermFileExecutable); err != nil {

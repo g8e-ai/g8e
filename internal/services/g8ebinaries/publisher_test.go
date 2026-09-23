@@ -18,6 +18,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -91,6 +92,137 @@ func TestPublisherPublish_RejectsDuplicateArchiveEntries(t *testing.T) {
 	_, err := NewPublisher(filepath.Join(t.TempDir(), "mirror")).Publish(&archive)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrG8eBinaryArchive)
+}
+
+func TestCatalogAndManifestValidationRejectsUnsupportedInputs(t *testing.T) {
+	assert.Len(t, Targets(), 7)
+	assert.NoError(t, ValidateArtifactName(Targets()[0].Filename))
+	assert.NoError(t, ValidateArtifactName(Targets()[0].Checksum))
+
+	for _, name := range []string{"", "../g8e-linux-amd64", "/tmp/g8e-linux-amd64", "g8e\\\\linux-amd64", "unsupported"} {
+		t.Run("rejects "+name, func(t *testing.T) {
+			assert.ErrorIs(t, ValidateArtifactName(name), constants.ErrG8eBinaryArtifact)
+		})
+	}
+
+	target, err := PlatformTarget("linux", "amd64")
+	require.NoError(t, err)
+	assert.Equal(t, "g8e-linux-amd64", target.Filename)
+	hostTarget, err := HostTarget()
+	if runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" || runtime.GOARCH == "386") {
+		require.NoError(t, err)
+		assert.Equal(t, runtime.GOOS, hostTarget.OS)
+	} else {
+		assert.ErrorIs(t, err, constants.ErrG8eBinaryArtifact)
+	}
+	_, err = PlatformTarget("plan9", "amd64")
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryArtifact)
+
+	manifest := Manifest{
+		SchemaVersion:  1,
+		Version:        "2.1.12",
+		BuildID:        "build-1",
+		BuildTime:      time.Now().UTC().Format(time.RFC3339),
+		SourceRevision: "revision",
+		SourceTreeHash: strings.Repeat("a", 64),
+	}
+	for _, target := range Targets() {
+		manifest.Targets = append(manifest.Targets, Artifact{Target: target, Size: 1, SHA256: strings.Repeat("a", 64)})
+	}
+	assert.NoError(t, manifest.Validate())
+	manifest.BuildTime = "not-a-timestamp"
+	assert.ErrorIs(t, manifest.Validate(), constants.ErrG8eBinaryManifest)
+}
+
+func TestReaderAndManifestFiles_ValidateCataloguedArtifacts(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "mirror")
+	_, err := OpenReader(root)
+	require.NoError(t, err)
+	reader, err := OpenReader(root)
+	require.NoError(t, err)
+	assert.False(t, reader.HasManifest())
+	_, _, err = reader.Artifact("unsupported")
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryArtifact)
+
+	manifest, err := NewPublisher(root).Publish(bytes.NewReader(validArchive(t, "build-1", false)))
+	require.NoError(t, err)
+	reader, err = OpenReader(root)
+	require.NoError(t, err)
+	assert.True(t, reader.HasManifest())
+	artifact, info, err := reader.Artifact(manifest.Targets[0].Filename)
+	require.NoError(t, err)
+	assert.Equal(t, manifest.Targets[0].Size, info.Size())
+	assert.NotNil(t, artifact)
+	closer, ok := artifact.(io.Closer)
+	require.True(t, ok)
+	require.NoError(t, closer.Close())
+	_, _, err = reader.Artifact("g8e-binaries.json")
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryArtifact)
+
+	digest, err := ManifestDigest(root)
+	require.NoError(t, err)
+	assert.Len(t, digest, sha256.Size*2)
+	record := ExportRecord{ImageReference: "g8e:test", ImageID: "sha256:test", ManifestSHA256: digest}
+	require.NoError(t, WriteExportRecord(root, record))
+	data, err := os.ReadFile(filepath.Join(root, constants.G8eBinariesExportRecordFilename))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "g8e:test")
+}
+
+func TestPublisherPublishMatching_EnforcesImageProvenance(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "mirror")
+	archive := validArchive(t, "build-1", false)
+	_, err := NewPublisher(root).PublishMatching(bytes.NewReader(archive), Provenance{
+		Version:        "test",
+		BuildID:        "build-1",
+		BuildTime:      "wrong",
+		SourceRevision: "test",
+		SourceTreeHash: strings.Repeat("a", 64),
+	})
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryManifest)
+}
+
+func TestLoadManifest_RejectsMissingAndMalformedFiles(t *testing.T) {
+	root := t.TempDir()
+	_, err := LoadManifest(root)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryManifest)
+	require.NoError(t, os.WriteFile(filepath.Join(root, constants.G8eBinariesManifestFilename), []byte("{"), constants.PermFilePublic))
+	_, err = LoadManifest(root)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryManifest)
+}
+
+func TestPublisherRejectsInvalidOutputAndMatchesProvenance(t *testing.T) {
+	_, err := NewPublisher("").Publish(bytes.NewReader(nil))
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryExport)
+
+	archive := validArchive(t, "build-1", false)
+	_, err = NewPublisher(filepath.Join(t.TempDir(), "mirror")).PublishMatching(bytes.NewReader(archive), Provenance{
+		Version:        "test",
+		BuildID:        "build-1",
+		BuildTime:      extractBuildTime(t, archive),
+		SourceRevision: "test",
+		SourceTreeHash: strings.Repeat("a", 64),
+	})
+	assert.NoError(t, err)
+
+	_, err = NewPublisher(filepath.Join(t.TempDir(), "mirror")).Publish(bytes.NewReader([]byte("not a tar archive")))
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryArchive)
+}
+
+func extractBuildTime(t *testing.T, archive []byte) string {
+	t.Helper()
+	reader := tar.NewReader(bytes.NewReader(archive))
+	for {
+		header, err := reader.Next()
+		require.NoError(t, err)
+		if header.Name == constants.G8eBinariesManifestFilename {
+			data, err := io.ReadAll(reader)
+			require.NoError(t, err)
+			var manifest Manifest
+			require.NoError(t, json.Unmarshal(data, &manifest))
+			return manifest.BuildTime
+		}
+	}
 }
 
 func validArchive(t *testing.T, buildID string, includeRoot bool) []byte {

@@ -499,8 +499,8 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 | `./g8e docker start --profile <profile>` | Starts one selected Compose profile; the CLI flag is singular. |
 | `./g8e docker stop` | `docker compose down` — preserves volumes. |
 | `./g8e docker status` | `docker compose ps`. |
-| `./g8e docker build` | Build all stack images. |
-| `./g8e docker rebuild [--full]` | Stop, rebuild, restart selected profile. |
+| `./g8e docker build` | Build the selected stack images, export the Gateway image's target-platform runtime binary to `./g8e`, and report success only after publication succeeds. |
+| `./g8e docker rebuild [--full]` | Stop the selected scope, rebuild with the same provenance inputs, publish the Gateway runtime binary to `./g8e`, and restart only after publication succeeds. |
 | `./g8e docker clean` | Destructive wipe of containers, volumes, networks. |
 
 Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean`, repeat owner enrollment and platform approvals.

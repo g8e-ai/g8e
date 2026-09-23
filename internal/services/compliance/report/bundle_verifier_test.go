@@ -96,6 +96,140 @@ func (r *bundleArtifactReaderStub) ListFiles(context.Context) ([]string, error) 
 	return paths, nil
 }
 
+func TestVerifyComplianceReportBundleRejectsInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name    string
+		request BundleVerificationRequest
+		wantErr error
+	}{
+		{
+			name:    "nil bundle",
+			request: BundleVerificationRequest{Reader: &bundleArtifactReaderStub{}, TrustPolicy: &compliancev1.ComplianceReportTrustPolicy{}, VerifiedAt: time.Unix(1, 0)},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+		{
+			name:    "nil reader",
+			request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{}, TrustPolicy: &compliancev1.ComplianceReportTrustPolicy{}, VerifiedAt: time.Unix(1, 0)},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+		{
+			name:    "nil trust policy",
+			request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{}, Reader: &bundleArtifactReaderStub{}, VerifiedAt: time.Unix(1, 0)},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+		{
+			name:    "zero verification time",
+			request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{}, Reader: &bundleArtifactReaderStub{}, TrustPolicy: &compliancev1.ComplianceReportTrustPolicy{}},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+		{
+			name:    "missing manifest report ID",
+			request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{Manifest: &compliancev1.ComplianceReportManifest{}}, Reader: &bundleArtifactReaderStub{}, TrustPolicy: &compliancev1.ComplianceReportTrustPolicy{}, VerifiedAt: time.Unix(1, 0)},
+			wantErr: constants.ErrReportVerificationFailed,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := VerifyComplianceReportBundle(context.Background(), test.request)
+			assert.ErrorIs(t, err, test.wantErr)
+		})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := VerifyComplianceReportBundle(ctx, BundleVerificationRequest{})
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestBundledSourceArtifactReaderEnforcesContextAndReadOnlyDirectoryBehavior(t *testing.T) {
+	reader := &bundledSourceArtifactReader{bodies: map[string][]byte{"source.json": []byte("body")}}
+	body, err := reader.ReadFile(context.Background(), "source.json")
+	require.NoError(t, err)
+	assert.Equal(t, []byte("body"), body)
+	body[0] = 'x'
+	assert.Equal(t, []byte("body"), reader.bodies["source.json"])
+
+	_, err = reader.ReadFile(context.Background(), "missing.json")
+	assert.ErrorIs(t, err, constants.ErrNotFound)
+	_, err = reader.ReadDir(context.Background(), "")
+	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = reader.ReadFile(ctx, "source.json")
+	assert.ErrorIs(t, err, context.Canceled)
+	_, err = reader.ReadDir(ctx, "")
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestBundledRuntimeArtifactReaderResolvesFilesAndRejectsWrites(t *testing.T) {
+	reader := &bundledRuntimeArtifactReader{
+		bodies: map[string][]byte{
+			"sources/evals/run-1/runtime/data.json":        []byte("data"),
+			"sources/evals/run-1/runtime/nested/file.json": []byte("nested"),
+		},
+		runID:       "run-1",
+		sourceDir:   "evals",
+		runtimeRoot: constants.PathCurrentDir,
+	}
+
+	body, err := reader.ReadFile(context.Background(), filepath.Join(constants.PathCurrentDir, "data.json"))
+	require.NoError(t, err)
+	assert.Equal(t, []byte("data"), body)
+	body[0] = 'x'
+	assert.Equal(t, []byte("data"), reader.bodies["sources/evals/run-1/runtime/data.json"])
+
+	exists, err := reader.FileExists(context.Background(), filepath.Join(constants.PathCurrentDir, "data.json"))
+	require.NoError(t, err)
+	assert.True(t, exists)
+	exists, err = reader.FileExists(context.Background(), filepath.Join(constants.PathCurrentDir, "missing.json"))
+	require.NoError(t, err)
+	assert.False(t, exists)
+
+	entries, err := reader.ReadDir(context.Background(), constants.PathCurrentDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "data.json", entries[0].Name())
+	assert.False(t, entries[0].IsDir())
+	assert.Equal(t, "nested", entries[1].Name())
+	assert.True(t, entries[1].IsDir())
+	assert.Equal(t, os.FileMode(0), entries[0].Type())
+	_, err = entries[0].Info()
+	assert.NoError(t, err)
+
+	_, err = reader.ReadFile(context.Background(), filepath.Join(constants.PathCurrentDir, "..", "outside.json"))
+	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
+	_, err = reader.ReadDir(context.Background(), filepath.Join(constants.PathCurrentDir, "..", "outside"))
+	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
+	_, err = reader.FileExists(context.Background(), filepath.Join(constants.PathCurrentDir, "..", "outside.json"))
+	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
+
+	readOnlyChecks := []func() error{
+		func() error { return reader.MkdirAll(context.Background(), "", 0) },
+		func() error { return reader.CreateRuntimeTree(context.Background()) },
+		func() error { _, err := reader.Stat(context.Background(), ""); return err },
+		func() error { _, err := reader.Lstat(context.Background(), ""); return err },
+		func() error { return reader.WriteFile(context.Background(), "", nil, 0) },
+		func() error { _, err := reader.OpenForAppend(context.Background(), "", 0); return err },
+		func() error { _, err := reader.OpenForRead(context.Background(), ""); return err },
+		func() error { return reader.Remove(context.Background(), "") },
+		func() error { return reader.RemoveAll(context.Background(), "") },
+		func() error { return reader.Rename(context.Background(), "", "") },
+		func() error { return reader.EnforceDirPermissions(context.Background(), "", 0) },
+		func() error { return reader.EnforceFilePermissions(context.Background(), "", 0) },
+	}
+	for _, check := range readOnlyChecks {
+		assert.ErrorIs(t, check(), constants.ErrReadOnlyEvidenceSource)
+	}
+	assert.Equal(t, "path", reader.Resolve("path"))
+	rel, err := reader.Rel("path")
+	require.NoError(t, err)
+	assert.Equal(t, "path", rel)
+	rel, err = reader.RelFromAbs("path")
+	require.NoError(t, err)
+	assert.Equal(t, "path", rel)
+}
+
 func TestCampaignWitnessPoliciesMatchAdmissionRejectsSubstitution(t *testing.T) {
 	admission := &compliancev1.AssessmentSourceAdmission{
 		AdmissionId:               "campaign-source",
