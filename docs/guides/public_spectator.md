@@ -5,8 +5,8 @@ parent: Guides
 
 # Public Spectator Operations Guide
 
-Last Updated: 2026-09-21
-Version: v2.1.11
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 This guide covers the gateway-owned anonymous public mirror and evaluation explorer. It is separate from the passkey-authenticated owner-local observe frontend connected with `./g8e gw connect <origin>`; see [Generator-Neutral Builder Guide](./build_observe_frontend.md) and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend).
 
@@ -14,9 +14,9 @@ This guide covers the gateway-owned anonymous public mirror and evaluation explo
 
 The gateway-owned public spectator runs inside the Gateway process when started with `--public-spectator` (Docker Compose default). One in-process `PublicSpectatorRuntime` owns:
 
-- **Private ingest** (`127.0.0.1:8081` by default): authenticated publisher ingest, proof ingest, replacement-key registration
-- **Public read/SSE** (`127.0.0.1:8082` by default): anonymous bootstrap, snapshot, history, SSE, proof catalog/manifest, content-addressed proof downloads
-- **Evaluation explorer** (`127.0.0.1:5173` by default): embedded acceptance UI
+- **Private ingest** (container port `8081`, host-published as `127.0.0.1:8081`): authenticated publisher ingest, proof ingest, replacement-key registration
+- **Public read/SSE** (container port `8082`, host-published as `127.0.0.1:8082`): anonymous bootstrap, snapshot, history, SSE, proof catalog/manifest, content-addressed proof downloads
+- **Evaluation explorer** (container port `5173`, host-published as `127.0.0.1:5173`): embedded acceptance UI
 
 Durable feed, mirror, signing keys, and outbox state live in the gateway volume (`g8e-gateway-data`). Docker stacks do **not** bind-mount host `.g8e/public-feed` or `.g8e/public-mirror`.
 
@@ -24,7 +24,7 @@ The unified Compose deployment binds host ports 8081, 8082, and 5173 to loopback
 
 Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-feed/batches`. Host `g8e public init` is not required for Docker or evaluation campaigns.
 
-Campaign publication emits public-safe assignment records with the enriched `1.1.0` result envelope. Assignment Details can show approved scenario context, typed grades, grouped activity, bounded resource observations, verification metadata, and content bindings. The source run and catalog bindings must match; unavailable capture remains unavailable, and public evidence bindings are references rather than proof of public accessibility. A passing campaign verification report also publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates. The browser reads these stored revisions and does not promote model quality locally.
+Campaign publication emits public-safe assignment records with the enriched `1.1.0` result envelope and Evaluation Explorer summaries with view schema `1.5.0`. Assignment Details show approved scenario context, typed grades, grouped activity, bounded resource observations, verification metadata, and content bindings. Evaluation summaries carry typed pass-rate, latency-p50, and output-throughput-p50 metrics with observed, eligible, and unavailable contributor counts; model evaluations omit system-only routing and correlation metrics. New summaries use `not_run` until a population-bound verification report is published, and later aggregate revisions preserve the bound `passed` or `failed` state and verification metadata. The source run and catalog bindings must match; unavailable capture remains unavailable, and public evidence bindings are references rather than proof of public accessibility. A passing campaign verification report also publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates. The browser reads these stored revisions and does not promote model quality locally.
 
 For an existing run, use verified catch-up after the report is persisted so assignment and model-summary revisions are restored together:
 

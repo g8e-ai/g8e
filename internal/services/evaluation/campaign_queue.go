@@ -8,7 +8,10 @@
 package evaluation
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +22,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -78,6 +82,8 @@ type CampaignStartPlan struct {
 
 // CampaignStartPlanRequest carries user intent for campaign start resolution.
 type CampaignStartPlanRequest struct {
+	Context       context.Context
+	FileService   fs.RuntimeFileService
 	ProjectRoot   string
 	ModelTag      string
 	ModelTags     []string
@@ -385,14 +391,14 @@ func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string
 	if err := ValidateModelRegistry(freeze); err != nil {
 		return nil, err
 	}
-	inventoryDir := filepath.Join(req.ProjectRoot, DefaultCampaignInventoryRelDirname)
-	if err := os.MkdirAll(inventoryDir, constants.PermDirPrivate); err != nil {
-		return nil, fmt.Errorf("evaluation: resolve campaign start plan: create inventory dir: %w", err)
+	if req.Context == nil || req.FileService == nil {
+		return nil, fmt.Errorf("evaluation: resolve campaign start plan: %w", constants.ErrMissingRequiredField)
 	}
-	inventoryPath := filepath.Join(inventoryDir, campaignID+".json")
-	if err := writeModelInventoryFreezeFile(inventoryPath, freeze); err != nil {
+	inventoryRelPath := filepath.Join(constants.EvaluationDirname, constants.EvaluationInventoriesDirname, campaignID+".json")
+	if err := materializeImmutableModelInventory(req.Context, req.FileService, inventoryRelPath, freeze); err != nil {
 		return nil, err
 	}
+	inventoryPath := req.FileService.Resolve(inventoryRelPath)
 	runID := req.RunID
 	if runID == "" {
 		runID = campaignID + "-" + fmt.Sprintf("%d", now.Unix())
@@ -451,15 +457,47 @@ func normalizeModelTags(modelTag string, modelTags []string) []string {
 	return tags
 }
 
+func materializeImmutableModelInventory(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, freeze *ModelInventoryFreeze) error {
+	payload, err := marshalModelInventoryFreeze(freeze)
+	if err != nil {
+		return err
+	}
+	existing, err := fileSvc.ReadFile(ctx, relPath)
+	if err == nil {
+		if bytes.Equal(existing, payload) {
+			return nil
+		}
+		return fmt.Errorf("evaluation: materialize immutable model inventory: %w", constants.ErrImmutableInventoryConflict)
+	}
+	if !errors.Is(err, constants.ErrNotFound) {
+		return fmt.Errorf("evaluation: materialize immutable model inventory: read existing: %w", err)
+	}
+	if err := fileSvc.WriteFile(ctx, relPath, payload, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("evaluation: materialize immutable model inventory: write: %w", err)
+	}
+	return nil
+}
+
 func writeModelInventoryFreezeFile(path string, freeze *ModelInventoryFreeze) error {
+	payload, err := marshalModelInventoryFreeze(freeze)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, payload, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("evaluation: write model inventory freeze file: %w", err)
+	}
+	return nil
+}
+
+func marshalModelInventoryFreeze(freeze *ModelInventoryFreeze) ([]byte, error) {
 	if freeze == nil {
-		return fmt.Errorf("evaluation: write model inventory freeze file: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("evaluation: marshal model inventory freeze: %w", constants.ErrMissingRequiredField)
 	}
 	variantBodies := make([]json.RawMessage, 0, len(freeze.Variants))
 	for _, variant := range freeze.Variants {
 		body, err := protojson.Marshal(variant)
 		if err != nil {
-			return fmt.Errorf("evaluation: write model inventory freeze file: marshal variant: %w", err)
+			return nil, fmt.Errorf("evaluation: marshal model inventory freeze: marshal variant: %w", err)
 		}
 		variantBodies = append(variantBodies, body)
 	}
@@ -477,10 +515,7 @@ func writeModelInventoryFreezeFile(path string, freeze *ModelInventoryFreeze) er
 		Variants:             variantBodies,
 	}, "", "  ")
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("evaluation: marshal model inventory freeze: %w", err)
 	}
-	if err := os.WriteFile(path, payload, constants.PermFileReadOnly); err != nil {
-		return fmt.Errorf("evaluation: write model inventory freeze file: %w", err)
-	}
-	return nil
+	return payload, nil
 }

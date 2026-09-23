@@ -5,14 +5,14 @@ parent: Architecture
 
 # Public Spectator Architecture and Threat Model
 
-Last Updated: 2026-09-20
-Version: v2.1.11
+Last Updated: 2026-09-22
+Version: v2.1.12
 
 ## Purpose
 
 This document freezes the architecture, trust boundary, data classification, network path, export binding, threat model, and availability policy for public spectator observation of g8e evaluation campaigns. It defines what a public visitor can see, how safe data reaches them, and what can never cross the projection boundary. The credentialed owner-local observe mode and the anonymous public-spectator mode are separate, non-interchangeable browser modes with distinct authentication, network paths, endpoint allowlists, and disclosure policies. They must never be conflated or combined.
 
-This document is the frozen reference for O0-boundary. Downstream packets (O1-supervisor through O7-readiness) implement against the architecture defined here. The [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) is extended separately by O5-builder-handoff to cover the public spectator mode in builder-facing terms.
+This document is the canonical public spectator reference. The [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) describes the separate builder-facing observe integration.
 
 ## Two Browser Modes
 
@@ -32,47 +32,38 @@ The two modes are non-interchangeable. The public adapter contains no passkey, G
 
 ## Network Path
 
-The g8e-owned network path is outbound-only from the private deployment to the hosted mirror. Public browsers connect to the mirror, not to the Gateway.
+The supported unified deployment runs the public mirror inside the Gateway process but on listeners and route tables that are separate from the private Gateway API. The campaign publisher enters through the owner-authenticated Gateway publication route. Public browsers reach only the anonymous read listener through the host cloudflared connector and Cloudflare edge; they never connect to the private Gateway API.
 
 ```
-Private g8e deployment                 Hosted Mirror                    Public Browser
-──────────────────────                  ──────────────                   ──────────────
-                                          │
-  Safe publication input                  │
-  (persisted, allowlisted)                │
-        │                                 │
-        ▼                                 │
-  CLI-local publisher                     │
-  (signs batches, writes outbox)          │
-        │                                 │
-        ▼ HTTPS (outbound only)           │
-  Hosted ingest endpoint ────────────────►│ Ingest (authenticated)
-                                          │   ├─ ordered outbox
-                                          │   ├─ hash chain
-                                          │   ├─ signature verify
-                                          │   ├─ snapshot store
-                                          │   ├─ proof catalog
-                                          │   ├─ SSE relay
-                                          │   └─ anonymous read API
-                                          │
-                                          │ ◄──── GET bootstrap (anonymous)
-                                          │ ◄──── GET cycles/runs/evals (anonymous, paginated)
-                                          │ ◄──── GET SSE stream (anonymous, replayable)
-                                          │ ◄──── GET proof download (anonymous, content-addressed)
-                                          │
-                                          ▼
-                                     Public Browser
+Campaign host                         Gateway container                    Public path
+─────────────                         ─────────────────                    ───────────
+Canonical campaign records
+       │
+       ▼ owner mTLS
+Gateway publication route ──────────► PublicSpectatorRuntime
+                                      ├─ signed ordered batches
+                                      ├─ durable mirror state
+                                      ├─ hash chain and snapshots
+                                      ├─ proof catalog and manifest
+                                      ├─ private ingest listener
+                                      └─ anonymous read/SSE listener
+                                                   │
+                                                   ▼ Docker host publication 127.0.0.1:8082
+                                             host cloudflared ──outbound tunnel──► Cloudflare edge
+                                                                                         │
+                                                                                         ▼ HTTPS
+                                                                                   Public browser
 ```
 
-The private Gateway receives no public connection and gains no anonymous route. The CLI-local publisher initiates authenticated ingest to the mirror. The mirror accepts authenticated ingest from that private publisher and anonymous reads from public browsers. The two surfaces are separate allowlists and separate listeners in the host-backed deployment.
+The private Gateway API gains no anonymous route. The in-process public spectator runtime exposes separate private-ingest and anonymous-read allowlists, listeners, and host publications over the same gateway-owned durable volume. Compose publishes ports 8081, 8082, and 5173 on host loopback only; the container listeners remain reachable on the Compose bridge where required. Cloudflared targets the host's loopback-only public port and cannot route public traffic to private ingest or the Gateway API.
 
-SSE connection direction is explicit. A browser initiates an SSE connection to the server it can reach. A private local Gateway cannot initiate an SSE response into a static hosted page. The CLI-local publisher therefore pushes signed batches over an outbound connection to the mirror, and public browsers open anonymous read-only SSE connections to that mirror. The mirror preserves g8e event schemas, sequence and replay semantics, verification labels, and disclosure boundaries. The mirror does not become a second campaign or governance implementation; it relays signed projections and proofs produced by the private deployment.
+SSE connection direction is explicit. A browser opens the stream through Cloudflare to the mirror's public listener. The mirror preserves g8e event schemas, sequence and replay semantics, verification labels, and disclosure boundaries. It does not become a second campaign or governance implementation; it relays signed projections and proofs admitted from the private publication path.
 
-The public mirror is a required data-plane companion to the static frontend. A presentation-only site generated by Lovable or another builder is insufficient for an unbounded live stream. The handoff (O5-builder-handoff) defines the mirror ingest, snapshot, SSE, history, and proof APIs without requiring a particular visual framework. The OpenDevOps.ai implementation may use Lovable Cloud/Supabase, Cloudflare Workers with Durable Objects and R2, or equivalent services as long as it passes the generated g8e conformance suite.
+The public mirror is a required data-plane companion to the static frontend. A presentation-only site generated by Lovable or another builder is insufficient for a replayable live stream. The mirror owns bootstrap, snapshot, history, SSE, and proof APIs without requiring a particular visual framework.
 
 ## Closed Allowlist
 
-The public spectator surface exposes only a closed allowlist of fields, event types, and artifact classes. Everything not on the allowlist is prohibited. The allowlist is defined here and enforced by the projector, validator, and promoter in S8-publication and by the outbound publisher and mirror in O3-public-feed.
+The public spectator surface exposes only a closed allowlist of fields, event types, and artifact classes. Everything not on the allowlist is prohibited. The campaign projector, disclosure validator, publisher, and mirror enforce this allowlist before a record becomes browser-visible.
 
 ### Public live projections
 
@@ -257,7 +248,7 @@ A projection or proof accidentally includes a prohibited field. Mitigation: the 
 | Cursor-paginated cycles/runs/evals | Page size 1-500 | Default 20 |
 | SSE live stream | Globally bounded concurrent connections with one bounded queue per connection | 1,000 connections; 100-event in-memory buffer per connection |
 | Proof download | One download per request, byte-counted | Maximum artifact size enforced |
-| Anonymous read rate | Requests per minute per client IP | Configured by mirror operator; Cloudflare's connecting IP is accepted only from the loopback tunnel connector |
+| Anonymous read rate | Requests per minute per client IP | Configured by mirror operator; exactly one valid unicast `CF-Connecting-IP` is accepted only when the socket peer belongs to an explicit trusted-proxy CIDR |
 
 Anonymous reads never expose mutation, producer, audit, filesystem, pub/sub, MCP, A2A, or tool routes. The public contract contains no mutation or producer operation.
 
@@ -297,11 +288,11 @@ Mirror availability is not verification evidence. A mirror outage does not inval
 
 ### Availability boundaries
 
-The mirror is a read-only data plane. It does not participate in governance, execution, or campaign decisions. A mirror outage pauses public visibility but does not stop the private campaign. The CLI-local publisher writes to a durable ordered outbox and retries idempotently when the mirror recovers. A prolonged mirror outage pauses before the next cycle (O1-supervisor safety stop) while the outbox retains exports. Mirror retry never reruns valid eval work.
+The mirror is a read-only data plane. It does not participate in governance, execution, or campaign decisions. A mirror outage pauses public visibility but does not stop the private campaign. The publisher writes to a durable ordered outbox and retries idempotently when the mirror recovers. Mirror retry never reruns valid evaluation work.
 
 ### Gateway-owned listener separation
 
-The production mirror runs inside the Gateway process (`--public-spectator`) with two unique loopback-only listeners over the same durable state in the gateway volume. The private listener serves authenticated batch ingest, proof ingest, replacement-key registration, and local read diagnostics. The public listener mounts only bootstrap, snapshot, history, SSE, proof catalog, proof manifest, and content-addressed proof downloads. Cloudflared targets only the public listener through an explicit plain-HTTP service URL, so the public hostname has no route to ingest, key registration, proof ingest, the Gateway console, or another private service. See the [Public Spectator Operations Guide](../guides/public_spectator.md) for verification and tunnel procedure.
+The production mirror runs inside the Gateway process (`--public-spectator`) with separate private and public listeners over the same durable state in the gateway volume. The listeners bind to the container network interfaces; Compose publishes their host ports on loopback only. The private listener serves authenticated batch ingest, proof ingest, replacement-key registration, and local read diagnostics. The public listener mounts only bootstrap, snapshot, history, SSE, proof catalog, proof manifest, and content-addressed proof downloads. Cloudflared targets only the host-published public listener through an explicit plain-HTTP service URL, so the public hostname has no route to ingest, key registration, proof ingest, the Gateway console, or another private service. The mirror accepts `CF-Connecting-IP` only from the configured Docker bridge peer, and the Gateway container runs with a 16,384 `nofile` soft and hard limit plus `unless-stopped` recovery. See the [Public Spectator Operations Guide](../guides/public_spectator.md) for verification and tunnel procedure.
 
 ## Relationship to Existing Architecture
 
@@ -325,7 +316,7 @@ This document is accepted when:
 1. Security review approves the allowlist and outbound-only architecture. Anonymous private-Gateway requests remain unauthorized, and the public contract contains no mutation or producer operation.
 2. The two browser modes are documented as separate and non-interchangeable, with distinct authentication, transport, endpoint allowlists, and disclosure policies.
 3. The closed allowlist covers public live projections, public immutable proofs, and public metadata, with every prohibited field enumerated.
-4. The network path is frozen: the Gateway persists a safe projection, the outbound publisher signs and sends it to a hosted ingest endpoint, and public browsers connect to the hosted mirror's snapshot and SSE read endpoints. The private Gateway receives no public connection.
+4. The network path is explicit: the owner-authenticated publication route admits safe signed projections to the in-process mirror, and public browsers connect through Cloudflare only to the mirror's anonymous snapshot and SSE read endpoints. The private Gateway API receives no public connection.
 5. Every export is bound to pseudonymous source deployment, schema version, monotonic sequence, prior-batch hash, timestamp, content hash, signing key ID, and signature. Key rotation and revocation are defined.
 6. Every threat vector (replay, reordering, duplicate sequence numbers, equivocation, stale snapshots, forged events, mirror tampering, cache poisoning, artifact substitution, traversal, symlinks, oversized artifacts, denial of service, correlation leakage, restricted-field publication) has a defined mitigation that fails closed.
 7. Anonymous read limits, stream limits, retention, cache policy, stale and offline semantics, and availability boundaries are defined. Mirror availability is explicitly not verification evidence.

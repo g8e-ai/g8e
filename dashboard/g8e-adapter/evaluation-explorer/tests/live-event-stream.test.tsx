@@ -107,6 +107,26 @@ describe('LiveEventStream', () => {
     expect(screen.getByText('Completed')).toBeInTheDocument();
   });
 
+  it('colors role labels by event outcome instead of only lifecycle status', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({ event_id: 'evt-starting', kind: 'assignment_started', lifecycle_status: 'running' }),
+            liveEvent({ event_id: 'evt-succeeding', kind: 'assignment_completed', lifecycle_status: 'completed' }),
+            liveEvent({ event_id: 'evt-failing', kind: 'assignment_failed', lifecycle_status: 'completed' }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Assignment Started' }).closest('tr')?.querySelector('.stream-role')).toHaveClass('status-running');
+    expect(screen.getByRole('link', { name: 'Assignment Completed' }).closest('tr')?.querySelector('.stream-role')).toHaveClass('status-completed');
+    expect(screen.getByRole('link', { name: 'Assignment Failed' }).closest('tr')?.querySelector('.stream-role')).toHaveClass('status-failed');
+  });
+
   it('renders each event and assignment detail as its own table column', () => {
     render(
       <MemoryRouter>

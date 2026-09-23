@@ -51,6 +51,13 @@ function eventStatus(event: LiveEvent): string | undefined {
   return event.lifecycle_status;
 }
 
+function eventRoleStatus(event: LiveEvent): LiveEvent['lifecycle_status'] {
+  if (event.kind === 'assignment_failed') return 'failed';
+  if (event.kind === 'assignment_completed') return 'completed';
+  if (event.lifecycle_status === 'queued') return 'running';
+  return event.lifecycle_status;
+}
+
 type EventParts = {
   kind: string;
   status: string;
@@ -337,7 +344,7 @@ export function LiveEventStream({
                   <tr key={event.event_id}>
                     <td className="stream-time">{eventTime(event.observed_at)}</td>
                     <td>
-                      <span className={`stream-role status-${event.lifecycle_status}`}>
+                      <span className={`stream-role status-${eventRoleStatus(event)}`}>
                         {roleLabelText}
                       </span>
                     </td>

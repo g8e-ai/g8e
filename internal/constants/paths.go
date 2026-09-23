@@ -738,6 +738,7 @@ const (
 	DemoRunMaxResults                             = 1024
 	DemoRunMaxArtifactsPerDirectory               = 4096
 	EvaluationDirname                             = "eval"
+	EvaluationInventoriesDirname                  = "inventories"
 	EvaluationCampaignsDirname                    = "campaigns"
 	EvaluationRunsDirname                         = "runs"
 	EvaluationAssignmentsDirname                  = "assignments"

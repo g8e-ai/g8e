@@ -8,7 +8,9 @@
 package evaluation
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,6 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -159,8 +163,12 @@ func TestResolveCampaignStartPlanForModelTags(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(inventoryPath), 0o755))
 	require.NoError(t, os.WriteFile(inventoryPath, []byte(`{"variants":[`+string(raw)+`]}`), 0o600))
 
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
 	now := time.Unix(1789657337, 0).UTC()
 	plan, err := ResolveCampaignStartPlan(CampaignStartPlanRequest{
+		Context:     context.Background(),
+		FileService: fileSvc,
 		ProjectRoot: root,
 		ModelTag:    "qwen3:4b",
 		Now:         now,
@@ -169,6 +177,94 @@ func TestResolveCampaignStartPlanForModelTags(t *testing.T) {
 	assert.Equal(t, "eval-init-qwen3-4b", plan.CampaignID)
 	assert.Equal(t, "eval-init-qwen3-4b-1789657337", plan.RunID)
 	assert.FileExists(t, plan.InventoryPath)
+}
+
+type immutableInventoryFileService struct {
+	*campaignMemoryFileService
+	readErr  error
+	writeErr error
+}
+
+func (s *immutableInventoryFileService) ReadFile(ctx context.Context, relPath string) ([]byte, error) {
+	if s.readErr != nil {
+		return nil, s.readErr
+	}
+	return s.campaignMemoryFileService.ReadFile(ctx, relPath)
+}
+
+func (s *immutableInventoryFileService) WriteFile(ctx context.Context, relPath string, data []byte, mode os.FileMode) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	return s.campaignMemoryFileService.WriteFile(ctx, relPath, data, mode)
+}
+
+func TestMaterializeImmutableModelInventory_ReturnsReadWriteAndMarshalErrors(t *testing.T) {
+	freeze, err := MaterializeModelRegistry("eval-init-qwen3-4b", []*evalv1.ModelVariant{{
+		VariantId:      "qwen3-4b",
+		ServedModelTag: "qwen3:4b",
+		ModelDigest:    "digest",
+		ProviderClass:  "ollama",
+	}})
+	require.NoError(t, err)
+	errRead := errors.New("read failure")
+	errWrite := errors.New("write failure")
+	tests := []struct {
+		name    string
+		service *immutableInventoryFileService
+		freeze  *ModelInventoryFreeze
+		want    error
+	}{
+		{name: "read failure", service: &immutableInventoryFileService{campaignMemoryFileService: newCampaignMemoryFileService(), readErr: errRead}, freeze: freeze, want: errRead},
+		{name: "write failure", service: &immutableInventoryFileService{campaignMemoryFileService: newCampaignMemoryFileService(), readErr: constants.ErrNotFound, writeErr: errWrite}, freeze: freeze, want: errWrite},
+		{name: "missing freeze", service: &immutableInventoryFileService{campaignMemoryFileService: newCampaignMemoryFileService()}, want: constants.ErrMissingRequiredField},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			relPath := filepath.Join(constants.EvaluationDirname, constants.EvaluationInventoriesDirname, freeze.CampaignID+".json")
+			err := materializeImmutableModelInventory(context.Background(), test.service, relPath, test.freeze)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, test.want)
+		})
+	}
+}
+
+func TestResolveCampaignStartPlan_ReusesIdenticalReadOnlyInventoryAndRejectsDifferentContent(t *testing.T) {
+	root := t.TempDir()
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	variant := &evalv1.ModelVariant{
+		VariantId:      "qwen3-4b",
+		ServedModelTag: "qwen3:4b",
+		ModelDigest:    "digest",
+		ProviderClass:  "ollama",
+	}
+	writeFrozenVariantsForQueueTest(t, root, DefaultBaseModelInventoryRelPath, variant)
+
+	request := CampaignStartPlanRequest{
+		Context:     context.Background(),
+		FileService: fileSvc,
+		ProjectRoot: root,
+		ModelTag:    variant.GetServedModelTag(),
+		CampaignID:  "eval-init-qwen3-4b",
+		Now:         time.Unix(1789657337, 0).UTC(),
+	}
+	first, err := ResolveCampaignStartPlan(request)
+	require.NoError(t, err)
+	info, err := os.Stat(first.InventoryPath)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(constants.PermFileReadOnly), info.Mode().Perm())
+
+	second, err := ResolveCampaignStartPlan(request)
+	require.NoError(t, err)
+	assert.Equal(t, first.InventoryPath, second.InventoryPath)
+
+	variant.ModelDigest = "different-digest"
+	writeFrozenVariantsForQueueTest(t, root, DefaultBaseModelInventoryRelPath, variant)
+	_, err = ResolveCampaignStartPlan(request)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrImmutableInventoryConflict))
 }
 
 func TestActiveCampaignRunRoundTrip(t *testing.T) {

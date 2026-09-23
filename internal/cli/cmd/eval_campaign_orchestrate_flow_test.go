@@ -255,7 +255,11 @@ func TestScheduleHomogeneousCampaignRun_RequiresInitializedRun(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 
+	fileSvc, err := deps.fileSvcFactory(root, slog.Default())
+	require.NoError(t, err)
 	plan, err := evaluation.ResolveCampaignStartPlan(evaluation.CampaignStartPlanRequest{
+		Context:     context.Background(),
+		FileService: fileSvc,
 		ProjectRoot: root,
 		ModelTag:    "qwen3:4b",
 		Now:         deps.now().UTC(),

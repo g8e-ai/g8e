@@ -523,11 +523,13 @@ type campaignStartFlowResult struct {
 }
 
 func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaignStartFlowOptions) (*campaignStartFlowResult, error) {
-	cfg, _, err := nativeEvalEnvironment(cmd, deps)
+	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 	if err != nil {
 		return nil, err
 	}
 	plan, err := evaluation.ResolveCampaignStartPlan(evaluation.CampaignStartPlanRequest{
+		Context:       cmd.Context(),
+		FileService:   fileSvc,
 		ProjectRoot:   cfg.ProjectRoot,
 		ModelTag:      opts.ModelTag,
 		ModelTags:     opts.ModelTags,
