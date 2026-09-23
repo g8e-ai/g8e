@@ -50,8 +50,7 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := createTestVault(t, fileSvc, privKey)
 
 	cfg := &storage.AuditStoreConfig{
 		DBPath:               "test_audit.db",
@@ -66,14 +65,13 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	return store
 }
 
-// createTestVault creates an unlocked vault in the given directory.
-func createTestVault(t *testing.T, dataDir string, privateKey []byte) *vault.Vault {
+// createTestVault creates an unlocked vault in the runtime tree.
+func createTestVault(t *testing.T, fileSvc fs.RuntimeFileService, privateKey []byte) *vault.Vault {
 	t.Helper()
-	require.NoError(t, os.MkdirAll(dataDir, 0700))
 	header, _, err := vault.NewVaultHeader(privateKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(dataDir))
-	v, err := vault.NewVault(&vault.VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, header.Save(fileSvc))
+	v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	require.NoError(t, v.Unlock(privateKey))
 	t.Cleanup(func() { v.Close() })

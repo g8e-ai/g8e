@@ -395,7 +395,9 @@ func setupCampaignWitnessEnv(t *testing.T) (root string, deps nativeEvalDeps, cm
 
 	paths := config.DefaultPathsConfig()
 	paths.Host = server.URL
-	cfg := &config.Config{ProjectRoot: root, RuntimeDir: root + "/.g8e", Paths: &paths}
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	cfg := &config.Config{ProjectRoot: root, RuntimeDir: fileSvc.Resolve(""), Paths: &paths}
 	deps = nativeEvalDeps{
 		configLoader: func(string) (*config.Config, error) { return cfg, nil },
 		fileSvcFactory: func(string, *slog.Logger) (fs.RuntimeFileService, error) {

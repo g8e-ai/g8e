@@ -31,14 +31,11 @@ func setupTestGitLedger(t *testing.T) *storage.GitLedgerService {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
-	vaultDir := filepath.Join(testutil.TempDir(t), "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0o700))
-	v := createTestVault(t, vaultDir, privKey)
-
 	baseDir := testutil.TempDir(t)
 	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	v := createTestVault(t, fileSvc, privKey)
 
 	ledger, err := storage.NewGitLedgerService(&storage.LedgerConfig{
 		GitPath:         "git",

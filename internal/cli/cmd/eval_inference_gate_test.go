@@ -197,9 +197,11 @@ func setupInferenceEvalEnv(t *testing.T) (root string, deps nativeEvalDeps, cmd 
 
 	paths := config.DefaultPathsConfig()
 	paths.Host = server.URL
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
 	cfg := &config.Config{
 		ProjectRoot: root,
-		RuntimeDir:  root + "/.g8e",
+		RuntimeDir:  fileSvc.Resolve(""),
 		Paths:       &paths,
 	}
 

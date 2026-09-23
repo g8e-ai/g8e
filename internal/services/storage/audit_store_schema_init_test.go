@@ -10,7 +10,6 @@ package storage
 import (
 	"crypto/ed25519"
 	"database/sql"
-	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -30,7 +29,7 @@ func TestSQLAuditStore_InitDatabase_CommitmentLedgerWardenIntentColumn(t *testin
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := CreateTestVault(t, filepath.Join(tempDir, constants.VaultDirname), privKey)
+	testVault := CreateTestVault(t, fileSvc, privKey)
 
 	config := &AuditStoreConfig{
 		DBPath:               constants.TestCommitmentLedgerDBFilename,
@@ -98,7 +97,7 @@ func TestSQLAuditStore_StartupMigratesPopulatedCommitmentLedger(t *testing.T) {
 	fileSvc, _ := newTestFileSvc(t, tempDir)
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := CreateTestVault(t, filepath.Join(tempDir, constants.VaultDirname), privKey)
+	testVault := CreateTestVault(t, fileSvc, privKey)
 	config := &AuditStoreConfig{
 		DBPath:               constants.TestCommitmentLedgerDBFilename,
 		MaxDBSizeMB:          100,

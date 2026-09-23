@@ -19,7 +19,7 @@ import (
 
 func TestImportAssignmentResultFromTrace_CompletedHomogeneousRole(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	req := homogeneousAssignmentExecutionRequest("primary")
 	evidence, err := BuildAssignmentTraceEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, trace, time.Unix(1_700_000_000, 0).UTC())
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestImportAssignmentResultFromTrace_CompletedHomogeneousRole(t *testing.T) 
 
 func TestImportAssignmentResultFromTrace_RoleNotInvokedIsPartial(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["role_outcome"] = "role_not_invoked"
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestImportAssignmentResultFromTrace_RoleNotInvokedIsPartial(t *testing.T) {
 
 func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithoutModelCallsIsProviderFailed(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["status"] = "failed"
 	trace["role_outcome"] = "role_not_invoked"
 	trace["model_calls"] = []any{}
@@ -63,7 +63,7 @@ func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithoutModelCallsIs
 
 func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedWithModelCallsIsPartial(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["status"] = "failed"
 	trace["role_outcome"] = "role_not_invoked"
 	digest, err := ComputeChatProbeTraceDigest(trace)
@@ -101,7 +101,7 @@ func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionReque
 			ScenarioID: "instruction-exact-format",
 			UserPrompt: "Reply with exactly: NORTH-STAR-OK",
 		},
-		ScenarioGold:  loadScenarioGold("instruction-exact-format"),
+		ScenarioGold:  loadScenarioGold(t, "instruction-exact-format"),
 		GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		Binding: CampaignExecutionBinding{
 			InferenceOperatorSessionID: "session-1",
@@ -115,7 +115,7 @@ func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionReque
 
 func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["tool_decisions"] = []any{
 		map[string]any{
 			"decision_id": "exec-1",
@@ -157,7 +157,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 
 func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	call := trace["model_calls"].([]any)[0].(map[string]any)
 	call["usage_reported"] = true
 	call["input_tokens"] = float64(0)
@@ -199,7 +199,7 @@ func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testi
 
 func TestImportAssignmentResultFromTrace_RejectsUnknownPolicyOutcome(t *testing.T) {
 	t.Parallel()
-	trace := completedHomogeneousTrace("primary")
+	trace := completedHomogeneousTrace(t, "primary")
 	trace["policy_decisions"] = []any{map[string]any{
 		"decision_id": "policy-1",
 		"tool_name":   "read_file",
@@ -235,7 +235,8 @@ func TestDurationSecondsToNanosChecked_RoundsProviderTelemetryFloats(t *testing.
 	}
 }
 
-func completedHomogeneousTrace(role string) map[string]any {
+func completedHomogeneousTrace(t *testing.T, role string) map[string]any {
+	t.Helper()
 	trace := map[string]any{
 		"schema_version":    "1",
 		"chat_execution_id": "exec-1",
@@ -270,9 +271,7 @@ func completedHomogeneousTrace(role string) map[string]any {
 		},
 	}
 	digest, err := ComputeChatProbeTraceDigest(trace)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	return trace
 }

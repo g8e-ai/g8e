@@ -53,13 +53,13 @@ func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 	require.NoError(t, err)
 	vh, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vh.Save(vaultDir))
+	require.NoError(t, vh.Save(fileSvc))
 
 	keyHex := hex.EncodeToString(privKey)
 	keyPath := filepath.Join(root, "vault.key")
 	require.NoError(t, os.WriteFile(keyPath, []byte(keyHex), 0o600))
 
-	v, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	require.NoError(t, v.Unlock(privKey))
 	t.Cleanup(func() { v.Close() })

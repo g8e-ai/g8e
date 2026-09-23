@@ -1061,7 +1061,7 @@ func TestObserveProducerEndpoint_AgentStateResponseTyped(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 	assert.True(t, resp.Accepted)
 	// The response body must contain only {"accepted":true}.
-	var raw map[string]any
+	var raw map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &raw))
 	assert.Len(t, raw, 1, "response must have exactly one field")
 	assert.Contains(t, raw, "accepted")
