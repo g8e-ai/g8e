@@ -144,7 +144,9 @@ func TestVaultInitCmd(t *testing.T) {
 		err := cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 
-		assert.True(t, vault.VaultHeaderExists(fileSvc.Resolve(constants.VaultDirname)))
+		headerExists, err := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, err)
+		assert.True(t, headerExists)
 		exists, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
 		require.NoError(t, err)
 		assert.True(t, exists)
@@ -161,7 +163,9 @@ func TestVaultInitCmd(t *testing.T) {
 		err := cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 
-		assert.True(t, vault.VaultHeaderExists(fileSvc.Resolve("custom-vault")))
+		headerExists, err := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, err)
+		assert.True(t, headerExists)
 		exists, err := fileSvc.FileExists(context.Background(), "custom.key")
 		require.NoError(t, err)
 		assert.True(t, exists)
@@ -292,7 +296,9 @@ func TestVaultResetCmd(t *testing.T) {
 		err := cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 		assert.Contains(t, out.String(), "Vault reset complete")
-		assert.False(t, vault.VaultHeaderExists(fileSvc.Resolve(constants.VaultDirname)))
+		headerExists, headerErr := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, headerErr)
+		assert.False(t, headerExists)
 	})
 
 	t.Run("interactive cancellation", func(t *testing.T) {
@@ -311,7 +317,9 @@ func TestVaultResetCmd(t *testing.T) {
 		err := cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 		assert.Contains(t, out.String(), "Reset cancelled")
-		assert.True(t, vault.VaultHeaderExists(fileSvc.Resolve(constants.VaultDirname)))
+		headerExists, headerErr := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, headerErr)
+		assert.True(t, headerExists)
 	})
 }
 
@@ -431,7 +439,9 @@ func TestVaultResetCmd_ErrorPaths(t *testing.T) {
 		err := cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 		assert.Contains(t, out.String(), "Vault reset complete")
-		assert.False(t, vault.VaultHeaderExists(fileSvc.Resolve(constants.VaultDirname)))
+		headerExists, headerErr := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, headerErr)
+		assert.False(t, headerExists)
 	})
 
 	t.Run("interactive confirm with wrong text", func(t *testing.T) {
@@ -450,7 +460,9 @@ func TestVaultResetCmd_ErrorPaths(t *testing.T) {
 		err := cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 		assert.Contains(t, out.String(), "Reset cancelled")
-		assert.True(t, vault.VaultHeaderExists(fileSvc.Resolve(constants.VaultDirname)))
+		headerExists, headerErr := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, headerErr)
+		assert.True(t, headerExists)
 	})
 }
 

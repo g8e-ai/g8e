@@ -10,6 +10,7 @@ package gateway
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -590,7 +591,7 @@ func TestHandlePublish_InvalidProtoJSONDroppedFailClosed(t *testing.T) {
 
 func TestHandlePublish_InvalidOperatorSessionDroppedFailClosed(t *testing.T) {
 	broker, validator := newRelayTestBroker(t, "root-abc", nil)
-	validator.err = errors.New("session not found")
+	validator.err = fmt.Errorf("session not found")
 	handler := newAppSessionHandler(broker, "g8ee")
 
 	cmdChannel := pubsub.CmdChannel("op-001", "sess-001")
@@ -623,7 +624,7 @@ func TestHandlePublish_StateRootErrorDroppedFailClosed(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 	broker.SetCommandRelayDeps(
-		&stubStateRootProvider{err: errors.New("state root unavailable")},
+		&stubStateRootProvider{err: fmt.Errorf("state root unavailable")},
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
 		governance.NewL1Doctrine(),

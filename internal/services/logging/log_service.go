@@ -10,6 +10,7 @@ package logging
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -33,14 +34,14 @@ func NewLogService(fileSvc fs.RuntimeFileService) *LogService {
 }
 
 // ConfigureFileLogger opens g8e.log via the file service and returns a
-// slog.Logger writing to it. The caller must close the returned handle
-// on shutdown. Ensures the log directory exists.
+// slog.Logger writing to it and stderr. The caller must close the returned
+// handle on shutdown. Ensures the log directory exists.
 func (s *LogService) ConfigureFileLogger(ctx context.Context, level string) (*slog.Logger, *os.File, error) {
 	handle, err := s.OpenLogForAppend(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	logger, err := NewLogger(level, handle)
+	logger, err := NewLogger(level, io.MultiWriter(handle, os.Stderr))
 	if err != nil {
 		_ = handle.Close()
 		return nil, nil, fmt.Errorf("logging: configure logger: %w", err)

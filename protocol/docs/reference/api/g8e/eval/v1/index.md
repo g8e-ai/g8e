@@ -4,6 +4,8 @@
 ## Table of Contents
 
 - [g8e/eval/v1/eval.proto](#g8e_eval_v1_eval-proto)
+    - [CampaignComplianceSourceArtifact](#g8e-eval-v1-CampaignComplianceSourceArtifact)
+    - [CampaignComplianceSourceInventory](#g8e-eval-v1-CampaignComplianceSourceInventory)
     - [DecomposedScoreRecord](#g8e-eval-v1-DecomposedScoreRecord)
     - [DeterministicGrade](#g8e-eval-v1-DeterministicGrade)
     - [EscalationRecord](#g8e-eval-v1-EscalationRecord)
@@ -90,6 +92,7 @@
     - [EvaluationScenarioCategory](#g8e-eval-v1-EvaluationScenarioCategory)
     - [EvaluationUsageAvailability](#g8e-eval-v1-EvaluationUsageAvailability)
     - [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus)
+    - [EvaluationWitnessPolicy](#g8e-eval-v1-EvaluationWitnessPolicy)
     - [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole)
     - [ModelCapabilityKind](#g8e-eval-v1-ModelCapabilityKind)
     - [ModelManifestVerificationStatus](#g8e-eval-v1-ModelManifestVerificationStatus)
@@ -115,6 +118,44 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## g8e/eval/v1/eval.proto
+
+
+
+<a name="g8e-eval-v1-CampaignComplianceSourceArtifact"></a>
+
+### CampaignComplianceSourceArtifact
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| runtime_path | [string](#string) |  |  |
+| sha256 | [string](#string) |  |  |
+| media_type | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-CampaignComplianceSourceInventory"></a>
+
+### CampaignComplianceSourceInventory
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| schema_version | [string](#string) |  |  |
+| admission_id | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| campaign_id | [string](#string) |  |  |
+| provider_observation_policy | [EvaluationWitnessPolicy](#g8e-eval-v1-EvaluationWitnessPolicy) |  |  |
+| model_provenance_policy | [EvaluationWitnessPolicy](#g8e-eval-v1-EvaluationWitnessPolicy) |  |  |
+| artifacts | [CampaignComplianceSourceArtifact](#g8e-eval-v1-CampaignComplianceSourceArtifact) | repeated |  |
+
+
+
 
 
 
@@ -593,6 +634,8 @@ EvaluationVerificationReport independently verifies one run or assignment.
 | campaign_digest | [string](#string) |  |  |
 | catalog_digest | [string](#string) |  |  |
 | model_registry_digest | [string](#string) |  |  |
+| provider_observation_policy | [EvaluationWitnessPolicy](#g8e-eval-v1-EvaluationWitnessPolicy) |  |  |
+| model_provenance_policy | [EvaluationWitnessPolicy](#g8e-eval-v1-EvaluationWitnessPolicy) |  |  |
 
 
 
@@ -1874,6 +1917,19 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 | EVALUATION_VERDICT_STATUS_UNAVAILABLE | 3 |  |
 | EVALUATION_VERDICT_STATUS_UNSUPPORTED | 4 |  |
 | EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE | 5 |  |
+
+
+
+<a name="g8e-eval-v1-EvaluationWitnessPolicy"></a>
+
+### EvaluationWitnessPolicy
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| EVALUATION_WITNESS_POLICY_UNSPECIFIED | 0 |  |
+| EVALUATION_WITNESS_POLICY_INTERIM | 1 |  |
+| EVALUATION_WITNESS_POLICY_STRICT | 2 |  |
 
 
 

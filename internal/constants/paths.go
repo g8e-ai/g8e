@@ -213,6 +213,13 @@ const (
 	ExecutionVaultDBPath       = RuntimeDirname + "/" + ExecutionVaultDBFilename
 	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename
 
+	// Runtime-relative database paths (relative to RuntimeFileService root).
+	CanonicalDBRelPath            = DataDirname + "/" + DbFilename
+	SuspendedTransactionDBRelPath = DataDirname + "/" + SuspendedTxFilename
+	ExecutionVaultDBRelPath       = DataDirname + "/" + ExecutionVaultDBFilename
+	ReplayStoreDBRelPath          = DataDirname + "/" + ReplayStoreDBFilename
+	DefaultVaultKeyRelPath        = VaultDirname + "/" + VaultKeyFilename
+
 	// Key filenames
 	MasterKeyFilename = ".master_key"
 	PublicKeySuffix   = ".pub"
@@ -238,6 +245,7 @@ const (
 const (
 	DockerExecutable                 = "docker"
 	DockerComposeFile                = "docker-compose.yml"
+	DockerNativeEvalComposeFile      = "eval/native-boundary-compose.yml"
 	DockerBootstrappedProfile        = "bootstrapped"
 	DockerCrossEnrollProfile         = "cross-enrollment"
 	DockerEvaluationProfile          = "evaluation"
@@ -245,7 +253,7 @@ const (
 	DockerOperatorContainer          = "g8e-operator"
 	DockerEnsembleContainer          = "ensemble"
 	DockerDashboardContainer         = "dashboard"
-	DockerEvaluationObserverService  = "g8e-eval-observer"
+	DockerNativeTargetReaderService  = "g8e-native-target-reader"
 	DockerProjectPrefix              = "g8e"
 	EvaluationTargetContainerDir     = "/tmp"
 	EvaluationTargetFilenamePrefix   = "g8e-eval-"
@@ -337,13 +345,26 @@ const (
 	BinaryImageNameWindows = "g8e.exe"
 )
 
-// NodeBinariesDir is the image-baked directory in the Docker runtime image
-// where all platform binaries (g8e-linux-amd64, g8e-darwin-arm64, etc.) are
-// placed by the Dockerfile. The gateway serves them via the
-// /.well-known/g8e/bin/{filename} endpoint. This path is outside the .g8e/
-// volume mount so it is always present regardless of volume state.
+// G8eBinariesDir is the optional image-baked directory for a complete
+// cross-platform binary manifest. Standard runtime images contain only /g8e;
+// custom distribution images can populate this directory for the Gateway's
+// /.well-known/g8e/bin/{filename} endpoint. The path remains outside .g8e/
+// runtime state.
 const (
-	NodeBinariesDir = "/opt/g8e/bin"
+	G8eBinariesDir                  = "/opt/g8e/bin"
+	G8eBinariesManifestFilename     = "g8e-binaries.json"
+	G8eBinariesExportRecordFilename = "g8e-binaries-export.json"
+	G8eBinaryChecksumSuffix         = ".sha256"
+	G8eBinariesArchiveRoot          = "/opt/g8e/bin"
+	G8eBinariesStagingPrefix        = ".g8e-binaries-export-"
+	G8eBinariesPreviousSuffix       = ".previous"
+
+	// OCI labels copied from the build provenance embedded in g8e-binaries.json.
+	G8eImageVersionLabel   = "org.opencontainers.image.version"
+	G8eBuildIDLabel        = "io.g8e.build.id"
+	G8eBuildTimeLabel      = "io.g8e.build.time"
+	G8eSourceRevisionLabel = "io.g8e.source.revision"
+	G8eSourceTreeHashLabel = "io.g8e.source.tree.hash"
 )
 
 // Deploy script filenames served by the gateway.
@@ -483,6 +504,7 @@ const (
 	TestVaultDirname               = "test-vault"
 	TestSecretManagerDBFilename    = "secret_manager_test.db"
 	TestCommitmentLedgerDBFilename = "commitment_ledger_test.db"
+	TestGatewayDatabaseFilename    = "gateway_test.db"
 	TestCertFilename               = "test-cert.pem"
 	TestKeyFilename                = "test-key.pem"
 
@@ -534,6 +556,7 @@ const (
 	TestPathRepoRootFromCompliancePackage = "../../.."
 	TestDataDirname                       = "testdata"
 	TestEvaluationTargetFilename          = "evaluation-target.txt"
+	TestReadOnlyDatabaseFilename          = "read-only.db"
 
 	// Source-tree protocol path constants for contract tests in
 	// internal/constants and internal/models. These resolve canonical
@@ -656,6 +679,11 @@ const (
 	ComplianceBundleChecksumsFilename            = "checksums.json"
 	ComplianceBundlePublicKeysFilename           = "public-keys.json"
 	ComplianceBundleSignaturesFilename           = "signatures.json"
+	ComplianceOperationalExportDirname           = "operational"
+	ComplianceOperationalInventoryFilename       = "inventory.json"
+	ComplianceOperationalReceiptsDirname         = "receipts"
+	ComplianceOperationalPersistenceDirname      = "persistence"
+	ComplianceOperationalCommitmentsDirname      = "commitments"
 )
 
 // Release evidence output filename suffixes. The per-release compliance
@@ -686,13 +714,14 @@ const (
 	DemoRunVerificationCheck                      = "demo_run"
 	EvalRunVerificationCheck                      = "eval_evidence_graph"
 	AssertionGraderID                             = "assertion_assessment"
-	AssertionGraderVersion                        = "1.0.0"
+	AssertionGraderVersion                        = "2.2.0"
 	FrameworkGraderID                             = "framework_assessment"
 	FrameworkGraderVersion                        = "1.0.0"
 	ReceiptEvidenceVerifierID                     = "g8e-receipt-evidence-importer"
 	ReceiptEvidenceVerifierVersion                = "1.0.0"
 	ActionReceiptReferencePrefix                  = "action-receipt"
 	ReceiptPersistenceReferencePrefix             = "receipt-persistence"
+	DeterministicStagesReferencePrefix            = "deterministic-stages"
 	AuditRecordReferencePrefix                    = "audit-record"
 	AuditRecordsDirname                           = "audit-records"
 	CommitmentReferencePrefix                     = "commitment"
@@ -730,28 +759,55 @@ const (
 	DemoRunMaxResults                             = 1024
 	DemoRunMaxArtifactsPerDirectory               = 4096
 	EvaluationDirname                             = "eval"
+	EvaluationInventoriesDirname                  = "inventories"
 	EvaluationCampaignsDirname                    = "campaigns"
 	EvaluationRunsDirname                         = "runs"
 	EvaluationAssignmentsDirname                  = "assignments"
+	EvaluationActiveRunFilename                   = "active-run.json"
+	EvaluationActiveRunPath                       = DataDirname + "/" + EvaluationDirname + "/" + EvaluationActiveRunFilename
+	EvaluationModelInventoryPath                  = EvaluationDirname + "/model-inventory.json"
+	EvaluationInitCampaignQueuePath               = EvaluationDirname + "/init-campaign-queue.json"
+	EvaluationQueueLogsDirname                    = EvaluationDirname + "/logs"
+	EvaluationCampaignExportDirname               = "export"
+	EvaluationCampaignExportSQLiteFilename        = "campaign_export.sqlite"
+	EvaluationExportSchemaFilename                = "export_schema.json"
+	EvaluationRunSummaryFilename                  = "run_summary.json"
+	EvaluationAssignmentsJSONLFilename            = "assignments.jsonl"
+	EvaluationModelSummariesJSONLFilename         = "model_summaries.jsonl"
+	EvaluationAssignmentsCSVFilename              = "assignments.csv"
+	EvaluationModelSummariesCSVFilename           = "model_summaries.csv"
 	EvaluationReportFilename                      = "report.json"
 	EvaluationVerificationFilename                = "verification.json"
 	EvaluationCampaignSpecFilename                = "campaign-spec.json"
 	EvaluationHeterogeneousStackSetFilename       = "heterogeneous-stack-set.json"
 	EvaluationScenarioCatalogFilename             = "scenario-catalog.json"
+	EvaluationScenarioArtifactsDirname            = "scenario-artifacts"
 	EvaluationRunStateFilename                    = "run.json"
 	EvaluationPublicationStateFilename            = "public-projection-state.json"
 	EvaluationEvidenceDirname                     = "evidence"
 	EvalRunVerifierID                             = "g8e-native-evaluation-verifier"
 	EvalRunVerifierVersion                        = "1.0.0"
+	EvaluationSourceKindNative                    = "native-evaluation"
+	EvaluationSourceKindCampaign                  = "campaign-evaluation"
+	EvaluationSourceVersion                       = "1.0.0"
+	CampaignVerifierID                            = "g8e-campaign-verifier"
+	CampaignVerifierVersion                       = "2.0.0"
+	CampaignVerificationFilename                  = "campaign-verification.json"
+	CampaignExportEvaluationSummaryFilename       = "evaluation_summary.json"
+	CampaignSourceInventoryFilename               = "campaign-source-inventory.json"
+	CampaignSourceInventoryVersion                = "1.0.0"
+	EvaluationSelectionDiagnosticsFilename        = "evaluation-selection-diagnostics.json"
 	EvalScopePrefix                               = "eval:"
 	EvalRestrictedEvidenceScope                   = "restricted_evaluation_evidence"
 	EvalEvidenceEncryptionAES256GCM               = "aes-256-gcm"
 	EvalEncryptedEvidenceVersion                  = 1
 	EvalEncryptedEvidenceNonceBytes               = 12
 	MediaTypeJSON                                 = "application/json"
+	MediaTypeOctetStream                          = "application/octet-stream"
 	MediaTypeOSCALJSON                            = "application/oscal+json"
 	MediaTypeMarkdown                             = "text/markdown; charset=utf-8"
 	MediaTypeHTML                                 = "text/html; charset=utf-8"
+	MediaTypeCSV                                  = "text/csv; charset=utf-8"
 	MediaTypeText                                 = "text/plain; charset=utf-8"
 	ObserveEventPayloadSchemaVersion              = "1.0.0"
 	ObserveMeasurementSchemaVersion               = "1.0.0"
@@ -770,7 +826,7 @@ const (
 	ComplianceBundleAssemblerID                   = "g8e-compliance-bundle-assembler"
 	ComplianceBundleAssemblerVersion              = "1.0.0"
 	ComplianceBundleVerifierID                    = "compliance_bundle"
-	ComplianceBundleVerifierVersion               = "1.0.0"
+	ComplianceBundleVerifierVersion               = "2.0.0"
 	ComplianceBundleCheckCatalog                  = "bundle_catalog"
 	ComplianceBundleCheckManifestDigest           = "manifest_digest"
 	ComplianceBundleCheckBindings                 = "bundle_bindings"
@@ -780,12 +836,14 @@ const (
 	ComplianceBundleCheckSignatures               = "bundle_signatures"
 	ComplianceBundleCheckTypedArtifacts           = "typed_artifacts"
 	ComplianceBundleCheckSourceVerification       = "source_verification"
+	ComplianceBundleCheckDecisionReplay           = "decision_replay"
 	ComplianceBundleCheckRenderedFormats          = "rendered_formats"
 	ComplianceBundleSchemaVersion                 = "1.0.0"
 	ComplianceBundleProfilePublic                 = "public"
 	ComplianceBundleProfileRestricted             = "restricted"
 	ComplianceBundleMaxArtifacts                  = 8192
 	ComplianceBundleMaxArtifactBytes              = 64 << 20
+	ComplianceOperationalExportDefaultMaxRows     = 4096
 	ComplianceEvidenceTrustMaxKeys                = 4096
 	ComplianceBundleMaxDirectoryDepth             = 32
 	ComplianceBundleMaxEnumeratedEntries          = ComplianceBundleMaxArtifacts * 2
@@ -794,6 +852,7 @@ const (
 	ComplianceBundleOSCALPath                     = "oscal/assessment-results.json"
 	ComplianceBundleMarkdownPath                  = "report.md"
 	ComplianceBundleHTMLPath                      = "report.html"
+	ComplianceBundleCSVPath                       = "report.csv"
 	ComplianceBundleCLIPath                       = "report.txt"
 	ComplianceBundleJSONPath                      = "analysis.json"
 	ComplianceBundleChecksumsPath                 = "checksums.json"
@@ -888,26 +947,37 @@ const (
 // signed append-only batches, ordered outbox, and content-addressed proof
 // packages).
 const (
-	PublicLoopTempPrefix           = "g8e-public-loop-"
-	PublicFeedDirname              = "public-feed"
-	PublicFeedOutboxFilename       = "outbox.jsonl"
-	PublicFeedOutboxPath           = "public-feed/outbox.jsonl"
-	PublicFeedSnapshotFilename     = "snapshot.json"
-	PublicFeedSnapshotPath         = "public-feed/snapshot.json"
-	PublicFeedExportConfigFilename = "export-config.json"
-	PublicFeedExportConfigPath     = "public-feed/export-config.json"
-	PublicFeedSigningKeyFilename   = "signing-key.ed25519"
-	PublicFeedSigningKeyPath       = "public-feed/signing-key.ed25519"
-	PublicFeedIngestTokenFilename  = "ingest-token"
-	PublicFeedIngestTokenPath      = "public-feed/ingest-token"
-	PublicFeedKeyRotationFilename  = "key-rotation.json"
-	PublicFeedKeyRotationPath      = "public-feed/key-rotation.json"
-	PublicMirrorDirname            = "public-mirror"
-	PublicMirrorStateFilename      = "state.json"
-	PublicMirrorStatePath          = "public-mirror/state.json"
-	PublicProofsDirname            = "public-proofs"
-	PublicProofCatalogFilename     = "proof-catalog.json"
-	PublicProofManifestFilename    = "proof-manifest.json"
+	PublicLoopTempPrefix                     = "g8e-public-loop-"
+	PublicFeedDirname                        = "public-feed"
+	PublicFeedOutboxFilename                 = "outbox.jsonl"
+	PublicFeedOutboxPath                     = "public-feed/outbox.jsonl"
+	PublicFeedSnapshotFilename               = "snapshot.json"
+	PublicFeedSnapshotPath                   = "public-feed/snapshot.json"
+	PublicFeedExportConfigFilename           = "export-config.json"
+	PublicFeedExportConfigPath               = "public-feed/export-config.json"
+	PublicFeedSigningKeyFilename             = "signing-key.ed25519"
+	PublicFeedSigningKeyPath                 = "public-feed/signing-key.ed25519"
+	PublicFeedIngestTokenFilename            = "ingest-token"
+	PublicFeedIngestTokenPath                = "public-feed/ingest-token"
+	PublicFeedKeyRotationFilename            = "key-rotation.json"
+	PublicFeedKeyRotationPath                = "public-feed/key-rotation.json"
+	PublicFeedArchiveDirname                 = "public-feed-archive"
+	PublicFeedArchiveGenerationsDirname      = "public-feed-archive/generations"
+	PublicFeedLegacyArchiveExportConfigPath  = "public-feed-archive/export-config.json"
+	PublicFeedLegacyArchiveSigningKeyPath    = "public-feed-archive/signing-key.ed25519"
+	PublicFeedLegacyArchiveIngestTokenPath   = "public-feed-archive/ingest-token"
+	PublicFeedLegacyArchiveOutboxPath        = "public-feed-archive/outbox.jsonl"
+	PublicFeedLegacyArchiveSnapshotPath      = "public-feed-archive/snapshot.json"
+	PublicFeedLegacyArchiveKeyRotationPath   = "public-feed-archive/key-rotation.json"
+	PublicFeedLegacyArchiveProofsPath        = "public-feed-archive/public-proofs"
+	PublicFeedLegacyArchiveProofCatalogPath  = "public-feed-archive/proof-catalog.json"
+	PublicFeedLegacyArchiveProofManifestPath = "public-feed-archive/proof-manifest.json"
+	PublicMirrorDirname                      = "public-mirror"
+	PublicMirrorStateFilename                = "state.json"
+	PublicMirrorStatePath                    = "public-mirror/state.json"
+	PublicProofsDirname                      = "public-proofs"
+	PublicProofCatalogFilename               = "proof-catalog.json"
+	PublicProofManifestFilename              = "proof-manifest.json"
 )
 
 // Public feed schema and protocol version constants.

@@ -28,7 +28,7 @@ func TestValidateChatProbeTrace_RequiresTerminalCompletedTrace(t *testing.T) {
 		TargetOperatorSessionID: "session-1",
 		ModelRegistryDigest:     "d" + repeatHex('d', 63),
 	}
-	trace := map[string]any{
+	trace := EvaluationTrace{
 		"status": "running",
 	}
 	err := ValidateChatProbeTrace(req, trace)
@@ -47,12 +47,12 @@ func TestValidateChatProbeTrace_AcceptsGovernedCompletedTrace(t *testing.T) {
 		ModelRegistryDigest:     "d" + repeatHex('d', 63),
 		EvaluationLane:          "system",
 	}
-	trace := map[string]any{
+	trace := EvaluationTrace{
 		"schema_version":    "1",
 		"chat_execution_id": "exec-1",
 		"status":            "completed",
 		"completed_at":      "2026-09-15T00:00:00+00:00",
-		"evaluation_context": map[string]any{
+		"evaluation_context": EvaluationTrace{
 			"campaign_id":                "campaign-1",
 			"run_id":                     "run-1",
 			"assignment_id":              "assignment-1",
@@ -63,7 +63,7 @@ func TestValidateChatProbeTrace_AcceptsGovernedCompletedTrace(t *testing.T) {
 			"evaluation_lane":            "system",
 		},
 		"model_calls": []any{
-			map[string]any{
+			EvaluationTrace{
 				"agent_role":              "sage",
 				"provider":                "G8EProvider",
 				"governed_transaction_id": "tx-1",
@@ -90,12 +90,12 @@ func TestValidateChatProbeTrace_IgnoresFailedGovernedCalls(t *testing.T) {
 		ModelRegistryDigest:     "d" + repeatHex('d', 63),
 		EvaluationLane:          "system",
 	}
-	trace := map[string]any{
+	trace := EvaluationTrace{
 		"schema_version":    "1",
 		"chat_execution_id": "exec-1",
 		"status":            "completed",
 		"completed_at":      "2026-09-15T00:00:00+00:00",
-		"evaluation_context": map[string]any{
+		"evaluation_context": EvaluationTrace{
 			"campaign_id":                "campaign-1",
 			"run_id":                     "run-1",
 			"assignment_id":              "assignment-1",
@@ -106,12 +106,12 @@ func TestValidateChatProbeTrace_IgnoresFailedGovernedCalls(t *testing.T) {
 			"evaluation_lane":            "system",
 		},
 		"model_calls": []any{
-			map[string]any{
+			EvaluationTrace{
 				"agent_role": "triage",
 				"provider":   "G8EProvider",
 				"succeeded":  false,
 			},
-			map[string]any{
+			EvaluationTrace{
 				"agent_role":              "sage",
 				"provider":                "G8EProvider",
 				"succeeded":               true,

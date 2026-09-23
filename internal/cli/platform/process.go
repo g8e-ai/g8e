@@ -9,6 +9,7 @@ package platform
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -209,16 +210,8 @@ func operatorBinaryName() string {
 // and returns the absolute path to the copy. This gives the re-executed
 // gateway process a stable binary location that survives rebuilds or moves
 // of the original executable.
-//
-// If the destination already matches the source (same size and modtime), the
-// copy is skipped.
 func (pm *ProcessManager) copyBinaryToBinDir() (string, error) {
 	exePath, err := os.Executable()
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrBinaryResolveFailed, err)
-	}
-
-	srcInfo, err := os.Stat(exePath)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrBinaryResolveFailed, err)
 	}
@@ -226,40 +219,27 @@ func (pm *ProcessManager) copyBinaryToBinDir() (string, error) {
 	relPath := filepath.Join(constants.BinDirname, operatorBinaryName())
 	destPath := pm.fileSvc.Resolve(relPath)
 
-	// Skip copy if destination already matches source.
-	if destInfo, statErr := os.Stat(destPath); statErr == nil {
-		if destInfo.Size() == srcInfo.Size() && destInfo.ModTime().Equal(srcInfo.ModTime()) {
-			return destPath, nil
-		}
-	}
-
-	if err := pm.fileSvc.MkdirAll(context.Background(), constants.BinDirname, constants.PermDirStandard); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
-
 	src, err := os.Open(exePath)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrBinaryCopyFailed, err)
 	}
-	defer src.Close()
-
-	dest, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, constants.PermFileExecutable)
+	data, err := io.ReadAll(src)
+	closeErr := src.Close()
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrBinaryCopyFailed, err)
+		return "", fmt.Errorf("%w: read executable: %w", constants.ErrBinaryCopyFailed, err)
 	}
-
-	if _, err := io.Copy(dest, src); err != nil {
-		_ = dest.Close()
-		return "", fmt.Errorf("%w: %w", constants.ErrBinaryCopyFailed, err)
+	if closeErr != nil {
+		return "", fmt.Errorf("%w: close executable: %w", constants.ErrBinaryCopyFailed, closeErr)
 	}
-
-	if err := dest.Close(); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrBinaryCopyFailed, err)
+	existing, readErr := pm.fileSvc.ReadFile(context.Background(), relPath)
+	if readErr == nil && bytes.Equal(existing, data) {
+		return destPath, nil
 	}
-
-	// Preserve modtime so the skip-if-same check works on subsequent starts.
-	if err := os.Chtimes(destPath, srcInfo.ModTime(), srcInfo.ModTime()); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrBinaryCopyFailed, err)
+	if readErr != nil && !errors.Is(readErr, constants.ErrNotFound) {
+		return "", fmt.Errorf("%w: read runtime executable: %w", constants.ErrBinaryCopyFailed, readErr)
+	}
+	if err := pm.fileSvc.WriteFile(context.Background(), relPath, data, constants.PermFileExecutable); err != nil {
+		return "", fmt.Errorf("%w: write runtime executable: %w", constants.ErrBinaryCopyFailed, err)
 	}
 
 	return destPath, nil
@@ -340,6 +320,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	}
 	if opts.EvalExplorerRoot != "" {
 		args = append(args, "--eval-explorer-root", opts.EvalExplorerRoot)
+	}
+	for _, cidr := range opts.PublicSpectatorTrustedProxyCIDRs {
+		args = append(args, "--public-spectator-trusted-proxy-cidr", cidr)
 	}
 
 	return args, nil

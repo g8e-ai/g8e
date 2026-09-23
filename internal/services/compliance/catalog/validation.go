@@ -27,12 +27,14 @@ var mappingTypes = []string{"full", "partial", "supporting", "not_applicable"}
 var assessmentStatuses = []string{"satisfied", "not_satisfied", "not_applicable", "unverifiable", "customer_attestation_required"}
 var evidenceLevels = []string{"L0", "L1", "L2", "L3", "L4", "L5"}
 var validationCycles = []string{"7d", "90d"}
-var missingEvidencePolicies = []string{"unverifiable", "customer_attestation_required", "not_applicable"}
+var missingEvidencePolicies = []string{"unverifiable", "customer_attestation_required"}
+var assertionEvidenceTypes = []string{"action_receipt", "attestation", "build_attestation", "commitment", "config_attestation", "deterministic_stage", "final_persistence_attestation", "identity_attestation", "metric", "runtime_attestation", "state_observation"}
+var assertionPassingRules = []string{"all_required", "threshold"}
 var verificationStatuses = []string{"verified", "invalid", "unverifiable", "unsupported"}
 var freshnessStatuses = []string{"fresh", "stale", "incomplete", "not_applicable"}
 var signatureAlgorithms = []string{"ed25519"}
-var supportedGraders = []string{"protocol_chain@1.0.0", "policy_outcome@1.0.0", "receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "commitment_chain@1.0.0", "independent_state@1.0.0", "secret_detection_precision_recall@1.0.0", "model_boundary_raw_secret_rate@1.0.0", "exact_local_rehydration@1.0.0", "authenticated_operation@1.0.0", "fips_mode@1.0.0"}
-var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", constants.ComplianceBundleVerifierID + "@" + constants.ComplianceBundleVerifierVersion, constants.AssertionGraderID + "@" + constants.AssertionGraderVersion, constants.FrameworkGraderID + "@" + constants.FrameworkGraderVersion}
+var supportedGraders = []string{"protocol_chain@1.0.0", "policy_outcome@1.0.0", "receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "commitment_attestation@1.0.0", "commitment_chain@1.0.0", "independent_state@1.0.0", "secret_detection_precision_recall@1.0.0", "model_boundary_raw_secret_rate@1.0.0", "exact_local_rehydration@1.0.0", "authenticated_operation@1.0.0", "fips_mode@1.0.0"}
+var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_attestation@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", constants.ComplianceBundleVerifierID + "@" + constants.ComplianceBundleVerifierVersion, constants.AssertionGraderID + "@" + constants.AssertionGraderVersion, constants.FrameworkGraderID + "@" + constants.FrameworkGraderVersion}
 
 func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) error {
 	if catalog == nil || catalog.CatalogId == "" || catalog.CatalogVersion == "" || len(catalog.Assertions) == 0 {
@@ -54,7 +56,7 @@ func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) err
 		if !contains(responsibilities, assertion.Responsibility) || !contains(evidenceLevels, assertion.MinimumEvidenceLevel) || !contains(validationCycles, assertion.ValidationCycle) || !contains(missingEvidencePolicies, assertion.MissingEvidencePolicy) {
 			return fmt.Errorf("%w: assertion %s has invalid semantics", constants.ErrInvalidEvidenceGraph, key)
 		}
-		if len(assertion.ComponentScope) == 0 || len(assertion.ApplicableActionClasses) == 0 || len(assertion.ApplicableArms) == 0 || len(assertion.RequiredEvidenceTypes) == 0 || len(assertion.RequiredGraderRefs) == 0 || len(assertion.RequiredVerifierRefs) == 0 || assertion.PassingRule == "" {
+		if len(assertion.ComponentScope) == 0 || len(assertion.ApplicableActionClasses) == 0 || len(assertion.ApplicableArms) == 0 || len(assertion.RequiredEvidenceTypes) == 0 || len(assertion.RequiredGraderRefs) == 0 || len(assertion.RequiredVerifierRefs) == 0 || !contains(assertionPassingRules, assertion.PassingRule) {
 			return fmt.Errorf("%w: assertion %s has incomplete evaluation requirements", constants.ErrInvalidEvidenceGraph, key)
 		}
 		stringLists := []struct {
@@ -70,6 +72,11 @@ func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) err
 		for _, list := range stringLists {
 			if err := validateUniqueStrings(list.values); err != nil {
 				return fmt.Errorf("%w: assertion %s %s: %v", constants.ErrInvalidEvidenceGraph, key, list.label, err)
+			}
+		}
+		for _, evidenceType := range assertion.RequiredEvidenceTypes {
+			if !contains(assertionEvidenceTypes, evidenceType) {
+				return fmt.Errorf("%w: assertion %s has unsupported evidence type %s", constants.ErrInvalidEvidenceGraph, key, evidenceType)
 			}
 		}
 		if err := validateVersionedReferences(assertion.RequiredGraderRefs); err != nil {
@@ -236,14 +243,68 @@ func FindDemoScenarioDefinition(catalog *compliancev1.DemoScenarioCatalog, id, v
 	return nil
 }
 
+func validateUnavailableAssessmentContext(records []*compliancev1.UnavailableAssessmentContext) (map[compliancev1.AssessmentContextKind]string, error) {
+	unavailable := make(map[compliancev1.AssessmentContextKind]string, len(records))
+	for _, record := range records {
+		if record == nil || strings.TrimSpace(record.GetReason()) == "" {
+			return nil, fmt.Errorf("%w: unavailable assessment context is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		switch record.GetKind() {
+		case compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS:
+		default:
+			return nil, fmt.Errorf("%w: unavailable assessment context kind is unsupported", constants.ErrInvalidEvidenceGraph)
+		}
+		if _, exists := unavailable[record.GetKind()]; exists {
+			return nil, fmt.Errorf("%w: unavailable assessment context kind is duplicated", constants.ErrInvalidEvidenceGraph)
+		}
+		unavailable[record.GetKind()] = record.GetReason()
+	}
+	return unavailable, nil
+}
+
 func ValidateAssessmentScope(scope *compliancev1.AssessmentScope) error {
-	if scope == nil || scope.ScopeId == "" || scope.OrganizationId == "" || scope.DeploymentId == "" || scope.ProductVersion == "" || scope.BuildIdentity == "" || scope.SourceRevision == "" || scope.NetworkTopologyHash == "" || scope.CryptographicMode == "" || len(scope.ImageDigests) == 0 || len(scope.ComponentInventory) == 0 || len(scope.ConfigurationHashes) == 0 || len(scope.DoctrineBundleHashes) == 0 || len(scope.ConsensusPolicyHashes) == 0 || len(scope.TrustAnchorIds) == 0 {
+	if scope == nil || scope.ScopeId == "" || scope.OrganizationId == "" || scope.DeploymentId == "" || scope.ProductVersion == "" || scope.CryptographicMode == "" || scope.Applicability == nil || scope.SelectedPopulation == nil || len(scope.SourceAdmissions) == 0 {
 		return fmt.Errorf("%w: assessment scope is incomplete", constants.ErrInvalidEvidenceGraph)
 	}
-	if err := validateSHA256(scope.NetworkTopologyHash); err != nil {
+	unavailable, err := validateUnavailableAssessmentContext(scope.GetUnavailableContext())
+	if err != nil {
 		return err
 	}
-	if scope.AssessmentWindowStart == nil || scope.AssessmentWindowEnd == nil || scope.AssessmentWindowStart.CheckValid() != nil || scope.AssessmentWindowEnd.CheckValid() != nil || !scope.AssessmentWindowStart.AsTime().Before(scope.AssessmentWindowEnd.AsTime()) {
+	contextRequirements := []struct {
+		kind      compliancev1.AssessmentContextKind
+		name      string
+		available bool
+	}{
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY, name: "build identity", available: scope.GetBuildIdentity() != ""},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION, name: "source revision", available: scope.GetSourceRevision() != ""},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY, name: "component inventory", available: len(scope.GetComponentInventory()) > 0},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY, name: "network topology", available: scope.GetNetworkTopologyHash() != ""},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION, name: "configuration", available: len(scope.GetConfigurationHashes()) > 0},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES, name: "doctrine bundles", available: len(scope.GetDoctrineBundleHashes()) > 0},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS, name: "trust anchors", available: len(scope.GetTrustAnchorIds()) > 0},
+	}
+	for _, requirement := range contextRequirements {
+		_, declaredUnavailable := unavailable[requirement.kind]
+		if requirement.available == declaredUnavailable {
+			return fmt.Errorf("%w: assessment %s context must be available or explicitly unavailable", constants.ErrInvalidEvidenceGraph, requirement.name)
+		}
+	}
+	postureRequirements, postureValid := constants.GetGovernancePostureRequirements(scope.ActivePosture)
+	if !postureValid || postureRequirements.RequiresL2 && len(scope.ConsensusPolicyHashes) == 0 {
+		return fmt.Errorf("%w: assessment posture is invalid or missing required consensus policy", constants.ErrInvalidEvidenceGraph)
+	}
+	if scope.GetNetworkTopologyHash() != "" {
+		if err := validateSHA256(scope.NetworkTopologyHash); err != nil {
+			return err
+		}
+	}
+	if scope.AssessmentWindowStart == nil || scope.AssessmentWindowEnd == nil || scope.AssessmentAsOf == nil || scope.AssessmentWindowStart.CheckValid() != nil || scope.AssessmentWindowEnd.CheckValid() != nil || scope.AssessmentAsOf.CheckValid() != nil || !scope.AssessmentWindowStart.AsTime().Before(scope.AssessmentWindowEnd.AsTime()) || scope.AssessmentAsOf.AsTime().Before(scope.AssessmentWindowStart.AsTime()) || scope.AssessmentAsOf.AsTime().After(scope.AssessmentWindowEnd.AsTime()) {
 		return fmt.Errorf("%w: assessment window is invalid", constants.ErrInvalidEvidenceGraph)
 	}
 	for _, digests := range [][]*compliancev1.NamedDigest{scope.ImageDigests, scope.ConfigurationHashes, scope.DoctrineBundleHashes, scope.ConsensusPolicyHashes} {
@@ -266,6 +327,66 @@ func ValidateAssessmentScope(scope *compliancev1.AssessmentScope) error {
 	}
 	if err := validateUniqueStrings(scope.TrustAnchorIds); err != nil {
 		return fmt.Errorf("%w: trust anchors: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	for name, values := range map[string][]string{"components": scope.Applicability.Components, "action classes": scope.Applicability.ActionClasses, "arms": scope.Applicability.Arms} {
+		if len(values) == 0 {
+			return fmt.Errorf("%w: applicability %s are missing", constants.ErrInvalidEvidenceGraph, name)
+		}
+		if err := validateUniqueStrings(values); err != nil {
+			return fmt.Errorf("%w: applicability %s: %v", constants.ErrInvalidEvidenceGraph, name, err)
+		}
+	}
+	return validateAssessmentSelections(scope)
+}
+
+func validateAssessmentSelections(scope *compliancev1.AssessmentScope) error {
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.SourceAdmissions))
+	for _, admission := range scope.SourceAdmissions {
+		if admission == nil || admission.AdmissionId == "" || admission.SourceKind == "" || admission.SourceVersion == "" || admission.SourceScopeId == "" || admission.OwnerRuntimeBoundary == "" || admission.AcquisitionBoundary == "" || admission.RunId == "" && admission.SnapshotId == "" || admission.VerifierRef == nil || admission.VerifierRef.Id == "" || admission.VerifierRef.Version == "" || admission.DisclosureClassification != constants.ComplianceBundleProfilePublic && admission.DisclosureClassification != constants.ComplianceBundleProfileRestricted {
+			return fmt.Errorf("%w: source admission is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		if err := validateAssessmentWitnessPolicies(admission); err != nil {
+			return err
+		}
+		if _, exists := admissions[admission.AdmissionId]; exists {
+			return fmt.Errorf("%w: duplicate source admission %s", constants.ErrInvalidEvidenceGraph, admission.AdmissionId)
+		}
+		if err := validateUniqueStrings(admission.ArtifactIds); err != nil {
+			return fmt.Errorf("%w: source admission %s artifacts: %v", constants.ErrInvalidEvidenceGraph, admission.AdmissionId, err)
+		}
+		admissions[admission.AdmissionId] = admission
+	}
+	seenSubjects := make(map[string]struct{}, len(scope.SelectedPopulation.Subjects))
+	for _, subject := range scope.SelectedPopulation.Subjects {
+		if subject == nil || subject.SourceAdmissionId == "" || subject.RunId == "" || subject.AttemptId == "" && subject.ScenarioId == "" && subject.TransactionId == "" {
+			return fmt.Errorf("%w: selected subject is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		admission := admissions[subject.SourceAdmissionId]
+		if admission == nil || admission.RunId != "" && admission.RunId != subject.RunId {
+			return fmt.Errorf("%w: selected subject is outside its source admission", constants.ErrEvidenceScopeMismatch)
+		}
+		key := subject.SourceAdmissionId + "\x00" + subject.RunId + "\x00" + subject.AttemptId + "\x00" + subject.ScenarioId + "\x00" + subject.TransactionId
+		if _, exists := seenSubjects[key]; exists {
+			return fmt.Errorf("%w: duplicate selected subject", constants.ErrInvalidEvidenceGraph)
+		}
+		seenSubjects[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateAssessmentWitnessPolicies(admission *compliancev1.AssessmentSourceAdmission) error {
+	isCampaign := admission.GetSourceKind() == constants.EvaluationSourceKindCampaign
+	validPolicy := func(policy compliancev1.AssessmentWitnessPolicy) bool {
+		return policy == compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM || policy == compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	}
+	if isCampaign {
+		if !validPolicy(admission.GetProviderObservationPolicy()) || !validPolicy(admission.GetModelProvenancePolicy()) {
+			return fmt.Errorf("%w: campaign source admission requires explicit provider-observation and model-provenance witness policies", constants.ErrInvalidEvidenceGraph)
+		}
+		return nil
+	}
+	if admission.GetProviderObservationPolicy() != compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED || admission.GetModelProvenancePolicy() != compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED {
+		return fmt.Errorf("%w: non-campaign source admission cannot declare campaign witness policies", constants.ErrInvalidEvidenceGraph)
 	}
 	return nil
 }

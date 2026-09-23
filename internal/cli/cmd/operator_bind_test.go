@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -155,7 +155,7 @@ func TestOperatorBindCmdWithConfig_BindError(t *testing.T) {
 		loader,
 		mockClientFactory(&mockAPIClient{getResp: listBody}),
 		func(*config.Config) operatorBindClient {
-			return &stubOperatorBindClient{err: errors.New("gateway rejected bind")}
+			return &stubOperatorBindClient{err: fmt.Errorf("gateway rejected bind")}
 		},
 		fileSvcFactoryFor(fileSvc),
 	)

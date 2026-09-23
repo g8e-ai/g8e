@@ -87,7 +87,7 @@ export function ModelsView() {
         return false;
       }
       if (filters.role !== 'all' && m.role !== filters.role) return false;
-      if (evaluatedFilter === 'evaluated' && !m.pass_rate) return false;
+      if (evaluatedFilter === 'evaluated' && (!m.pass_rate || m.evaluation_coverage < 1)) return false;
       if (evaluatedFilter === 'not_evaluated' && m.pass_rate) return false;
       if (filters.quality !== 'all' && m.quality_state !== filters.quality) return false;
       return true;
@@ -214,7 +214,7 @@ export function ModelsView() {
 
   const updateFilter = (patch: Partial<ModelFilters>) => setFilters({ ...filters, ...patch });
 
-  const measuredCount = models.filter((model) => Boolean(model.pass_rate)).length;
+  const measuredCount = models.filter((model) => Boolean(model.pass_rate) && model.evaluation_coverage >= 1).length;
 
   return (
     <div className="models-view">
@@ -245,9 +245,10 @@ export function ModelsView() {
         </select>
         <select aria-label="Filter by quality state" value={filters.quality} onChange={(e) => updateFilter({ quality: e.target.value })}>
           <option value="all">All quality states</option>
-          <option value="exploratory_partial">Exploratory · partial</option>
-          <option value="exploratory_verified">Exploratory · verifier passed</option>
-          <option value="verified_public">Verified public</option>
+          <option value="verified_public">Current-standard verified</option>
+          <option value="exploratory_verified">Run-scoped verification passed</option>
+          <option value="exploratory_partial">Not fully verified</option>
+          <option value="legacy_unverified">Legacy · not current-standard verified</option>
           <option value="not_evaluated">Not evaluated</option>
         </select>
         <span className="result-count">{formatNumber(measuredCount)} measured · {formatNumber(models.length)} total</span>

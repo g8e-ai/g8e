@@ -4,7 +4,13 @@
 ## Table of Contents
 
 - [g8e/compliance/v1/compliance.proto](#g8e_compliance_v1_compliance-proto)
+    - [AssessmentApplicabilitySelection](#g8e-compliance-v1-AssessmentApplicabilitySelection)
+    - [AssessmentCoverage](#g8e-compliance-v1-AssessmentCoverage)
+    - [AssessmentDiagnostic](#g8e-compliance-v1-AssessmentDiagnostic)
+    - [AssessmentPopulationSelection](#g8e-compliance-v1-AssessmentPopulationSelection)
     - [AssessmentScope](#g8e-compliance-v1-AssessmentScope)
+    - [AssessmentSourceAdmission](#g8e-compliance-v1-AssessmentSourceAdmission)
+    - [AssessmentSubjectSelection](#g8e-compliance-v1-AssessmentSubjectSelection)
     - [BundleArtifact](#g8e-compliance-v1-BundleArtifact)
     - [ChecksumEntry](#g8e-compliance-v1-ChecksumEntry)
     - [ComplianceAnalysis](#g8e-compliance-v1-ComplianceAnalysis)
@@ -48,10 +54,13 @@
     - [OSCALValidatorIdentity](#g8e-compliance-v1-OSCALValidatorIdentity)
     - [RenderedFormatEntry](#g8e-compliance-v1-RenderedFormatEntry)
     - [ReportSignature](#g8e-compliance-v1-ReportSignature)
+    - [UnavailableAssessmentContext](#g8e-compliance-v1-UnavailableAssessmentContext)
     - [VerificationCheckResult](#g8e-compliance-v1-VerificationCheckResult)
     - [VerificationFailure](#g8e-compliance-v1-VerificationFailure)
     - [VersionedReference](#g8e-compliance-v1-VersionedReference)
   
+    - [AssessmentContextKind](#g8e-compliance-v1-AssessmentContextKind)
+    - [AssessmentWitnessPolicy](#g8e-compliance-v1-AssessmentWitnessPolicy)
     - [VerificationCheckStatus](#g8e-compliance-v1-VerificationCheckStatus)
   
 - [Scalar Value Types](#scalar-value-types)
@@ -62,6 +71,76 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## g8e/compliance/v1/compliance.proto
+
+
+
+<a name="g8e-compliance-v1-AssessmentApplicabilitySelection"></a>
+
+### AssessmentApplicabilitySelection
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| components | [string](#string) | repeated |  |
+| action_classes | [string](#string) | repeated |  |
+| arms | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-AssessmentCoverage"></a>
+
+### AssessmentCoverage
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| selected_subject_count | [int32](#int32) |  |  |
+| assessed_subject_count | [int32](#int32) |  |  |
+| failed_subject_count | [int32](#int32) |  |  |
+| unavailable_subject_count | [int32](#int32) |  |  |
+| unavailable_subjects | [AssessmentSubjectSelection](#g8e-compliance-v1-AssessmentSubjectSelection) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-AssessmentDiagnostic"></a>
+
+### AssessmentDiagnostic
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| code | [string](#string) |  |  |
+| severity | [string](#string) |  |  |
+| source_admission_id | [string](#string) |  |  |
+| subject | [AssessmentSubjectSelection](#g8e-compliance-v1-AssessmentSubjectSelection) |  |  |
+| message | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-AssessmentPopulationSelection"></a>
+
+### AssessmentPopulationSelection
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| subjects | [AssessmentSubjectSelection](#g8e-compliance-v1-AssessmentSubjectSelection) | repeated |  |
+
+
+
 
 
 
@@ -91,6 +170,58 @@
 | assessment_window_end | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 | excluded_components | [string](#string) | repeated |  |
 | customer_responsibilities | [string](#string) | repeated |  |
+| active_posture | [string](#string) |  |  |
+| source_admissions | [AssessmentSourceAdmission](#g8e-compliance-v1-AssessmentSourceAdmission) | repeated |  |
+| applicability | [AssessmentApplicabilitySelection](#g8e-compliance-v1-AssessmentApplicabilitySelection) |  |  |
+| selected_population | [AssessmentPopulationSelection](#g8e-compliance-v1-AssessmentPopulationSelection) |  |  |
+| assessment_as_of | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| unavailable_context | [UnavailableAssessmentContext](#g8e-compliance-v1-UnavailableAssessmentContext) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-AssessmentSourceAdmission"></a>
+
+### AssessmentSourceAdmission
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| admission_id | [string](#string) |  |  |
+| source_kind | [string](#string) |  |  |
+| source_version | [string](#string) |  |  |
+| source_scope_id | [string](#string) |  |  |
+| owner_runtime_boundary | [string](#string) |  |  |
+| acquisition_boundary | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| snapshot_id | [string](#string) |  |  |
+| artifact_ids | [string](#string) | repeated |  |
+| verifier_ref | [VersionedReference](#g8e-compliance-v1-VersionedReference) |  |  |
+| disclosure_classification | [string](#string) |  |  |
+| provider_observation_policy | [AssessmentWitnessPolicy](#g8e-compliance-v1-AssessmentWitnessPolicy) |  |  |
+| model_provenance_policy | [AssessmentWitnessPolicy](#g8e-compliance-v1-AssessmentWitnessPolicy) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-AssessmentSubjectSelection"></a>
+
+### AssessmentSubjectSelection
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| source_admission_id | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| attempt_id | [string](#string) |  |  |
+| scenario_id | [string](#string) |  |  |
+| transaction_id | [string](#string) |  |  |
 
 
 
@@ -159,6 +290,8 @@
 | evidence_graph_failures | [string](#string) | repeated |  |
 | evidence_graph_valid | [bool](#bool) |  |  |
 | evidence_resources | [ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) | repeated |  |
+| assessment_scope_sha256 | [string](#string) |  |  |
+| diagnostics | [AssessmentDiagnostic](#g8e-compliance-v1-AssessmentDiagnostic) | repeated |  |
 
 
 
@@ -191,6 +324,7 @@
 | verified_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 | bundle_path | [string](#string) |  |  |
 | encryption | [EvidenceEncryptionMetadata](#g8e-compliance-v1-EvidenceEncryptionMetadata) |  |  |
+| source_admission_id | [string](#string) |  |  |
 
 
 
@@ -466,6 +600,8 @@
 | freshness_status | [string](#string) |  |  |
 | failure_reason | [string](#string) |  |  |
 | limitations | [string](#string) | repeated |  |
+| coverage | [AssessmentCoverage](#g8e-compliance-v1-AssessmentCoverage) |  |  |
+| diagnostics | [AssessmentDiagnostic](#g8e-compliance-v1-AssessmentDiagnostic) | repeated |  |
 
 
 
@@ -1044,6 +1180,22 @@
 
 
 
+<a name="g8e-compliance-v1-UnavailableAssessmentContext"></a>
+
+### UnavailableAssessmentContext
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| kind | [AssessmentContextKind](#g8e-compliance-v1-AssessmentContextKind) |  |  |
+| reason | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-VerificationCheckResult"></a>
 
 ### VerificationCheckResult
@@ -1097,6 +1249,37 @@
 
 
  
+
+
+<a name="g8e-compliance-v1-AssessmentContextKind"></a>
+
+### AssessmentContextKind
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| ASSESSMENT_CONTEXT_KIND_UNSPECIFIED | 0 |  |
+| ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY | 1 |  |
+| ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION | 2 |  |
+| ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY | 3 |  |
+| ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY | 4 |  |
+| ASSESSMENT_CONTEXT_KIND_CONFIGURATION | 5 |  |
+| ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES | 6 |  |
+| ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS | 7 |  |
+
+
+
+<a name="g8e-compliance-v1-AssessmentWitnessPolicy"></a>
+
+### AssessmentWitnessPolicy
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| ASSESSMENT_WITNESS_POLICY_UNSPECIFIED | 0 |  |
+| ASSESSMENT_WITNESS_POLICY_INTERIM | 1 |  |
+| ASSESSMENT_WITNESS_POLICY_STRICT | 2 |  |
+
 
 
 <a name="g8e-compliance-v1-VerificationCheckStatus"></a>

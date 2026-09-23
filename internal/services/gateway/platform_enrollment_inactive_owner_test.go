@@ -157,9 +157,7 @@ func TestPlatformEnrollmentService_ReenabledOwnerCanDecide(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentInvalidDecision)
 
 	// Re-enable the owner by directly setting the status back to active.
-	updateBytes, err := json.Marshal(map[string]interface{}{
-		"status": "active",
-	})
+	updateBytes, err := json.Marshal(models.User{Status: constants.UserStatusActive})
 	require.NoError(t, err)
 	_, err = env.docStore.DocUpdate(
 		marshaler.CollectionName(constants.CollectionUsers), env.ownerID, updateBytes)

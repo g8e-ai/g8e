@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
 func TestChatEvalEnsureOperatorBinding_RefreshesStaleBinding(t *testing.T) {
@@ -128,18 +129,18 @@ func TestFormatChatAcceptElapsed(t *testing.T) {
 
 func TestChatEvalWaitForTrace_ReportsProgress(t *testing.T) {
 	var calls int
-	fetch := func(context.Context) (map[string]any, error) {
+	fetch := func(context.Context) (evaluation.EvaluationTrace, error) {
 		calls++
 		switch calls {
 		case 1:
 			return nil, assert.AnError
 		case 2:
-			return map[string]any{
+			return evaluation.EvaluationTrace{
 				"status":      "running",
 				"model_calls": []any{map[string]any{"agent_role": "primary"}},
 			}, nil
 		default:
-			return map[string]any{"status": "completed"}, nil
+			return evaluation.EvaluationTrace{"status": "completed"}, nil
 		}
 	}
 
@@ -159,10 +160,10 @@ func TestChatEvalWaitForTrace_ReportsProgress(t *testing.T) {
 
 func TestChatEvalWaitForTrace_QuietJSONMode(t *testing.T) {
 	var calls int
-	fetch := func(context.Context) (map[string]any, error) {
+	fetch := func(context.Context) (evaluation.EvaluationTrace, error) {
 		calls++
 		if calls == 1 {
-			return map[string]any{"status": "completed"}, nil
+			return evaluation.EvaluationTrace{"status": "completed"}, nil
 		}
 		return nil, assert.AnError
 	}

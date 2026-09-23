@@ -8,6 +8,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -103,23 +105,56 @@ type PublicProofCatalogSummary struct {
 	LastGeneratedAt *time.Time `json:"last_generated_at,omitempty"`
 }
 
+// PublicFeedObject is an open-ended public JSON object. Public projections
+// intentionally admit schema-versioned fields owned by the evaluation publisher;
+// RawMessage preserves those fields without converting the boundary to an
+// untyped Go contract.
+type PublicFeedObject map[string]json.RawMessage
+
+// NewPublicFeedObject constructs an open-ended public object from string fields.
+func NewPublicFeedObject(fields map[string]string) PublicFeedObject {
+	object := make(PublicFeedObject, len(fields))
+	for name, value := range fields {
+		object[name] = json.RawMessage(strconv.Quote(value))
+	}
+	return object
+}
+
+// StringField returns a string field from the public object.
+func (o PublicFeedObject) StringField(name string) (string, bool) {
+	value, ok := o[name]
+	if !ok {
+		return "", false
+	}
+	var result string
+	if err := json.Unmarshal(value, &result); err != nil {
+		return "", false
+	}
+	return result, true
+}
+
+// SetInt64Field adds or replaces an integer field in the public object.
+func (o PublicFeedObject) SetInt64Field(name string, value int64) {
+	o[name] = json.RawMessage(strconv.FormatInt(value, 10))
+}
+
 // PublicFeedBootstrap is one bounded initial snapshot for public first paint.
 type PublicFeedBootstrap struct {
 	ProtocolVersion     string                    `json:"protocol_version"`
 	Snapshot            PublicFeedSnapshot        `json:"snapshot"`
 	SourceFreshness     CampaignFreshness         `json:"source_freshness"`
-	RecentProjections   []map[string]any          `json:"recent_projections"`
+	RecentProjections   []PublicFeedObject        `json:"recent_projections"`
 	ProofCatalogSummary PublicProofCatalogSummary `json:"proof_catalog_summary"`
 	GeneratedAt         time.Time                 `json:"generated_at"`
 }
 
 // PublicFeedCursorPage is a cursor-paginated page of public records.
 type PublicFeedCursorPage struct {
-	ProtocolVersion string           `json:"protocol_version"`
-	Items           []map[string]any `json:"items"`
-	Cursor          string           `json:"cursor,omitempty"`
-	HasMore         bool             `json:"has_more"`
-	Limit           int              `json:"limit"`
+	ProtocolVersion string             `json:"protocol_version"`
+	Items           []PublicFeedObject `json:"items"`
+	Cursor          string             `json:"cursor,omitempty"`
+	HasMore         bool               `json:"has_more"`
+	Limit           int                `json:"limit"`
 }
 
 // PublicFeedExportBatchResponse is returned after the gateway accepts a
@@ -138,8 +173,10 @@ type PublicIngestRequest struct {
 // PublicIngestResponse is the authenticated ingest response from the mirror.
 type PublicIngestResponse struct {
 	Accepted          bool                            `json:"accepted"`
+	SourceID          string                          `json:"source_id,omitempty"`
 	HighWaterSequence int64                           `json:"high_water_sequence,omitempty"`
 	FeedChainHash     string                          `json:"feed_chain_hash,omitempty"`
+	BatchCount        int                             `json:"batch_count,omitempty"`
 	RejectionReason   PublicFeedIngestRejectionReason `json:"rejection_reason,omitempty"`
 }
 

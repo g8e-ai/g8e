@@ -137,22 +137,33 @@ func gradeFrameworkControl(request FrameworkGradingRequest, control mappedContro
 	customerAttestationRequired := false
 	for _, mapping := range control.Mappings {
 		mappingRefs = append(mappingRefs, mapping.CrosswalkId)
+		fullMapping := mapping.MappingType == frameworkMappingTypeFull
+		if !fullMapping {
+			limitations = append(limitations, fmt.Sprintf("mapping %s is %s: assertion supports but does not fully satisfy the control", mapping.CrosswalkId, mapping.MappingType))
+		}
 		for _, assertionRef := range mapping.AssertionRefs {
 			key := versionedReferenceKey(assertionRef.Id, assertionRef.Version)
 			assessment := assertionIndex[key]
 			if assessment == nil {
-				statuses = append(statuses, "unverifiable")
+				if fullMapping {
+					statuses = append(statuses, "unverifiable")
+				}
 				limitations = append(limitations, fmt.Sprintf("assertion %s has no assessment", key))
 				continue
 			}
 			assertionAssessmentRefs[assessment.AssessmentId] = struct{}{}
-			statuses = append(statuses, assessment.Status)
-			evidenceLevels = append(evidenceLevels, assessment.EvidenceLevel)
-			if assessment.Status == "customer_attestation_required" {
-				customerAttestationRequired = true
+			if !fullMapping {
+				continue
 			}
-			if mapping.MappingType == frameworkMappingTypePartial || mapping.MappingType == frameworkMappingTypeSupporting {
-				limitations = append(limitations, fmt.Sprintf("mapping %s is %s: assertion supports but does not fully satisfy the control", mapping.CrosswalkId, mapping.MappingType))
+			status := assessment.Status
+			if status == "satisfied" && !evidenceLevelMeets(mapping.RequiredEvidenceLevel, assessment.EvidenceLevel) {
+				status = "unverifiable"
+				limitations = append(limitations, fmt.Sprintf("mapping %s requires evidence level %s but assertion %s achieved %s", mapping.CrosswalkId, mapping.RequiredEvidenceLevel, key, assessment.EvidenceLevel))
+			}
+			statuses = append(statuses, status)
+			evidenceLevels = append(evidenceLevels, assessment.EvidenceLevel)
+			if status == "customer_attestation_required" {
+				customerAttestationRequired = true
 			}
 		}
 	}
@@ -286,4 +297,10 @@ func evidenceLevelIndexOrdered(level string) int {
 		}
 	}
 	return -1
+}
+
+func evidenceLevelMeets(required, achieved string) bool {
+	requiredIndex := evidenceLevelIndexOrdered(required)
+	achievedIndex := evidenceLevelIndexOrdered(achieved)
+	return requiredIndex >= 0 && achievedIndex >= requiredIndex
 }

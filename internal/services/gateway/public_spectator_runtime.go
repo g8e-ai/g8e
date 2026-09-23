@@ -35,6 +35,7 @@ type PublicSpectatorConfig struct {
 	PublicBaseURL         string
 	SourceID              string
 	ExplorerRoot          string
+	TrustedProxyCIDRs     []string
 }
 
 // DefaultPublicSpectatorConfig returns loopback defaults for local development.
@@ -132,7 +133,9 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 		return fmt.Errorf("public spectator: %w", err)
 	}
 
-	mirror, err := NewPublicMirrorServer(runtime.logger, NewRuntimePublicMirrorStore(runtime.fileSvc))
+	mirror, err := NewPublicMirrorServer(runtime.logger, NewRuntimePublicMirrorStore(runtime.fileSvc), PublicMirrorConfig{
+		TrustedProxyCIDRs: runtime.cfg.TrustedProxyCIDRs,
+	})
 	if err != nil {
 		return err
 	}

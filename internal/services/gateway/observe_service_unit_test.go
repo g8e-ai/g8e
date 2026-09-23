@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -475,7 +476,7 @@ func TestObserveController_MapDownloadStreamError(t *testing.T) {
 	}{
 		{name: "not found", err: constants.ErrObserveDownloadNotFound, wantStatus: http.StatusNotFound},
 		{name: "restricted", err: constants.ErrObserveDownloadRestrictedArtifact, wantStatus: http.StatusNotFound},
-		{name: "internal", err: errors.New("unexpected"), wantStatus: http.StatusInternalServerError},
+		{name: "internal", err: fmt.Errorf("unexpected"), wantStatus: http.StatusInternalServerError},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

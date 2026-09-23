@@ -68,6 +68,8 @@ func (r *localModelProvenanceReader) Load(ctx context.Context, providerAttemptID
 // for campaign verification.
 type CampaignModelProvenanceReader struct {
 	windows ModelProvenanceReader
+	local   model_provenance.WindowStore
+	remote  ModelProvenanceRemote
 }
 
 // NewCampaignModelProvenanceReader constructs one read-only model provenance
@@ -83,15 +85,16 @@ func NewCampaignModelProvenanceReaderWithRemote(fileSvc fs.RuntimeFileService, r
 	if fileSvc == nil {
 		return nil, fmt.Errorf("evaluation: model provenance reader: %w", constants.ErrMissingRequiredField)
 	}
-	localReader, err := NewLocalModelProvenanceReader(fileSvc)
+	local, err := model_provenance.NewWindowStore(fileSvc)
 	if err != nil {
 		return nil, err
 	}
-	windows := localReader
+	localReader := &localModelProvenanceReader{store: local}
+	var windows ModelProvenanceReader = localReader
 	if remote != nil {
 		windows = &fallbackModelProvenanceReader{local: localReader, remote: remote}
 	}
-	return &CampaignModelProvenanceReader{windows: windows}, nil
+	return &CampaignModelProvenanceReader{windows: windows, local: local, remote: remote}, nil
 }
 
 type fallbackModelProvenanceReader struct {
@@ -105,6 +108,36 @@ func (s *fallbackModelProvenanceReader) Load(ctx context.Context, providerAttemp
 		return window, err
 	}
 	return s.remote.Load(ctx, providerAttemptID)
+}
+
+func (r *CampaignModelProvenanceReader) CaptureAssignmentEvidence(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error {
+	if r == nil || result == nil || r.remote == nil {
+		return nil
+	}
+	for _, inferenceRecord := range scoredModelInferences(result) {
+		attemptID := inferenceRecord.GetProviderAttemptId()
+		if attemptID == "" {
+			continue
+		}
+		_, err := r.local.Load(ctx, attemptID)
+		if err == nil {
+			continue
+		}
+		if !isModelProvenanceEvidenceNotFound(err) {
+			return fmt.Errorf("evaluation: capture model provenance: %w", err)
+		}
+		window, err := r.remote.Load(ctx, attemptID)
+		if err != nil {
+			if isModelProvenanceEvidenceNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("evaluation: capture model provenance: %w", err)
+		}
+		if err := r.local.Save(ctx, window); err != nil {
+			return fmt.Errorf("evaluation: persist model provenance: %w", err)
+		}
+	}
+	return nil
 }
 
 func isModelProvenanceEvidenceNotFound(err error) bool {

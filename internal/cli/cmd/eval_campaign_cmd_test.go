@@ -14,11 +14,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 func prepareCampaignRunViaStart(t *testing.T, root string, deps nativeEvalDeps) *evaluation.ActiveCampaignRun {
@@ -35,7 +37,9 @@ func prepareCampaignRunViaStart(t *testing.T, root string, deps nativeEvalDeps) 
 	require.NotNil(t, result)
 	require.NotNil(t, result.Plan)
 
-	active, err := evaluation.LoadActiveCampaignRun(root)
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	active, err := evaluation.LoadActiveCampaignRunFromRuntime(context.Background(), fileSvc)
 	require.NoError(t, err)
 	require.NotEmpty(t, active.RunID)
 	return active
@@ -82,14 +86,10 @@ func TestCampaignEvalList_JSON(t *testing.T) {
 	rootCmd.SetArgs([]string{"eval", "campaign", "list", "--project-root", root})
 	require.NoError(t, rootCmd.Execute())
 
-	var payload map[string]any
+	var payload campaignListOutput
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
-	campaigns, ok := payload["campaigns"].([]any)
-	require.True(t, ok)
-	require.NotEmpty(t, campaigns)
-	first, ok := campaigns[0].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, active.CampaignID, first["campaign_id"])
+	require.NotEmpty(t, payload.Campaigns)
+	assert.Equal(t, active.CampaignID, payload.Campaigns[0].CampaignID)
 }
 
 func TestCampaignEvalShow_AfterPrepare(t *testing.T) {
@@ -122,10 +122,10 @@ func TestCampaignEvalShow_JSON(t *testing.T) {
 	rootCmd.SetArgs([]string{"eval", "campaign", "show", "--project-root", root, active.RunID})
 	require.NoError(t, rootCmd.Execute())
 
-	var payload map[string]any
+	var payload campaignShowOutput
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
-	assert.Equal(t, active.RunID, payload["run_id"])
-	assert.Equal(t, active.CampaignID, payload["campaign_id"])
+	assert.Equal(t, active.RunID, payload.RunID)
+	assert.Equal(t, active.CampaignID, payload.CampaignID)
 }
 
 func TestCampaignEvalStatus_AfterPrepare(t *testing.T) {
@@ -179,18 +179,40 @@ func TestCampaignEvalExport_WritesArtifacts(t *testing.T) {
 	defer cleanup()
 
 	active := prepareCampaignRunViaStart(t, root, deps)
-	outputDir := filepath.Join(root, "exports", active.RunID)
+	outputRelDir := filepath.Join("data", "eval", "runs", active.RunID, "export")
 
 	command := evalCmdWithConfig(deps)
 	var output bytes.Buffer
 	command.SetOut(&output)
 	command.SetArgs([]string{
 		"campaign", "export", "--project-root", root,
-		"--output-dir", outputDir, active.RunID,
+		"--output-dir", outputRelDir, active.RunID,
 	})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), active.RunID)
-	assert.DirExists(t, outputDir)
+
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	exists, err := fileSvc.FileExists(context.Background(), filepath.Join(outputRelDir, constants.EvaluationRunSummaryFilename))
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+func TestCampaignEvalExport_RejectsExternalOutputDir(t *testing.T) {
+	root, deps, _, cleanup := setupCampaignOrchestrateEnv(t)
+	defer cleanup()
+
+	active := prepareCampaignRunViaStart(t, root, deps)
+	externalDir := filepath.Join(root, "exports", active.RunID)
+
+	command := evalCmdWithConfig(deps)
+	command.SetArgs([]string{
+		"campaign", "export", "--project-root", root,
+		"--output-dir", externalDir, active.RunID,
+	})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "output directory must be runtime-relative")
 }
 
 func TestCampaignEvalInit_RequiresFields(t *testing.T) {
@@ -246,10 +268,14 @@ func TestResolveCampaignOllamaEndpoint_UsesFlag(t *testing.T) {
 	assert.Equal(t, "http://127.0.0.1:11434", endpoint)
 }
 
-func TestCampaignEvalVerify_ViaCLIAfterExecute(t *testing.T) {
+func TestCampaignEvalVerify_ViaCLIPersistsAndPublishesPopulationBoundReport(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 	defer enableCampaignWitnessGateway(t, root, deps)()
+	publication := &recordingCampaignVerificationPublication{}
+	deps.campaignPublicationFactory = func(*cobra.Command, fs.RuntimeFileService) (campaignVerificationPublication, error) {
+		return publication, nil
+	}
 
 	lookup := &campaignTraceLookup{root: root, deps: deps}
 	ensemble := newTestEnsembleServer(lookup.resolve)
@@ -260,7 +286,6 @@ func TestCampaignEvalVerify_ViaCLIAfterExecute(t *testing.T) {
 		ModelTag:           "qwen3:4b",
 		EnsembleURL:        ensemble.URL,
 		NoAutoRefresh:      true,
-		Verify:             true,
 		InferenceSessionID: "infer-session",
 		DataSessionID:      "data-session",
 	})
@@ -274,4 +299,14 @@ func TestCampaignEvalVerify_ViaCLIAfterExecute(t *testing.T) {
 	command.SetArgs([]string{"campaign", "verify", "--project-root", root, result.Plan.RunID})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), "PASS")
+
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	loaded, err := evaluation.NewStore(fileSvc).LoadCampaignVerification(context.Background(), result.Plan.RunID)
+	require.NoError(t, err)
+	assertPopulationBoundCampaignReport(t, loaded, 75, 1)
+	assert.Equal(t, []string{result.Plan.RunID}, publication.completionRunIDs)
+	require.Len(t, publication.reports, 1)
+	assertPopulationBoundCampaignReport(t, publication.reports[0], 75, 1)
+	assert.Equal(t, loaded.GetReportDigestRef().GetSha256(), publication.reports[0].GetReportDigestRef().GetSha256())
 }

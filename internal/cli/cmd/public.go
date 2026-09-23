@@ -115,14 +115,13 @@ func publicInitCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory pub
 }
 
 func publicConfigSetCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
-	var sourceID string
 	var mirrorOrigin string
 	var enabled bool
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Update public-feed publisher configuration",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if !cmd.Flags().Changed("source-id") && !cmd.Flags().Changed("mirror-origin") && !cmd.Flags().Changed("enabled") {
+			if !cmd.Flags().Changed("mirror-origin") && !cmd.Flags().Changed("enabled") {
 				return fmt.Errorf("%w: no configuration field was specified", constants.ErrValidationFailed)
 			}
 			cfg, err := configLoader("")
@@ -137,9 +136,6 @@ func publicConfigSetCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 			exportConfig, err := readPublicExportConfig(ctx, fileSvc)
 			if err != nil {
 				return err
-			}
-			if cmd.Flags().Changed("source-id") {
-				exportConfig.SourceID = sourceID
 			}
 			if cmd.Flags().Changed("mirror-origin") {
 				exportConfig.MirrorOrigin = mirrorOrigin
@@ -157,9 +153,42 @@ func publicConfigSetCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&sourceID, "source-id", "", "Public source deployment pseudonym")
 	cmd.Flags().StringVar(&mirrorOrigin, "mirror-origin", "", "Hosted public mirror origin")
 	cmd.Flags().BoolVar(&enabled, "enabled", true, "Enable or disable public publication")
+	return cmd
+}
+
+func publicSourceTransitionCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	var sourceID string
+	var confirmed bool
+	cmd := &cobra.Command{
+		Use:   "transition",
+		Short: "Archive the current publisher state and start a fresh public source",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !confirmed {
+				return constants.ErrPublicFeedSourceTransitionConfirmation
+			}
+			if strings.TrimSpace(sourceID) == "" {
+				return constants.ErrPublicFeedSourceIDRequired
+			}
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			newConfig, err := gateway.TransitionLocalPublicFeed(commandContext(cmd), fileSvc, sourceID)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public feed transitioned to source %s; prior publisher state archived under %s\n", newConfig.SourceID, constants.PublicFeedArchiveDirname)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&sourceID, "source-id", "", "New public source deployment pseudonym")
+	cmd.Flags().BoolVar(&confirmed, "yes", false, "Confirm archival of the current publisher state and creation of a fresh source")
 	return cmd
 }
 
@@ -234,9 +263,12 @@ func publicCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "public", Short: "Manage the public spectator feed"}
 	configCmd := &cobra.Command{Use: "config", Short: "Manage public-feed configuration"}
 	configCmd.AddCommand(publicConfigSetCmdWithConfig(loadConfig, newFileSvc))
+	sourceCmd := &cobra.Command{Use: "source", Short: "Manage the active public-feed source"}
+	sourceCmd.AddCommand(publicSourceTransitionCmdWithConfig(loadConfig, newFileSvc))
 	cmd.AddCommand(
 		publicInitCmdWithConfig(loadConfig, newFileSvc),
 		configCmd,
+		sourceCmd,
 		publicPublishCmdWithConfig(loadConfig, newFileSvc),
 		publicPushCmdWithConfig(loadConfig, newFileSvc),
 		publicRepairOutboxCmdWithConfig(loadConfig, newFileSvc),
@@ -408,15 +440,28 @@ func publicRepairOutboxCmdWithConfig(configLoader publicConfigLoader, fileSvcFac
 		Use:   "repair-outbox",
 		Short: "Compact a prefix-pruned public-feed outbox back to the mirror snapshot tip",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			ctx := commandContext(cmd)
+			if shouldPublishViaGateway(ctx, fileSvc) {
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Gateway-owned public mirror outbox is managed by the Gateway")
+				return err
+			}
 			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err
 			}
-			publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+			publisher, err := newPublicPublisherForCommand(ctx, fileSvc, exportConfig)
 			if err != nil {
 				return err
 			}
-			if err := publisher.RepairOutboxFromSnapshot(commandContext(cmd)); err != nil {
+			if err := publisher.RepairOutboxFromSnapshot(ctx); err != nil {
 				return err
 			}
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public outbox repaired against snapshot")

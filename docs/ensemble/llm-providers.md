@@ -1,5 +1,8 @@
 # LLM Providers
 
+Last Updated: 2026-09-23
+Version: v2.1.12
+
 ## Overview
 
 The g8e Agentic Ensemble (`g8ee`) uses a provider-neutral interface for model requests. The interface normalizes messages, streamed chunks, tool calls, structured responses, token usage, finish reasons, and provider reasoning into common application types. The provider factory selects a configured adapter for each model role and reuses its client across calls.
@@ -24,7 +27,7 @@ The main chat agent always uses the primary generation call shape because both s
 
 ### Environment bootstrap
 
-Environment variables provide the lowest-priority bootstrap values. Stored settings and request-specific role values replace them when present.
+Environment variables provide the lowest-priority bootstrap values. Platform settings replace them when explicitly set, and request-specific role overrides take precedence over platform settings.
 
 Each role accepts `PROVIDER`, `MODEL`, `ENDPOINT`, and `API_KEY` variables under these prefixes:
 
@@ -63,11 +66,12 @@ The LLM settings model also carries these cross-provider controls:
 | OpenAI (`openai`) | API key and endpoint; default endpoint is `https://api.openai.com/v1` | Uses Chat Completions; supports primary function calling, registered-model reasoning effort, JSON Schema response formats for assistant and lite calls, streaming, and usage metadata |
 | Ollama (`ollama`) | Endpoint; API key is optional; default endpoint is `http://localhost:11434` | Uses Ollama's native chat API; supports primary tools, per-model `think` toggles, JSON Schema formats for assistant and lite calls, streaming, and usage metadata; endpoints containing `/v1` are rejected |
 | llama.cpp (`llamacpp`) | Endpoint; API key is optional; default endpoint is `http://localhost:11444` | Uses the OpenAI-compatible adapter and appends `/v1` when absent; actual tool, schema, and streaming support depends on the server and loaded model |
+| g8e (`g8e`) | No provider endpoint or API key; requires the startup-injected `InternalHttpClient` | Sends inference through the Gateway's `/api/v1/inference/dispatch` endpoint over the app's mTLS client. The Gateway and Inference Operator apply the governed L1-L5 path and return a signed receipt with the typed result. Ordered messages, tools, structured output, thinking controls, usage, and evaluation bindings cross the governed request; inline-data parts are rejected |
 | Fake (`fake`) | No credentials or endpoint | Runs in process without network access; emits deterministic text, structured lite responses, and selected tool calls for CI, air-gapped tests, and scenarios |
 
-Provider validation runs for every configured role before chat starts. A configured model without a provider fails validation. OpenAI and Anthropic require both credentials and endpoints, Gemini requires credentials, Ollama and llama.cpp require endpoints, and the fake provider has no external requirements.
+Provider validation runs for every configured role before chat starts. A configured model without a provider fails validation. OpenAI and Anthropic require both credentials and endpoints, Gemini requires credentials, Ollama and llama.cpp require endpoints, and the fake and g8e providers have no provider-level credential or endpoint requirements. The g8e provider still fails if the startup-injected `InternalHttpClient` is unavailable.
 
-The LLM adapters rely on their SDK transports for TLS verification. They do not attach the g8ee workload mTLS certificate or explicitly pass the platform trust bundle to model-provider connections. Custom HTTPS endpoints therefore require trust configuration that the selected SDK and its process environment recognize.
+Direct provider adapters rely on their SDK transports for TLS verification. They do not attach the g8ee workload mTLS certificate or explicitly pass the platform trust bundle to model-provider connections. Custom HTTPS endpoints therefore require trust configuration that the selected SDK and its process environment recognize. The g8e provider is different: its injected `InternalHttpClient` uses the enrolled app mTLS identity to reach the Gateway.
 
 ## Generation Call Shapes
 
@@ -90,9 +94,9 @@ The registry contains these unique model names:
 | Gemini | `gemini-3.1-pro-preview`, `gemini-3.1-pro-preview-customtools`, `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | Off plus low, medium, and high; flash lite also supports minimal | Enabled |
 | Anthropic | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Opus and Sonnet support off, low, medium, and high; Haiku supports off, minimal, and low | Not declared |
 | OpenAI | `gpt-5.4`, `gpt-5.4-mini` | `gpt-5.4` has no declared thinking support; mini supports off, minimal, and low | Enabled |
-| Ollama | `gemma4:e4b`, `gemma4:e2b`, `llama3.2:3b`, `qwen3.5:2b` | All except Llama use an off/high native toggle; Llama has no thinking mode | Enabled for Gemma4 E4B and E2B |
+| Ollama | `gemma4:e4b`, `gemma4:e2b`, `llama3.2:3b`, `qwen3.5:2b` | Gemma4 and Qwen use an off/high native toggle; Llama has no thinking mode | Structured output is disabled in the registry; the adapter can serialize a supplied schema when a caller provides one |
 
-Adapters can send other model names to a backend, but unknown names use the shared unknown profile. That profile disables thinking and provider-enforced structured-output decisions while leaving tools enabled. Add a registered profile before relying on reasoning or structured output from a custom model.
+Adapters can send other model names to a backend, but unknown names use the shared unknown profile. That profile disables thinking, tools, and provider-enforced structured-output decisions. Register a model profile before relying on reasoning, tools, or provider-enforced structured output for a custom model. The llama.cpp default model name is not currently registered, so it uses this unknown profile unless an equivalent model is registered.
 
 ### Thinking translation
 
@@ -121,7 +125,7 @@ The factory caches provider clients by connection configuration, not by model. G
 
 ## Model Call Evidence
 
-Network adapters record a SHA-256 hash and a sensitive-data scan attestation for the exact outbound provider request. Service call sites can attach this input evidence to model-call telemetry with the agent role, provider class, model, monotonic timestamps, available token counts, finish reason, retry count, success state, error type, and an output hash. The fake provider does not record provider-boundary evidence because it does not cross a network boundary.
+Network adapters record a SHA-256 hash and a sensitive-data scan attestation for the exact outbound provider request. Service call sites can attach this input evidence to model-call telemetry with the agent role, provider class, model, monotonic timestamps, available token counts, finish reason, retry count, success state, error type, and an output hash. The g8e provider additionally records governed-dispatch evidence, including the signed receipt and identity-bound inference result. The fake provider does not record provider-boundary evidence because it does not cross a network boundary.
 
 Usage fields remain zero with `usage_reported=false` when a provider omits usage. Telemetry stores hashes and sensitivity findings rather than raw prompts and outputs. Evidence and retry telemetry are assembled by participating services, so direct adapter calls do not independently create complete model-call records.
 

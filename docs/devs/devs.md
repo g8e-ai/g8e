@@ -1,7 +1,7 @@
 # Developer Guidelines
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 This guide defines the coding and maintenance rules for the g8e repository. The current working tree is the source of truth for current behavior. Use the [Code Map](codemap.md) for package and runtime ownership, the [Testing Guide](tests.md) for test infrastructure and commands, and the [Documentation Guide](docs.md) for documentation ownership, style, metadata, generation, and validation.
 
@@ -13,7 +13,7 @@ The governance guarantee applies only to operations that traverse a g8e ingress.
 
 ## Development Environment
 
-The Go module declares Go 1.26.6, and the platform setup scripts accept Go 1.26 or newer. The scripts install missing development prerequisites interactively, run the repository build, and add the repository binary to the user path. See [Scripts](../architecture/scripts.md) for platform-specific behavior.
+The Go module declares Go 1.26.6, and the platform setup scripts accept Go 1.26 or newer. The scripts check for `make` and Go, install missing prerequisites interactively, run the repository build, and add the repository binary to the user path. Before `make build` or a setup script, build the required evaluation-explorer asset when it is absent: `cd dashboard/g8e-adapter/evaluation-explorer && npm run build`. The setup scripts do not install Node dependencies or build that asset. See [Scripts](../architecture/scripts.md) for platform-specific behavior.
 
 Run commands from the repository root unless the owning component guide says otherwise:
 
@@ -27,7 +27,7 @@ make lint
 
 `make build` compiles the complete `g8e` platform CLI from `cmd/g8e`, writes a platform binary under `bin/`, and copies the runnable binary to the repository root. Use `./g8e <command> --help` as the live source for command names, arguments, flags, defaults, and destructive effects. Use the [Getting Started Guide](../guides/getting_started.md) for deployment and enrollment rather than treating this coding guide as an operations procedure.
 
-This guide owns repository-wide invariants and Go platform conventions. Component-specific workflows live in the [Protocol README](../../protocol/README.md), [Dashboard Development](../dashboard/development.md), [Dashboard Testing](../dashboard/tests.md), [Ensemble Development](../ensemble/devs.md), and [Ensemble Testing](../ensemble/tests.md).
+This guide owns repository-wide invariants and Go platform conventions. Component-specific workflows live in the [Protocol README](../../protocol/README.md), [Dashboard Development](../dashboard/devs.md), [Dashboard Testing](../dashboard/tests.md), [Ensemble Development](../ensemble/devs.md), and [Ensemble Testing](../ensemble/tests.md).
 
 ## Engineering Rules
 
@@ -152,7 +152,7 @@ Use these primary entry points:
 - `./g8e test unit`
 - `./g8e test integration`
 - `./g8e test e2e`
-- `./g8e test e2e-full`
+- `./g8e test e2e-full` (starts the `bootstrapped` Compose profile and removes its Compose volumes during teardown; add `--cross-enrollment` for that profile)
 - `./g8e test coverage`
 - `./g8e test lint`
 - `./g8e test chaos`
@@ -160,7 +160,7 @@ Use these primary entry points:
 - `make test`, `make test-unit`, `make test-integration`, `make test-docker`, and `make test-coverage`
 - `make ensemble-test`, `make test-external`, and `make dashboard-test`
 
-The CLI and Makefile do not select identical package sets and timeout flags for every suite. Reproduce a CI failure through the same owning entry point. Read the [Testing Guide](tests.md) for exact selection, lifecycle, state, race, coverage, and component-specific behavior.
+The CLI delegates Tier 1 execution to the Makefile, while other suites may still use component-specific package and timeout flags. Reproduce a CI failure through the same owning entry point. Read the [Testing Guide](tests.md) for exact selection, lifecycle, state, race, coverage, and component-specific behavior.
 
 ## Generated Artifacts
 

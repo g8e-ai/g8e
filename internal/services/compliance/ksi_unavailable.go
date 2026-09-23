@@ -22,9 +22,9 @@ import (
 )
 
 // UnavailableInterval records a contiguous interval during which a KSI was
-// unavailable (could not be evaluated) or not_satisfied. Preserving these
-// intervals alongside satisfied snapshots gives consumers a complete
-// operating-effectiveness history rather than only current snapshots.
+// unverifiable or not_satisfied. Preserving these intervals alongside
+// satisfied snapshots gives consumers a complete operating-effectiveness
+// history rather than only current snapshots.
 type UnavailableInterval struct {
 	KSIID       string            `json:"ksi_id"`
 	ScopeID     string            `json:"scope_id"`
@@ -40,7 +40,7 @@ type UnavailableInterval struct {
 // Validate returns constants.ErrKSIBindingIncomplete when required fields are
 // empty or the interval is inverted.
 func (u UnavailableInterval) Validate() error {
-	if u.KSIID == "" || u.ScopeID == "" || u.RunID == "" || u.StartUnixMs <= 0 || u.EndUnixMs <= 0 || u.StartUnixMs > u.EndUnixMs || !u.Outcome.Valid() || u.Status != KSIStatusNotSatisfied || u.Outcome.Status() != u.Status {
+	if u.KSIID == "" || u.ScopeID == "" || u.RunID == "" || u.StartUnixMs <= 0 || u.EndUnixMs <= 0 || u.StartUnixMs > u.EndUnixMs || !u.Outcome.Valid() || !u.Status.unavailable() || u.Outcome.Status() != u.Status {
 		return fmt.Errorf("%w: unavailable interval binding is incomplete", constants.ErrKSIBindingIncomplete)
 	}
 	if err := u.Binding.Validate(); err != nil {
@@ -97,12 +97,11 @@ func (s *UnavailableIntervalStore) AppendInterval(ctx context.Context, interval 
 	return nil
 }
 
-// AppendFromResultSet extracts not_satisfied results from a KSIResultSet and
-// appends each as an UnavailableInterval. This is the canonical way to
-// preserve historical failures after every evaluation: satisfied KSIs are
-// recorded as snapshots, while not_satisfied KSIs are also recorded as
-// unavailable intervals so consumers can reconstruct complete
-// operating-effectiveness history.
+// AppendFromResultSet extracts unverifiable and not_satisfied results from a
+// KSIResultSet and appends each as an UnavailableInterval. This is the
+// canonical way to preserve historical non-passing intervals after every
+// evaluation so consumers can reconstruct complete operating-effectiveness
+// history.
 func (s *UnavailableIntervalStore) AppendFromResultSet(ctx context.Context, rs *KSIResultSet) error {
 	if rs == nil {
 		return fmt.Errorf("%w: nil result set", constants.ErrKSIUnavailableWriteFailed)
@@ -121,7 +120,7 @@ func (s *UnavailableIntervalStore) AppendFromResultSet(ctx context.Context, rs *
 		if !res.Outcome.Valid() || res.Status != res.Outcome.Status() {
 			return fmt.Errorf("%w: result %s has inconsistent status and outcome", constants.ErrKSIUnavailableWriteFailed, res.ID)
 		}
-		if res.Status != KSIStatusNotSatisfied {
+		if !res.Status.unavailable() {
 			continue
 		}
 		intervals = append(intervals, UnavailableInterval{

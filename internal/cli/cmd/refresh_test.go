@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -142,7 +142,7 @@ func TestRefreshCmd_RefreshFailure(t *testing.T) {
 	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 	stub := &stubRefreshClient{
-		err: errors.New("gateway rejected refresh: certificate expired"),
+		err: fmt.Errorf("gateway rejected refresh: certificate expired"),
 	}
 
 	cmd := refreshCmdWithConfig(

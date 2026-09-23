@@ -108,6 +108,78 @@ message ComponentInventoryEntry {
   string digest = 4;
 }
 
+enum AssessmentWitnessPolicy {
+  ASSESSMENT_WITNESS_POLICY_UNSPECIFIED = 0;
+  ASSESSMENT_WITNESS_POLICY_INTERIM = 1;
+  ASSESSMENT_WITNESS_POLICY_STRICT = 2;
+}
+
+message AssessmentSourceAdmission {
+  string admission_id = 1;
+  string source_kind = 2;
+  string source_version = 3;
+  string source_scope_id = 4;
+  string owner_runtime_boundary = 5;
+  string acquisition_boundary = 6;
+  string run_id = 7;
+  string snapshot_id = 8;
+  repeated string artifact_ids = 9;
+  VersionedReference verifier_ref = 10;
+  string disclosure_classification = 11;
+  AssessmentWitnessPolicy provider_observation_policy = 12;
+  AssessmentWitnessPolicy model_provenance_policy = 13;
+}
+
+message AssessmentApplicabilitySelection {
+  repeated string components = 1;
+  repeated string action_classes = 2;
+  repeated string arms = 3;
+}
+
+message AssessmentSubjectSelection {
+  string source_admission_id = 1;
+  string run_id = 2;
+  string attempt_id = 3;
+  string scenario_id = 4;
+  string transaction_id = 5;
+}
+
+message AssessmentPopulationSelection {
+  repeated AssessmentSubjectSelection subjects = 1;
+}
+
+message AssessmentCoverage {
+  int32 selected_subject_count = 1;
+  int32 assessed_subject_count = 2;
+  int32 failed_subject_count = 3;
+  int32 unavailable_subject_count = 4;
+  repeated AssessmentSubjectSelection unavailable_subjects = 5;
+}
+
+message AssessmentDiagnostic {
+  string code = 1;
+  string severity = 2;
+  string source_admission_id = 3;
+  AssessmentSubjectSelection subject = 4;
+  string message = 5;
+}
+
+enum AssessmentContextKind {
+  ASSESSMENT_CONTEXT_KIND_UNSPECIFIED = 0;
+  ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY = 1;
+  ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION = 2;
+  ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY = 3;
+  ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY = 4;
+  ASSESSMENT_CONTEXT_KIND_CONFIGURATION = 5;
+  ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES = 6;
+  ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS = 7;
+}
+
+message UnavailableAssessmentContext {
+  AssessmentContextKind kind = 1;
+  string reason = 2;
+}
+
 message AssessmentScope {
   string scope_id = 1;
   string organization_id = 2;
@@ -127,6 +199,12 @@ message AssessmentScope {
   google.protobuf.Timestamp assessment_window_end = 16;
   repeated string excluded_components = 17;
   repeated string customer_responsibilities = 18;
+  string active_posture = 19;
+  repeated AssessmentSourceAdmission source_admissions = 20;
+  AssessmentApplicabilitySelection applicability = 21;
+  AssessmentPopulationSelection selected_population = 22;
+  google.protobuf.Timestamp assessment_as_of = 23;
+  repeated UnavailableAssessmentContext unavailable_context = 24;
 }
 
 message EvidenceEncryptionMetadata {
@@ -156,6 +234,7 @@ message ComplianceEvidenceReference {
   google.protobuf.Timestamp verified_at = 16;
   string bundle_path = 17;
   EvidenceEncryptionMetadata encryption = 18;
+  string source_admission_id = 19;
 }
 
 message ControlAssertionAssessment {
@@ -171,6 +250,8 @@ message ControlAssertionAssessment {
   string freshness_status = 10;
   string failure_reason = 11;
   repeated string limitations = 12;
+  AssessmentCoverage coverage = 13;
+  repeated AssessmentDiagnostic diagnostics = 14;
 }
 
 message FrameworkControlAssessment {
@@ -419,6 +500,8 @@ message ComplianceAnalysis {
   repeated string evidence_graph_failures = 16;
   bool evidence_graph_valid = 17;
   repeated ComplianceEvidenceReference evidence_resources = 18;
+  string assessment_scope_sha256 = 19;
+  repeated AssessmentDiagnostic diagnostics = 20;
 }
 
 message FrameworkProfile {

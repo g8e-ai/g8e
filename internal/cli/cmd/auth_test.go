@@ -59,6 +59,7 @@ func TestEnrollCmd_Parent(t *testing.T) {
 	assert.True(t, names["pending"], "enroll parent must register the pending subcommand")
 	assert.True(t, names["approve"], "enroll parent must register the approve subcommand")
 	assert.True(t, names["deny"], "enroll parent must register the deny subcommand")
+	assert.True(t, names["revoke"], "enroll parent must register the revoke subcommand")
 	assert.False(t, names["operator"], "enroll parent must NOT register the removed operator subcommand")
 	assert.False(t, names["gui"], "enroll parent must NOT register the removed gui subcommand")
 }

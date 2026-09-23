@@ -5,14 +5,14 @@ parent: Architecture
 
 # L2 Consensus
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ## Scope
 
 L2 Consensus is the machine-authorization layer in the g8e five-layer interlock. It is a K-of-N Ed25519 signature policy, not a Byzantine fault-tolerant protocol, leader-election system, or replicated state machine. An enabled policy identifies trusted signer identities and the number of affirmative votes required to authorize a transaction.
 
-The bundled Consensus service is the reference vote producer. It applies the same deterministic L1 Doctrine analysis for every locally configured member and signs each result with that member's available key. It does not run heterogeneous models or perform application-level agent reasoning. The g8ee Tribunal and other multi-model voting systems remain advisory unless enrolled L2 identities produce valid protocol votes.
+The bundled Consensus service is the reference vote producer. For every locally configured member with an available private key, it runs the same deterministic L1 Doctrine threat analysis and signs the resulting Boolean decision with that member's key. It does not run heterogeneous models or perform application-level agent reasoning. The g8ee Tribunal and other multi-model voting systems remain advisory unless enrolled L2 identities produce valid protocol votes.
 
 See [Governance](./governance.md) for the complete verification pipeline, [AI Agents and the g8e Governance Boundary](./agents.md) for the distinction between protocol consensus and application reasoning, and [Authentication and Authorization](./auth.md) for trusted identities.
 
@@ -59,7 +59,7 @@ The Gateway exposes an mTLS-protected deliberation route only while running a po
 
 ### Reference Deliberation Behavior
 
-The reference service recomputes the envelope ID from the hash-bound transaction fields and rejects a mismatch. It evaluates structured intent data when present, otherwise it evaluates the typed payload bytes. Every member with an available private key applies the same L1 Doctrine analysis, treats any block-recommended signal as unsafe, and signs its Boolean decision.
+The reference service recomputes the envelope ID from the hash-bound transaction fields and rejects a mismatch. It evaluates structured intent data when present, otherwise it evaluates the typed payload bytes. Every member with an available private key runs the deterministic L1 Doctrine threat analysis, treats any block-recommended signal as unsafe, and signs its Boolean decision. This vote-production check is not a replacement for the executing Warden's full typed-payload validation.
 
 Each signature covers the UTF-8 string `transaction_hash|decision`, where the decision is `true` or `false`; the Ed25519 signature is hex-encoded. The service attaches the selected consensus ID and all produced votes to the envelope. Deliberation fails if no member key is available, but it does not decide whether quorum is met; the L4 Warden makes that authorization decision.
 
@@ -69,7 +69,7 @@ Each signature covers the UTF-8 string `transaction_hash|decision`, where the de
 
 Start an L2-enforcing Gateway with `--posture consensus` or `--posture notary` and select the policy with `--consensus-id`. The equivalent environment setting is `G8E_CONSENSUS_ID`. The Gateway logs an advisory warning and continues startup when the ID is absent or the selected policy is missing or disabled; subsequent non-bootstrap transactions fail closed at L4.
 
-The local Consensus service is assembled during Gateway construction. A policy created or replaced through the admin surface after startup does not hot-load a new local deliberator, so restart the Gateway after changing the selected policy or its local member keys. Disabling or deleting the active policy takes effect at verification because the Warden reads the policy store for each transaction, causing later L2-gated transactions to fail.
+The local Consensus service is assembled during Gateway construction. A policy created or disabled through the admin surface after startup does not hot-load a new local deliberator, so restart the Gateway after changing the selected policy or its local member keys. Disabling or deleting the active policy takes effect at verification because the Warden reads the policy store for each transaction, causing later L2-gated transactions to fail.
 
 ### Declarative Bootstrap
 
@@ -83,7 +83,7 @@ Bootstrap always creates an enabled policy with distinct votes required. If a po
 
 ### Administrative Enrollment
 
-The first enrolled user can create, list, disable, and delete policies through the authenticated admin surface. Member trusted signers must already exist and be enabled before policy creation. Administrative policy creation does not provision local private keys, and changing a policy does not rewire the running in-process deliberator.
+The first enrolled user can create, list, and delete policies through the authenticated admin surface at `POST`/`GET /api/v1/admin/consensus` and `DELETE /api/v1/admin/consensus/{id}`. To disable an existing policy, the first user posts the same policy ID with `enabled=false`; the store rejects enabled overwrites and does not expose a separate update route. Member trusted signers must already exist and be enabled before policy creation. Administrative policy creation does not provision local private keys, and changing a policy does not rewire the running in-process deliberator.
 
 At runtime, local key resolution first checks the stored member seed. If no file key is available and a member ID equals the Gateway Actuator key ID, the reference service can use the Actuator key for that member. Other members without available private keys remain policy members but produce no local vote, which can prevent the configured quorum from being reached.
 

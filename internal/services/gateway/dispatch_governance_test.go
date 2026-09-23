@@ -10,7 +10,7 @@ package gateway
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -44,7 +44,7 @@ func (s *stubL2Deliberator) Deliberate(_ context.Context, envelopeBytes []byte) 
 type failingL2Deliberator struct{}
 
 func (failingL2Deliberator) Deliberate(_ context.Context, _ []byte) ([]byte, error) {
-	return nil, errors.New("l2 deliberation unavailable")
+	return nil, fmt.Errorf("l2 deliberation unavailable")
 }
 
 // inferencePayload builds a valid InferenceRequested proto payload.

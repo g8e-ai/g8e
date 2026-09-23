@@ -297,11 +297,11 @@ func TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs(t *test
 	assert.NotEmpty(t, firstEvidenceRef(t, resultsByID["KSI-CMT-01"], EvidenceTypeHistoricalFreshness))
 	assert.NotEmpty(t, firstEvidenceRef(t, resultsByID["KSI-IAM-05"], EvidenceTypeGraderResult))
 
-	// Non-automatable KSIs fail-closed even with seeded evidence.
-	assert.Equal(t, KSIStatusNotSatisfied, resultsByID["KSI-CED-01"].Status)
+	// Non-automatable KSIs remain unverifiable even with seeded evidence.
+	assert.Equal(t, KSIStatusUnverifiable, resultsByID["KSI-CED-01"].Status)
 	assert.Equal(t, KSIOutcomeUnsupportedAutomation, resultsByID["KSI-CED-01"].Outcome)
 	assert.Positive(t, resultSet.SatisfiedCount())
-	assert.Positive(t, resultSet.NotSatisfiedCount())
+	assert.Positive(t, resultSet.UnverifiableCount())
 }
 
 // TestKSIEvaluator_Integration_EmptyStoresFailClosed verifies that the
@@ -321,10 +321,11 @@ func TestKSIEvaluator_Integration_EmptyStoresFailClosed(t *testing.T) {
 	require.NotEmpty(t, resultSet.Results)
 
 	for _, res := range resultSet.Results {
-		assert.Equal(t, KSIStatusNotSatisfied, res.Status, "%s must fail-closed on empty stores", res.ID)
+		assert.Equal(t, KSIStatusUnverifiable, res.Status, "%s must be unverifiable with empty stores", res.ID)
 	}
 	assert.Zero(t, resultSet.SatisfiedCount())
-	assert.True(t, resultSet.HasFailures())
+	assert.Equal(t, len(resultSet.Results), resultSet.UnverifiableCount())
+	assert.False(t, resultSet.HasFailures())
 }
 
 // firstEvidenceRef returns the reference of the first evidence anchor of the

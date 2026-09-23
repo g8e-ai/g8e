@@ -17,6 +17,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/reporting"
 )
 
@@ -61,26 +62,22 @@ func (f *reportFlags) resolveOptions() (reporting.Options, error) {
 	if dataDir == "" {
 		dataDir = paths.Infra.DataDir
 	}
-	runtimeDir := f.runtimeDir
-	if runtimeDir == "" {
-		runtimeDir = paths.Infra.RuntimeDir
-	}
 	outDir := f.outDir
 	if outDir == "" {
 		outDir = filepath.Join(constants.ReportsDirname, time.Now().UTC().Format("2006-01-02T150405Z"))
 	}
 
+	baseDir := filepath.Dir(filepath.Dir(dataDir))
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, slog.Default())
+	if err != nil {
+		return reporting.Options{}, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
 	return reporting.Options{
-		DataDir:                    dataDir,
-		RuntimeDir:                 runtimeDir,
-		LedgerDir:                  f.ledgerDir,
-		VaultDir:                   paths.Infra.VaultDir,
-		VaultKeyPath:               paths.Infra.VaultKeyPath,
-		OutDir:                     outDir,
-		ExecutionVaultDBPath:       paths.Infra.ExecutionVaultDBPath,
-		ReplayStoreDBPath:          paths.Infra.ReplayStoreDBPath,
-		SuspendedTransactionDBPath: paths.Infra.SuspendedTransactionsDBPath,
-		Logger:                     slog.Default(),
+		FileSvc:      fileSvc,
+		VaultKeyPath: paths.Infra.VaultKeyPath,
+		OutDir:       outDir,
+		Logger:       slog.Default(),
 	}, nil
 }
 

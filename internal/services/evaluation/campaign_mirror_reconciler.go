@@ -10,6 +10,7 @@ package evaluation
 import (
 	"context"
 	"fmt"
+	"time"
 
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -28,6 +29,27 @@ type CampaignMirrorReconcileResult struct {
 	FailedRuns       map[string]string `json:"failed_runs,omitempty"`
 	PublishedRecords int               `json:"published_records"`
 }
+
+type CampaignMirrorReconcileStatus string
+
+const (
+	CampaignMirrorReconcileChecking   CampaignMirrorReconcileStatus = "checking"
+	CampaignMirrorReconcileRestored   CampaignMirrorReconcileStatus = "restored"
+	CampaignMirrorReconcilePresent    CampaignMirrorReconcileStatus = "already_present"
+	CampaignMirrorReconcileHostAbsent CampaignMirrorReconcileStatus = "host_absent"
+	CampaignMirrorReconcileFailed     CampaignMirrorReconcileStatus = "failed"
+)
+
+type CampaignMirrorReconcileProgress struct {
+	Index            int
+	Total            int
+	RunID            string
+	Status           CampaignMirrorReconcileStatus
+	PublishedRecords int
+	Err              error
+}
+
+type CampaignMirrorReconcileProgressFunc func(CampaignMirrorReconcileProgress)
 
 // CampaignMirrorReconciler compares queue-verified runs against the public
 // mirror and republishes canonical host artifacts when datasets are missing.
@@ -49,43 +71,64 @@ func NewCampaignMirrorReconciler(publication *CampaignPublicationCoordinator, st
 
 // ReconcileVerifiedQueue restores every verified queue entry whose canonical
 // dataset is absent from the public mirror.
-func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, queue *CampaignQueue) (*CampaignMirrorReconcileResult, error) {
-	if r == nil || r.publication == nil || r.store == nil || queue == nil {
+func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, queue *CampaignQueue, runTimeout time.Duration, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
+	if r == nil || r.publication == nil || r.store == nil || queue == nil || runTimeout <= 0 {
 		return nil, fmt.Errorf("evaluation: reconcile verified queue: missing required dependencies")
 	}
-	result := &CampaignMirrorReconcileResult{FailedRuns: map[string]string{}}
-	for _, entry := range queue.FilterByStatus("verified") {
-		runID := entry.VerifiedRunID
-		if runID == "" {
-			continue
+	entries := queue.FilterByStatus("verified")
+	runIDs := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.VerifiedRunID != "" {
+			runIDs = append(runIDs, entry.VerifiedRunID)
 		}
+	}
+	result := &CampaignMirrorReconcileResult{FailedRuns: map[string]string{}}
+	for index, runID := range runIDs {
+		update := func(status CampaignMirrorReconcileStatus, published int, err error) {
+			if progress != nil {
+				progress(CampaignMirrorReconcileProgress{Index: index + 1, Total: len(runIDs), RunID: runID, Status: status, PublishedRecords: published, Err: err})
+			}
+		}
+		update(CampaignMirrorReconcileChecking, 0, nil)
+		runCtx, cancel := context.WithTimeout(ctx, runTimeout)
 		if r.probe != nil {
-			present, err := r.probe.DatasetPresent(ctx, CampaignDatasetID(runID))
+			present, err := r.probe.DatasetPresent(runCtx, CampaignDatasetID(runID))
 			if err != nil {
+				cancel()
 				result.FailedRuns[runID] = err.Error()
+				update(CampaignMirrorReconcileFailed, 0, err)
 				continue
 			}
 			if present {
+				cancel()
 				result.SkippedRunIDs = append(result.SkippedRunIDs, runID)
+				update(CampaignMirrorReconcilePresent, 0, nil)
 				continue
 			}
 		}
-		exists, err := r.store.RunExists(ctx, runID)
+		exists, err := r.store.RunExists(runCtx, runID)
 		if err != nil {
+			cancel()
 			result.FailedRuns[runID] = err.Error()
+			update(CampaignMirrorReconcileFailed, 0, err)
 			continue
 		}
 		if !exists {
+			cancel()
 			result.HostAbsentRunIDs = append(result.HostAbsentRunIDs, runID)
+			update(CampaignMirrorReconcileHostAbsent, 0, nil)
 			continue
 		}
-		published, err := r.restoreRun(ctx, runID)
+		published, err := r.restoreRun(runCtx, runID)
+		cancel()
 		if err != nil {
 			result.FailedRuns[runID] = err.Error()
+			update(CampaignMirrorReconcileFailed, published, err)
 			continue
 		}
 		result.RestoredRunIDs = append(result.RestoredRunIDs, runID)
 		result.PublishedRecords += published
+		update(CampaignMirrorReconcileRestored, published, nil)
 	}
 	return result, nil
 }

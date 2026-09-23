@@ -140,7 +140,7 @@ func resolveEvalExplorerFS(rootOverride string) (fs.FS, error) {
 func evalExplorerDiskCandidates() []string {
 	candidates := []string{
 		evalExplorerRelativeRoot,
-		filepath.Join("..", evalExplorerRelativeRoot),
+		filepath.Join(constants.PathParentDir, evalExplorerRelativeRoot),
 	}
 	if cwd, err := os.Getwd(); err == nil {
 		for depth := 0; depth < 5; depth++ {

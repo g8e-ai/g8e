@@ -11,7 +11,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/x509"
-	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -79,7 +79,7 @@ func TestListenForCommands_MaxReconnectAttemptsGiveUp(t *testing.T) {
 	f := newPubsubFixture(t)
 
 	// Configure the mock client to always fail Subscribe with a non-TLS error.
-	f.DB.SetSubscribeError(errors.New("connection refused"))
+	f.DB.SetSubscribeError(fmt.Errorf("connection refused"))
 
 	// Use a very short base delay so the test completes quickly.
 	f.Svc.reconnectBaseDelay = 1 * time.Millisecond
@@ -179,7 +179,7 @@ func TestListenForCommands_SuccessfulReceiptResetsAttempts(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	mockClient := &subscribeOnceThenFailClient{
-		failErr: errors.New("connection refused"),
+		failErr: fmt.Errorf("connection refused"),
 	}
 
 	svc, err := NewOperatorPubSubService(CommandServiceConfig{
@@ -215,4 +215,13 @@ func TestListenForCommands_SuccessfulReceiptResetsAttempts(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("listenForCommands did not exit after reset + max reconnect attempts")
 	}
+}
+
+func TestWaitForReconnect_ContextCancellationInterruptsDelay(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	assert.False(t, waitForReconnect(ctx, time.Hour))
 }

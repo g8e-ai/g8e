@@ -84,12 +84,12 @@ func TestHandleWebSession(t *testing.T) {
 		c.handleWebSession(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.WebSessionResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Equal(t, "user-test-1", resp["user_id"])
-		assert.Equal(t, "test-session-id", resp["web_session_id"])
+		assert.True(t, resp.Success)
+		assert.Equal(t, "user-test-1", resp.UserID)
+		assert.Equal(t, "test-session-id", resp.WebSessionID)
 	})
 
 	t.Run("Success - returns session data without cookie", func(t *testing.T) {
@@ -102,12 +102,12 @@ func TestHandleWebSession(t *testing.T) {
 		c.handleWebSession(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.WebSessionResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Equal(t, "user-test-2", resp["user_id"])
-		assert.Empty(t, resp["web_session_id"])
+		assert.True(t, resp.Success)
+		assert.Equal(t, "user-test-2", resp.UserID)
+		assert.Empty(t, resp.WebSessionID)
 	})
 }
 

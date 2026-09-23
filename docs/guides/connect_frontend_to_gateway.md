@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ---
 
@@ -32,12 +32,13 @@ The gateway's embedded SPA at `/console/` implements passkey registration and au
 
 ## Prerequisites
 
-- g8e Gateway running and healthy (`./g8e gw start`)
-- Existing frontend application served from a known origin (e.g., `https://your-app.example.com`, `http://localhost:3003`)
-- Gateway started with `--cors-origin` and `--passkey-rp-origin` flags matching the frontend origin
-- Browser supports WebAuthn (all modern Chrome, Firefox, Safari, Edge)
-- Browser trusts the gateway's HTTPS certificate; the session cookie is always `Secure`
-- Frontend runs in a WebAuthn secure context (HTTPS, or the browser's localhost exception for local development)
+- An existing frontend application served from a known top-level origin (e.g., `https://your-app.example.com`, `http://localhost:3003`)
+- Either a healthy Gateway already configured for that origin, or permission to let `./g8e gw connect <frontend-origin>` start or restart the local Gateway
+- Browser support for WebAuthn (all modern Chrome, Firefox, Safari, and Edge)
+- A browser that trusts the Gateway's HTTPS certificate; the session cookie is always `Secure`
+- A WebAuthn secure context for the frontend (HTTPS, or the browser's localhost exception for local development)
+
+For direct browser integration, the browser calls the Gateway's absolute HTTPS origin. Do not route requests through an edge function, server-side proxy, service worker, or iframe relay unless the deployment intentionally changes the browser origin and authentication model. The frontend must be open in a top-level browser tab; an embedded builder preview or iframe can block loopback and WebAuthn permissions. `gw connect` verifies Gateway HTTPS and CORS, but cannot verify browser-controlled local-network permission or third-party-cookie acceptance.
 
 ---
 
@@ -120,7 +121,7 @@ Public endpoints (no auth required):
 - `POST /api/v1/auth/passkeys/enrollment/register/challenge` - Begin token-gated passkey registration
 - `POST /api/v1/auth/passkeys/enrollment/register/verify` - Complete token-gated passkey registration
 - `POST /api/v1/auth/logout` - Clear session cookie
-- `POST /api/v1/auth/enrollment-token/validate` - Validate **and consume** a CLI-generated enrollment token; do not call this before token-gated registration
+- `POST /api/v1/auth/enrollment-token/validate` - Validate a CLI-generated enrollment token without consuming it; this call is optional because the registration challenge validates the token too
 
 Browser-accessible authenticated endpoints (session cookie required for browser calls):
 
@@ -179,11 +180,11 @@ On app mount, check auth state:
 
 1. Read the token from the URL hash (`window.location.hash`).
 2. Immediately clear the token from the URL via `history.replaceState`.
-3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ enrollment_token: <token> }` in the JSON body. The gateway validates the token and derives `user_id` and `cli_session_id` from it; there is no separate `/enrollment-token/validate` round-trip, and the token-derived identifiers never need to touch the DOM.
+3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ enrollment_token: <token> }` in the JSON body. The gateway validates the token without consuming it and derives `user_id` and `cli_session_id` from it; there is no need to send those identifiers or expose them in the DOM. The separate `/api/v1/auth/enrollment-token/validate` endpoint is optional and also does not consume the token.
 4. Perform the WebAuthn ceremony with the challenge response (`navigator.credentials.create`).
 5. POST the flat encoded attestation and token to `/api/v1/auth/passkeys/enrollment/register/verify` with `{ "enrollment_token": <token>, "attestation_response": <flat encoded attestation> }`. The verify handler atomically consumes the token before verifying the attestation, so a failed verify attempt requires a new token. A successful verify sets the web session cookie.
 
-Do not call `/api/v1/auth/enrollment-token/validate` as a preliminary step. Despite its name, that endpoint validates **and consumes** the token, so the registration challenge then returns `409 Conflict`.
+Do not treat `/api/v1/auth/enrollment-token/validate` as a required preliminary step. Calling it is safe but redundant; the registration challenge validates the token and the verify endpoint consumes it.
 
 Handle error responses from the challenge and verify endpoints:
 - **`410 Gone`**: Token has expired (5-minute TTL).
@@ -215,7 +216,7 @@ When streaming is unavailable or blocked by deployment infrastructure, poll `GET
 
 ### WebSocket Note
 
-The gateway also exposes a WebSocket pub/sub endpoint at `/api/v1/pubsub/stream`, but it requires mTLS authentication and is not available to browser clients. Use SSE for all browser-based real-time telemetry.
+The gateway also exposes an mTLS-authenticated WebSocket pub/sub endpoint at `/ws/pubsub`, but it is not available to browser clients without a client certificate. Use SSE for browser-based real-time telemetry.
 
 ---
 
@@ -244,7 +245,7 @@ The gateway's public approval URL is `{publicBaseURL}/api/v1/approve/{txHash}`. 
 On app load, check `window.location.hash` for:
 
 - **`#approve={txHash}`**: If user is logged in, auto-trigger the approval flow for this transaction. If not logged in, store it and trigger after login.
-- **`#enroll=1&token={enrollmentToken}`**: If the external frontend supports token-gated enrollment, clear the fragment immediately, then post the token to the enrollment registration challenge and verify endpoints. Do not call the consuming enrollment-token validation endpoint first.
+- **`#enroll=1&token={enrollmentToken}`**: If the external frontend supports token-gated enrollment, clear the fragment immediately, then post the token to the enrollment registration challenge and verify endpoints. The separate enrollment-token validation endpoint is optional and does not consume the token.
 
 Clear secret-bearing enrollment tokens with `history.replaceState` immediately after reading them. Transaction hashes are not credentials; the frontend can retain or remove approval fragments according to its routing behavior.
 
@@ -338,7 +339,7 @@ For a guided one-command workflow on a local Gateway, run `./g8e gw connect http
 
 **Symptom**: Registration via `#enroll=1&token={token}` fails.
 
-**Cause**: Token expired (5-minute TTL), was already used, or was consumed by a preliminary call to `/api/v1/auth/enrollment-token/validate`.
+**Cause**: Token expired (5-minute TTL), was already used by a completed or failed verify attempt, or is invalid.
 
 **Fix**: Generate a new token with `g8e auth enroll user`. Send it directly to the token-gated registration challenge and verify endpoints, and handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing messages.
 

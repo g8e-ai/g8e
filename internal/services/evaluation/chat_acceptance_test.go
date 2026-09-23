@@ -72,13 +72,13 @@ func TestBuildChatProbeRequest_ModelRoleLanePreservesContext(t *testing.T) {
 
 func TestValidateChatAcceptanceCase_RolePrimaryRequiresInvokedOutcome(t *testing.T) {
 	t.Parallel()
-	trace := map[string]any{
-		"controlled_role_assignment": map[string]any{
+	trace := EvaluationTrace{
+		"controlled_role_assignment": EvaluationTrace{
 			"designated_model_role": "primary",
 		},
 		"role_outcome": "role_not_invoked",
 		"model_calls": []any{
-			map[string]any{
+			EvaluationTrace{
 				"agent_role": "sage",
 				"model_role": "assistant",
 			},
@@ -90,9 +90,9 @@ func TestValidateChatAcceptanceCase_RolePrimaryRequiresInvokedOutcome(t *testing
 
 func TestValidateChatAcceptanceCase_BackgroundBarrierRequiresCodex(t *testing.T) {
 	t.Parallel()
-	trace := map[string]any{
+	trace := EvaluationTrace{
 		"model_calls": []any{
-			map[string]any{"agent_role": "sage"},
+			EvaluationTrace{"agent_role": "sage"},
 		},
 	}
 	err := ValidateChatAcceptanceCase(ChatAcceptanceCaseBackgroundBarrier, ChatProbeRequest{}, trace)

@@ -14,7 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -491,7 +491,7 @@ func TestRelayActionReceipt_SignerStoreErrorRejected(t *testing.T) {
 	keyID := "actuator-key-1"
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
-	signerStore := &stubSignerStore{err: errors.New("signer store unavailable")}
+	signerStore := &stubSignerStore{err: fmt.Errorf("signer store unavailable")}
 	recorder := &stubReceiptRecorder{}
 	broker.SetReceiptRelayDeps(signerStore, recorder)
 	handler := newOperatorSessionHandler(broker, "op-001")
@@ -524,7 +524,7 @@ func TestRelayActionReceipt_RecorderErrorStillFansOut(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 	signerStore := &stubSignerStore{keys: map[string]ed25519.PublicKey{keyID: pub}}
-	recorder := &stubReceiptRecorder{err: errors.New("audit store write failed")}
+	recorder := &stubReceiptRecorder{err: fmt.Errorf("audit store write failed")}
 	broker.SetReceiptRelayDeps(signerStore, recorder)
 	handler := newOperatorSessionHandler(broker, "op-001")
 

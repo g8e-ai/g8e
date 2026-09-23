@@ -93,10 +93,10 @@ type ExecutionVaultService struct {
 // Ensure ExecutionVaultService implements ExecutionVault.
 var _ ExecutionVault = (*ExecutionVaultService)(nil)
 
-// NewExecutionVaultService creates a new execution vault service.
+// NewExecutionVaultService creates a new execution vault service. The caller must provide a config with a runtime-resolved database path.
 func NewExecutionVaultService(config *ExecutionVaultConfig, logger *slog.Logger, v *vault.Vault) (*ExecutionVaultService, error) {
 	if config == nil {
-		config = DefaultExecutionVaultConfig()
+		return nil, fmt.Errorf("execution_vault: %w", constants.ErrStorageConfigRequired)
 	}
 
 	if v == nil {

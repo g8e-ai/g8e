@@ -34,6 +34,38 @@ type operatorBindClient interface {
 
 type operatorBindClientFactory func(cfg *config.Config) operatorBindClient
 
+type operatorBindOutput struct {
+	Success           bool   `json:"success"`
+	CLISessionID      string `json:"cli_session_id"`
+	UserID            string `json:"user_id"`
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id"`
+	AlreadyBound      bool   `json:"already_bound"`
+}
+
+type operatorBindingEntry struct {
+	CLISessionID      string                   `json:"cli_session_id"`
+	OperatorID        string                   `json:"operator_id"`
+	OperatorSessionID string                   `json:"operator_session_id"`
+	OperatorType      constants.OperatorType   `json:"operator_type"`
+	Status            constants.OperatorStatus `json:"status"`
+	Hostname          string                   `json:"hostname,omitempty"`
+	Name              string                   `json:"name,omitempty"`
+}
+
+type operatorBindListOutput struct {
+	CLISessionID string                 `json:"cli_session_id"`
+	UserID       string                 `json:"user_id"`
+	Bindings     []operatorBindingEntry `json:"bindings"`
+}
+
+type operatorUnbindOutput struct {
+	Success        bool   `json:"success"`
+	CLISessionID   string `json:"cli_session_id"`
+	UserID         string `json:"user_id"`
+	AlreadyUnbound bool   `json:"already_unbound"`
+}
+
 func defaultOperatorBindClientFactory(cfg *config.Config) operatorBindClient {
 	return auth.NewEnrollmentClient(cfg, nil)
 }
@@ -171,13 +203,13 @@ func runOperatorBind(
 	}
 
 	if output.JSONEnabled(cmd) {
-		return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-			"success":             true,
-			"cli_session_id":      bind.CLISessionID,
-			"user_id":             bind.UserID,
-			"operator_id":         bind.OperatorID,
-			"operator_session_id": bind.OperatorSessionID,
-			"already_bound":       bind.AlreadyBound,
+		return output.WriteJSON(cmd.OutOrStdout(), operatorBindOutput{
+			Success:           true,
+			CLISessionID:      bind.CLISessionID,
+			UserID:            bind.UserID,
+			OperatorID:        bind.OperatorID,
+			OperatorSessionID: bind.OperatorSessionID,
+			AlreadyBound:      bind.AlreadyBound,
 		})
 	}
 
@@ -246,27 +278,22 @@ func runOperatorBindList(
 	}
 
 	if output.JSONEnabled(cmd) {
-		entries := make([]map[string]any, 0, len(operators))
+		entries := make([]operatorBindingEntry, 0, len(operators))
 		for _, op := range operators {
-			entry := map[string]any{
-				"cli_session_id":      sessionInfo.CLISessionID,
-				"operator_id":         op.ID,
-				"operator_session_id": op.OperatorSessionID,
-				"operator_type":       op.OperatorType,
-				"status":              op.Status,
-			}
-			if hostname := operatorHostnameValue(op); hostname != "" {
-				entry["hostname"] = hostname
-			}
-			if op.Name != "" {
-				entry["name"] = op.Name
-			}
-			entries = append(entries, entry)
+			entries = append(entries, operatorBindingEntry{
+				CLISessionID:      sessionInfo.CLISessionID,
+				OperatorID:        op.ID,
+				OperatorSessionID: op.OperatorSessionID,
+				OperatorType:      op.OperatorType,
+				Status:            op.Status,
+				Hostname:          operatorHostnameValue(op),
+				Name:              op.Name,
+			})
 		}
-		return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-			"cli_session_id": sessionInfo.CLISessionID,
-			"user_id":        sessionInfo.UserID,
-			"bindings":       entries,
+		return output.WriteJSON(cmd.OutOrStdout(), operatorBindListOutput{
+			CLISessionID: sessionInfo.CLISessionID,
+			UserID:       sessionInfo.UserID,
+			Bindings:     entries,
 		})
 	}
 
@@ -348,11 +375,11 @@ func runOperatorBindUnbind(
 	}
 
 	if output.JSONEnabled(cmd) {
-		return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-			"success":         true,
-			"cli_session_id":  unbind.CLISessionID,
-			"user_id":         unbind.UserID,
-			"already_unbound": unbind.AlreadyUnbound,
+		return output.WriteJSON(cmd.OutOrStdout(), operatorUnbindOutput{
+			Success:        true,
+			CLISessionID:   unbind.CLISessionID,
+			UserID:         unbind.UserID,
+			AlreadyUnbound: unbind.AlreadyUnbound,
 		})
 	}
 

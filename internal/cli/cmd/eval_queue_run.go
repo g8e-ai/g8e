@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
@@ -76,11 +77,11 @@ Examples:
   g8e eval rollout run --dry-run --skip-variant granite3-3-2b
   g8e eval rollout run --tier-a --continue-on-error --log-dir .g8e/eval/logs/batch-001`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			queue, queuePath, err := loadInitCampaignQueue(cfg.ProjectRoot, queueFile)
+			queue, queuePath, err := loadInitCampaignQueue(cmd.Context(), fileSvc, queueFile)
 			if err != nil {
 				return fmt.Errorf("evaluation: queue run: %w", err)
 			}
@@ -96,11 +97,17 @@ Examples:
 				return writeCampaignQueueRunPlan(cmd, plan, output.JSONEnabled(cmd))
 			}
 			if logDir == "" {
-				logDir = filepath.Join(cfg.ProjectRoot, ".g8e/eval/logs", "queue-run-"+deps.now().UTC().Format("20060102-150405"))
+				logDir = evaluation.QueueLogDir("queue-run-" + deps.now().UTC().Format("20060102-150405"))
 			} else {
-				logDir = evaluation.ResolveEvalPath(cfg.ProjectRoot, logDir)
+				logDir = strings.TrimPrefix(filepath.ToSlash(logDir), constants.RuntimeDirname+"/")
+				if filepath.IsAbs(logDir) || strings.HasPrefix(logDir, "../") || logDir == ".." {
+					return fmt.Errorf("evaluation: queue run: log directory must be runtime-relative")
+				}
 			}
-			if err := os.MkdirAll(logDir, 0o700); err != nil {
+			if logDir == "" {
+				return fmt.Errorf("evaluation: queue run: invalid log directory")
+			}
+			if err := fileSvc.MkdirAll(cmd.Context(), logDir, constants.PermDirPrivate); err != nil {
 				return fmt.Errorf("evaluation: queue run: create log dir: %w", err)
 			}
 			if err := preflightCampaignQueueRun(cmd, deps, cfg, waitForWitnesses, ensembleHealthURL, mirrorBootstrapURL); err != nil {
@@ -119,8 +126,8 @@ Examples:
 			stderr := cmd.ErrOrStderr()
 			for _, entry := range plan {
 				_, _ = fmt.Fprintf(stdout, "=== START %s (%s) ===\n", entry.VariantID, entry.ServedModelTag)
-				modelLogPath := filepath.Join(logDir, entry.VariantID+".log")
-				logFile, err := os.Create(modelLogPath)
+				modelLogPath := path.Join(logDir, entry.VariantID+constants.FileExtText)
+				logFile, err := fileSvc.OpenForAppend(cmd.Context(), modelLogPath, constants.PermFilePrivate)
 				if err != nil {
 					return fmt.Errorf("evaluation: queue run: create log file: %w", err)
 				}
@@ -195,9 +202,13 @@ Examples:
 	return cmd
 }
 
+type campaignQueueRunPlanJSON struct {
+	Models []evaluation.CampaignQueueModel `json:"models"`
+}
+
 func writeCampaignQueueRunPlan(cmd *cobra.Command, plan []evaluation.CampaignQueueModel, jsonOutput bool) error {
 	if jsonOutput {
-		payload, err := json.MarshalIndent(map[string]any{"models": plan}, "", "  ")
+		payload, err := json.MarshalIndent(campaignQueueRunPlanJSON{Models: plan}, "", "  ")
 		if err != nil {
 			return err
 		}

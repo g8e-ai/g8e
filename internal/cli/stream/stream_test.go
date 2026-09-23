@@ -845,7 +845,7 @@ func TestRunStream_HelpFlag(t *testing.T) {
 	assert.NotEmpty(t, buf.String(), "usage output must not be empty")
 }
 
-func TestRunStream_NodeBinaryNotFound_ResultsInFailure(t *testing.T) {
+func TestRunStream_G8eBinaryNotFound_ResultsInFailure(t *testing.T) {
 	// Exercise the binary-load step in isolation: build a minimal binaryDir
 	// that does NOT contain the expected arch sub-path and verify the error
 	// message that RunStream would emit to stderr.
@@ -857,7 +857,7 @@ func TestRunStream_NodeBinaryNotFound_ResultsInFailure(t *testing.T) {
 	require.Error(t, err, "binary must not exist in fresh temp dir")
 }
 
-func TestRunStream_ValidNodeBinaryWithCancelledContext(t *testing.T) {
+func TestRunStream_ValidG8eBinaryWithCancelledContext(t *testing.T) {
 	// Write a minimal fake binary so the binary-load step succeeds.
 	binaryDir := testutil.TempDir(t)
 	arch := "amd64"
@@ -1005,12 +1005,12 @@ func generateTestSSHKey(t *testing.T, path string) {
 }
 
 // ---------------------------------------------------------------------------
-// getDefaultNodeBinaryDir
+// getDefaultG8eBinaryDir
 // ---------------------------------------------------------------------------
 
-func TestGetDefaultNodeBinaryDir(t *testing.T) {
-	// Test that getDefaultNodeBinaryDir returns a valid path
-	dir := getDefaultNodeBinaryDir()
+func TestGetDefaultG8eBinaryDir(t *testing.T) {
+	// Test that getDefaultG8eBinaryDir returns a valid path
+	dir := getDefaultG8eBinaryDir()
 	assert.NotEmpty(t, dir, "default binary dir should not be empty")
 	assert.Contains(t, dir, "bin", "default binary dir should contain 'bin'")
 }

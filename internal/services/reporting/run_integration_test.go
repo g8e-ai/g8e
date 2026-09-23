@@ -31,13 +31,10 @@ import (
 // setupReportingEnv creates a fully populated reporting environment in a temp
 // directory. It returns Options pre-configoured with all paths, plus the vault
 // key path so tests can pass it to Run.
-func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
+func setupReportingEnv(t *testing.T, seed bool, withSecondaryStores bool) (Options, string) {
 	t.Helper()
 
 	root := testutil.TempDir(t)
-	runtimeDir := filepath.Join(root, "runtime")
-	vaultDir := filepath.Join(root, "vault")
-	ledgerDir := filepath.Join(root, "runtime", "ledger")
 	outDir := filepath.Join(root, "reports")
 
 	fileSvc, err := fs.NewRuntimeFileService(root, testutil.NewTestLogger())
@@ -45,21 +42,18 @@ func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	dataDir := fileSvc.Resolve(constants.DataDirname)
 
-	require.NoError(t, os.MkdirAll(runtimeDir, 0o755))
-	require.NoError(t, os.MkdirAll(vaultDir, 0o700))
-
 	// Create vault with key.
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	vh, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vh.Save(vaultDir))
+	require.NoError(t, vh.Save(fileSvc))
 
 	keyHex := hex.EncodeToString(privKey)
 	keyPath := filepath.Join(root, "vault.key")
 	require.NoError(t, os.WriteFile(keyPath, []byte(keyHex), 0o600))
 
-	v, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	v, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	require.NoError(t, v.Unlock(privKey))
 	t.Cleanup(func() { v.Close() })
@@ -100,41 +94,38 @@ func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 	require.NoError(t, err)
 	t.Cleanup(func() { clDB.Close() })
 
-	// Execution vault.
-	evCfg := storage.DefaultExecutionVaultConfig()
-	evCfg.DBPath = filepath.Join(runtimeDir, constants.ExecutionVaultDBFilename)
-	ev, err := storage.NewExecutionVaultService(evCfg, testutil.NewTestLogger(), v)
-	require.NoError(t, err)
-	t.Cleanup(func() { ev.Close() })
+	var ev *storage.ExecutionVaultService
+	var rs *storage.SQLReplayStore
+	var sts *storage.SuspendedTransactionService
+	if withSecondaryStores {
+		evCfg := storage.DefaultExecutionVaultConfig()
+		evCfg.DBPath = fileSvc.Resolve(constants.ExecutionVaultDBRelPath)
+		ev, err = storage.NewExecutionVaultService(evCfg, testutil.NewTestLogger(), v)
+		require.NoError(t, err)
+		t.Cleanup(func() { ev.Close() })
 
-	// Replay store.
-	rsCfg := storage.DefaultReplayStoreConfig()
-	rsCfg.DBPath = filepath.Join(runtimeDir, constants.ReplayStoreDBFilename)
-	rs, err := storage.NewSQLReplayStore(rsCfg, testutil.NewTestLogger())
-	require.NoError(t, err)
-	t.Cleanup(func() { rs.Close() })
+		rsCfg := storage.DefaultReplayStoreConfig()
+		rsCfg.DBPath = fileSvc.Resolve(constants.ReplayStoreDBRelPath)
+		rs, err = storage.NewSQLReplayStore(rsCfg, testutil.NewTestLogger())
+		require.NoError(t, err)
+		t.Cleanup(func() { rs.Close() })
 
-	// Suspended transaction store.
-	stsCfg := storage.DefaultSuspendedTransactionConfig()
-	stsCfg.DBPath = filepath.Join(dataDir, constants.SuspendedTxFilename)
-	sts, err := storage.NewSuspendedTransactionService(stsCfg, testutil.NewTestLogger())
-	require.NoError(t, err)
-	t.Cleanup(func() { sts.Close() })
+		stsCfg := storage.DefaultSuspendedTransactionConfig()
+		stsCfg.DBPath = fileSvc.Resolve(constants.SuspendedTransactionDBRelPath)
+		sts, err = storage.NewSuspendedTransactionService(stsCfg, testutil.NewTestLogger())
+		require.NoError(t, err)
+		t.Cleanup(func() { sts.Close() })
+	}
 
 	opts := Options{
-		DataDir:                    dataDir,
-		RuntimeDir:                 runtimeDir,
-		LedgerDir:                  ledgerDir,
-		VaultDir:                   vaultDir,
-		VaultKeyPath:               keyPath,
-		OutDir:                     outDir,
-		ExecutionVaultDBPath:       evCfg.DBPath,
-		ReplayStoreDBPath:          rsCfg.DBPath,
-		SuspendedTransactionDBPath: stsCfg.DBPath,
-		Logger:                     testutil.NewTestLogger(),
+		FileSvc:      fileSvc,
+		VaultKeyPath: keyPath,
+		OutDir:       outDir,
+		Logger:       testutil.NewTestLogger(),
 	}
 
 	if seed {
+		require.True(t, withSecondaryStores, "seeded reporting env requires secondary stores")
 		seedReportingData(t, store, ev, rs, sts)
 	}
 
@@ -226,7 +217,7 @@ func seedReportingData(t *testing.T, store *storage.SQLAuditStore, ev *storage.E
 }
 
 func TestRun_PopulatedStores_AllCSVFilesWritten(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true)
+	opts, _ := setupReportingEnv(t, true, true)
 
 	result, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -310,7 +301,7 @@ func TestRun_PopulatedStores_AllCSVFilesWritten(t *testing.T) {
 }
 
 func TestRun_EmptyStores_AllCSVFilesWritten(t *testing.T) {
-	opts, _ := setupReportingEnv(t, false)
+	opts, _ := setupReportingEnv(t, false, true)
 
 	result, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -340,7 +331,7 @@ func TestRun_EmptyStores_AllCSVFilesWritten(t *testing.T) {
 }
 
 func TestRun_LockedVault_NoKeyPath(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true)
+	opts, _ := setupReportingEnv(t, true, true)
 	opts.VaultKeyPath = "" // No key → locked vault.
 
 	result, err := Run(context.Background(), opts)
@@ -349,7 +340,7 @@ func TestRun_LockedVault_NoKeyPath(t *testing.T) {
 }
 
 func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true)
+	opts, _ := setupReportingEnv(t, true, true)
 	opts.VaultKeyPath = filepath.Join(testutil.TempDir(t), "nonexistent.key")
 
 	result, err := Run(context.Background(), opts)
@@ -358,11 +349,8 @@ func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
 }
 
 func TestRun_MissingExecutionVault(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true)
-	// Use a file as parent directory so SQLite can't create the DB (cross-platform).
-	blocker := filepath.Join(testutil.TempDir(t), "blocker")
-	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
-	opts.ExecutionVaultDBPath = filepath.Join(blocker, "test.db")
+	opts, _ := setupReportingEnv(t, false, false)
+	opts.FileSvc = blockedDBPathFileSvc(t, opts.FileSvc, constants.ExecutionVaultDBRelPath)
 
 	_, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -372,10 +360,8 @@ func TestRun_MissingExecutionVault(t *testing.T) {
 }
 
 func TestRun_MissingReplayStore(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true)
-	blocker := filepath.Join(testutil.TempDir(t), "blocker")
-	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
-	opts.ReplayStoreDBPath = filepath.Join(blocker, "test.db")
+	opts, _ := setupReportingEnv(t, false, false)
+	opts.FileSvc = blockedDBPathFileSvc(t, opts.FileSvc, constants.ReplayStoreDBRelPath)
 
 	_, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -384,10 +370,8 @@ func TestRun_MissingReplayStore(t *testing.T) {
 }
 
 func TestRun_MissingSuspendedTxStore(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true)
-	blocker := filepath.Join(testutil.TempDir(t), "blocker")
-	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
-	opts.SuspendedTransactionDBPath = filepath.Join(blocker, "test.db")
+	opts, _ := setupReportingEnv(t, false, false)
+	opts.FileSvc = blockedDBPathFileSvc(t, opts.FileSvc, constants.SuspendedTransactionDBRelPath)
 
 	_, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -396,7 +380,7 @@ func TestRun_MissingSuspendedTxStore(t *testing.T) {
 }
 
 func TestRun_CancelledContext(t *testing.T) {
-	opts, _ := setupReportingEnv(t, true)
+	opts, _ := setupReportingEnv(t, true, true)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -410,7 +394,7 @@ func TestRun_CancelledContext(t *testing.T) {
 }
 
 func TestRun_BadOutDir(t *testing.T) {
-	opts, _ := setupReportingEnv(t, false)
+	opts, _ := setupReportingEnv(t, false, true)
 	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.OutDir = filepath.Join(blocker, "cannot-create-here")
@@ -418,4 +402,28 @@ func TestRun_BadOutDir(t *testing.T) {
 	_, err := Run(context.Background(), opts)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReportOutputDirFailed)
+}
+
+type blockedDBPathRuntimeFileSvc struct {
+	fs.RuntimeFileService
+	relPath string
+	dbPath  string
+}
+
+func (svc *blockedDBPathRuntimeFileSvc) Resolve(relPath string) string {
+	if relPath == svc.relPath {
+		return svc.dbPath
+	}
+	return svc.RuntimeFileService.Resolve(relPath)
+}
+
+func blockedDBPathFileSvc(t *testing.T, base fs.RuntimeFileService, relPath string) fs.RuntimeFileService {
+	t.Helper()
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+	return &blockedDBPathRuntimeFileSvc{
+		RuntimeFileService: base,
+		relPath:            relPath,
+		dbPath:             filepath.Join(blocker, "test.db"),
+	}
 }

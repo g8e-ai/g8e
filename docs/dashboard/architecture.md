@@ -2,9 +2,9 @@
 
 ## Purpose
 
-g8ed is the first-party browser interface for g8e. The current runtime separates application delivery, browser authentication, and container workload identity into distinct security boundaries. The dashboard host serves the browser application, the browser authenticates directly to the Gateway, and the dashboard container enrolls its own workload identity before it begins serving.
+g8ed is the first-party browser interface for g8e. The current runtime separates application delivery, browser authentication, and container workload identity into distinct security boundaries. The dashboard host serves the browser application and runtime configuration, the browser authenticates directly to the Gateway, and the dashboard container enrolls its own workload identity before it begins serving.
 
-The current dashboard is not a complete operational control plane. It restores existing Gateway browser sessions and exposes user-interface modules for chat, Operator management, approvals, audit, settings, and terminal activity, but the running dashboard host does not provide the API backend required by those modules.
+The current dashboard is not a complete operational control plane. It can restore an existing Gateway browser session and request logout, and it exposes user-interface modules for chat, Operator management, approvals, audit, settings, and terminal activity. The running dashboard host does not provide the API backend required by those retained modules.
 
 ```mermaid
 flowchart LR
@@ -20,9 +20,9 @@ flowchart LR
 
 ### Dashboard Host
 
-The Node.js and Express process serves the checked-in browser application over plain HTTP. It publishes the required browser-reachable Gateway origin as runtime configuration, applies browser security headers, logs requests, serves static assets, and returns the single-page document for unknown `GET` requests that accept HTML. The HTML fallback is rate-limited.
+The Node.js 22 and Express 5 process serves the checked-in browser application over plain HTTP. It publishes the required browser-reachable Gateway origin through `/g8e-config.js`, applies browser security headers, logs requests, serves static assets, and returns the single-page document for unknown `GET` requests that accept HTML. The HTML fallback is rate-limited.
 
-The host does not terminate TLS, authenticate browser users, store browser sessions, proxy Gateway traffic, or mount dashboard API and event routes. Deployments that require HTTPS on the dashboard origin terminate TLS in an external proxy or load balancer.
+`G8E_GATEWAY_URL` is required at startup and has no fallback. The host does not terminate TLS, authenticate browser users, store browser sessions, proxy Gateway traffic, or mount dashboard API and event routes. Deployments that require HTTPS on the dashboard origin terminate TLS in an external proxy or load balancer.
 
 ### Browser Application
 
@@ -38,12 +38,12 @@ The workload certificate is separate from browser authentication. The current st
 
 ## Startup and Deployment
 
-The unified container deployment starts the dashboard only after the Gateway health check succeeds and platform owner bootstrap is available. Startup proceeds as follows:
+The unified container deployment starts the dashboard only after the Gateway health check succeeds. Gateway owner bootstrap may still be incomplete at that point; the dashboard's enrollment request retries while the owner bootstrap completes. Startup proceeds as follows:
 
-1. The container waits for the Gateway's plain-HTTP health surface.
-2. The dashboard loads its existing workload identity, resumes a pending enrollment request, or submits a new request and persists the resumable state.
-3. An owner approves a new request through the Gateway console while the dashboard remains unavailable.
-4. The dashboard stores the issued certificate, private key, and trust bundle in its persistent runtime volume, then removes the pending enrollment state.
+1. The container entrypoint waits for the Gateway's plain-HTTP health surface, polling up to 30 times at two-second intervals, then exits if the health surface never becomes ready.
+2. The dashboard loads its existing workload identity, resumes an unexpired pending enrollment request, or creates a P-256 key and certificate signing request for a new request and persists the pending state.
+3. An owner approves a new request through the Gateway console while the dashboard remains unavailable. If the Gateway has not yet been bootstrapped, request submission retries for up to 30 minutes.
+4. After approval, the dashboard proves possession of the private key, stores the issued certificate, private key, and trust bundle in its persistent runtime volume, then removes the pending enrollment state.
 5. The static host begins listening and publishes the browser-facing Gateway origin to the browser application.
 
 The deployment uses separate addresses for browser and container traffic:
@@ -57,6 +57,8 @@ The deployment uses separate addresses for browser and container traffic:
 | `PORT` | Dashboard host port; defaults to `3000` |
 
 Browser authentication also requires the exact dashboard origin in the Gateway's credentialed CORS and WebAuthn relying-party configuration. The browser must trust the Gateway certificate, and the dashboard must run in a WebAuthn secure context, either HTTPS or the browser's localhost development exception. See [Gateway Integration](gateway.md#deployment-requirements) for the complete deployment requirements.
+
+In the root Compose deployment, the dashboard is the `bootstrapped`-profile `dashboard` service. It publishes host port `3000` to container port `3000`, runs as the non-root `g8e` user, mounts the component-local `g8e-dashboard-data` volume at `/data`, and uses `/data` as `G8E_RUNTIME_DIR`. That volume owns the dashboard's enrollment state and credentials; it is not shared with the Gateway or an Operator. The container health check probes `http://localhost:3000/` from the dashboard container.
 
 ## Request Ownership
 
@@ -92,7 +94,7 @@ The browser cannot use the Gateway's mTLS WebSocket surface because it does not 
 
 Browser assets are served directly from the repository without bundling or transpilation. The dashboard test suite covers the static host, browser authentication logic, event connection behavior, startup enrollment, model parsing, and feature modules. Unit coverage of retained modules does not prove that their routes are mounted or that they work against a live Gateway.
 
-Deployment verification therefore checks the complete browser path: Gateway certificate trust, exact CORS and WebAuthn origins, session-cookie behavior, runtime Gateway configuration, workload enrollment, and the active request owner for each feature. See [Testing](tests.md) for the dashboard test scope and [Development](development.md) for local verification commands.
+Deployment verification therefore checks the complete browser path: Gateway certificate trust, exact CORS and WebAuthn origins, session-cookie behavior, runtime Gateway configuration, workload enrollment, and the active request owner for each feature. See [Testing](tests.md) for the dashboard test scope and [Development](devs.md) for local verification commands.
 
 ## Related
 

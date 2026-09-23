@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -70,19 +71,13 @@ func newPublicPublisherTestEnv(t *testing.T) (*PublicPublisherService, *Document
 	return publisher, docStore, priv, hex.EncodeToString(pub)
 }
 
-// makeProjectionRecord creates a valid public feed record from a projection
-// dict.
-func makeProjectionRecord(t *testing.T, seq int64, proj map[string]any) models.PublicFeedRecord {
-	t.Helper()
-	recordBytes, err := json.Marshal(proj)
-	require.NoError(t, err)
-	recordHash := sha256.Sum256(recordBytes)
-	return models.PublicFeedRecord{
-		Sequence:    seq,
-		RecordType:  models.PublicFeedRecordTypeProjection,
-		RecordHash:  hex.EncodeToString(recordHash[:]),
-		RecordBytes: string(recordBytes),
-	}
+// makeProjectionRecord creates a valid public feed record from a projection object.
+func makeProjectionRecord(t *testing.T, seq int64, proj models.PublicFeedObject) models.PublicFeedRecord {
+	return projectionRecordFromObject(t, seq, proj)
+}
+
+func validPublicViewRecordBytes() string {
+	return `{"schema_version":"1.3.0","kind":"catalog_snapshot","dataset_id":"test-dataset","quality_state":"live_in_progress","observed_at":"2026-09-21T00:00:00Z"}`
 }
 
 // TestExportBatch_SignsAndWritesOutbox verifies that ExportBatch builds a
@@ -100,8 +95,24 @@ func TestExportBatch_SendsConfiguredIngestToken(t *testing.T) {
 	publisher.SetMirrorOrigin(mirror.URL)
 
 	require.NoError(t, publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
-		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "campaign-1"}),
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "campaign-1"})),
 	}))
+}
+
+func TestBuildBatch_RejectsEventBodyOutsideExplorerContract(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	recordBytes := []byte(`{"kind":"heartbeat"}`)
+	digest := sha256.Sum256(recordBytes)
+
+	_, err := publisher.BuildBatch([]models.PublicFeedRecord{{
+		Sequence:    1,
+		RecordType:  models.PublicFeedRecordTypeEvent,
+		RecordHash:  hex.EncodeToString(digest[:]),
+		RecordBytes: string(recordBytes),
+	}})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedRecordSchemaInvalid)
 }
 
 func TestExportBatch_SignsAndWritesOutbox(t *testing.T) {
@@ -121,8 +132,8 @@ func TestExportBatch_SignsAndWritesOutbox(t *testing.T) {
 	publisher.SetMirrorOrigin(mirror.URL)
 
 	records := []models.PublicFeedRecord{
-		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1", "variant_id": "v1"}),
-		makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c1", "variant_id": "v2"}),
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1", "variant_id": "v1"})),
+		makeProjectionRecord(t, 2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1", "variant_id": "v2"})),
 	}
 
 	err := publisher.ExportBatch(context.Background(), records)
@@ -173,11 +184,11 @@ func TestExportBatch_HashChainLinksBatches(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err := publisher.ExportBatch(context.Background(), records1)
 	require.NoError(t, err)
 
-	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c1"})}
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err = publisher.ExportBatch(context.Background(), records2)
 	require.NoError(t, err)
 
@@ -217,14 +228,204 @@ func TestExportBatch_RetriesOnMirrorFailure(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err := publisher.ExportBatch(context.Background(), records)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, accepted.Load(), int32(2), "must have retried at least once")
 }
 
-// TestExportBatch_IdempotentRetransmit verifies that an unacknowledged outbox
-// tail batch is retransmitted with the same content hash.
+// TestExportBatch_RejectsMirrorTipThatConflictsWithPublisherSnapshot verifies
+// that a different accepted hash at the publisher's next sequence fails closed.
+func TestExportBatch_RejectsMirrorTipThatConflictsWithPublisherSnapshot(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	remoteTipHash := strings.Repeat("a", sha256.Size*2)
+	var firstBatch models.PublicFeedBatch
+	var receivedSequences []int64
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		receivedSequences = append(receivedSequences, req.Batch.FirstSequence)
+		if len(receivedSequences) == 1 {
+			firstBatch = req.Batch
+			require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{Accepted: true, HighWaterSequence: 1, FeedChainHash: req.Batch.ContentHash}))
+			return
+		}
+		require.Equal(t, int64(2), req.Batch.FirstSequence)
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{
+			Accepted:          false,
+			SourceID:          req.Batch.SourceID,
+			HighWaterSequence: 2,
+			FeedChainHash:     remoteTipHash,
+			BatchCount:        2,
+			RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+		}))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	require.NoError(t, publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "campaign-1"})),
+	}))
+	err := publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 2, models.NewPublicFeedObject(map[string]string{"campaign_id": "campaign-2"})),
+	})
+	require.ErrorIs(t, err, constants.ErrPublicFeedMirrorRejected)
+	assert.Equal(t, []int64{1, 2}, receivedSequences)
+	snapshot, snapshotErr := publisher.GetSnapshot(context.Background())
+	require.NoError(t, snapshotErr)
+	assert.Equal(t, int64(1), snapshot.HighWaterSequence)
+	assert.Equal(t, firstBatch.ContentHash, snapshot.FeedChainHash)
+}
+
+func TestSendToMirror_RejectsUnverifiedMirrorState(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	batch, err := publisher.BuildBatch([]models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "campaign-1"})),
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		response models.PublicIngestResponse
+	}{
+		{
+			name: "different source",
+			response: models.PublicIngestResponse{
+				SourceID:          "other-source",
+				HighWaterSequence: batch.LastSequence,
+				FeedChainHash:     batch.ContentHash,
+				BatchCount:        1,
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "newer mirror tip",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence + 1,
+				FeedChainHash:     strings.Repeat("a", sha256.Size*2),
+				BatchCount:        2,
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "equal sequence with different hash",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence,
+				FeedChainHash:     strings.Repeat("b", sha256.Size*2),
+				BatchCount:        1,
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "malformed tip hash",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence + 1,
+				FeedChainHash:     "invalid",
+				BatchCount:        2,
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "missing batch count",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence + 1,
+				FeedChainHash:     strings.Repeat("c", sha256.Size*2),
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "non-duplicate rejection",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence,
+				FeedChainHash:     batch.ContentHash,
+				BatchCount:        1,
+				RejectionReason:   models.PublicFeedIngestRejectionEquivocation,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				require.NoError(t, json.NewEncoder(w).Encode(tt.response))
+			}))
+			t.Cleanup(mirror.Close)
+			err := publisher.sendToMirror(context.Background(), mirror.URL, "", batch)
+			require.ErrorIs(t, err, constants.ErrPublicFeedMirrorRejected)
+		})
+	}
+}
+
+func TestExportBatch_RecoversWhenMirrorAcceptedBatchBeforeResponseFailure(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	var accepted models.PublicFeedBatch
+	attempts := atomic.Int32{}
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		if attempts.Add(1) == 1 {
+			accepted = req.Batch
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		require.Equal(t, accepted.ContentHash, req.Batch.ContentHash)
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{
+			Accepted:          false,
+			SourceID:          accepted.SourceID,
+			HighWaterSequence: accepted.LastSequence,
+			FeedChainHash:     accepted.ContentHash,
+			RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+		}))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	err := publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "campaign-1"})),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), attempts.Load())
+	snapshot, err := publisher.GetSnapshot(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, accepted.LastSequence, snapshot.HighWaterSequence)
+	assert.Equal(t, accepted.ContentHash, snapshot.FeedChainHash)
+}
+
+func TestRetransmitOutbox_AcknowledgesBatchAlreadyAcceptedByMirror(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "campaign-1"}))}
+	batch, err := publisher.BuildBatch(records)
+	require.NoError(t, err)
+	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch))
+	require.NoError(t, publisher.updateOutboxStatus(context.Background(), batch.LastSequence, models.PublicFeedOutboxStatusSent, true))
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.Equal(t, batch.ContentHash, req.Batch.ContentHash)
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{
+			Accepted:          false,
+			SourceID:          batch.SourceID,
+			HighWaterSequence: batch.LastSequence,
+			FeedChainHash:     batch.ContentHash,
+			RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+		}))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	require.NoError(t, publisher.RetransmitOutbox(context.Background()))
+	snapshot, err := publisher.GetSnapshot(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, batch.LastSequence, snapshot.HighWaterSequence)
+	assert.Equal(t, batch.ContentHash, snapshot.FeedChainHash)
+}
+
 func TestExportBatch_IdempotentRetransmit(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 
@@ -240,7 +441,7 @@ func TestExportBatch_IdempotentRetransmit(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	batch, err := publisher.BuildBatch(records)
 	require.NoError(t, err)
 	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch))
@@ -267,10 +468,10 @@ func TestLoadSnapshotFromOutbox_IgnoresUnacknowledgedTail(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	require.NoError(t, publisher.ExportBatch(context.Background(), records1))
 
-	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c2"})}
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c2"}))}
 	batch2, err := publisher.BuildBatch(records2)
 	require.NoError(t, err)
 	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch2))
@@ -307,16 +508,16 @@ func TestExportBatch_RetriesUnacknowledgedBeforeNewBatch(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	require.NoError(t, publisher.ExportBatch(context.Background(), records1))
 
-	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c2"})}
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c2"}))}
 	batch2, err := publisher.BuildBatch(records2)
 	require.NoError(t, err)
 	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch2))
 	require.NoError(t, publisher.updateOutboxStatus(context.Background(), batch2.LastSequence, models.PublicFeedOutboxStatusSent, true))
 
-	records3 := []models.PublicFeedRecord{makeProjectionRecord(t, 3, map[string]any{"campaign_id": "c3"})}
+	records3 := []models.PublicFeedRecord{makeProjectionRecord(t, 3, models.NewPublicFeedObject(map[string]string{"campaign_id": "c3"}))}
 	receivedSequences = nil
 	require.NoError(t, publisher.ExportBatch(context.Background(), records3))
 
@@ -342,17 +543,17 @@ func TestRepairOutboxFromSnapshot_CompactsPrefixGap(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	require.NoError(t, publisher.ExportBatch(context.Background(), records1))
 
-	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c2"})}
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c2"}))}
 	require.NoError(t, publisher.ExportBatch(context.Background(), records2))
 
 	entries, err := publisher.outbox.List(context.Background())
 	require.NoError(t, err)
 	require.Len(t, entries, 2)
 
-	orphanRecord := makeProjectionRecord(t, 1, map[string]any{"campaign_id": "orphan"})
+	orphanRecord := makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "orphan"}))
 	orphanBatch, err := publisher.BuildBatch([]models.PublicFeedRecord{orphanRecord})
 	require.NoError(t, err)
 	orphanBytes, err := json.Marshal(orphanBatch)
@@ -391,7 +592,7 @@ func TestRepairOutboxFromSnapshot_DropsDiscontinuousTail(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, publisher.fileSvc.WriteFile(context.Background(), constants.PublicFeedSnapshotPath, snapBytes, constants.PermFilePrivate))
 
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 15, map[string]any{"campaign_id": "orphan-tail"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 15, models.NewPublicFeedObject(map[string]string{"campaign_id": "orphan-tail"}))}
 	batch, err := publisher.BuildBatch(records)
 	require.NoError(t, err)
 	batchBytes, err := json.Marshal(batch)
@@ -426,7 +627,7 @@ func TestExportBatch_RejectsMirrorRejection(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err := publisher.ExportBatch(context.Background(), records)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorRejected)
@@ -448,7 +649,7 @@ func TestGetSnapshot_ReturnsCurrentHighWater(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err := publisher.ExportBatch(context.Background(), records)
 	require.NoError(t, err)
 
@@ -488,7 +689,7 @@ func TestRecoverOutbox_ResumesAfterRestart(t *testing.T) {
 	publisher1.SetMirrorOrigin(mirror.URL)
 
 	// Export a batch with the first publisher.
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err := publisher1.ExportBatch(context.Background(), records)
 	require.NoError(t, err)
 
@@ -528,7 +729,7 @@ func TestRecoverOutbox_UsesRuntimeFileStateAfterDatabaseReplacement(t *testing.T
 	publisher1.SetMirrorOrigin(mirror.URL)
 
 	err := publisher1.ExportBatch(context.Background(), []models.PublicFeedRecord{
-		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"}),
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"})),
 	})
 	require.NoError(t, err)
 
@@ -569,7 +770,7 @@ func TestRecoverOutbox_RejectsSnapshotEquivocationAtHighWater(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher1.SetMirrorOrigin(mirror.URL)
 	require.NoError(t, publisher1.ExportBatch(context.Background(), []models.PublicFeedRecord{
-		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"}),
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"})),
 	}))
 
 	snapshotBytes, err := publisher1.fileSvc.ReadFile(context.Background(), constants.PublicFeedSnapshotPath)
@@ -605,7 +806,7 @@ func TestExportBatch_DisabledReturnsError(t *testing.T) {
 	disabledCfg := models.PublicExportConfig{Enabled: false}
 	publisher := NewPublicPublisherService(docStore, fileSvc, logger, disabledCfg, priv, "key-1")
 
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err = publisher.ExportBatch(context.Background(), records)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedDisabled)
@@ -628,9 +829,9 @@ func TestExportBatch_RejectsOversizedBatch(t *testing.T) {
 	publisher.SetMirrorOrigin(mirror.URL)
 
 	records := []models.PublicFeedRecord{
-		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"}),
-		makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c1"}),
-		makeProjectionRecord(t, 3, map[string]any{"campaign_id": "c1"}),
+		makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"})),
+		makeProjectionRecord(t, 2, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"})),
+		makeProjectionRecord(t, 3, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"})),
 	}
 	err := publisher.ExportBatch(context.Background(), records)
 	require.Error(t, err)
@@ -641,12 +842,7 @@ func TestExportBatch_RejectsOversizedBatch(t *testing.T) {
 // hash is rejected before signing.
 func TestBuildBatch_RejectsNestedProhibitedField(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
-	record := makeProjectionRecord(t, 1, map[string]any{
-		"campaign_id": "c1",
-		"metadata": map[string]any{
-			"api_key": "restricted",
-		},
-	})
+	record := makeProjectionRecord(t, 1, mustPublicFeedObjectFromJSON(t, `{"campaign_id":"c1","metadata":{"api_key":"restricted"}}`))
 
 	_, err := publisher.BuildBatch([]models.PublicFeedRecord{record})
 	require.Error(t, err)
@@ -704,7 +900,7 @@ func TestExportBatch_RejectsInvalidRecordType(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	recordBytes := `{"campaign_id":"c1"}`
+	recordBytes := validPublicViewRecordBytes()
 	recordHash := sha256.Sum256([]byte(recordBytes))
 	records := []models.PublicFeedRecord{
 		{
@@ -724,7 +920,7 @@ func TestExportBatch_RejectsInvalidRecordType(t *testing.T) {
 func TestVerifyBatch_SignatureValidation(t *testing.T) {
 	publisher, _, _, pubKeyHex := newPublicPublisherTestEnv(t)
 
-	recordBytes := `{"campaign_id":"c1"}`
+	recordBytes := validPublicViewRecordBytes()
 	recordHash := sha256.Sum256([]byte(recordBytes))
 	records := []models.PublicFeedRecord{
 		{
@@ -758,7 +954,7 @@ func TestVerifyBatch_SignatureValidation(t *testing.T) {
 func TestVerifyBatch_HashChainValidation(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 
-	recordBytes := `{"campaign_id":"c1"}`
+	recordBytes := validPublicViewRecordBytes()
 	recordHash := sha256.Sum256([]byte(recordBytes))
 	records := []models.PublicFeedRecord{
 		{
@@ -803,7 +999,7 @@ func TestRotateKey_SwitchesSigningKey(t *testing.T) {
 	publisher.SetMirrorOrigin(mirror.URL)
 
 	// Export with the old key.
-	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err := publisher.ExportBatch(context.Background(), records1)
 	require.NoError(t, err)
 
@@ -814,7 +1010,7 @@ func TestRotateKey_SwitchesSigningKey(t *testing.T) {
 	assert.NotEqual(t, oldPubKeyHex, newPubKeyHex)
 
 	// Export with the new key.
-	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 3, map[string]any{"campaign_id": "c1"})}
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 3, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err = publisher.ExportBatch(context.Background(), records2)
 	require.NoError(t, err)
 
@@ -834,7 +1030,7 @@ func TestExportBatch_MirrorOutageDoesNotLoseSequence(t *testing.T) {
 	// Point to an invalid URL so the mirror is unreachable.
 	publisher.SetMirrorOrigin("http://127.0.0.1:1")
 
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err := publisher.ExportBatch(context.Background(), records)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedMaxRetriesExceeded)
@@ -896,7 +1092,7 @@ func TestExportBatch_NeverMutatesAuthoritativeReports(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, models.NewPublicFeedObject(map[string]string{"campaign_id": "c1"}))}
 	err = publisher.ExportBatch(context.Background(), records)
 	require.NoError(t, err)
 
@@ -925,12 +1121,7 @@ func TestExportBatch_RejectsProhibitedFields(t *testing.T) {
 	publisher.SetMirrorOrigin(mirror.URL)
 
 	// A record with a prohibited field.
-	badRecord := map[string]any{
-		"campaign_id": "c1",
-		"raw_prompt":  "some private prompt",
-	}
-	recordBytes, err := json.Marshal(badRecord)
-	require.NoError(t, err)
+	recordBytes := []byte(`{"campaign_id":"c1","raw_prompt":"some private prompt"}`)
 	recordHash := sha256.Sum256(recordBytes)
 	records := []models.PublicFeedRecord{
 		{
@@ -940,7 +1131,7 @@ func TestExportBatch_RejectsProhibitedFields(t *testing.T) {
 			RecordBytes: string(recordBytes),
 		},
 	}
-	err = publisher.ExportBatch(context.Background(), records)
+	err := publisher.ExportBatch(context.Background(), records)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedRestrictedField)
 }

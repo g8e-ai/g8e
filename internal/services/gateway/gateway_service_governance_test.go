@@ -13,12 +13,14 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
@@ -41,11 +43,11 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 	t.Run("Notary posture returns true with signers", func(t *testing.T) {
 		ls := newTestGatewayService(t, testGatewayOpts{posture: config.PostureNotary})
 
-		signer := map[string]interface{}{
-			"id":         "test-signer-1",
-			"public_key": "abc123",
-			"added_at":   "2026-01-01T00:00:00Z",
-			"enabled":    true,
+		signer := models.TrustedSigner{
+			ID:        "test-signer-1",
+			PublicKey: "abc123",
+			AddedAt:   time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+			Enabled:   true,
 		}
 		signerBytes, err := json.Marshal(signer)
 		require.NoError(t, err)

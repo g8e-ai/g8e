@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -114,22 +115,34 @@ type Validator struct {
 	schemaDigest   string
 }
 
-// NewValidator creates and returns an OSCAL Validator. It compiles the
-// embedded official NIST OSCAL 1.1.2 assessment-results schema at
-// construction time. If the schema fails to compile (which would indicate
-// a tampered or corrupted embedded schema), an error is returned.
+var (
+	compiledSchemaOnce sync.Once
+	compiledSchema     *jsonschema.Schema
+	compiledSchemaErr  error
+)
+
+// NewValidator creates and returns an OSCAL Validator. The first construction
+// compiles the embedded official NIST OSCAL 1.1.2 assessment-results schema;
+// subsequent constructions reuse the immutable compiled schema. If the schema
+// fails to compile, an error is returned.
 func NewValidator() (*Validator, error) {
-	schemaBytes, err := oscalschema.SchemaBytes()
-	if err != nil {
-		return nil, fmt.Errorf("oscal validator: %w", err)
-	}
-	compiler := jsonschema.NewCompiler()
-	compiled, err := compiler.Compile(schemaBytes)
-	if err != nil {
-		return nil, fmt.Errorf("oscal validator: compile embedded schema: %w", err)
+	compiledSchemaOnce.Do(func() {
+		schemaBytes, err := oscalschema.SchemaBytes()
+		if err != nil {
+			compiledSchemaErr = fmt.Errorf("oscal validator: %w", err)
+			return
+		}
+		compiler := jsonschema.NewCompiler()
+		compiledSchema, err = compiler.Compile(schemaBytes)
+		if err != nil {
+			compiledSchemaErr = fmt.Errorf("oscal validator: compile embedded schema: %w", err)
+		}
+	})
+	if compiledSchemaErr != nil {
+		return nil, compiledSchemaErr
 	}
 	return &Validator{
-		compiledSchema: compiled,
+		compiledSchema: compiledSchema,
 		schemaDigest:   oscalschema.PinnedSHA256,
 	}, nil
 }

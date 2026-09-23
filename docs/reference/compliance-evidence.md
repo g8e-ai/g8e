@@ -1,15 +1,15 @@
 # Proof-Backed Compliance Evidence
 
-**Document Version:** 2.1.8
-**Last Updated:** 2026-09-18
-**Platform:** g8e v2.1.8
+**Document Version:** 2.1.12
+**Last Updated:** 2026-09-23
+**Platform:** g8e v2.1.12
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
 
 ## Purpose
 
-This document is the evidence companion to the [Compliance Alignment Report](./compliance-alignment.md). The alignment report maps g8e's security controls to external frameworks (SOC 2, ISO 27001, GDPR, HIPAA, NIST SP 800-53, PCI DSS, NIST SP 800-63B, NSA ZIG, FedRAMP 20x). This document describes the proof-backed reporting pipeline that binds those mappings to immutable, independently verifiable evidence rather than prose claims.
+This document is the evidence companion to the [Compliance Alignment Report](./compliance-alignment.md). The canonical alignment currently covers FedRAMP 20x and NIST SP 800-53; the other frameworks named in the alignment report are planned and do not receive generated framework-control assessments. This document describes the proof-backed reporting pipeline that binds reviewed mappings to immutable, independently verifiable evidence rather than prose claims.
 
 The pipeline answers five questions for every reported control:
 
@@ -48,11 +48,18 @@ Framework catalogs/crosswalks ────────────────�
                                                                          ├──> OSCAL
                                                                          ├──> JSON
                                                                          ├──> Markdown
+                                                                         ├──> CSV
                                                                          ├──> HTML
                                                                          └──> CLI
 ```
 
 Atomic g8e assertions are the source of behavioral truth. External framework controls map to those assertions through typed crosswalks. A single verified assertion can support multiple framework controls, while each framework control retains its own applicability, scope, responsibility, and evidence requirements. Demos, evals, KSI methods, OSCAL, Markdown, HTML, and CLI output all consume one immutable evidence graph; renderers project one canonical assessment record into each format rather than scraping terminal output or inferring results from filenames.
+
+### Protected assessment scope
+
+A report is admitted through one canonical `AssessmentScope` document, supplied to `g8e compliance report generate --scope <scope.json>`. The scope protects the assessment boundary: source admissions, owner and acquisition boundaries, source and verifier versions, applicability selection, selected population, posture, assessment window, and assessment-as-of time. Generation and offline verification use the same protected scope bytes and reject source records that are missing, duplicated, outside the declared selection, or bound to another admission. A local path identifies where bytes were read; it does not establish source ownership or signer trust.
+
+Context needed for a release claim is explicit. Build identity, source revision, component inventory, network topology, configuration, doctrine bundles, and trust anchors are either populated with protected evidence or declared as a typed `UnavailableAssessmentContext` record with a non-empty reason. Omission is invalid, and an unavailable declaration does not satisfy a posture-required consensus policy or any native assertion. The generator projects these declarations as `assessment_context_unavailable` diagnostics in the canonical analysis and all renderers. Unavailable context limits the assessment's claims; it does not automatically disqualify a truthful report from release projection. Schema validity alone is insufficient: the complete public bundle must also satisfy the trust, replay, version, and claim requirements in [Release-Eligible Bundle](../devs/release_process.md#release-eligible-bundle).
 
 The pipeline fails closed with explicit uncertainty. Unknown framework versions, unknown assertion or verifier versions, missing trust roots, stale evidence, duplicate records, cross-run evidence, scope mismatches, malformed signatures, unresolved references, unsupported task shapes, and incomplete assessment periods produce non-passing results, and the report preserves the exact reason. The `unverifiable` result status records missing, stale, malformed, unsupported, ambiguous, or cryptographically invalid evidence without inventing a measured control failure.
 
@@ -66,21 +73,21 @@ The assertion catalog (`protocol/constants/compliance/assertion-catalog.json`) d
 |--------------|-------|------------------------|
 | `G8E-GOV-ALLOW-001` | Governed allow outcome | L3 |
 | `G8E-GOV-BLOCK-001` | Governed block outcome | L3 |
-| `G8E-AU-RECEIPT-001` | Receipt integrity | L3 |
-| `G8E-AU-PERSIST-001` | Receipt persistence | L3 |
-| `G8E-AU-CHAIN-001` | Protocol chain integrity | L3 |
-| `G8E-AU-COMMIT-001` | Commitment integrity | L3 |
+| `G8E-AU-RECEIPT-001` | Receipt integrity | L2 |
+| `G8E-AU-PERSIST-001` | Receipt persistence | L2 |
+| `G8E-AU-CHAIN-001` | Protocol chain integrity | L2 |
+| `G8E-AU-COMMIT-001` | Commitment integrity | L2 |
 | `G8E-CM-STATE-001` | Independently observed state | L3 |
-| `G8E-DLP-DETECT-001` | Sensitive-data detection | L3 |
-| `G8E-DLP-BOUNDARY-001` | Model-boundary leakage | L3 |
-| `G8E-DLP-REHYDRATE-001` | Local rehydration | L3 |
+| `G8E-DLP-DETECT-001` | Sensitive-data detection | L2 |
+| `G8E-DLP-BOUNDARY-001` | Model-boundary leakage | L2 |
+| `G8E-DLP-REHYDRATE-001` | Local rehydration | L2 |
 | `G8E-IA-MTLS-001` | Workload mTLS | L3 |
-| `G8E-IA-NOTARY-001` | Notary authorization | L3 |
-| `G8E-CRYPTO-FIPS-001` | Declared cryptographic mode | L3 |
+| `G8E-IA-NOTARY-001` | Notary authorization | L2 |
+| `G8E-CRYPTO-FIPS-001` | Declared cryptographic mode | L2 |
 
-Catalog identity: `g8e-control-assertions` v1.0.0, SHA-256 `bee48afa18a8c54983c8178718600c4f6b64d9c3f9007e65d6d4b1fabbaff1dd`.
+Catalog identity: `g8e-control-assertions` v2.0.0, SHA-256 `00d19e31296c93cb4695d3ecc828fe5cc9591af0bbc4798d44a2ce3ce4f53b8b`.
 
-The assertion families cover identity and workload authentication, access enforcement and least privilege, governed allow and block outcomes, exact rejection-layer attribution, receipt integrity and durable persistence, deterministic protocol-chain integrity, commitment and ledger integrity, configuration and file-state correctness, audit evidence preservation, replay and nonce and signer and state-root protections, sensitive-data detection and transformation, model-boundary leakage, local rehydration and token lifecycle, transport protection and cryptographic mode, and availability and recovery and fail-closed dependency behavior.
+The assertion families cover identity and workload authentication, access enforcement and least privilege, governed allow and block outcomes, exact rejection-layer attribution, receipt integrity and durable persistence, deterministic protocol-chain integrity, signed commitment-attestation integrity, configuration and file-state correctness, audit evidence preservation, replay and nonce and signer and state-root protections, sensitive-data detection and transformation, model-boundary leakage, local rehydration and token lifecycle, transport protection and cryptographic mode, and availability and recovery and fail-closed dependency behavior.
 
 ---
 
@@ -97,7 +104,7 @@ A result never receives a higher level merely because lower-level evidence exist
 | L4 | Continuously evidenced | Fresh historical evidence satisfies the control's declared validation cycle across the assessment window. |
 | L5 | Externally attested | An independent assessor or authority accepts the evidence for the declared scope. |
 
-Every assertion in the current catalog declares a minimum evidence level of L3, meaning a satisfied result requires a real-stack demonstration with verified receipts and independently observed terminal state. L4 and L5 are not yet produced by the pipeline; they require historical evidence collection and external attestation respectively.
+The catalog assigns L2 to deterministic integrity and specialized measurement contracts and L3 to behavioral claims that require subject-bound independent observation. Evidence strength is derived from reproduced checks rather than copied from the catalog minimum: typed evidence reaches at most L1, a registered deterministic verifier or grader reaches L2, and an independent observation bound to a deterministic check reaches L3. L4 and L5 are not produced by the pipeline; they require historical effectiveness evidence and external attestation respectively.
 
 ---
 
@@ -105,7 +112,7 @@ Every assertion in the current catalog declares a minimum evidence level of L3, 
 
 The canonical crosswalk (`protocol/constants/compliance/fedramp-nist-crosswalk.json`) maps framework controls to atomic assertions. The initial crosswalk targets FedRAMP 20x (CR26-2026-06-24) and NIST SP 800-53 (rev5), the two frameworks for which the repository already has a 31-KSI catalog, Class A-D method requirements, validation cycles, a KSI evaluator, history, OSCAL export, typed doctrine linkages, and a real-stack demo.
 
-Crosswalk identity: SHA-256 `d73eb7fa35d2f3bbd88510a000df6c35daf354f148d4f986feb6a7751e2ba2cd`.
+Crosswalk identity: SHA-256 `f29489b373b64afae0bd1242e9f9dfd521b60a0d2f0c0172ccec3bf23ccd5208`.
 
 The crosswalk contains 60 conservative `supporting` mappings. Every one of the 13 reviewed assertions has at least one mapping. The framework catalog (`protocol/constants/compliance/framework-catalog.json`) marks 34 controls as mapped and 97 as unsupported across the two frameworks:
 
@@ -123,7 +130,7 @@ Each framework control carries typed `support_status` and `support_rationale` fi
 
 The demo scenario catalog (`protocol/constants/compliance/demo-scenario-catalog.json`) defines 14 evidence-grade scenarios across four demo environments. Each definition carries a stable scenario ID and version, display number, purpose, risk category, expected action classes, expected allow or block outcome, expected rejection layer where applicable, initial-state fixture reference, terminal-state assertions, required receipts and deterministic stages, assertion references, framework-control references, required evidence level, timeout, and failure policy.
 
-Catalog identity: `g8e-demo-scenarios` v1.1.0, SHA-256 `aa81ad66b05868580f35b2124f6cda77106a7fccf361a36d0bb8b24c9ffc4120`.
+Catalog identity: `g8e-demo-scenarios` v1.1.0, SHA-256 `e6c4e699014bc87946a3b28c3303b3acc5593aeba39ff31ecc7e1f73a1f59fc1`.
 
 | Scenario ID | Demo | Display | Expected outcome |
 |-------------|------|---------|------------------|
@@ -187,7 +194,7 @@ Independent `g8e compliance demo-run verify` verification reports `valid: true` 
 - All four DHS scenarios (`dhs-ingest`, `dhs-disconnected-operations`, `dhs-cue`, `dhs-destruction-block` + `dhs-destruction-purge` under one run ID)
 - All four healthcare scenarios (`healthcare-success`, `healthcare-gold-card`, `healthcare-sla-breach`, `healthcare-phi-blocked`), including the two metric-bearing gold-card and SLA runs
 
-This demonstrates L3 evidence (real-stack scenario with verified receipts and independently observed terminal state) for the 13 atomic assertions exercised by those scenarios. It does not demonstrate L4 (continuous effectiveness over an assessment window) or L5 (external attestation), both of which require infrastructure not yet built.
+These runs provide real-stack source evidence with verified receipts and independently observed terminal state for the scenarios they exercise. Assertion satisfaction remains a separate catalog-driven decision: each selected subject must meet the exact evidence, verifier, grader, trust, freshness, and minimum-level contract, and specialized mTLS, notary, FIPS, and independent-state claims remain unavailable when their dedicated proof is absent. The runs do not demonstrate L4 continuous effectiveness or L5 external attestation.
 
 ---
 
@@ -199,7 +206,7 @@ Canonical analysis, signed report-bundle generation, protected-source replay, an
 
 The following capabilities remain outstanding:
 
-- **Compliance-report eval release gate** — Native eval and campaign runs replay when represented in `g8e compliance report generate --eval-run` and `g8e compliance evidence-graph verify`. A dedicated eval-native statistical release gate and first-class compliance-report signing profile for campaign bundles remain future work; campaign verification is owned by `g8e eval campaign verify`, not `g8e compliance report verify`.
+- **Compliance-report eval release gate** — Native eval and campaign runs can contribute protected, replayable evidence when admitted by `g8e compliance report generate --scope <scope.json> --eval-run <run-id>`. A dedicated eval-native statistical release gate remains future work; campaign verification is owned by `g8e eval campaign verify`, while compliance report verification reproduces the protected campaign source and the canonical report decision.
 - **Historical effectiveness evidence** — Recurring evidence collection, assertion and control history stores, release-gate profiles, failed-run denominator preservation, and version bridge assessments are not implemented. Canonical analysis calculates point-in-time evidence-window completeness but does not establish operating effectiveness over a recurring period.
 - **Additional framework crosswalks** — Only FedRAMP 20x and NIST SP 800-53 have canonical framework definitions and a reviewed crosswalk. SOC 2, ISO 27001, HIPAA, PCI DSS, GDPR, NIST SP 800-63B, and NSA ZIG do not receive generated framework-control assessments.
 - **Manual notary real-topology verification** — The `fedramp-escalate` and `dhs-release` passkey flows are implemented and unit-tested but have not been run against their real notary topologies.
@@ -209,9 +216,11 @@ The following capabilities remain outstanding:
 
 ## Offline trust and replay contract
 
-Report-signing trust and source-evidence trust are independent inputs. `--trust-policy` authenticates the signed report manifest and checksum root. `--evidence-trust` supplies protocol-owned assessed Ed25519 signer records for commitment and customer or assessor attestation replay. Both policies remain outside the bundle; the verifier rejects an in-bundle policy, a reused path, non-canonical input, invalid key material or digest, duplicate keys, revoked or expired assessment, and scope-ineligible trust.
+Report-signing trust and source-evidence trust are separate inputs. `--trust-policy` is required to authenticate the signed report manifest and checksum root. `--evidence-trust` is required when represented sources need assessed signer trust, including commitment and customer or assessor attestation replay. Each supplied policy remains outside the bundle, and the source-evidence policy uses a distinct path from report trust. The verifier rejects in-bundle policies, a reused policy path, non-canonical input, invalid key material or digest, duplicate keys, and signers that are revoked, outside their applicable validity interval, or ineligible for the assessed scope.
 
-The verifier reads all source bodies through the bundle root, enforces the signed directory inventory and artifact limits, and does not discover evidence or trust from the working directory or runtime state. It reproduces demo and eval source-verification reports, reimports every standalone source, compares every reproduced protocol evidence reference with protected analysis, reproduces every renderer, and fails closed for missing, orphaned, duplicated, transplanted, substituted, malformed, unsupported, or unassessed evidence. One report has one assessment scope; generation includes only source records bound to that scope.
+External trust refers to that separate trust input, not a mandatory third-party assessor. A release owner or delegated engineering assessor can establish and record first-party signer trust with the required key, identity, scope, purpose, assessment, and validity metadata. The verifier checks the policy and signatures; it does not establish an assessor's real-world independence or confer evidence-level L5 external attestation. First-party assessment and reproducible offline verification satisfy the standard release reporting contract without claiming certification. The [Release Process](../devs/release_process.md#compliance-evidence-generation) defines generation, release eligibility, conditional source trust, and clean offline acceptance.
+
+The verifier reads all source bodies through the bundle root, enforces the signed directory inventory and artifact limits, and does not discover evidence or trust from the working directory or runtime state. It reproduces demo and eval source-verification reports, reimports every standalone source, compares every reproduced protocol evidence reference with protected analysis, reproduces every renderer according to the protected bundle profile, and fails closed for missing, orphaned, duplicated, transplanted, substituted, malformed, unsupported, or unassessed evidence. One report has one assessment scope; generation includes only source records bound to that scope. Generation defaults to the restricted profile. Public generation requires every source admission to be explicitly public and renders release Markdown and CSV through a fixed allowlist that excludes source-local identities, runtime paths, free-form diagnostics, limitations, and source bodies.
 
 ## Roadmap
 
@@ -232,8 +241,9 @@ The compliance CLI exposes evaluation, evidence-graph verification, demo verific
 - `g8e compliance overlay --overlay-dir <dir>` inspects and validates AI control overlay catalogs.
 - `g8e compliance demo-run verify <run-id> [--project-root <dir>]` independently verifies one persisted demo run and emits a canonical `ComplianceVerificationReport`.
 - `g8e compliance evidence-graph verify --demo-run <run-id> --eval-run <run-id>` imports and validates persisted runs as one typed content-addressed graph.
-- `g8e compliance report generate --scope-id <scope> [--demo-run <run-id>] [--eval-run <run-id>] [standalone source flags] --window-start-unix-ms <start> --window-end-unix-ms <end> --report-id <report-id> --profile <public|restricted> --signing-metadata <path> --signing-private-key <path> [--evidence-trust <path>]` imports explicit scope-bound evidence, copies exact demo, eval, KSI, commitment, attestation, audit, ledger, and build/configuration source bytes into canonical protected paths, grades the evidence, constructs canonical analysis and framework profiles, renders every supported format, signs the complete bundle, persists it under the runtime report tree, and prints the descriptor path. Signed standalone sources require the external assessed evidence trust input during generation.
-- `g8e compliance report verify <bundle-manifest.json> --trust-policy <assessed-report-trust.json> [--evidence-trust <assessed-evidence-trust.json>]` verifies protected bodies, directory inventory, signed roots, external assessed trust, independent source replay, protected analysis equality, and deterministic renderer reproduction offline and emits a canonical `ComplianceVerificationReport`. Evidence trust is required whenever commitment or customer or assessor attestation evidence is represented.
+- `g8e compliance report generate --scope <scope.json> [--demo-run <run-id>] [--eval-run <run-id>] [--source <operational-source-dir>] [standalone source flags] --report-id <report-id> [--profile <public|restricted>] --signing-metadata <path> --signing-private-key <path> [--evidence-trust <path>]` imports only sources admitted by the protected `AssessmentScope`, copies exact source bytes into admission-local protected paths, grades the evidence, constructs canonical analysis and framework profiles, renders every supported format, signs the complete bundle, persists it under the runtime report tree, and prints the descriptor path. Generation defaults to `restricted`; `--profile public` fails when any protected source admission is not affirmatively classified public. The scope supplies the assessment window and assessment-as-of time; source trust remains separate and signed standalone sources require the external assessed evidence trust input during generation.
+- `g8e compliance report verify <bundle-manifest.json> --trust-policy <assessed-report-trust.json> [--evidence-trust <assessed-evidence-trust.json>]` verifies protected scope and source bodies, directory inventory, signed roots, external assessed trust, independent source replay, protected analysis equality, and profile-aware deterministic renderer reproduction offline and emits a canonical `ComplianceVerificationReport`. Evidence trust is required whenever commitment or customer or assessor attestation evidence is represented.
+- `g8e compliance release-evidence <bundle-manifest.json> --trust-policy <assessed-report-trust.json> [--evidence-trust <assessed-evidence-trust.json>] --out <release-directory>` accepts only an independently verified public bundle, derives the version from its protected scope, and copies its canonical public Markdown and CSV. These release projections allowlist assessment outcomes, coverage, content-addressed proof digests, verifier identities, and diagnostic summaries; they omit source-local identities, runtime paths, free-form diagnostics, limitations, and source bodies.
 
 ---
 
@@ -243,7 +253,7 @@ The compliance CLI exposes evaluation, evidence-graph verification, demo verific
 
 | Catalog | Location | Identity |
 |---------|----------|----------|
-| Assertion catalog | `protocol/constants/compliance/assertion-catalog.json` | `g8e-control-assertions` v1.0.0 |
+| Assertion catalog | `protocol/constants/compliance/assertion-catalog.json` | `g8e-control-assertions` v2.0.0 |
 | Framework catalog | `protocol/constants/compliance/framework-catalog.json` | FedRAMP 20x CR26-2026-06-24, NIST SP 800-53 rev5 |
 | Crosswalk | `protocol/constants/compliance/fedramp-nist-crosswalk.json` | 60 supporting mappings |
 | Demo scenario catalog | `protocol/constants/compliance/demo-scenario-catalog.json` | `g8e-demo-scenarios` v1.1.0 |
@@ -256,7 +266,7 @@ The compliance CLI exposes evaluation, evidence-graph verification, demo verific
 |-----------|----------|---------|
 | Compliance catalogs | `protocol/constants/compliance/`, `internal/services/compliance/catalog/` | Digest-verified assertion, framework, crosswalk, and demo-scenario definitions with fail-closed validation |
 | Evidence import and verification | `internal/services/compliance/evidence/` | Read-only typed importers, content-addressed evidence graph validation, cryptographic verification, assertion and framework grading, canonical analysis, and deterministic framework profiles |
-| Compliance report service | `internal/services/compliance/report/` | Canonical analysis orchestration and shared JSON, OSCAL, Markdown, HTML, and CLI rendering |
+| Compliance report service | `internal/services/compliance/report/` | Canonical analysis orchestration and shared JSON, CSV, OSCAL, Markdown, HTML, and CLI rendering |
 | Compliance CLI | `internal/cli/cmd/compliance.go` | KSI evaluation/history, overlay validation, demo verification, evidence-graph verification, release evidence, and canonical report generation |
 | KSI evaluator | `internal/services/compliance/ksi_evaluator.go` | Scope-bound KSI outcomes from typed cryptographic, grader, state, commitment, ledger, and historical evidence methods |
 | KSI history store | `internal/services/compliance/ksi_history.go` | KSI snapshot persistence and historical metrics retention |

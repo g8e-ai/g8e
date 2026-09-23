@@ -5,14 +5,14 @@ parent: Architecture
 
 # Public Spectator Architecture and Threat Model
 
-Last Updated: 2026-09-20
-Version: v2.1.11
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ## Purpose
 
 This document freezes the architecture, trust boundary, data classification, network path, export binding, threat model, and availability policy for public spectator observation of g8e evaluation campaigns. It defines what a public visitor can see, how safe data reaches them, and what can never cross the projection boundary. The credentialed owner-local observe mode and the anonymous public-spectator mode are separate, non-interchangeable browser modes with distinct authentication, network paths, endpoint allowlists, and disclosure policies. They must never be conflated or combined.
 
-This document is the frozen reference for O0-boundary. Downstream packets (O1-supervisor through O7-readiness) implement against the architecture defined here. The [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) is extended separately by O5-builder-handoff to cover the public spectator mode in builder-facing terms.
+This document is the canonical public spectator reference. The [Public Spectator Operations Guide](../guides/public_spectator.md) describes deployment and publication procedures. The [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) describes the separate builder-facing owner-local observe integration.
 
 ## Two Browser Modes
 
@@ -24,55 +24,54 @@ The existing audited adapter connects from a top-level browser directly to a rea
 
 ### Public spectator mode
 
-Arbitrary visitors connect only to a public-safe mirror operated with the OpenDevOps.ai deployment. The local `g8e public` publisher exports allowlisted, signed g8e projections, canonical events, and public proof artifacts to the mirror through a durable host-runtime outbox. Public visitors never authenticate to, discover, or connect directly to the private Gateway. The mirror exposes no mutation, eval-launch, approval, producer, audit, filesystem, pub/sub, MCP, A2A, or tool route. Public reads are anonymous, read-only, and bounded by the allowlist and rate policy defined in this document.
+Arbitrary visitors connect only to a public-safe mirror exposed by the Gateway-owned `PublicSpectatorRuntime` or by a separately operated compatible mirror. In the unified Compose deployment, the Gateway initializes the publisher and mirror in the Gateway process and persists their state in the Gateway runtime volume. The host `g8e public` commands use the Gateway publication route when the local Gateway is healthy; when a configured remote mirror is used instead, the CLI owns the publisher and its durable outbox. Both paths export allowlisted, signed public-feed projections and public proof artifacts. Public visitors never authenticate to, discover, or connect directly to the private Gateway. The mirror exposes no mutation, eval-launch, approval, producer, audit, filesystem, pub/sub, MCP, A2A, or tool route. Public reads are anonymous, read-only, and bounded by the allowlist and rate policy defined in this document.
 
 ### Non-interchangeability
 
-The two modes are non-interchangeable. The public adapter contains no passkey, Gateway, credential, or session fields. It sends no credentials and exposes only public reads against the mirror origin. The owner-local adapter contains no mirror origin and never falls back to a public endpoint. No mode auto-detection, public-to-Gateway fallback, or generic path helper exists. A public visitor cannot reach the private Gateway through the mirror, and an owner cannot reach the mirror through the Gateway's credentialed routes. The two modes share no endpoint allowlist, no fetch implementation, no SSE client, and no state store.
+The two modes are non-interchangeable. The public adapter contains no passkey, Gateway, credential, or session fields. It sends no credentials and exposes only public reads against the configured mirror origin. The owner-local adapter contains no mirror origin and never falls back to a public endpoint. No mode auto-detection, public-to-Gateway fallback, or generic path helper exists. A public visitor cannot reach the private Gateway through the mirror, and an owner cannot reach the mirror through the Gateway's credentialed routes. The modes share no endpoint allowlist, fetch implementation, SSE client, or persisted browser state; each mode owns its own state, if any.
 
 ## Network Path
 
-The g8e-owned network path is outbound-only from the private deployment to the hosted mirror. Public browsers connect to the mirror, not to the Gateway.
+The supported unified deployment runs the public mirror inside the Gateway process on listeners and route tables that are separate from the private Gateway API. The campaign publisher enters through the owner-authenticated `POST /api/v1/public-feed/batches` route; the Gateway publisher then sends the signed batch to the private mirror listener. Public browsers reach only the anonymous read listener through the host cloudflared connector and Cloudflare edge; they never connect to the private Gateway API. A remote-mirror deployment instead runs the publisher in the host CLI and sends it to the configured mirror origin.
 
 ```
-Private g8e deployment                 Hosted Mirror                    Public Browser
-──────────────────────                  ──────────────                   ──────────────
-                                          │
-  Safe publication input                  │
-  (persisted, allowlisted)                │
-        │                                 │
-        ▼                                 │
-  CLI-local publisher                     │
-  (signs batches, writes outbox)          │
-        │                                 │
-        ▼ HTTPS (outbound only)           │
-  Hosted ingest endpoint ────────────────►│ Ingest (authenticated)
-                                          │   ├─ ordered outbox
-                                          │   ├─ hash chain
-                                          │   ├─ signature verify
-                                          │   ├─ snapshot store
-                                          │   ├─ proof catalog
-                                          │   ├─ SSE relay
-                                          │   └─ anonymous read API
-                                          │
-                                          │ ◄──── GET bootstrap (anonymous)
-                                          │ ◄──── GET cycles/runs/evals (anonymous, paginated)
-                                          │ ◄──── GET SSE stream (anonymous, replayable)
-                                          │ ◄──── GET proof download (anonymous, content-addressed)
-                                          │
-                                          ▼
-                                     Public Browser
+Campaign host                         Gateway container                    Public path
+─────────────                         ─────────────────                    ───────────
+Canonical campaign records
+       │
+       ▼ owner mTLS
+Gateway publication route ──────────► PublicSpectatorRuntime
+                                      ├─ signed ordered batches
+                                      ├─ durable mirror state
+                                      ├─ hash chain and snapshots
+                                      ├─ proof catalog and manifest
+                                      ├─ private ingest listener
+                                      └─ anonymous read/SSE listener
+                                                   │
+                                                   ▼ Docker host publication 127.0.0.1:8082
+                                             host cloudflared ──outbound tunnel──► Cloudflare edge
+                                                                                         │
+                                                                                         ▼ HTTPS
+                                                                                   Public browser
 ```
 
-The private Gateway receives no public connection and gains no anonymous route. The CLI-local publisher initiates authenticated ingest to the mirror. The mirror accepts authenticated ingest from that private publisher and anonymous reads from public browsers. The two surfaces are separate allowlists and separate listeners in the host-backed deployment.
+The private Gateway API gains no anonymous route. The in-process public spectator runtime exposes separate private-ingest and anonymous-read allowlists, listeners, and host publications over the same gateway-owned durable volume. Compose publishes ports 8081, 8082, and 5173 on host loopback only; the container listeners remain reachable on the Compose bridge where required. Cloudflared targets the host's loopback-only public port and cannot route public traffic to private ingest or the Gateway API.
 
-SSE connection direction is explicit. A browser initiates an SSE connection to the server it can reach. A private local Gateway cannot initiate an SSE response into a static hosted page. The CLI-local publisher therefore pushes signed batches over an outbound connection to the mirror, and public browsers open anonymous read-only SSE connections to that mirror. The mirror preserves g8e event schemas, sequence and replay semantics, verification labels, and disclosure boundaries. The mirror does not become a second campaign or governance implementation; it relays signed projections and proofs produced by the private deployment.
+SSE connection direction is explicit. A browser opens `GET /stream` through Cloudflare to the mirror's public listener. The mirror preserves public-feed record schemas, sequence and replay semantics, freshness labels, and disclosure boundaries. It does not become a second campaign or governance implementation; it verifies and stores signed batches and proofs admitted from the private publication path, then serves their public projections.
 
-The public mirror is a required data-plane companion to the static frontend. A presentation-only site generated by Lovable or another builder is insufficient for an unbounded live stream. The handoff (O5-builder-handoff) defines the mirror ingest, snapshot, SSE, history, and proof APIs without requiring a particular visual framework. The OpenDevOps.ai implementation may use Lovable Cloud/Supabase, Cloudflare Workers with Durable Objects and R2, or equivalent services as long as it passes the generated g8e conformance suite.
+The public mirror is a required data-plane companion to the static frontend. A presentation-only site generated by Lovable or another builder is insufficient for a replayable live stream. The mirror owns bootstrap, snapshot, history, SSE, and proof APIs without requiring a particular visual framework.
+
+### Listener contracts
+
+The private listener accepts authenticated `POST /ingest`, `POST /keys/register`, and `POST /proof-ingest` requests from the publisher. The public listener exposes only `GET /bootstrap`, `GET /snapshot`, `GET /history`, `GET /stream`, `GET /proof-catalog`, `GET /proof-manifest`, and `GET /proofs/<artifact-id>`. Its CORS policy permits anonymous `GET` and `OPTIONS` requests and the `Last-Event-ID` header. Unknown paths and the private operations are not registered on the public listener. The Gateway's primary HTTP and HTTPS routers do not expose these mirror paths.
+
+The runtime is enabled by `--public-spectator`, which is enabled by default in the root Compose service. Its listener flags are `--public-spectator-private-listen`, `--public-spectator-public-listen`, `--eval-explorer-listen`, `--eval-explorer-root`, and `--public-spectator-trusted-proxy-cidr`. In Compose, the Gateway container binds `0.0.0.0:8081`, `0.0.0.0:8082`, and `0.0.0.0:5173`; Docker publishes those listeners to host loopback ports `8081`, `8082`, and `5173`. Outside Compose, listener validation permits loopback addresses only.
+
+The Gateway-owned mirror stores its state at `public-mirror/state.json`; the Gateway publisher stores export configuration, the signing key, ingest token, snapshot, outbox, rotation state, and proof package under the Gateway runtime tree's `public-feed/` and `public-proofs/` paths. These are component-local runtime files in the Gateway volume, not Docker-host files. The remote publisher uses the same relative state paths in the runtime of the process that owns it.
 
 ## Closed Allowlist
 
-The public spectator surface exposes only a closed allowlist of fields, event types, and artifact classes. Everything not on the allowlist is prohibited. The allowlist is defined here and enforced by the projector, validator, and promoter in S8-publication and by the outbound publisher and mirror in O3-public-feed.
+The public spectator surface exposes only a closed allowlist of fields, event types, and artifact classes. Everything not on the allowlist is prohibited. The campaign projector, disclosure validator, publisher, and mirror enforce this allowlist before a record becomes browser-visible.
 
 ### Public live projections
 
@@ -91,11 +90,11 @@ Public live projections carry only the following field families:
 
 Assignment detail records are public-safe projections, not traces. They may identify approved model variants, roles, tool labels, closed explanation codes, reported outcomes, and content-addressed bindings. They never contain prompts, outputs, reasoning, call or transaction identifiers, receipt bodies, filesystem paths, provider identities, private artifact locations, or unrestricted free text. A reported tool or policy outcome is not a protocol authorization decision, and an evidence binding is not proof that a public visitor can retrieve or independently verify the referenced artifact.
 
-### Explorer view 1.4.0 semantics
+### Explorer view 1.5.0 semantics
 
-The public spectator explorer normalizes accepted snapshot and live records to view schema `1.4.0`. The common view envelope carries `schema_version`, `kind`, `dataset_id`, `quality_state`, and `observed_at`; the browser continues to read historical view records from `1.0.0` through `1.3.0`. The `assignment_result` view keeps required `task_id` and accepts optional `scenario_id`; new records set both to the exact scenario identity, while a record that supplies both with different values is rejected.
+The public spectator explorer normalizes accepted snapshot and live records to view schema `1.5.0`. The common view envelope carries `schema_version`, `kind`, `dataset_id`, `quality_state`, and `observed_at`; the browser continues to read historical view records from `1.0.0` through `1.4.0`. The `assignment_result` view keeps required `task_id` and accepts optional `scenario_id`; new records set both to the exact scenario identity, while a record that supplies both with different values is rejected.
 
-View schema `1.4.0` adds the public assignment families `scenario_summary`, `semantic_grade_summaries`, `activity_summary`, `evidence_bindings`, `resource_summary`, and `verification_metadata` while retaining the historical benchmark and metric fields. The view adapter converts canonical campaign enum names and decimal protobuf integers into bounded view values. It preserves explicit zero, distinguishes observed-empty from unavailable and not-applicable activity, and refuses unknown fields, unsupported enums, conflicting identities, malformed hashes, negative or non-finite values, duplicate criterion or evidence identities, and out-of-bounds arrays or strings.
+View schema `1.5.0` retains the public assignment families `scenario_summary`, `semantic_grade_summaries`, `activity_summary`, `evidence_bindings`, `resource_summary`, and `verification_metadata` and adds typed run-level `headline_metrics` for pass rate, latency p50, and output-throughput p50. Each applicable run metric carries its unit and observed, eligible, and unavailable contributor counts. Evaluation summaries also carry `evaluation_unit`, use `not_run` until a bound verification result exists, and include bound verification metadata when the result is `passed` or `failed`. The view adapter converts canonical campaign enum names and decimal protobuf integers into bounded view values. It preserves explicit zero, distinguishes observed-empty from unavailable and not-applicable activity, and refuses unknown fields, unsupported enums, conflicting identities, malformed hashes, negative or non-finite values, duplicate criterion or evidence identities, and out-of-bounds arrays or strings.
 
 The view quality state `exploratory_verified` is only a stored publication result for the exact dataset, variant, and role aggregate covered by an applicable passing run report. The explorer does not infer this state from an assignment, run ID, badge, or the highest quality state seen in history, and it never changes `exploratory_verified` into `verified_public`. The closed assignment unavailable vocabulary is `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. A missing value is never rendered as zero.
 
@@ -103,7 +102,7 @@ The view quality state `exploratory_verified` is only a stored publication resul
 
 Disclosure enforcement is layered. The Go projector builds only typed approved fields and rejects extension collisions; the producer-side public disclosure validator rejects unknown or prohibited assignment fields and validates the canonical protobuf projection; the publisher and mirror reject malformed records, prohibited patterns, traversal, symlinks, and invalid proof packages; and the frontend validates raw campaign envelopes before adaptation and validates adapted view records before indexing. The receiver remains a fail-closed boundary rather than trusting the producer or the contract description. Private prompts, outputs, reasoning, identities, credentials, endpoints, paths, envelopes, receipt internals, audit data, and evidence bodies remain prohibited at every layer.
 
-Offline reproduction uses the signed public package, not the mirror's availability. A verifier downloads the proof manifest, proof catalog, and content-addressed artifact bytes, records the source pseudonym and feed high-water metadata, then disables network access. It checks that every artifact's SHA-256 matches its catalog entry, that catalog entries match the manifest, that the manifest root recomputes from the declared artifact hashes and metadata, and that the Ed25519 signature verifies against the published signing key. It then validates the exported projection and event records against the frozen `1.4.0` view contract, replays records in sequence order, and compares the resulting high-water and feed-chain hashes with the snapshot. A failed hash, signature, schema, disclosure, binding, or sequence check stops reproduction; it does not produce a partial verified result. Mirror recovery can republish the same signed package, but it never recomputes evaluation results or upgrades their quality state.
+Offline reproduction uses the signed public package, not the mirror's availability. A verifier downloads the proof manifest, proof catalog, and content-addressed artifact bytes, records the source pseudonym and feed high-water metadata, then disables network access. It checks that every artifact's SHA-256 matches its catalog entry, that catalog entries match the manifest, that the manifest root recomputes from the declared artifact hashes and metadata, and that the Ed25519 signature verifies against the published signing key. It then validates the exported projection and event records against the frozen `1.5.0` view contract, replays records in sequence order, and compares the resulting high-water and feed-chain hashes with the snapshot. A failed hash, signature, schema, disclosure, binding, or sequence check stops reproduction; it does not produce a partial verified result. The browser explorer performs structural and disclosure validation and does not replace the offline cryptographic verifier. Mirror recovery can republish the same signed package, but it never recomputes evaluation results or upgrades their quality state.
 
 ### Public immutable proofs
 
@@ -171,19 +170,22 @@ Every exported batch is a signed, append-only record bound to the following fiel
 | Signing key ID | Identifier of the signing key used to produce the signature. |
 | Signature | Ed25519 signature over the content hash. |
 
-A snapshot binds its high-water sequence (the last accepted sequence) and the feed-chain hash (the hash of the last accepted batch). A public client reconciles against the snapshot to establish a consistent cursor.
+A snapshot binds its high-water sequence (the last accepted sequence) and the feed-chain hash (the hash of the last accepted batch). A public client reconciles against the snapshot to establish a consistent cursor. The snapshot read accepts an optional retained batch-end sequence so a returning browser can validate that its cached snapshot remains on the retained chain before resuming from the cached cursor.
+
+A source transition never splices, renumbers, or deletes an existing accepted chain. The owner stops the publisher, archives its current configuration, signing key, ingest token, outbox, snapshot, key-rotation record, and local proof package, then creates a distinct source pseudonym with a fresh key, token, empty outbox, zero-hash predecessor, and sequence beginning at one. The mirror retains the archived source under its original source identity and marks the newly registered source as active for anonymous reads that omit an explicit source. Explicit source queries continue to reproduce the archived chain. A source transition does not upgrade, relabel, or republish historical datasets.
 
 ### Key rotation and revocation
 
 Signing keys are owner-only secrets stored in the host g8e runtime tree. They never appear in frontend runtime JSON, logs, events, reports, proofs, or contract packs. Key rotation proceeds as follows:
 
-1. The owner generates a new Ed25519 key pair and records the new key ID in the Gateway configuration.
-2. The outbound publisher signs subsequent batches with the new key. The batch carries the new signing key ID.
-3. The mirror accepts batches signed by either the old or new key during a configurable overlap window.
-4. After the overlap window, the old key is revoked. The mirror rejects batches signed with the revoked key ID.
-5. A key revocation event is published as a signed batch record before the old key is deactivated. The revocation record carries the revoked key ID, revocation time, and revocation signature.
+Key rotation is coordinated by `g8e public rotate-key` or the publisher's `RotateKey` operation:
 
-Key compromise requires immediate revocation. The owner marks the compromised key ID as revoked in the Gateway configuration. The outbound publisher emits a revocation record and switches to the backup key. The mirror rejects any batch signed with the compromised key after the revocation record is accepted. Historical batches signed with the compromised key remain verifiable but carry a compromised-key flag in the mirror's trust metadata.
+1. The owner generates a new Ed25519 key pair and persists rotation state in the runtime tree.
+2. The publisher registers the new public key with the private mirror, authenticated by a request signed with the current private key.
+3. The publisher emits a key-revocation record signed by the old key, then switches to the new key after the batch is acknowledged.
+4. The mirror records the revocation and rejects later batches signed with the revoked key. The CLI finalizes the new key only after the revocation batch is acknowledged; an interrupted rotation remains pending and blocks unrelated publisher commands.
+
+There is no configurable overlap window in the current implementation. Historical batches signed with the old key remain verifiable through the retained key registry, while subsequent batches use the new key. A compromised key requires the owner to complete this rotation workflow; the mirror does not independently infer compromise or revoke a key without a signed registration/revocation path.
 
 ## Threat Model
 
@@ -207,7 +209,7 @@ A public client receives a stale snapshot that does not reflect the current high
 
 ### Forged events
 
-An attacker constructs a fake event payload and injects it into the SSE stream or bootstrap response. Mitigation: every event carries a sequence, content hash, and signature. The mirror verifies the signature before serving. A public client verifies the signature against the published signing key. A forged event fails signature verification and is rejected.
+An attacker constructs a fake event payload and injects it into the SSE stream or bootstrap response. Mitigation: each feed batch carries ordered records, record hashes, a content hash, and an Ed25519 signature. The mirror verifies the signature and record/hash-chain invariants before persisting or serving the batch. The browser validates the received contract and sequence state; the signed package's offline verifier performs the cryptographic signature check. A forged batch fails mirror or offline verification.
 
 ### Mirror tampering
 
@@ -252,10 +254,10 @@ A projection or proof accidentally includes a prohibited field. Mitigation: the 
 | Surface | Limit | Default |
 | --- | --- | --- |
 | Bootstrap response | One bounded snapshot per request | Fixed size, no pagination |
-| Cursor-paginated cycles/runs/evals | Page size 1-100 | Default 20 |
+| Cursor-paginated cycles/runs/evals | Page size 1-500 | Default 20 |
 | SSE live stream | Globally bounded concurrent connections with one bounded queue per connection | 1,000 connections; 100-event in-memory buffer per connection |
 | Proof download | One download per request, byte-counted | Maximum artifact size enforced |
-| Anonymous read rate | Requests per minute per client IP | Configured by mirror operator; Cloudflare's connecting IP is accepted only from the loopback tunnel connector |
+| Anonymous read rate | Requests per minute per client IP | Configured by mirror operator; exactly one valid unicast `CF-Connecting-IP` is accepted only when the socket peer belongs to an explicit trusted-proxy CIDR |
 
 Anonymous reads never expose mutation, producer, audit, filesystem, pub/sub, MCP, A2A, or tool routes. The public contract contains no mutation or producer operation.
 
@@ -267,16 +269,16 @@ The SSE stream has a bounded in-memory queue. If a connected consumer falls behi
 
 | Data class | Retention | Cleanup |
 | --- | --- | --- |
-| Event history (SSE rows) | Bounded window | Periodic cleanup removes rows older than the retention window |
-| Proof artifacts | Append-only with tombstones | Public retention uses append-only tombstones rather than rewriting history |
-| Snapshots | Current and recent | Old snapshots are superseded but not deleted; the high-water sequence advances |
-| Publisher outbox | Until mirror acknowledgment | Acknowledged batches are removed after a confirmation window |
+| Event history (feed records and batches) | Bounded retained prefix | The mirror retains up to 25,000 batches by default and advances the retained predecessor hash when older batches are pruned |
+| Proof artifacts and metadata | Append-only in the mirror state | Content-addressed artifacts remain available while their catalog and manifest remain valid; the current implementation has no tombstone cleanup job |
+| Snapshots | Current publisher and mirror checkpoints | A snapshot records the current high-water sequence and feed-chain hash; clients reconcile against the retained chain |
+| Publisher outbox | Until mirror acknowledgment | The publisher prunes acknowledged entries after its configured acknowledgment window; failed entries remain retryable |
 
 The publisher never silently deletes reports, encrypted evidence, indexes, or proofs. Storage pressure is reported and requires an explicit owner retention operation.
 
 ### Cache policy
 
-Proof downloads are served with `Cache-Control: immutable` because they are content-addressed. Bootstrap and paginated reads are served with short cache durations because they reflect live state. SSE streams are never cached. The mirror may use a CDN for proof artifacts only; live projections and SSE streams bypass the CDN to preserve freshness.
+Proof downloads are served with `Cache-Control: immutable` because they are content-addressed. Bootstrap and paginated reads are served with short cache durations because they reflect live state. History responses use negotiated gzip compression. SSE streams are never cached. A deployment may place a CDN in front of proof artifacts, but that is outside the Gateway runtime; live projections and SSE streams should bypass it to preserve freshness. The Evaluation Explorer persists accepted public records and their sealed snapshot in browser IndexedDB. On reload it resumes from that cursor only after the mirror confirms the cached source, protocol, sequence, and feed-chain checkpoint; an incompatible or pruned checkpoint is discarded and replay starts from retained history.
 
 ### Stale and offline semantics
 
@@ -295,11 +297,11 @@ Mirror availability is not verification evidence. A mirror outage does not inval
 
 ### Availability boundaries
 
-The mirror is a read-only data plane. It does not participate in governance, execution, or campaign decisions. A mirror outage pauses public visibility but does not stop the private campaign. The CLI-local publisher writes to a durable ordered outbox and retries idempotently when the mirror recovers. A prolonged mirror outage pauses before the next cycle (O1-supervisor safety stop) while the outbox retains exports. Mirror retry never reruns valid eval work.
+The mirror is a read-only data plane. It does not participate in governance, execution, or campaign decisions. A mirror outage pauses public visibility but does not stop the private campaign. The publisher writes to a durable ordered outbox and retries idempotently when the mirror recovers. Mirror retry never reruns valid evaluation work.
 
 ### Gateway-owned listener separation
 
-The production mirror runs inside the Gateway process (`--public-spectator`) with two unique loopback-only listeners over the same durable state in the gateway volume. The private listener serves authenticated batch ingest, proof ingest, replacement-key registration, and local read diagnostics. The public listener mounts only bootstrap, snapshot, history, SSE, proof catalog, proof manifest, and content-addressed proof downloads. Cloudflared targets only the public listener through an explicit plain-HTTP service URL, so the public hostname has no route to ingest, key registration, proof ingest, the Gateway console, or another private service. See the [Public Spectator Operations Guide](../guides/public_spectator.md) for verification and tunnel procedure.
+The production mirror runs inside the Gateway process (`--public-spectator`) with separate private and public listeners over the same durable state in the gateway volume. The listeners bind to the container network interfaces; Compose publishes their host ports on loopback only. The private listener serves authenticated batch ingest, proof ingest, replacement-key registration, and local read diagnostics. The public listener mounts only bootstrap, snapshot, history, SSE, proof catalog, proof manifest, and content-addressed proof downloads. Cloudflared targets only the host-published public listener through an explicit plain-HTTP service URL, so the public hostname has no route to ingest, key registration, proof ingest, the Gateway console, or another private service. The mirror accepts `CF-Connecting-IP` only from the configured Docker bridge peer, and the Gateway container runs with a 16,384 `nofile` soft and hard limit plus `unless-stopped` recovery. See the [Public Spectator Operations Guide](../guides/public_spectator.md) for verification and tunnel procedure.
 
 ## Relationship to Existing Architecture
 
@@ -323,7 +325,7 @@ This document is accepted when:
 1. Security review approves the allowlist and outbound-only architecture. Anonymous private-Gateway requests remain unauthorized, and the public contract contains no mutation or producer operation.
 2. The two browser modes are documented as separate and non-interchangeable, with distinct authentication, transport, endpoint allowlists, and disclosure policies.
 3. The closed allowlist covers public live projections, public immutable proofs, and public metadata, with every prohibited field enumerated.
-4. The network path is frozen: the Gateway persists a safe projection, the outbound publisher signs and sends it to a hosted ingest endpoint, and public browsers connect to the hosted mirror's snapshot and SSE read endpoints. The private Gateway receives no public connection.
+4. The network path is explicit: the owner-authenticated publication route admits safe signed projections to the in-process mirror, and public browsers connect through Cloudflare only to the mirror's anonymous snapshot and SSE read endpoints. The private Gateway API receives no public connection.
 5. Every export is bound to pseudonymous source deployment, schema version, monotonic sequence, prior-batch hash, timestamp, content hash, signing key ID, and signature. Key rotation and revocation are defined.
 6. Every threat vector (replay, reordering, duplicate sequence numbers, equivocation, stale snapshots, forged events, mirror tampering, cache poisoning, artifact substitution, traversal, symlinks, oversized artifacts, denial of service, correlation leakage, restricted-field publication) has a defined mitigation that fails closed.
 7. Anonymous read limits, stream limits, retention, cache policy, stale and offline semantics, and availability boundaries are defined. Mirror availability is explicitly not verification evidence.

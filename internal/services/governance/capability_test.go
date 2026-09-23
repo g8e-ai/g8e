@@ -169,6 +169,37 @@ func TestCapability_Verify_Expired(t *testing.T) {
 	assert.Contains(t, err.Error(), "expired")
 }
 
+func TestCapability_VerifyRejectsNilAndInvalidContextValues(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	valid := &Capability{
+		TransactionHash: "hash-1",
+		ActionType:      constants.ActionTypeExecuteBash,
+		ExpiresAt:       now.Add(time.Minute),
+	}
+	for _, tt := range []struct {
+		name string
+		cap  *Capability
+		want string
+	}{
+		{name: "nil capability", cap: nil, want: "nil capability"},
+		{name: "dissolved capability", cap: func() *Capability {
+			valid.Dissolve()
+			return valid
+		}(), want: "dissolved"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cap.Verify(constants.ActionTypeExecuteBash, "hash-1", now)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+		})
+	}
+
+	ctx := context.WithValue(context.Background(), constants.ContextKeyCapability, "not-a-capability")
+	assert.Nil(t, CapabilityFromContext(ctx))
+}
+
 func TestCapabilityFromContext(t *testing.T) {
 	t.Parallel()
 

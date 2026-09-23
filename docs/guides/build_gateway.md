@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ---
 
@@ -22,10 +22,23 @@ The reference implementation is the static `g8e` binary running in gateway mode.
 
 ### Prerequisites
 
-- **Go 1.26.6+** - Required for building the reference gateway.
-- **Make** - Required to run build targets.
+- **Go 1.26.6+** - Required for building the reference gateway. The root `go.mod` is authoritative; the Makefile may select a newer toolchain automatically unless `GOTOOLCHAIN=local` is set.
+- **Make** - Required to run the root build targets.
+- **Node.js and npm** - Required to build the Evaluation Explorer asset that the Go build embeds. The build does not install the dashboard adapter's Node dependencies for you.
+- **Docker Engine and the Docker Compose plugin** - Required only for the container build and Compose deployment.
 
-> **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
+Before the first Go build, build the Evaluation Explorer asset from the repository root:
+
+```bash
+cd dashboard/g8e-adapter/evaluation-explorer
+npm install
+npm run build
+cd ../../..
+```
+
+The resulting `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` is required by `make build` and `make build-all`. If the asset is already present, do not rebuild it unless its source changed.
+
+> **Don't have `make`, `go`, or the Explorer prerequisites installed?** Run the setup script for your platform to detect and install Go and Make automatically:
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`
@@ -39,7 +52,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the host binary as `g8e` in the repository root (`g8e.exe` on Windows) and a named platform binary and SHA-256 checksum in `bin/`. The binary is statically linked with `CGO_ENABLED=0` and has no runtime dependency on the Go toolchain, OpenSSL, or another external library.
+This produces the host binary as `g8e` in the repository root (`g8e.exe` on Windows) and a named platform binary with a neighboring SHA-256 checksum in `bin/`. The binary is statically linked with `CGO_ENABLED=0` and does not require the Go toolchain or OpenSSL at runtime. The build embeds the Evaluation Explorer assets and records non-Git source provenance values in the binary; override `BUILD_ID`, `SOURCE_REVISION`, or `SOURCE_TREE_HASH` when a reviewed build pipeline supplies them.
 
 ### Build Targets
 
@@ -47,6 +60,7 @@ The Makefile provides several build targets:
 
 - `make build` - Builds `g8e` for the current platform.
 - `make build-all` - Builds `g8e` for every supported Linux, Windows, and macOS target.
+- `make build-target` - Builds `g8e` for one `GOOS`/`GOARCH` pair (used by the Dockerfile).
 - `make build-linux` - Builds Linux binaries for amd64, arm64, and 386.
 - `make build-windows` - Builds Windows binaries for amd64 and arm64.
 - `make build-darwin` - Builds macOS binaries for amd64 and arm64.
@@ -59,22 +73,22 @@ The Makefile provides several build targets:
 
 ### Build in Docker (no local Go required)
 
-Docker 24.0+ with the Docker Compose plugin can build the binaries without a local Go toolchain:
+Docker Engine with the Docker Compose plugin can build the binaries without a local Go toolchain:
 
 ```bash
 make up
 ```
 
-This runs `docker compose up -d --build`. The builder stage runs `make build-all`, creates the `g8e-gateway` image, and starts only the gateway because the Operator, Dashboard, and Ensemble use the `bootstrapped` Compose profile. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
+This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts only the gateway because the Operator, Dashboard, and Ensemble use the `bootstrapped` Compose profile. `make up` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
 
 ```bash
 docker cp g8e-gateway:/g8e ./g8e
 chmod +x ./g8e
 ```
 
-The first-owner and workload enrollment steps happen before the remaining services start. See [Docker Gateway](docker_gateway.md) for the bootstrap sequence and [Unified Stack](unified_stack.md) for the complete two-phase deployment.
+Owner and workload enrollment are separate from `make up`; complete them before starting profile-gated services. See [Docker Gateway](docker_gateway.md) for the bootstrap sequence and [Unified Stack](unified_stack.md) for the complete two-phase deployment.
 
-The Dockerfile builder produces binaries for linux/amd64, linux/arm64, linux/386, windows/amd64, windows/arm64, darwin/amd64, and darwin/arm64. The gateway serves these artifacts through the node deployment download surface. Linux builds link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the project's FIPS compliance claim is restricted to linux/amd64, and enforcement requires `GODEBUG=fips140=only` at runtime.
+The Dockerfile builder produces only the image target platform binary (`linux/amd64` or `linux/arm64`). Run `make build-all` on the host when you need the full Linux, Windows, and macOS deployment matrix. Linux builds link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the FIPS compliance claim is restricted to linux/amd64. Approved mode is enabled by the build, while strict runtime enforcement is separate and requires `GODEBUG=fips140=only`. Check the deployed binary with `g8e version --fips`; see [Docker Gateway](docker_gateway.md#fips-runtime-mode) for the enforcement caveat.
 
 ### Cross-Compilation
 
@@ -116,14 +130,14 @@ Use `--follow` to run in the foreground, which is appropriate for containers and
 ./g8e gw start --follow
 ```
 
-On first start, the gateway creates the `.g8e/` runtime tree and PKI hierarchy. It defaults to plain HTTP on port 8080 and HTTPS on port 8443; resolved ports can shift when defaults are occupied, and startup fails if it cannot reserve a valid distinct pair. Confirm the resolved endpoints, then enroll the first owner:
+On first start, the gateway creates the `.g8e/` runtime tree and PKI hierarchy. A host-managed gateway defaults to plain HTTP on port 8080 and HTTPS on port 8443; it searches upward for a free pair while preserving the port offset when those defaults are occupied. Startup fails if it cannot reserve a valid distinct pair. Docker Compose keeps the container listeners at 8080 and 8443 and changes only published host ports through `G8E_HTTP_PORT` and `G8E_HTTPS_PORT`. Confirm the resolved endpoints, then enroll the first owner:
 
 ```bash
 ./g8e gw status
 ./g8e auth enroll user -e localhost
 ```
 
-The owner enrollment creates the local CLI identity, installs the gateway root CA into the operating system trust store, and registers a passkey. Use `--no-system-trust` only when an administrator has already installed the root CA. For a Docker deployment, start the `bootstrapped` profile after owner enrollment, then approve the pending Operator, Dashboard, and Ensemble requests that those workloads submit; [Docker Gateway](docker_gateway.md) documents that flow.
+The default owner enrollment creates the local CLI identity, installs the Gateway root CA into the operating-system trust store, and registers a passkey. Use `--no-system-trust` only when an administrator has already installed the root CA. Use `--headless` for an mTLS-only CLI identity; it skips both passkey registration and OS trust installation, and that identity cannot authenticate to the Console SPA. For a Docker deployment, use the published host ports (for example, `-e localhost --port 8443` when defaults are in use), start the `bootstrapped` profile after owner enrollment, then approve the pending Operator, Dashboard, and Ensemble requests that those workloads submit; [Docker Gateway](docker_gateway.md) documents that flow.
 
 Choose a stricter posture only after configuring the proofs it requires:
 
@@ -144,7 +158,7 @@ Consensus and notary require an enabled consensus policy, trusted signers, and a
 - `--pki-dir <dir>` - Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` - Directory for platform secrets (default: .g8e/secrets)
 - `--vault-dir <dir>` - Directory for vault data (default: .g8e/vault)
-- `--vault-key <path>` - Path to the vault private key (default: `.g8e/vault/key`)
+- `--vault-key <path>` - Path to the vault private key (default: `.g8e/secrets/key`)
 - `--passkey-rp-id <id>` - RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>` - RP Name for passkey operations (default: g8e)
 - `--passkey-rp-origin <origin>` - Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)
@@ -158,6 +172,12 @@ Consensus and notary require an enabled consensus policy, trusted signers, and a
 - `--mcp-downstream-url <url>` - URL of a downstream MCP server to proxy discovery and execution to (default: none)
 - `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
 - `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
+- `--public-spectator` - Start the in-process public mirror and Evaluation Explorer listeners (enabled by default)
+- `--public-spectator-private-listen <address>` - Authenticated mirror-ingest listener (default: `127.0.0.1:8081`)
+- `--public-spectator-public-listen <address>` - Anonymous mirror read and SSE listener (default: `127.0.0.1:8082`)
+- `--public-spectator-trusted-proxy-cidr <cidr>` - Trusted proxy CIDR permitted to supply exactly one `CF-Connecting-IP` value (repeatable)
+- `--eval-explorer-listen <address>` - Evaluation Explorer listener (default: `127.0.0.1:5173`)
+- `--eval-explorer-root <dir>` - Directory containing built Evaluation Explorer assets
 - `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
 - `--doctrine-dir <dir>` - Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)
 - `-f, --follow` - Run gateway in foreground instead of background (Ctrl+C stops gateway)
@@ -178,7 +198,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -190,7 +210,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -275,8 +295,8 @@ The gateway exposes two ports with distinct transport and authentication propert
 
 | Port | Transport | Client Cert | Purpose |
 |---|---|---|---|
-| **HTTP 8080** | Plain HTTP | None | Bootstrap health and state, CA discovery, initial owner bootstrap, token-scoped CLI recovery and platform enrollment, deploy scripts, and node binaries |
-| **HTTPS 8443** | TLS 1.3 | Verified when present | Console and WebAuthn, public TLS routes, authenticated API and PKI management, pub/sub, MCP/A2A, governance, and audit |
+| **HTTP 8080** | Plain HTTP | None | Bootstrap health and state, CA discovery, initial owner bootstrap, token-scoped CLI recovery and platform enrollment, deploy scripts, and g8e binaries |
+| **HTTPS 8443** | TLS 1.3 | Requested and verified when presented; route middleware decides whether a client certificate is required | Console and WebAuthn, public TLS routes, authenticated API and PKI management, pub/sub, MCP/A2A, governance, and audit |
 
 The HTTP router exposes only bootstrap and discovery operations, then redirects other requests to HTTPS. It does not expose privileged CSR signing, certificate revocation, MCP/A2A, pub/sub, or governance routes.
 
@@ -463,6 +483,9 @@ Requires `cloudflared` installed and a Cloudflare account with a registered doma
 
 ## Next Steps
 
+- **[Docker Gateway](docker_gateway.md)** - Build and run the root Compose Gateway, enroll the owner, approve workloads, and manage container state.
+- **[Unified Docker Stack](unified_stack.md)** - Operate the complete Gateway, Operator, Ensemble, Dashboard, and evaluation profiles.
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** - Connect to, authenticate, use, maintain, and pull reports from a Gateway.
 - **[Build Operator](build_operator.md)** - Build a custom g8e-compatible Operator.
 - **[Protocol Library](../architecture/protocol.md)** - Go module and Python package API reference, constants, models, and usage examples.
+- **[Scripts](../architecture/scripts.md)** - Development bootstrap scripts and Gateway-served Operator deployment scripts.

@@ -108,9 +108,8 @@ func (w *WorkloadIdentity) MatchesCLI(spiffeID, userID, sessionID string) bool {
 // MatchesCLISessionOnly checks if a SPIFFE ID matches a CLI identity with the given session ID,
 // regardless of the user ID. This is useful for initial routing/verification before user context is loaded.
 func (w *WorkloadIdentity) MatchesCLISessionOnly(spiffeID, sessionID string) bool {
-	prefix := fmt.Sprintf("spiffe://%s/cli/", TrustDomain)
-	suffix := "/" + sessionID
-	return strings.HasPrefix(spiffeID, prefix) && strings.HasSuffix(spiffeID, suffix)
+	extractedSessionID, ok := w.ExtractCLISessionID(spiffeID)
+	return ok && extractedSessionID == sessionID
 }
 
 // MatchesApp checks if a SPIFFE ID matches an application identity.
@@ -145,11 +144,11 @@ func (w *WorkloadIdentity) ExtractCLISessionID(spiffeID string) (string, bool) {
 		return "", false
 	}
 	// Format: spiffe://g8e.local/cli/<user_id>/<cli_session_id>
-	parts := strings.Split(spiffeID, "/")
-	if len(parts) < 6 {
+	parts := strings.Split(strings.TrimPrefix(spiffeID, prefix), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", false
 	}
-	return parts[5], true
+	return parts[1], true
 }
 
 // ExtractUserID extracts the user ID from a CLI SPIFFE ID.
@@ -160,11 +159,11 @@ func (w *WorkloadIdentity) ExtractUserID(spiffeID string) (string, bool) {
 	if !strings.HasPrefix(spiffeID, prefix) {
 		return "", false
 	}
-	parts := strings.Split(spiffeID, "/")
-	if len(parts) < 5 {
+	parts := strings.Split(strings.TrimPrefix(spiffeID, prefix), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", false
 	}
-	return parts[4], true
+	return parts[0], true
 }
 
 // ExtractUserIDFromUserSAN extracts the user ID from a user SPIFFE ID.
@@ -176,7 +175,7 @@ func (w *WorkloadIdentity) ExtractUserIDFromUserSAN(spiffeID string) (string, bo
 		return "", false
 	}
 	userID := strings.TrimPrefix(spiffeID, prefix)
-	if userID == "" {
+	if userID == "" || strings.Contains(userID, "/") {
 		return "", false
 	}
 	return userID, true
@@ -206,11 +205,11 @@ func (w *WorkloadIdentity) ExtractGatewayID(spiffeID string) (string, bool) {
 		return "", false
 	}
 	// Format: spiffe://g8e.local/gateway/<gateway_id>
-	parts := strings.Split(spiffeID, "/")
-	if len(parts) < 5 {
+	parts := strings.Split(strings.TrimPrefix(spiffeID, prefix), "/")
+	if len(parts) != 1 || parts[0] == "" {
 		return "", false
 	}
-	return parts[4], true
+	return parts[0], true
 }
 
 // ExtractOperatorSessionID extracts the operator session ID from a SPIFFE ID.
@@ -222,9 +221,9 @@ func (w *WorkloadIdentity) ExtractOperatorSessionID(spiffeID string) (string, bo
 		return "", false
 	}
 	// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
-	parts := strings.Split(spiffeID, "/")
-	if len(parts) < 7 {
+	parts := strings.Split(strings.TrimPrefix(spiffeID, prefix), "/")
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
 		return "", false
 	}
-	return parts[6], true
+	return parts[2], true
 }

@@ -34,7 +34,7 @@ describe('assignmentMetricEntries', () => {
     });
     expect(entries.map((entry) => entry.key)).toEqual(['pass', 'deterministic_pass_rate', 'latency_ms']);
     expect(entries[0]?.label).toBe('Pass');
-    expect(entries[1]?.label).toBe('Deterministic pass rate');
+    expect(entries[1]?.label).toBe('Pass Rate');
   });
 });
 

@@ -131,6 +131,7 @@ type OperatorDocumentGo struct {
 	UpdatedAt            time.Time                `json:"updated_at"`
 	StartedAt            *time.Time               `json:"started_at,omitempty"`
 	ClaimedAt            *time.Time               `json:"claimed_at,omitempty"`
+	StopReason           string                   `json:"stop_reason,omitempty"`
 	LatestHeartbeat      json.RawMessage          `json:"latest_heartbeat_snapshot,omitempty"`
 	RuntimeConfig        *RuntimeConfig           `json:"runtime_config,omitempty"`
 	ConsumedByOperatorID string                   `json:"consumed_by_operator_id,omitempty"`
@@ -167,6 +168,18 @@ type TerminateOperatorRequest struct {
 type TerminateOperatorResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
+}
+
+type StopOperatorRequest struct {
+	OperatorSessionID string `json:"operator_session_id"`
+	Reason            string `json:"reason,omitempty"`
+}
+
+type StopOperatorResponse struct {
+	Success           bool   `json:"success"`
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id"`
+	TransactionID     string `json:"transaction_id,omitempty"`
 }
 
 // BindOperatorsRequest is the inbound body for /api/operators/bind
@@ -413,6 +426,18 @@ type LocalOSUser struct {
 // is the gateway owner and admin. Admin authorization is enforced via
 // UserService.IsFirstUser (the first human enrollee is the admin); there is
 // no ephemeral bootstrap-user concept.
+type Organization struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name,omitempty"`
+	OwnerUserID   string    `json:"owner_user_id"`
+	MemberUserIDs []string  `json:"member_user_ids,omitempty"`
+	PlanType      string    `json:"plan_type,omitempty"`
+	MaxOperators  int       `json:"max_operators,omitempty"`
+	MaxUsers      int       `json:"max_users,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type User struct {
 	ID                 string              `json:"id"`
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`

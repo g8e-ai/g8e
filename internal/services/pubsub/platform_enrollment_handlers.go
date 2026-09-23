@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -37,6 +38,51 @@ import (
 // decision, actor user ID, and resulting document/session IDs. CSR PEM,
 // token hashes, and private keys never appear in summaries or audit
 // records.
+type platformEnrollmentDecisionUpdate struct {
+	State              string    `json:"state"`
+	ApprovedByUserID   string    `json:"approved_by_user_id"`
+	DecidedAt          time.Time `json:"decided_at"`
+	DecisionReason     string    `json:"decision_reason"`
+	DecisionEnvelopeID string    `json:"decision_envelope_id"`
+	DecisionReceiptID  string    `json:"decision_receipt_id"`
+	LastTransitionAt   time.Time `json:"last_transition_at"`
+}
+
+type platformEnrollmentIssueRollbackUpdate struct {
+	State            string    `json:"state"`
+	LastTransitionAt time.Time `json:"last_transition_at"`
+}
+
+type platformEnrollmentCompletionUpdate struct {
+	State                  string                                     `json:"state"`
+	Issued                 *models.PlatformEnrollmentCompleteResponse `json:"issued"`
+	CompletedAt            time.Time                                  `json:"completed_at"`
+	LastTransitionAt       time.Time                                  `json:"last_transition_at"`
+	IssuanceEnvelopeID     string                                     `json:"issuance_envelope_id"`
+	IssuanceReceiptID      string                                     `json:"issuance_receipt_id"`
+	CertificateSerial      string                                     `json:"certificate_serial"`
+	CertificateFingerprint string                                     `json:"certificate_fingerprint"`
+	OperatorID             string                                     `json:"operator_id,omitempty"`
+	OperatorSessionID      string                                     `json:"operator_session_id,omitempty"`
+	CLISessionID           string                                     `json:"cli_session_id,omitempty"`
+}
+
+type platformEnrollmentRevocationUpdate struct {
+	State                string    `json:"state"`
+	RevokedAt            time.Time `json:"revoked_at"`
+	RevokedByUserID      string    `json:"revoked_by_user_id"`
+	RevocationReason     string    `json:"revocation_reason"`
+	RevocationEnvelopeID string    `json:"revocation_envelope_id"`
+	RevocationReceiptID  string    `json:"revocation_receipt_id"`
+	LastTransitionAt     time.Time `json:"last_transition_at"`
+}
+
+type platformOperatorTerminationUpdate struct {
+	Status            string    `json:"status"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	TerminationReason string    `json:"termination_reason"`
+}
+
 type PlatformEnrollmentHandler struct {
 	deps   PlatformEnrollmentDeps
 	logger platformEnrollmentLogger
@@ -98,7 +144,9 @@ func protoDecision(d commonv1.PlatformEnrollmentDecision) (models.PlatformEnroll
 // This handler decodes the payload, returns a receipt summary, and
 // writes nothing to the doc store.
 func (h *PlatformEnrollmentHandler) HandleCreate(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("platform enrollment: create context: %w", err)
+	}
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -122,7 +170,6 @@ func (h *PlatformEnrollmentHandler) HandleCreate(ctx context.Context, msg *PubSu
 // decision_receipt_id (from msg.ID). The conditional update ensures a
 // concurrent or repeated decision does not consume approval.
 func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -140,7 +187,7 @@ func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSu
 		return "", constants.ErrPlatformEnrollmentInvalidDecision
 	}
 
-	req, err := loadPlatformEnrollmentRequest(context.Background(), h.deps, requestID)
+	req, err := loadPlatformEnrollmentRequest(ctx, h.deps, requestID)
 	if err != nil {
 		return "", err
 	}
@@ -162,14 +209,17 @@ func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSu
 	}
 
 	now := time.Now().UTC()
-	setFields := map[string]interface{}{
-		"state":                string(targetState),
-		"approved_by_user_id":  actorUserID,
-		"decided_at":           now,
-		"decision_reason":      "",
-		"decision_envelope_id": msg.ID,
-		"decision_receipt_id":  msg.ID,
-		"last_transition_at":   now,
+	setFields, err := json.Marshal(platformEnrollmentDecisionUpdate{
+		State:              string(targetState),
+		ApprovedByUserID:   actorUserID,
+		DecidedAt:          now,
+		DecisionReason:     "",
+		DecisionEnvelopeID: msg.ID,
+		DecisionReceiptID:  msg.ID,
+		LastTransitionAt:   now,
+	})
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: marshal decision %s: %w", requestID, err)
 	}
 	applied, err := h.deps.DocStore.DocConditionalUpdate(
 		platformEnrollmentCollection(), requestID, setFields, "state", string(models.PlatformEnrollmentStatePending),
@@ -199,7 +249,6 @@ func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSu
 // both the operator and CLI CSRs and persists the operator document;
 // app issuance uses SignPlatformAppCSR for the dual-SAN app certificate.
 func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -217,7 +266,7 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 		return "", constants.ErrPlatformEnrollmentInvalidDecision
 	}
 
-	req, err := loadPlatformEnrollmentRequest(context.Background(), h.deps, requestID)
+	req, err := loadPlatformEnrollmentRequest(ctx, h.deps, requestID)
 	if err != nil {
 		return "", err
 	}
@@ -238,43 +287,44 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 	if err != nil {
 		// Roll back issuing -> approved so a retry can re-acquire. A
 		// failed signing must not permanently consume approval.
-		_, rollbackErr := h.deps.DocStore.DocConditionalUpdate(
-			platformEnrollmentCollection(), requestID,
-			map[string]interface{}{
-				"state":              string(models.PlatformEnrollmentStateApproved),
-				"last_transition_at": time.Now().UTC(),
-			},
-			"state", string(models.PlatformEnrollmentStateIssuing),
-		)
-		if rollbackErr != nil {
-			h.logger.Error("platform enrollment: rollback issuing failed",
-				"request_id", requestID, "error", rollbackErr)
+		rollbackUpdate, marshalErr := json.Marshal(platformEnrollmentIssueRollbackUpdate{
+			State:            string(models.PlatformEnrollmentStateApproved),
+			LastTransitionAt: time.Now().UTC(),
+		})
+		if marshalErr != nil {
+			h.logger.Error("platform enrollment: marshal rollback failed", "request_id", requestID, "error", marshalErr)
+		} else {
+			_, rollbackErr := h.deps.DocStore.DocConditionalUpdate(
+				platformEnrollmentCollection(), requestID, rollbackUpdate,
+				"state", string(models.PlatformEnrollmentStateIssuing),
+			)
+			if rollbackErr != nil {
+				h.logger.Error("platform enrollment: rollback issuing failed",
+					"request_id", requestID, "error", rollbackErr)
+			}
 		}
 		return "", fmt.Errorf("platform enrollment: issue %s: %w", requestID, err)
 	}
 
 	// Persist the issued response, generated IDs, cert metadata, and
 	// transition issuing -> completed in a single conditional update.
-	completionFields := map[string]interface{}{
-		"state":                   string(models.PlatformEnrollmentStateCompleted),
-		"issued":                  issued,
-		"completed_at":            time.Now().UTC(),
-		"last_transition_at":      time.Now().UTC(),
-		"issuance_envelope_id":    msg.ID,
-		"issuance_receipt_id":     msg.ID,
-		"certificate_serial":      certSerial,
-		"certificate_fingerprint": certFingerprint,
+	completedAt := time.Now().UTC()
+	completionFields, err := json.Marshal(platformEnrollmentCompletionUpdate{
+		State:                  string(models.PlatformEnrollmentStateCompleted),
+		Issued:                 issued,
+		CompletedAt:            completedAt,
+		LastTransitionAt:       completedAt,
+		IssuanceEnvelopeID:     msg.ID,
+		IssuanceReceiptID:      msg.ID,
+		CertificateSerial:      certSerial,
+		CertificateFingerprint: certFingerprint,
+		OperatorID:             operatorID,
+		OperatorSessionID:      operatorSessionID,
+		CLISessionID:           cliSessionID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: marshal completion %s: %w", requestID, err)
 	}
-	if operatorID != "" {
-		completionFields["operator_id"] = operatorID
-	}
-	if operatorSessionID != "" {
-		completionFields["operator_session_id"] = operatorSessionID
-	}
-	if cliSessionID != "" {
-		completionFields["cli_session_id"] = cliSessionID
-	}
-
 	applied, err := h.deps.DocStore.DocConditionalUpdate(
 		platformEnrollmentCollection(), requestID, completionFields,
 		"state", string(models.PlatformEnrollmentStateIssuing),
@@ -362,19 +412,23 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	if req.Operator == nil {
 		return nil, "", "", "", "", "", constants.ErrPlatformEnrollmentInvalidPayload
 	}
+	user, organization, err := loadPlatformEnrollmentOrganization(h.deps, actorUserID)
+	if err != nil {
+		return nil, "", "", "", "", "", err
+	}
 	operatorID := uuid.NewString()
 	operatorSessionID := uuid.NewString()
 	cliSessionID := uuid.NewString()
 	now := time.Now().UTC()
 
 	operatorCertPEM, operatorChainPEM, err := h.deps.PKI.SignCSR(
-		req.Operator.OperatorCSRPEM, constants.LeafTypeOperator, "", operatorID, "", operatorSessionID, "",
+		req.Operator.OperatorCSRPEM, constants.LeafTypeOperator, organization.ID, operatorID, "", operatorSessionID, "",
 	)
 	if err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("sign operator csr: %w", err)
 	}
 	cliCertPEM, cliCertChainPEM, err := h.deps.PKI.SignCSR(
-		req.Operator.CLICSRPEM, constants.LeafTypeCLI, "", "", "", cliSessionID, "",
+		req.Operator.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "",
 	)
 	if err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("sign cli csr: %w", err)
@@ -387,7 +441,8 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	// can discover and manage the platform-enrolled operator.
 	operatorDoc := &models.OperatorDocumentGo{
 		ID:                operatorID,
-		UserID:            actorUserID,
+		UserID:            user.ID,
+		OrganizationID:    organization.ID,
 		Component:         constants.ComponentNameG8EO,
 		Name:              req.Hostname,
 		Status:            constants.OperatorStatusActive,
@@ -434,7 +489,9 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 // enrollment service from the ISSUE handler outputs). This handler is
 // only invoked for dashboard and ensemble components.
 func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("platform enrollment: persist policy context: %w", err)
+	}
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -485,6 +542,116 @@ func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg
 		requestID, policyID, targetDocumentID), nil
 }
 
+func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("platform enrollment: revoke context: %w", err)
+	}
+	payload, err := h.decodePayload(msg)
+	if err != nil {
+		return "", err
+	}
+	requestID := payload.GetRequestId()
+	if requestID == "" {
+		return "", constants.ErrPlatformEnrollmentRequestIDRequired
+	}
+	req, err := loadPlatformEnrollmentRequest(ctx, h.deps, requestID)
+	if err != nil {
+		return "", err
+	}
+	if req == nil {
+		return "", constants.ErrPlatformEnrollmentRequestNotFound
+	}
+	if req.State != models.PlatformEnrollmentStateCompleted {
+		return "", constants.ErrPlatformEnrollmentInvalidState
+	}
+	if h.deps.Connections == nil {
+		return "", constants.ErrPlatformEnrollmentDepsRequired
+	}
+	reason := strings.TrimSpace(payload.GetReason())
+	if reason == "" {
+		reason = string(constants.PlatformEnrollmentIntentRevoke)
+	}
+	if req.CertificateSerial != "" {
+		if err := h.deps.PKI.RevokeCertificate(req.CertificateSerial, reason); err != nil {
+			return "", fmt.Errorf("platform enrollment: revoke certificate: %w", err)
+		}
+	}
+	switch req.ComponentKind {
+	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble:
+		if payload.GetTargetDocumentId() == "" {
+			return "", constants.ErrPlatformEnrollmentInvalidPayload
+		}
+		if err := h.deps.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), payload.GetTargetDocumentId()); err != nil {
+			return "", fmt.Errorf("platform enrollment: revoke app policy: %w", err)
+		}
+		h.deps.Connections.DisconnectIdentity(payload.GetTargetDocumentId())
+	case models.PlatformComponentOperator:
+		if req.Issued == nil || req.Issued.Operator == nil {
+			return "", constants.ErrPlatformEnrollmentInvalidPayload
+		}
+		operatorSerial := serialFromPEM(req.Issued.Operator.OperatorCert)
+		if operatorSerial == "" {
+			return "", constants.ErrPlatformEnrollmentInvalidPayload
+		}
+		if err := h.deps.PKI.RevokeCertificate(operatorSerial, reason); err != nil {
+			return "", fmt.Errorf("platform enrollment: revoke operator certificate: %w", err)
+		}
+		operatorSPIFFEID, err := spiffeIDFromCertificate(req.Issued.Operator.OperatorCert)
+		if err != nil {
+			return "", err
+		}
+		cliSPIFFEID, err := spiffeIDFromCertificate(req.Issued.Operator.CLICert)
+		if err != nil {
+			return "", err
+		}
+		if err := h.deps.CLISessions.DeactivateCLISession(req.CLISessionID); err != nil && !errors.Is(err, constants.ErrCLISessionAlreadyDeactivated) {
+			return "", fmt.Errorf("platform enrollment: deactivate CLI session: %w", err)
+		}
+		if err := h.deps.OperatorSessions.DeactivateOperatorSession(req.OperatorSessionID); err != nil {
+			return "", fmt.Errorf("platform enrollment: deactivate operator session: %w", err)
+		}
+		update, err := json.Marshal(platformOperatorTerminationUpdate{
+			Status:            string(constants.OperatorStatusTerminated),
+			UpdatedAt:         time.Now().UTC(),
+			TerminationReason: reason,
+		})
+		if err != nil {
+			return "", fmt.Errorf("platform enrollment: marshal operator revocation: %w", err)
+		}
+		if _, err := h.deps.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID, update); err != nil {
+			return "", fmt.Errorf("platform enrollment: terminate operator: %w", err)
+		}
+		h.deps.Connections.DisconnectIdentity(operatorSPIFFEID)
+		h.deps.Connections.DisconnectIdentity(cliSPIFFEID)
+	default:
+		return "", constants.ErrPlatformEnrollmentInvalidComponent
+	}
+	now := time.Now().UTC()
+	revocationUpdate, err := json.Marshal(platformEnrollmentRevocationUpdate{
+		State:                string(models.PlatformEnrollmentStateRevoked),
+		RevokedAt:            now,
+		RevokedByUserID:      payload.GetActorUserId(),
+		RevocationReason:     reason,
+		RevocationEnvelopeID: msg.ID,
+		RevocationReceiptID:  msg.ID,
+		LastTransitionAt:     now,
+	})
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: marshal revocation %s: %w", requestID, err)
+	}
+	applied, err := h.deps.DocStore.DocConditionalUpdate(
+		platformEnrollmentCollection(), requestID, revocationUpdate,
+		"state", string(models.PlatformEnrollmentStateCompleted),
+	)
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: mark revoked: %w", err)
+	}
+	if !applied {
+		return "", constants.ErrPlatformEnrollmentInvalidState
+	}
+	return fmt.Sprintf("platform enrollment revoke request_id=%s component=%s", requestID, req.ComponentKind), nil
+}
+
 // HandleCreateSession delegates to CLISessionService and
 // OperatorSessionService using the session IDs carried in the payload.
 // The handler writes nothing to the doc store directly; the session
@@ -493,7 +660,9 @@ func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg
 // sessions are bound to the approving owner's user_id (the actor) so the
 // owner can discover and manage the platform-enrolled operator.
 func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("platform enrollment: create session context: %w", err)
+	}
 	payload, err := h.decodePayload(msg)
 	if err != nil {
 		return "", err
@@ -512,19 +681,23 @@ func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg
 	if actorUserID == "" {
 		return "", constants.ErrPlatformEnrollmentInvalidDecision
 	}
+	user, organization, err := loadPlatformEnrollmentOrganization(h.deps, actorUserID)
+	if err != nil {
+		return "", err
+	}
 
 	// Persist the CLI session bound to the approving owner's user_id.
 	// The cert fingerprint/serial come from the payload (populated by
 	// the enrollment service from the ISSUE handler outputs).
 	if err := h.deps.CLISessions.PersistCLISession(
-		cliSessionID, operatorSessionID, actorUserID,
+		cliSessionID, operatorSessionID, user.ID,
 		"", payload.GetCertificateFingerprint(), payload.GetCertificateSerial(),
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {
 		return "", fmt.Errorf("platform enrollment: persist cli session: %w", err)
 	}
 	if err := h.deps.OperatorSessions.PersistOperatorSession(
-		operatorSessionID, actorUserID, "", operatorID,
+		operatorSessionID, user.ID, organization.ID, operatorID,
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {
 		return "", fmt.Errorf("platform enrollment: persist operator session: %w", err)
@@ -595,6 +768,18 @@ func serialFromPEM(certPEM string) string {
 		return ""
 	}
 	return cert.SerialNumber.String()
+}
+
+func spiffeIDFromCertificate(certPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return "", constants.ErrPlatformEnrollmentInvalidPayload
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil || len(cert.URIs) == 0 {
+		return "", constants.ErrPlatformEnrollmentInvalidPayload
+	}
+	return cert.URIs[0].String(), nil
 }
 
 // expiryFromPEM extracts the NotAfter timestamp from the PEM-encoded

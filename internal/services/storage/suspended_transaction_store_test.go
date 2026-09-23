@@ -63,12 +63,11 @@ func TestDefaultSuspendedTransactionConfig(t *testing.T) {
 func TestNewSuspendedTransactionService_NilConfig(t *testing.T) {
 	t.Parallel()
 
-	logger := testutil.NewTestLogger()
-	sts, err := NewSuspendedTransactionService(nil, logger)
+	sts, err := NewSuspendedTransactionService(nil, testutil.NewTestLogger())
 
-	require.NoError(t, err)
-	require.NotNil(t, sts)
-	assert.NotNil(t, sts.config)
+	require.Error(t, err)
+	assert.Nil(t, sts)
+	assert.ErrorIs(t, err, constants.ErrStorageConfigRequired)
 }
 
 func TestNewSuspendedTransactionService_InvalidDBPath(t *testing.T) {

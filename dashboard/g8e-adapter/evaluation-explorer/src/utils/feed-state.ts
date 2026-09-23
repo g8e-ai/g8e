@@ -24,11 +24,12 @@ const QUALITY_STATE_RANK: Record<QualityState, number> = {
   verified_public: 7,
   exploratory_verified: 6,
   exploratory_partial: 5,
-  live_in_progress: 4,
-  terminal_failed: 3,
-  dead_evidence: 2,
-  not_evaluated: 1,
-  unavailable: 0,
+  legacy_unverified: 4,
+  live_in_progress: 3,
+  terminal_failed: 2,
+  dead_evidence: 1,
+  not_evaluated: 0,
+  unavailable: -1,
 };
 
 export function isRunLevelQualityEvent(kind: LiveEventKind): boolean {
@@ -169,17 +170,19 @@ export function isTerminalFailure(status: LifecycleStatus): boolean {
 export function qualityStateLabel(state: QualityState): string {
   switch (state) {
     case 'verified_public':
-      return 'Verified public';
+      return 'Current-standard verified';
     case 'exploratory_verified':
-      return 'Exploratory · verifier passed';
+      return 'Run-scoped verification passed';
     case 'exploratory_partial':
-      return 'Exploratory · partial';
+      return 'Not fully verified';
+    case 'legacy_unverified':
+      return 'Legacy · not current-standard verified';
     case 'live_in_progress':
-      return 'Live · in progress';
+      return 'In progress · unverified';
     case 'terminal_failed':
-      return 'Terminal · failed';
+      return 'Failed · unverified';
     case 'dead_evidence':
-      return 'Dead evidence';
+      return 'Evidence invalid';
     case 'not_evaluated':
       return 'Not evaluated';
     case 'unavailable':
@@ -194,6 +197,8 @@ export function qualityStateTone(state: QualityState): 'ok' | 'info' | 'warn' | 
     case 'exploratory_verified':
       return 'info';
     case 'exploratory_partial':
+      return 'warn';
+    case 'legacy_unverified':
       return 'warn';
     case 'live_in_progress':
       return 'info';

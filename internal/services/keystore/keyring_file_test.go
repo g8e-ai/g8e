@@ -25,8 +25,8 @@ import (
 func TestNewFileKeyring(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, _ := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 	assert.Equal(t, "file", keyring.Name())
 }
@@ -34,8 +34,8 @@ func TestNewFileKeyring(t *testing.T) {
 func TestFileKeyring_StoreRetrieveDelete(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, _ := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 	assert.Equal(t, "file", keyring.Name())
 
@@ -88,8 +88,8 @@ func TestFileKeyring_StoreRetrieveDelete(t *testing.T) {
 func TestFileKeyring_RetrieveNotFound(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, _ := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 
 	_, err = keyring.RetrieveMasterKey()
@@ -100,8 +100,8 @@ func TestFileKeyring_RetrieveNotFound(t *testing.T) {
 func TestFileKeyring_DeleteIdempotent(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, _ := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -134,7 +134,7 @@ func TestFileKeyring_WithRealKeystore(t *testing.T) {
 
 	fileSvc, secretsDir := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
-	keyring, err := newFileKeyring(secretsDir)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 
 	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)

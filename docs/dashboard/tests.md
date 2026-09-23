@@ -73,7 +73,7 @@ Infrastructure tests cover:
 
 - P-256 CSR generation and certificate parsing.
 - Installed identity reuse, expiry, malformed certificate, and missing SPIFFE identity behavior.
-- New and resumed owner-approved enrollment attempts.
+- New, resumed, and expired-state replacement owner-approved enrollment attempts.
 - Required gateway and runtime configuration.
 - Startup load, enrollment fallback, and fail-closed fatal paths.
 - Native `fetch` interception for platform enrollment request, status, and completion calls.
@@ -86,7 +86,7 @@ Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are
 
 ## Related
 
-- [Development](development.md)
+- [Development](devs.md)
 - [Architecture](architecture.md)
 - [Authentication](auth.md)
 - [Server-Sent Events](sse.md)

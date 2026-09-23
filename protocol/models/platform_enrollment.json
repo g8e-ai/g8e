@@ -8,7 +8,7 @@
   },
   "state": {
     "type": "string",
-    "values": ["pending", "approved", "issuing", "completed", "denied", "expired"]
+    "values": ["pending", "approved", "issuing", "completed", "denied", "expired", "revoked"]
   },
   "decision": {
     "type": "string",
@@ -33,7 +33,7 @@
     "token_hash": "Persisted SHA-256 hash of token; never exposed by administrative APIs."
   },
   "governance": {
-    "actions": ["PLATFORM_ENROLLMENT_CREATE", "PLATFORM_ENROLLMENT_DECIDE", "PLATFORM_ENROLLMENT_ISSUE", "PLATFORM_ENROLLMENT_PERSIST_POLICY", "PLATFORM_ENROLLMENT_CREATE_SESSION"],
-    "intents": ["platform_enrollment.request", "platform_enrollment.approve", "platform_enrollment.deny", "platform_enrollment.issue"]
+    "actions": ["PLATFORM_ENROLLMENT_CREATE", "PLATFORM_ENROLLMENT_DECIDE", "PLATFORM_ENROLLMENT_ISSUE", "PLATFORM_ENROLLMENT_PERSIST_POLICY", "PLATFORM_ENROLLMENT_CREATE_SESSION", "PLATFORM_ENROLLMENT_REVOKE"],
+    "intents": ["platform_enrollment.request", "platform_enrollment.approve", "platform_enrollment.deny", "platform_enrollment.issue", "platform_enrollment.revoke"]
   }
 }

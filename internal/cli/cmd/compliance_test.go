@@ -135,7 +135,7 @@ func setupTestVaultWithKey(t *testing.T, fileSvc fs.RuntimeFileService, privKey 
 	require.NoError(t, os.MkdirAll(vaultDir, constants.PermDirPrivate))
 	header, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, header.Save(vaultDir))
+	require.NoError(t, header.Save(fileSvc))
 
 	vaultKeyRel := constants.SecretsDirname + "/" + constants.VaultKeyFilename
 	hexKey := hex.EncodeToString(privKey)
@@ -161,9 +161,9 @@ func TestComplianceCmd_Structure(t *testing.T) {
 	assert.Equal(t, "compliance", cmd.Use)
 
 	subcommands := cmd.Commands()
-	assert.Len(t, subcommands, 7)
+	assert.Len(t, subcommands, 8)
 
-	names := make(map[string]bool, 7)
+	names := make(map[string]bool, 8)
 	for _, sub := range subcommands {
 		names[sub.Name()] = true
 	}
@@ -172,6 +172,7 @@ func TestComplianceCmd_Structure(t *testing.T) {
 	assert.True(t, names["ksi-history"], "compliance should have 'ksi-history' subcommand")
 	assert.True(t, names["overlay"], "compliance should have 'overlay' subcommand")
 	assert.True(t, names["demo-run"], "compliance should have 'demo-run' subcommand")
+	assert.True(t, names["evidence"], "compliance should have 'evidence' subcommand")
 	assert.True(t, names["evidence-graph"], "compliance should have 'evidence-graph' subcommand")
 	assert.True(t, names["report"], "compliance should have 'report' subcommand")
 	assert.True(t, names["release-evidence"], "compliance should have 'release-evidence' subcommand")
@@ -364,7 +365,8 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &resultSet))
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
 	assert.NotEmpty(t, resultSet.Results)
-	assert.Equal(t, 2, resultSet.NotSatisfiedCount())
+	assert.Zero(t, resultSet.NotSatisfiedCount())
+	assert.Equal(t, 2, resultSet.UnverifiableCount())
 	assert.Equal(t, "test-scope", resultSet.Binding.ScopeID)
 	assert.Equal(t, "test-run", resultSet.Binding.RunID)
 
@@ -375,7 +377,7 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	assert.Len(t, snapshots, 1)
 	intervals, err := newKSIUnavailableIntervalStore(fileSvc).ListIntervals(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, intervals, resultSet.NotSatisfiedCount())
+	assert.Len(t, intervals, resultSet.UnverifiableCount())
 	for _, interval := range intervals {
 		assert.Equal(t, resultSet.Binding.ScopeID, interval.ScopeID)
 		assert.Equal(t, resultSet.Binding.RunID, interval.RunID)
@@ -729,7 +731,8 @@ func TestEvaluateKSIs_NilContextHandling(t *testing.T) {
 	resultSet := evaluateKSIs(nilCtx, fileSvc, cat, compliance.ClassC, binding)
 	require.NotNil(t, resultSet)
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
-	assert.Equal(t, 2, resultSet.NotSatisfiedCount())
+	assert.Zero(t, resultSet.NotSatisfiedCount())
+	assert.Equal(t, 2, resultSet.UnverifiableCount())
 }
 
 // TestSaveKSIHistorySnapshot_NilResultSetReturnsError asserts error when saving nil result set.

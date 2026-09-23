@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -394,7 +395,7 @@ func (w *L5Actuator) persistCommitment(vt *VerifiedTransaction, receipt *operato
 		hash := sha256.Sum256(canonical)
 		attestation.Hash = hex.EncodeToString(hash[:])
 		attestation.Signature = hex.EncodeToString(ed25519.Sign(w.AuditorSigningKey, canonical))
-		payload, err := json.Marshal(attestation)
+		payload, err := compliancev1.MarshalCanonical(attestation)
 		if err != nil {
 			return nil, "", fmt.Errorf("commitment attestation: marshal: %w", err)
 		}

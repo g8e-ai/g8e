@@ -28,7 +28,7 @@ func TestWriteInventoryMaterializeResult_TextAndJSON(t *testing.T) {
 		ServedModelTag: "qwen3:4b",
 		RegistryDigest: "digest-1",
 		CellCount:      3,
-		InventoryFile:  ".g8e/eval/inventories/eval-init-qwen3-4b.json",
+		InventoryFile:  "eval/inventories/eval-init-qwen3-4b.json",
 	}}
 	command := &cobra.Command{}
 	var output bytes.Buffer

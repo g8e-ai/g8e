@@ -18,6 +18,17 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+type campaignStartResultJSON struct {
+	CampaignID     string   `json:"campaign_id"`
+	RunID          string   `json:"run_id"`
+	Executed       int      `json:"executed"`
+	Verified       bool     `json:"verified"`
+	VerifyStatus   string   `json:"verify_status"`
+	FailureCount   int      `json:"failure_count"`
+	FailureReasons []string `json:"failure_reasons"`
+	Prepared       bool     `json:"prepared"`
+}
+
 func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var modelTag string
 	var modelTags string
@@ -80,15 +91,15 @@ Examples:
 				return err
 			}
 			if output.JSONEnabled(cmd) && result != nil && !dryRun {
-				payload, err := json.MarshalIndent(map[string]any{
-					"campaign_id":     result.Plan.CampaignID,
-					"run_id":          result.Plan.RunID,
-					"executed":        result.Executed,
-					"verified":        result.Report != nil,
-					"verify_status":   verificationStatusString(result.Report),
-					"failure_count":   verificationFailureCount(result.Report),
-					"failure_reasons": verificationFailureReasons(result.Report),
-					"prepared":        prepareOnly,
+				payload, err := json.MarshalIndent(campaignStartResultJSON{
+					CampaignID:     result.Plan.CampaignID,
+					RunID:          result.Plan.RunID,
+					Executed:       result.Executed,
+					Verified:       result.Report != nil,
+					VerifyStatus:   verificationStatusString(result.Report),
+					FailureCount:   verificationFailureCount(result.Report),
+					FailureReasons: verificationFailureReasons(result.Report),
+					Prepared:       prepareOnly,
 				}, "", "  ")
 				if err != nil {
 					return err

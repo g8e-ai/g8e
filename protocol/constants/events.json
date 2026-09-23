@@ -976,6 +976,30 @@
       "_go_const": "EventPlatformAuthUserUnauthenticated",
       "value": "g8e.v1.platform.auth.user.unauthenticated"
     },
+    "PlatformEnrollmentCreateRequested": {
+      "_go_const": "EventPlatformEnrollmentCreateRequested",
+      "value": "g8e.v1.platform.enrollment.create.requested"
+    },
+    "PlatformEnrollmentDecideRequested": {
+      "_go_const": "EventPlatformEnrollmentDecideRequested",
+      "value": "g8e.v1.platform.enrollment.decide.requested"
+    },
+    "PlatformEnrollmentIssueRequested": {
+      "_go_const": "EventPlatformEnrollmentIssueRequested",
+      "value": "g8e.v1.platform.enrollment.issue.requested"
+    },
+    "PlatformEnrollmentPersistPolicyRequested": {
+      "_go_const": "EventPlatformEnrollmentPersistPolicyRequested",
+      "value": "g8e.v1.platform.enrollment.persist_policy.requested"
+    },
+    "PlatformEnrollmentCreateSessionRequested": {
+      "_go_const": "EventPlatformEnrollmentCreateSessionRequested",
+      "value": "g8e.v1.platform.enrollment.create_session.requested"
+    },
+    "PlatformEnrollmentRevokeRequested": {
+      "_go_const": "EventPlatformEnrollmentRevokeRequested",
+      "value": "g8e.v1.platform.enrollment.revoke.requested"
+    },
     "PlatformConsoleLogConnectedConfirmed": {
       "_go_const": "EventPlatformConsoleLogConnectedConfirmed",
       "value": "g8e.v1.platform.console.log.connected.confirmed"

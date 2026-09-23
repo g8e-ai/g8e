@@ -68,7 +68,7 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_SubscribesToOwner
 		logger,
 	)
 
-	assert.NoError(t, coordinator.ensureObserver(context.Background()))
+	assert.NoError(t, coordinator.synchronizeObserverSubscription(context.Background()))
 	assert.NotNil(t, coordinator.observer)
 	assert.Equal(t, "sess-observer-1", coordinator.observer.OperatorSessionID)
 }
@@ -157,7 +157,7 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSes
 		logger,
 	)
 
-	require.NoError(t, coordinator.ensureObserver(context.Background()))
+	require.NoError(t, coordinator.synchronizeObserverSubscription(context.Background()))
 	require.NotNil(t, coordinator.observer)
 	assert.Equal(t, "sess-observer-old", coordinator.observer.OperatorSessionID)
 
@@ -171,7 +171,7 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSes
 		},
 	}
 
-	require.NoError(t, coordinator.ensureObserver(context.Background()))
+	require.NoError(t, coordinator.synchronizeObserverSubscription(context.Background()))
 	require.NotNil(t, coordinator.observer)
 	assert.Equal(t, "sess-observer-new", coordinator.observer.OperatorSessionID)
 
@@ -234,7 +234,7 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_LogsNotFound(t *t
 		logger,
 	)
 
-	err = coordinator.ensureObserver(context.Background())
+	err = coordinator.synchronizeObserverSubscription(context.Background())
 	assert.Error(t, err)
 	assert.Nil(t, coordinator.observer)
 }
@@ -263,7 +263,7 @@ func TestProviderBoundaryObservationCoordinator_IngestAfterDispatchContextCancel
 	)
 
 	dispatchCtx, cancel := context.WithCancel(context.Background())
-	require.NoError(t, coordinator.ensureObserver(dispatchCtx))
+	require.NoError(t, coordinator.synchronizeObserverSubscription(dispatchCtx))
 	cancel()
 
 	window := &evalv1.ProviderBoundaryObservationWindow{

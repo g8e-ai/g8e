@@ -5,6 +5,54 @@
   "generate_command": "./g8e eval rollout init --from eval/base-model-inventory.json --materialize --merge",
   "models": [
     {
+      "variant_id": "granite4-2-3b",
+      "served_model_tag": "granite4.2:3b",
+      "campaign_id": "eval-init-granite4-2-3b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-granite4-2-3b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "granite4-2-8b",
+      "served_model_tag": "granite4.2:8b",
+      "campaign_id": "eval-init-granite4-2-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-granite4-2-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-5-0-8b",
+      "served_model_tag": "qwen3.5:0.8b",
+      "campaign_id": "eval-init-qwen3-5-0-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-5-0-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-5-2b",
+      "served_model_tag": "qwen3.5:2b",
+      "campaign_id": "eval-init-qwen3-5-2b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-5-2b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-5-4b",
+      "served_model_tag": "qwen3.5:4b",
+      "campaign_id": "eval-init-qwen3-5-4b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-5-4b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-5-9b",
+      "served_model_tag": "qwen3.5:9b",
+      "campaign_id": "eval-init-qwen3-5-9b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-5-9b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
       "variant_id": "deepseek-r1-7b",
       "served_model_tag": "deepseek-r1:7b",
       "campaign_id": "eval-init-deepseek-r1-7b",
@@ -57,6 +105,14 @@
       "served_model_tag": "gemma4:e4b",
       "campaign_id": "init-campaign",
       "inventory_file": ".g8e/eval/inventories/init-campaign.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "gpt-oss-20b",
+      "served_model_tag": "gpt-oss:20b",
+      "campaign_id": "eval-init-gpt-oss-20b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-gpt-oss-20b.json",
       "homogeneous_cell_count": 75,
       "status": "pending"
     },
@@ -117,6 +173,14 @@
       "status": "pending"
     },
     {
+      "variant_id": "milkey-glm-4-9b-0414-q4-k-m",
+      "served_model_tag": "milkey/GLM-4-9B-0414:Q4_K_M",
+      "campaign_id": "eval-init-milkey-glm-4-9b-0414-q4-k-m",
+      "inventory_file": ".g8e/eval/inventories/eval-init-milkey-glm-4-9b-0414-q4-k-m.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
       "variant_id": "ministral-3-3b",
       "served_model_tag": "ministral-3:3b",
       "campaign_id": "eval-init-ministral-3-3b",
@@ -137,6 +201,14 @@
       "served_model_tag": "mistral:7b",
       "campaign_id": "eval-init-mistral-7b",
       "inventory_file": ".g8e/eval/inventories/eval-init-mistral-7b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "pdevine-qwen3-6-27b-mtp-q4-k-m",
+      "served_model_tag": "pdevine/qwen3.6:27b-mtp-q4_K_M",
+      "campaign_id": "eval-init-pdevine-qwen3-6-27b-mtp-q4-k-m",
+      "inventory_file": ".g8e/eval/inventories/eval-init-pdevine-qwen3-6-27b-mtp-q4-k-m.json",
       "homogeneous_cell_count": 75,
       "status": "pending"
     },
@@ -201,6 +273,14 @@
       "served_model_tag": "qwen3:1.7b",
       "campaign_id": "eval-init-qwen3-1-7b",
       "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-1-7b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-30b",
+      "served_model_tag": "qwen3:30b",
+      "campaign_id": "eval-init-qwen3-30b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-30b.json",
       "homogeneous_cell_count": 75,
       "status": "pending"
     },

@@ -24,6 +24,12 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+type modelInventoryFreezePayload struct {
+	CampaignID          string            `json:"campaign_id"`
+	ModelRegistryDigest string            `json:"model_registry_digest"`
+	Variants            []json.RawMessage `json:"variants"`
+}
+
 func TestComputeHomogeneousMatrixSize(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, uint64(75), ComputeHomogeneousMatrixSize(1))
@@ -77,10 +83,10 @@ func TestLoadModelInventoryFreezeFile_RoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		rawVariants = append(rawVariants, body)
 	}
-	payload, err := json.Marshal(map[string]any{
-		"campaign_id":           freeze.CampaignID,
-		"model_registry_digest": freeze.RegistryDigest,
-		"variants":              rawVariants,
+	payload, err := json.Marshal(modelInventoryFreezePayload{
+		CampaignID:          freeze.CampaignID,
+		ModelRegistryDigest: freeze.RegistryDigest,
+		Variants:            rawVariants,
 	})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, payload, 0o644))

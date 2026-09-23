@@ -10,10 +10,9 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -47,12 +46,11 @@ func mustDocJSON(t *testing.T, v interface{}) json.RawMessage {
 }
 
 func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
-	dataDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dataDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	sseStore := db.GetSSEStore()
@@ -77,11 +75,10 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 
 func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
-	dir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -243,20 +240,19 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSchemaIdempotent(t *testing.T) {
-	dir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 	ks1 := newTestKeystoreWithKeyring(t, fileSvc, logger, keyring)
-	db1, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks1, fileSvc)
+	db1, err := OpenCanonicalDBService(logger, "", ks1, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, db1.GetDocStore().DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
 	ks2 := newTestKeystoreWithKeyring(t, fileSvc, logger, keyring)
-	db2, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks2, fileSvc)
+	db2, err := OpenCanonicalDBService(logger, "", ks2, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
@@ -270,18 +266,16 @@ func TestSchemaIdempotent(t *testing.T) {
 // Data directory creation
 // ---------------------------------------------------------------------------
 
-func TestCreateDataDir(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
-	dir := filepath.Join(tmpDir, "nested", "deep", "data")
+func TestOpenCanonicalDBService_CreatesDatabaseAtRuntimePath(t *testing.T) {
 	fileSvc := newTestFileSvc(t)
 
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	_, err = os.Stat(filepath.Join(dir, constants.DbFilename))
+	_, err = fileSvc.Stat(context.Background(), constants.CanonicalDBRelPath)
 	require.NoError(t, err)
 }
 

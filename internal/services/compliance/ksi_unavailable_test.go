@@ -46,7 +46,7 @@ func unavailableTestResultSet() *KSIResultSet {
 		Binding:       binding,
 		Results: []KSIResult{
 			{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, LastValidatedUnixMs: binding.WindowEndUnixMs, Binding: binding},
-			{ID: "KSI-MLA-03", Status: KSIStatusNotSatisfied, Outcome: KSIOutcomeInvalidEvidence, LastValidatedUnixMs: binding.WindowEndUnixMs, Binding: binding},
+			{ID: "KSI-MLA-03", Status: KSIStatusUnverifiable, Outcome: KSIOutcomeInvalidEvidence, LastValidatedUnixMs: binding.WindowEndUnixMs, Binding: binding},
 			{ID: "KSI-SVC-05", Status: KSIStatusNotApplicable, Outcome: KSIOutcomeNotApplicable, LastValidatedUnixMs: binding.WindowEndUnixMs, Binding: binding},
 		},
 	}
@@ -61,7 +61,7 @@ func TestUnavailableIntervalValidateRejectsCrossBindingFields(t *testing.T) {
 		StartUnixMs: binding.WindowStartUnixMs,
 		EndUnixMs:   binding.WindowEndUnixMs,
 		Outcome:     KSIOutcomeInvalidEvidence,
-		Status:      KSIStatusNotSatisfied,
+		Status:      KSIStatusUnverifiable,
 		Binding:     binding,
 	}
 	tests := []struct {
@@ -131,8 +131,8 @@ func TestUnavailableIntervalStoreFiltersAndTotalsChronologicalIntervals(t *testi
 	binding := unavailableTestBinding()
 	intervals := []UnavailableInterval{
 		{KSIID: "KSI-MLA-03", ScopeID: binding.ScopeID, RunID: binding.RunID, StartUnixMs: binding.WindowStartUnixMs + 500, EndUnixMs: binding.WindowStartUnixMs + 900, Outcome: KSIOutcomeMethodFailure, Status: KSIStatusNotSatisfied, Binding: binding},
-		{KSIID: "KSI-CMT-01", ScopeID: binding.ScopeID, RunID: binding.RunID, StartUnixMs: binding.WindowStartUnixMs + 100, EndUnixMs: binding.WindowStartUnixMs + 200, Outcome: KSIOutcomeInvalidEvidence, Status: KSIStatusNotSatisfied, Binding: binding},
-		{KSIID: "KSI-MLA-03", ScopeID: binding.ScopeID, RunID: binding.RunID, StartUnixMs: binding.WindowStartUnixMs + 300, EndUnixMs: binding.WindowStartUnixMs + 400, Outcome: KSIOutcomeStaleEvidence, Status: KSIStatusNotSatisfied, Binding: binding},
+		{KSIID: "KSI-CMT-01", ScopeID: binding.ScopeID, RunID: binding.RunID, StartUnixMs: binding.WindowStartUnixMs + 100, EndUnixMs: binding.WindowStartUnixMs + 200, Outcome: KSIOutcomeInvalidEvidence, Status: KSIStatusUnverifiable, Binding: binding},
+		{KSIID: "KSI-MLA-03", ScopeID: binding.ScopeID, RunID: binding.RunID, StartUnixMs: binding.WindowStartUnixMs + 300, EndUnixMs: binding.WindowStartUnixMs + 400, Outcome: KSIOutcomeStaleEvidence, Status: KSIStatusUnverifiable, Binding: binding},
 	}
 	for _, interval := range intervals {
 		require.NoError(t, store.AppendInterval(context.Background(), interval))
@@ -165,7 +165,7 @@ func TestUnavailableIntervalStorePrunesExpiredIntervals(t *testing.T) {
 	binding := unavailableTestBinding()
 	binding.WindowStartUnixMs = now.Add(-48 * time.Hour).UnixMilli()
 	binding.WindowEndUnixMs = now.Add(-47 * time.Hour).UnixMilli()
-	require.NoError(t, store.AppendInterval(context.Background(), UnavailableInterval{KSIID: "KSI-CMT-01", ScopeID: binding.ScopeID, RunID: binding.RunID, StartUnixMs: binding.WindowStartUnixMs, EndUnixMs: binding.WindowEndUnixMs, Outcome: KSIOutcomeInvalidEvidence, Status: KSIStatusNotSatisfied, Binding: binding}))
+	require.NoError(t, store.AppendInterval(context.Background(), UnavailableInterval{KSIID: "KSI-CMT-01", ScopeID: binding.ScopeID, RunID: binding.RunID, StartUnixMs: binding.WindowStartUnixMs, EndUnixMs: binding.WindowEndUnixMs, Outcome: KSIOutcomeInvalidEvidence, Status: KSIStatusUnverifiable, Binding: binding}))
 	binding.WindowStartUnixMs = now.Add(-time.Hour).UnixMilli()
 	binding.WindowEndUnixMs = now.UnixMilli()
 	require.NoError(t, store.AppendInterval(context.Background(), UnavailableInterval{KSIID: "KSI-MLA-03", ScopeID: binding.ScopeID, RunID: binding.RunID, StartUnixMs: binding.WindowStartUnixMs, EndUnixMs: binding.WindowEndUnixMs, Outcome: KSIOutcomeMethodFailure, Status: KSIStatusNotSatisfied, Binding: binding}))

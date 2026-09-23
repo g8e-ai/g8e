@@ -8,7 +8,7 @@
 package cmd
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -26,7 +26,7 @@ func TestLoadConfigSuccess(t *testing.T) {
 func TestLoadConfigWrapsError(t *testing.T) {
 	originalLoad := configLoad
 	configLoad = func(string) (*config.Config, error) {
-		return nil, errors.New("disk read failure")
+		return nil, fmt.Errorf("disk read failure")
 	}
 	defer func() { configLoad = originalLoad }()
 

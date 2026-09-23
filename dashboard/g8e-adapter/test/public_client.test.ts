@@ -21,6 +21,7 @@ describe('public spectator typed client', () => {
       { protocol_version: '1.0.0', snapshot, source_freshness: 'source_offline', recent_projections: [{ sequence: 1, kind: 'catalog_snapshot' }], proof_catalog_summary: { artifact_count: 0, total_byte_size: 0 }, generated_at: '2026-09-13T00:00:00Z' },
       { protocol_version: '1.0.0', items: [], has_more: false, limit: 20 },
       snapshot,
+      snapshot,
     ];
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify(responses.shift()), { status: 200 }));
     const client = createPublicClient(parsePublicRuntimeConfig({ schema_version: '1.0.0', mirror_origin: 'https://feed.example.com' }), fetchImpl);
@@ -28,6 +29,8 @@ describe('public spectator typed client', () => {
     await expect(client.bootstrap('deployment-a')).resolves.toMatchObject({ source_freshness: 'source_offline' });
     await expect(client.history('deployment-a', 0, 20)).resolves.toMatchObject({ has_more: false });
     await expect(client.snapshot('deployment-a')).resolves.toMatchObject({ high_water_sequence: 0 });
+    await expect(client.snapshotAt('deployment-a', 20)).resolves.toMatchObject({ high_water_sequence: 0 });
+    expect(fetchImpl.mock.calls[3]?.[0]).toBe('https://feed.example.com/snapshot?source=deployment-a&sequence=20');
     for (const call of fetchImpl.mock.calls) expect(call[1]).toMatchObject({ credentials: 'omit', method: 'GET' });
   });
 

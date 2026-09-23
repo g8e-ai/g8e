@@ -7,7 +7,7 @@
 
 import { type ReactNode, useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { ConfidenceInterval, MetricValue, QualityState } from '../contract/types';
+import type { ConfidenceInterval, MetricValue, QualityState, RunMetricValue } from '../contract/types';
 import {
   classifyFreshness,
   classifyStreamConnection,
@@ -53,10 +53,12 @@ export function StreamStatusIndicator({
   streamConnection,
   feedConnection,
   detail,
+  className,
 }: {
   streamConnection: StreamConnectionState;
   feedConnection: FeedConnectionState;
   detail?: 'short' | 'long';
+  className?: string;
 }) {
   const { label, tone, description } = classifyStreamConnection(streamConnection, feedConnection);
   const text =
@@ -66,7 +68,10 @@ export function StreamStatusIndicator({
         : description
       : label;
   return (
-    <span className={`stream-state status-${tone === 'ok' ? 'ok' : tone}`} data-testid="stream-status">
+    <span
+      className={`stream-state status-${tone === 'ok' ? 'ok' : tone}${className ? ` ${className}` : ''}`}
+      data-testid="stream-status"
+    >
       <span className="status-dot" aria-hidden="true" />
       {text}
     </span>
@@ -111,11 +116,14 @@ export function MetricCard({
   hint,
 }: {
   label: string;
-  metric: MetricValue | undefined;
+  metric: MetricValue | RunMetricValue | undefined;
   formatter: (value: number) => string;
   hint?: string;
 }) {
   const display = metricDisplay(metric, formatter);
+  const coverage = metric && 'observed_count' in metric
+    ? `${metric.observed_count} observed / ${metric.eligible_count} eligible`
+    : undefined;
   return (
     <div className="metric-card" data-testid={`metric-${label.replace(/\s+/g, '-').toLowerCase()}`}>
       <div className="metric-label">{label}</div>
@@ -125,6 +133,7 @@ export function MetricCard({
       {display.unavailable && display.reason ? (
         <div className="metric-reason">{display.reason}</div>
       ) : null}
+      {coverage ? <div className="metric-hint">{coverage}</div> : null}
       {hint ? <div className="metric-hint">{hint}</div> : null}
     </div>
   );

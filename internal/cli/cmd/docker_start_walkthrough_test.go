@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -111,7 +111,7 @@ func (c *stubWalkthroughAPIClient) Get(path string) ([]byte, error) {
 	if resp, ok := c.getResponses[path]; ok {
 		return resp, nil
 	}
-	return nil, errors.New("unexpected GET path: " + path)
+	return nil, fmt.Errorf("unexpected GET path: %s", path)
 }
 
 func (c *stubWalkthroughAPIClient) Post(path string, body interface{}) ([]byte, error) {
@@ -122,7 +122,7 @@ func (c *stubWalkthroughAPIClient) Post(path string, body interface{}) ([]byte, 
 	if resp, ok := c.postResponses[path]; ok {
 		return resp, nil
 	}
-	return nil, errors.New("unexpected POST path: " + path)
+	return nil, fmt.Errorf("unexpected POST path: %s", path)
 }
 
 func (c *stubWalkthroughAPIClient) Put(path string, body interface{}) ([]byte, error) {
@@ -227,7 +227,7 @@ func TestPromptApproveComponent_UserApprovesPostsDecision(t *testing.T) {
 
 func TestPromptApproveComponent_GetErrorReturnsError(t *testing.T) {
 	client := &stubWalkthroughAPIClient{
-		getErr: errors.New("network down"),
+		getErr: fmt.Errorf("network down"),
 	}
 
 	cmd := dockerStartCmd()
@@ -256,7 +256,7 @@ func TestPromptApproveComponent_PostErrorWrapsApprovalFailed(t *testing.T) {
 		getResponses: map[string][]byte{
 			constants.APIPaths.AuthPlatformEnrollmentPending: mustMarshalPendingResp(t, []models.PlatformEnrollmentPendingRequest{ensembleReq}),
 		},
-		postErr: errors.New("server error"),
+		postErr: fmt.Errorf("server error"),
 	}
 
 	cmd := dockerStartCmd()
@@ -274,7 +274,7 @@ func TestPromptApproveComponent_PostErrorWrapsApprovalFailed(t *testing.T) {
 func TestRunDockerStartWalkthrough_EnrollmentFailureWrapsEnrollmentFailed(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
 
-	failingEnroller := &failingWalkthroughEnroller{err: errors.New("bootstrap failed")}
+	failingEnroller := &failingWalkthroughEnroller{err: fmt.Errorf("bootstrap failed")}
 	deps := dockerStartDeps{
 		clientFactory:        panickingClientFactory(),
 		checkOperatorRunning: func(*config.Config) error { return nil },
@@ -303,7 +303,7 @@ func TestRunDockerStartWalkthrough_OperatorNotRunningWrapsEnrollmentFailed(t *te
 	deps := dockerStartDeps{
 		clientFactory: panickingClientFactory(),
 		checkOperatorRunning: func(*config.Config) error {
-			return errors.New("connection refused")
+			return fmt.Errorf("connection refused")
 		},
 		enrollerFactory:    panickingEnrollerFactory(),
 		waitGatewayHealthy: func(*cobra.Command) error { return nil },

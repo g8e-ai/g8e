@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -32,18 +33,19 @@ func setupReportingExecutionVault(t *testing.T) *storage.ExecutionVaultService {
 
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, err := fs.NewRuntimeFileService(tempDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)

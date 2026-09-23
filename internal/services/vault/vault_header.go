@@ -8,15 +8,17 @@
 package vault
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // VaultHeader contains the metadata and wrapped DEK for an encrypted vault.
@@ -150,64 +152,65 @@ func (h *VaultHeader) Rekey(oldPrivateKey, newPrivateKey []byte) error {
 	return nil
 }
 
-// Save writes the header to disk at the specified data directory.
-func (h *VaultHeader) Save(dataDir string) error {
-	headerPath := filepath.Join(dataDir, constants.VaultHeaderFilename)
+func vaultHeaderPath() string {
+	return filepath.Join(constants.VaultDirname, constants.VaultHeaderFilename)
+}
+
+// Save writes the header through the runtime-owned file service.
+func (h *VaultHeader) Save(fileSvc fs.RuntimeFileService) error {
+	if fileSvc == nil {
+		return fmt.Errorf("vault header save: %w", constants.ErrMissingRequiredField)
+	}
 
 	data, err := json.MarshalIndent(h, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal header: %w", err)
+		return fmt.Errorf("vault header: marshal: %w", err)
 	}
-
-	tempPath := headerPath + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write header: %w", err)
+	if err := fileSvc.WriteFile(context.Background(), vaultHeaderPath(), data, constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("vault header: write: %w", err)
 	}
-
-	if err := os.Rename(tempPath, headerPath); err != nil {
-		os.Remove(tempPath)
-		return fmt.Errorf("failed to rename header: %w", err)
-	}
-
 	return nil
 }
 
-// LoadVaultHeader loads a vault header from the specified data directory.
-func LoadVaultHeader(dataDir string) (*VaultHeader, error) {
-	headerPath := filepath.Join(dataDir, constants.VaultHeaderFilename)
+// LoadVaultHeader loads a vault header through the runtime-owned file service.
+func LoadVaultHeader(fileSvc fs.RuntimeFileService) (*VaultHeader, error) {
+	if fileSvc == nil {
+		return nil, fmt.Errorf("vault header load: %w", constants.ErrMissingRequiredField)
+	}
 
-	data, err := os.ReadFile(headerPath)
+	data, err := fileSvc.ReadFile(context.Background(), vaultHeaderPath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, constants.ErrNotFound) {
 			return nil, constants.ErrVaultHeaderNotFound
 		}
-		return nil, fmt.Errorf("failed to read header: %w", err)
+		return nil, fmt.Errorf("vault header: read: %w", err)
 	}
 
 	var header VaultHeader
 	if err := json.Unmarshal(data, &header); err != nil {
 		return nil, constants.ErrVaultHeaderCorrupted
 	}
-
 	if header.Version > VaultHeaderVersion {
 		return nil, constants.ErrVaultHeaderVersionUnsup
 	}
-
 	return &header, nil
 }
 
-// VaultHeaderExists checks if a vault header exists at the specified data directory.
-func VaultHeaderExists(dataDir string) bool {
-	headerPath := filepath.Join(dataDir, constants.VaultHeaderFilename)
-	_, err := os.Stat(headerPath)
-	return err == nil
+// VaultHeaderExists checks whether the runtime vault header exists.
+func VaultHeaderExists(fileSvc fs.RuntimeFileService) (bool, error) {
+	if fileSvc == nil {
+		return false, fmt.Errorf("vault header exists: %w", constants.ErrMissingRequiredField)
+	}
+	return fileSvc.FileExists(context.Background(), vaultHeaderPath())
 }
 
-// DeleteVaultHeader removes the vault header file. This makes the vault unrecoverable.
-func DeleteVaultHeader(dataDir string) error {
-	headerPath := filepath.Join(dataDir, constants.VaultHeaderFilename)
-	if err := os.Remove(headerPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete header: %w", err)
+// DeleteVaultHeader removes the vault header through the runtime-owned file service.
+func DeleteVaultHeader(fileSvc fs.RuntimeFileService) error {
+	if fileSvc == nil {
+		return fmt.Errorf("vault header delete: %w", constants.ErrMissingRequiredField)
+	}
+	if err := fileSvc.Remove(context.Background(), vaultHeaderPath()); err != nil {
+		return fmt.Errorf("vault header: delete: %w", err)
 	}
 	return nil
 }

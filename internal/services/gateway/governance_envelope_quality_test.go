@@ -69,9 +69,7 @@ func TestVerifyEnvelopeIdentityBinding_Exhaustive(t *testing.T) {
 
 	mustParseURL := func(s string) *url.URL {
 		u, err := url.Parse(s)
-		if err != nil {
-			panic(err)
-		}
+		require.NoError(t, err)
 		return u
 	}
 

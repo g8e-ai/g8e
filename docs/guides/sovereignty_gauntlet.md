@@ -1,7 +1,7 @@
 # Sovereignty Gauntlet Evidence and Social Content Guide
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 This runbook gives a coding agent a repeatable process for generating, preserving, and explaining g8e proof artifacts for social posts, articles, demonstrations, and technical review. The campaign message is:
 
@@ -28,7 +28,7 @@ The current repository supports four complementary evidence lanes. Demo evidence
 
 | Lane | Best use | What it produces | Headline status |
 | --- | --- | --- | --- |
-| Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven governed mutations, signed receipt export, CSV store exports, and integrity verification | Publish measured scenario outcomes and passing checks with the provider clearly identified |
+| Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven work plus direct governed mutations, signed receipt export, CSV store exports, and integrity verification | Publish measured scenario outcomes and passing checks with the provider clearly identified |
 | FedRAMP and DHS demos | Compliance, public-sector, defense, and event demonstrations | Concise or verbose typed scenario results, persisted manifests, content-addressed receipts, persistence attestations and state observations, independent demo-run verification, bound KSI evidence when supplied with the required assessment context, and tactical TUI output | Publish as a labeled demonstration; state that target resources and data are synthetic |
 | Evidence-grade evals | Engineering diagnostics and future campaign input | Go-native `core-execution-boundary` reports with canonical `report.json`, `verification.json`, content-addressed evidence, 10 required invariants, and independent `g8e eval boundary verify` | State that the run used the native execution-boundary suite; do not use it as the unimplemented flagship matrix |
 | Signed compliance report bundle | Point-in-time, scope-bound offline review | Canonical analysis, framework profiles, deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers, protected source inventories, a signed bundle, and a canonical offline verification report | Publish the exact verified bundle scope and external trust inputs; do not relabel point-in-time report integrity as certification, recurring effectiveness, or eval-native verification |
@@ -37,9 +37,24 @@ The Go-native `g8e eval boundary run` command exercises the authenticated Gatewa
 
 The compliance CLI separately implements `g8e compliance evidence-graph verify`, signed `g8e compliance report generate`, and complete offline `g8e compliance report verify`. The report verifier independently replays the protected demo, eval, KSI, commitment, customer or assessor attestation, audit, ledger, and build or configuration sources represented in that signed report bundle, reproduces analysis and renderers, and requires external assessed trust. It is not an eval-native verifier and does not turn the available suites into the planned frozen utility/privacy/policy/protocol experiment. The preregistered minimum 25-scenario flagship matrix, generated proof card, eval-native canonical analysis and signed bundle, statistical release gate, and complete eval-native verifier remain unimplemented. Until those capabilities exist and all publication gates pass, describe this work as a **Sovereignty Gauntlet demonstration** or **rehearsal**, not the completed publication-grade flagship experiment.
 
+## Governance boundary for campaign claims
+
+A campaign claim is valid only for the ingress, posture, runtime, and evidence owner that produced it. The Gateway is the Policy Decision Point: it authenticates ingress, constructs or admits the canonical protojson `GovernanceEnvelope`, and coordinates L1-L3 where that path supports those services. The executing Operator, including the Gateway's embedded Operator, independently performs L4 and L5 in its own runtime. A remote Operator receives work over an outbound-only mTLS connection on an exact operator/session channel; the Gateway does not execute inside or reach into that Operator runtime. See [Governance](../architecture/governance.md), [AI Agents and the g8e Governance Boundary](../architecture/agents.md), and [Operator](../architecture/operator.md) for the canonical contracts.
+
+The five layers are not equivalent to model reasoning or application approval: L1 Doctrine validates the typed payload and threat rules; L2 Consensus verifies K-of-N Ed25519 votes from trusted policy members; L3 Notary verifies human authorization for mutation actions when required; L4 Warden performs replay, expiry, payload, hash, state-root, and posture checks; and L5 Actuator performs fail-closed receipt persistence, capability-scoped execution, final receipt persistence, and best-effort remote receipt publication. The active posture travels in the envelope and determines whether L2 and L3 gate execution:
+
+| Posture | L1 | L2 | L3 for mutations |
+| --- | --- | --- | --- |
+| `doctrine` | Required | Audited only | Audited only |
+| `consensus` | Required | Required | Audited only |
+| `ratify` | Required | Audited only | Required |
+| `notary` | Required | Required | Required |
+
+Gateway MCP and A2A paths can coordinate L2 deliberation and supported L3 approval. Direct envelope submission and the Operator `CommandIntent` relay do not synthesize missing L2 votes or L3 proofs. External MCP wrappers and client-native tools remain outside L2-L5 governance, signed receipts, and Gateway audit. Do not combine evidence from these paths as if it represented one uniform control.
+
 ## Validated rehearsal
 
-The `20260831T220953Z` rehearsal exercised this runbook against a clean source baseline and retained the failed setup attempts and corrected reruns. The unified lane completed both useful-work scenarios, verified 49 of 49 exported receipt signatures and persistence attestations against the two producing actuator public keys, and passed all six store-integrity checks with no failures or skips. The fixed FedRAMP and DHS environments each passed all four scenarios under consensus posture. The separate real-local `ollama/gemma4:12b` doctrine diagnostic passed all five supported `ifeval_subset` tasks with a measured 180-second idle threshold.
+The `20260831T220953Z` rehearsal exercised this runbook against a clean source baseline and retained the failed setup attempts and corrected reruns. The unified lane completed both useful-work scenarios, verified 49 of 49 exported receipt signatures and persistence attestations against the two producing actuator public keys, and passed all six store-integrity checks with no failures or skips. The fixed FedRAMP and DHS environments completed their documented scenario sets under their posture requirements. The separate real-local `ollama/gemma4:12b` doctrine diagnostic passed all five supported `ifeval_subset` tasks with a measured 180-second idle threshold.
 
 These results remain bounded to that run. The FedRAMP resources, DHS targets, coalition link, and data were synthetic or simulated. The successful eval tasks were answer-only and contained zero bound receipts, so they support no eval receipt-verification claim. The run predates and did not perform v2.1.7 signed compliance report-bundle verification or any eval-native complete-bundle verification, and its KSI output describes measured evidence alignment rather than authorization. Use the process below for a new campaign; do not reuse these historical counts as evidence for a later run.
 
@@ -102,7 +117,7 @@ docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}' | tee "${
 
 ## 3. Run the unified-stack proof
 
-This lane provides the strongest currently runnable connection between a model request, governed local mutation, independently inspected final state, signed receipts, persistent commitments, and deterministic CSV verification. Follow the complete [Headless End-to-End UX Smoke Test](ux_smoke_test.md) when diagnosing startup or enrollment.
+This lane provides the strongest currently runnable connection between a model request or direct governed request, a governed local mutation, independently inspected final state, signed receipts, persistent commitments, and deterministic CSV verification. Follow the complete [Headless End-to-End UX Smoke Test](ux_smoke_test.md) when diagnosing startup or enrollment.
 
 ### 3.1 Start and enroll
 
@@ -199,7 +214,7 @@ Run the document mutation to show that the governed path is not file-specific:
   2>&1 | tee "${CAMPAIGN_DIR}/logs/ensemble-document-update.log"
 ```
 
-Both summaries must report `ok` and include correlated transaction hashes. Preserve the full logs even when a run fails.
+Both scenario summaries must report `ok` and include correlated transaction hashes. `ensemble-chat-file-create` uses the configured ensemble provider; `ensemble-document-update` submits direct governed `DOCUMENT_UPDATE` envelopes and does not call an LLM. Preserve the full logs even when a run fails.
 
 ### 3.4 Capture signed receipts and live audit output
 
@@ -258,7 +273,7 @@ The public keys come from the producing environment, so the result verifies inte
 
 ### 3.5 Generate deterministic CSV reports
 
-The Dockerized operator owns the execution vault, commitment ledger, and Git-backed mutation state. Generate reports inside that container, then copy them to the campaign directory:
+The Dockerized operator owns the execution vault and commitment ledger; it also owns Git-backed mutation state when Git integration is enabled. Generate reports inside that container, then copy them to the campaign directory:
 
 ```bash
 docker exec g8e-operator /g8e report all --out /root/reports/sovereignty-gauntlet
@@ -283,7 +298,7 @@ For a public integrity claim, inspect every `SKIPPED` row. Do not advertise a sk
 
 ### 3.6 Generate bound KSI evidence
 
-The v2.1.7 KSI command fails closed unless the caller binds the evaluation to an assessment scope, run, assertion-assessment set, and evidence window. Run it against the same populated Operator state only when those identifiers come from the assessment being reported:
+The `compliance ksi` command fails closed unless the caller binds the evaluation to an assessment scope, run, assertion-assessment set, and evidence window. Run it against the same populated Operator state only when those identifiers come from the assessment being reported:
 
 ```bash
 docker exec g8e-operator /g8e compliance ksi \
@@ -301,13 +316,13 @@ Add repeatable `--assertion-assessment-id`, `--attempt-id`, `--scenario-id`, and
 
 ### 3.7 Optionally generate and verify a signed compliance report bundle
 
-The compliance report pipeline is implemented in v2.1.7. `g8e compliance report generate` imports explicit scope-bound demo runs, eval runs, or standalone KSI, commitment, attestation, audit, ledger, and build or configuration sources; generates canonical analysis and deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers; copies protected source bytes into the bundle; and signs the complete bundle. `g8e compliance report verify` reads only bundle-confined bytes, authenticates the report with an external assessed report trust policy, separately authenticates represented signed source evidence with external assessed evidence trust when required, independently replays every protected source, reproduces the analysis and renderers, and exits nonzero when the canonical verification report is invalid.
+The compliance report pipeline is implemented in the current release. `g8e compliance report generate` imports explicit scope-bound demo runs, eval runs, or standalone KSI, commitment, attestation, audit, ledger, and build or configuration sources; generates canonical analysis and deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers; copies protected source bytes into the bundle; and signs the complete bundle. `g8e compliance report verify` reads only bundle-confined bytes, authenticates the report with an external assessed report trust policy, separately authenticates represented signed source evidence with external assessed evidence trust when required, independently replays every protected source, reproduces the analysis and renderers, and exits nonzero when the canonical verification report is invalid.
 
 Follow [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md#cli-commands) for the complete generation and trust setup. Generate one report per assessment scope; do not combine FedRAMP and DHS runs merely because they belong to one campaign. Retain the generated bundle, external trust-policy digests, exact verification command, verifier output, and exit status. A valid report bundle proves point-in-time integrity for its represented source set; it does not establish certification, recurring operating effectiveness, independent hardware or organizational control, or eval-native flagship results.
 
 ## 4. Run the audience-specific visual demos
 
-The per-demo environments are separate from the unified stack. Their cloud resources, coalition feeds, and data are synthetic, while their gateway/operator binaries, mTLS identities, governance envelopes, L1 enforcement, L2 distinct-signer quorum, actuator calls, receipts, and target-service operation records are real. Read [Demo Environments](../../demos/README.md), [FedRAMP Demo](../../demos/fedramp/README.md), and [DHS Demo](../../demos/dhs/README.md) before running them.
+The per-demo environments are separate from the unified stack. Their cloud resources, coalition feeds, and data are synthetic, while their gateway/operator binaries, mTLS identities, governance envelopes, L1 enforcement, posture-specific L2/L3 checks, actuator calls, receipts, and target-service operation records are real. Read [Demo Environments](../../demos/README.md), [FedRAMP Demo](../../demos/fedramp/README.md), and [DHS Demo](../../demos/dhs/README.md) before running them.
 
 ### 4.1 FedRAMP campaign
 
@@ -335,7 +350,7 @@ Require a zero exit status and `"valid":true` before claiming that the persisted
 2. Unauthorized destruction of `/var/cloudsvc` is blocked at L1 before actuation.
 3. Governed configuration revert succeeds and records the prior state hash.
 4. Destruction of the gateway audit vault is blocked at L1.
-5. The automatically appended KSI evidence row records the snapshot-export attempt; in v2.1.7 this row fails closed because the demo orchestration does not supply the assessment bindings now required by `compliance ksi`.
+5. The automatically appended KSI evidence row records the snapshot-export attempt; this row fails closed because the demo orchestration does not supply the assessment bindings required by `compliance ksi`.
 
 Treat the automatic KSI row as unavailable rather than a pass. When canonical assessment identifiers and an evidence window exist, collect a separately bound KSI result from the FedRAMP gateway:
 
@@ -380,7 +395,7 @@ Run the Go-native suite against the healthy unified stack with one active remote
 ./g8e eval boundary run
 ```
 
-The command submits one allowed typed file mutation through the authenticated Gateway command ingress and the exact remote Operator session, observes the controlled target through the networkless Compose observer, then submits the doctrine-prohibited equivalent and proves rejection without another effect. It persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`.
+The command submits one allowed typed file mutation through the authenticated Gateway command ingress and the exact remote Operator session, reads the controlled target through the ephemeral networkless native target reader, then submits the doctrine-prohibited equivalent and proves rejection without another effect. The target reader is defined outside the unified stack in `eval/native-boundary-compose.yml`; it is not the remote Observer Operator used by model campaigns. The command persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`.
 
 Re-run verification and inspect the report in separate read-only invocations:
 

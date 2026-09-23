@@ -8,9 +8,13 @@
 package evaluation
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,20 +23,34 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 const (
-	// Runtime operator data lives under .g8e/ (gitignored). Checked-in templates: eval/examples/.
-	DefaultInitCampaignQueueRelPath    = ".g8e/eval/init-campaign-queue.json"
-	DefaultModelInventoryRelPath       = ".g8e/eval/model-inventory.json"
-	DefaultCampaignInventoryRelDirname = ".g8e/eval/inventories"
+	// Runtime paths are relative to RuntimeFileService. Checked-in templates use the repository root.
+	DefaultInitCampaignQueueRelPath    = constants.EvaluationInitCampaignQueuePath
+	DefaultModelInventoryRelPath       = constants.EvaluationModelInventoryPath
+	DefaultCampaignInventoryRelDirname = constants.EvaluationDirname + "/" + constants.EvaluationInventoriesDirname
 
-	// Checked-in genesis program inventory (35 init-campaign models).
+	// Checked-in genesis program inventory.
 	DefaultBaseModelInventoryRelPath    = "eval/base-model-inventory.json"
 	DefaultBaseInitCampaignQueueRelPath = "eval/base-init-campaign-queue.json"
 	DefaultGenesisHomogeneousCampaignID = "eval-genesis-homogeneous"
 )
+
+// QueueLogDir returns the canonical runtime-relative directory for one rollout.
+func QueueLogDir(runName string) string {
+	runName = strings.TrimSpace(runName)
+	if runName == "" || runName == "." || runName == ".." || strings.ContainsAny(runName, `/\\`) {
+		return ""
+	}
+	return path.Join(constants.EvaluationQueueLogsDirname, runName)
+}
+
+func campaignInventoryPath(inventoryRelDir, campaignID string) string {
+	return path.Join(inventoryRelDir, campaignID+constants.FileExtJSON)
+}
 
 // CampaignQueueModel summarizes one init-campaign queue entry.
 type CampaignQueueModel struct {
@@ -69,7 +87,8 @@ type CampaignStartPlan struct {
 
 // CampaignStartPlanRequest carries user intent for campaign start resolution.
 type CampaignStartPlanRequest struct {
-	ProjectRoot   string
+	Context       context.Context
+	FileService   fs.RuntimeFileService
 	ModelTag      string
 	ModelTags     []string
 	QueueRef      string
@@ -79,9 +98,12 @@ type CampaignStartPlanRequest struct {
 	Now           time.Time
 }
 
-// LoadInitCampaignQueue reads the init-campaign rollout manifest.
-func LoadInitCampaignQueue(path string) (*CampaignQueue, error) {
-	data, err := os.ReadFile(path)
+// LoadInitCampaignQueueFromRuntime reads the rollout manifest through the runtime file service.
+func LoadInitCampaignQueueFromRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string) (*CampaignQueue, error) {
+	if fileSvc == nil || relPath == "" {
+		return nil, fmt.Errorf("evaluation: load init campaign queue: %w", constants.ErrMissingRequiredField)
+	}
+	data, err := fileSvc.ReadFile(ctx, relPath)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: load init campaign queue: %w", err)
 	}
@@ -93,6 +115,21 @@ func LoadInitCampaignQueue(path string) (*CampaignQueue, error) {
 		return nil, fmt.Errorf("evaluation: load init campaign queue: %w", constants.ErrMissingRequiredField)
 	}
 	return queue, nil
+}
+
+// SaveInitCampaignQueueToRuntime writes the rollout manifest through the runtime file service.
+func SaveInitCampaignQueueToRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, queue *CampaignQueue) error {
+	if fileSvc == nil || relPath == "" || queue == nil || len(queue.Models) == 0 {
+		return fmt.Errorf("evaluation: save init campaign queue: %w", constants.ErrMissingRequiredField)
+	}
+	body, err := json.MarshalIndent(queue, "", "  ")
+	if err != nil {
+		return fmt.Errorf("evaluation: save init campaign queue: encode: %w", err)
+	}
+	if err := fileSvc.WriteFile(ctx, relPath, body, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("evaluation: save init campaign queue: %w", err)
+	}
+	return nil
 }
 
 // NextPending returns the first queue entry with status pending.
@@ -142,57 +179,21 @@ func (queue *CampaignQueue) FilterByStatus(status string) []CampaignQueueModel {
 	return filtered
 }
 
-// ResolveBaseModelInventoryPath returns the checked-in genesis program inventory.
-func ResolveBaseModelInventoryPath(projectRoot string) string {
-	return ResolveEvalPath(projectRoot, DefaultBaseModelInventoryRelPath)
-}
-
-// ResolveModelInventoryPath picks an inventory file for rollout queue initialization.
-// When explicitPath is empty, use the checked-in genesis base inventory.
-func ResolveModelInventoryPath(projectRoot, explicitPath string) string {
-	explicitPath = strings.TrimSpace(explicitPath)
-	if explicitPath != "" {
-		return ResolveEvalPath(projectRoot, explicitPath)
+// LoadFrozenVariantsFromRuntime reads a frozen inventory through RuntimeFileService.
+func LoadFrozenVariantsFromRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string) ([]*evalv1.ModelVariant, error) {
+	if fileSvc == nil || relPath == "" {
+		return nil, fmt.Errorf("evaluation: load frozen variants: %w", constants.ErrMissingRequiredField)
 	}
-	return ResolveBaseModelInventoryPath(projectRoot)
-}
-
-// ResolveRuntimeModelInventoryPath picks an inventory file for ad-hoc campaign starts.
-// When explicitPath is empty, prefer the runtime provider freeze when present,
-// otherwise fall back to the checked-in genesis base inventory.
-func ResolveRuntimeModelInventoryPath(projectRoot, explicitPath string) string {
-	explicitPath = strings.TrimSpace(explicitPath)
-	if explicitPath != "" {
-		return ResolveEvalPath(projectRoot, explicitPath)
-	}
-	runtimePath := ResolveEvalPath(projectRoot, DefaultModelInventoryRelPath)
-	if _, err := os.Stat(runtimePath); err == nil {
-		return runtimePath
-	}
-	return ResolveBaseModelInventoryPath(projectRoot)
-}
-
-// BaseModelInventoryTags returns served model tags from the checked-in base inventory.
-func BaseModelInventoryTags(projectRoot string) ([]string, error) {
-	variants, err := LoadFrozenVariants(ResolveEvalPath(projectRoot, DefaultBaseModelInventoryRelPath))
+	data, err := fileSvc.ReadFile(ctx, relPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("evaluation: load frozen variants: %w", err)
 	}
-	tags := make([]string, 0, len(variants))
-	for _, variant := range variants {
-		if variant == nil || variant.GetServedModelTag() == "" {
-			continue
-		}
-		tags = append(tags, variant.GetServedModelTag())
-	}
-	if len(tags) == 0 {
-		return nil, fmt.Errorf("evaluation: base model inventory tags: %w", constants.ErrMissingRequiredField)
-	}
-	return tags, nil
+	return parseFrozenVariants(data)
 }
 
-// LoadFrozenVariants reads a frozen model inventory export.
-func LoadFrozenVariants(path string) ([]*evalv1.ModelVariant, error) {
+// LoadFrozenVariantsFromExternalSource reads a frozen model inventory export
+// from an explicit external or checked-in source path.
+func LoadFrozenVariantsFromExternalSource(path string) ([]*evalv1.ModelVariant, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: load frozen variants: %w", err)
@@ -211,10 +212,50 @@ func LoadFrozenVariants(path string) ([]*evalv1.ModelVariant, error) {
 		}
 		variants = append(variants, variant)
 	}
-	sort.Slice(variants, func(i, j int) bool {
-		return variants[i].GetVariantId() < variants[j].GetVariantId()
-	})
+	SortModelVariantsForRollout(variants)
 	return variants, nil
+}
+
+func parseFrozenVariants(data []byte) ([]*evalv1.ModelVariant, error) {
+	var payload struct {
+		Variants []json.RawMessage `json:"variants"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, fmt.Errorf("evaluation: load frozen variants: decode: %w", err)
+	}
+	variants := make([]*evalv1.ModelVariant, 0, len(payload.Variants))
+	for _, raw := range payload.Variants {
+		variant := &evalv1.ModelVariant{}
+		if err := protojson.Unmarshal(raw, variant); err != nil {
+			return nil, fmt.Errorf("evaluation: load frozen variants: decode variant: %w", err)
+		}
+		variants = append(variants, variant)
+	}
+	SortModelVariantsForRollout(variants)
+	return variants, nil
+}
+
+func SortModelVariantsForRollout(variants []*evalv1.ModelVariant) {
+	sort.SliceStable(variants, func(i, j int) bool {
+		left := variants[i]
+		right := variants[j]
+		if left == nil || right == nil {
+			return left != nil
+		}
+		leftParameterCount := left.GetParameterCount()
+		rightParameterCount := right.GetParameterCount()
+		if leftParameterCount == 0 || rightParameterCount == 0 {
+			if leftParameterCount != rightParameterCount {
+				return rightParameterCount == 0
+			}
+		} else if leftParameterCount != rightParameterCount {
+			return leftParameterCount < rightParameterCount
+		}
+		if left.GetServedModelTag() != right.GetServedModelTag() {
+			return left.GetServedModelTag() < right.GetServedModelTag()
+		}
+		return left.GetVariantId() < right.GetVariantId()
+	})
 }
 
 // VariantsByTags returns frozen variants for the requested served model tags.
@@ -259,8 +300,11 @@ func CampaignIDForVariant(variant *evalv1.ModelVariant) string {
 
 // ResolveCampaignStartPlan resolves one homogeneous campaign start plan.
 func ResolveCampaignStartPlan(req CampaignStartPlanRequest) (*CampaignStartPlan, error) {
-	if req.ProjectRoot == "" {
+	if req.FileService == nil {
 		return nil, fmt.Errorf("evaluation: resolve campaign start plan: %w", constants.ErrMissingRequiredField)
+	}
+	if req.Context == nil {
+		req.Context = context.Background()
 	}
 	now := req.Now
 	if now.IsZero() {
@@ -275,8 +319,7 @@ func ResolveCampaignStartPlan(req CampaignStartPlanRequest) (*CampaignStartPlan,
 		}
 		return resolveCampaignStartPlanForTags(req, tags, now)
 	case "next":
-		queuePath := filepath.Join(req.ProjectRoot, DefaultInitCampaignQueueRelPath)
-		queue, err := LoadInitCampaignQueue(queuePath)
+		queue, err := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, DefaultInitCampaignQueueRelPath)
 		if err != nil {
 			return nil, err
 		}
@@ -286,8 +329,7 @@ func ResolveCampaignStartPlan(req CampaignStartPlanRequest) (*CampaignStartPlan,
 		}
 		return planFromQueueEntry(req, entry, now)
 	default:
-		queuePath := filepath.Join(req.ProjectRoot, DefaultInitCampaignQueueRelPath)
-		queue, err := LoadInitCampaignQueue(queuePath)
+		queue, err := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, DefaultInitCampaignQueueRelPath)
 		if err != nil {
 			return nil, err
 		}
@@ -301,11 +343,12 @@ func ResolveCampaignStartPlan(req CampaignStartPlanRequest) (*CampaignStartPlan,
 
 func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string, now time.Time) (*CampaignStartPlan, error) {
 	if req.InventoryFile != "" {
-		inventoryPath := req.InventoryFile
-		if !filepath.IsAbs(inventoryPath) {
-			inventoryPath = filepath.Join(req.ProjectRoot, inventoryPath)
+		inventoryPath := filepath.ToSlash(strings.TrimSpace(req.InventoryFile))
+		if filepath.IsAbs(inventoryPath) {
+			return nil, fmt.Errorf("evaluation: resolve campaign start plan: inventory path must be runtime-relative")
 		}
-		freeze, err := LoadModelInventoryFreezeFile(inventoryPath)
+		inventoryPath = normalizeRuntimeInventoryPath(inventoryPath)
+		freeze, err := LoadModelInventoryFreezeFromRuntime(req.Context, req.FileService, inventoryPath)
 		if err != nil {
 			return nil, err
 		}
@@ -327,16 +370,16 @@ func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string
 		}, nil
 	}
 
-	queuePath := filepath.Join(req.ProjectRoot, DefaultInitCampaignQueueRelPath)
 	if len(tags) == 1 {
-		if queue, err := LoadInitCampaignQueue(queuePath); err == nil {
+		if queue, err := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, DefaultInitCampaignQueueRelPath); err == nil {
 			if entry, err := queue.FindByTagOrVariantID(tags[0]); err == nil {
 				return planFromQueueEntry(req, entry, now)
 			}
 		}
 	}
 
-	variants, err := LoadFrozenVariants(ResolveRuntimeModelInventoryPath(req.ProjectRoot, ""))
+	inventoryPath := DefaultModelInventoryRelPath
+	variants, err := LoadFrozenVariantsFromRuntime(req.Context, req.FileService, inventoryPath)
 	if err != nil {
 		return nil, err
 	}
@@ -360,14 +403,14 @@ func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string
 	if err := ValidateModelRegistry(freeze); err != nil {
 		return nil, err
 	}
-	inventoryDir := filepath.Join(req.ProjectRoot, DefaultCampaignInventoryRelDirname)
-	if err := os.MkdirAll(inventoryDir, constants.PermDirPrivate); err != nil {
-		return nil, fmt.Errorf("evaluation: resolve campaign start plan: create inventory dir: %w", err)
+	if req.Context == nil || req.FileService == nil {
+		return nil, fmt.Errorf("evaluation: resolve campaign start plan: %w", constants.ErrMissingRequiredField)
 	}
-	inventoryPath := filepath.Join(inventoryDir, campaignID+".json")
-	if err := writeModelInventoryFreezeFile(inventoryPath, freeze); err != nil {
+	inventoryRelPath := campaignInventoryPath(DefaultCampaignInventoryRelDirname, campaignID)
+	if err := materializeImmutableModelInventory(req.Context, req.FileService, inventoryRelPath, freeze); err != nil {
 		return nil, err
 	}
+	inventoryPath = inventoryRelPath
 	runID := req.RunID
 	if runID == "" {
 		runID = campaignID + "-" + fmt.Sprintf("%d", now.Unix())
@@ -386,9 +429,9 @@ func planFromQueueEntry(req CampaignStartPlanRequest, entry *CampaignQueueModel,
 	if entry == nil {
 		return nil, fmt.Errorf("evaluation: resolve campaign start plan: %w", constants.ErrMissingRequiredField)
 	}
-	inventoryPath := entry.InventoryFile
-	if !filepath.IsAbs(inventoryPath) {
-		inventoryPath = filepath.Join(req.ProjectRoot, inventoryPath)
+	inventoryPath := normalizeRuntimeInventoryPath(entry.InventoryFile)
+	if filepath.IsAbs(inventoryPath) {
+		return nil, fmt.Errorf("evaluation: resolve campaign start plan: inventory path must be runtime-relative")
 	}
 	campaignID := req.CampaignID
 	if campaignID == "" {
@@ -410,6 +453,11 @@ func planFromQueueEntry(req CampaignStartPlanRequest, entry *CampaignQueueModel,
 	}, nil
 }
 
+func normalizeRuntimeInventoryPath(rawPath string) string {
+	path := filepath.ToSlash(strings.TrimSpace(rawPath))
+	return strings.TrimPrefix(path, constants.RuntimeDirname+"/")
+}
+
 func normalizeModelTags(modelTag string, modelTags []string) []string {
 	tags := make([]string, 0, len(modelTags)+1)
 	if strings.TrimSpace(modelTag) != "" {
@@ -426,15 +474,36 @@ func normalizeModelTags(modelTag string, modelTags []string) []string {
 	return tags
 }
 
-func writeModelInventoryFreezeFile(path string, freeze *ModelInventoryFreeze) error {
+func materializeImmutableModelInventory(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, freeze *ModelInventoryFreeze) error {
+	payload, err := marshalModelInventoryFreeze(freeze)
+	if err != nil {
+		return err
+	}
+	existing, err := fileSvc.ReadFile(ctx, relPath)
+	if err == nil {
+		if bytes.Equal(existing, payload) {
+			return nil
+		}
+		return fmt.Errorf("evaluation: materialize immutable model inventory: %w", constants.ErrImmutableInventoryConflict)
+	}
+	if !errors.Is(err, constants.ErrNotFound) {
+		return fmt.Errorf("evaluation: materialize immutable model inventory: read existing: %w", err)
+	}
+	if err := fileSvc.WriteFile(ctx, relPath, payload, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("evaluation: materialize immutable model inventory: write: %w", err)
+	}
+	return nil
+}
+
+func marshalModelInventoryFreeze(freeze *ModelInventoryFreeze) ([]byte, error) {
 	if freeze == nil {
-		return fmt.Errorf("evaluation: write model inventory freeze file: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("evaluation: marshal model inventory freeze: %w", constants.ErrMissingRequiredField)
 	}
 	variantBodies := make([]json.RawMessage, 0, len(freeze.Variants))
 	for _, variant := range freeze.Variants {
 		body, err := protojson.Marshal(variant)
 		if err != nil {
-			return fmt.Errorf("evaluation: write model inventory freeze file: marshal variant: %w", err)
+			return nil, fmt.Errorf("evaluation: marshal model inventory freeze: marshal variant: %w", err)
 		}
 		variantBodies = append(variantBodies, body)
 	}
@@ -452,10 +521,7 @@ func writeModelInventoryFreezeFile(path string, freeze *ModelInventoryFreeze) er
 		Variants:             variantBodies,
 	}, "", "  ")
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("evaluation: marshal model inventory freeze: %w", err)
 	}
-	if err := os.WriteFile(path, payload, constants.PermFileReadOnly); err != nil {
-		return fmt.Errorf("evaluation: write model inventory freeze file: %w", err)
-	}
-	return nil
+	return payload, nil
 }

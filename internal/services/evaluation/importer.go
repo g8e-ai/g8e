@@ -32,7 +32,7 @@ func NewEvidenceImporter(reader complianceevidence.ArtifactReader, runID string,
 }
 
 func (i *EvidenceImporter) SourceID() string {
-	return "native-evaluation"
+	return constants.EvaluationSourceKindNative
 }
 
 // RunID returns the run ID this importer is bound to.

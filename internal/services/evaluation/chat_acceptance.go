@@ -108,7 +108,7 @@ func SelectChatAcceptanceCases(ids []ChatAcceptanceCaseID) ([]ChatAcceptanceCase
 
 // ValidateChatAcceptanceCase applies case-specific success checks after the
 // shared chat trace validation passes.
-func ValidateChatAcceptanceCase(caseID ChatAcceptanceCaseID, req ChatProbeRequest, trace map[string]any) error {
+func ValidateChatAcceptanceCase(caseID ChatAcceptanceCaseID, req ChatProbeRequest, trace EvaluationTrace) error {
 	modelCalls, _ := trace["model_calls"].([]any)
 	switch caseID {
 	case ChatAcceptanceCaseSystemBasic:
@@ -129,7 +129,7 @@ func ValidateChatAcceptanceCase(caseID ChatAcceptanceCaseID, req ChatProbeReques
 	}
 }
 
-func validateHomogeneousRoleTrace(trace map[string]any, designatedRole string, modelCalls []any) error {
+func validateHomogeneousRoleTrace(trace EvaluationTrace, designatedRole string, modelCalls []any) error {
 	if !hasControlledRoleAssignment(trace, designatedRole) {
 		return fmt.Errorf("evaluation: homogeneous role trace missing controlled_role_assignment for %q", designatedRole)
 	}
@@ -137,7 +137,7 @@ func validateHomogeneousRoleTrace(trace map[string]any, designatedRole string, m
 		return fmt.Errorf("evaluation: homogeneous role trace role_outcome not invoked for %q", designatedRole)
 	}
 	for _, rawCall := range modelCalls {
-		call, ok := rawCall.(map[string]any)
+		call, ok := evaluationTrace(rawCall)
 		if !ok {
 			continue
 		}

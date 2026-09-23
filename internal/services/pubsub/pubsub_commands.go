@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -386,13 +387,26 @@ func (rs *OperatorPubSubService) buildHandlers() {
 		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,
 		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,
 		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
-		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg *PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
 		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
-		constants.Event.Operator.Audit.UserMsg:              func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleUserMsgRequest(ctx, msg) },
-		constants.Event.Operator.Audit.AIMsg:                func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleAIMsgRequest(ctx, msg) },
-		constants.Event.Operator.Audit.DirectCmd:            func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleDirectCmdRequest(ctx, msg) },
+		constants.Event.Operator.Audit.UserMsg: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if err := rs.audit.HandleUserMsgRequest(ctx, msg); err != nil {
+				rs.logger.Error("failed to handle audit user message", "error", err)
+			}
+		},
+		constants.Event.Operator.Audit.AIMsg: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if err := rs.audit.HandleAIMsgRequest(ctx, msg); err != nil {
+				rs.logger.Error("failed to handle audit AI message", "error", err)
+			}
+		},
+		constants.Event.Operator.Audit.DirectCmd: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if err := rs.audit.HandleDirectCmdRequest(ctx, msg); err != nil {
+				rs.logger.Error("failed to handle direct command audit", "error", err)
+			}
+		},
 		constants.Event.Operator.Audit.DirectCmdResult: func(ctx context.Context, msg *PubSubCommandMessage) {
-			_ = rs.audit.HandleDirectCmdResultRequest(ctx, msg)
+			if err := rs.audit.HandleDirectCmdResultRequest(ctx, msg); err != nil {
+				rs.logger.Error("failed to handle direct command result audit", "error", err)
+			}
 		},
 		constants.Event.Operator.FetchFileDiff.Requested: rs.history.HandleFetchFileDiffRequest,
 		// Governed document mutations dispatch through the canonical
@@ -552,7 +566,7 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 
 		msgCh, err := rs.client.Subscribe(rs.ctx, channelName)
 		if err != nil {
-			if err == context.Canceled {
+			if errors.Is(err, context.Canceled) {
 				rs.logger.Info("Command gateway stopped (context cancelled during connection)")
 				return
 			}
@@ -571,7 +585,9 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 			}
 			rs.logger.Warn("[RECONNECT] Failed to connect, will retry...",
 				"attempt", attempts, "max", maxReconnectAttempts, string(constants.ConnectionStateError), err)
-			time.Sleep(reconnectDelay)
+			if !waitForReconnect(rs.ctx, reconnectDelay) {
+				return
+			}
 			reconnectDelay = nextReconnectDelay(reconnectDelay, maxReconnectDelay)
 			continue
 		}
@@ -618,13 +634,27 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 		}
 
 		rs.logger.Info("[RECONNECT] Waiting before reconnection attempt...", "delay_seconds", reconnectDelay.Seconds())
-		time.Sleep(reconnectDelay)
+		if !waitForReconnect(rs.ctx, reconnectDelay) {
+			return
+		}
 		reconnectDelay = nextReconnectDelay(reconnectDelay, maxReconnectDelay)
 	}
 }
 
 // nextReconnectDelay doubles the current delay, capped at max. This implements
 // exponential backoff for the reconnect loop.
+func waitForReconnect(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
 func nextReconnectDelay(current, max time.Duration) time.Duration {
 	return min(current*2, max)
 }
@@ -727,6 +757,9 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 	if envelope.ActionType == string(constants.ActionTypeInference) {
 		rs.publishInferenceCompletion(ctx, envelope, cmdMsg.InferenceResult, receipt)
 	}
+	if execErr == nil && envelope.ActionType == string(constants.ActionTypeShutdown) {
+		execErr = rs.completeShutdown(ctx, cmdMsg)
+	}
 	return receipt, execErr
 }
 
@@ -818,6 +851,12 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 				"receipt_status", receipt.Status.String())
 			return
 		}
+		if env.ActionType == string(constants.ActionTypeShutdown) {
+			if err := rs.completeShutdown(rs.ctx, cmdMsg); err != nil {
+				rs.logger.Error("Shutdown acknowledgement failed", string(constants.ConnectionStateError), err, "message_id", env.Id)
+				return
+			}
+		}
 		rs.logger.Info("Actuator execution succeeded",
 			"message_id", env.Id,
 			"receipt_status", receipt.Status.String())
@@ -874,6 +913,10 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 		return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
 	case constants.EventPlatformEnrollmentCreateSessionRequested:
 		return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentRevokeRequested:
+		return rs.platformEnrollment.HandleRevoke(ctx, pubsubMsg)
+	case constants.Event.Operator.ShutdownRequested:
+		return rs.handleShutdownRequest(pubsubMsg)
 	}
 
 	handler, ok := rs.handlers[eventType]
@@ -1088,31 +1131,57 @@ func (rs *OperatorPubSubService) handleDocumentDeleteSync(ctx context.Context, m
 	return fmt.Sprintf("document deleted: %s/%s", req.Collection, req.DocumentId), nil
 }
 
-func (rs *OperatorPubSubService) handleShutdownRequest(msg *PubSubCommandMessage) {
+func (rs *OperatorPubSubService) handleShutdownRequest(msg *PubSubCommandMessage) (string, error) {
 	rs.logger.Info("Shutdown command received")
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
 	if err != nil {
-		rs.logger.Error("Failed to unmarshal shutdown request", string(constants.ConnectionStateError), err)
-		return
+		return "", err
 	}
 
 	shutdownReq, ok := req.(*operatorv1.ShutdownRequested)
 	if !ok {
-		rs.logger.Error("Invalid payload type for shutdown request", "got", fmt.Sprintf("%T", req))
-		return
+		return "", fmt.Errorf("invalid payload type %T: %w", req, constants.ErrTxPayloadActionMismatch)
 	}
 
 	reason := shutdownReq.Reason
 	if reason == "" {
 		reason = "No reason provided"
 	}
-	rs.logger.Info("Shutting down Operator", "reason", reason)
-	rs.ShutdownChan <- reason
+	return reason, nil
+}
+
+func (rs *OperatorPubSubService) completeShutdown(ctx context.Context, msg *PubSubCommandMessage) error {
+	if rs.results == nil {
+		return constants.ErrPubSubResultsPublisher
+	}
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		return err
+	}
+	shutdownReq, ok := req.(*operatorv1.ShutdownRequested)
+	if !ok {
+		return fmt.Errorf("invalid payload type %T: %w", req, constants.ErrTxPayloadActionMismatch)
+	}
+	if err := rs.results.PublishShutdownAcknowledgement(ctx, shutdownReq, msg); err != nil {
+		return fmt.Errorf("pubsub: publish shutdown acknowledgement: %w", err)
+	}
+	reason := shutdownReq.Reason
+	if reason == "" {
+		reason = "No reason provided"
+	}
+	select {
+	case rs.ShutdownChan <- reason:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("pubsub: signal shutdown: %w", ctx.Err())
+	}
 }
 
 func (rs *OperatorPubSubService) handleEvalAnswerRequest(ctx context.Context, msg *PubSubCommandMessage) {
-	_, _ = rs.handleEvalAnswerRequestSync(ctx, msg)
+	if _, err := rs.handleEvalAnswerRequestSync(ctx, msg); err != nil {
+		rs.logger.Error("failed to handle eval answer request", "error", err)
+	}
 }
 
 func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
@@ -1196,7 +1265,9 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 	resp, err := rs.inference.ExecuteInference(ctx, msg)
 	if err != nil {
 		if rs.inferenceAttemptStore != nil && governedReq != nil {
-			_ = rs.inferenceAttemptStore.Fail(ctx, governedReq.GetProviderAttemptId(), err.Error())
+			if failErr := rs.inferenceAttemptStore.Fail(ctx, governedReq.GetProviderAttemptId(), err.Error()); failErr != nil {
+				rs.logger.Error("inference handler: record failed attempt", "error", failErr)
+			}
 		}
 		return "", err
 	}
@@ -1205,7 +1276,9 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 	digest, err := models.ComputeInferenceResultDigest(result)
 	if err != nil {
 		if rs.inferenceAttemptStore != nil && governedReq != nil {
-			_ = rs.inferenceAttemptStore.Fail(ctx, governedReq.GetProviderAttemptId(), err.Error())
+			if failErr := rs.inferenceAttemptStore.Fail(ctx, governedReq.GetProviderAttemptId(), err.Error()); failErr != nil {
+				rs.logger.Error("inference handler: record failed attempt", "error", failErr)
+			}
 		}
 		return "", err
 	}

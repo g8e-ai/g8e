@@ -427,8 +427,7 @@ func Run(cfg Config) error {
 	trustedSigners := map[string]ed25519.PublicKey{keyID: pubKey}
 
 	// ── vault ────────────────────────────────────────────────────────────────
-	vaultDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, "vault"))
-	if err := fileSvc.MkdirAll(context.Background(), filepath.Join(constants.DataDirname, "vault"), constants.PermDirPrivate); err != nil {
+	if err := fileSvc.MkdirAll(context.Background(), constants.VaultDirname, constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 	_, vaultPrivKey, err := ed25519.GenerateKey(nil)
@@ -439,11 +438,11 @@ func Run(cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrVaultHeaderCreateFailed, err)
 	}
-	if err := vaultHeader.Save(vaultDir); err != nil {
+	if err := vaultHeader.Save(fileSvc); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrVaultHeaderSaveFailed, err)
 	}
 	encryptionVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  logger,
 	})
 	if err != nil {

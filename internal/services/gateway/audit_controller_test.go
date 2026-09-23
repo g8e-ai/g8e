@@ -282,11 +282,11 @@ func TestAuditControllerHandleAuditEvents(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.AuditEventsResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Equal(t, 0, int(resp["count"].(float64)))
+		assert.True(t, resp.Success)
+		assert.Equal(t, 0, resp.Count)
 	})
 
 	t.Run("Success - with operator_session_id", func(t *testing.T) {
@@ -294,10 +294,10 @@ func TestAuditControllerHandleAuditEvents(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.AuditEventsResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
+		assert.True(t, resp.Success)
 	})
 
 	t.Run("Success - with limit and offset", func(t *testing.T) {
@@ -305,10 +305,10 @@ func TestAuditControllerHandleAuditEvents(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.AuditEventsResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
+		assert.True(t, resp.Success)
 	})
 }
 
@@ -327,13 +327,13 @@ func TestAuditControllerHandleAuditSummary(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditSummary(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.AuditSummaryResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Equal(t, 0, int(resp["events_total"].(float64)))
-		assert.Equal(t, 0, int(resp["receipts_total"].(float64)))
-		assert.Equal(t, 0, int(resp["total_records"].(float64)))
+		assert.True(t, resp.Success)
+		assert.Equal(t, 0, resp.EventsTotal)
+		assert.Equal(t, 0, resp.ReceiptsTotal)
+		assert.Equal(t, 0, resp.TotalRecords)
 	})
 
 	t.Run("Success - with operator_session_id", func(t *testing.T) {
@@ -341,12 +341,12 @@ func TestAuditControllerHandleAuditSummary(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditSummary(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.AuditSummaryResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Contains(t, resp, "events_summary")
-		assert.Contains(t, resp, "receipts_summary")
+		assert.True(t, resp.Success)
+		assert.NotNil(t, resp.EventsSummary)
+		assert.NotNil(t, resp.ReceiptsSummary)
 	})
 }
 
@@ -365,16 +365,14 @@ func TestAuditControllerHandleAuditReport(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditReport(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.AuditReportResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Contains(t, resp, "report")
-		report := resp["report"].(map[string]interface{})
-		assert.Equal(t, 0, int(report["events_count"].(float64)))
-		assert.Equal(t, 0, int(report["receipts_count"].(float64)))
-		assert.Equal(t, 0, int(report["total_records"].(float64)))
-		assert.Contains(t, report, "generated_at")
+		assert.True(t, resp.Success)
+		assert.Equal(t, 0, resp.Report.EventsCount)
+		assert.Equal(t, 0, resp.Report.ReceiptsCount)
+		assert.Equal(t, 0, resp.Report.TotalRecords)
+		assert.NotEmpty(t, resp.Report.GeneratedAt)
 	})
 
 	t.Run("Success - with operator_session_id", func(t *testing.T) {
@@ -382,12 +380,10 @@ func TestAuditControllerHandleAuditReport(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditReport(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.AuditReportResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Contains(t, resp, "report")
-		report := resp["report"].(map[string]interface{})
-		assert.Equal(t, "op-session-123", report["operator_session_id"])
+		assert.True(t, resp.Success)
+		assert.Equal(t, "op-session-123", resp.Report.OperatorSessionID)
 	})
 }

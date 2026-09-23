@@ -16,6 +16,21 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
+// EvaluationTrace is the schema-flexible boundary representation imported from
+// the ensemble. Its fields are validated by the evaluation service before use.
+type EvaluationTrace map[string]any
+
+func evaluationTrace(value any) (EvaluationTrace, bool) {
+	switch typed := value.(type) {
+	case EvaluationTrace:
+		return typed, true
+	case map[string]any:
+		return EvaluationTrace(typed), true
+	default:
+		return nil, false
+	}
+}
+
 // MarshalCanonicalJSONObject returns deterministic JSON bytes for one decoded
 // JSON value. Object keys are sorted lexicographically at every depth. Leaf
 // values use encoding/json.Marshal, including HTML-safe escapes for <, >, and &.
@@ -26,8 +41,9 @@ func MarshalCanonicalJSONObject(value any) ([]byte, error) {
 
 func marshalSortedJSON(value any) ([]byte, error) {
 	switch typed := value.(type) {
-	case map[string]any:
+	case EvaluationTrace:
 		keys := make([]string, 0, len(typed))
+
 		for key := range typed {
 			keys = append(keys, key)
 		}
@@ -74,11 +90,11 @@ func marshalSortedJSON(value any) ([]byte, error) {
 
 // ComputeChatProbeTraceDigest returns the SHA-256 digest for one decoded
 // chat-probe trace object with trace_digest cleared before canonicalization.
-func ComputeChatProbeTraceDigest(trace map[string]any) (string, error) {
+func ComputeChatProbeTraceDigest(trace EvaluationTrace) (string, error) {
 	if len(trace) == 0 {
 		return "", fmt.Errorf("evaluation: compute chat probe trace digest: trace is required")
 	}
-	payload := make(map[string]any, len(trace))
+	payload := make(EvaluationTrace, len(trace))
 	for key, value := range trace {
 		payload[key] = value
 	}

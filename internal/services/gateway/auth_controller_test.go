@@ -12,7 +12,6 @@ package gateway
 import (
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -40,7 +39,6 @@ func setupTestBootstrapController(t *testing.T) (*BootstrapController, *config.C
 		CLISessionSvc:      infra.CLISessionSvc,
 		OperatorSessionSvc: infra.OperatorSessionSvc,
 		Responder:          infra.Responder,
-		ActuatorKeyReader:  nil,
 	}), infra.Cfg
 }
 
@@ -84,9 +82,8 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -97,7 +94,7 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	require.NoError(t, err)
 
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
+		DBPath:               fileSvc.Resolve(constants.SuspendedTransactionDBRelPath),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,

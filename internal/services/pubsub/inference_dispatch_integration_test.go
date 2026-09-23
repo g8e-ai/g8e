@@ -150,7 +150,7 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 	svc, err := NewOperatorPubSubService(CommandServiceConfig{
 		Config:             cfg,
 		Logger:             logger,
-		PubSubClient:       NewInProcessPubSubClient(nil),
+		PubSubClient:       NewInProcessPubSubClient(nil, logger),
 		ResultsService:     results,
 		ActuatorSigningKey: privKey,
 		ActuatorKeyID:      "test-key",
@@ -332,7 +332,7 @@ func TestInferenceDispatch_ProcessEnvelope_NilInferenceHandler_FailsClosed(t *te
 	svc, err := NewOperatorPubSubService(CommandServiceConfig{
 		Config:             cfg,
 		Logger:             logger,
-		PubSubClient:       NewInProcessPubSubClient(nil),
+		PubSubClient:       NewInProcessPubSubClient(nil, logger),
 		ActuatorSigningKey: privKey,
 		ActuatorKeyID:      "test-key",
 		AuditorSigningKey:  privKey,

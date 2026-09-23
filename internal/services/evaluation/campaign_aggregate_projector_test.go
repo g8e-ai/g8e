@@ -10,6 +10,7 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -74,35 +76,41 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 			CampaignId: "eval-smoke-mini",
 		},
 	}
-	records, err := BuildRunAggregateViewRecords(run, state, time.Unix(1_700_000_050, 0).UTC())
+	records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
 	require.NoError(t, err)
 	require.Len(t, records, 4)
 
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "evaluation_summary", summary["kind"])
-	assert.Equal(t, "completed", summary["lifecycle_state"])
-	assert.Equal(t, "exploratory_partial", summary["quality_state"])
-	assert.Equal(t, float64(50), summary["elapsed_seconds"])
+	assert.Equal(t, "1.5.0", summary.SchemaVersion)
+	assert.Equal(t, "evaluation_summary", summary.Kind)
+	assert.Equal(t, "model", summary.EvaluationUnit)
+	assert.Equal(t, "completed", summary.LifecycleState)
+	assert.Equal(t, "exploratory_partial", summary.QualityState)
+	require.NotNil(t, summary.ElapsedSeconds)
+	assert.Equal(t, 50.0, *summary.ElapsedSeconds)
 
-	catalog := map[string]any{}
+	var catalog catalogSnapshotRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &catalog))
-	assert.Equal(t, "catalog_snapshot", catalog["kind"])
-	assert.Equal(t, "ds-live-run-1", catalog["dataset_id"])
-	assert.Equal(t, float64(1), catalog["assignment_count"])
-	assert.Equal(t, float64(1), catalog["provider_request_count"])
+	assert.Equal(t, "1.5.0", catalog.SchemaVersion)
+	assert.Equal(t, "catalog_snapshot", catalog.Kind)
+	assert.Equal(t, "ds-live-run-1", catalog.DatasetID)
+	assert.Equal(t, uint32(1), catalog.AssignmentCount)
+	assert.Equal(t, uint32(1), catalog.ProviderRequestCount)
 
-	model := map[string]any{}
+	var model modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[2].Body, &model))
-	assert.Equal(t, "model_summary", model["kind"])
-	assert.Equal(t, "qwen3-4b", model["variant_id"])
-	assert.Equal(t, "primary", model["role"])
-	assert.Equal(t, "Qwen3 4b", model["display_name"])
-	assert.Equal(t, "qwen3:4b", model["served_model_tag"])
+	assert.Equal(t, "1.5.0", model.SchemaVersion)
+	assert.Equal(t, "model_summary", model.Kind)
+	assert.Equal(t, "qwen3-4b", model.VariantID)
+	assert.Equal(t, "primary", model.Role)
+	assert.Equal(t, "Qwen3 4b", model.DisplayName)
+	assert.Equal(t, "qwen3:4b", model.ServedModelTag)
 
-	methodology := map[string]any{}
+	var methodology methodologySnapshotRecord
 	require.NoError(t, json.Unmarshal(records[3].Body, &methodology))
-	assert.Equal(t, "methodology_snapshot", methodology["kind"])
+	assert.Equal(t, "1.5.0", methodology.SchemaVersion)
+	assert.Equal(t, "methodology_snapshot", methodology.Kind)
 }
 
 func TestBuildRunAggregateViewRecordsPartialProgress(t *testing.T) {
@@ -128,13 +136,13 @@ func TestBuildRunAggregateViewRecordsPartialProgress(t *testing.T) {
 			CampaignId: "eval-smoke-mini",
 		},
 	}
-	records, err := BuildRunAggregateViewRecords(run, state, time.Unix(1_700_000_050, 0).UTC())
+	records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
 	require.NoError(t, err)
 
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "running", summary["lifecycle_state"])
-	assert.Equal(t, "live_in_progress", summary["quality_state"])
+	assert.Equal(t, "running", summary.LifecycleState)
+	assert.Equal(t, "live_in_progress", summary.QualityState)
 }
 
 func TestBuildRunCompletionViewRecords(t *testing.T) {
@@ -165,25 +173,26 @@ func TestBuildRunCompletionViewRecords(t *testing.T) {
 			CampaignId: "eval-smoke-mini",
 		},
 	}
-	records, err := BuildRunCompletionViewRecords(run, assignments, results, state, time.Unix(1_700_000_100, 0).UTC())
+	records, err := BuildRunCompletionViewRecords(run, assignments, results, state, nil, time.Unix(1_700_000_100, 0).UTC())
 	require.NoError(t, err)
 	require.Len(t, records, 5)
 
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "evaluation_summary", summary["kind"])
-	assert.IsType(t, map[string]any{}, summary["model_role_mapping"])
-	assert.Equal(t, "completed", summary["lifecycle_state"])
-	assert.Equal(t, float64(100), summary["elapsed_seconds"])
-	assert.Equal(t, float64(2), summary["assignment_total"])
-	assert.Equal(t, float64(1), summary["assignment_completed"])
-	assert.Equal(t, float64(1), summary["assignment_failed"])
-	assert.Equal(t, "exploratory_partial", summary["quality_state"])
+	assert.Equal(t, "evaluation_summary", summary.Kind)
+	assert.NotNil(t, summary.ModelRoleMapping)
+	assert.Equal(t, "completed", summary.LifecycleState)
+	require.NotNil(t, summary.ElapsedSeconds)
+	assert.Equal(t, 100.0, *summary.ElapsedSeconds)
+	assert.Equal(t, uint32(2), summary.AssignmentTotal)
+	assert.Equal(t, uint32(1), summary.AssignmentCompleted)
+	assert.Equal(t, uint32(1), summary.AssignmentFailed)
+	assert.Equal(t, "exploratory_partial", summary.QualityState)
 
-	catalog := map[string]any{}
+	var catalog catalogSnapshotRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &catalog))
-	assert.Equal(t, "catalog_snapshot", catalog["kind"])
-	assert.Equal(t, "exploratory_partial", catalog["quality_state"])
+	assert.Equal(t, "catalog_snapshot", catalog.Kind)
+	assert.Equal(t, "exploratory_partial", catalog.QualityState)
 }
 
 func TestBuildRunVerificationViewRecords(t *testing.T) {
@@ -231,19 +240,20 @@ func TestBuildRunVerificationViewRecords(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, records, 2)
 
-	summary := map[string]any{}
+	var summary evaluationSummaryRecord
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
-	assert.Equal(t, "passed", summary["verifier_state"])
-	assert.Equal(t, "exploratory_verified", summary["quality_state"])
+	assert.Equal(t, "passed", summary.VerifierState)
+	assert.Equal(t, "exploratory_verified", summary.QualityState)
 
-	model := map[string]any{}
+	var model modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &model))
-	assert.Equal(t, "model_summary", model["kind"])
-	assert.Equal(t, "exploratory_verified", model["quality_state"])
-	assert.Equal(t, "qwen3-4b", model["variant_id"])
-	assert.Equal(t, "primary", model["role"])
-	assert.Equal(t, float64(1), model["evaluation_coverage"])
-	assert.Equal(t, float64(1), model["pass_rate"].(map[string]any)["denominator"])
+	assert.Equal(t, "model_summary", model.Kind)
+	assert.Equal(t, "exploratory_verified", model.QualityState)
+	assert.Equal(t, "qwen3-4b", model.VariantID)
+	assert.Equal(t, "primary", model.Role)
+	assert.Equal(t, 1.0, model.EvaluationCoverage)
+	require.NotNil(t, model.PassRate)
+	assert.Equal(t, uint32(1), model.PassRate.Denominator)
 }
 
 func TestBuildRunVerificationViewRecordsEligibility(t *testing.T) {
@@ -271,10 +281,16 @@ func TestBuildRunVerificationViewRecordsEligibility(t *testing.T) {
 			}
 			run := &evalv1.EvaluationRun{RunId: "run-eligibility"}
 			report := &evalv1.EvaluationVerificationReport{
-				RunId:                   run.GetRunId(),
-				Status:                  tt.reportStatus,
-				ExpectedAssignmentCount: tt.expected,
-				VerifiedAssignmentCount: tt.verified,
+				SchemaVersion:            "2.0.0",
+				RunId:                    run.GetRunId(),
+				Status:                   tt.reportStatus,
+				ReportDigestRef:          &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("a", 64)},
+				VerifiedAt:               timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+				VerifierReleaseVersion:   "v2.1.10",
+				VerifierContractVersion:  "2.0.0",
+				VerifiedPopulationDigest: strings.Repeat("b", 64),
+				ExpectedAssignmentCount:  tt.expected,
+				VerifiedAssignmentCount:  tt.verified,
 			}
 			records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
 			require.NoError(t, err)
@@ -318,14 +334,14 @@ func TestBuildRunVerificationViewRecordsEmitsEveryEligibleVariantRole(t *testing
 	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
 	require.NoError(t, err)
 	require.Len(t, records, 3)
-	firstModel := map[string]any{}
-	secondModel := map[string]any{}
+	var firstModel, secondModel modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &firstModel))
 	require.NoError(t, json.Unmarshal(records[2].Body, &secondModel))
-	assert.Equal(t, "exploratory_verified", firstModel["quality_state"])
-	assert.Equal(t, "exploratory_verified", secondModel["quality_state"])
-	assert.Equal(t, float64(0), secondModel["pass_rate"].(map[string]any)["estimate"])
-	assert.NotEqual(t, firstModel["variant_id"], secondModel["variant_id"])
+	assert.Equal(t, "exploratory_verified", firstModel.QualityState)
+	assert.Equal(t, "exploratory_verified", secondModel.QualityState)
+	require.NotNil(t, secondModel.PassRate)
+	assert.Equal(t, 0.0, secondModel.PassRate.Estimate)
+	assert.NotEqual(t, firstModel.VariantID, secondModel.VariantID)
 }
 
 func TestBuildRunVerificationViewRecordsBoundFailurePublishesPartialModelRevisions(t *testing.T) {
@@ -335,9 +351,9 @@ func TestBuildRunVerificationViewRecordsBoundFailurePublishesPartialModelRevisio
 	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
 	require.NoError(t, err)
 	require.Len(t, records, 2)
-	model := map[string]any{}
+	var model modelSummaryRecord
 	require.NoError(t, json.Unmarshal(records[1].Body, &model))
-	assert.Equal(t, "exploratory_partial", model["quality_state"])
+	assert.Equal(t, "exploratory_partial", model.QualityState)
 }
 
 func TestBoundVerificationRevisionKeysAreReportScoped(t *testing.T) {
@@ -410,16 +426,414 @@ func TestCampaignPublicationCoordinatorPublishRunAggregates(t *testing.T) {
 
 	var aggregateKinds []string
 	for _, record := range exporter.records {
-		payload := map[string]any{}
+		var payload struct {
+			Kind string `json:"kind"`
+		}
 		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &payload))
-		if kind, ok := payload["kind"].(string); ok {
-			aggregateKinds = append(aggregateKinds, kind)
+		if payload.Kind != "" {
+			aggregateKinds = append(aggregateKinds, payload.Kind)
 		}
 	}
 	assert.Contains(t, aggregateKinds, "evaluation_summary")
 	assert.Contains(t, aggregateKinds, "catalog_snapshot")
 	assert.Contains(t, aggregateKinds, "model_summary")
 	assert.Contains(t, aggregateKinds, "methodology_snapshot")
+}
+
+func scoredInferenceCall(tokens uint32, durationNanos uint64) *evalv1.ModelInferenceRecord {
+	return &evalv1.ModelInferenceRecord{
+		InferenceRecordId:       "inference-1",
+		UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+		CompletionTokens:        tokens,
+		GenerationDurationNanos: durationNanos,
+	}
+}
+
+func terminalResultWithEvidence(assignmentID string, spanNanos *uint64, calls ...*evalv1.ModelInferenceRecord) *evalv1.EvaluationAssignmentResult {
+	result := &evalv1.EvaluationAssignmentResult{
+		AssignmentId:    assignmentID,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		DeterministicGrades: []*evalv1.DeterministicGrade{{
+			Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		}},
+		ModelInferences: calls,
+	}
+	if spanNanos != nil {
+		span := *spanNanos
+		result.ScoredInferenceSpanNanos = &span
+	}
+	return result
+}
+
+func TestCollectRunHeadlineMetricsPassRate(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	assignments[1].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", nil),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	require.NotNil(t, state.Headline)
+	passRate := state.Headline.PassRate
+	require.NotNil(t, passRate.Value)
+	assert.Equal(t, 1.0, *passRate.Value)
+	assert.Equal(t, uint32(2), passRate.Eligible)
+	assert.Equal(t, uint32(2), passRate.Observed)
+	assert.Equal(t, uint32(0), passRate.Unavailable)
+}
+
+func TestCollectRunHeadlineMetricsPassRateUnavailableBeforeTerminal(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	state, err := CollectRunAggregateState(assignments, map[string]*evalv1.EvaluationAssignmentResult{})
+	require.NoError(t, err)
+	passRate := state.Headline.PassRate
+	assert.Nil(t, passRate.Value)
+	assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE, passRate.UnavailableReason)
+	assert.Equal(t, uint32(0), passRate.Eligible)
+}
+
+func TestCollectRunHeadlineMetricsLatencyMedian(t *testing.T) {
+	tests := []struct {
+		name      string
+		spansMS   []uint64
+		wantValue float64
+	}{
+		{name: "odd count picks center", spansMS: []uint64{300_000_000, 100_000_000, 200_000_000}, wantValue: 200},
+		{name: "even count averages centers", spansMS: []uint64{100_000_000, 300_000_000}, wantValue: 200},
+		{name: "observed zero contributes", spansMS: []uint64{0, 400_000_000}, wantValue: 200},
+		{name: "single observed zero", spansMS: []uint64{0}, wantValue: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assignments := make([]*evalv1.EvaluationAssignment, 0, len(tt.spansMS))
+			results := make(map[string]*evalv1.EvaluationAssignmentResult, len(tt.spansMS))
+			for index, span := range tt.spansMS {
+				id := fmt.Sprintf("assign-%d", index)
+				assignment := homogeneousAssignment(id, "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY)
+				assignment.LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+				assignments = append(assignments, assignment)
+				results[id] = terminalResultWithEvidence(id, &span, scoredInferenceCall(10, 1_000_000))
+			}
+			state, err := CollectRunAggregateState(assignments, results)
+			require.NoError(t, err)
+			latency := state.Headline.LatencyP50MS
+			require.NotNil(t, latency.Value)
+			assert.Equal(t, tt.wantValue, *latency.Value)
+			assert.Equal(t, uint32(len(tt.spansMS)), latency.Observed)
+			assert.Equal(t, uint32(len(tt.spansMS)), latency.Eligible)
+			assert.Equal(t, uint32(0), latency.Unavailable)
+		})
+	}
+}
+
+func TestCollectRunHeadlineMetricsLatencyPartialCoverage(t *testing.T) {
+	span := uint64(150_000_000)
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	assignments[1].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", &span, scoredInferenceCall(10, 1_000_000)),
+		"assign-2": terminalResultWithEvidence("assign-2", nil, scoredInferenceCall(10, 1_000_000)),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	latency := state.Headline.LatencyP50MS
+	require.NotNil(t, latency.Value)
+	assert.Equal(t, 150.0, *latency.Value)
+	assert.Equal(t, uint32(1), latency.Observed)
+	assert.Equal(t, uint32(2), latency.Eligible)
+	assert.Equal(t, uint32(1), latency.Unavailable)
+}
+
+func TestCollectRunHeadlineMetricsLatencyUnavailableWithoutSpans(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", nil, scoredInferenceCall(10, 1_000_000)),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	latency := state.Headline.LatencyP50MS
+	assert.Nil(t, latency.Value)
+	assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE, latency.UnavailableReason)
+	assert.Equal(t, uint32(0), latency.Observed)
+	assert.Equal(t, uint32(1), latency.Eligible)
+	assert.Equal(t, uint32(1), latency.Unavailable)
+}
+
+func TestCollectRunHeadlineMetricsNoScoredCalls(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", nil),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	assert.Nil(t, state.Headline.LatencyP50MS.Value)
+	assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS, state.Headline.LatencyP50MS.UnavailableReason)
+	assert.Equal(t, uint32(0), state.Headline.LatencyP50MS.Eligible)
+	assert.Nil(t, state.Headline.OutputThroughputP50.Value)
+	assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS, state.Headline.OutputThroughputP50.UnavailableReason)
+}
+
+func TestCollectRunHeadlineMetricsLatencyRejectsOutOfBoundSpan(t *testing.T) {
+	span := (maxPublicDurationMS + 1) * 1_000_000
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", &span, scoredInferenceCall(10, 1_000_000)),
+	}
+	_, err := CollectRunAggregateState(assignments, results)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
+}
+
+func TestCollectRunHeadlineMetricsOutputThroughput(t *testing.T) {
+	// Two scored calls totaling 40 tokens over 2s of generation: 20 tok/s.
+	call := scoredInferenceCall(20, 1_000_000_000)
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	assignments[1].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	secondCall := scoredInferenceCall(30, 1_000_000_000)
+	secondCall.InferenceRecordId = "inference-2"
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", nil, call, scoredInferenceCall(20, 1_000_000_000)),
+		"assign-2": terminalResultWithEvidence("assign-2", nil, secondCall),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	throughput := state.Headline.OutputThroughputP50
+	require.NotNil(t, throughput.Value)
+	// assign-1: 40 tokens / 2s = 20 tok/s; assign-2: 30 tok/s. Median = 25.
+	assert.Equal(t, 25.0, *throughput.Value)
+	assert.Equal(t, uint32(2), throughput.Observed)
+	assert.Equal(t, uint32(2), throughput.Eligible)
+}
+
+func TestCollectRunHeadlineMetricsOutputThroughputIncompleteContributors(t *testing.T) {
+	tests := []struct {
+		name  string
+		calls []*evalv1.ModelInferenceRecord
+	}{
+		{
+			name: "usage not reported",
+			calls: []*evalv1.ModelInferenceRecord{{
+				InferenceRecordId:       "inference-1",
+				UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE,
+				CompletionTokens:        20,
+				GenerationDurationNanos: 1_000_000_000,
+			}},
+		},
+		{
+			name: "zero generation duration",
+			calls: []*evalv1.ModelInferenceRecord{{
+				InferenceRecordId:       "inference-1",
+				UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+				CompletionTokens:        20,
+				GenerationDurationNanos: 0,
+			}},
+		},
+		{
+			name: "one incomplete call disqualifies the assignment",
+			calls: []*evalv1.ModelInferenceRecord{
+				scoredInferenceCall(20, 1_000_000_000),
+				{
+					InferenceRecordId:       "inference-2",
+					UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE,
+					CompletionTokens:        20,
+					GenerationDurationNanos: 1_000_000_000,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assignments := []*evalv1.EvaluationAssignment{
+				homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+			}
+			assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+			results := map[string]*evalv1.EvaluationAssignmentResult{
+				"assign-1": terminalResultWithEvidence("assign-1", nil, tt.calls...),
+			}
+			state, err := CollectRunAggregateState(assignments, results)
+			require.NoError(t, err)
+			throughput := state.Headline.OutputThroughputP50
+			assert.Nil(t, throughput.Value)
+			assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE, throughput.UnavailableReason)
+			assert.Equal(t, uint32(0), throughput.Observed)
+			assert.Equal(t, uint32(1), throughput.Eligible)
+			assert.Equal(t, uint32(1), throughput.Unavailable)
+		})
+	}
+}
+
+func TestCollectRunHeadlineMetricsFailedAssignmentContributesMeasurements(t *testing.T) {
+	span := uint64(500_000_000)
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	failed := terminalResultWithEvidence("assign-1", &span, scoredInferenceCall(15, 1_000_000_000))
+	failed.DeterministicGrades[0].Status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
+	results := map[string]*evalv1.EvaluationAssignmentResult{"assign-1": failed}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	require.NotNil(t, state.Headline.LatencyP50MS.Value)
+	assert.Equal(t, 500.0, *state.Headline.LatencyP50MS.Value)
+	require.NotNil(t, state.Headline.OutputThroughputP50.Value)
+	assert.Equal(t, 15.0, *state.Headline.OutputThroughputP50.Value)
+}
+
+func boundTestReport(runID string, status evalv1.EvaluationVerdictStatus) *evalv1.EvaluationVerificationReport {
+	return &evalv1.EvaluationVerificationReport{
+		SchemaVersion:            "2.0.0",
+		ReportId:                 runID,
+		RunId:                    runID,
+		Status:                   status,
+		ReportDigestRef:          &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("a", 64)},
+		VerifiedAt:               timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+		VerifierReleaseVersion:   "v2.1.10",
+		VerifierContractVersion:  "2.0.0",
+		VerifiedPopulationDigest: strings.Repeat("b", 64),
+		ExpectedAssignmentCount:  1,
+		VerifiedAssignmentCount:  1,
+	}
+}
+
+func TestBuildRunAggregateViewRecordsVerifierStates(t *testing.T) {
+	span := uint64(200_000_000)
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", &span, scoredInferenceCall(10, 1_000_000_000)),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	run := &evalv1.EvaluationRun{
+		RunId:           "run-1",
+		StartedAt:       timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "eval-smoke-mini"},
+	}
+	decodeSummary := func(t *testing.T, records []CampaignViewRecord) *evaluationSummaryRecord {
+		t.Helper()
+		for _, record := range records {
+			var payload evaluationSummaryRecord
+			require.NoError(t, json.Unmarshal(record.Body, &payload))
+			if payload.Kind == "evaluation_summary" {
+				return &payload
+			}
+		}
+		return nil
+	}
+
+	t.Run("unbound run reports not_run", func(t *testing.T) {
+		records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
+		require.NoError(t, err)
+		summary := decodeSummary(t, records)
+		assert.Equal(t, "not_run", summary.VerifierState)
+		assert.Nil(t, summary.VerificationMetadata)
+	})
+
+	t.Run("bound pass reports verified state and metadata", func(t *testing.T) {
+		report := boundTestReport(run.GetRunId(), evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS)
+		records, err := BuildRunAggregateViewRecords(run, state, report, time.Unix(1_700_000_050, 0).UTC())
+		require.NoError(t, err)
+		summary := decodeSummary(t, records)
+		assert.Equal(t, "passed", summary.VerifierState)
+		assert.Equal(t, "exploratory_verified", summary.QualityState)
+		require.NotNil(t, summary.VerificationMetadata)
+		assert.Equal(t, "bound", summary.VerificationMetadata.Provenance)
+		assert.Equal(t, "passed", summary.VerificationMetadata.VerifierState)
+		assert.Equal(t, "v2.1.10", summary.VerificationMetadata.VerifierReleaseVersion)
+		assert.Equal(t, "2.0.0", summary.VerificationMetadata.VerifierContractVersion)
+		assert.Equal(t, strings.Repeat("a", 64), summary.VerificationMetadata.ReportDigest)
+		assert.Equal(t, strings.Repeat("b", 64), summary.VerificationMetadata.PopulationDigest)
+		assert.Equal(t, "2023-11-14T22:16:40Z", summary.VerificationMetadata.VerifiedAt)
+	})
+
+	t.Run("bound failure reports failed state", func(t *testing.T) {
+		report := boundTestReport(run.GetRunId(), evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL)
+		report.FailureReasons = []string{"assignment assign-1: missing window"}
+		records, err := BuildRunAggregateViewRecords(run, state, report, time.Unix(1_700_000_050, 0).UTC())
+		require.NoError(t, err)
+		summary := decodeSummary(t, records)
+		assert.Equal(t, "failed", summary.VerifierState)
+		assert.Equal(t, "assignment assign-1: missing window", summary.VerifierFailureSummary)
+		require.NotNil(t, summary.VerificationMetadata)
+		assert.Equal(t, "failed", summary.VerificationMetadata.VerifierState)
+	})
+
+	t.Run("malformed bound report fails closed", func(t *testing.T) {
+		report := boundTestReport(run.GetRunId(), evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS)
+		report.VerifiedAt = nil
+		_, err := BuildRunAggregateViewRecords(run, state, report, time.Unix(1_700_000_050, 0).UTC())
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
+	})
+}
+
+func TestBuildRunAggregateViewRecordsHeadlineMetricsShape(t *testing.T) {
+	span := uint64(200_000_000)
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", &span, scoredInferenceCall(10, 1_000_000_000)),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	run := &evalv1.EvaluationRun{
+		RunId:           "run-1",
+		StartedAt:       timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "eval-smoke-mini"},
+	}
+	records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
+	require.NoError(t, err)
+	var summary evaluationSummaryRecord
+	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
+
+	passRate := summary.HeadlineMetrics.PassRate
+	assert.Equal(t, "ratio", passRate.Unit)
+	require.NotNil(t, passRate.Value)
+	assert.Equal(t, 1.0, *passRate.Value)
+	assert.Equal(t, uint32(1), passRate.ObservedCount)
+	assert.Equal(t, uint32(1), passRate.EligibleCount)
+	assert.Equal(t, uint32(0), passRate.UnavailableCount)
+
+	latency := summary.HeadlineMetrics.LatencyP50MS
+	assert.Equal(t, "milliseconds", latency.Unit)
+	require.NotNil(t, latency.Value)
+	assert.Equal(t, 200.0, *latency.Value)
+	assert.Equal(t, uint32(1), latency.ObservedCount)
+	assert.Equal(t, uint32(1), latency.EligibleCount)
+
+	throughput := summary.HeadlineMetrics.OutputThroughputP50
+	assert.Equal(t, "tokens_per_second", throughput.Unit)
+	require.NotNil(t, throughput.Value)
+	assert.Equal(t, 10.0, *throughput.Value)
+	assert.Equal(t, uint32(1), throughput.ObservedCount)
+	assert.Equal(t, uint32(1), throughput.EligibleCount)
 }
 
 func homogeneousAssignment(assignmentID, variantID string, role evalv1.ModelCampaignRole) *evalv1.EvaluationAssignment {

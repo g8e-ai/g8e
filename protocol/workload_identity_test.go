@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -172,6 +173,74 @@ func TestExtractOperatorSessionID(t *testing.T) {
 	if _, ok := wid.ExtractOperatorSessionID("spiffe://g8e.local/cli/user/cli"); ok {
 		t.Fatal("ExtractOperatorSessionID should reject non-operator SPIFFE IDs")
 	}
+}
+
+func TestWorkloadIdentityExtractorsRejectMalformedPathSegments(t *testing.T) {
+	wid := NewWorkloadIdentity()
+	tests := []struct {
+		name      string
+		spiffeID  string
+		extract   func(string) (string, bool)
+		wantValue string
+	}{
+		{name: "cli session valid", spiffeID: wid.CLISPIFFEID("user-1", "session-1"), extract: wid.ExtractCLISessionID, wantValue: "session-1"},
+		{name: "cli user valid", spiffeID: wid.CLISPIFFEID("user-1", "session-1"), extract: wid.ExtractUserID, wantValue: "user-1"},
+		{name: "gateway valid", spiffeID: wid.GatewayPeerSPIFFEID("gateway-1"), extract: wid.ExtractGatewayID, wantValue: "gateway-1"},
+		{name: "operator session valid", spiffeID: wid.OperatorSPIFFEID("org-1", "operator-1", "session-1"), extract: wid.ExtractOperatorSessionID, wantValue: "session-1"},
+		{name: "cli missing user", spiffeID: "spiffe://g8e.local/cli//session-1", extract: wid.ExtractUserID},
+		{name: "cli missing session", spiffeID: "spiffe://g8e.local/cli/user-1/", extract: wid.ExtractCLISessionID},
+		{name: "cli extra segment", spiffeID: "spiffe://g8e.local/cli/user-1/session-1/extra", extract: wid.ExtractUserID},
+		{name: "gateway extra segment", spiffeID: "spiffe://g8e.local/gateway/gateway-1/extra", extract: wid.ExtractGatewayID},
+		{name: "operator missing component", spiffeID: "spiffe://g8e.local/operator/org-1//session-1", extract: wid.ExtractOperatorSessionID},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := tt.extract(tt.spiffeID)
+			if tt.wantValue == "" {
+				assert.False(t, ok)
+				assert.Empty(t, got)
+				return
+			}
+			assert.True(t, ok)
+			assert.Equal(t, tt.wantValue, got)
+		})
+	}
+}
+
+func TestMatchesCLISessionOnlyRequiresCanonicalCLIIdentity(t *testing.T) {
+	wid := NewWorkloadIdentity()
+	valid := wid.CLISPIFFEID("user-1", "session-1")
+	for _, tt := range []struct {
+		name      string
+		spiffeID  string
+		sessionID string
+		want      bool
+	}{
+		{name: "matching session", spiffeID: valid, sessionID: "session-1", want: true},
+		{name: "different session", spiffeID: valid, sessionID: "session-2", want: false},
+		{name: "extra path segment", spiffeID: valid + "/extra", sessionID: "session-1", want: false},
+		{name: "empty session", spiffeID: "spiffe://g8e.local/cli/user-1/", sessionID: "", want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, wid.MatchesCLISessionOnly(tt.spiffeID, tt.sessionID))
+		})
+	}
+}
+
+func TestExtractUserIDFromUserSANRejectsPathTraversal(t *testing.T) {
+	wid := NewWorkloadIdentity()
+	for _, spiffeID := range []string{
+		"spiffe://g8e.local/user/",
+		"spiffe://g8e.local/user/user-1/extra",
+		"spiffe://other.local/user/user-1",
+	} {
+		userID, ok := wid.ExtractUserIDFromUserSAN(spiffeID)
+		assert.False(t, ok, spiffeID)
+		assert.Empty(t, userID)
+	}
+	userID, ok := wid.ExtractUserIDFromUserSAN(wid.UserSPIFFEID("user-1"))
+	require.True(t, ok)
+	assert.Equal(t, "user-1", userID)
 }
 
 func assertOperatorURL(t *testing.T, got *url.URL, want string) {

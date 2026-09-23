@@ -28,6 +28,7 @@ type ResultsPublisher interface {
 	PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishFsListResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
+	PublishShutdownAcknowledgement(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishInferenceCompletion(ctx context.Context, env *commonv1.GovernanceEnvelope, completion *operatorv1.InferenceCompletion) error
 	PublishInferenceProgress(ctx context.Context, originalMsg *PubSubCommandMessage, progress *operatorv1.InferenceProgressEvent) error
 	PublishProviderBoundaryObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ProviderBoundaryObservationCompleted) error

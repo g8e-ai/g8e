@@ -5,12 +5,15 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Tests for g8e version consistency between __init__.py and pyproject.toml."""
+"""Tests for g8e version consistency across package and protocol documentation."""
 
 import re
 from pathlib import Path
 
 import g8e
+
+
+PROTOCOL_DOCUMENTS = ("a2a.md", "constants.md", "mcp.md", "spec.md")
 
 
 def _read_pyproject_version() -> str:
@@ -19,6 +22,11 @@ def _read_pyproject_version() -> str:
     match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
     assert match, "Could not find version in pyproject.toml"
     return match.group(1)
+
+
+def _read_repository_version() -> str:
+    version_file = Path(__file__).parents[3] / "VERSION"
+    return version_file.read_text(encoding="utf-8").strip().removeprefix("v")
 
 
 class TestVersionConsistency:
@@ -43,3 +51,16 @@ class TestVersionConsistency:
         assert re.match(r"^\d+\.\d+\.\d+", version), (
             f"Version '{version}' does not look like semver"
         )
+
+    def test_protocol_documentation_matches_repository_version(self):
+        expected_version = _read_repository_version()
+        protocol_docs = Path(__file__).parents[2] / "docs"
+        for name in PROTOCOL_DOCUMENTS:
+            path = protocol_docs / name
+            text = path.read_text(encoding="utf-8")
+            match = re.search(r"^Version: v([^\n]+)$", text, re.MULTILINE)
+            assert match, f"Could not find a version in {path}"
+            assert match.group(1) == expected_version, (
+                f"{path} version ({match.group(1)}) != "
+                f"repository version ({expected_version})"
+            )

@@ -9,7 +9,9 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"log/slog"
 	"path/filepath"
 	"testing"
 	"time"
@@ -18,8 +20,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -27,7 +31,7 @@ func TestWriteCampaignStartPlan_TextAndJSON(t *testing.T) {
 	plan := &evaluation.CampaignStartPlan{
 		CampaignID:           "eval-init-qwen3-4b",
 		RunID:                "run-123",
-		InventoryPath:        ".g8e/eval/inventories/eval-init-qwen3-4b.json",
+		InventoryPath:        filepath.Join(constants.EvaluationDirname, constants.EvaluationInventoriesDirname, "eval-init-qwen3-4b.json"),
 		ModelTags:            []string{"qwen3:4b"},
 		RegistryDigest:       "digest-1",
 		HomogeneousCellCount: 75,
@@ -47,11 +51,11 @@ func TestWriteCampaignStartPlan_TextAndJSON(t *testing.T) {
 
 	var jsonOut bytes.Buffer
 	require.NoError(t, writeCampaignStartPlan(&jsonOut, plan, sessions, true))
-	var payload map[string]any
+	var payload campaignStartPlanJSON
 	require.NoError(t, json.Unmarshal(jsonOut.Bytes(), &payload))
-	assert.Equal(t, "eval-init-qwen3-4b", payload["campaign_id"])
-	assert.Equal(t, "run-123", payload["run_id"])
-	assert.Equal(t, "inference-session-1", payload["inference_session"])
+	assert.Equal(t, "eval-init-qwen3-4b", payload.CampaignID)
+	assert.Equal(t, "run-123", payload.RunID)
+	assert.Equal(t, "inference-session-1", payload.InferenceSession)
 }
 
 func TestPersistActiveCampaignRun_WritesMarker(t *testing.T) {
@@ -60,12 +64,15 @@ func TestPersistActiveCampaignRun_WritesMarker(t *testing.T) {
 	plan := &evaluation.CampaignStartPlan{
 		RunID:         "run-abc",
 		CampaignID:    "eval-init-gemma3-4b",
-		InventoryPath: ".g8e/eval/inventories/eval-init-gemma3-4b.json",
+		InventoryPath: filepath.Join(constants.EvaluationDirname, constants.EvaluationInventoriesDirname, "eval-init-gemma3-4b.json"),
 		ModelTags:     []string{"gemma3:4b"},
 	}
-	require.NoError(t, persistActiveCampaignRun(root, plan, startedAt))
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, persistActiveCampaignRunWithFileService(context.Background(), fileSvc, plan, startedAt))
 
-	loaded, err := evaluation.LoadActiveCampaignRun(root)
+	loaded, err := evaluation.LoadActiveCampaignRunFromRuntime(context.Background(), fileSvc)
 	require.NoError(t, err)
 	assert.Equal(t, plan.RunID, loaded.RunID)
 	assert.Equal(t, plan.CampaignID, loaded.CampaignID)
@@ -76,10 +83,24 @@ func TestPersistActiveCampaignRun_WritesMarker(t *testing.T) {
 
 func TestResolveCampaignRunID(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, evaluation.SaveActiveCampaignRun(root, evaluation.ActiveCampaignRun{
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveActiveCampaignRunToRuntime(context.Background(), fileSvc, evaluation.ActiveCampaignRun{
 		RunID:      "active-run-1",
 		CampaignID: "eval-init-qwen3-4b",
 	}))
+	deps := nativeEvalDeps{
+		configLoader: func(projectRoot string) (*config.Config, error) {
+			return &config.Config{ProjectRoot: projectRoot}, nil
+		},
+		fileSvcFactory: func(projectRoot string, _ *slog.Logger) (fs.RuntimeFileService, error) {
+			return fs.NewRuntimeFileService(projectRoot, nil)
+		},
+		createRuntimeTree: func(ctx context.Context, service fs.RuntimeFileService) error {
+			return service.CreateRuntimeTree(ctx)
+		},
+	}
 
 	tests := []struct {
 		name      string
@@ -124,14 +145,16 @@ func TestResolveCampaignRunID(t *testing.T) {
 		{
 			name:    "missing run id",
 			command: "verify",
+			project: filepath.Join(root, "missing"),
 			wantErr: constants.ErrMissingRequiredField.Error(),
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			command := &cobra.Command{Use: "eval"}
+			command.SetContext(context.Background())
 			command.Flags().String("project-root", test.project, "")
-			got, err := resolveCampaignRunID(command, test.command, test.flagValue, test.args)
+			got, err := resolveCampaignRunID(command, deps, test.command, test.flagValue, test.args)
 			if test.wantErr != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.wantErr)
@@ -150,8 +173,10 @@ func TestMarkQueueEntryVerifiedAfterPass(t *testing.T) {
 			{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "pending"},
 		},
 	}
-	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
-	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, &queue))
 
 	plan := &evaluation.CampaignStartPlan{
 		RunID: "run-pass-1",
@@ -163,23 +188,23 @@ func TestMarkQueueEntryVerifiedAfterPass(t *testing.T) {
 		Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 	}
 
-	require.NoError(t, markQueueEntryVerifiedAfterPass(root, plan, report, false))
-	loaded, err := evaluation.LoadInitCampaignQueue(queuePath)
+	require.NoError(t, markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, plan, report, false))
+	loaded, err := evaluation.LoadInitCampaignQueueFromRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, err)
 	require.Len(t, loaded.Models, 1)
 	assert.Equal(t, "verified", loaded.Models[0].Status)
 	assert.Equal(t, "run-pass-1", loaded.Models[0].VerifiedRunID)
 	assert.Contains(t, loaded.Models[0].Notes, "75/75 verify PASS")
 
-	require.NoError(t, markQueueEntryVerifiedAfterPass(root, plan, report, true))
-	loaded, err = evaluation.LoadInitCampaignQueue(queuePath)
+	require.NoError(t, markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, plan, report, true))
+	loaded, err = evaluation.LoadInitCampaignQueueFromRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, err)
 	assert.Equal(t, evaluation.TierAVerifyNotes("run-pass-1"), loaded.Models[0].Notes)
 
-	require.NoError(t, markQueueEntryVerifiedAfterPass(root, nil, report, false))
-	require.NoError(t, markQueueEntryVerifiedAfterPass(root, plan, nil, false))
+	require.NoError(t, markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, nil, report, false))
+	require.NoError(t, markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, plan, nil, false))
 	failReport := &evalv1.EvaluationVerificationReport{
 		Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 	}
-	require.NoError(t, markQueueEntryVerifiedAfterPass(root, plan, failReport, false))
+	require.NoError(t, markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, plan, failReport, false))
 }

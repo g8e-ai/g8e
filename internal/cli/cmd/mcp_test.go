@@ -169,12 +169,16 @@ func TestJSONRPCRequest(t *testing.T) {
 	})
 }
 
+type mcpProxyStatusResult struct {
+	Status string `json:"status"`
+}
+
 func TestJSONRPCResponse(t *testing.T) {
 	t.Run("JSON-RPC response with result serializes correctly", func(t *testing.T) {
 		resp := JSONRPCResponse{
 			JSONRPC: "2.0",
 			ID:      1,
-			Result:  map[string]string{"status": "ok"},
+			Result:  mcpProxyStatusResult{Status: "ok"},
 		}
 		data, err := json.Marshal(resp)
 		require.NoError(t, err)

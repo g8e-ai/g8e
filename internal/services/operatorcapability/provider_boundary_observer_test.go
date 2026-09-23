@@ -27,6 +27,38 @@ func TestSelectProviderBoundaryObserver(t *testing.T) {
 	assert.Equal(t, "sess-obs-1", selected.OperatorSessionID)
 }
 
+func TestActiveProviderBoundaryObserversFiltersAndProjectsOperators(t *testing.T) {
+	t.Parallel()
+
+	operators := []models.OperatorDocumentGo{
+		{ID: "inactive", OperatorSessionID: "sess-inactive", Status: constants.OperatorStatusAvailable, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{ID: "local", OperatorSessionID: "sess-local", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded, RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{ID: "disabled", OperatorSessionID: "sess-disabled", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: false}},
+		{ID: "missing-config", OperatorSessionID: "sess-missing-config", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote},
+		{ID: "missing-session", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}},
+		{ID: "observer-1", OperatorSessionID: "sess-observer-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true, Platform: "linux"}},
+	}
+
+	matches := ActiveProviderBoundaryObservers(operators)
+	require.Len(t, matches, 1)
+	assert.Equal(t, ProviderBoundaryObserverStatus{OperatorID: "observer-1", OperatorSessionID: "sess-observer-1", Status: string(constants.OperatorStatusActive), ObserverEnabled: true, Platform: "linux"}, matches[0])
+}
+
+func TestSelectProviderBoundaryObserverBySessionRejectsUnknownSession(t *testing.T) {
+	t.Parallel()
+
+	operators := []models.OperatorDocumentGo{{
+		ID: "obs-1", OperatorSessionID: "sess-obs-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
+		RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+	}}
+	selected, err := SelectProviderBoundaryObserver(operators, "sess-obs-1")
+	require.NoError(t, err)
+	assert.Equal(t, "obs-1", selected.OperatorID)
+
+	_, err = SelectProviderBoundaryObserver(operators, "missing")
+	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverNotCapable)
+}
+
 func TestSelectProviderBoundaryObserver_NotFound(t *testing.T) {
 	_, err := SelectProviderBoundaryObserver(nil, "")
 	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverNotFound)

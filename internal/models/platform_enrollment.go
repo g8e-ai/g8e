@@ -31,6 +31,7 @@ const (
 	PlatformEnrollmentStateCompleted PlatformEnrollmentState = "completed"
 	PlatformEnrollmentStateDenied    PlatformEnrollmentState = "denied"
 	PlatformEnrollmentStateExpired   PlatformEnrollmentState = "expired"
+	PlatformEnrollmentStateRevoked   PlatformEnrollmentState = "revoked"
 
 	PlatformEnrollmentDecisionApprove PlatformEnrollmentDecision = "approve"
 	PlatformEnrollmentDecisionDeny    PlatformEnrollmentDecision = "deny"
@@ -54,7 +55,7 @@ func (k PlatformComponentKind) CanonicalName() (string, error) {
 }
 
 func (s PlatformEnrollmentState) IsTerminal() bool {
-	return s == PlatformEnrollmentStateCompleted || s == PlatformEnrollmentStateDenied || s == PlatformEnrollmentStateExpired
+	return s == PlatformEnrollmentStateCompleted || s == PlatformEnrollmentStateDenied || s == PlatformEnrollmentStateExpired || s == PlatformEnrollmentStateRevoked
 }
 
 type PlatformEnrollmentCreateRequest struct {
@@ -172,6 +173,27 @@ type PlatformEnrollmentDecisionResponse struct {
 	State     PlatformEnrollmentState `json:"state"`
 }
 
+type PlatformEnrollmentRevokeRequest struct {
+	RequestID string `json:"request_id"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+func (r PlatformEnrollmentRevokeRequest) Validate() error {
+	if r.RequestID == "" {
+		return constants.ErrPlatformEnrollmentRequestIDRequired
+	}
+	if len(r.Reason) > constants.PlatformEnrollmentMaxReasonBytes {
+		return constants.ErrPlatformEnrollmentReasonTooLong
+	}
+	return nil
+}
+
+type PlatformEnrollmentRevokeResponse struct {
+	RequestID     string                  `json:"request_id"`
+	ComponentKind PlatformComponentKind   `json:"component_kind"`
+	State         PlatformEnrollmentState `json:"state"`
+}
+
 type PlatformEnrollmentProofs struct {
 	App      string `json:"app,omitempty"`
 	Operator string `json:"operator,omitempty"`
@@ -246,6 +268,11 @@ type PlatformEnrollmentRequest struct {
 	CertificateFingerprint string                              `json:"certificate_fingerprint,omitempty"`
 	Issued                 *PlatformEnrollmentCompleteResponse `json:"issued,omitempty"`
 	CompletedAt            *time.Time                          `json:"completed_at,omitempty"`
+	RevokedAt              *time.Time                          `json:"revoked_at,omitempty"`
+	RevokedByUserID        string                              `json:"revoked_by_user_id,omitempty"`
+	RevocationReason       string                              `json:"revocation_reason,omitempty"`
+	RevocationEnvelopeID   string                              `json:"revocation_envelope_id,omitempty"`
+	RevocationReceiptID    string                              `json:"revocation_receipt_id,omitempty"`
 	FailureReason          string                              `json:"failure_reason,omitempty"`
 }
 

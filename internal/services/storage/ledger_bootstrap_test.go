@@ -41,12 +41,10 @@ func setupBootstrapLedger(t *testing.T) (*GitLedgerService, string) {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
-	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, vHeader.Save(fileSvc))
+	testVault, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	t.Cleanup(func() { testVault.Close() })
 
@@ -265,12 +263,10 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
-	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, vHeader.Save(fileSvc))
+	testVault, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	t.Cleanup(func() { testVault.Close() })
 
@@ -336,12 +332,13 @@ func TestBootstrap_BootstrapFailureOnUnwritableBaseDir(t *testing.T) {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(testutil.TempDir(t), "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	tempDir := testutil.TempDir(t)
+	fileSvc, _ := newTestFileSvc(t, tempDir)
+	require.NoError(t, err)
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
-	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: testutil.NewTestLogger()})
+	require.NoError(t, vHeader.Save(fileSvc))
+	testVault, err := vault.NewVault(&vault.VaultConfig{FileSvc: fileSvc, Logger: testutil.NewTestLogger()})
 	require.NoError(t, err)
 	t.Cleanup(func() { testVault.Close() })
 
@@ -349,7 +346,7 @@ func TestBootstrap_BootstrapFailureOnUnwritableBaseDir(t *testing.T) {
 		GitPath:         testGitPath(t),
 		EncryptionVault: testVault,
 	}
-	fileSvc, err := fs.NewRuntimeFileService(blocker, testutil.NewTestLogger())
+	fileSvc, err = fs.NewRuntimeFileService(blocker, testutil.NewTestLogger())
 	require.NoError(t, err)
 	svc, err := NewGitLedgerService(config, testutil.NewTestLogger(), fileSvc)
 	require.Error(t, err)

@@ -58,16 +58,18 @@ const (
 // GradeControlAssertions and GradeFrameworkControls respectively; the
 // builder aggregates them rather than re-grading.
 type AnalysisRequest struct {
-	ScopeID              string
-	WindowStart          time.Time
-	WindowEnd            time.Time
-	EvaluatedAt          time.Time
-	Graph                *EvidenceGraph
-	Assertions           *compliancev1.ControlAssertionCatalog
-	Frameworks           *compliancev1.FrameworkCatalog
-	Crosswalks           *compliancev1.ControlCrosswalkCatalog
-	AssertionAssessments []*compliancev1.ControlAssertionAssessment
-	FrameworkAssessments []*compliancev1.FrameworkControlAssessment
+	ScopeID               string
+	AssessmentScopeSHA256 string
+	WindowStart           time.Time
+	WindowEnd             time.Time
+	EvaluatedAt           time.Time
+	Graph                 *EvidenceGraph
+	Assertions            *compliancev1.ControlAssertionCatalog
+	Frameworks            *compliancev1.FrameworkCatalog
+	Crosswalks            *compliancev1.ControlCrosswalkCatalog
+	AssertionAssessments  []*compliancev1.ControlAssertionAssessment
+	FrameworkAssessments  []*compliancev1.FrameworkControlAssessment
+	Diagnostics           []*compliancev1.AssessmentDiagnostic
 }
 
 // BuildComplianceAnalysis aggregates verified evidence, assertion
@@ -93,6 +95,7 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 	remediation := buildRemediation(findings)
 	sections := buildSections(request)
 	graphFailures := buildGraphFailureMessages(request.Graph)
+	diagnostics := buildAnalysisDiagnostics(request.AssertionAssessments, request.Graph, request.ScopeID, request.Diagnostics)
 
 	analysis := &compliancev1.ComplianceAnalysis{
 		AnalysisSchemaVersion:      constants.AnalysisSchemaVersion,
@@ -112,6 +115,8 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 		EvidenceGraphFailures:      graphFailures,
 		EvidenceGraphValid:         request.Graph.Valid(),
 		EvidenceResources:          buildEvidenceResources(request),
+		AssessmentScopeSha256:      request.AssessmentScopeSHA256,
+		Diagnostics:                diagnostics,
 	}
 	analysisID, err := analysisContentAddress(analysis)
 	if err != nil {
@@ -169,13 +174,12 @@ func indexAnalysisAssertions(assertions *compliancev1.ControlAssertionCatalog) m
 
 func buildEvidenceWindowCompleteness(request AnalysisRequest) *compliancev1.EvidenceWindowCompleteness {
 	expected := int32(len(request.AssertionAssessments))
-	satisfied := int32(0)
+	assessed := int32(0)
 	missing := make([]string, 0)
 	stale := make([]string, 0)
 	for _, assessment := range request.AssertionAssessments {
-		switch assessment.GetStatus() {
-		case statusSatisfied:
-			satisfied++
+		if assessment.GetFreshnessStatus() == freshnessFresh {
+			assessed++
 		}
 		switch assessment.GetFreshnessStatus() {
 		case freshnessIncomplete:
@@ -187,15 +191,15 @@ func buildEvidenceWindowCompleteness(request AnalysisRequest) *compliancev1.Evid
 	sort.Strings(missing)
 	sort.Strings(stale)
 	status := completenessStatusEmpty
-	if satisfied > 0 && satisfied == expected {
+	if assessed > 0 && assessed == expected {
 		status = completenessStatusComplete
-	} else if satisfied > 0 {
+	} else if assessed > 0 {
 		status = completenessStatusPartial
 	}
 	return &compliancev1.EvidenceWindowCompleteness{
 		ScopeId:               request.ScopeID,
 		ExpectedEvidenceCount: expected,
-		ActualEvidenceCount:   satisfied,
+		ActualEvidenceCount:   assessed,
 		MissingEvidenceRefs:   missing,
 		StaleEvidenceRefs:     stale,
 		CompletenessStatus:    status,
@@ -493,6 +497,39 @@ func buildGraphFailureMessages(graph *EvidenceGraph) []string {
 	}
 	sort.Strings(messages)
 	return messages
+}
+
+func buildAnalysisDiagnostics(assessments []*compliancev1.ControlAssertionAssessment, graph *EvidenceGraph, scopeID string, diagnostics []*compliancev1.AssessmentDiagnostic) []*compliancev1.AssessmentDiagnostic {
+	result := make([]*compliancev1.AssessmentDiagnostic, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		if diagnostic != nil {
+			result = append(result, proto.Clone(diagnostic).(*compliancev1.AssessmentDiagnostic))
+		}
+	}
+	for _, assessment := range assessments {
+		for _, diagnostic := range assessment.GetDiagnostics() {
+			if diagnostic != nil {
+				result = append(result, proto.Clone(diagnostic).(*compliancev1.AssessmentDiagnostic))
+			}
+		}
+	}
+	for _, node := range graph.NodesByScope(scopeID) {
+		for _, diagnostic := range node.Diagnostics {
+			if diagnostic != nil {
+				result = append(result, proto.Clone(diagnostic).(*compliancev1.AssessmentDiagnostic))
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		left := diagnosticSortKey(result[i])
+		right := diagnosticSortKey(result[j])
+		return left < right
+	})
+	return result
+}
+
+func diagnosticSortKey(diagnostic *compliancev1.AssessmentDiagnostic) string {
+	return diagnostic.GetSourceAdmissionId() + "\x00" + diagnostic.GetSubject().GetRunId() + "\x00" + diagnostic.GetSubject().GetAttemptId() + "\x00" + diagnostic.GetSubject().GetScenarioId() + "\x00" + diagnostic.GetSubject().GetTransactionId() + "\x00" + diagnostic.GetCode() + "\x00" + diagnostic.GetMessage()
 }
 
 func sortedAssertionAssessments(assessments []*compliancev1.ControlAssertionAssessment) []*compliancev1.ControlAssertionAssessment {

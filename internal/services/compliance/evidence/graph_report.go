@@ -36,15 +36,16 @@ type RunBoundImporter interface {
 // validity, node counts by type and scope, validation failures, and any
 // importer errors encountered during construction.
 type EvidenceGraphReport struct {
-	VerifierID      string          `json:"verifier_id"`
-	VerifierVersion string          `json:"verifier_version"`
-	Valid           bool            `json:"valid"`
-	NodeCount       int             `json:"node_count"`
-	NodesByType     map[string]int  `json:"nodes_by_type"`
-	NodesByScope    map[string]int  `json:"nodes_by_scope"`
-	Failures        []GraphFailure  `json:"failures"`
-	ImporterErrors  []ImporterError `json:"importer_errors"`
-	VerifiedAt      time.Time       `json:"verified_at"`
+	VerifierID        string          `json:"verifier_id"`
+	VerifierVersion   string          `json:"verifier_version"`
+	Valid             bool            `json:"valid"`
+	NodeCount         int             `json:"node_count"`
+	NodesByType       map[string]int  `json:"nodes_by_type"`
+	NodesByScope      map[string]int  `json:"nodes_by_scope"`
+	Failures          []GraphFailure  `json:"failures"`
+	FreshnessFailures []GraphFailure  `json:"freshness_failures"`
+	ImporterErrors    []ImporterError `json:"importer_errors"`
+	VerifiedAt        time.Time       `json:"verified_at"`
 }
 
 // BuildAndValidateGraph constructs an evidence graph from the given
@@ -99,7 +100,8 @@ func BuildAndValidateGraph(
 
 	report.Valid = graph.Valid() && len(report.ImporterErrors) == 0
 	report.NodeCount = graph.NodeCount()
-	report.Failures = graph.Failures()
+	report.Failures = graph.failures
+	report.FreshnessFailures = graph.FreshnessFailures()
 
 	for artifactType, nodes := range graph.byType {
 		report.NodesByType[string(artifactType)] = len(nodes)

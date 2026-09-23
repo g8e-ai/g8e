@@ -130,17 +130,17 @@ test('replaces partial model revisions with verified revisions and keeps scope i
   await page.goto('/evaluations');
   await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible();
   await expect(page.getByTestId('quality-exploratory_verified')).toBeVisible();
-  await expect(page.getByTestId('quality-exploratory_verified')).toHaveText('Exploratory · verifier passed');
+  await expect(page.getByTestId('quality-exploratory_verified')).toHaveText('Run-scoped verification passed');
 
   await page.goto('/models');
   await expect(page.locator(`a[href="/models/${verifiedDataset}/quality-model?role=primary"]`)).toBeVisible();
   await expect(page.getByTestId('quality-exploratory_verified')).toBeVisible();
-  await expect(page.getByTestId('quality-exploratory_verified')).toHaveText('Exploratory · verifier passed');
+  await expect(page.getByTestId('quality-exploratory_verified')).toHaveText('Run-scoped verification passed');
   await expect(page.getByText('Quality Model Assistant')).toBeVisible();
-  await expect(page.locator('tr').filter({ has: page.getByRole('link', { name: 'Quality Model Assistant' }) })).toContainText('Exploratory · partial');
+  await expect(page.locator('tr').filter({ has: page.getByRole('link', { name: 'Quality Model Assistant' }) })).toContainText('Not fully verified');
   await expect(
     page.locator('tr').filter({ has: page.locator(`a[href="/models/${partialDataset}/quality-model?role=primary"]`) }),
-  ).toContainText('Exploratory · partial');
+  ).toContainText('Not fully verified');
 
   await page.getByLabel('Filter by quality state').selectOption('exploratory_verified');
   await expect(page.locator(`a[href="/models/${verifiedDataset}/quality-model?role=primary"]`)).toBeVisible();
@@ -151,6 +151,22 @@ test('replaces partial model revisions with verified revisions and keeps scope i
   await expect(page.locator(`a[href="/models/${verifiedDataset}/quality-model?role=primary"]`)).toBeVisible();
   await expect(page.getByTestId('quality-exploratory_verified')).toBeVisible();
   expectPublicOnly(requests);
+});
+
+test('downgrades stale verified-public model records before rendering', async ({ page }) => {
+  const stale = {
+    ...model(verifiedDataset, 'verified_public'),
+    schema_version: '1.2.0',
+    evaluation_coverage: 0.2,
+  };
+  await installMirror(page, [stale]);
+
+  await page.goto('/models');
+  await page.getByLabel('Filter by evaluation status').selectOption('all');
+  const row = page.locator('tr').filter({ has: page.getByRole('link', { name: 'Quality Model' }) });
+  await expect(row).toContainText('20.0%');
+  await expect(row).toContainText('Legacy · not current-standard verified');
+  await expect(row).not.toContainText('Current-standard verified');
 });
 
 test('does not promote model rows from an evaluation-only update', async ({ page }) => {

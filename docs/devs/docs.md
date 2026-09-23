@@ -152,7 +152,7 @@ This catalog covers every first-party documentation surface in the repository. I
 
 ### Dashboard documentation
 
-The [g8ed index](../dashboard/index.md) owns the component documentation map and current capability status. Its complete set is [Architecture](../dashboard/architecture.md), [Authentication](../dashboard/auth.md), [Gateway Integration](../dashboard/gateway.md), [Operator Surfaces](../dashboard/operators.md), [SSE](../dashboard/sse.md), [Development](../dashboard/development.md), and [Testing](../dashboard/tests.md). The component entry point is [dashboard/README.md](../../dashboard/README.md).
+The [g8ed index](../dashboard/index.md) owns the component documentation map and current capability status. Its complete set is [Architecture](../dashboard/architecture.md), [Authentication](../dashboard/auth.md), [Gateway Integration](../dashboard/gateway.md), [Operator Surfaces](../dashboard/operators.md), [SSE](../dashboard/sse.md), [Development](../dashboard/devs.md), and [Testing](../dashboard/tests.md). The component entry point is [dashboard/README.md](../../dashboard/README.md).
 
 ### Ensemble documentation
 

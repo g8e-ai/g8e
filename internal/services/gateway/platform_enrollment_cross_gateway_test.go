@@ -37,6 +37,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/protocol"
 )
 
 // gatewayHostname is the hostname used by the secondary (enrolling) gateway
@@ -172,6 +173,12 @@ func TestPlatformEnrollment_ApproveAndIssue_GatewayOriginBecomesActiveOperator(t
 	require.NoError(t, json.Unmarshal(dataBytes, &op))
 	assert.Equal(t, env.ownerID, op.UserID,
 		"gateway-as-operator doc must carry the approving owner's user_id")
+	owner, err := env.userSvc.GetByID(env.ownerID)
+	require.NoError(t, err)
+	require.NotNil(t, owner)
+	require.NotEmpty(t, owner.OrganizationID)
+	assert.Equal(t, owner.OrganizationID, op.OrganizationID,
+		"gateway-as-operator doc must carry the owner's organization membership")
 	assert.Equal(t, constants.OperatorStatusActive, op.Status,
 		"gateway-as-operator must be active after issuance")
 	assert.Equal(t, constants.OperatorTypeRemote, op.OperatorType,
@@ -182,9 +189,9 @@ func TestPlatformEnrollment_ApproveAndIssue_GatewayOriginBecomesActiveOperator(t
 
 	// Verify the operator cert carries a SPIFFE URI SAN in the canonical
 	// operator format: spiffe://g8e.local/operator/<org>/<operatorID>/<sessionID>.
-	// The issuance handler passes an empty organization_id, so the org
-	// segment is empty. The assertion checks the prefix and that the
-	// operator_id and session_id appear in the URI.
+	// The issuance handler resolves the approving owner's organization
+	// membership and binds that organization, operator, and session tuple
+	// into the certificate identity and persisted Operator document.
 	uris := extractURISANsFromCert(t, completionResp.Operator.OperatorCert)
 	require.NotEmpty(t, uris, "operator cert must carry at least one URI SAN")
 	var operatorURI string
@@ -195,10 +202,9 @@ func TestPlatformEnrollment_ApproveAndIssue_GatewayOriginBecomesActiveOperator(t
 		}
 	}
 	require.NotEmpty(t, operatorURI, "operator cert must carry a SPIFFE operator URI SAN")
-	assert.Contains(t, operatorURI, completionResp.Operator.OperatorID,
-		"operator SPIFFE URI must contain the operator ID")
-	assert.Contains(t, operatorURI, completionResp.Operator.OperatorSessionID,
-		"operator SPIFFE URI must contain the operator session ID")
+	wid := protocol.NewWorkloadIdentity()
+	assert.Equal(t, wid.OperatorSPIFFEID(owner.OrganizationID, completionResp.Operator.OperatorID, completionResp.Operator.OperatorSessionID), operatorURI)
+	assert.Contains(t, extractURISANsFromCert(t, completionResp.Operator.CLICert), wid.CLISPIFFEID(owner.ID, completionResp.Operator.CLISessionID))
 }
 
 // ============================================================================

@@ -96,6 +96,11 @@
         "format": "iso8601",
         "required": false,
         "description": "When the slot was claimed (set at claim time, not heartbeat time)"
+      },
+      "stop_reason": {
+        "type": "string",
+        "required": false,
+        "description": "Owner-supplied reason recorded after a governed remote stop is acknowledged"
       }
     },
 

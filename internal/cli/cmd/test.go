@@ -24,7 +24,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/paths"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 func testCmd() *cobra.Command {
@@ -50,31 +50,25 @@ func testCmd() *cobra.Command {
 }
 
 func testUnitCmd() *cobra.Command {
+	return testUnitCmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
+}
+
+func testUnitCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unit",
 		Short: "Run Tier 1 (Unit) tests",
 		Long:  `Run unit tests without any build tags. These tests use mocks/stubs and have no external dependencies (no files, network, or DB).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Running Tier 1 (Unit) tests...")
+			fmt.Println("make test-unit")
 
-			// Build the test command based on the Makefile test-unit target
-			// TEST_RACE: -race on non-Windows, empty on Windows
-			// TEST_COUNT: -count=1
-			// TEST_SHORT_TIMEOUT: 60s
-			// TEST_PKGS: all packages excluding cmd/, test/, internal/testutil/, mocks/, proto/
-
-			testRace := ""
-			if runtime.GOOS != "windows" {
-				testRace = "-race"
-			}
-
-			testCmd := exec.Command("go", "test", testRace, "-count=1", "-timeout", "60s",
-				"./internal/...", "./protocol/...")
-			testCmd.Stdout = os.Stdout
-			testCmd.Stderr = os.Stderr
-
-			if err := testCmd.Run(); err != nil {
+			// Delegate to the Makefile so the CLI and repository test target share
+			// package exclusions, race settings, cache settings, and timeouts.
+			code, err := runner(cmd.Context(), "make", "test-unit")
+			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrUnitTestsFailed, err)
+			}
+			if code != 0 {
+				return fmt.Errorf("%w: exit code %d", constants.ErrUnitTestsFailed, code)
 			}
 
 			fmt.Println("Unit tests completed successfully.")
@@ -408,20 +402,22 @@ func testSummaryCmd() *cobra.Command {
 		Short: "View chaos test summary from test vault",
 		Long:  `View aggregated chaos test results from the test vault database. This queries the chaos_events table across all test runs in the test vault directory.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Initialize paths to get test vault directory
-			if err := paths.Init(); err != nil {
+			fileSvc, err := fs.NewRuntimeFileService("", nil)
+			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
-
-			testVaultDir := paths.Infra.TestVaultDir
-			if _, err := os.Stat(testVaultDir); os.IsNotExist(err) {
-				cmd.Printf("Test vault directory not found at %s\n", testVaultDir)
+			testVaultRelDir := constants.TestVaultDirname
+			exists, err := fileSvc.FileExists(cmd.Context(), testVaultRelDir)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
+			}
+			if !exists {
+				cmd.Printf("Test vault directory not found at %s\n", fileSvc.Resolve(testVaultRelDir))
 				cmd.Println("Run './g8e test chaos' first to generate test data.")
 				return nil
 			}
 
-			// Find all test run directories
-			entries, err := os.ReadDir(testVaultDir)
+			entries, err := fileSvc.ReadDir(cmd.Context(), testVaultRelDir)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
 			}
@@ -429,7 +425,7 @@ func testSummaryCmd() *cobra.Command {
 			var testRuns []string
 			for _, entry := range entries {
 				if entry.IsDir() && strings.HasSuffix(entry.Name(), "chaos-test") {
-					testRuns = append(testRuns, filepath.Join(testVaultDir, entry.Name()))
+					testRuns = append(testRuns, filepath.Join(testVaultRelDir, entry.Name()))
 				}
 			}
 
@@ -439,18 +435,19 @@ func testSummaryCmd() *cobra.Command {
 				return nil
 			}
 
-			// Sort test runs by name (timestamp)
-			// For simplicity, we'll just use the most recent one
 			latestRun := testRuns[len(testRuns)-1]
-			dbPath := filepath.Join(latestRun, constants.DbFilename)
-
-			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-				return fmt.Errorf("%w: %s", constants.ErrChaosTestDatabaseNotFound, dbPath)
+			dbRelPath := filepath.Join(latestRun, constants.DbFilename)
+			exists, err = fileSvc.FileExists(cmd.Context(), dbRelPath)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
+			}
+			if !exists {
+				return fmt.Errorf("%w: %s", constants.ErrChaosTestDatabaseNotFound, fileSvc.Resolve(dbRelPath))
 			}
 
 			// Query chaos_events table
 			query := "SELECT category, outcome, COUNT(*) FROM chaos_events GROUP BY category, outcome"
-			db, err := sql.Open("sqlite", dbPath)
+			db, err := sql.Open("sqlite", fileSvc.Resolve(dbRelPath))
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}

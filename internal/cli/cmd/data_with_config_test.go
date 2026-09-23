@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,7 +49,7 @@ func failingClientFactory(err error) apiClientFactory {
 
 func TestDataUsersCmdWithConfig_ConfigLoadError(t *testing.T) {
 	failLoader := func(string) (*config.Config, error) {
-		return nil, errors.New("config load error")
+		return nil, fmt.Errorf("config load error")
 	}
 
 	cmd := dataUsersCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
@@ -65,7 +65,7 @@ func TestDataUsersCmdWithConfig_ClientCreationError(t *testing.T) {
 	env := newDataTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
-	cmd := dataUsersCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")), fileSvcFactoryFor(env.fileSvc))
+	cmd := dataUsersCmdWithConfig(loader, failingClientFactory(fmt.Errorf("client creation error")), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -79,7 +79,7 @@ func TestDataUsersCmdWithConfig_GetRequestError(t *testing.T) {
 	env := newDataTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
-	client := &mockAPIClient{getErr: errors.New("network error")}
+	client := &mockAPIClient{getErr: fmt.Errorf("network error")}
 	cmd := dataUsersCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -108,7 +108,9 @@ func TestDataUsersCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 func TestDataUsersCmdWithConfig_ValidResponse(t *testing.T) {
 	env := newDataTestEnv(t)
 
-	users := []map[string]interface{}{{"id": "user1"}, {"id": "user2"}}
+	users := []struct {
+		ID string `json:"id"`
+	}{{ID: "user1"}, {ID: "user2"}}
 	usersJSON, _ := json.Marshal(users)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
@@ -216,11 +218,17 @@ func TestDataOperatorsCmdWithConfig_SendsUserIDQueryParameter(t *testing.T) {
 func TestDataSettingsCmdWithConfig_ValidResponse(t *testing.T) {
 	env := newDataTestEnv(t)
 
-	settings := map[string]interface{}{
-		"settings":   map[string]interface{}{"key": "value"},
-		"created_at": "2026-01-01T00:00:00Z",
-		"updated_at": "2026-01-01T00:00:00Z",
+	settings := struct {
+		Settings struct {
+			Key string `json:"key"`
+		} `json:"settings"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+	}{
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
 	}
+	settings.Settings.Key = "value"
 	settingsJSON, _ := json.Marshal(settings)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
@@ -306,7 +314,7 @@ func TestDataStoreCmdWithConfig_PostError(t *testing.T) {
 	env := newDataTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
-	client := &mockAPIClient{postErr: errors.New("query failed")}
+	client := &mockAPIClient{postErr: fmt.Errorf("query failed")}
 	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("collection", "test_collection")
 	var buf bytes.Buffer
@@ -322,7 +330,7 @@ func TestDataStoreCmdWithConfig_GetError(t *testing.T) {
 	env := newDataTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
-	client := &mockAPIClient{getErr: errors.New("fetch failed")}
+	client := &mockAPIClient{getErr: fmt.Errorf("fetch failed")}
 	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("collection", "test_collection")
 	cmd.Flags().Set("document-id", "doc1")
@@ -372,7 +380,7 @@ func TestDataAuditListCmdWithConfig_GetError(t *testing.T) {
 	env := newDataTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
-	client := &mockAPIClient{getErr: errors.New("query failed")}
+	client := &mockAPIClient{getErr: fmt.Errorf("query failed")}
 	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("operator-session-id", "sess-123")
 	var buf bytes.Buffer

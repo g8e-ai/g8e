@@ -13,8 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -35,10 +33,6 @@ type DBConfig struct {
 	// Default: 5000
 	BusyTimeoutMs int
 
-	// SetFilePermissions controls whether to chmod the DB file to 0600 after creation.
-	// Default: true
-	SetFilePermissions bool
-
 	// MaxRetries is the maximum number of retry attempts for SQLITE_BUSY errors.
 	// Default: 10
 	MaxRetries int
@@ -53,12 +47,11 @@ type DBConfig struct {
 // The caller must set Path.
 func DefaultDBConfig(path string) DBConfig {
 	return DBConfig{
-		Path:               path,
-		CacheSizeMB:        64,
-		BusyTimeoutMs:      30000, // Increased to 30s for parallel test concurrency
-		SetFilePermissions: true,
-		MaxRetries:         10,
-		RetryBaseDelayMs:   50,
+		Path:             path,
+		CacheSizeMB:      64,
+		BusyTimeoutMs:    30000, // Increased to 30s for parallel test concurrency
+		MaxRetries:       10,
+		RetryBaseDelayMs: 50,
 	}
 }
 
@@ -72,9 +65,11 @@ type DB struct {
 
 // OpenDB opens (or creates) a SQLite database with best-practice settings.
 func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
-	dir := filepath.Dir(cfg.Path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("sqliteutil: create database directory %s: %w", dir, err)
+	if cfg.Path == "" {
+		return nil, fmt.Errorf("sqliteutil: database path is required: %w", constants.ErrMissingRequiredField)
+	}
+	if logger == nil {
+		logger = slog.Default()
 	}
 
 	dsn := fmt.Sprintf("file:%s?_synchronous=NORMAL&_journal_mode=WAL&_busy_timeout=%d&_mutex=full",
@@ -92,7 +87,9 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	sqlDB.SetConnMaxLifetime(0)
 
 	if err := sqlDB.Ping(); err != nil {
-		sqlDB.Close()
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			return nil, fmt.Errorf("sqliteutil: ping database %s: %w", cfg.Path, errors.Join(err, fmt.Errorf("close database: %w", closeErr)))
+		}
 		return nil, fmt.Errorf("sqliteutil: ping database %s: %w", cfg.Path, err)
 	}
 
@@ -111,12 +108,6 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		}
 	}
 
-	if cfg.SetFilePermissions {
-		if err := os.Chmod(cfg.Path, 0600); err != nil {
-			logger.Warn("Failed to set database file permissions", "path", cfg.Path, string(constants.ConnectionStateError), err)
-		}
-	}
-
 	logger.Info("SQLite database opened", "path", cfg.Path)
 	return &DB{
 		DB:     sqlDB,
@@ -124,6 +115,33 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		path:   cfg.Path,
 		config: cfg,
 	}, nil
+}
+
+// OpenReadOnlyDB opens an existing SQLite database without creating or
+// modifying the database file. SQLite's read-only mode observes the current
+// WAL state while preventing schema, migration, pruning, and write side effects.
+func OpenReadOnlyDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
+	if cfg.Path == "" {
+		return nil, fmt.Errorf("sqliteutil: read-only database path is required: %w", constants.ErrMissingRequiredField)
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	dsn := fmt.Sprintf("file:%s?mode=ro&_query_only=true&_busy_timeout=%d&_mutex=full", cfg.Path, cfg.BusyTimeoutMs)
+	sqlDB, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("sqliteutil: open read-only database %s: %w", cfg.Path, err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+	sqlDB.SetConnMaxLifetime(0)
+	if err := sqlDB.Ping(); err != nil {
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			return nil, fmt.Errorf("sqliteutil: ping read-only database %s: %w", cfg.Path, errors.Join(err, fmt.Errorf("close database: %w", closeErr)))
+		}
+		return nil, fmt.Errorf("sqliteutil: ping read-only database %s: %w", cfg.Path, err)
+	}
+	return &DB{DB: sqlDB, logger: logger, path: cfg.Path, config: cfg}, nil
 }
 
 // GetPath returns the filesystem path to the database file.
@@ -310,7 +328,9 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 
 		err = fn(tx)
 		if err != nil {
-			_ = tx.Rollback()
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				err = errors.Join(err, fmt.Errorf("sqliteutil: rollback transaction: %w", rollbackErr))
+			}
 			if isBusyError(err) {
 				db.logger.Debug("Database busy during transaction, retrying", "attempt", i+1, "max_retries", maxRetries)
 				db.backoff(i)
@@ -345,7 +365,10 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 			return fmt.Errorf("sqliteutil: acquire transaction connection: %w", err)
 		}
 		if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
-			conn.Close()
+			closeErr := conn.Close()
+			if closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
+			}
 			if isBusyError(err) {
 				db.backoff(i)
 				lastErr = err
@@ -355,8 +378,17 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 		}
 		err = fn(conn)
 		if err != nil {
-			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
-			conn.Close()
+			rollbackErr := func() error {
+				_, rollbackErr := conn.ExecContext(context.Background(), "ROLLBACK")
+				return rollbackErr
+			}()
+			closeErr := conn.Close()
+			if rollbackErr != nil {
+				err = errors.Join(err, fmt.Errorf("rollback transaction: %w", rollbackErr))
+			}
+			if closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
+			}
 			if isBusyError(err) {
 				db.backoff(i)
 				lastErr = err
@@ -365,7 +397,14 @@ func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn)
 			return err
 		}
 		_, err = conn.ExecContext(ctx, "COMMIT")
-		conn.Close()
+		closeErr := conn.Close()
+		if closeErr != nil {
+			if err != nil {
+				err = errors.Join(err, fmt.Errorf("close transaction connection: %w", closeErr))
+			} else {
+				err = fmt.Errorf("close transaction connection: %w", closeErr)
+			}
+		}
 		if err == nil {
 			return nil
 		}

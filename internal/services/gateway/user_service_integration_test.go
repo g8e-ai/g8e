@@ -28,8 +28,8 @@ import (
 func TestUserService_CreateUser_Integration(t *testing.T) {
 	t.Run("Success - creates regular user with OS user info", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -38,6 +38,17 @@ func TestUserService_CreateUser_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, newUser)
 		require.Equal(t, constants.UserStatusActive, newUser.Status)
+		require.NotEmpty(t, newUser.OrganizationID)
+		organization, err := db.GetDocStore().DocGet(marshaler.CollectionName(constants.CollectionOrganizations), newUser.OrganizationID)
+		require.NoError(t, err)
+		require.NotNil(t, organization)
+		organizationData, err := json.Marshal(organization.ForWire())
+		require.NoError(t, err)
+		var organizationRecord models.Organization
+		require.NoError(t, json.Unmarshal(organizationData, &organizationRecord))
+		require.Equal(t, newUser.OrganizationID, organizationRecord.ID)
+		require.Equal(t, newUser.ID, organizationRecord.OwnerUserID)
+		require.Equal(t, []string{newUser.ID}, organizationRecord.MemberUserIDs)
 
 		// Verify local OS user info is stored
 		currentUser, err := user.Current()
@@ -52,8 +63,8 @@ func TestUserService_CreateUser_Integration(t *testing.T) {
 func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Success - disables user with audit entry", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -92,8 +103,8 @@ func TestUserService_Disable_Integration(t *testing.T) {
 
 	t.Run("Success - idempotent when already disabled", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -120,8 +131,8 @@ func TestUserService_Disable_Integration(t *testing.T) {
 
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -147,8 +158,8 @@ func TestUserService_Disable_Integration(t *testing.T) {
 
 	t.Run("Error - GetByID failure when DB closed", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -169,8 +180,8 @@ func TestUserService_Disable_Integration(t *testing.T) {
 func TestUserService_DeleteUser_Integration(t *testing.T) {
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -196,8 +207,8 @@ func TestUserService_DeleteUser_Integration(t *testing.T) {
 func TestUserService_UpdatePasskeyCredentials_Integration(t *testing.T) {
 	t.Run("Error - DocUpdate failure", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -228,8 +239,8 @@ func TestUserService_UpdatePasskeyCredentials_Integration(t *testing.T) {
 func TestUserService_HasAnyUsers_Integration(t *testing.T) {
 	t.Run("Error - DocQuery failure", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -247,8 +258,8 @@ func TestUserService_HasAnyUsers_Integration(t *testing.T) {
 func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - maps role to matching persona", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -271,8 +282,8 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 
 	t.Run("Success - returns default when no roles", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -285,8 +296,8 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 
 	t.Run("Success - returns default when no match", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -299,8 +310,8 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 
 	t.Run("Success - returns default when persona load fails", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -318,8 +329,8 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 func TestUserService_docToUser_Integration(t *testing.T) {
 	t.Run("Success - converts valid doc to user", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -340,8 +351,8 @@ func TestUserService_docToUser_Integration(t *testing.T) {
 
 	t.Run("Error - handles malformed doc", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 

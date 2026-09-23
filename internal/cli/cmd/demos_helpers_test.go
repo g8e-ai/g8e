@@ -642,7 +642,7 @@ func TestRunAllScenarios_CancelledContextStopsBeforeScenarioLookup(t *testing.T)
 }
 
 func TestRunAllScenariosWithRunner_PreservesResultsAfterScenarioError(t *testing.T) {
-	scenarioErr := errors.New("persistence failure")
+	scenarioErr := fmt.Errorf("persistence failure")
 	callCount := 0
 	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
 		callCount++
@@ -684,7 +684,7 @@ func TestRunAllScenariosWithRunner_ContextCancellationStopsLoop(t *testing.T) {
 func TestRunAllScenariosWithRunner_FiltersNilResultsFromErroredScenarios(t *testing.T) {
 	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
 		if scenario == "2" {
-			return nil, errors.New("validation failure")
+			return nil, fmt.Errorf("validation failure")
 		}
 		return []*compliancev1.DemoScenarioResult{newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")}, nil
 	}

@@ -15,6 +15,7 @@ export class PublicClientError extends Error {
 export interface PublicClient {
   bootstrap(sourceID?: string, signal?: AbortSignal): Promise<PublicBootstrap>;
   snapshot(sourceID?: string, signal?: AbortSignal): Promise<PublicSnapshot>;
+  snapshotAt(sourceID: string, sequence: number, signal?: AbortSignal): Promise<PublicSnapshot>;
   history(sourceID?: string, cursor?: number, limit?: number, signal?: AbortSignal): Promise<PublicHistory>;
 }
 
@@ -98,6 +99,7 @@ export function createPublicClient(config: PublicRuntimeConfig, fetchImpl: typeo
   return {
     bootstrap: (sourceID, signal) => read(fetchPublic, 'bootstrap', query({ source: sourceID }), bootstrap, signal),
     snapshot: (sourceID, signal) => read(fetchPublic, 'snapshot', query({ source: sourceID }), snapshot, signal),
+    snapshotAt: (sourceID, sequence, signal) => read(fetchPublic, 'snapshot', query({ source: sourceID, sequence }), snapshot, signal),
     history: (sourceID, cursor, limit, signal) => read(fetchPublic, 'history', query({ source: sourceID, cursor, limit }), history, signal),
   };
 }

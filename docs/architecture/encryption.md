@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ## Overview
 
@@ -23,20 +23,20 @@ See [Governance](./governance.md) for posture-specific enforcement and [Authenti
 
 ### Key Hierarchy
 
-Each runtime tree has one vault. A 32-byte vault private key derives a Key Encryption Key (KEK) through HKDF-SHA256. The KEK wraps a randomly generated 32-byte Data Encryption Key (DEK) with AES Key Wrap. The vault header stores the wrapped DEK and a derived key fingerprint, while the unwrapped DEK remains in process memory only while the vault is open.
+Each runtime tree has one vault. A randomly generated 32-byte vault private key derives a Key Encryption Key (KEK) through HKDF-SHA256. The KEK wraps a randomly generated 32-byte Data Encryption Key (DEK) with AES Key Wrap (RFC 3394). The JSON vault header stores the wrapped DEK, KDF and wrapping algorithm identifiers, and a derived key fingerprint; the unwrapped DEK remains in process memory only while the vault is open.
 
-The DEK encrypts each protected value with AES-256-GCM and a fresh random nonce. Authentication failures, malformed ciphertext, a locked vault, a missing header, and an incorrect private key return errors rather than producing plaintext or accepting unauthenticated data. Closing the vault clears the in-memory DEK.
+The DEK encrypts each protected value with AES-256-GCM and a fresh 12-byte random nonce. The vault stores the nonce before the authenticated ciphertext and does not use additional authenticated data. Authentication failures, malformed ciphertext, a locked vault, a missing header, and an incorrect private key return errors rather than producing plaintext or accepting unauthenticated data. Closing the vault clears the in-memory DEK.
 
-The vault private key is a separate file. Possession of the private key and vault header is sufficient to recover the DEK, so operators must back up and protect both. The key file relies on restrictive filesystem permissions and is not stored in the platform keystore.
+The vault private key is a separate hex-encoded file. Possession of the private key and vault header is sufficient to recover the DEK, so operators must back up and protect both. The key file uses restrictive filesystem permissions and is not stored in the platform keystore.
 
 ### Protected Content
 
-The vault encrypts these content fields before persistence:
+When the vault is unlocked, these services encrypt selected content fields before persistence:
 
-- **Audit store:** Event content, command standard output, and command standard error. Searchable metadata such as event type, timestamps, command text, exit status, identifiers, and receipt fields remains structured in the database.
-- **Execution vault:** Command standard output, command standard error, and file-diff content. Encryption occurs before compression. Execution metadata, file paths, hashes, sizes, and workflow identifiers remain structured.
-- **File ledger:** Copies of governed file content are encrypted and stored with an `.enc` suffix when the ledger is enabled. Repository metadata and file-history metadata are not encrypted by the vault.
-- **Scrubbing token store:** Reversible UEI token values are encrypted before entering the canonical key-value store. Token keys and expiry metadata remain visible.
+- **Audit store:** Event content, command standard output, and command standard error. Searchable metadata such as event type, timestamps, command text, exit status, identifiers, and receipt fields remains structured in the database. Audit writes fail closed if encryption cannot run.
+- **Execution vault:** Command standard output, command standard error, and file-diff content. Encryption occurs before compression. Execution metadata, file paths, hashes, sizes, and workflow identifiers remain structured. Protected writes fail if the vault is locked, although persistence after an already completed execution is best-effort.
+- **File ledger:** Copies of governed file content are encrypted and stored with an `.enc` suffix when the ledger is enabled and the vault is unlocked. Repository metadata and file-history metadata are not encrypted by the vault; the current copy path can write a plaintext copy when the vault is locked.
+- **Scrubbing token store:** Reversible UEI token values are encrypted before entering the canonical key-value store. Token keys and expiry metadata remain visible, and locked reads and writes fail.
 
 These controls encrypt selected sensitive fields, not every byte in every database or runtime file. Replay nonces, suspended envelopes, state documents, SSE events, commitment records, and other structured governance data use their service-specific storage protections. See [Storage Architecture](./storage.md) for the complete persistence boundary.
 
@@ -44,7 +44,7 @@ These controls encrypt selected sensitive fields, not every byte in every databa
 
 Gateway startup creates the vault header and a random private key when no header exists, then opens the vault before initializing services that require encrypted storage. The default vault directory and key path are `.g8e/vault` and `.g8e/vault/key`. `--vault-dir` and `--vault-key` override these paths; `G8E_VAULT_DIR` and `G8E_VAULT_KEY` provide environment overrides when the corresponding flags are unset.
 
-Startup fails if an existing vault key cannot be read, decoded, or matched to the header. The audit store, execution vault, ledger, and encrypted token adapter also reject protected reads or writes while the vault is locked. Execution-vault persistence of command output and file diffs is best-effort after execution, so a persistence failure is logged but does not change the already completed action result.
+Startup fails if an existing vault key cannot be read, decoded, or matched to the header. Audit-store, execution-vault, and encrypted-token writes fail closed while the vault is locked. Audit and execution-vault reads cannot decrypt protected content while locked and return the record without that plaintext while logging the decryption failure; the encrypted-token adapter rejects locked reads. Ledger point-in-time reads require an unlocked vault, while the current ledger-copy path can write plaintext when the vault is locked. Execution-vault persistence of command output and file diffs is best-effort after execution, so a persistence failure is logged but does not change the already completed action result.
 
 Automatic initialization is convenient for a new runtime tree but is not recovery. If a vault header is missing while ciphertext from an earlier vault remains, startup creates a new key hierarchy that cannot decrypt the old content.
 
@@ -70,13 +70,13 @@ Re-keying invalidates the old private key as soon as the updated header is saved
 
 ### Reset
 
-`g8e vault reset` requires typing `destroy`; `--confirm` skips that prompt. Reset removes the vault header and any database files located directly in the vault directory, which makes content encrypted under that header's DEK unrecoverable. It does not securely erase every ciphertext-bearing database, ledger repository, backup, or exported key, and it does not remove the configured key file.
+`g8e vault reset` requires typing `destroy`; `--confirm` skips that prompt. Reset removes the vault header and the vault service's `g8e.db` file plus its SQLite WAL and shared-memory sidecars when present. This makes content encrypted under that header's DEK unrecoverable. It does not securely erase the separate execution-vault, replay, suspended-transaction, or ledger stores, their backups, or exported keys, and it does not remove the configured key file.
 
 Use reset only when abandoning the encrypted data set. Starting the Gateway afterward creates a new vault hierarchy.
 
 ## Platform Keystore
 
-The platform keystore has its own random 32-byte AES-256-GCM master key and does not use the vault DEK. It stores each encrypted secret as an authenticated ciphertext with its nonce and format version. Gateway startup retrieves or creates the master key, enforces private permissions on the secrets directory, and validates the required bootstrap secrets before continuing.
+The platform keystore has its own random 32-byte AES-256-GCM master key and does not use the vault DEK. It stores each file-backed secret as JSON containing the format version, nonce, and authenticated ciphertext; its in-memory `Encrypt` and `Decrypt` methods use the same format serialized as base64. Gateway startup retrieves or creates the master key, enforces private permissions on the secrets directory and existing secret files, and validates the required bootstrap secrets before continuing.
 
 The keystore protects:
 

@@ -58,7 +58,7 @@ export function detectArch(userAgent) {
 
 /**
  * Build the g8e binary filename for the given OS/arch.
- * Matches the pattern enforced by handleNodeBinaryDownload:
+ * Matches the pattern enforced by handleG8eBinaryDownload:
  * `g8e-(linux|darwin|windows)-(amd64|arm64|386)(.exe)?`.
  * @param {'windows'|'darwin'|'linux'} os
  * @param {'amd64'|'arm64'|'386'} arch

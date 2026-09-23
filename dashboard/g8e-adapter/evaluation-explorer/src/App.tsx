@@ -13,7 +13,7 @@ import { EvaluationsView } from './views/EvaluationsView';
 import { EvaluationDetailView } from './views/EvaluationDetailView';
 import { AssignmentDetailView } from './views/AssignmentDetailView';
 import { MethodologyView } from './views/MethodologyView';
-import { GITHUB_SPONSORS_URL } from './content/platform';
+import { GITHUB_SPONSORS_URL, PLATFORM_CONTACT_CALENDLY } from './content/platform';
 
 function CompareRedirect() {
   const [params] = useSearchParams();
@@ -77,6 +77,14 @@ function Shell() {
           <NavItem to="/methodology" label="Docs" />
         </nav>
         <div className="header-right">
+          <a
+            className="header-cta header-cta-hire"
+            href={PLATFORM_CONTACT_CALENDLY}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Can I help you? Book a Time
+          </a>
           <a
             className="header-cta header-cta-sponsor"
             href={GITHUB_SPONSORS_URL}

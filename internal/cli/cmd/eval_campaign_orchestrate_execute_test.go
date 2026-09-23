@@ -17,15 +17,49 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
+
+type recordingCampaignVerificationPublication struct {
+	completionRunIDs []string
+	reports          []*evalv1.EvaluationVerificationReport
+}
+
+func (p *recordingCampaignVerificationPublication) PublishRunCompletion(_ context.Context, runID string, _ time.Time) (int, error) {
+	p.completionRunIDs = append(p.completionRunIDs, runID)
+	return 1, nil
+}
+
+func (p *recordingCampaignVerificationPublication) PublishRunVerification(_ context.Context, _ string, report *evalv1.EvaluationVerificationReport) (int, error) {
+	p.reports = append(p.reports, report)
+	return 1, nil
+}
+
+func assertPopulationBoundCampaignReport(t *testing.T, report *evalv1.EvaluationVerificationReport, expectedAssignments, verifiedAssignments uint32) {
+	t.Helper()
+	require.NotNil(t, report)
+	assert.Equal(t, constants.CampaignVerifierVersion, report.GetSchemaVersion())
+	assert.Equal(t, constants.CampaignVerifierVersion, report.GetVerifierContractVersion())
+	assert.Equal(t, constants.EvaluationSourceVersion, report.GetVerifierReleaseVersion())
+	assert.Equal(t, expectedAssignments, report.GetExpectedAssignmentCount())
+	assert.Equal(t, verifiedAssignments, report.GetVerifiedAssignmentCount())
+	assert.NotEmpty(t, report.GetVerifiedPopulationDigest())
+	assert.NotEmpty(t, report.GetCampaignDigest())
+	assert.NotEmpty(t, report.GetCatalogDigest())
+	assert.NotEmpty(t, report.GetModelRegistryDigest())
+	require.NotNil(t, report.GetReportDigestRef())
+	assert.Len(t, report.GetReportDigestRef().GetSha256(), 64)
+}
 
 func prepareCampaignRunForExecute(t *testing.T, deps nativeEvalDeps, cmd *cobra.Command) (runID string, store *evaluation.Store) {
 	t.Helper()
@@ -232,10 +266,14 @@ func TestRunCampaignExecute_DefaultsLimitToOne(t *testing.T) {
 	assert.Equal(t, 1, executed)
 }
 
-func TestVerifyCampaignRun_PersistsVerificationReport(t *testing.T) {
+func TestVerifyCampaignRun_PersistsAndPublishesPopulationBoundReport(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 	defer enableCampaignWitnessGateway(t, root, deps)()
+	publication := &recordingCampaignVerificationPublication{}
+	deps.campaignPublicationFactory = func(*cobra.Command, fs.RuntimeFileService) (campaignVerificationPublication, error) {
+		return publication, nil
+	}
 
 	runID, store := prepareCampaignRunForExecute(t, deps, cmd)
 	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string {
@@ -279,6 +317,16 @@ func TestVerifyCampaignRun_PersistsVerificationReport(t *testing.T) {
 	loaded, err := store.LoadCampaignVerification(context.Background(), runID)
 	require.NoError(t, err)
 	assert.Equal(t, report.GetStatus(), loaded.GetStatus())
+	assertPopulationBoundCampaignReport(t, loaded, 75, 1)
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, loaded.GetProviderObservationPolicy())
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, loaded.GetModelProvenancePolicy())
+	assert.Equal(t, spec.GetCampaignDigest(), loaded.GetCampaignDigest())
+	assert.Equal(t, spec.GetCatalogDigest(), loaded.GetCatalogDigest())
+	assert.Equal(t, spec.GetModelRegistryDigest(), loaded.GetModelRegistryDigest())
+	assert.Equal(t, []string{runID}, publication.completionRunIDs)
+	require.Len(t, publication.reports, 1)
+	assertPopulationBoundCampaignReport(t, publication.reports[0], 75, 1)
+	assert.Equal(t, loaded.GetReportDigestRef().GetSha256(), publication.reports[0].GetReportDigestRef().GetSha256())
 }
 
 func TestVerifyCampaignRun_RejectsMissingRun(t *testing.T) {
@@ -302,7 +350,7 @@ func (l *campaignTraceLookup) resolve(assignmentID, attemptID string) map[string
 		return nil
 	}
 	store := evaluation.NewStore(fileSvc)
-	active, err := evaluation.LoadActiveCampaignRun(l.root)
+	active, err := evaluation.LoadActiveCampaignRunFromRuntime(context.Background(), fileSvc)
 	if err != nil || active.RunID == "" {
 		return nil
 	}
@@ -321,10 +369,14 @@ func (l *campaignTraceLookup) resolve(assignmentID, attemptID string) map[string
 	return buildCompletedCampaignTrace(assignment, attemptID, spec.GetModelRegistryDigest(), "infer-session")
 }
 
-func TestRunCampaignStartFlow_ExecuteAndVerify(t *testing.T) {
+func TestRunCampaignStartFlow_ExecuteAndVerifyPersistsPopulationBoundReportWithoutPublication(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 	defer enableCampaignWitnessGateway(t, root, deps)()
+	publication := &recordingCampaignVerificationPublication{}
+	deps.campaignPublicationFactory = func(*cobra.Command, fs.RuntimeFileService) (campaignVerificationPublication, error) {
+		return publication, nil
+	}
 
 	lookup := &campaignTraceLookup{root: root, deps: deps}
 	ensemble := newTestEnsembleServer(lookup.resolve)
@@ -346,11 +398,14 @@ func TestRunCampaignStartFlow_ExecuteAndVerify(t *testing.T) {
 	assert.Equal(t, 1, result.Executed)
 	require.NotNil(t, result.Report)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, result.Report.GetStatus())
+	assertPopulationBoundCampaignReport(t, result.Report, 75, 1)
 	assert.Contains(t, output.String(), "verification")
 
-	command := evalCmdWithConfig(deps)
-	command.SetOut(&output)
-	command.SetArgs([]string{"campaign", "verify", "--project-root", root, result.Plan.RunID})
-	require.NoError(t, command.Execute())
-	assert.Contains(t, output.String(), "PASS")
+	fileSvc, err := deps.fileSvcFactory(root, slog.Default())
+	require.NoError(t, err)
+	loaded, err := evaluation.NewStore(fileSvc).LoadCampaignVerification(context.Background(), result.Plan.RunID)
+	require.NoError(t, err)
+	assertPopulationBoundCampaignReport(t, loaded, 75, 1)
+	assert.Empty(t, publication.completionRunIDs)
+	assert.Empty(t, publication.reports)
 }

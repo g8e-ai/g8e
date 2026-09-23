@@ -8,9 +8,9 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -18,9 +18,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance/governancetest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
+
+func newSignerTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
+	t.Helper()
+	fileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	return fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirTrustedSigners)
+}
 
 func TestFailClosedSignerStore_NilMap(t *testing.T) {
 	t.Parallel()
@@ -51,7 +60,8 @@ func TestFailClosedSignerStore_Found(t *testing.T) {
 func TestFilesystemSignerStore_NonexistentDir(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	_, err := NewFilesystemSignerStore("/nonexistent/path/that/does/not/exist", logger)
+	fileSvc, relDir := newSignerTestFileService(t)
+	_, err := NewFilesystemSignerStore(fileSvc, filepath.Join(relDir, "missing"), logger)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read trusted signers directory")
 }
@@ -59,8 +69,8 @@ func TestFilesystemSignerStore_NonexistentDir(t *testing.T) {
 func TestFilesystemSignerStore_EmptyDir(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := testutil.TempDir(t)
-	store, err := NewFilesystemSignerStore(dir, logger)
+	fileSvc, dir := newSignerTestFileService(t)
+	store, err := NewFilesystemSignerStore(fileSvc, dir, logger)
 	require.NoError(t, err)
 	assert.NotNil(t, store)
 
@@ -72,16 +82,16 @@ func TestFilesystemSignerStore_EmptyDir(t *testing.T) {
 func TestFilesystemSignerStore_WithValidKey(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := testutil.TempDir(t)
+	fileSvc, dir := newSignerTestFileService(t)
 
 	pub, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
 	hexKey := hex.EncodeToString(pub)
 	keyPath := filepath.Join(dir, "signer1.pub")
-	require.NoError(t, os.WriteFile(keyPath, []byte(hexKey), 0644))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyPath, []byte(hexKey), constants.PermFilePublic))
 
-	store, err := NewFilesystemSignerStore(dir, logger)
+	store, err := NewFilesystemSignerStore(fileSvc, dir, logger)
 	require.NoError(t, err)
 
 	result, err := store.GetTrustedSigner("signer1")
@@ -92,11 +102,11 @@ func TestFilesystemSignerStore_WithValidKey(t *testing.T) {
 func TestFilesystemSignerStore_WithInvalidHex(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := testutil.TempDir(t)
+	fileSvc, dir := newSignerTestFileService(t)
 
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.pub"), []byte("not-hex!"), 0644))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(dir, "bad.pub"), []byte("not-hex!"), constants.PermFilePublic))
 
-	store, err := NewFilesystemSignerStore(dir, logger)
+	store, err := NewFilesystemSignerStore(fileSvc, dir, logger)
 	require.NoError(t, err)
 
 	pubKey, err := store.GetTrustedSigner("bad")
@@ -107,12 +117,12 @@ func TestFilesystemSignerStore_WithInvalidHex(t *testing.T) {
 func TestFilesystemSignerStore_WithWrongKeySize(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := testutil.TempDir(t)
+	fileSvc, dir := newSignerTestFileService(t)
 
 	shortKey := hex.EncodeToString([]byte("short"))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "short.pub"), []byte(shortKey), 0644))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(dir, "short.pub"), []byte(shortKey), constants.PermFilePublic))
 
-	store, err := NewFilesystemSignerStore(dir, logger)
+	store, err := NewFilesystemSignerStore(fileSvc, dir, logger)
 	require.NoError(t, err)
 
 	pubKey, err := store.GetTrustedSigner("short")
@@ -123,12 +133,12 @@ func TestFilesystemSignerStore_WithWrongKeySize(t *testing.T) {
 func TestFilesystemSignerStore_SkipsNonPubFiles(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := testutil.TempDir(t)
+	fileSvc, dir := newSignerTestFileService(t)
 
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("ignore me"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "subdir"), []byte("dir"), 0644))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(dir, "readme.txt"), []byte("ignore me"), constants.PermFilePublic))
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), filepath.Join(dir, "subdir"), constants.PermDirStandard))
 
-	store, err := NewFilesystemSignerStore(dir, logger)
+	store, err := NewFilesystemSignerStore(fileSvc, dir, logger)
 	require.NoError(t, err)
 	assert.NotNil(t, store)
 }

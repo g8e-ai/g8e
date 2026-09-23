@@ -1,12 +1,15 @@
 # g8e Headless End-to-End UX Smoke Test
 
+Last Updated: 2026-09-23
+Version: v2.1.12
+
 This runbook exercises the current headless Docker workflow from the repository root. It starts the gateway, enrolls an mTLS-only owner identity, starts and approves the operator, ensemble, and dashboard workloads, runs governed file and document mutations, inspects their audit records, verifies the operator-local CSV evidence report, and downloads the published platform binary. See the [g8ee documentation](../ensemble/index.md) for the ensemble architecture and the [g8ed documentation](../dashboard/index.md) for the dashboard component.
 
 ## What this proves
 
 A successful run verifies that:
 
-- The CLI exposes the documented command tree and MCP agent integrations.
+- The CLI exposes the documented command tree and lists the registered MCP agent integrations.
 - The default Docker profile starts the gateway, and the `bootstrapped` profile adds the operator, ensemble, and dashboard.
 - The Linux AMD64 container binary reports that FIPS 140-3 approved mode is active and identifies its linked cryptographic module. Strict FIPS enforcement is a separate runtime setting and is off in the default image.
 - Headless owner enrollment creates local mTLS credentials without opening a browser and prints the user and CLI session IDs.

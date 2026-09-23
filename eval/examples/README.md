@@ -6,24 +6,26 @@ Checked-in evaluation program data and templates live here. **Runtime** campaign
 
 | Path | Purpose |
 | --- | --- |
-| `eval/base-model-inventory.json` | **Default genesis program inventory** — 35 init-campaign models (3 roles × 25 scenarios = **2625** cells when run homogeneously) |
-| `eval/base-init-campaign-queue.json` | Template rollout queue for all 35 models (`status: pending`) |
+| `eval/base-model-inventory.json` | **Default genesis program inventory** — 45 init-campaign models (3 roles × 25 scenarios = **3375** cells when run homogeneously) |
+| `eval/base-init-campaign-queue.json` | Template rollout queue for all 45 models (`status: pending`) |
 | `eval/examples/init-campaign-queue.example.json` | Minimal queue shape reference |
 
-The base inventory is the canonical 35-model genesis program set from the first init-campaign rollout. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code.
+The base inventory is the canonical 45-model genesis program set. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code. The rollout queue places the current Granite 4.2 and Qwen 3.5 small-model intake ahead of the alphabetical backlog.
 
-### 35-model program set
+### 45-model program set
 
 | Family | Models |
 | --- | --- |
 | DeepSeek | `deepseek-r1:7b` |
+| GLM | `milkey/GLM-4-9B-0414:Q4_K_M` |
+| GPT-OSS | `gpt-oss:20b` |
 | Gemma | `gemma2:9b`, `gemma3:270m`, `gemma3:1b`, `gemma3:4b`, `gemma4:e2b`, `gemma4:e4b` |
-| Granite | `granite3.3:2b`, `granite3.3:8b` |
+| Granite | `granite4.2:3b`, `granite4.2:8b`, `granite3.3:2b`, `granite3.3:8b` |
 | Hermes | `hermes3:8b` |
 | Llama | `llama3.1:8b`, `llama3.2:1b`, `llama3.2:3b`, `tinyllama:1.1b` |
 | Mistral | `mistral:7b`, `ministral-3:3b`, `ministral-3:8b` |
 | Phi | `phi4-mini:3.8b`, `phi4-mini-reasoning:3.8b` |
-| Qwen | `qwen2.5:0.5b`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5-coder:7b`, `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b` |
+| Qwen | `pdevine/qwen3.6:27b-mtp-q4_K_M`, `qwen3:30b`, `qwen3.5:0.8b`, `qwen3.5:2b`, `qwen3.5:4b`, `qwen3.5:9b`, `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b`, `qwen2.5:0.5b`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5-coder:7b` |
 | SmolLM | `smollm2:135m`, `smollm2:360m`, `smollm2:1.7b`, `Impulse2000/smollm3:3b-q4_k_m` |
 | Other | `Randomblock1/nemotron-nano:8b`, `sam860/LFM2:350m`, `sam860/LFM2:700m`, `sam860/LFM2:2.6b` |
 

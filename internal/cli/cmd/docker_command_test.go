@@ -8,8 +8,12 @@
 package cmd
 
 import (
+	"archive/tar"
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	g8ebinaries "github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
 )
 
 func TestDockerCommandSubcommands(t *testing.T) {
@@ -38,6 +43,7 @@ func TestDockerCommandSubcommands(t *testing.T) {
 			"reset",
 			"rebuild",
 			"logs",
+			"binaries",
 		}
 
 		for _, subcmd := range expectedSubcommands {
@@ -51,6 +57,17 @@ func TestDockerCommandSubcommands(t *testing.T) {
 			assert.Truef(t, found, "docker command should have %s subcommand", subcmd)
 		}
 	})
+}
+
+func TestDockerBinariesCommandHasExportSubcommand(t *testing.T) {
+	cmd := dockerCmd()
+	binaries, _, err := cmd.Find([]string{"binaries"})
+	require.NoError(t, err)
+	require.Equal(t, "binaries", binaries.Name())
+
+	export, _, err := binaries.Find([]string{"export"})
+	require.NoError(t, err)
+	assert.Equal(t, "export", export.Name())
 }
 
 func TestDockerCommand_RegisteredOnRoot(t *testing.T) {
@@ -320,10 +337,31 @@ func TestDockerTeardownProfiles(t *testing.T) {
 	}, dockerTeardownProfiles(""))
 }
 
+func TestImageProvenance_RequiresAllLabels(t *testing.T) {
+	_, err := imageProvenance(dockerImage{ID: "sha256:image", Config: dockerImageConfig{Labels: map[string]string{
+		constants.G8eImageVersionLabel: "2.1.12",
+	}}})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryExport)
+}
+
+func TestPublisherMatchProvenance_RejectsMismatchedImageLabels(t *testing.T) {
+	manifest := g8ebinaries.Manifest{Version: "2.1.12", BuildID: "build", BuildTime: "2026-09-23T00:00:00Z", SourceRevision: "revision", SourceTreeHash: strings.Repeat("a", 64)}
+	provenance := g8ebinaries.Provenance{Version: manifest.Version, BuildID: "different", BuildTime: manifest.BuildTime, SourceRevision: manifest.SourceRevision, SourceTreeHash: manifest.SourceTreeHash}
+
+	err := g8ebinaries.MatchProvenance(manifest, provenance)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryManifest)
+}
+
 func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 	vi := serve.VersionInfo{
+		Version:             "v2.1.12",
+		BuildTime:           "2026-09-23T00:00:00Z",
 		BuildID:             "abc123",
-		SourceRevision:      "unavailable",
+		SourceRevision:      "revision-123",
 		SourceTreeStateHash: "a" + strings.Repeat("1", 63),
 	}
 	tests := []struct {
@@ -331,8 +369,8 @@ func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 		noCache  bool
 		expected []string
 	}{
-		{name: "cached build", expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=unavailable", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash}},
-		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=unavailable", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash, "--no-cache"}},
+		{name: "cached build", expected: []string{"build", "--build-arg", "VERSION=v2.1.12", "--build-arg", "BUILD_TIME=2026-09-23T00:00:00Z", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=revision-123", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash}},
+		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "VERSION=v2.1.12", "--build-arg", "BUILD_TIME=2026-09-23T00:00:00Z", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=revision-123", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash, "--no-cache"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -341,6 +379,18 @@ func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 			assert.Equal(t, tt.expected, args)
 		})
 	}
+}
+
+func TestDockerBuildArgs_UsesSourceTreeHashForUnstampedBuildID(t *testing.T) {
+	hash := "a" + strings.Repeat("1", 63)
+	args, err := dockerBuildArgs(serve.VersionInfo{
+		BuildID:             constants.BuildMetadataUnavailable,
+		SourceRevision:      "revision-123",
+		SourceTreeStateHash: hash,
+	}, false)
+
+	require.NoError(t, err)
+	assert.Contains(t, args, "BUILD_ID="+hash)
 }
 
 func TestDockerBuildArgs_RejectsUnstampedSourceHash(t *testing.T) {
@@ -353,4 +403,75 @@ func TestDockerComposePath_ResolvesFromCwd(t *testing.T) {
 	p, err := dockerComposePath()
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(tmpDir, constants.DockerComposeFile), p)
+}
+
+type fakeDockerBinaryRunner struct {
+	image     dockerImage
+	container string
+	binary    []byte
+}
+
+func (r *fakeDockerBinaryRunner) InspectImage(context.Context, string) (dockerImage, error) {
+	return r.image, nil
+}
+
+func (r *fakeDockerBinaryRunner) CreateContainer(context.Context, string) (string, error) {
+	return r.container, nil
+}
+
+func (r *fakeDockerBinaryRunner) CopyContainerPath(_ context.Context, container, path string, destination io.Writer) error {
+	if container != r.container || path != dockerRuntimeBinaryPath {
+		return fmt.Errorf("unexpected copy request: %s:%s", container, path)
+	}
+	_, err := destination.Write(r.binary)
+	return err
+}
+
+func (r *fakeDockerBinaryRunner) RemoveContainer(context.Context, string) error { return nil }
+
+func TestExportDockerRuntimeBinary_WritesExecutable(t *testing.T) {
+	tmpDir := t.TempDir()
+	destination := filepath.Join(tmpDir, "g8e")
+	executable := []byte("runtime-binary")
+	var archive bytes.Buffer
+	writer := tar.NewWriter(&archive)
+	require.NoError(t, writer.WriteHeader(&tar.Header{Name: "g8e", Mode: int64(constants.PermFileExecutable), Size: int64(len(executable)), Typeflag: tar.TypeReg}))
+	_, err := writer.Write(executable)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	runner := &fakeDockerBinaryRunner{
+		image:     dockerImage{ID: "sha256:image"},
+		container: "container-id",
+		binary:    archive.Bytes(),
+	}
+
+	err = exportDockerRuntimeBinary(t.Context(), runner, "g8e-gateway", destination)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(destination)
+	require.NoError(t, err)
+	assert.Equal(t, executable, data)
+}
+
+func TestExportDockerRuntimeBinary_RejectsTruncatedArchive(t *testing.T) {
+	tmpDir := t.TempDir()
+	destination := filepath.Join(tmpDir, "g8e")
+	var archive bytes.Buffer
+	writer := tar.NewWriter(&archive)
+	require.NoError(t, writer.WriteHeader(&tar.Header{Name: "g8e", Mode: int64(constants.PermFileExecutable), Size: 1, Typeflag: tar.TypeReg}))
+	_, err := writer.Write([]byte("x"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	truncatedArchive := archive.Bytes()[:512]
+	runner := &fakeDockerBinaryRunner{
+		image:     dockerImage{ID: "sha256:image"},
+		container: "container-id",
+		binary:    truncatedArchive,
+	}
+
+	err = exportDockerRuntimeBinary(t.Context(), runner, "g8e-gateway", destination)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryArchive)
+	_, statErr := os.Stat(destination)
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }

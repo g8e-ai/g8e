@@ -22,9 +22,8 @@ func setupBlobStoreTest(t *testing.T) (*BlobStoreService, *CanonicalDBService) {
 	t.Helper()
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
-	dbDir := testutil.TempDir(t)
 
-	db, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

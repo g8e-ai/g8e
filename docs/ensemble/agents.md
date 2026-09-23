@@ -1,86 +1,93 @@
 # Agents
 
-## Overview
+## Scope and boundary
 
-The g8e Agentic Ensemble (`g8ee`) uses a structured multi-agent architecture where specialized agents collaborate across defined operational stages. Each agent operates under a concrete persona model that defines its role, model tier, tool availability, autonomy boundary, and output contract. The architecture enforces separation of concerns: reasoning agents formulate high-level intent without raw shell syntax, a five-member Tribunal derives and validates exact commands under information isolation, Marshal assesses pre-envelope execution risk, and support agents manage lifecycle metadata, memory, and performance evaluation.
+g8ee is an optional application-layer client. Its personas, model reasoning, Tribunal agreement, Marshal analysis, memories, reputation, and application approvals express intent or telemetry; they do not authorize a host or platform mutation. Host-command requests are relayed as typed `CommandIntent` messages to the selected Operator, while designated application-record writes use the Gateway governance endpoint. The Gateway and executing Operator enforce the active five-layer protocol posture. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) and [Ensemble Architecture](../architecture/ensemble.md).
 
-## Persona Architecture
+This page documents the registered persona models and the application pipeline that uses them. A registered persona is not necessarily invoked on every chat turn.
 
-Agent personas are implemented as typed Python classes inheriting from `AgentPersonaModel` (`app.models.personas.base.AgentPersonaModel`), replacing unstructured JSON configuration with validated code models.
+## Persona models and registry
 
-Each persona defines:
+Personas are immutable Pydantic models implemented under `ensemble/app/models/personas/` and derived from `AgentPersonaModel` in `ensemble/app/models/personas/base.py`. `ensemble/app/models/personas/__init__.py` constructs the process-local `PERSONA_REGISTRY`, and `ensemble/app/utils/agent_persona_loader.py` exposes validated `AgentPersona` views through `get_agent_persona()`, `get_tribunal_member()`, and `list_all_agents()`. An unknown ID raises `KeyError`.
 
-- **`id`** — Unique identifier registered in the central `PERSONA_REGISTRY` (e.g., `triage`, `sage`, `dash`, `auditor`).
-- **`display_name`** — Human-readable display label for user interfaces and logs.
-- **`icon`** — Material icon identifier representing the persona.
-- **`description`** — Summary of the agent's responsibilities.
-- **`role`** — Functional classification within the ensemble (`classifier`, `reasoner`, `responder`, `tribunal_member`, `arbitrator`, `auditor`, `defender`, `summarizer`, `analyzer`, `evaluator`).
-- **`model_tier`** — Assigned LLM model role wire value (`primary`, `assistant`, `lite`). User-facing copy displays these as Primary, Assistant, and Lite.
-- **`tools`** — Whitelist of tool names available to the persona during execution.
-- **`identity`** — System prompt guidelines specifying behavioral principles, voice, and discipline, structured via canonical XML tags (`<role>`, `<identity>`, `<purpose>`, `<autonomy>`, `<output_contract>`).
-- **`purpose`** — Operational charter defining what the agent accomplishes in the workflow pipeline.
-- **`autonomy`** — Authority boundary governing whether the agent commits decisions directly or delegates to downstream verification.
-- **`output_contract`** — Schema or format constraints enforced on the agent's generation output.
+The base model contains these fields:
 
-## Ensemble Roster and Hierarchy
+- **`id`** — Registry key and stable persona identifier.
+- **`display_name`**, **`icon`**, and **`description`** — Presentation metadata used by application surfaces and agent-state projections.
+- **`role`** — Functional classification such as `classifier`, `reasoner`, `responder`, `tribunal_member`, `arbitrator`, `auditor`, `defender`, `summarizer`, `analyzer`, or `evaluator`.
+- **`model_tier`** — Logical model role such as `primary`, `assistant`, or `lite`. The concrete provider and model are resolved from user and platform settings; the tier is not itself a provider identity.
+- **`tools`** — Declared tool names. Triage and the collective personas have no tool list; Sage and Dash declare the operator and investigation tools available to their reasoning prompts.
+- **`capabilities`** — Declared persona capabilities. The five Tribunal members declare `local_syntax_check`; a declaration is an upper bound that the pipeline intersects with settings and resolved-model support before enabling behavior.
+- **`identity`**, **`purpose`**, **`autonomy`**, and optional **`output_contract`** — Prompt content and output constraints. `get_system_prompt()` emits the canonical sequence `<role>`, optional `<output_contract>`, `<identity>`, `<purpose>`, and `<autonomy>`.
 
-The ensemble organizes agents into functional tiers corresponding to the lifecycle of an investigation turn.
+The current registry contains these IDs: `triage`, `sage`, `dash`, `tribunal`, `axiom`, `concord`, `variance`, `pragma`, `nemesis`, `auditor`, `marshal`, `marshal_command`, `marshal_error`, `marshal_file`, `scribe`, `codex`, and `judge`. The registry is the implementation source for this roster; prompt scaffolding and structured response schemas are assembled by the owning services rather than stored entirely in persona models.
 
-### Gatekeeper / Triage
+## Chat routing personas
 
-- **Triage (`triage`)** — Operates on the `lite` tier as the initial classifier (`role="classifier"`). Triage performs the first read of the user's message and emits a structured `TriageResult` containing `complexity` (`simple` or `complex`), `intent` (`information`, `action`, or `unknown`), `request_posture` (`normal`, `escalated`, `adversarial`, or `confused`), and associated confidence ratings. Triage enforces a mandatory security override: any request involving authentication, credentials, permissions, accounts, or security configuration is classified as `complex` regardless of phrasing. Triage does not generate clarifying questions or call tools; it routes simple turns to Dash and complex turns to Sage.
+- **Triage (`triage`)** — A `lite` classifier that returns `TriageResult`: complexity, confidence, intent, intent confidence, intent summary, request posture, and posture confidence. Security-sensitive requests involving authentication, credentials, permissions, account access, password resets, user management, or security configuration are forced to `complex`. Attachments and empty messages are also escalated by the triage service; an empty message receives `unknown` intent. Triage does not ask questions or call tools. The chat pipeline selects Sage for `complex` turns and Dash for other turns, unless evaluation role control supplies a controlled assignment.
+- **Sage (`sage`)** — The `primary` reasoning persona for complex turns. It plans investigations, interprets tool results, synthesizes evidence, and composes the user-facing response. Its `SageOperatorRequest` describes the intended result and command-shape constraints in natural language; it has no `command` field. The Tribunal creates the command later. Sage owns the interrogation protocol for complex turns and must emit an `<interrogation>` block containing exactly three binary YES/NO questions when required context is missing.
+- **Dash (`dash`)** — The `assistant` fast-path persona for non-complex turns. It answers from available context or makes a targeted tool call and escalates conceptually to Sage when the request needs deeper, multi-step reasoning. Dash also owns interrogation for turns routed to the fast path and uses the same exactly-three binary-question block; the tool loop suppresses execution while the application waits for answers.
 
-### Reasoning Agents
+Sage and Dash currently declare the same tool surface, including `run_commands_with_operator`, file operations, detailed file listing, port checks, intent permission changes, file history and diff, web search, and investigation-context queries. Their distinction is routing, model tier, and prompt behavior, not an empty-versus-full tool list.
 
-- **Sage (`sage`)** — The senior reasoning authority (`model_tier="primary"`, `role="reasoner"`). Sage plans multi-step investigations, articulates intent to the Tribunal, interprets tool outputs, synthesizes evidence, and drafts final user responses. Sage articulates investigative intent using `SageOperatorRequest` without proposing raw shell syntax. If an investigation stalls due to missing context or ambiguity, Sage invokes the interrogation protocol by emitting three binary YES/NO questions.
-- **Dash (`dash`)** — The fast-path responder (`model_tier="assistant"`, `role="responder"`). Dash resolves straightforward requests with minimal latency. It answers knowledge-based inquiries directly or executes a single surgical tool call when required. If a simple turn lacks necessary context, Dash emits an interrogation block before executing state-changing tools. Requests requiring multi-step chains or deep hypothesis testing escalate to Sage.
+## Tribunal command generation
 
-### Tribunal Collective and Members
+The Tribunal is represented by the `tribunal` persona (`role="arbitrator"`, `model_tier="lite"`) and is implemented by `ensemble/app/services/ai/generator.py` and `ensemble/app/services/ai/tribunal/`. The collective persona is documentation and state-projection metadata; the five generation seats are the actual independent model passes:
 
-The Tribunal (`tribunal`, `role="arbitrator"`) is a five-member consensus panel that translates Sage's natural-language intent into executable commands on the target host. To prevent groupthink and preserve Information Isolation, all five members evaluate the intent independently in parallel:
+- **Axiom (`axiom`)** — Composition. Produces a coherent command or pipeline that fulfills the complete intent in one invocation.
+- **Concord (`concord`)** — Safety. Favors bounded, read-only, defensive, explicitly scoped commands, safe quoting, `&&`, and failure propagation where appropriate.
+- **Variance (`variance`)** — Edge cases. Accounts for spaces, null-delimited filenames, symlinks, missing directories, binary data, locales, and other plausible environmental hazards.
+- **Pragma (`pragma`)** — Convention. Uses idiomatic tools and flags for the target operating system, shell, and ecosystem.
+- **Nemesis (`nemesis`)** — Calibrated adversary. Produces a plausible semantic flaw when one can be introduced without becoming dangerous, and otherwise emits the honest command. It does not produce destructive commands.
 
-- **Axiom (`axiom`)** — Composition lens (`role="tribunal_member"`, `lite` tier). Focuses on clean, coherent multi-stage pipelines that fulfill multi-fact intents in a single invocation.
-- **Concord (`concord`)** — Safety lens (`role="tribunal_member"`, `lite` tier). Focuses on defensive flags, read-only discipline, explicit paths, and safe pipeline chaining (`&&`, `pipefail`, `xargs -r`).
-- **Variance (`variance`)** — Edge-case lens (`role="tribunal_member"`, `lite` tier). Focuses on environmental hazards, handling spaces in filenames, null-delimited processing (`-print0 | xargs -0`), locales, and missing directories.
-- **Pragma (`pragma`)** — Convention lens (`role="tribunal_member"`, `lite` tier). Focuses on idiomatic community patterns and native OS/shell tools (`journalctl` on systemd, `ss` over `netstat`, `kubectl get`).
-- **Nemesis (`nemesis`)** — Calibrated adversary lens (`role="tribunal_member"`, `lite` tier). Proposes subtle, plausible-but-flawed commands to stress-test verification, or honestly abstains by emitting the correct command when no realistic flaw exists.
+The default setting requests five passes, one for each seat (`llm_command_gen_passes`, default `5`). The setting can change the number of passes; seats repeat cyclically when more than five passes are requested. Each pass receives the same intent, guidelines, operator context, constraints, and its own member system prompt. Generation runs in parallel. Responses are normalized, structurally parsed when the model supports structured output, and rejected when command safety validation fails. A successful seat emits one command candidate without commentary.
 
-Every Tribunal member emits strictly a shell command string without commentary or markdown formatting.
+Voting is uniform: each successful candidate contributes one vote. A command needs at least two votes (`TRIBUNAL_MIN_CONSENSUS = 2`). A unique top candidate wins; ties use deterministic shortest-command and non-Nemesis tie breakers, then trigger another anonymized generation and voting round if unresolved. If the final round cannot reach the threshold, the Tribunal returns a consensus failure and no command is executed.
 
-### Machine-Domain Auditor
+The Tribunal's model agreement is application-level reasoning. It is not protocol L2 consensus, does not produce Ed25519 votes, and does not authorize execution.
 
-- **Auditor (`auditor`)** — The Tribunal judge and quality gate (`model_tier="primary"`, `role="auditor"`). The Auditor inspects anonymized candidate command clusters produced by the Tribunal members against Sage's intent. Operating across unanimous (5/5), majority (3-4), or tied modes, the Auditor emits one of three structured verdicts: `ok` (approves the top candidate), `revised:<command>` (corrects syntax or whitelist violations), or `swap:<cluster_id>` (selects a superior dissenting candidate).
+## Marshal and Auditor stages
 
-### Pre-Generation Defense (Marshal)
+After a voting winner exists, the pipeline invokes Marshal risk analysis before the Auditor. Marshal is application-layer analysis and can be unavailable when no analyzer is configured. A `HIGH` command-risk result blocks the command. The first block records investigation feedback and asks the reasoning loop to propose a safer alternative; a second consecutive block emits an agent-conflict event and requires human intervention. A successful command resets the investigation's Marshal block count.
 
-- **Marshal (`marshal`)** — The Order Keeper (`model_tier="lite"`, `role="defender"`). Pre-generation risk coordinator that consolidates risk assessments before a `GovernanceEnvelope` is constructed:
-  - **Command Risk Analyzer (`marshal_command`)** — Evaluates shell command blast radius, reversibility, and failure impact (`LOW`, `MEDIUM`, `HIGH`). Stakes reputation on assessment accuracy.
-  - **Error Analyzer (`marshal_error`)** — Analyzes command execution failures and classifies recovery as `AUTO_FIXABLE`, `ESCALATE`, or `RETRY_LIMIT`.
-  - **File Operation Risk Analyzer (`marshal_file`)** — Assesses file mutation risks based on path sensitivity, reversibility, and Git repository state (`LOW`, `MEDIUM`, `HIGH`). Stakes reputation on assessment accuracy.
+The registered Marshal personas are:
 
-### Support and Evaluation Agents
+- **Marshal (`marshal`)** — Coordinates the consolidated pre-execution risk signal and emits risk and error-handling classifications.
+- **Command Risk Analyzer (`marshal_command`)** — Classifies command blast radius, reversibility, and failure consequence as `LOW`, `MEDIUM`, or `HIGH`, failing closed to `HIGH` when analysis is inconclusive.
+- **Error Analyzer (`marshal_error`)** — Classifies command failures as `AUTO_FIXABLE`, `ESCALATE`, or `RETRY_LIMIT`, with ambiguous failures escalating and a default retry budget of two.
+- **File Operation Risk Analyzer (`marshal_file`)** — Classifies file-operation risk as `LOW`, `MEDIUM`, or `HIGH` using path sensitivity, reversibility, Git state, and backup availability. File-operation services use this analysis when evaluating operator file mutations.
 
-- **Scribe (`scribe`)** — Case titler (`model_tier="lite"`, `role="summarizer"`). Generates concise, 3-7 word titles summarizing new cases based on initial user prompts.
-- **Codex (`codex`)** — Memory builder (`model_tier="lite"`, `role="analyzer"`). Extracts durable user preferences and redacted investigation summaries into `InvestigationMemory` records for cross-session personalization.
-- **Judge (`judge`)** — Benchmark evaluator (`model_tier="primary"`, `role="evaluator"`). Evaluates agent outputs against gold-standard rubric criteria, generating quantitative scores and qualitative justifications for eval runs and reputation tracking.
+The Auditor is controlled by `llm_command_gen_auditor`, enabled by default. When disabled, the voting winner passes through the Auditor stage without an Auditor model call. When enabled, a `primary`-tier model reviews anonymized candidate clusters against the original intent and command constraints. Unanimous mode permits `ok` or `revised`; majority mode permits `ok`, `revised`, or `swap`; tied mode forbids `ok` and requires `revised` or `swap`. Revisions and swaps are normalized and run through command safety validation again. When the enabled Auditor approves a result, the pipeline also creates the application reputation commitment used by the later stake-resolution path; the disabled-Auditor pass-through does not perform an Auditor model call or create that commitment.
 
-## Operational Flow and Invariants
+## Support and evaluation personas
 
-The interaction between agents follows strict architectural invariants:
+- **Scribe (`scribe`)** — A `lite` summarizer that generates a specific three-to-seven-word case title from the initial user message. It emits only the title and does not approve actions.
+- **Codex (`codex`)** — A `lite` analyzer used by `MemoryGenerationService` to extract durable user preferences and scrubbed investigation summaries. It must redact hostnames, IP addresses, credentials, and other identifiers before the resulting `InvestigationMemory` is used in later prompts.
+- **Judge (`judge`)** — A `primary`-tier evaluator whose authority is reputational, not operational. Evaluation services use Judge behavior to score agent responses against rubric dimensions; it does not gate a production command or create protocol authorization.
 
-1. **Intent vs. Command Separation** — The caller-facing model `SageOperatorRequest` does not contain a `command` field; reasoning agents articulate what to accomplish rather than shell commands. The Tribunal derives the exact syntax, which is injected into `ExecutorCommandArgs` after consensus and auditor verification.
-2. **Information Isolation** — Tribunal members run without knowledge of each other's candidate outputs or identities, preventing premature convergence.
-3. **Fail-Closed Risk Analysis** — Marshal sub-agents fail closed to `HIGH` risk on ambiguous or inconclusive data.
-4. **Interrogation Gate** — When Sage or Dash encounters ambiguity, it emits an `<interrogation>` block with exactly three binary YES/NO questions. Tool execution pauses until the user provides answers.
-5. **Reputation Staking** — Risk analyzer agents stake reputation on classification decisions, penalizing unwarranted blocks of benign operations while rewarding accurate detection of hazardous operations.
+These support personas operate on application records, memory, evaluation, and telemetry. Those records remain outside the Gateway and Operator execution boundary even when g8ee persists selected results through governed application-record writes.
+
+## End-to-end command flow
+
+For a host-command tool call, the current pipeline is:
+
+1. Triage classifies the user turn. The chat pipeline selects Dash or Sage and builds the reasoning prompt with investigation context and memories.
+2. The selected reasoning persona may request `run_commands_with_operator` using `SageOperatorRequest`, which contains intent and constraints but no shell command.
+3. `TribunalInvoker` resolves the selected Operator context and command-validation settings, then runs Tribunal generation, voting, and any second round.
+4. Marshal analyzes the voting winner. A high-risk block stops this attempt before Auditor review.
+5. Auditor review is performed when enabled. The final command is normalized and revalidated before it is placed in `ExecutorCommandArgs`.
+6. The operator tool executor sends the typed internal request through the g8ee command path. At the pub/sub boundary, g8ee serializes `CommandIntent` for the exact Operator and session; the Gateway constructs the canonical envelope and the target Operator independently performs L1-L4 and L5 execution.
+7. The result returns to the sequential ReAct loop. The model can request another tool turn until it stops or reaches `AGENT_MAX_TOOL_TURNS` (currently `25`); continuing after the limit requires a separate g8ee application approval. That approval is not protocol L3.
+
+Application SSE events expose progress, candidate, risk, approval, and result telemetry. They do not authorize execution or replace the Operator's authoritative receipt and audit evidence. Application approvals and reputation outcomes have the same limitation.
 
 ## Related
 
-- [Platform Agents](../architecture/agents.md) — Platform-level agent architecture and ensemble role in the g8e platform
-- [Governance Pipeline](../architecture/governance.md) — Platform-level five-layer verification pipeline and governance postures
-- [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
-- [Governance](governance.md) — Five-layer verification pipeline and envelope validation
-- [Prompts](prompts.md) — System prompt assembly and persona templating
-- [Thinking](thinking.md) — Provider reasoning tokens and cryptographic thought signatures
-- [Evals](evals.md) — Benchmark evaluation suite and Judge scoring rubrics
-
+- [Platform Agents](../architecture/agents.md) — Platform agent concepts, ingress paths, and governance boundary.
+- [Governance Pipeline](../architecture/governance.md) — Canonical five-layer verification and posture behavior.
+- [Architecture](architecture.md) — g8ee runtime, services, and model hierarchy.
+- [Governance](governance.md) — g8ee integration limits and envelope paths.
+- [Prompts](prompts.md) — System prompt assembly and persona templating.
+- [Thinking](thinking.md) — Provider reasoning tokens and thought signatures.
+- [Evals](evals.md) — Benchmark and evaluation behavior.
+- [Documentation Guide](../devs/docs.md) — Documentation audit and ownership rules.

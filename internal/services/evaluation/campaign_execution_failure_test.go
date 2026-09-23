@@ -9,7 +9,7 @@ package evaluation
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -25,13 +25,13 @@ type failingCampaignExecutor struct {
 }
 
 func (f *failingCampaignExecutor) ExecuteAssignment(_ context.Context, _ AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
-	return nil, errors.New(f.message)
+	return nil, fmt.Errorf("%s", f.message)
 }
 
 func TestBuildExecutorFailureAssignmentResult_ClassifiesProviderFailures(t *testing.T) {
 	t.Parallel()
-	req := homogeneousAssignmentExecutionRequest("primary")
-	result, err := BuildExecutorFailureAssignmentResult(req, errors.New("evaluation: execute assignment: wait for trace: deadline exceeded"), time.Unix(1_700_000_000, 0).UTC())
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
+	result, err := BuildExecutorFailureAssignmentResult(req, fmt.Errorf("evaluation: execute assignment: wait for trace: deadline exceeded"), time.Unix(1_700_000_000, 0).UTC())
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED, result.GetLifecycleStatus())
 	assert.NotEmpty(t, result.GetResultDigest())
@@ -39,8 +39,8 @@ func TestBuildExecutorFailureAssignmentResult_ClassifiesProviderFailures(t *test
 
 func TestBuildExecutorFailureAssignmentResult_ClassifiesValidationFailures(t *testing.T) {
 	t.Parallel()
-	req := homogeneousAssignmentExecutionRequest("primary")
-	result, err := BuildExecutorFailureAssignmentResult(req, errors.New(`evaluation: execute assignment: submit chat: ensemble chat: status 422: {"detail":[{"loc":["body","evaluation_context","gold_summary","expected_tools"]}]}`), time.Unix(1_700_000_000, 0).UTC())
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
+	result, err := BuildExecutorFailureAssignmentResult(req, fmt.Errorf(`evaluation: execute assignment: submit chat: ensemble chat: status 422: {"detail":[{"loc":["body","evaluation_context","gold_summary","expected_tools"]}]}`), time.Unix(1_700_000_000, 0).UTC())
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, result.GetLifecycleStatus())
 }

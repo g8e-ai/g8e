@@ -14,6 +14,12 @@ import (
 	"os"
 )
 
+const (
+	ComponentKey              = "component"
+	ComponentGateway          = "gateway"
+	ComponentEmbeddedOperator = "embedded-operator"
+)
+
 // NewLogger returns a slog.Logger writing to the given writer with g8e
 // log formatting. Used by LogService.ConfigureFileLogger and by CLI
 // clients that log to stdout.

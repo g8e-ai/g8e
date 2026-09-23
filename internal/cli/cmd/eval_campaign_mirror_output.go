@@ -15,6 +15,22 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
+func writeCampaignMirrorRestoreProgress(w io.Writer, progress evaluation.CampaignMirrorReconcileProgress) {
+	prefix := fmt.Sprintf("[%d/%d] %s", progress.Index, progress.Total, progress.RunID)
+	switch progress.Status {
+	case evaluation.CampaignMirrorReconcileChecking:
+		_, _ = fmt.Fprintf(w, "Checking verified run %d/%d: %s\n", progress.Index, progress.Total, progress.RunID)
+	case evaluation.CampaignMirrorReconcileRestored:
+		_, _ = fmt.Fprintf(w, "%s restored (%d record(s))\n", prefix, progress.PublishedRecords)
+	case evaluation.CampaignMirrorReconcilePresent:
+		_, _ = fmt.Fprintf(w, "%s already present\n", prefix)
+	case evaluation.CampaignMirrorReconcileHostAbsent:
+		_, _ = fmt.Fprintf(w, "%s skipped (host artifacts absent)\n", prefix)
+	case evaluation.CampaignMirrorReconcileFailed:
+		_, _ = fmt.Fprintf(w, "%s failed: %v\n", prefix, progress.Err)
+	}
+}
+
 func writeCampaignMirrorRestoreQueueResult(stdout, stderr io.Writer, result *evaluation.CampaignMirrorReconcileResult) {
 	if result == nil {
 		return

@@ -22,13 +22,21 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/g8e-ai/g8e/v2/protocol"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -49,6 +57,119 @@ func TestNewOperatorController(t *testing.T) {
 	assert.Equal(t, reg, controller.reg)
 	assert.Equal(t, auth, controller.auth)
 	assert.Equal(t, resp, controller.responder)
+}
+
+func seedStopOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessionID, userID string, operatorType constants.OperatorType, status constants.OperatorStatus) {
+	t.Helper()
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                operatorID,
+		UserID:            userID,
+		OrganizationID:    "stop-org",
+		OperatorSessionID: sessionID,
+		OperatorType:      operatorType,
+		Status:            status,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+}
+
+func stopOperatorRequest(t *testing.T, controller *OperatorController, userID, sessionID, reason string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(models.StopOperatorRequest{OperatorSessionID: sessionID, Reason: reason})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsStop, strings.NewReader(string(body)))
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, userID))
+	rr := httptest.NewRecorder()
+	controller.handleStopOperator(rr, req)
+	return rr
+}
+
+func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Dispatch: dispatch, Responder: infra.Responder})
+
+	seedStopOperator(t, infra, "stop-remote", "stop-remote-session", "stop-owner", constants.OperatorTypeRemote, constants.OperatorStatusActive)
+	seedStopOperator(t, infra, "stop-other", "stop-other-session", "stop-other-owner", constants.OperatorTypeRemote, constants.OperatorStatusActive)
+	seedStopOperator(t, infra, "stop-embedded", "stop-embedded-session", "stop-owner", constants.OperatorTypeEmbedded, constants.OperatorStatusActive)
+	seedStopOperator(t, infra, "stop-offline", "stop-offline-session", "stop-owner", constants.OperatorTypeRemote, constants.OperatorStatusStopped)
+
+	t.Run("cross-owner target is rejected", func(t *testing.T) {
+		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-other-session", "retired")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("embedded target is rejected", func(t *testing.T) {
+		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-embedded-session", "retired")
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrOperatorStopEmbedded.Error())
+	})
+
+	for _, tc := range []struct {
+		name      string
+		sessionID string
+	}{
+		{name: "missing target is rejected", sessionID: "missing-stop-session"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := stopOperatorRequest(t, controller, "stop-owner", tc.sessionID, "retired")
+			assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		})
+	}
+
+	t.Run("offline target is rejected", func(t *testing.T) {
+		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-offline-session", "retired")
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrRegistrationOperatorNoActiveSession.Error())
+	})
+
+	t.Run("delivery failure leaves operator active", func(t *testing.T) {
+		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-remote-session", "retired")
+		assert.Equal(t, http.StatusBadGateway, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrDispatchNoDelivery.Error())
+		op, err := infra.Auth.ValidateOperatorSession("stop-remote-session")
+		require.NoError(t, err)
+		assert.Equal(t, constants.OperatorStatusActive, op.Status)
+	})
+
+	t.Run("acknowledged delivery records reason and stopped state", func(t *testing.T) {
+		channel := pubsub.CmdChannel("stop-remote", "stop-remote-session")
+		resultsChannel := pubsub.ResultsChannel("stop-remote", "stop-remote-session")
+		unregister := infra.Pubsub.RegisterHandler(channel, func(_ string, data []byte) {
+			envelope := &commonv1.GovernanceEnvelope{}
+			require.NoError(t, protojson.Unmarshal(data, envelope))
+			shutdown := &operatorv1.ShutdownRequested{}
+			require.NoError(t, proto.Unmarshal(envelope.Payload, shutdown))
+			assert.Equal(t, "planned maintenance", shutdown.Reason)
+			wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+				Id: envelope.Id, EventType: string(constants.Event.Operator.ShutdownAcknowledged), Timestamp: timestamppb.Now(),
+			})
+			require.NoError(t, err)
+			infra.Pubsub.Publish(resultsChannel, wire)
+		})
+		t.Cleanup(unregister)
+
+		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-remote-session", "planned maintenance")
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), "stop-remote")
+		require.NoError(t, err)
+		require.NotNil(t, doc)
+		body, err := json.Marshal(doc.Data)
+		require.NoError(t, err)
+		var operator models.OperatorDocumentGo
+		require.NoError(t, json.Unmarshal(body, &operator))
+		assert.Equal(t, constants.OperatorStatusStopped, operator.Status)
+		assert.Equal(t, "planned maintenance", operator.StopReason)
+	})
+}
+
+func TestOperatorStopRouteRequiresMTLS(t *testing.T) {
+	assert.Equal(t, RouteAuthMTLS, NewRouteAuthRegistry(false).AuthMode(constants.APIPaths.OperatorsStop))
 }
 
 func TestHandleReauth_MalformedJSON(t *testing.T) {

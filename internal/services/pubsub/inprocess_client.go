@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"sync"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -34,11 +33,11 @@ type InProcessPubSubClient struct {
 }
 
 // NewInProcessPubSubClient creates a new in-process pub/sub client.
-func NewInProcessPubSubClient(broker Broker) *InProcessPubSubClient {
+func NewInProcessPubSubClient(broker Broker, logger *slog.Logger) *InProcessPubSubClient {
 	return &InProcessPubSubClient{
 		broker: broker,
 		subs:   make(map[string]chan []byte),
-		logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		logger: logger,
 	}
 }
 

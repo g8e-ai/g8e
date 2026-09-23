@@ -34,12 +34,13 @@ const (
 	KSICategoryTPR KSICategory = "TPR" // Supply Chain Risk
 )
 
-// KSIStatus represents the binary evaluation result for a KSI.
+// KSIStatus represents the evaluation result for a KSI.
 type KSIStatus string
 
 const (
 	KSIStatusSatisfied     KSIStatus = "satisfied"
 	KSIStatusNotSatisfied  KSIStatus = "not_satisfied"
+	KSIStatusUnverifiable  KSIStatus = "unverifiable"
 	KSIStatusNotApplicable KSIStatus = "not_applicable"
 )
 
@@ -59,11 +60,19 @@ func (o KSIOutcome) Status() KSIStatus {
 	switch o {
 	case KSIOutcomeSatisfied:
 		return KSIStatusSatisfied
+	case KSIOutcomeMethodFailure:
+		return KSIStatusNotSatisfied
+	case KSIOutcomeInvalidEvidence, KSIOutcomeStaleEvidence, KSIOutcomeUnsupportedAutomation, KSIOutcomeCustomerAttestationRequired:
+		return KSIStatusUnverifiable
 	case KSIOutcomeNotApplicable:
 		return KSIStatusNotApplicable
 	default:
-		return KSIStatusNotSatisfied
+		return KSIStatusUnverifiable
 	}
+}
+
+func (s KSIStatus) unavailable() bool {
+	return s == KSIStatusUnverifiable || s == KSIStatusNotSatisfied
 }
 
 func (o KSIOutcome) Valid() bool {

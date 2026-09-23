@@ -48,6 +48,7 @@ const (
 	ActionTypePlatformEnrollmentIssue         ActionType = "PLATFORM_ENROLLMENT_ISSUE"
 	ActionTypePlatformEnrollmentPersistPolicy ActionType = "PLATFORM_ENROLLMENT_PERSIST_POLICY"
 	ActionTypePlatformEnrollmentCreateSession ActionType = "PLATFORM_ENROLLMENT_CREATE_SESSION"
+	ActionTypePlatformEnrollmentRevoke        ActionType = "PLATFORM_ENROLLMENT_REVOKE"
 	ActionTypePortCheck                       ActionType = "PORT_CHECK"
 	ActionTypeProviderBoundaryObservation     ActionType = "PROVIDER_BOUNDARY_OBSERVATION"
 	ActionTypeModelProvenanceObservation      ActionType = "MODEL_PROVENANCE_OBSERVATION"
@@ -84,6 +85,7 @@ var AllActionTypes = []ActionType{
 	ActionTypePlatformEnrollmentIssue,
 	ActionTypePlatformEnrollmentPersistPolicy,
 	ActionTypePlatformEnrollmentCreateSession,
+	ActionTypePlatformEnrollmentRevoke,
 	ActionTypePortCheck,
 	ActionTypeProviderBoundaryObservation,
 	ActionTypeModelProvenanceObservation,
@@ -107,6 +109,7 @@ func (a ActionType) IsMutation() bool {
 		ActionTypePlatformEnrollmentIssue,
 		ActionTypePlatformEnrollmentPersistPolicy,
 		ActionTypePlatformEnrollmentCreateSession,
+		ActionTypePlatformEnrollmentRevoke,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown:
 		return true
@@ -129,7 +132,8 @@ func (a ActionType) IsBootstrapAction() bool {
 		ActionTypePlatformEnrollmentDecide,
 		ActionTypePlatformEnrollmentIssue,
 		ActionTypePlatformEnrollmentPersistPolicy,
-		ActionTypePlatformEnrollmentCreateSession:
+		ActionTypePlatformEnrollmentCreateSession,
+		ActionTypePlatformEnrollmentRevoke:
 		return true
 	default:
 		return false

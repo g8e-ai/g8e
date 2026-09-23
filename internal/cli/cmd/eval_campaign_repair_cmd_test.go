@@ -43,9 +43,9 @@ func TestCampaignEvalRepairTraceDigests_JSON(t *testing.T) {
 	rootCmd.SetArgs([]string{"eval", "campaign", "repair", "trace-digests", "--project-root", root, active.RunID})
 	require.NoError(t, rootCmd.Execute())
 
-	var payload map[string]any
+	var payload campaignRepairOutput
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
-	assert.Equal(t, active.RunID, payload["run_id"])
+	assert.Equal(t, active.RunID, payload.RunID)
 }
 
 func TestCampaignEvalRepairResults_ViaCLI(t *testing.T) {

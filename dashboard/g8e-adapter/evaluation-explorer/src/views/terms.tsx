@@ -31,7 +31,7 @@ export const TERM_DEFINITIONS = {
   denominator:
     'The count of eligible units a rate is computed over — assignments with an observed pass metric, or tasks for bootstrap intervals. Never inflated by repetitions.',
   verification_status:
-    'The canonical verifier disposition for a suite or run. Failed means the report did not pass verification — the measured values are still shown, labeled exploratory partial.',
+    'The canonical verifier disposition for a suite or run. Failed means the report did not pass verification — measured values remain visible as Not fully verified.',
   missingness:
     'Why a metric was not observed or is not applicable. Missing values are disclosed, never rendered as zero.',
   repeatability:

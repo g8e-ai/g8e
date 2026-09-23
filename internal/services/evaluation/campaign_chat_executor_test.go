@@ -20,14 +20,14 @@ import (
 )
 
 type stubCampaignChatClient struct {
-	trace map[string]any
+	trace EvaluationTrace
 }
 
 func (s *stubCampaignChatClient) EnsembleChat(_ context.Context, _ harnessclient.Persona, _ harnessclient.EnsembleChatRequest) (*harnessclient.EnsembleChatResponse, error) {
 	return &harnessclient.EnsembleChatResponse{CaseID: "case-1", InvestigationID: "inv-1"}, nil
 }
 
-func (s *stubCampaignChatClient) GetEvaluationTrace(_ context.Context, _ harnessclient.Persona, _, _ string) (map[string]any, error) {
+func (s *stubCampaignChatClient) GetEvaluationTrace(_ context.Context, _ harnessclient.Persona, _, _ string) (EvaluationTrace, error) {
 	return s.trace, nil
 }
 
@@ -45,20 +45,20 @@ func TestCampaignChatExecutor_ImportsCompletedTrace(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	traceStore := &stubCampaignTraceStore{}
-	client := &stubCampaignChatClient{trace: completedHomogeneousTrace("primary")}
+	client := &stubCampaignChatClient{trace: completedHomogeneousTrace(t, "primary")}
 	executor := NewCampaignChatExecutor(
 		client,
 		harnessclient.Persona{ID: "campaign-cli", UserID: "user-1", CLISessionID: "cli-1"},
 		"data-op",
 		"data-session",
 		traceStore,
-		func(ctx context.Context, fetch func(context.Context) (map[string]any, error)) (map[string]any, error) {
+		func(ctx context.Context, fetch func(context.Context) (EvaluationTrace, error)) (EvaluationTrace, error) {
 			return fetch(ctx)
 		},
 		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
 		func(prefix string) string { return prefix + "-1" },
 	)
-	req := homogeneousAssignmentExecutionRequest("primary")
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
 	result, err := executor.ExecuteAssignment(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, result.GetLifecycleStatus())

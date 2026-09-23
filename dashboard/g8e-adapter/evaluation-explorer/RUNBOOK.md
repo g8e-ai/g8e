@@ -75,7 +75,7 @@ Publication is owned by the Go evaluation service. Campaign runs project lifecyc
 
 ## Expected browser states
 
-The overview first reconstructs bootstrap, complete paginated history, and the sealed snapshot, then connects SSE. A live run appears as queued, running, provisional assignment and metric updates, and finally completed, failed, or stopped without a refresh. Reload reconstructs the same state before SSE resumes. Exploratory, verified-public, live-in-progress, failed, unavailable, and not-evaluated states remain distinct; the site never averages datasets.
+The overview first reconstructs bootstrap, complete paginated history, and the sealed snapshot, then connects SSE. A live run appears as queued, running, provisional assignment and metric updates, and finally completed, failed, or stopped without a refresh. Reload reconstructs the same state before SSE resumes. Current-standard verified, run-scoped verified, not fully verified, legacy unverified, in-progress, failed, unavailable, and not-evaluated states remain distinct; the site never averages datasets.
 
 ## Verification
 

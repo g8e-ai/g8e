@@ -44,6 +44,25 @@ func TestAttemptStore_BeginCompleteAndRejectDuplicate(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrInferenceProviderAttemptConflict)
 }
 
+func TestAttemptStore_ImportPersistsSynthesizedRemoteRecord(t *testing.T) {
+	t.Parallel()
+	store, err := NewAttemptStore(storagetest.NewTestFileSvc(t, t.TempDir()))
+	require.NoError(t, err)
+	ctx := context.Background()
+	record := &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: "attempt-imported",
+		Status:            operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
+		StartedAtUnixMs:   1_700_000_000_000,
+		CompletedAtUnixMs: 1_700_000_001_000,
+	}
+
+	require.NoError(t, store.Import(ctx, record))
+	require.NoError(t, store.Import(ctx, record))
+	stored, err := store.Get(ctx, record.GetProviderAttemptId())
+	require.NoError(t, err)
+	assert.Equal(t, record, stored)
+}
+
 func TestAttemptStore_FailMarksTerminalState(t *testing.T) {
 	t.Parallel()
 	store, err := NewAttemptStore(storagetest.NewTestFileSvc(t, t.TempDir()))

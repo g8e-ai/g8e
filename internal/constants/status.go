@@ -201,6 +201,8 @@ const (
 	SystemHealthHealthy   SystemHealth = "healthy"
 	SystemHealthUnhealthy SystemHealth = "unhealthy"
 	SystemHealthUnknown   SystemHealth = "unknown"
+
+	BuildMetadataUnavailable = "unavailable"
 )
 
 // NetworkProtocol is a typed string for network protocol.

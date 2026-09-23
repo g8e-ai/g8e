@@ -173,6 +173,7 @@ message PlatformEnrollmentGovernancePayload {
   string certificate_serial = 15;
   string certificate_fingerprint = 16;
   string owner_user_id = 17;
+  string reason = 18;
 }
 
 message PlatformEnrollmentCompletionTranscript {

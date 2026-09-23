@@ -3,9 +3,10 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { EvaluationSummary, SnapshotRecord } from '../src/contract/types';
 import { evalStore } from '../src/state/store';
+import { EvaluationDetailView } from '../src/views/EvaluationDetailView';
 import { EvaluationsView } from '../src/views/EvaluationsView';
 
 function evaluation(
@@ -58,5 +59,40 @@ describe('EvaluationsView', () => {
     expect(screen.getByRole('link', { name: 'eval-init-qwen3-4b-1789657337' })).toBeInTheDocument();
     expect(screen.getByTitle('ds-live-init-campaign-1789654273')).toBeInTheDocument();
     expect(screen.getByTitle('ds-live-eval-init-qwen3-4b-1789657337')).toBeInTheDocument();
+  });
+
+  it('renders typed model headline coverage without system-only cards', () => {
+    const summary: EvaluationSummary = {
+      ...evaluation('ds-current', 'run-current', '2026-09-22T08:00:00Z'),
+      schema_version: '1.5.0',
+      lifecycle_state: 'completed',
+      assignment_completed: 3,
+      assignment_failed: 1,
+      terminal_outcomes: { completed: 3, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+      verifier_state: 'not_run',
+      headline_metrics: {
+        pass_rate: { value: 0.75, unit: 'ratio', observed_count: 4, eligible_count: 4, unavailable_count: 0 },
+        latency_p50_ms: { value: 640, unit: 'milliseconds', observed_count: 3, eligible_count: 4, unavailable_count: 1 },
+        output_throughput_p50_tokens_per_second: { unavailable_reason: 'incomplete_contributor_evidence', unit: 'tokens_per_second', observed_count: 0, eligible_count: 4, unavailable_count: 4 },
+      },
+    };
+    evalStore.loadFixtures([summary], []);
+
+    render(
+      <MemoryRouter initialEntries={['/evaluations/ds-current/run-current']}>
+        <Routes>
+          <Route path="/evaluations/:datasetId/:runId" element={<EvaluationDetailView />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('metric-pass-rate')).toHaveTextContent('4 observed / 4 eligible');
+    expect(screen.getByTestId('metric-latency-p50')).toHaveTextContent('3 observed / 4 eligible');
+    expect(screen.getByTestId('metric-output-throughput-p50')).toHaveTextContent('0 observed / 4 eligible');
+    expect(screen.queryByTestId('metric-primary-invocation-share')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('metric-correlated-failure-rate')).not.toBeInTheDocument();
+    expect(screen.getByText(/heterogeneous routing and correlation metrics appear only for system evaluations/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Not yet verified')).toHaveLength(2);
+    expect(screen.queryByText('not_run')).not.toBeInTheDocument();
   });
 });

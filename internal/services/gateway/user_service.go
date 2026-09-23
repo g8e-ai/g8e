@@ -90,13 +90,8 @@ func (s *UserService) CreateUserWithSub(sub string) (*models.User, error) {
 		WebAuthnUserID:     uuid.NewString(),
 	}
 
-	data, err := json.Marshal(user)
-	if err != nil {
-		return nil, fmt.Errorf("user service: failed to marshal JIT user: %w", err)
-	}
-
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), sub, data); err != nil {
-		return nil, fmt.Errorf("user service: failed to store JIT user: %w", err)
+	if err := s.persistNewUser(user); err != nil {
+		return nil, fmt.Errorf("user service: create JIT user: %w", err)
 	}
 
 	s.logger.Info("[USER-SERVICE] JIT user provisioned", "user_id", sub)
@@ -155,17 +150,42 @@ func (s *UserService) createUser(localOSUser *models.LocalOSUser, roles []string
 		Roles:              roles,
 	}
 
-	data, err := json.Marshal(user)
-	if err != nil {
-		return nil, fmt.Errorf("user service: failed to marshal user: %w", err)
-	}
-
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
-		return nil, fmt.Errorf("user service: failed to store user: %w", err)
+	if err := s.persistNewUser(user); err != nil {
+		return nil, fmt.Errorf("user service: create user: %w", err)
 	}
 
 	s.logger.Info("[USER-SERVICE] User created", "user_id", userID)
 	return user, nil
+}
+
+func (s *UserService) persistNewUser(user *models.User) error {
+	now := time.Now().UTC()
+	user.OrganizationID = user.ID
+	organization := &models.Organization{
+		ID:            user.OrganizationID,
+		OwnerUserID:   user.ID,
+		MemberUserIDs: []string{user.ID},
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	organizationData, err := json.Marshal(organization)
+	if err != nil {
+		return fmt.Errorf("marshal organization: %w", err)
+	}
+	userData, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("marshal user: %w", err)
+	}
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOrganizations), organization.ID, organizationData); err != nil {
+		return fmt.Errorf("store organization: %w", err)
+	}
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), user.ID, userData); err != nil {
+		if rollbackErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionOrganizations), organization.ID); rollbackErr != nil {
+			return fmt.Errorf("store user: %w; rollback organization: %v", err, rollbackErr)
+		}
+		return fmt.Errorf("store user: %w", err)
+	}
+	return nil
 }
 
 // Disable transitions a user to UserStatusDisabled and appends an audit row.
@@ -317,11 +337,16 @@ func (s *UserService) GetBySub(sub string) (*models.User, error) {
 	return s.GetByID(sub)
 }
 
+type userStatusUpdate struct {
+	Status    constants.UserStatus `json:"status"`
+	UpdatedAt int64                `json:"updated_at"`
+}
+
 // updateUserStatus updates a user's status field.
 func (s *UserService) updateUserStatus(userID string, status constants.UserStatus) error {
-	updates := map[string]interface{}{
-		"status":     marshaler.Status(status),
-		"updated_at": time.Now().UTC().UnixMilli(),
+	updates := userStatusUpdate{
+		Status:    status,
+		UpdatedAt: time.Now().UTC().UnixMilli(),
 	}
 
 	updateBytes, err := json.Marshal(updates)
@@ -337,11 +362,16 @@ func (s *UserService) updateUserStatus(userID string, status constants.UserStatu
 	return nil
 }
 
+type userPasskeyCredentialsUpdate struct {
+	PasskeyCredentials []models.PasskeyCredential `json:"passkey_credentials"`
+	UpdatedAt          int64                      `json:"updated_at"`
+}
+
 // UpdatePasskeyCredentials updates a user's passkey credentials.
 func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []models.PasskeyCredential) error {
-	updates := map[string]interface{}{
-		"passkey_credentials": credentials,
-		"updated_at":          time.Now().UTC().UnixMilli(),
+	updates := userPasskeyCredentialsUpdate{
+		PasskeyCredentials: credentials,
+		UpdatedAt:          time.Now().UTC().UnixMilli(),
 	}
 
 	updateBytes, err := json.Marshal(updates)

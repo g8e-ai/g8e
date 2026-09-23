@@ -5,14 +5,26 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ---
 
 ## Overview
 
-This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) that enforces 5-layer Byzantine Fault Tolerant governance over all AI agent mutations. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and the document store API.
+This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) for governed AI-agent mutations, while the selected Operator independently verifies the envelope and owns L4/L5 execution. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and the document store API.
+
+This is a task guide for the reference Gateway. For the integration decision table and application-owned state model, see [Build g8e-Compatible Applications](./build_apps.md). For the trust boundary, ingress-path differences, and client-side bypass limits, see [AI Agents and the g8e Governance Boundary](../architecture/agents.md).
+
+### Prerequisites
+
+- Run commands from the repository root with a built `./g8e` binary, or use a deployed Gateway endpoint and the matching client credentials.
+- For a local Gateway, use Docker with Compose v2 or start the reference binary with `./g8e gw start`.
+- For CLI or delegated-app mTLS, enroll a human CLI identity first. The CLI must trust the Gateway CA bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`.
+- For a browser frontend, use an HTTPS Gateway endpoint, a browser with WebAuthn support, and an exact frontend origin that can be configured as a CORS origin and valid WebAuthn RP origin.
+- Keep private keys and issued certificates in a protected application-owned directory. The Gateway returns certificates and trust material, but never the app private key.
+
+The root Compose deployment publishes host ports 8080 and 8443 while containers use those same listener ports on the Compose network. Host-side clients use `localhost`; clients inside Compose use the Gateway service name and container ports. See [Docker Gateway Guide](./docker_gateway.md) and [Unified Docker Stack Guide](./unified_stack.md) for deployment-specific startup and owner-approval workflows.
 
 ---
 
@@ -63,7 +75,7 @@ Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 con
 
 #### Consensus Mode
 
-Enforces L1 and L2 (multi-signature Byzantine consensus). L3 notary signature is audited but not required.
+Enforces L1 and L2 K-of-N Ed25519 protocol authorization. L3 notary evidence is audited but not required.
 
 ```bash
 ./g8e gw start --posture consensus
@@ -131,7 +143,7 @@ The credential determines authorization as well as transport authentication:
 | Credential | Primary surfaces | Important restrictions |
 |---|---|---|
 | CLI or Operator mTLS certificate | Direct governance envelopes, data APIs, audit, PKI management, MCP, and A2A | The certificate identity and active session must match request context. |
-| App mTLS certificate | MCP, A2A, WebSocket pub/sub, SSE producer APIs, and policy-authorized data APIs | App identities cannot submit directly to `/api/v1/governance/envelopes`; the Gateway constructs envelopes for MCP, A2A, and `cmd:` pub/sub intents. App policy controls limits and access. |
+| App mTLS certificate | MCP, A2A, WebSocket pub/sub, SSE producer APIs, governance envelopes, and non-query data APIs | The certificate must have an active `AppPolicy`. App identities may submit complete envelopes when the envelope binds `acting_app_id` to the certificate and the source component is an app workload. App identities cannot use query routes or other privileged routes. Current app-policy enforcement applies rate and payload limits; the stored collection, event, intent, and L3 fields are not currently enforced by the middleware. |
 | Web session cookie | Browser user, passkey, approval, and SSE consumer routes | Browser requests use `credentials: 'include'`; this credential is not accepted by mTLS-only routes. |
 | JWT | MCP and A2A only when Gateway JWKS authentication is configured | The configured issuer, audience, role, and token signature are validated. |
 
@@ -290,7 +302,7 @@ curl -X POST https://localhost:8443/api/v1/a2a/call \
 
 ### 3. Direct Governance Envelope
 
-Authenticated CLI and Operator clients can submit canonical protojson `GovernanceEnvelope` transactions directly. This is the direct mutation API for clients that construct complete envelopes themselves. App certificates are intentionally blocked from this route; app workloads submit MCP calls, A2A calls, or `CommandIntent` messages on authorized `cmd:` channels so the Gateway constructs and verifies the envelope.
+Authenticated CLI, Operator, and policy-authorized app clients can submit canonical protojson `GovernanceEnvelope` transactions directly. This is the direct mutation API for clients that construct complete envelopes themselves. An app certificate must have an active `AppPolicy`, the envelope must use an app source component, and `acting_app_id` must match the app certificate's SPIFFE identity. The Gateway still verifies the complete envelope; it does not add missing L2 votes or L3 proofs. Use MCP or A2A when the Gateway must construct the envelope, request configured L2 deliberation, or suspend for L3 approval. `CommandIntent` remains the proof-free relay path for authorized `cmd:` channels and is transformed into an envelope by the Gateway.
 
 #### Envelope Submission
 
@@ -377,7 +389,7 @@ The document store uses the `/api/v1/data/{collection}/{id}` pattern for CRUD op
 
 #### Governed Collections
 
-Direct `/api/v1/data/` mutations (PUT, PATCH, DELETE) are restricted to platform infrastructure collections (`settings`, `users`, `operators`, `operator_sessions`, `bound_sessions`, `passkey_challenges`, `revoked_certificates`, `trusted_signers`, `console_audit`). Governed collections (`cases`, `investigations`, `tasks`, `memories`, `reputation_state`, `reputation_commitments`, `stake_resolutions`, `agent_activity_metadata`) permit reads and queries via `GET` and `POST .../_query`, but require `POST /api/v1/governance/envelopes` for mutations.
+Direct `/api/v1/data/` mutations (PUT, PATCH, DELETE) are restricted to platform infrastructure collections (`settings`, `users`, `operators`, `operator_sessions`, `bound_sessions`, `passkey_challenges`, `revoked_certificates`, `trusted_signers`, `console_audit`). Governed collections (`cases`, `investigations`, `tasks`, `memories`, `reputation_state`, `reputation_commitments`, `stake_resolutions`, `agent_activity_metadata`) permit reads via `GET` and require `POST /api/v1/governance/envelopes` for mutations. Query routes under `/api/v1/data/.../_query` are privileged and require CLI or Operator authentication; app certificates cannot use them. App-policy collection, event, intent, and L3 fields do not currently expand that route access.
 
 ---
 
@@ -388,7 +400,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.9
+go get github.com/g8e-ai/g8e/v2@v2.1.12
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -396,7 +408,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.1.9
+pip install g8e==2.1.12
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.
@@ -463,7 +475,7 @@ For device enrollment, use the `/api/v1/pki/devices/enroll` endpoint (see PKI se
 
 #### Application Enrollment
 
-External applications use delegated enrollment. An enrolled human CLI authenticates `POST /api/v1/pki/apps/delegated`, vouches for the application, and submits a P-256 CSR with `app_name`, `app_type`, and optional `organization_id`. The Gateway returns a one-hour certificate containing both the app identity and requesting-user identity, its chain, the trust bundle, the SPIFFE app ID, and the expiry time. It also creates the default `AppPolicy` required by app authentication. Delegated enrollment establishes identity only; it does not grant L2 consensus signing authority.
+External applications use delegated enrollment. An enrolled human CLI authenticates `POST /api/v1/pki/apps/delegated`, vouches for the application, and submits a P-256 CSR with `app_name`, `app_type`, and optional `organization_id`. The Gateway returns a one-hour certificate containing both the app identity and requesting-user identity, its chain, the trust bundle, the SPIFFE app ID, and the expiry time. It also creates the default `AppPolicy` required by app authentication. The default policy has no per-app rate or payload limit; the middleware enforces those limits only when corresponding policy fields are populated. Delegated enrollment establishes identity only and does not grant L2 consensus signing authority. It also does not make query or other privileged routes available to the app.
 
 The following example creates an app key and CSR, builds the JSON request without flattening PEM newlines, and enrolls the app with the local CLI identity:
 
@@ -798,7 +810,7 @@ For custom g8e-compatible gateway implementations, connection follows the same o
 2. **Configure Persistence**: Set up document store and persistence backends
 3. **Configure Ports**: Bind the two logical surfaces (HTTP and HTTPS) to appropriate ports with correct TLS settings
 4. **Start Gateway**: Launch in the desired posture (doctrine, consensus, ratify, or notary)
-5. **Enroll Clients**: Use CSR-based enrollment for operators and CLI clients
+5. **Enroll Clients**: Use CSR-based enrollment for operators and CLI clients, or delegated app enrollment for external applications
 6. **Monitor Health**: Implement health checks for gateway process and connected operators
 
 ### Configuration Requirements

@@ -82,8 +82,9 @@ func DecodePayloadForAction(actionType constants.ActionType, payload []byte) (pr
 		constants.ActionTypePlatformEnrollmentDecide,
 		constants.ActionTypePlatformEnrollmentIssue,
 		constants.ActionTypePlatformEnrollmentPersistPolicy,
-		constants.ActionTypePlatformEnrollmentCreateSession:
-		// All five platform enrollment actions share the same
+		constants.ActionTypePlatformEnrollmentCreateSession,
+		constants.ActionTypePlatformEnrollmentRevoke:
+		// All six platform enrollment actions share the same
 		// PlatformEnrollmentGovernancePayload proto. The action field
 		// inside the payload distinguishes them; L1 doctrine validates
 		// the payload shape and the handler layer enforces per-action

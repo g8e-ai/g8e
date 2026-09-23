@@ -8,17 +8,19 @@
 package consensus
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
 
@@ -81,64 +83,66 @@ func NewConsensusFromPolicy(
 // {prefix}{consensusID}_{memberAppID}.key within the secrets directory.
 // This enables multi-member consensus co-signing without sharing a single key.
 type FileKeyProvider struct {
-	secretsDir  string
+	fileSvc     fs.RuntimeFileService
 	consensusID string
 	keyPrefix   string
 }
 
-// NewFileKeyProvider creates a FileKeyProvider that looks for member keys in
-// the given secrets directory using the standard naming convention.
-func NewFileKeyProvider(secretsDir, consensusID string) *FileKeyProvider {
+// NewFileKeyProvider creates a FileKeyProvider backed by runtime secrets using
+// the standard consensus member key naming convention.
+func NewFileKeyProvider(fileSvc fs.RuntimeFileService, consensusID string) (*FileKeyProvider, error) {
+	if fileSvc == nil || consensusID == "" {
+		return nil, fmt.Errorf("consensus file key provider: %w", constants.ErrMissingRequiredField)
+	}
 	return &FileKeyProvider{
-		secretsDir:  secretsDir,
+		fileSvc:     fileSvc,
 		consensusID: consensusID,
 		keyPrefix:   constants.SecretsFileConsensusMemberKeyPrefix,
-	}
+	}, nil
 }
 
-// GetMemberKey loads the Ed25519 private key for the given member AppID from disk.
-// Returns an error if the key file does not exist or contains invalid data.
-func (p *FileKeyProvider) GetMemberKey(appID string) (ed25519.PrivateKey, error) {
+func (p *FileKeyProvider) memberKeyPath(appID string) string {
 	filename := fmt.Sprintf("%s%s_%s.key", p.keyPrefix, p.consensusID, appID)
-	keyPath := filepath.Join(p.secretsDir, filename)
+	return filepath.Join(constants.SecretsDirname, filename)
+}
 
-	seedHex, err := os.ReadFile(keyPath)
+// GetMemberKey loads the Ed25519 private key for the given member AppID from
+// runtime secrets. Returns an error if the key file does not exist or contains
+// invalid data.
+func (p *FileKeyProvider) GetMemberKey(appID string) (ed25519.PrivateKey, error) {
+	if p == nil || appID == "" {
+		return nil, fmt.Errorf("consensus file key provider: %w", constants.ErrMissingRequiredField)
+	}
+	keyPath := p.memberKeyPath(appID)
+	seedHex, err := p.fileSvc.ReadFile(context.Background(), keyPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("consensus file key provider: key file not found for member %s: %s", appID, keyPath)
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, fmt.Errorf("consensus file key provider: key file not found for member %s: %w", appID, constants.ErrNotFound)
 		}
 		return nil, fmt.Errorf("consensus file key provider: read key for member %s: %w", appID, err)
 	}
 
-	seedHexStr := strings.TrimSpace(string(seedHex))
-	seed, err := hex.DecodeString(seedHexStr)
+	seed, err := hex.DecodeString(strings.TrimSpace(string(seedHex)))
 	if err != nil {
 		return nil, fmt.Errorf("consensus file key provider: decode seed for member %s: %w", appID, err)
 	}
-
 	if len(seed) != ed25519.SeedSize {
 		return nil, fmt.Errorf("consensus file key provider: %w for member %s: got %d, expected %d", constants.ErrInvalidSeedLength, appID, len(seed), ed25519.SeedSize)
 	}
-
 	return ed25519.NewKeyFromSeed(seed), nil
 }
 
-// SaveMemberKey writes an Ed25519 private key seed to disk for the given member.
-// This is used during consensus member provisioning to persist generated keys.
-func SaveMemberKey(secretsDir, consensusID, appID string, privKey ed25519.PrivateKey) error {
-	if err := os.MkdirAll(secretsDir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("consensus: save member key: create secrets dir: %w", err)
+// SaveMemberKey writes an Ed25519 private key seed to runtime secrets for the
+// given member.
+func SaveMemberKey(fileSvc fs.RuntimeFileService, consensusID, appID string, privKey ed25519.PrivateKey) error {
+	if fileSvc == nil || consensusID == "" || appID == "" || len(privKey) != ed25519.PrivateKeySize {
+		return fmt.Errorf("consensus: save member key: %w", constants.ErrMissingRequiredField)
 	}
-
-	seed := privKey.Seed()
-	seedHex := hex.EncodeToString(seed)
-
+	seedHex := hex.EncodeToString(privKey.Seed())
 	filename := fmt.Sprintf("%s%s_%s.key", constants.SecretsFileConsensusMemberKeyPrefix, consensusID, appID)
-	keyPath := filepath.Join(secretsDir, filename)
-
-	if err := os.WriteFile(keyPath, []byte(seedHex), constants.PermFilePrivate); err != nil {
+	keyPath := filepath.Join(constants.SecretsDirname, filename)
+	if err := fileSvc.WriteFile(context.Background(), keyPath, []byte(seedHex), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("consensus: save member key: write: %w", err)
 	}
-
 	return nil
 }

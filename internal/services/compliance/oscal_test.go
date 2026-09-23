@@ -283,9 +283,9 @@ func TestOSCALExporter_GenerateAssessmentResults_MapsCanonicalStatuses(t *testin
 	}{
 		{name: "satisfied", status: "satisfied", expected: "satisfied"},
 		{name: "not satisfied", status: "not_satisfied", expected: "not-satisfied"},
-		{name: "not applicable", status: "not_applicable", expected: "not-satisfied"},
-		{name: "unverifiable", status: "unverifiable", expected: "not-satisfied"},
-		{name: "customer attestation required", status: "customer_attestation_required", expected: "not-satisfied"},
+		{name: "not applicable", status: "not_applicable", expected: ""},
+		{name: "unverifiable", status: "unverifiable", expected: ""},
+		{name: "customer attestation required", status: "customer_attestation_required", expected: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -294,6 +294,11 @@ func TestOSCALExporter_GenerateAssessmentResults_MapsCanonicalStatuses(t *testin
 			analysis.FrameworkAssessments[0].Status = tt.status
 			results, err := NewOSCALExporter(nil).GenerateAssessmentResults(analysis)
 			require.NoError(t, err)
+			if tt.expected == "" {
+				assert.Empty(t, results.AssessmentResults.Results[0].Findings)
+				assert.Contains(t, oscalPropValue(results.AssessmentResults.Results[0].Props, "g8e-framework-status"), tt.status)
+				return
+			}
 			require.Len(t, results.AssessmentResults.Results[0].Findings, 1)
 			assert.Equal(t, tt.expected, results.AssessmentResults.Results[0].Findings[0].Target.Status.State)
 			assert.Contains(t, results.AssessmentResults.Results[0].Findings[0].Description, tt.status)

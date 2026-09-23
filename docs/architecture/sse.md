@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 The Governance Gateway provides a Server-Sent Events (SSE) bridge for session-targeted application telemetry and platform workflow notifications. App workloads publish events over authenticated HTTPS, and browser, CLI, Operator, and test clients consume a session-scoped event history by polling or by opening a live stream. The Gateway also publishes completion events for passkey enrollment and L3 approval without calling its public push endpoint.
 
@@ -24,7 +24,7 @@ The Gateway also exposes two observe producer endpoints that accept typed agent 
 - **`POST /api/v1/observe/producer/agent-state`** accepts a typed `ObserveProducerAgentStateRequest`, persists the agent projection, and emits an `app.agent.status.updated` SSE event after successful persistence.
 - **`POST /api/v1/observe/producer/run-state`** accepts a typed `ObserveProducerRunStateRequest`, persists the run projection, and emits an `app.run.status.updated` SSE event after successful persistence.
 
-The in-process `ObserveProducerService` also implements persist-before-publish for the full `g8e.v1.ai.eval.*` campaign event family (`ai.eval.cycle.started`, `ai.eval.assignment.started`, `ai.eval.assignment.completed`, `ai.eval.model_role.invoked`, `ai.eval.metric.available`, `ai.eval.verifier.completed`, `ai.eval.proof.available`, `ai.eval.publication.completed`, `ai.eval.heartbeat`, and `ai.eval.stop.requested`). Gateway live tests verify those emissions. Campaign `--publish` additionally exports signed public-safe projections through `POST /api/v1/public-feed/batches` for the anonymous mirror SSE relay; see [Public Spectator Architecture](./public_spectator.md).
+The in-process `ObserveProducerService` emits the live `g8e.v1.ai.eval.*` campaign event family (`ai.eval.cycle.started`, `ai.eval.cycle.completed`, `ai.eval.assignment.started`, `ai.eval.assignment.completed`, `ai.eval.model_role.invoked`, `ai.eval.metric.available`, `ai.eval.verifier.completed`, `ai.eval.proof.available`, `ai.eval.publication.completed`, `ai.eval.heartbeat`, and `ai.eval.stop.requested`). State projection methods persist before publishing; `ai.eval.metric.available` is event-only and its metric projection is not persisted separately. Gateway live tests verify these emissions. Campaign `--publish` additionally exports signed public-safe projections through `POST /api/v1/public-feed/batches` for the anonymous mirror SSE relay; see [Public Spectator Architecture](./public_spectator.md).
 
 Both HTTP producer endpoints require mTLS app-workload authentication (never browser-accessible), enforce strict JSON decoding with unknown-field rejection, validate the supported schema version, required display/role/run-kind fields, recognized lifecycle statuses even on first write, non-negative task counters, completed-tasks-not-exceeding-total, and coherent start/end times. The Gateway derives `user_id` from the mTLS peer certificate; the request body carries no `user_id` field and cannot override the authenticated identity. Exactly one of `web_session_id` or `cli_session_id` is required for routing; supplying both or neither is rejected at the Gateway boundary.
 
@@ -52,7 +52,7 @@ The Gateway persists an accepted event before publishing it to the live session 
 
 ### Authentication and authorization
 
-The push surface requires a verified mTLS client certificate and an enrolled app policy. The certificate must contain an app SPIFFE URI SAN. Gateway and Operator app identities are not accepted as external producers.
+The push surface requires a verified mTLS client certificate for an enrolled app workload. The certificate must contain an app SPIFFE URI SAN. The handler accepts app identities under `/app/` except the reserved Gateway and Operator identities (`/app/g8eg` and `/app/g8eo`); Gateway and Operator certificates are not accepted as external producers.
 
 The Gateway authorizes non-ensemble producers against the target session before storing an event. A web target must be bound to an Operator associated with the app identity. A CLI target must resolve to a CLI session whose Operator is associated with the app identity. The first-party ensemble identity, `spiffe://g8e.local/app/g8ee`, acts as the centralized event broker and bypasses this per-Operator target check after normal app authentication succeeds.
 
@@ -109,7 +109,7 @@ Each live stream has a 100-event in-memory queue. If a connected consumer falls 
 
 ## Gateway-Produced Events
 
-The Gateway writes internal events directly to the same history and live-delivery paths. It records `g8eg` as the producer for attribution.
+The Gateway writes internal events directly to the same history and live-delivery paths. Passkey enrollment and approval events record `g8eg` as the producer. Observe projection events record `g8e-gateway-observe-producer`; HTTP app pushes record the authenticated app SPIFFE ID.
 
 - **`approval.completed`** is emitted after the WebAuthn ceremony resumes an L3 transaction. It targets the CLI session that submitted the transaction and includes the transaction hash and resumed-receipt reference when available.
 - **`passkey.registered`** is emitted after CLI-initiated passkey enrollment succeeds. It targets the CLI session associated with the enrollment token.
@@ -146,7 +146,7 @@ The browser-scoped observe read API (`GET /api/v1/observe/bootstrap`, `GET /api/
 
 ### Event dashboard classification
 
-The protocol registry (`protocol/constants/event_dashboard_classification.json`) classifies event families for browser observability. At v2.1.8, `g8e.v1.app.run` and `g8e.v1.ai.eval` are `produced_to_sse` and `dashboard_safe`. Agent/run HTTP producers and the in-process eval observe producer are the registered production paths for those families. Reserved contracts `ai.eval.run.completed` and `ai.eval.metric.recorded` remain typed payloads without a native evaluation HTTP producer. See [Protocol Library](./protocol.md) for the full inventory.
+The protocol registry (`protocol/constants/event_dashboard_classification.json`) classifies event families for browser observability. The current registry marks `g8e.v1.app.run` and `g8e.v1.ai.eval` as `produced_to_sse` and `dashboard_safe`. Agent/run HTTP producers and the in-process evaluation observe producer are the registered production paths for those families. Reserved contracts `ai.eval.run.completed` and `ai.eval.metric.recorded` remain typed payloads without a native evaluation producer. See [Protocol Library](./protocol.md) for the full inventory.
 
 ## Retention and Administration
 

@@ -31,19 +31,18 @@ func setupTestExecutionVault(t *testing.T) (*ExecutionVaultService, string) {
 
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	// Create vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)
@@ -82,34 +81,13 @@ func TestExecutionVault_DefaultExecutionVaultConfig(t *testing.T) {
 	assert.Equal(t, 60, config.PruneIntervalMinutes)
 }
 
-func TestExecutionVault_NewExecutionVaultService_WithNilConfig(t *testing.T) {
+func TestExecutionVault_NewExecutionVaultService_NilConfig(t *testing.T) {
 	t.Parallel()
 
-	tempDir := testutil.TempDir(t)
-	vaultDir := filepath.Join(tempDir, "vault")
-
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
-
-	vHeader, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
-
-	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
-		Logger:  testutil.NewTestLogger(),
-	})
-	require.NoError(t, err)
-	require.NoError(t, testVault.Unlock(privKey))
-	t.Cleanup(func() { testVault.Close() })
-
-	ev, err := NewExecutionVaultService(nil, testutil.NewTestLogger(), testVault)
-	require.NoError(t, err)
-	require.NotNil(t, ev)
-
-	ev.Wait()
-	ev.Close()
+	ev, err := NewExecutionVaultService(nil, testutil.NewTestLogger(), nil)
+	require.Error(t, err)
+	assert.Nil(t, ev)
+	assert.ErrorIs(t, err, constants.ErrStorageConfigRequired)
 }
 
 func TestExecutionVault_NewExecutionVaultService_NilVault(t *testing.T) {
@@ -872,18 +850,17 @@ func TestExecutionVault_StoreExecution_LockedVault(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)
@@ -928,18 +905,17 @@ func TestExecutionVault_StoreFileDiff_LockedVault(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)
@@ -983,18 +959,17 @@ func TestExecutionVault_PruneRetention(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)
@@ -1065,18 +1040,17 @@ func TestExecutionVault_PruneSizeLimit(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)
@@ -1268,8 +1242,8 @@ func TestExecutionVault_DatabaseInitFailure(t *testing.T) {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := testutil.TempDir(t)
-	testVault := CreateTestVault(t, vaultDir, privKey)
+	fileSvc, _ := newTestFileSvc(t, testutil.TempDir(t))
+	testVault := CreateTestVault(t, fileSvc, privKey)
 
 	// Create a file (not a directory) and try to use a path inside it
 	// This will fail because you can't create directories inside a file
@@ -1293,18 +1267,17 @@ func TestExecutionVault_SchemaInitFailure(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)
@@ -1338,18 +1311,17 @@ func TestExecutionVault_GetExecution_DecryptFailure(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)
@@ -1402,18 +1374,17 @@ func TestExecutionVault_GetFileDiff_DecryptFailure(t *testing.T) {
 	t.Parallel()
 	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
-	vaultDir := filepath.Join(tempDir, "vault")
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
+	require.NoError(t, vHeader.Save(fileSvc))
 
 	testVault, err := vault.NewVault(&vault.VaultConfig{
-		DataDir: vaultDir,
+		FileSvc: fileSvc,
 		Logger:  testutil.NewTestLogger(),
 	})
 	require.NoError(t, err)

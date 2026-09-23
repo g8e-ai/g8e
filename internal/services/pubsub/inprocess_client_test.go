@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 type mockBroker struct {
@@ -37,13 +39,19 @@ func (m *mockBroker) RegisterHandler(channel string, handler func(string, []byte
 	}
 }
 
+func newTestInProcessPubSubClient(broker Broker) *InProcessPubSubClient {
+	return NewInProcessPubSubClient(broker, testutil.NewTestLogger())
+}
+
 func TestNewInProcessPubSubClient(t *testing.T) {
 	t.Run("creates client successfully", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		logger := testutil.NewTestLogger()
+		client := NewInProcessPubSubClient(broker, logger)
 		require.NotNil(t, client)
 		assert.Equal(t, broker, client.broker)
+		assert.Same(t, logger, client.logger)
 	})
 }
 
@@ -51,7 +59,7 @@ func TestInProcessPubSubClient_Subscribe(t *testing.T) {
 	t.Run("subscribes to channel successfully", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		client := newTestInProcessPubSubClient(broker)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -64,7 +72,7 @@ func TestInProcessPubSubClient_Subscribe(t *testing.T) {
 	t.Run("rejects subscription when closed", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		client := newTestInProcessPubSubClient(broker)
 		client.Close()
 
 		ctx := context.Background()
@@ -76,7 +84,7 @@ func TestInProcessPubSubClient_Subscribe(t *testing.T) {
 	t.Run("rejects duplicate subscription", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		client := newTestInProcessPubSubClient(broker)
 
 		ctx1, cancel1 := context.WithCancel(context.Background())
 		defer cancel1()
@@ -93,7 +101,7 @@ func TestInProcessPubSubClient_Subscribe(t *testing.T) {
 	t.Run("receives published messages", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		client := newTestInProcessPubSubClient(broker)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -120,7 +128,7 @@ func TestInProcessPubSubClient_Publish(t *testing.T) {
 	t.Run("publishes successfully", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		client := newTestInProcessPubSubClient(broker)
 
 		ctx := context.Background()
 		err := client.Publish(ctx, "test-channel", []byte("test message"))
@@ -130,7 +138,7 @@ func TestInProcessPubSubClient_Publish(t *testing.T) {
 	t.Run("rejects publish when closed", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		client := newTestInProcessPubSubClient(broker)
 		client.Close()
 
 		ctx := context.Background()
@@ -144,7 +152,7 @@ func TestInProcessPubSubClient_Close(t *testing.T) {
 	t.Run("closes successfully", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		client := newTestInProcessPubSubClient(broker)
 
 		client.Close()
 		// Should not panic
@@ -154,7 +162,7 @@ func TestInProcessPubSubClient_Close(t *testing.T) {
 	t.Run("prevents operations after close", func(t *testing.T) {
 		t.Parallel()
 		broker := &mockBroker{}
-		client := NewInProcessPubSubClient(broker)
+		client := newTestInProcessPubSubClient(broker)
 
 		client.Close()
 

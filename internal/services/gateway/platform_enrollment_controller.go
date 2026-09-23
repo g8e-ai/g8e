@@ -292,6 +292,38 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentDecision(w http.R
 // requireActiveFirstUser verifies that the given user ID is the active
 // first user (the persistent owner). Returns a typed error if the user
 // is not the first user, is not active, or cannot be looked up.
+func (c *PlatformEnrollmentController) handlePlatformEnrollmentRevoke(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	var req models.PlatformEnrollmentRevokeRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	if err := req.Validate(); err != nil {
+		c.writeEnrollmentError(w, err)
+		return
+	}
+	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	if err := c.requireActiveFirstUser(userID); err != nil {
+		c.writeEnrollmentError(w, err)
+		return
+	}
+	resp, err := c.enrollSvc.Revoke(r.Context(), userID, req)
+	if err != nil {
+		c.writeEnrollmentError(w, err)
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, resp)
+}
+
 func (c *PlatformEnrollmentController) requireActiveFirstUser(userID string) error {
 	user, err := c.userSvc.GetByID(userID)
 	if err != nil {
@@ -399,6 +431,8 @@ func (c *PlatformEnrollmentController) writeEnrollmentError(w http.ResponseWrite
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 	case constants.ErrPlatformEnrollmentStoredRequestInvalid:
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+	case constants.ErrPlatformEnrollmentRevoked:
+		c.responder.Error(w, http.StatusGone, err.Error())
 	default:
 		c.logger.Error("platform enrollment: unhandled error", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "internal error")

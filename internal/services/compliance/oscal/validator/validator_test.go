@@ -152,6 +152,15 @@ func TestValidator_NewValidator_CompilesEmbeddedSchema(t *testing.T) {
 	assert.Equal(t, constants.OSCALSchemaSHA256, v.SchemaDigest())
 }
 
+func TestValidator_NewValidatorReusesImmutableCompiledSchema(t *testing.T) {
+	first, err := NewValidator()
+	require.NoError(t, err)
+	second, err := NewValidator()
+	require.NoError(t, err)
+
+	assert.Same(t, first.compiledSchema, second.compiledSchema)
+}
+
 func TestValidator_ValidMinimalDocument_PassesBothStages(t *testing.T) {
 	v, err := NewValidator()
 	require.NoError(t, err)

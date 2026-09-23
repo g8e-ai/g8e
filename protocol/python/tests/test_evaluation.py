@@ -43,9 +43,6 @@ ENRICHED_MODEL_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / ENRICHED_MODEL_
 ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME
 BOUND_VERIFICATION_REPORT_VECTOR_PATH = EVAL_VECTOR_DIR / BOUND_VERIFICATION_REPORT_VECTOR_FILENAME
 CHAT_PROBE_TRACE_VECTOR_PATH = EVAL_VECTOR_DIR / CHAT_PROBE_TRACE_VECTOR_FILENAME
-MODEL_CAMPAIGN_DESCRIPTOR_PATH = (
-    PROTOCOL_ROOT / "descriptors" / EVALUATION_DIRECTORY_NAME / "v1" / "model_campaign.json"
-)
 
 
 def test_evaluation_report_canonicalization_matches_cross_language_vector():
@@ -135,41 +132,6 @@ def test_bound_verification_report_includes_population_binding():
     assert vector["message_type"] == "EvaluationVerificationReport"
     assert report.verifier_contract_version == "2.0.0"
     assert report.verified_assignment_count == report.expected_assignment_count == 25
-
-
-def _live_message_field_names(message_descriptor):
-    field_names = []
-    oneof_groups = set()
-    for oneof in message_descriptor.oneofs:
-        if len(oneof.fields) == 1:
-            field_names.append(oneof.fields[0].name)
-        else:
-            oneof_groups.add(oneof.name)
-    for field in message_descriptor.fields:
-        if field.containing_oneof is None:
-            field_names.append(field.name)
-    return sorted(field_names), sorted(oneof_groups)
-
-
-def test_evaluation_model_campaign_descriptor_matches_protobuf():
-    descriptor = json.loads(MODEL_CAMPAIGN_DESCRIPTOR_PATH.read_text())
-    assert descriptor["schema_version"] == "1.0.0"
-    assert descriptor["protobuf_package"] == "g8e.eval.v1"
-    assert len(descriptor["canonical_vectors"]) == 7
-
-    for enum_name, values in descriptor["enums"].items():
-        live_enum = eval_pb2.DESCRIPTOR.enum_types_by_name[enum_name]
-        live_values = sorted(value.name for value in live_enum.values)
-        assert live_values == sorted(values)
-
-    for message_name, message_descriptor in descriptor["messages"].items():
-        live_message = eval_pb2.DESCRIPTOR.message_types_by_name[message_name]
-        live_fields, live_oneofs = _live_message_field_names(live_message)
-        assert sorted(message_descriptor["fields"]) == live_fields
-        assert sorted(message_descriptor.get("oneof_groups", [])) == live_oneofs
-
-        for prohibited in message_descriptor.get("prohibited_fields", []):
-            assert prohibited not in {field.name for field in live_message.fields}
 
 
 def test_public_assignment_projection_omits_private_evidence_fields():

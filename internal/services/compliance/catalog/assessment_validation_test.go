@@ -33,12 +33,87 @@ func validScope() *compliancev1.AssessmentScope {
 		CryptographicMode:     "standard",
 		AssessmentWindowStart: timestamppb.New(time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)),
 		AssessmentWindowEnd:   timestamppb.New(time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)),
+		AssessmentAsOf:        timestamppb.New(time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)),
 		ImageDigests:          []*compliancev1.NamedDigest{{Name: "gateway", Sha256: validSHA256}},
 		ComponentInventory:    []*compliancev1.ComponentInventoryEntry{{ComponentId: "gateway", ComponentType: "service", Version: "2.1.3", Digest: validSHA256}},
 		ConfigurationHashes:   []*compliancev1.NamedDigest{{Name: "gateway", Sha256: validSHA256}},
 		DoctrineBundleHashes:  []*compliancev1.NamedDigest{{Name: "fedramp", Sha256: validSHA256}},
 		ConsensusPolicyHashes: []*compliancev1.NamedDigest{{Name: "default", Sha256: validSHA256}},
 		TrustAnchorIds:        []string{"root-1"},
+		ActivePosture:         constants.PostureDoctrine,
+		SourceAdmissions: []*compliancev1.AssessmentSourceAdmission{{
+			AdmissionId:              "source-1",
+			SourceKind:               "native-evaluation",
+			SourceVersion:            "1.0.0",
+			SourceScopeId:            "source-scope-1",
+			OwnerRuntimeBoundary:     "operator-1",
+			AcquisitionBoundary:      "operator-local-export",
+			RunId:                    "run-1",
+			VerifierRef:              &compliancev1.VersionedReference{Id: "native-evaluation-verifier", Version: "1.0.0"},
+			DisclosureClassification: constants.ComplianceBundleProfileRestricted,
+		}},
+		Applicability: &compliancev1.AssessmentApplicabilitySelection{
+			Components:    []string{"operator"},
+			ActionClasses: []string{"governed_mutation"},
+			Arms:          []string{"governed"},
+		},
+		SelectedPopulation: &compliancev1.AssessmentPopulationSelection{Subjects: []*compliancev1.AssessmentSubjectSelection{{
+			SourceAdmissionId: "source-1",
+			RunId:             "run-1",
+			TransactionId:     "transaction-1",
+		}}},
+	}
+}
+
+func scopeWithUnavailableContext() *compliancev1.AssessmentScope {
+	scope := validScope()
+	scope.BuildIdentity = ""
+	scope.SourceRevision = ""
+	scope.ComponentInventory = nil
+	scope.NetworkTopologyHash = ""
+	scope.ConfigurationHashes = nil
+	scope.DoctrineBundleHashes = nil
+	scope.TrustAnchorIds = nil
+	scope.UnavailableContext = []*compliancev1.UnavailableAssessmentContext{
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY, Reason: "build provenance was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION, Reason: "source revision evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY, Reason: "component inventory evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY, Reason: "network topology evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION, Reason: "configuration evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES, Reason: "doctrine bundle evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS, Reason: "trust-anchor evidence was not captured"},
+	}
+	return scope
+}
+
+func TestValidateAssessmentScopeAcceptsExplicitUnavailableContext(t *testing.T) {
+	require.NoError(t, catalog.ValidateAssessmentScope(scopeWithUnavailableContext()))
+}
+
+func TestValidateAssessmentScopeRejectsInvalidUnavailableContext(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.AssessmentScope)
+	}{
+		{name: "missing declaration", mutate: func(scope *compliancev1.AssessmentScope) { scope.UnavailableContext = scope.UnavailableContext[1:] }},
+		{name: "duplicate declaration", mutate: func(scope *compliancev1.AssessmentScope) {
+			scope.UnavailableContext = append(scope.UnavailableContext, scope.UnavailableContext[0])
+		}},
+		{name: "unspecified kind", mutate: func(scope *compliancev1.AssessmentScope) {
+			scope.UnavailableContext[0].Kind = compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_UNSPECIFIED
+		}},
+		{name: "empty reason", mutate: func(scope *compliancev1.AssessmentScope) { scope.UnavailableContext[0].Reason = "" }},
+		{name: "contradicts available context", mutate: func(scope *compliancev1.AssessmentScope) { scope.BuildIdentity = "build-1" }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scope := scopeWithUnavailableContext()
+			tt.mutate(scope)
+			err := catalog.ValidateAssessmentScope(scope)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+		})
 	}
 }
 
@@ -72,6 +147,25 @@ func TestValidateAssessmentScopeRejectsMalformedAndDuplicateBindings(t *testing.
 			assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 		})
 	}
+}
+
+func TestValidateAssessmentScopeRequiresCampaignWitnessPolicies(t *testing.T) {
+	scope := validScope()
+	admission := scope.SourceAdmissions[0]
+	admission.SourceKind = constants.EvaluationSourceKindCampaign
+	admission.VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
+
+	err := catalog.ValidateAssessmentScope(scope)
+	require.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+	assert.Contains(t, err.Error(), "witness policies")
+
+	admission.ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	admission.ModelProvenancePolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM
+	require.NoError(t, catalog.ValidateAssessmentScope(scope))
+
+	admission.ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED
+	err = catalog.ValidateAssessmentScope(scope)
+	require.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 }
 
 func TestValidateAssertionAssessmentEnforcesReferencesStatusAndFreshness(t *testing.T) {
@@ -386,7 +480,7 @@ func TestValidateReportSignatureEnforcesRequiredFieldsAlgorithmAndDigest(t *test
 
 func TestValidateVerificationReportEnforcesIntegrityResultConsistency(t *testing.T) {
 	valid := func() *compliancev1.ComplianceVerificationReport {
-		return &compliancev1.ComplianceVerificationReport{ReportId: "report-1", Valid: true, VerifiedAt: timestamppb.Now(), VerifierId: "compliance_bundle", VerifierVersion: "1.0.0", ReproducedChecksumRoot: validSHA256}
+		return &compliancev1.ComplianceVerificationReport{ReportId: "report-1", Valid: true, VerifiedAt: timestamppb.Now(), VerifierId: constants.ComplianceBundleVerifierID, VerifierVersion: constants.ComplianceBundleVerifierVersion, ReproducedChecksumRoot: validSHA256}
 	}
 	tests := []struct {
 		name   string
@@ -405,7 +499,7 @@ func TestValidateVerificationReportEnforcesIntegrityResultConsistency(t *testing
 			return r
 		}, want: constants.ErrReportVerificationFailed},
 		{name: "unsupported verifier", mutate: func(r *compliancev1.ComplianceVerificationReport) *compliancev1.ComplianceVerificationReport {
-			r.VerifierVersion = "2.0.0"
+			r.VerifierVersion = "unsupported"
 			return r
 		}, want: constants.ErrUnsupportedVerifier},
 		{name: "malformed checksum root", mutate: func(r *compliancev1.ComplianceVerificationReport) *compliancev1.ComplianceVerificationReport {

@@ -759,14 +759,14 @@ func TestObserveProducerController_HandleRunState_ValidZeroCountersAccepted(t *t
 func TestObserveProducerController_HandleAgentState_UnknownStatusRejected(t *testing.T) {
 	controller := newProducerControllerTestEnv(t)
 
-	body, err := json.Marshal(map[string]any{
-		"schema_version": constants.ObserveEventPayloadSchemaVersion,
-		"agent_id":       "agent-bogus",
-		"display_name":   "Sage",
-		"role":           "reasoner",
-		"status":         "bogus",
-		"observed_at":    time.Now().UTC().Format(time.RFC3339Nano),
-		"web_session_id": "web-1",
+	body, err := json.Marshal(models.ObserveProducerAgentStateRequest{
+		SchemaVersion: constants.ObserveEventPayloadSchemaVersion,
+		AgentID:       "agent-bogus",
+		DisplayName:   "Sage",
+		Role:          "reasoner",
+		Status:        models.AgentLifecycleStatus("bogus"),
+		ObservedAt:    time.Now().UTC(),
+		WebSessionID:  "web-1",
 	})
 	require.NoError(t, err)
 
@@ -782,15 +782,15 @@ func TestObserveProducerController_HandleAgentState_UnknownStatusRejected(t *tes
 func TestObserveProducerController_HandleRunState_UnknownRunKindRejected(t *testing.T) {
 	controller := newProducerControllerTestEnv(t)
 
-	body, err := json.Marshal(map[string]any{
-		"schema_version": constants.ObserveEventPayloadSchemaVersion,
-		"run_id":         "run-bogus-kind",
-		"run_kind":       "bogus",
-		"display_name":   "Bogus",
-		"status":         "running",
-		"total_tasks":    1,
-		"observed_at":    time.Now().UTC().Format(time.RFC3339Nano),
-		"web_session_id": "web-1",
+	body, err := json.Marshal(models.ObserveProducerRunStateRequest{
+		SchemaVersion: constants.ObserveEventPayloadSchemaVersion,
+		RunID:         "run-bogus-kind",
+		RunKind:       models.RunKind("bogus"),
+		DisplayName:   "Bogus",
+		Status:        models.RunLifecycleStatusRunning,
+		TotalTasks:    1,
+		ObservedAt:    time.Now().UTC(),
+		WebSessionID:  "web-1",
 	})
 	require.NoError(t, err)
 

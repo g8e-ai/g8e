@@ -33,21 +33,31 @@ switch ($arch) {
 
 $BinaryName = "g8e-windows-$arch.exe"
 $BinaryUrl = "http://${GatewayHost}:${GatewayPort}/.well-known/g8e/bin/${BinaryName}"
+$ChecksumUrl = "${BinaryUrl}.sha256"
 
 Write-Host "Detected: Windows $arch" -ForegroundColor Yellow
 Write-Host "Downloading from: $BinaryUrl" -ForegroundColor Yellow
 
-# Remove existing binary to ensure overwrite
-Write-Host "Removing existing g8e.exe binary..." -ForegroundColor Yellow
-Remove-Item -Force "g8e.exe" -ErrorAction SilentlyContinue
+$TempBinary = "g8e.download"
+$TempChecksum = "g8e.download.sha256"
 
-# Download binary
+# Download the binary and checksum to temporary files before replacing the
+# existing executable.
 try {
-    Invoke-RestMethod -Uri $BinaryUrl -OutFile "g8e.exe"
+    Invoke-RestMethod -Uri $BinaryUrl -OutFile $TempBinary
+    Invoke-RestMethod -Uri $ChecksumUrl -OutFile $TempChecksum
+    $ExpectedHash = (Get-Content -Raw $TempChecksum).Trim().Split(" ")[0].ToLowerInvariant()
+    $ActualHash = (Get-FileHash -Algorithm SHA256 -Path $TempBinary).Hash.ToLowerInvariant()
+    if ($ExpectedHash -ne $ActualHash) {
+        throw "checksum verification failed"
+    }
+    Move-Item -Force $TempBinary "g8e.exe"
 } catch {
-    Write-Host "Failed to download g8e: $_" -ForegroundColor Red
+    Remove-Item -Force $TempBinary, $TempChecksum -ErrorAction SilentlyContinue
+    Write-Host "Failed to download or verify g8e: $_" -ForegroundColor Red
     exit 1
 }
+Remove-Item -Force $TempChecksum -ErrorAction SilentlyContinue
 
 Write-Host "g8e deployed successfully!" -ForegroundColor Green
 

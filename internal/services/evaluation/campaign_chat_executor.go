@@ -20,11 +20,11 @@ import (
 // CampaignChatClient submits production chat and reads persisted g8ee traces.
 type CampaignChatClient interface {
 	EnsembleChat(ctx context.Context, persona harnessclient.Persona, req harnessclient.EnsembleChatRequest) (*harnessclient.EnsembleChatResponse, error)
-	GetEvaluationTrace(ctx context.Context, persona harnessclient.Persona, assignmentID, evaluationAttemptID string) (map[string]any, error)
+	GetEvaluationTrace(ctx context.Context, persona harnessclient.Persona, assignmentID, evaluationAttemptID string) (EvaluationTrace, error)
 }
 
 // CampaignTraceWaiter polls until one g8ee trace reaches a terminal status.
-type CampaignTraceWaiter func(ctx context.Context, fetch func(context.Context) (map[string]any, error)) (map[string]any, error)
+type CampaignTraceWaiter func(ctx context.Context, fetch func(context.Context) (EvaluationTrace, error)) (EvaluationTrace, error)
 
 // CampaignTraceStore persists imported g8ee trace evidence for one assignment.
 type CampaignTraceStore interface {
@@ -91,7 +91,7 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	if e.waitForTrace == nil {
 		return nil, fmt.Errorf("evaluation: execute assignment: trace waiter is required")
 	}
-	trace, err := e.waitForTrace(ctx, func(pollCtx context.Context) (map[string]any, error) {
+	trace, err := e.waitForTrace(ctx, func(pollCtx context.Context) (EvaluationTrace, error) {
 		return e.client.GetEvaluationTrace(pollCtx, e.persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
 	})
 	if err != nil {

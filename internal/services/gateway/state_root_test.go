@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
@@ -185,13 +184,12 @@ func TestStateRootCaching(t *testing.T) {
 }
 
 func BenchmarkStateRootCalculation(b *testing.B) {
-	dir := b.TempDir()
 	baseDir := b.TempDir()
 	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(b, err)
 	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
 	ks := newTestKeystore(b, fileSvc, testutil.NewTestLogger())
-	db, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), testutil.NewTestLogger(), "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(testutil.NewTestLogger(), "", ks, fileSvc)
 	require.NoError(b, err)
 	defer db.Close()
 
@@ -213,13 +211,12 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 }
 
 func BenchmarkStateRootLargeDataset(b *testing.B) {
-	dir := b.TempDir()
 	baseDir := b.TempDir()
 	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(b, err)
 	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
 	ks := newTestKeystore(b, fileSvc, testutil.NewTestLogger())
-	db, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), testutil.NewTestLogger(), "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(testutil.NewTestLogger(), "", ks, fileSvc)
 	require.NoError(b, err)
 	defer db.Close()
 

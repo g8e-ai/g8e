@@ -10,7 +10,7 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -278,10 +278,10 @@ func TestBoundaryEvalRun_PersistsAndPrintsFailureReportsWithExactSessionBinding(
 		runErr            error
 		verificationValid bool
 	}{
-		{name: "topology failure", runErr: errors.New("topology failed"), verificationValid: true},
-		{name: "posture failure", runErr: errors.New("posture failed"), verificationValid: true},
-		{name: "dispatch failure", runErr: errors.New("dispatch failed"), verificationValid: true},
-		{name: "observation failure", runErr: errors.New("observation failed"), verificationValid: true},
+		{name: "topology failure", runErr: fmt.Errorf("topology failed"), verificationValid: true},
+		{name: "posture failure", runErr: fmt.Errorf("posture failed"), verificationValid: true},
+		{name: "dispatch failure", runErr: fmt.Errorf("dispatch failed"), verificationValid: true},
+		{name: "observation failure", runErr: fmt.Errorf("observation failed"), verificationValid: true},
 		{name: "evidence verification failure", verificationValid: false},
 	}
 	for _, testCase := range testCases {

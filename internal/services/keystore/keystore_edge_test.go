@@ -37,8 +37,8 @@ func setupTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
 
 func TestFileKeyring_StoreMasterKey_InvalidKeyLength(t *testing.T) {
 	t.Parallel()
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, _ := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 
 	err = keyring.StoreMasterKey([]byte("too-short"))
@@ -48,8 +48,8 @@ func TestFileKeyring_StoreMasterKey_InvalidKeyLength(t *testing.T) {
 
 func TestFileKeyring_RetrieveMasterKey_InvalidBase64(t *testing.T) {
 	t.Parallel()
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, secretsDir := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 
 	keyPath := filepath.Join(secretsDir, constants.MasterKeyFilename)
@@ -62,8 +62,8 @@ func TestFileKeyring_RetrieveMasterKey_InvalidBase64(t *testing.T) {
 
 func TestFileKeyring_RetrieveMasterKey_EmptyFile(t *testing.T) {
 	t.Parallel()
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, secretsDir := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 
 	keyPath := filepath.Join(secretsDir, constants.MasterKeyFilename)
@@ -82,8 +82,8 @@ func TestFileKeyring_RetrieveMasterKey_PermissionDenied(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root can read any file")
 	}
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, secretsDir := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 
 	keyPath := filepath.Join(secretsDir, constants.MasterKeyFilename)
@@ -96,8 +96,8 @@ func TestFileKeyring_RetrieveMasterKey_PermissionDenied(t *testing.T) {
 
 func TestFileKeyring_StoreAndRetrieve_RoundTrip(t *testing.T) {
 	t.Parallel()
-	secretsDir := testutil.TempDir(t)
-	keyring, err := newFileKeyring(secretsDir)
+	fileSvc, _ := setupTestFileService(t)
+	keyring, err := newFileKeyring(fileSvc)
 	require.NoError(t, err)
 
 	testKey := make([]byte, vault.KeySize)

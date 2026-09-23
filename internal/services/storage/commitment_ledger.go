@@ -10,13 +10,16 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // CommitmentRow represents a single row from the commitment_ledger table.
@@ -186,12 +189,16 @@ func (cl *CommitmentLedger) appendCommitmentJSON(conn *sql.Conn, attestationJSON
 	if len(attestationJSON) == 0 {
 		return fmt.Errorf("attestation JSON is empty")
 	}
-	var fields commitmentFields
-	if err := json.Unmarshal(attestationJSON, &fields); err != nil {
+	attestation := &operatorv1.CommitmentAttestation{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(attestationJSON, attestation); err != nil {
 		return fmt.Errorf("failed to unmarshal attestation JSON: %w", err)
 	}
+	canonicalAttestation, err := compliancev1.MarshalCanonical(attestation)
+	if err != nil {
+		return fmt.Errorf("failed to canonicalize attestation JSON: %w", err)
+	}
 	var currentPriorHash string
-	err := conn.QueryRowContext(context.Background(), `SELECT hash FROM commitment_ledger ORDER BY id DESC LIMIT 1`).Scan(&currentPriorHash)
+	err = conn.QueryRowContext(context.Background(), `SELECT hash FROM commitment_ledger ORDER BY id DESC LIMIT 1`).Scan(&currentPriorHash)
 	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("failed to query current prior hash: %w", err)
 	}
@@ -205,15 +212,15 @@ func (cl *CommitmentLedger) appendCommitmentJSON(conn *sql.Conn, attestationJSON
 			action_type, target_resource, committed_at_unix_ms, auditor_key_id, signature,
 			hash, attestation_json
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, fields.TransactionID, fields.TransactionHash, priorHash, fields.StateRootAtCommit,
-		fields.L2SignatureDigest, fields.WardenIntentSignatureDigest, fields.HumanSignatureDigest,
-		fields.ActionType, fields.TargetResource, fields.CommittedAtUnixMs, fields.AuditorKeyID,
-		fields.Signature, hash, attestationJSON)
+	`, attestation.GetTransactionId(), attestation.GetTransactionHash(), priorHash, attestation.GetStateRootAtCommit(),
+		attestation.GetL2SignatureDigest(), attestation.GetWardenIntentSignatureDigest(), attestation.GetHumanSignatureDigest(),
+		attestation.GetActionType(), attestation.GetTargetResource(), attestation.GetCommittedAtUnixMs(), attestation.GetAuditorKeyId(),
+		attestation.GetSignature(), hash, canonicalAttestation)
 	if err != nil {
 		return fmt.Errorf("failed to insert commitment: %w", err)
 	}
 	if cl.logger != nil {
-		cl.logger.Info("Commitment appended to ledger", "transaction_id", fields.TransactionID, "commitment_hash", hash, "prior_commitment_hash", priorHash)
+		cl.logger.Info("Commitment appended to ledger", "transaction_id", attestation.GetTransactionId(), "commitment_hash", hash, "prior_commitment_hash", priorHash)
 	}
 	return nil
 }

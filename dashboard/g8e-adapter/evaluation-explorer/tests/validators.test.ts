@@ -324,6 +324,99 @@ describe('schema 1.4 assignment contract', () => {
   });
 });
 
+describe('schema 1.5 evaluation summary contract', () => {
+  const currentSummary = {
+    schema_version: '1.5.0',
+    kind: 'evaluation_summary',
+    dataset_id: 'ds-live-run-1',
+    quality_state: 'exploratory_partial',
+    observed_at: '2026-09-22T08:00:00Z',
+    run_id: 'run-1',
+    suite_id: 'north-star-25',
+    arm: 'homogeneous-model-role',
+    evaluation_unit: 'model',
+    model_role_mapping: { primary: 'model-1' },
+    lifecycle_state: 'completed',
+    assignment_total: 4,
+    assignment_completed: 3,
+    assignment_failed: 1,
+    terminal_outcomes: { completed: 3, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+    verifier_state: 'not_run',
+    headline_metrics: {
+      pass_rate: { value: 0.75, unit: 'ratio', observed_count: 4, eligible_count: 4, unavailable_count: 0 },
+      latency_p50_ms: { value: 640, unit: 'milliseconds', observed_count: 3, eligible_count: 4, unavailable_count: 1 },
+      output_throughput_p50_tokens_per_second: { unavailable_reason: 'incomplete_contributor_evidence', unit: 'tokens_per_second', observed_count: 0, eligible_count: 4, unavailable_count: 4 },
+    },
+  };
+
+  it('accepts typed model metrics with partial coverage and not-run verification', () => {
+    expect(() => decodeViewRecord('evaluation_summary', currentSummary)).not.toThrow();
+  });
+
+  it.each([
+    ['unknown metric key', { invented: { value: 1, unit: 'ratio', observed_count: 1, eligible_count: 1, unavailable_count: 0 } }],
+    ['inconsistent coverage counts', { latency_p50_ms: { value: 640, unit: 'milliseconds', observed_count: 3, eligible_count: 3, unavailable_count: 1 } }],
+    ['contradictory value and reason', { latency_p50_ms: { value: 640, unavailable_reason: 'source_unavailable', unit: 'milliseconds', observed_count: 3, eligible_count: 4, unavailable_count: 1 } }],
+    ['invalid unit', { latency_p50_ms: { value: 640, unit: 'seconds', observed_count: 3, eligible_count: 4, unavailable_count: 1 } }],
+    ['negative metric value', { latency_p50_ms: { value: -1, unit: 'milliseconds', observed_count: 3, eligible_count: 4, unavailable_count: 1 } }],
+    ['ratio above one', { pass_rate: { value: 1.1, unit: 'ratio', observed_count: 4, eligible_count: 4, unavailable_count: 0 } }],
+  ])('rejects %s', (_name, replacement) => {
+    expect(() => decodeViewRecord('evaluation_summary', {
+      ...currentSummary,
+      headline_metrics: { ...currentSummary.headline_metrics, ...replacement },
+    })).toThrow(ValidationError);
+  });
+
+  it('rejects system-only metrics on a model evaluation', () => {
+    expect(() => decodeViewRecord('evaluation_summary', {
+      ...currentSummary,
+      primary_invocation_share: { value: 1, unit: 'ratio', observed_count: 4, eligible_count: 4, unavailable_count: 0 },
+    })).toThrow(ValidationError);
+  });
+
+  it('accepts typed system-only metrics on a system evaluation', () => {
+    expect(() => decodeViewRecord('evaluation_summary', {
+      ...currentSummary,
+      evaluation_unit: 'system',
+      primary_invocation_share: { value: 0.5, unit: 'ratio', observed_count: 4, eligible_count: 4, unavailable_count: 0 },
+      correlated_failure_rate: { unavailable_reason: 'source_not_captured', unit: 'ratio', observed_count: 0, eligible_count: 4, unavailable_count: 4 },
+    })).not.toThrow();
+  });
+
+  it('accepts report-bound verification metadata for a passed run', () => {
+    expect(() => decodeViewRecord('evaluation_summary', {
+      ...currentSummary,
+      quality_state: 'exploratory_verified',
+      verifier_state: 'passed',
+      verification_metadata: {
+        provenance: 'bound',
+        verifier_state: 'passed',
+        verifier_release_version: 'v2.1.12',
+        verifier_contract_version: '2.0.0',
+        report_digest: 'a'.repeat(64),
+        population_digest: 'b'.repeat(64),
+        verified_at: '2026-09-22T08:05:00Z',
+      },
+    })).not.toThrow();
+  });
+
+  it('rejects a passed run without report binding metadata', () => {
+    expect(() => decodeViewRecord('evaluation_summary', {
+      ...currentSummary,
+      verifier_state: 'passed',
+    })).toThrow(ValidationError);
+  });
+
+  it('continues to accept historical open headline metrics', () => {
+    expect(() => decodeViewRecord('evaluation_summary', {
+      ...currentSummary,
+      schema_version: '1.4.0',
+      verifier_state: 'not_applicable',
+      headline_metrics: { pass_rate: { value: 0.75 }, throughput: { value: 44.2 } },
+    })).not.toThrow();
+  });
+});
+
 describe('decodeViewRecord', () => {
   it('decodes a live event', () => {
     const event = fixtureLiveEvents[0]!;

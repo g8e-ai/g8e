@@ -28,7 +28,6 @@ func TestDefaultDBConfig(t *testing.T) {
 	assert.Equal(t, "/some/path/db.sqlite", cfg.Path)
 	assert.Equal(t, 64, cfg.CacheSizeMB)
 	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
-	assert.True(t, cfg.SetFilePermissions)
 	assert.Equal(t, 10, cfg.MaxRetries)
 	assert.Equal(t, 50, cfg.RetryBaseDelayMs)
 }
@@ -48,19 +47,14 @@ func TestOpenDB_CreatesFile(t *testing.T) {
 	assert.Equal(t, 1, result)
 }
 
-func TestOpenDB_CreatesParentDirectories(t *testing.T) {
+func TestOpenDB_RequiresExistingParentDirectory(t *testing.T) {
 	t.Parallel()
 	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "nested", "deep", "test.db"))
 
-	db, err := OpenDB(cfg, logger)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	var result int
-	require.NoError(t, db.QueryRow("SELECT 1").Scan(&result))
-	assert.Equal(t, 1, result)
+	_, err := OpenDB(cfg, logger)
+	require.Error(t, err)
 }
 
 func TestOpenDB_WALModeEnabled(t *testing.T) {
@@ -105,22 +99,6 @@ func TestOpenDB_SingleConnectionPool(t *testing.T) {
 
 	stats := db.Stats()
 	assert.Equal(t, 20, stats.MaxOpenConnections)
-}
-
-func TestOpenDB_SetFilePermissions_False(t *testing.T) {
-	t.Parallel()
-	dir := testutil.TempDir(t)
-	logger := testutil.NewTestLogger()
-	cfg := DefaultDBConfig(filepath.Join(dir, "noperm.db"))
-	cfg.SetFilePermissions = false
-
-	db, err := OpenDB(cfg, logger)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	var result int
-	require.NoError(t, db.QueryRow("SELECT 1").Scan(&result))
-	assert.Equal(t, 1, result)
 }
 
 func TestRunIncrementalVacuum(t *testing.T) {
@@ -722,7 +700,6 @@ func TestDefaultDBConfig_Tier1_SetsAllDefaults(t *testing.T) {
 	assert.Equal(t, "/test/path.db", cfg.Path)
 	assert.Equal(t, 64, cfg.CacheSizeMB)
 	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
-	assert.True(t, cfg.SetFilePermissions)
 	assert.Equal(t, 10, cfg.MaxRetries)
 	assert.Equal(t, 50, cfg.RetryBaseDelayMs)
 }
@@ -738,18 +715,16 @@ func TestDefaultDBConfig_Tier1_PathIsSet(t *testing.T) {
 func TestDBConfig_Tier1_AllFieldsAccessible(t *testing.T) {
 	t.Parallel()
 	cfg := DBConfig{
-		Path:               "/test.db",
-		CacheSizeMB:        128,
-		BusyTimeoutMs:      5000,
-		SetFilePermissions: false,
-		MaxRetries:         5,
-		RetryBaseDelayMs:   100,
+		Path:             "/test.db",
+		CacheSizeMB:      128,
+		BusyTimeoutMs:    5000,
+		MaxRetries:       5,
+		RetryBaseDelayMs: 100,
 	}
 
 	assert.Equal(t, "/test.db", cfg.Path)
 	assert.Equal(t, 128, cfg.CacheSizeMB)
 	assert.Equal(t, 5000, cfg.BusyTimeoutMs)
-	assert.False(t, cfg.SetFilePermissions)
 	assert.Equal(t, 5, cfg.MaxRetries)
 	assert.Equal(t, 100, cfg.RetryBaseDelayMs)
 }
@@ -964,4 +939,102 @@ func TestDB_Tier1_EmbeddedSQLDBAccessible(t *testing.T) {
 	}
 
 	assert.Same(t, sqlDB, db.DB)
+}
+
+func TestOpenReadOnlyDB_ReadsExistingDatabaseWithoutWriting(t *testing.T) {
+	t.Parallel()
+	dir := testutil.TempDir(t)
+	path := filepath.Join(dir, "readonly.db")
+	logger := testutil.NewTestLogger()
+
+	writable, err := OpenDB(DefaultDBConfig(path), logger)
+	require.NoError(t, err)
+	_, err = writable.Exec("CREATE TABLE records (value TEXT)")
+	require.NoError(t, err)
+	_, err = writable.Exec("INSERT INTO records (value) VALUES ('kept')")
+	require.NoError(t, err)
+	require.NoError(t, writable.Close())
+
+	readonly, err := OpenReadOnlyDB(DBConfig{Path: path}, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { readonly.Close() })
+
+	var value string
+	require.NoError(t, readonly.QueryRow("SELECT value FROM records").Scan(&value))
+	assert.Equal(t, "kept", value)
+	_, err = readonly.Exec("INSERT INTO records (value) VALUES ('rejected')")
+	require.Error(t, err)
+}
+
+func TestOpenReadOnlyDB_RejectsMissingPath(t *testing.T) {
+	t.Parallel()
+	dir := testutil.TempDir(t)
+
+	_, err := OpenReadOnlyDB(DBConfig{Path: filepath.Join(dir, "missing.db")}, testutil.NewTestLogger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ping read-only database")
+}
+
+func TestOpenReadOnlyDB_RequiresPath(t *testing.T) {
+	t.Parallel()
+
+	_, err := OpenReadOnlyDB(DBConfig{}, testutil.NewTestLogger())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path is required")
+}
+
+func TestExecInImmediateTxWithRetry_RejectsCancelledContext(t *testing.T) {
+	t.Parallel()
+	dir := testutil.TempDir(t)
+	db, err := OpenDB(DefaultDBConfig(filepath.Join(dir, "immediate-cancelled.db")), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = db.ExecInImmediateTxWithRetry(ctx, func(*sql.Conn) error { return nil })
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "acquire transaction connection")
+}
+
+func TestExecInImmediateTxWithRetry_CommitsCallback(t *testing.T) {
+	t.Parallel()
+	dir := testutil.TempDir(t)
+	db, err := OpenDB(DefaultDBConfig(filepath.Join(dir, "immediate.db")), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	_, err = db.Exec("CREATE TABLE records (value TEXT)")
+	require.NoError(t, err)
+	err = db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		_, err := conn.ExecContext(context.Background(), "INSERT INTO records (value) VALUES ('committed')")
+		return err
+	})
+	require.NoError(t, err)
+
+	var value string
+	require.NoError(t, db.QueryRow("SELECT value FROM records").Scan(&value))
+	assert.Equal(t, "committed", value)
+}
+
+func TestExecInImmediateTxWithRetry_RollsBackCallbackError(t *testing.T) {
+	t.Parallel()
+	dir := testutil.TempDir(t)
+	db, err := OpenDB(DefaultDBConfig(filepath.Join(dir, "immediate-rollback.db")), testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	_, err = db.Exec("CREATE TABLE records (value TEXT)")
+	require.NoError(t, err)
+	expectedErr := fmt.Errorf("callback failed")
+	err = db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		_, execErr := conn.ExecContext(context.Background(), "INSERT INTO records (value) VALUES ('rolled back')")
+		require.NoError(t, execErr)
+		return expectedErr
+	})
+	require.ErrorIs(t, err, expectedErr)
+
+	var count int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM records").Scan(&count))
+	assert.Zero(t, count)
 }

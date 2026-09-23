@@ -3,43 +3,49 @@ title: Model Provenance
 parent: Architecture
 ---
 
-# Zero Trust Model Provenance
+# Model Provenance
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 ## Scope
 
-Model campaigns already bind scored inference to a frozen `ModelRegistryFreeze` at campaign init and witness provider-boundary hardware telemetry through the **Observer Operator**. The **Provenance Operator** adds a storage-side attestor that independently hashes model weight blobs at the site where `.gguf` / Ollama blobs live, producing a cryptographic chain-of-custody record for every scored inference attempt.
+Model campaigns bind scored inference records to the frozen model variant selected for the campaign. When a campaign model has a served tag and expected SHA-256 digest, the Gateway can coordinate an independent **Provenance Operator** at the model storage site. That Operator reads the Ollama manifest and referenced content-addressed blobs, hashes them locally, and returns a typed attestation window bound to the inference `provider_attempt_id`.
 
-This document describes the evaluation-time architecture. Signed manifest verification (Sigstore, Cosign, OpenSSF Model Signing) and short-lived SPIFFE/SPIRE-style attestation tokens are planned follow-ons; the current implementation performs fail-closed digest binding against the frozen campaign model digest.
+This is evaluation witness evidence, not an authorization mechanism and not a claim that the model itself is safe or that every client-side inference path is governed. The Inference Operator remains the only scored path to the approved Ollama endpoint. The Provenance Operator does not run inference, sample provider hardware, manage Ollama, or authorize execution. The Observer Operator is a separate optional witness for provider-boundary GPU and RAM telemetry; it is described in [Evaluations](evals.md).
 
----
+The current implementation compares the SHA-256 digest of the local Ollama manifest with the expected campaign model digest and hashes every referenced blob. It records `MODEL_MANIFEST_VERIFICATION_STATUS_UNSIGNED`; Sigstore, Cosign, OpenSSF Model Signing, and SPIFFE/SPIRE-style short-lived attestation tokens are not implemented by this path.
 
-## Operator topology
+## Operator topology and boundaries
 
-Model evaluation campaigns use **four** distinct remote operator sessions when provenance is enabled:
+A campaign has two core remote Operators on the campaign host. It may add one or both provider-side witness Operators, depending on the evidence requirements:
 
-| Session | Capability flag | Host | Role |
+| Session | Capability flag | Placement | Role |
 | --- | --- | --- | --- |
-| **Data Operator** | default | Campaign host | Governed tool/filesystem boundary |
-| **Inference Operator** | `inference_enabled=true` | Campaign host | Governed path to Ollama |
-| **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host (GPU/Ollama runtime) | Read-only GPU/RAM witness telemetry; no provider lifecycle or generic command authority |
-| **Provenance Operator** | `provenance_operator_enabled=true` | Model storage site (blob store) | Independent model weight hashing and digest attestation |
+| **Data Operator** | `inference_enabled=false` | Campaign host | Governed tool, filesystem, and process boundary for model-originated host actions |
+| **Inference Operator** | `inference_enabled=true` | Campaign host | Governed L4/L5 inference path to the approved Ollama provider |
+| **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host where Ollama and the GPU run | Read-only GPU and system RAM witness; no provider lifecycle or generic command authority |
+| **Provenance Operator** | `provenance_operator_enabled=true` | Model storage site where Ollama manifests and blobs live | Independent manifest and model-weight hashing and digest attestation |
 
-The Observer and Provenance Operator may run on the same physical host (for example a Windows Ollama box where `~/.ollama/models` is local), but they are enrolled as separate governed operator sessions with separate capability flags.
+Provenance does not imply that all four sessions are present: the Data and Inference Operators are the core campaign sessions, while the Observer and Provenance Operators are independently enrolled witness sessions. The Observer and Provenance Operator can run on the same physical host, but they use separate `g8e operator start` processes and governed sessions. A container on the campaign host cannot authoritatively attest files or hardware on a different provider host.
 
----
+All remote Operators connect outbound-only to the Gateway over the governed mTLS/pub-sub path. The Gateway targets the exact Provenance Operator session selected from active remote operators whose runtime configuration has `provenance_operator_enabled=true`. Zero or multiple matching sessions cause preflight or observation setup to fail rather than selecting an arbitrary operator.
 
-## Storage-side operations (Provenance Operator)
+## Storage-side attestation
 
-When a model is present in the enterprise registry, the Provenance Operator acts as gatekeeper and attestor for model weights:
+The Provenance Operator is configured with a model storage root, such as `~/.ollama/models`. On `FINALIZE`, its `OllamaStorageAttestor` performs these checks:
 
-1. **Cryptographic hashing** — On `FINALIZE`, the operator reads the Ollama manifest for the served model tag, hashes every referenced content-addressed blob under `--model-storage-root`, and records per-blob `ModelWeightAttestation` entries. Unqualified tags resolve under `manifests/registry.ollama.ai/library/<model>/<tag>`; namespaced tags such as `Impulse2000/smollm3:3b-q4_k_m` resolve under `manifests/registry.ollama.ai/Impulse2000/smollm3/3b-q4_k_m`.
-2. **Digest verification** — The manifest digest (SHA-256 of manifest bytes) is compared to the `expected_model_digest` carried in the governed `ModelProvenanceObservationCommand` from the frozen campaign registry. Mismatch fails closed.
-3. **Attestation window** — A `ModelProvenanceAttestationWindow` is minted, content-addressed by `attestation_digest`, and published on the operator results channel for gateway ingest.
+1. It resolves `served_model_tag` below `manifests/registry.ollama.ai/`. An unqualified tag such as `smollm3:3b-q4_k_m` uses the `library` namespace; a namespaced tag such as `Impulse2000/smollm3:3b-q4_k_m` uses the supplied namespace.
+2. It reads the manifest and computes its SHA-256 digest. The digest is compared with `expected_model_digest` from the campaign binding.
+3. It parses the manifest's config and layer digest references, opens each corresponding `blobs/sha256-<digest>` file, hashes the file, and verifies its declared size when present. A missing blob, invalid digest reference, content hash mismatch, or size mismatch fails the attestation.
+4. It returns a `ModelProvenanceAttestationWindow` containing the served tag, expected and observed digests, manifest digest, unsigned manifest status, per-blob `ModelWeightAttestation` entries, timestamps, and `digest_match`.
+5. The tracker computes `attestation_digest` as a deterministic SHA-256 digest of the window with `attestation_digest` cleared. The Gateway accepts and persists the window only after its content-addressed digest validates.
+
+The operator removes the in-memory BEGIN context when FINALIZE is processed. FINALIZE can use the model binding carried by the command if the BEGIN context is unavailable, but it still requires a served tag and expected digest. A digest mismatch returns an error and does not publish a completion window.
 
 ### Enrollment
+
+Run this on the host that owns the Ollama model storage, using a separate session from any Observer Operator:
 
 ```bash
 g8e operator start \
@@ -48,34 +54,34 @@ g8e operator start \
   --model-storage-root /path/to/ollama/models
 ```
 
----
+The process submits a platform enrollment request. Approve that request through the owner enrollment workflow before relying on the witness. Do not pass `--inference-enabled` for a storage-only witness. The [Unified Docker Stack Guide](../guides/unified_stack.md#storage-side-provenance-operator) contains provider-host prerequisites, Windows examples, and the operational enrollment sequence.
 
-## Inference handoff (zero trust handshake)
+## Gateway coordination and inference handoff
 
-For every scored inference dispatch in campaign mode:
+For each scored inference with a non-empty served tag and expected model digest, the Gateway provenance coordinator targets the active Provenance Operator and sends typed commands on its session-specific command channel:
 
-1. Gateway sends `ModelProvenanceObservationCommand` `BEGIN` with `served_model_tag`, `expected_model_digest`, `model_registry_digest`, and `campaign_id`.
-2. Governed inference proceeds through the Inference Operator.
-3. Gateway sends `FINALIZE`; the Provenance Operator attests blobs and publishes `ModelProvenanceObservationCompleted`.
-4. Gateway ingests attestation windows under `.g8e/data/inference/model-provenance/windows/`.
+1. `BEGIN` carries `provider_attempt_id`, start time, retry count, `served_model_tag`, `expected_model_digest`, `model_registry_digest`, and `campaign_id`.
+2. The Inference Operator performs the governed inference dispatch. The Provenance Operator does not observe prompts or inference execution.
+3. `FINALIZE` carries the attempt and inference transaction identifiers, terminal attempt status, timestamps, retry count, and the same model binding.
+4. The Provenance Operator publishes `ModelProvenanceObservationCompleted` on its results channel. The Gateway validates and stores the included window under `.g8e/data/inference/model-provenance/windows/` in the Gateway runtime volume, keyed by `provider_attempt_id`.
 
-If the Provenance Operator is enrolled and campaign bindings include a model digest, provenance command delivery failures fail closed the same way as provider-boundary observation gaps.
+The command and result are relayed through the normal governed Operator path. Results are evidence; pub/sub delivery is not itself durable governance evidence. The Gateway's stored window is a verified mirror of the Provenance Operator's attestation, while the storage-side Operator remains the authority for the local files it hashed.
 
-Before execute begins, Tier-A campaigns can call gateway preflight endpoints to verify provenance command delivery and storage-side attestation for each frozen `served_model_tag` and `expected_model_digest` pair. Preflight failures stop the run before assignments complete with missing attestation windows that verify cannot backfill.
+Before execution, strict campaign workflows can run two preflights: one verifies that exactly one active Provenance Operator is enrolled and subscribed to its command channel, and the other sends a probe BEGIN/FINALIZE pair for each frozen served-tag/digest binding and waits for a matching attestation. A failed preflight stops the workflow before scored assignments are consumed. Commands with no provider attempt, served tag, or expected digest are not sent by the coordinator.
 
----
+## Persistence, API, and verification
 
-## Governance audit trail
+Gateway-local windows are canonical protojson files owned by the Gateway's runtime file service. They are private runtime evidence, not public spectator data. An authenticated owner mTLS client can read one window with:
 
-Campaign verification can load attestation windows by `provider_attempt_id` and enforce:
+```text
+GET /api/v1/inference/model-provenance/attestations/{provider_attempt_id}
+```
 
-- `attestation_digest` integrity
-- `digest_match == true` under strict policy
-- `observed_model_digest` equals the frozen campaign model digest
+The response wraps the canonical window in a `window` field. The same route exposes owner-authenticated preflight operations used by campaign execution; these operations return readiness or an error and do not replace verification of the persisted window.
 
-This yields an auditable chain of custody from frozen registry → storage-side weight hashes → governed inference record.
+Campaign verification loads windows locally and can fall back to the Gateway read API when local evidence is unavailable. It always validates the window's `attestation_digest` and checks the expected campaign digest binding. Missing windows are recorded as unavailable under interim policy. `g8e eval campaign verify --require-model-provenance` selects strict policy, which requires a valid window for every scored inference and requires `digest_match=true`; `--tier-a` on campaign start enables strict provider observation and model provenance requirements together. Without strict policy, missing provenance is incomplete witness telemetry rather than an automatic assignment-verification failure.
 
----
+This produces a bounded evidence chain from the frozen campaign model binding to the storage-side manifest and blob hashes and then to the governed inference attempt. It does not prove that an unsigned manifest came from a trusted supply chain, that the Ollama process loaded only those bytes, or that inference performed through a native client or another side channel was governed.
 
 ## Protocol surface
 
@@ -84,13 +90,15 @@ This yields an auditable chain of custody from frozen registry → storage-side 
 | Command | `g8e.eval.v1.ModelProvenanceObservationCommand` |
 | Result | `g8e.eval.v1.ModelProvenanceObservationCompleted` |
 | Evidence | `g8e.eval.v1.ModelProvenanceAttestationWindow` |
+| Blob evidence | `g8e.eval.v1.ModelWeightAttestation` |
 | Action | `MODEL_PROVENANCE_OBSERVATION` |
 
----
+The command has `BEGIN` and `FINALIZE` phases and carries attempt status values for completed or failed provider attempts. The attestation window includes `schema_version` `1.0.0`, the model binding, manifest verification status, per-blob evidence, timestamps, `digest_match`, and `attestation_digest`. See the generated [evaluation API reference](../../protocol/docs/reference/api/g8e/eval/v1/index.md) for the complete wire contract.
 
-## Related docs
+## Related documentation
 
-- [Evaluations](evals.md) — campaign operator topology, Observer Operator, and verification
-- [Unified Docker Stack Guide](../guides/unified_stack.md) — enrollment order, provider-host deployment, and troubleshooting
+- [Evaluations](evals.md) — campaign topology, witness roles, strict verification, and evidence ownership
+- [Unified Docker Stack Guide](../guides/unified_stack.md) — enrollment prerequisites, provider-host deployment, preflight workflow, and troubleshooting
 - [Ensemble Evaluations](../ensemble/evals.md) — how g8ee participates in the production chat path during campaigns
-- [Operator architecture](operator.md) — governed PEP pattern shared by all remote operators
+- [Operator Architecture](operator.md) — outbound Operator transport and capability boundaries
+- [Protocol](protocol.md) — canonical wire types and serialization

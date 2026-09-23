@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-23
+Version: v2.1.12
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -381,7 +381,7 @@ The g8e Gateway runs with four posture options:
 ### Port Configuration
 
 The g8e Gateway exposes two logical protocol surfaces in a consolidated 2-port configuration:
-- **HTTP port 8080**: Bootstrap, CLI recovery discovery, deploy scripts, node binary download, health checks, and a catch-all redirect to HTTPS
+- **HTTP port 8080**: Bootstrap, CLI recovery discovery, deploy scripts, g8e binary download, health checks, and a catch-all redirect to HTTPS
 - **HTTPS port 8443**: mTLS API and public surface, including MCP/A2A ingress, SSE, console, and authenticated API routes
 
 See [Network Architecture](../../docs/architecture/network.md) for detailed port topology, authentication requirements, and port constraints.

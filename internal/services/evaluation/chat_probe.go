@@ -141,7 +141,7 @@ func toEnsembleModelVariants(variants []*operatorv1.InferenceModelVariant) []har
 
 // ValidateChatProbeTrace verifies a persisted evaluation assignment trace
 // imported from g8ee after chat completion.
-func ValidateChatProbeTrace(req ChatProbeRequest, trace map[string]any) error {
+func ValidateChatProbeTrace(req ChatProbeRequest, trace EvaluationTrace) error {
 	if len(trace) == 0 {
 		return fmt.Errorf("evaluation: validate chat probe trace: %w", constants.ErrMissingRequiredField)
 	}
@@ -155,7 +155,7 @@ func ValidateChatProbeTrace(req ChatProbeRequest, trace map[string]any) error {
 	if err := validateTraceDigest(trace); err != nil {
 		return err
 	}
-	evalContext, ok := trace["evaluation_context"].(map[string]any)
+	evalContext, ok := evaluationTrace(trace["evaluation_context"])
 	if !ok {
 		return fmt.Errorf("evaluation: validate chat probe trace: missing evaluation_context")
 	}
@@ -178,7 +178,7 @@ func ValidateChatProbeTrace(req ChatProbeRequest, trace map[string]any) error {
 	return nil
 }
 
-func validateTraceDigest(trace map[string]any) error {
+func validateTraceDigest(trace EvaluationTrace) error {
 	digest, _ := trace["trace_digest"].(string)
 	if digest == "" {
 		return fmt.Errorf("evaluation: validate chat probe trace: missing trace_digest")
@@ -193,7 +193,7 @@ func validateTraceDigest(trace map[string]any) error {
 	return nil
 }
 
-func validateTraceEvaluationContext(req ChatProbeRequest, evalContext map[string]any) error {
+func validateTraceEvaluationContext(req ChatProbeRequest, evalContext EvaluationTrace) error {
 	checks := map[string]string{
 		"campaign_id":                req.CampaignID,
 		"run_id":                     req.RunID,
@@ -232,7 +232,7 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext map[string
 func validateGovernedModelCalls(modelCalls []any) error {
 	foundGoverned := false
 	for _, rawCall := range modelCalls {
-		call, ok := rawCall.(map[string]any)
+		call, ok := evaluationTrace(rawCall)
 		if !ok {
 			continue
 		}
@@ -259,7 +259,7 @@ func validateGovernedModelCalls(modelCalls []any) error {
 
 func hasAgentRole(modelCalls []any, agentRole string) bool {
 	for _, rawCall := range modelCalls {
-		call, ok := rawCall.(map[string]any)
+		call, ok := evaluationTrace(rawCall)
 		if !ok {
 			continue
 		}
@@ -270,13 +270,13 @@ func hasAgentRole(modelCalls []any, agentRole string) bool {
 	return false
 }
 
-func hasDesignatedRoleOutcome(trace map[string]any, designatedRole string) bool {
+func hasDesignatedRoleOutcome(trace EvaluationTrace, designatedRole string) bool {
 	roleOutcome, _ := trace["role_outcome"].(string)
 	return roleOutcome == "invoked" && designatedRole != ""
 }
 
-func hasControlledRoleAssignment(trace map[string]any, designatedRole string) bool {
-	assignment, ok := trace["controlled_role_assignment"].(map[string]any)
+func hasControlledRoleAssignment(trace EvaluationTrace, designatedRole string) bool {
+	assignment, ok := evaluationTrace(trace["controlled_role_assignment"])
 	if !ok {
 		return false
 	}

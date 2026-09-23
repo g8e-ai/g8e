@@ -106,6 +106,17 @@ export async function fetchSnapshot(
   return snapshot;
 }
 
+export async function fetchSnapshotAt(
+  mirrorOrigin: string,
+  sourceId: string,
+  sequence: number,
+  fetchImpl: typeof fetch = fetch.bind(globalThis),
+): Promise<FeedSnapshot> {
+  const snapshot = await client(mirrorOrigin, fetchImpl).snapshotAt(sourceId, sequence);
+  isFeedSnapshot(snapshot);
+  return snapshot;
+}
+
 export async function fetchHistoryPage(
   mirrorOrigin: string,
   sourceId: string,

@@ -23,7 +23,7 @@ import (
 
 // ValidateHomogeneousCampaignTrace verifies a terminal g8ee trace for one
 // homogeneous model-role campaign assignment.
-func ValidateHomogeneousCampaignTrace(req ChatProbeRequest, trace map[string]any) error {
+func ValidateHomogeneousCampaignTrace(req ChatProbeRequest, trace EvaluationTrace) error {
 	if err := ValidateChatProbeTrace(req, trace); err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func ValidateHomogeneousCampaignTrace(req ChatProbeRequest, trace map[string]any
 
 // ImportAssignmentResultFromTrace materializes one terminal assignment result
 // from a validated g8ee trace and optional content-addressed trace evidence.
-func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace map[string]any, traceEvidence *compliancev1.ComplianceEvidenceReference, now time.Time, newID func(string) string) (*evalv1.EvaluationAssignmentResult, error) {
+func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace EvaluationTrace, traceEvidence *compliancev1.ComplianceEvidenceReference, now time.Time, newID func(string) string) (*evalv1.EvaluationAssignmentResult, error) {
 	if req.Assignment == nil || req.AttemptID == "" || len(trace) == 0 {
 		return nil, fmt.Errorf("evaluation: import assignment result from trace: assignment, attempt, and trace are required")
 	}
@@ -110,7 +110,7 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace map[s
 	return result, nil
 }
 
-func classifyCampaignTraceOutcome(req ChatProbeRequest, trace map[string]any) (evalv1.EvaluationAssignmentLifecycleStatus, *evalv1.DeterministicGrade) {
+func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (evalv1.EvaluationAssignmentLifecycleStatus, *evalv1.DeterministicGrade) {
 	status, _ := trace["status"].(string)
 	roleOutcome, _ := trace["role_outcome"].(string)
 	grade := &evalv1.DeterministicGrade{
@@ -161,10 +161,10 @@ func homogeneousCandidateVariant(assignment *evalv1.EvaluationAssignment) *evalv
 	return homogeneous.Homogeneous.GetCandidateVariant()
 }
 
-func toolDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace map[string]any, newID func(string) string) []*evalv1.ToolDecisionRecord {
+func toolDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace EvaluationTrace, newID func(string) string) []*evalv1.ToolDecisionRecord {
 	records := make([]*evalv1.ToolDecisionRecord, 0)
 	for _, rawDecision := range traceToolRecords(trace, "tool_decisions") {
-		decision, ok := rawDecision.(map[string]any)
+		decision, ok := evaluationTrace(rawDecision)
 		if !ok {
 			continue
 		}
@@ -190,10 +190,10 @@ func toolDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace
 	return records
 }
 
-func toolCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace map[string]any, newID func(string) string) []*evalv1.ToolCallRecord {
+func toolCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace EvaluationTrace, newID func(string) string) []*evalv1.ToolCallRecord {
 	records := make([]*evalv1.ToolCallRecord, 0)
 	for _, rawCall := range traceToolRecords(trace, "tool_calls") {
-		call, ok := rawCall.(map[string]any)
+		call, ok := evaluationTrace(rawCall)
 		if !ok {
 			continue
 		}
@@ -225,10 +225,10 @@ func toolCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace map
 	return records
 }
 
-func governedActionBindingsFromTrace(assignment *evalv1.EvaluationAssignment, trace map[string]any, newID func(string) string) []*evalv1.GovernedActionBinding {
+func governedActionBindingsFromTrace(assignment *evalv1.EvaluationAssignment, trace EvaluationTrace, newID func(string) string) []*evalv1.GovernedActionBinding {
 	records := make([]*evalv1.GovernedActionBinding, 0)
 	for _, rawAction := range traceToolRecords(trace, "governed_actions") {
-		action, ok := rawAction.(map[string]any)
+		action, ok := evaluationTrace(rawAction)
 		if !ok {
 			continue
 		}
@@ -267,10 +267,10 @@ func mergeSemanticGrades(primary, imported []*evalv1.SemanticGrade) []*evalv1.Se
 	return primary
 }
 
-func graderCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace map[string]any, newID func(string) string) []*evalv1.GraderModelCallRecord {
+func graderCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace EvaluationTrace, newID func(string) string) []*evalv1.GraderModelCallRecord {
 	records := make([]*evalv1.GraderModelCallRecord, 0)
 	for _, rawCall := range traceToolRecords(trace, "grader_calls") {
-		call, ok := rawCall.(map[string]any)
+		call, ok := evaluationTrace(rawCall)
 		if !ok {
 			continue
 		}
@@ -318,7 +318,7 @@ func boolValue(raw any) bool {
 	return ok && value
 }
 
-func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, attemptID string, candidate *evalv1.ModelVariant, trace map[string]any, newID func(string) string) ([]*evalv1.ModelInferenceRecord, *uint64, error) {
+func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, attemptID string, candidate *evalv1.ModelVariant, trace EvaluationTrace, newID func(string) string) ([]*evalv1.ModelInferenceRecord, *uint64, error) {
 	modelCalls, ok := trace["model_calls"].([]any)
 	if !ok {
 		return nil, nil, fmt.Errorf("model_calls must be an array")
@@ -327,7 +327,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 	var monotonicStarts []uint64
 	var monotonicEnds []uint64
 	for _, rawCall := range modelCalls {
-		call, ok := rawCall.(map[string]any)
+		call, ok := evaluationTrace(rawCall)
 		if !ok {
 			return nil, nil, fmt.Errorf("model call must be an object")
 		}
@@ -444,7 +444,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 	return records, span, nil
 }
 
-func policyDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace map[string]any) ([]*evalv1.PolicyDecisionRecord, error) {
+func policyDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace EvaluationTrace) ([]*evalv1.PolicyDecisionRecord, error) {
 	raw, present := trace["policy_decisions"]
 	if !present {
 		return nil, nil
@@ -455,7 +455,7 @@ func policyDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, tra
 	}
 	records := make([]*evalv1.PolicyDecisionRecord, 0, len(items))
 	for _, item := range items {
-		decision, ok := item.(map[string]any)
+		decision, ok := evaluationTrace(item)
 		if !ok {
 			return nil, fmt.Errorf("policy decision must be an object")
 		}
@@ -497,7 +497,7 @@ func policyDecisionOutcome(raw any) (evalv1.EvaluationPolicyDecisionOutcome, boo
 	}
 }
 
-func traceFieldCaptured(trace map[string]any, field string) bool {
+func traceFieldCaptured(trace EvaluationTrace, field string) bool {
 	_, present := trace[field]
 	return present
 }
@@ -566,7 +566,7 @@ func numericFloat(raw any) (float64, bool) {
 	}
 }
 
-func monotonicCallBounds(call map[string]any) (uint64, uint64, bool, error) {
+func monotonicCallBounds(call EvaluationTrace) (uint64, uint64, bool, error) {
 	rawStart, startPresent := call["monotonic_start"]
 	rawEnd, endPresent := call["monotonic_end"]
 	if !startPresent && !endPresent {
@@ -591,7 +591,7 @@ func monotonicCallBounds(call map[string]any) (uint64, uint64, bool, error) {
 
 // BuildAssignmentTraceEvidenceReference returns a content-addressed evidence
 // reference for one imported g8ee assignment trace body.
-func BuildAssignmentTraceEvidenceReference(runID, assignmentID, attemptID string, trace map[string]any, producedAt time.Time) (*compliancev1.ComplianceEvidenceReference, error) {
+func BuildAssignmentTraceEvidenceReference(runID, assignmentID, attemptID string, trace EvaluationTrace, producedAt time.Time) (*compliancev1.ComplianceEvidenceReference, error) {
 	if runID == "" || assignmentID == "" || attemptID == "" || len(trace) == 0 {
 		return nil, fmt.Errorf("evaluation: build assignment trace evidence reference: run, assignment, attempt, and trace are required")
 	}

@@ -311,7 +311,7 @@ export function assignmentPass(assignment: AssignmentResult): number | undefined
 const ASSIGNMENT_METRIC_LABELS: Record<string, string> = {
   pass: 'Pass',
   task_score: 'Task score',
-  deterministic_pass_rate: 'Deterministic pass rate',
+  deterministic_pass_rate: 'Pass Rate',
   latency_ms: 'Latency',
 };
 
@@ -734,6 +734,10 @@ export interface RecentCampaignRow {
   observedAt: string;
   qualityState: QualityState;
   lifecycleState?: EvaluationSummary['lifecycle_state'];
+  verifierState?: VerifierState;
+  assignmentTotal: number;
+  assignmentCompleted: number;
+  assignmentFailed: number;
   runId?: string;
 }
 
@@ -778,6 +782,10 @@ export function recentCampaignRows(
       observedAt,
       qualityState: catalog?.quality_state ?? primary?.quality_state ?? 'not_evaluated',
       lifecycleState: primary?.lifecycle_state,
+      verifierState: primary?.verifier_state,
+      assignmentTotal: primary?.assignment_total ?? 0,
+      assignmentCompleted: primary?.assignment_completed ?? 0,
+      assignmentFailed: primary?.assignment_failed ?? 0,
       runId: primary?.run_id,
     });
   }

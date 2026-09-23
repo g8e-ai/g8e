@@ -91,11 +91,11 @@ func NewProviderBoundaryObservationCoordinator(
 	}
 }
 
-// ensureObserver resolves the enrolled provider-boundary observer for the
-// gateway owner and subscribes to its results channel. When the active observer
-// session changes, any cached target is dropped and the coordinator
-// re-subscribes to the newly selected session.
-func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Context) error {
+// synchronizeObserverSubscription resolves the enrolled provider-boundary
+// observer for the gateway owner and subscribes to its results channel. When
+// the active observer session changes, any cached target is dropped and the
+// coordinator re-subscribes to the newly selected session.
+func (c *ProviderBoundaryObservationCoordinator) synchronizeObserverSubscription(ctx context.Context) error {
 	if c == nil || c.dispatch == nil || c.operatorLister == nil || c.pubsub == nil || c.windows == nil {
 		return constants.ErrServiceUnavailable
 	}
@@ -181,7 +181,7 @@ func (c *ProviderBoundaryObservationCoordinator) Stop() {
 // PreflightCommandDelivery verifies that the active observer is enrolled and
 // has at least one cmd-channel WebSocket subscriber on this gateway broker.
 func (c *ProviderBoundaryObservationCoordinator) PreflightCommandDelivery(ctx context.Context) error {
-	if err := c.ensureObserver(ctx); err != nil {
+	if err := c.synchronizeObserverSubscription(ctx); err != nil {
 		return fmt.Errorf("provider-boundary observation preflight: %w", err)
 	}
 	c.mu.Lock()
@@ -205,7 +205,7 @@ func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptBegin(ctx context.
 	if providerAttemptID == "" {
 		return nil
 	}
-	if err := c.ensureObserver(ctx); err != nil {
+	if err := c.synchronizeObserverSubscription(ctx); err != nil {
 		return fmt.Errorf("provider-boundary observation begin: %w", err)
 	}
 	command := &evalv1.ProviderBoundaryObservationCommand{
@@ -231,7 +231,7 @@ func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptFinalize(
 	if providerAttemptID == "" {
 		return nil
 	}
-	if err := c.ensureObserver(ctx); err != nil {
+	if err := c.synchronizeObserverSubscription(ctx); err != nil {
 		return fmt.Errorf("provider-boundary observation finalize: %w", err)
 	}
 	status := evalv1.ProviderBoundaryObservationAttemptStatus_PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED

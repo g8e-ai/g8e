@@ -31,6 +31,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type operatorListEntry struct {
+	OperatorID                      string                   `json:"operator_id"`
+	OperatorSessionID               string                   `json:"operator_session_id"`
+	OperatorType                    constants.OperatorType   `json:"operator_type"`
+	Status                          constants.OperatorStatus `json:"status"`
+	Component                       constants.ComponentName  `json:"component"`
+	Hostname                        string                   `json:"hostname,omitempty"`
+	Name                            string                   `json:"name,omitempty"`
+	InferenceEnabled                *bool                    `json:"inference_enabled,omitempty"`
+	InferenceOllamaEndpoint         string                   `json:"inference_ollama_endpoint,omitempty"`
+	ProviderBoundaryObserverEnabled *bool                    `json:"provider_boundary_observer_enabled,omitempty"`
+	ProvenanceOperatorEnabled       *bool                    `json:"provenance_operator_enabled,omitempty"`
+	ProvenanceModelStorageRoot      string                   `json:"provenance_operator_model_storage_root,omitempty"`
+}
+
+type operatorListOutput struct {
+	Operators []operatorListEntry `json:"operators"`
+}
+
 func operatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operator",
@@ -43,6 +62,7 @@ func operatorCmd() *cobra.Command {
 		operatorShowCmd(),
 		operatorBindCmd(),
 		operatorRunCmd(),
+		operatorStopCmd(),
 		operatorStartCmd(),
 		operatorCpCmd(),
 		operatorScpCmd(),
@@ -52,6 +72,10 @@ func operatorCmd() *cobra.Command {
 	)
 
 	return cmd
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }
 
 func operatorModelCmd() *cobra.Command {
@@ -125,42 +149,34 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 			operators := slotResp.Operators
 			if len(operators) == 0 {
 				if output.JSONEnabled(cmd) {
-					return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"operators": []any{}})
+					return output.WriteJSON(cmd.OutOrStdout(), operatorListOutput{Operators: []operatorListEntry{}})
 				}
 				cmd.Println("No operators found")
 				return nil
 			}
 
 			if output.JSONEnabled(cmd) {
-				entries := make([]map[string]any, 0, len(operators))
+				entries := make([]operatorListEntry, 0, len(operators))
 				for _, op := range operators {
-					entry := map[string]any{
-						"operator_id":         op.ID,
-						"operator_session_id": op.OperatorSessionID,
-						"operator_type":       op.OperatorType,
-						"status":              op.Status,
-						"component":           op.Component,
-					}
-					if hostname := operatorHostnameValue(op); hostname != "" {
-						entry["hostname"] = hostname
-					}
-					if op.Name != "" {
-						entry["name"] = op.Name
+					entry := operatorListEntry{
+						OperatorID:        op.ID,
+						OperatorSessionID: op.OperatorSessionID,
+						OperatorType:      op.OperatorType,
+						Status:            op.Status,
+						Component:         op.Component,
+						Hostname:          operatorHostnameValue(op),
+						Name:              op.Name,
 					}
 					if op.RuntimeConfig != nil {
-						entry["inference_enabled"] = op.RuntimeConfig.InferenceEnabled
-						if op.RuntimeConfig.InferenceOllamaEndpoint != "" {
-							entry["inference_ollama_endpoint"] = op.RuntimeConfig.InferenceOllamaEndpoint
-						}
-						entry["provider_boundary_observer_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverEnabled
-						entry["provenance_operator_enabled"] = op.RuntimeConfig.ProvenanceOperatorEnabled
-						if op.RuntimeConfig.ProvenanceOperatorModelStorageRoot != "" {
-							entry["provenance_operator_model_storage_root"] = op.RuntimeConfig.ProvenanceOperatorModelStorageRoot
-						}
+						entry.InferenceEnabled = boolPointer(op.RuntimeConfig.InferenceEnabled)
+						entry.InferenceOllamaEndpoint = op.RuntimeConfig.InferenceOllamaEndpoint
+						entry.ProviderBoundaryObserverEnabled = boolPointer(op.RuntimeConfig.ProviderBoundaryObserverEnabled)
+						entry.ProvenanceOperatorEnabled = boolPointer(op.RuntimeConfig.ProvenanceOperatorEnabled)
+						entry.ProvenanceModelStorageRoot = op.RuntimeConfig.ProvenanceOperatorModelStorageRoot
 					}
 					entries = append(entries, entry)
 				}
-				return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"operators": entries})
+				return output.WriteJSON(cmd.OutOrStdout(), operatorListOutput{Operators: entries})
 			}
 
 			cmd.Printf("Operators (%d total)\n", len(operators))

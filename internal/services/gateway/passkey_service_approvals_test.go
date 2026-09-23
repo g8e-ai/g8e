@@ -717,15 +717,10 @@ func TestPasskeyService_HandleListSuspendedTransactions(t *testing.T) {
 		s.handleListSuspendedTransactions(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.SuspendedTransactionsResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		transactions, ok := resp["transactions"].([]interface{})
-		if !ok {
-			assert.Nil(t, resp["transactions"])
-		} else {
-			assert.Empty(t, transactions)
-		}
+		assert.Empty(t, resp.Transactions)
 	})
 
 	t.Run("Success - ignores query user_id (IDOR fix)", func(t *testing.T) {
@@ -740,14 +735,9 @@ func TestPasskeyService_HandleListSuspendedTransactions(t *testing.T) {
 		s.handleListSuspendedTransactions(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.SuspendedTransactionsResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		transactions, ok := resp["transactions"].([]interface{})
-		if !ok {
-			assert.Nil(t, resp["transactions"])
-		} else {
-			assert.Empty(t, transactions)
-		}
+		assert.Empty(t, resp.Transactions)
 	})
 }

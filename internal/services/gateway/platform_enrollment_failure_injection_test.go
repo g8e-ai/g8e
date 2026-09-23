@@ -21,7 +21,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 
@@ -132,7 +132,7 @@ func TestPlatformEnrollmentFailureInjection_AfterSigning(t *testing.T) {
 	// PERSIST_POLICY.
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionPersistPolicy), 1,
-		errors.New("simulated crash after signing"))
+		fmt.Errorf("simulated crash after signing"))
 	_, err := env.enrollSvc.Complete(context.Background(), token, proof)
 	restore()
 	assert.Error(t, err, "completion must fail when PERSIST_POLICY fails")
@@ -186,7 +186,7 @@ func TestPlatformEnrollmentFailureInjection_AfterPolicyWrite(t *testing.T) {
 	// crash after the policy write on a retry path).
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionPersistPolicy), 2,
-		errors.New("simulated crash after policy write"))
+		fmt.Errorf("simulated crash after policy write"))
 	// The retry path re-submits downstream envelopes; a failure there
 	// is returned to the caller but does not corrupt the completed state.
 	// The certificate was already returned successfully on the first call.
@@ -228,7 +228,7 @@ func TestPlatformEnrollmentFailureInjection_AfterOperatorDocWrite(t *testing.T) 
 	// ISSUE and CREATE_SESSION.
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionCreateSession), 1,
-		errors.New("simulated crash after operator doc write"))
+		fmt.Errorf("simulated crash after operator doc write"))
 	_, err := env.enrollSvc.Complete(context.Background(), token, proof)
 	restore()
 	assert.Error(t, err, "completion must fail when CREATE_SESSION fails")
@@ -281,7 +281,7 @@ func TestPlatformEnrollmentFailureInjection_AfterCLISessionWrite(t *testing.T) {
 	// crash after the CLI session write on a retry path).
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionCreateSession), 2,
-		errors.New("simulated crash after CLI session write"))
+		fmt.Errorf("simulated crash after CLI session write"))
 	// The retry path re-submits downstream envelopes; a failure there
 	// is returned to the caller but does not corrupt the completed state.
 	// The error is intentionally discarded: when the request is already
@@ -322,7 +322,7 @@ func TestPlatformEnrollmentFailureInjection_AfterResponsePersisted(t *testing.T)
 	// has persisted the response and transitioned to completed).
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionPersistPolicy), 1,
-		errors.New("simulated crash after response persisted"))
+		fmt.Errorf("simulated crash after response persisted"))
 	_, err := env.enrollSvc.Complete(context.Background(), token, proof)
 	restore()
 	assert.Error(t, err, "completion must fail when downstream envelope fails")
@@ -364,7 +364,7 @@ func TestPlatformEnrollmentFailureInjection_RetryDoesNotCreateSecondIdentity(t *
 	// Inject a failure on the first PERSIST_POLICY call.
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionPersistPolicy), 1,
-		errors.New("simulated crash"))
+		fmt.Errorf("simulated crash"))
 	_, err := env.enrollSvc.Complete(context.Background(), token, proof)
 	restore()
 	assert.Error(t, err)
@@ -403,7 +403,7 @@ func TestPlatformEnrollmentFailureInjection_RetryDoesNotConsumeApproval(t *testi
 	// Inject a failure on the ISSUE call itself (before signing).
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionIssue), 1,
-		errors.New("simulated crash before signing"))
+		fmt.Errorf("simulated crash before signing"))
 	_, err := env.enrollSvc.Complete(context.Background(), token, proof)
 	restore()
 	assert.Error(t, err, "completion must fail when ISSUE fails")
