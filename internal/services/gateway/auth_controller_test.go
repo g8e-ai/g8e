@@ -40,7 +40,6 @@ func setupTestBootstrapController(t *testing.T) (*BootstrapController, *config.C
 		CLISessionSvc:      infra.CLISessionSvc,
 		OperatorSessionSvc: infra.OperatorSessionSvc,
 		Responder:          infra.Responder,
-		ActuatorKeyReader:  nil,
 	}), infra.Cfg
 }
 

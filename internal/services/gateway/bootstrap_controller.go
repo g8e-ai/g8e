@@ -8,10 +8,8 @@
 package gateway
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
@@ -20,31 +18,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
-
-// actuatorKeyReader reads the actuator public key from storage.
-type actuatorKeyReader interface {
-	ReadActuatorPublicKey() (keyID, publicKey string, err error)
-}
-
-// fileActuatorKeyReader reads the actuator public key from a file.
-type fileActuatorKeyReader struct {
-	path string
-}
-
-func (r *fileActuatorKeyReader) ReadActuatorPublicKey() (keyID, publicKey string, err error) {
-	data, err := os.ReadFile(r.path)
-	if err != nil {
-		return "", "", err
-	}
-	var ap struct {
-		KeyID     string `json:"key_id"`
-		PublicKey string `json:"public_key"`
-	}
-	if err := json.Unmarshal(data, &ap); err != nil {
-		return "", "", err
-	}
-	return ap.KeyID, ap.PublicKey, nil
-}
 
 // BootstrapControllerDeps groups all dependencies for BootstrapController.
 type BootstrapControllerDeps struct {
@@ -56,7 +29,6 @@ type BootstrapControllerDeps struct {
 	CLISessionSvc      *CLISessionService
 	OperatorSessionSvc *OperatorSessionService
 	Responder          *response.Writer
-	ActuatorKeyReader  actuatorKeyReader
 }
 
 // BootstrapController handles system bootstrap, CLI enrollment, operator
@@ -70,7 +42,6 @@ type BootstrapController struct {
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
 	responder          *response.Writer
-	actuatorKeyReader  actuatorKeyReader
 }
 
 func newBootstrapController(deps BootstrapControllerDeps) *BootstrapController {
@@ -83,7 +54,6 @@ func newBootstrapController(deps BootstrapControllerDeps) *BootstrapController {
 		cliSessionSvc:      deps.CLISessionSvc,
 		operatorSessionSvc: deps.OperatorSessionSvc,
 		responder:          deps.Responder,
-		actuatorKeyReader:  deps.ActuatorKeyReader,
 	}
 }
 

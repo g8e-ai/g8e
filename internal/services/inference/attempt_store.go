@@ -49,7 +49,7 @@ func (s *fileAttemptStore) attemptsDir() string {
 }
 
 func (s *fileAttemptStore) recordPath(providerAttemptID string) string {
-	return filepath.Join(s.attemptsDir(), providerAttemptID+".json")
+	return filepath.Join(s.attemptsDir(), providerAttemptID+constants.FileExtJSON)
 }
 
 func (s *fileAttemptStore) Begin(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error {

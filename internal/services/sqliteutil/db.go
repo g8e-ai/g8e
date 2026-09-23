@@ -13,8 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -35,10 +33,6 @@ type DBConfig struct {
 	// Default: 5000
 	BusyTimeoutMs int
 
-	// SetFilePermissions controls whether to chmod the DB file to 0600 after creation.
-	// Default: true
-	SetFilePermissions bool
-
 	// MaxRetries is the maximum number of retry attempts for SQLITE_BUSY errors.
 	// Default: 10
 	MaxRetries int
@@ -53,12 +47,11 @@ type DBConfig struct {
 // The caller must set Path.
 func DefaultDBConfig(path string) DBConfig {
 	return DBConfig{
-		Path:               path,
-		CacheSizeMB:        64,
-		BusyTimeoutMs:      30000, // Increased to 30s for parallel test concurrency
-		SetFilePermissions: true,
-		MaxRetries:         10,
-		RetryBaseDelayMs:   50,
+		Path:             path,
+		CacheSizeMB:      64,
+		BusyTimeoutMs:    30000, // Increased to 30s for parallel test concurrency
+		MaxRetries:       10,
+		RetryBaseDelayMs: 50,
 	}
 }
 
@@ -72,9 +65,11 @@ type DB struct {
 
 // OpenDB opens (or creates) a SQLite database with best-practice settings.
 func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
-	dir := filepath.Dir(cfg.Path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("sqliteutil: create database directory %s: %w", dir, err)
+	if cfg.Path == "" {
+		return nil, fmt.Errorf("sqliteutil: database path is required: %w", constants.ErrMissingRequiredField)
+	}
+	if logger == nil {
+		logger = slog.Default()
 	}
 
 	dsn := fmt.Sprintf("file:%s?_synchronous=NORMAL&_journal_mode=WAL&_busy_timeout=%d&_mutex=full",
@@ -108,12 +103,6 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	for _, pragma := range pragmas {
 		if _, err := sqlDB.Exec(pragma); err != nil {
 			logger.Warn("Failed to set pragma", "pragma", pragma, string(constants.ConnectionStateError), err)
-		}
-	}
-
-	if cfg.SetFilePermissions {
-		if err := os.Chmod(cfg.Path, 0600); err != nil {
-			logger.Warn("Failed to set database file permissions", "path", cfg.Path, string(constants.ConnectionStateError), err)
 		}
 	}
 
@@ -335,7 +324,9 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 
 		err = fn(tx)
 		if err != nil {
-			_ = tx.Rollback()
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				err = errors.Join(err, fmt.Errorf("sqliteutil: rollback transaction: %w", rollbackErr))
+			}
 			if isBusyError(err) {
 				db.logger.Debug("Database busy during transaction, retrying", "attempt", i+1, "max_retries", maxRetries)
 				db.backoff(i)

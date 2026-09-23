@@ -197,11 +197,11 @@ func (r *Runner) listAttempts(ctx context.Context) ([]*operatorv1.InferenceProvi
 		}
 		body, err := r.cfg.FileSvc.ReadFile(ctx, filepath.Join(dir, entry.Name()))
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("provider observer runner: read attempt %s: %w", entry.Name(), err)
 		}
 		record := &operatorv1.InferenceProviderAttemptRecord{}
 		if err := protojson.Unmarshal(body, record); err != nil {
-			continue
+			return nil, fmt.Errorf("provider observer runner: unmarshal attempt %s: %w", entry.Name(), err)
 		}
 		attempts = append(attempts, record)
 	}

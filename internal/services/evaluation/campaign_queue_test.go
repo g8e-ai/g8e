@@ -80,21 +80,22 @@ func TestResolveCampaignStartPlanFromQueue(t *testing.T) {
 				VariantID:            "gemma3-4b",
 				ServedModelTag:       "gemma3:4b",
 				CampaignID:           "eval-init-gemma3-4b",
-				InventoryFile:        ".g8e/eval/inventories/eval-init-gemma3-4b.json",
+				InventoryFile:        "eval/inventories/eval-init-gemma3-4b.json",
 				ModelRegistryDigest:  "digest",
 				HomogeneousCellCount: 75,
 				Status:               "pending",
 			},
 		},
 	}
-	queuePath := filepath.Join(root, DefaultInitCampaignQueueRelPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(queuePath), 0o755))
-	body, err := json.Marshal(queue)
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(queuePath, body, 0o600))
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	require.NoError(t, SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, DefaultInitCampaignQueueRelPath, &queue))
 
 	now := time.Unix(1789669555, 0).UTC()
 	plan, err := ResolveCampaignStartPlan(CampaignStartPlanRequest{
+		Context:     context.Background(),
+		FileService: fileSvc,
 		ProjectRoot: root,
 		QueueRef:    "next",
 		Now:         now,
@@ -125,7 +126,12 @@ func TestInitCampaignQueueFiltersRuntimeFreezeToBaseTags(t *testing.T) {
 		&evalv1.ModelVariant{VariantId: "extra-model", ServedModelTag: "extra:model", ModelDigest: "d2", ProviderClass: "ollama"},
 	)
 
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	result, err := InitCampaignQueue(InitCampaignQueueRequest{
+		Context:             context.Background(),
+		FileService:         fileSvc,
 		ProjectRoot:         root,
 		SourceInventoryPath: DefaultModelInventoryRelPath,
 	})
@@ -252,7 +258,9 @@ func TestResolveCampaignStartPlan_ReusesIdenticalReadOnlyInventoryAndRejectsDiff
 	}
 	first, err := ResolveCampaignStartPlan(request)
 	require.NoError(t, err)
-	info, err := os.Stat(first.InventoryPath)
+	relPath, err := fileSvc.Rel(first.InventoryPath)
+	require.NoError(t, err)
+	info, err := fileSvc.Stat(context.Background(), relPath)
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(constants.PermFileReadOnly), info.Mode().Perm())
 

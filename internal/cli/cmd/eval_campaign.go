@@ -74,9 +74,9 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign init: load CLI identity: %w", err)
 			}
-			inventory, err := evaluation.LoadModelInventoryFreezeFile(inventoryFile)
+			inventory, err := loadEvaluationInventoryFreeze(cmd.Context(), fileSvc, cfg.ProjectRoot, inventoryFile)
 			if err != nil {
-				return err
+				return fmt.Errorf("evaluation: campaign init: load inventory: %w", err)
 			}
 			if inventory.CampaignID != "" && inventory.CampaignID != campaignID {
 				return fmt.Errorf("evaluation: campaign init: inventory campaign_id mismatch")

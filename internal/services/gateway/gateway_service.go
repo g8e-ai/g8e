@@ -719,7 +719,6 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			CLISessionSvc:      cliSessionSvc,
 			OperatorSessionSvc: operatorSessionSvc,
 			Responder:          ls.responder,
-			ActuatorKeyReader:  &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath},
 		},
 		CLIRecoveryControllerDeps: CLIRecoveryControllerDeps{
 			Cfg:                cfg,

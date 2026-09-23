@@ -8,12 +8,14 @@
 package evaluation
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -41,8 +43,12 @@ func TestModelRegistryFreezeLookupModelVariant(t *testing.T) {
 
 func TestMaterializeCampaignInventory_WritesInventoryFile(t *testing.T) {
 	root := t.TempDir()
+	fileSvc, err := fs.NewRuntimeFileService(root, nil)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	freeze, relPath, err := MaterializeCampaignInventory(MaterializeCampaignInventoryRequest{
-		ProjectRoot: root,
+		Context:     context.Background(),
+		FileService: fileSvc,
 		CampaignID:  "eval-init-gemma3-4b",
 		Variants:    []*evalv1.ModelVariant{testModelVariant()},
 	})

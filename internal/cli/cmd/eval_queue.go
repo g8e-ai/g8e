@@ -54,17 +54,16 @@ Examples:
   g8e eval rollout init --from .g8e/eval/model-inventory.json --tags qwen3:4b,gemma3:4b
   g8e eval rollout init --materialize --merge`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
 			result, err := evaluation.InitCampaignQueue(evaluation.InitCampaignQueueRequest{
 				Context:             cmd.Context(),
 				FileService:         fileSvc,
-				ProjectRoot:         cfg.ProjectRoot,
 				SourceInventoryPath: fromPath,
-				InventoryRelDir:     inventoryDir,
-				OutputQueuePath:     outputPath,
+				InventoryRelDir:     normalizeRuntimeEvalPath(inventoryDir),
+				OutputQueuePath:     normalizeRuntimeEvalPath(outputPath),
 				Tags:                splitCSVModelTags(tags),
 				Materialize:         materialize,
 				MergeExisting:       mergeExisting,
@@ -129,7 +128,7 @@ Example:
 			entry, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
 				Context:        cmd.Context(),
 				FileService:    fileSvc,
-				QueuePath:      queuePath,
+				QueuePath:      normalizeRuntimeEvalPath(queuePath),
 				VariantID:      variantID,
 				ServedModelTag: servedModelTag,
 				Status:         status,
@@ -161,20 +160,20 @@ Example:
 	return cmd
 }
 
-func loadInitCampaignQueue(ctx context.Context, fileSvc fs.RuntimeFileService, cfgProjectRoot, queueFile string) (*evaluation.CampaignQueue, string, error) {
+func normalizeRuntimeEvalPath(rawPath string) string {
+	return strings.TrimPrefix(filepath.ToSlash(strings.TrimSpace(rawPath)), constants.RuntimeDirname+"/")
+}
+
+func loadInitCampaignQueue(ctx context.Context, fileSvc fs.RuntimeFileService, queueFile string) (*evaluation.CampaignQueue, string, error) {
 	queuePath := queueFile
 	if queuePath == "" {
 		queuePath = evaluation.DefaultInitCampaignQueueRelPath
 	}
-	if fileSvc != nil && !filepath.IsAbs(queuePath) {
-		relPath := strings.TrimPrefix(filepath.ToSlash(queuePath), constants.RuntimeDirname+"/")
-		queue, err := evaluation.LoadInitCampaignQueueFromRuntime(ctx, fileSvc, relPath)
-		if err != nil {
-			return nil, queuePath, err
-		}
-		return queue, queuePath, nil
+	queuePath = normalizeRuntimeEvalPath(queuePath)
+	if filepath.IsAbs(queuePath) || queuePath == ".." || strings.HasPrefix(queuePath, "../") {
+		return nil, queueFile, fmt.Errorf("evaluation: queue path must be runtime-relative")
 	}
-	queue, err := evaluation.LoadInitCampaignQueue(evaluation.ResolveEvalPath(cfgProjectRoot, queuePath))
+	queue, err := evaluation.LoadInitCampaignQueueFromRuntime(ctx, fileSvc, queuePath)
 	if err != nil {
 		return nil, queuePath, err
 	}
@@ -188,11 +187,11 @@ func rolloutEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "list",
 		Short: "List init-campaign queue entries",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			queue, _, err := loadInitCampaignQueue(cmd.Context(), fileSvc, cfg.ProjectRoot, queueFile)
+			queue, _, err := loadInitCampaignQueue(cmd.Context(), fileSvc, queueFile)
 			if err != nil {
 				return fmt.Errorf("evaluation: queue list: %w", err)
 			}
@@ -238,11 +237,11 @@ func rolloutEvalNextCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "next",
 		Short: "Show the next pending init-campaign queue entry",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			queue, _, err := loadInitCampaignQueue(cmd.Context(), fileSvc, cfg.ProjectRoot, queueFile)
+			queue, _, err := loadInitCampaignQueue(cmd.Context(), fileSvc, queueFile)
 			if err != nil {
 				return fmt.Errorf("evaluation: queue next: %w", err)
 			}

@@ -17,8 +17,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
+
+func TestOpenDB_NilLoggerUsesDefaultLogger(t *testing.T) {
+	t.Parallel()
+	db, err := OpenDB(DefaultDBConfig(filepath.Join(testutil.TempDir(t), "nil-logger.db")), nil)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+}
+
+func TestOpenDB_EmptyPathReturnsMissingRequiredField(t *testing.T) {
+	t.Parallel()
+	_, err := OpenDB(DefaultDBConfig(""), testutil.NewTestLogger())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
 
 func TestDB_Backoff_DoesNotPanic(t *testing.T) {
 	t.Parallel()

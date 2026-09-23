@@ -109,14 +109,9 @@ func initializeCampaignRun(
 	if err != nil {
 		return fmt.Errorf("evaluation: campaign init: load CLI identity: %w", err)
 	}
-	var inventory *evaluation.ModelInventoryFreeze
-	if relPath, relErr := fileSvc.Rel(plan.InventoryPath); relErr == nil {
-		inventory, err = evaluation.LoadModelInventoryFreezeFromRuntime(cmd.Context(), fileSvc, relPath)
-	} else {
-		inventory, err = evaluation.LoadModelInventoryFreezeFile(plan.InventoryPath)
-	}
+	inventory, err := loadEvaluationInventoryFreeze(cmd.Context(), fileSvc, cfg.ProjectRoot, plan.InventoryPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("evaluation: campaign init: load inventory: %w", err)
 	}
 	if inventory.CampaignID != "" && inventory.CampaignID != plan.CampaignID {
 		return fmt.Errorf("evaluation: campaign init: inventory campaign_id mismatch")

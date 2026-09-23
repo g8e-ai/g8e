@@ -28,7 +28,6 @@ func TestDefaultDBConfig(t *testing.T) {
 	assert.Equal(t, "/some/path/db.sqlite", cfg.Path)
 	assert.Equal(t, 64, cfg.CacheSizeMB)
 	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
-	assert.True(t, cfg.SetFilePermissions)
 	assert.Equal(t, 10, cfg.MaxRetries)
 	assert.Equal(t, 50, cfg.RetryBaseDelayMs)
 }
@@ -48,19 +47,14 @@ func TestOpenDB_CreatesFile(t *testing.T) {
 	assert.Equal(t, 1, result)
 }
 
-func TestOpenDB_CreatesParentDirectories(t *testing.T) {
+func TestOpenDB_RequiresExistingParentDirectory(t *testing.T) {
 	t.Parallel()
 	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "nested", "deep", "test.db"))
 
-	db, err := OpenDB(cfg, logger)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	var result int
-	require.NoError(t, db.QueryRow("SELECT 1").Scan(&result))
-	assert.Equal(t, 1, result)
+	_, err := OpenDB(cfg, logger)
+	require.Error(t, err)
 }
 
 func TestOpenDB_WALModeEnabled(t *testing.T) {
@@ -105,22 +99,6 @@ func TestOpenDB_SingleConnectionPool(t *testing.T) {
 
 	stats := db.Stats()
 	assert.Equal(t, 20, stats.MaxOpenConnections)
-}
-
-func TestOpenDB_SetFilePermissions_False(t *testing.T) {
-	t.Parallel()
-	dir := testutil.TempDir(t)
-	logger := testutil.NewTestLogger()
-	cfg := DefaultDBConfig(filepath.Join(dir, "noperm.db"))
-	cfg.SetFilePermissions = false
-
-	db, err := OpenDB(cfg, logger)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	var result int
-	require.NoError(t, db.QueryRow("SELECT 1").Scan(&result))
-	assert.Equal(t, 1, result)
 }
 
 func TestRunIncrementalVacuum(t *testing.T) {
@@ -722,7 +700,6 @@ func TestDefaultDBConfig_Tier1_SetsAllDefaults(t *testing.T) {
 	assert.Equal(t, "/test/path.db", cfg.Path)
 	assert.Equal(t, 64, cfg.CacheSizeMB)
 	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
-	assert.True(t, cfg.SetFilePermissions)
 	assert.Equal(t, 10, cfg.MaxRetries)
 	assert.Equal(t, 50, cfg.RetryBaseDelayMs)
 }
@@ -738,18 +715,16 @@ func TestDefaultDBConfig_Tier1_PathIsSet(t *testing.T) {
 func TestDBConfig_Tier1_AllFieldsAccessible(t *testing.T) {
 	t.Parallel()
 	cfg := DBConfig{
-		Path:               "/test.db",
-		CacheSizeMB:        128,
-		BusyTimeoutMs:      5000,
-		SetFilePermissions: false,
-		MaxRetries:         5,
-		RetryBaseDelayMs:   100,
+		Path:             "/test.db",
+		CacheSizeMB:      128,
+		BusyTimeoutMs:    5000,
+		MaxRetries:       5,
+		RetryBaseDelayMs: 100,
 	}
 
 	assert.Equal(t, "/test.db", cfg.Path)
 	assert.Equal(t, 128, cfg.CacheSizeMB)
 	assert.Equal(t, 5000, cfg.BusyTimeoutMs)
-	assert.False(t, cfg.SetFilePermissions)
 	assert.Equal(t, 5, cfg.MaxRetries)
 	assert.Equal(t, 100, cfg.RetryBaseDelayMs)
 }

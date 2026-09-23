@@ -81,7 +81,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			queue, queuePath, err := loadInitCampaignQueue(cmd.Context(), fileSvc, cfg.ProjectRoot, queueFile)
+			queue, queuePath, err := loadInitCampaignQueue(cmd.Context(), fileSvc, queueFile)
 			if err != nil {
 				return fmt.Errorf("evaluation: queue run: %w", err)
 			}

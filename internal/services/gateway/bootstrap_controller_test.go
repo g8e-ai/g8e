@@ -14,8 +14,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,54 +23,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
-
-func TestFileActuatorKeyReader(t *testing.T) {
-	t.Run("Success - reads valid actuator key file", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
-		keyData := `{"key_id":"test-key-id","public_key":"test-public-key"}`
-		require.NoError(t, os.WriteFile(keyFile, []byte(keyData), 0644))
-
-		reader := &fileActuatorKeyReader{path: keyFile}
-		keyID, publicKey, err := reader.ReadActuatorPublicKey()
-
-		require.NoError(t, err)
-		assert.Equal(t, "test-key-id", keyID)
-		assert.Equal(t, "test-public-key", publicKey)
-	})
-
-	t.Run("Failure - file does not exist", func(t *testing.T) {
-		reader := &fileActuatorKeyReader{path: "/nonexistent/path/" + constants.ActuatorPubJSONFilename}
-		_, _, err := reader.ReadActuatorPublicKey()
-
-		assert.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-	})
-
-	t.Run("Failure - invalid JSON in file", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
-		require.NoError(t, os.WriteFile(keyFile, []byte("{invalid json"), 0644))
-
-		reader := &fileActuatorKeyReader{path: keyFile}
-		_, _, err := reader.ReadActuatorPublicKey()
-
-		assert.Error(t, err)
-	})
-
-	t.Run("Success - missing required fields returns empty values", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
-		require.NoError(t, os.WriteFile(keyFile, []byte(`{"key_id":"test-id"}`), 0644))
-
-		reader := &fileActuatorKeyReader{path: keyFile}
-		keyID, publicKey, err := reader.ReadActuatorPublicKey()
-
-		require.NoError(t, err)
-		assert.Equal(t, "test-id", keyID)
-		assert.Empty(t, publicKey)
-	})
-}
 
 func TestHandleBootstrapWithURL(t *testing.T) {
 	t.Run("Success - Bootstrap with CLI CSR creates the first real user", func(t *testing.T) {

@@ -8,10 +8,13 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -19,6 +22,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 func modelsEvalCmd(deps nativeEvalDeps) *cobra.Command {
@@ -114,12 +119,11 @@ func modelsEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "list",
 		Short: "List model variants from a frozen inventory file",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			inventoryPath := evaluation.ResolveRuntimeModelInventoryPath(cfg.ProjectRoot, fromPath)
-			variants, err := evaluation.LoadFrozenVariants(inventoryPath)
+			variants, err := loadEvaluationInventoryVariants(cmd.Context(), fileSvc, cfg.ProjectRoot, fromPath)
 			if err != nil {
 				return fmt.Errorf("evaluation: inventory list: %w", err)
 			}
@@ -174,7 +178,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			sourceVariants, err := evaluation.LoadFrozenVariants(evaluation.ResolveRuntimeModelInventoryPath(cfg.ProjectRoot, fromPath))
+			sourceVariants, err := loadEvaluationInventoryVariants(cmd.Context(), fileSvc, cfg.ProjectRoot, fromPath)
 			if err != nil {
 				return fmt.Errorf("evaluation: inventory materialize: %w", err)
 			}
@@ -207,7 +211,7 @@ Examples:
 					FileService: fileSvc,
 					ProjectRoot: cfg.ProjectRoot,
 					CampaignID:  campaignID,
-					OutputPath:  outputPath,
+					OutputPath:  normalizeRuntimeEvalPath(outputPath),
 					Variants:    selected,
 				})
 				if err != nil {
@@ -264,6 +268,46 @@ type inventoryMaterializeLine struct {
 	RegistryDigest string `json:"model_registry_digest"`
 	CellCount      uint64 `json:"homogeneous_cell_count"`
 	InventoryFile  string `json:"inventory_file"`
+}
+
+func loadEvaluationInventoryVariants(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) ([]*evalv1.ModelVariant, error) {
+	explicitPath = strings.TrimSpace(explicitPath)
+	if explicitPath == "" {
+		if exists, err := fileSvc.FileExists(ctx, evaluation.DefaultModelInventoryRelPath); err != nil {
+			return nil, fmt.Errorf("evaluation: inventory: check runtime freeze: %w", err)
+		} else if exists {
+			return evaluation.LoadFrozenVariantsFromRuntime(ctx, fileSvc, evaluation.DefaultModelInventoryRelPath)
+		}
+		explicitPath = evaluation.DefaultBaseModelInventoryRelPath
+	}
+	if !filepath.IsAbs(explicitPath) && strings.HasPrefix(filepath.ToSlash(explicitPath), constants.RuntimeDirname+"/") {
+		relPath := strings.TrimPrefix(filepath.ToSlash(explicitPath), constants.RuntimeDirname+"/")
+		return evaluation.LoadFrozenVariantsFromRuntime(ctx, fileSvc, relPath)
+	}
+	if explicitPath == evaluation.DefaultBaseModelInventoryRelPath {
+		explicitPath = filepath.Join(projectRoot, explicitPath)
+	}
+	return evaluation.LoadFrozenVariants(explicitPath)
+}
+
+func loadEvaluationInventoryFreeze(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) (*evaluation.ModelInventoryFreeze, error) {
+	explicitPath = strings.TrimSpace(explicitPath)
+	if explicitPath == "" {
+		if exists, err := fileSvc.FileExists(ctx, evaluation.DefaultModelInventoryRelPath); err != nil {
+			return nil, fmt.Errorf("evaluation: inventory: check runtime freeze: %w", err)
+		} else if exists {
+			return evaluation.LoadModelInventoryFreezeFromRuntime(ctx, fileSvc, evaluation.DefaultModelInventoryRelPath)
+		}
+		explicitPath = evaluation.DefaultBaseModelInventoryRelPath
+	}
+	if !filepath.IsAbs(explicitPath) && strings.HasPrefix(filepath.ToSlash(explicitPath), constants.RuntimeDirname+"/") {
+		relPath := strings.TrimPrefix(filepath.ToSlash(explicitPath), constants.RuntimeDirname+"/")
+		return evaluation.LoadModelInventoryFreezeFromRuntime(ctx, fileSvc, relPath)
+	}
+	if explicitPath == evaluation.DefaultBaseModelInventoryRelPath {
+		explicitPath = filepath.Join(projectRoot, explicitPath)
+	}
+	return evaluation.LoadModelInventoryFreezeFile(explicitPath)
 }
 
 func writeInventoryMaterializeResult(cmd *cobra.Command, lines []inventoryMaterializeLine, jsonOutput bool) error {
