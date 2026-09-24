@@ -71,10 +71,13 @@ func rolloutEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 flow as 'g8e eval campaign start --queue <variant> --require-witness' and updates the queue
 on strict witness verify PASS.
 
+Defaults: --require-witness, --verify, --publish, --daemon, and --skip-verified are all true.
+
 Examples:
-  g8e eval rollout run --require-witness --skip-verified
+  g8e eval rollout run
   g8e eval rollout run --dry-run --skip-variant granite3-3-2b
-  g8e eval rollout run --require-witness --log-dir .g8e/eval/logs/batch-001`,
+  g8e eval rollout run --log-dir .g8e/eval/logs/batch-001
+  g8e eval rollout run --skip-verified=false`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {

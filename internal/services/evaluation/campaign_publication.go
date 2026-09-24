@@ -121,21 +121,43 @@ func (c *CampaignPublicationCoordinator) publishAssignmentResultWithKey(
 	if err != nil {
 		return fmt.Errorf("evaluation: publish assignment result: load scenario artifacts: %w", err)
 	}
+	request, err := c.buildAssignmentResultPublishRequest(ctx, run, catalog, artifacts, assignment, result, scenarioCategory, verificationStatus, idempotencyKey)
+	if err != nil {
+		return err
+	}
+	_, err = c.exportFeedRecords(ctx, assignment.GetRunId(), []campaignFeedPublishRequest{request})
+	return err
+}
+
+func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
+	ctx context.Context,
+	run *evalv1.EvaluationRun,
+	catalog *evalv1.EvaluationScenarioCatalog,
+	artifacts map[string]ScenarioArtifacts,
+	assignment *evalv1.EvaluationAssignment,
+	result *evalv1.EvaluationAssignmentResult,
+	scenarioCategory evalv1.EvaluationScenarioCategory,
+	verificationStatus string,
+	idempotencyKey string,
+) (campaignFeedPublishRequest, error) {
+	if c == nil || c.files == nil || run == nil || catalog == nil || assignment == nil || result == nil || idempotencyKey == "" {
+		return campaignFeedPublishRequest{}, fmt.Errorf("evaluation: publish assignment result: %w", constants.ErrMissingRequiredField)
+	}
 	store, ok := c.store.(*Store)
 	if !ok {
-		return fmt.Errorf("evaluation: publish assignment result: resolve scenario context: %w", constants.ErrEvidenceScopeMismatch)
+		return campaignFeedPublishRequest{}, fmt.Errorf("evaluation: publish assignment result: resolve scenario context: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	scenario, scenarioErr := ResolvePublicScenarioContext(ctx, store, run, catalog, assignment, artifacts)
 	if scenarioErr != nil && !errors.Is(scenarioErr, constants.ErrEvidenceArtifactMalformed) {
-		return scenarioErr
+		return campaignFeedPublishRequest{}, scenarioErr
 	}
 	benchmark, err := c.buildAssignmentBenchmarkObservations(ctx, result)
 	if err != nil {
-		return err
+		return campaignFeedPublishRequest{}, err
 	}
 	resources, err := BuildPublicResourceSummary(result)
 	if err != nil {
-		return err
+		return campaignFeedPublishRequest{}, err
 	}
 	var record *PublicAssignmentRecord
 	if scenarioErr == nil {
@@ -149,20 +171,35 @@ func (c *CampaignPublicationCoordinator) publishAssignmentResultWithKey(
 	} else {
 		projection, projectionErr := BuildAssignmentResultProjection(assignment, result, scenarioCategory, DerivePublicSummaryStatus(result), verificationStatus)
 		if projectionErr != nil {
-			return projectionErr
+			return campaignFeedPublishRequest{}, projectionErr
 		}
 		projection.VerificationMetadata = nil
 		record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
 	}
 	if err != nil {
-		return err
+		return campaignFeedPublishRequest{}, err
 	}
 	body, err := MarshalAssignmentResultProjectionEnvelope(idempotencyKey, record)
 	if err != nil {
-		return err
+		return campaignFeedPublishRequest{}, err
 	}
-	_, err = c.exportFeedRecords(ctx, assignment.GetRunId(), []campaignFeedPublishRequest{{IdempotencyKey: idempotencyKey, Body: body}})
-	return err
+	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, Body: body}, nil
+}
+
+func buildAssignmentLifecyclePublishRequest(assignment *evalv1.EvaluationAssignment, scenarioCategory evalv1.EvaluationScenarioCategory, observedAt time.Time) (campaignFeedPublishRequest, error) {
+	if assignment == nil {
+		return campaignFeedPublishRequest{}, fmt.Errorf("evaluation: publish assignment lifecycle: %w", constants.ErrMissingRequiredField)
+	}
+	projection, err := BuildAssignmentLifecycleProjection(assignment, scenarioCategory, observedAt)
+	if err != nil {
+		return campaignFeedPublishRequest{}, err
+	}
+	idempotencyKey := AssignmentLifecycleIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), assignment.GetLifecycleStatus())
+	body, err := MarshalCampaignProjectionEnvelope(publicMessageTypeAssignmentLifecycle, idempotencyKey, projection)
+	if err != nil {
+		return campaignFeedPublishRequest{}, err
+	}
+	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, Body: body}, nil
 }
 
 func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ctx context.Context, result *evalv1.EvaluationAssignmentResult) (*PublicBenchmarkObservations, error) {
@@ -467,7 +504,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 			return 0, err
 		}
 	}
-	run, err := c.store.LoadRun(ctx, runID)
+	run, assignments, results, _, err := c.loadRunAggregateState(ctx, runID)
 	if err != nil {
 		return 0, err
 	}
@@ -475,33 +512,44 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	if err != nil {
 		return 0, err
 	}
-	assignments, err := c.store.ListAssignments(ctx, runID)
+	_, artifacts, err := LoadScenarioCatalog()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("evaluation: publish run catch-up: load scenario artifacts: %w", err)
 	}
-	published := 0
+	requests := make([]campaignFeedPublishRequest, 0, len(assignments)*2)
 	for _, assignment := range assignments {
 		category, err := ScenarioCategoryForAssignment(catalog, assignment)
 		if err != nil {
-			return published, err
+			return 0, err
 		}
-		if err := c.PublishAssignmentLifecycle(ctx, assignment, category, assignmentLifecycleObservedAt(assignment)); err != nil {
-			return published, err
+		lifecycleRequest, err := buildAssignmentLifecyclePublishRequest(assignment, category, assignmentLifecycleObservedAt(assignment))
+		if err != nil {
+			return 0, err
 		}
-		published++
-		if exists, err := c.store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId()); err != nil {
-			return published, err
-		} else if !exists {
+		requests = append(requests, lifecycleRequest)
+		result := results[assignment.GetAssignmentId()]
+		if result == nil {
 			continue
 		}
-		result, err := c.store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
+		resultRequest, err := c.buildAssignmentResultPublishRequest(
+			ctx,
+			run,
+			catalog,
+			artifacts,
+			assignment,
+			result,
+			category,
+			"unverified",
+			AssignmentResultIdempotencyKey(runID, assignment.GetAssignmentId()),
+		)
 		if err != nil {
-			return published, err
+			return 0, err
 		}
-		if err := c.PublishAssignmentResult(ctx, assignment, result, category, "unverified"); err != nil {
-			return published, err
-		}
-		published++
+		requests = append(requests, resultRequest)
+	}
+	published, err := c.exportFeedRecords(ctx, runID, requests)
+	if err != nil {
+		return published, err
 	}
 	aggregateCount, err := c.PublishRunAggregates(ctx, runID, time.Now().UTC())
 	if err != nil {

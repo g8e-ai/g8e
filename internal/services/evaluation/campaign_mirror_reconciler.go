@@ -25,6 +25,7 @@ type CampaignMirrorProbe interface {
 type CampaignMirrorReconcileResult struct {
 	RestoredRunIDs   []string          `json:"restored_run_ids"`
 	SkippedRunIDs    []string          `json:"skipped_run_ids"`
+	MissingRunIDs    []string          `json:"missing_run_ids,omitempty"`
 	HostAbsentRunIDs []string          `json:"host_absent_run_ids"`
 	FailedRuns       map[string]string `json:"failed_runs,omitempty"`
 	PublishedRecords int               `json:"published_records"`
@@ -36,6 +37,7 @@ const (
 	CampaignMirrorReconcileChecking   CampaignMirrorReconcileStatus = "checking"
 	CampaignMirrorReconcileRestored   CampaignMirrorReconcileStatus = "restored"
 	CampaignMirrorReconcilePresent    CampaignMirrorReconcileStatus = "already_present"
+	CampaignMirrorReconcileMissing    CampaignMirrorReconcileStatus = "missing"
 	CampaignMirrorReconcileHostAbsent CampaignMirrorReconcileStatus = "host_absent"
 	CampaignMirrorReconcileFailed     CampaignMirrorReconcileStatus = "failed"
 )
@@ -69,9 +71,10 @@ func NewCampaignMirrorReconciler(publication *CampaignPublicationCoordinator, st
 	}
 }
 
-// ReconcileVerifiedQueue restores every verified queue entry whose canonical
-// dataset is absent from the public mirror.
-func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, queue *CampaignQueue, runTimeout time.Duration, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
+// ReconcileVerifiedQueue compares verified queue entries against the public
+// mirror. When restoreMissing is true, it republishes canonical host artifacts
+// for datasets that are absent from the mirror.
+func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, queue *CampaignQueue, runTimeout time.Duration, restoreMissing bool, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
 	if r == nil || r.publication == nil || r.store == nil || queue == nil || runTimeout <= 0 {
 		return nil, fmt.Errorf("evaluation: reconcile verified queue: missing required dependencies")
 	}
@@ -90,7 +93,11 @@ func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, q
 			}
 		}
 		update(CampaignMirrorReconcileChecking, 0, nil)
-		runCtx, cancel := context.WithTimeout(ctx, runTimeout)
+		effectiveTimeout := runTimeout
+		if restoreMissing {
+			effectiveTimeout = CampaignMirrorReconcileRunTimeout(runTimeout, assignmentCountForMirrorTimeout(ctx, r.store, runID))
+		}
+		runCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
 		if r.probe != nil {
 			present, err := r.probe.DatasetPresent(runCtx, CampaignDatasetID(runID))
 			if err != nil {
@@ -117,6 +124,12 @@ func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, q
 			cancel()
 			result.HostAbsentRunIDs = append(result.HostAbsentRunIDs, runID)
 			update(CampaignMirrorReconcileHostAbsent, 0, nil)
+			continue
+		}
+		if !restoreMissing {
+			cancel()
+			result.MissingRunIDs = append(result.MissingRunIDs, runID)
+			update(CampaignMirrorReconcileMissing, 0, nil)
 			continue
 		}
 		published, err := r.restoreRun(runCtx, runID)
