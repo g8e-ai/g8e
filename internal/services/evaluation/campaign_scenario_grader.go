@@ -259,15 +259,29 @@ func deriveScenarioDecomposedScores(assignmentID string, grades []*evalv1.Determ
 	if deterministic == 0 {
 		return nil
 	}
-	value := float64(passed) / float64(deterministic)
-	return []*evalv1.DecomposedScoreRecord{{
-		ScoreId:           assignmentID + ":deterministic-pass-rate",
-		Dimension:         "deterministic_pass_rate",
-		Value:             value,
-		Unit:              evalv1.EvaluationMetricUnit_EVALUATION_METRIC_UNIT_RATIO,
-		Direction:         evalv1.EvaluationMetricDirection_EVALUATION_METRIC_DIRECTION_HIGHER_IS_BETTER,
-		MissingDataPolicy: evalv1.EvaluationMissingDataPolicy_EVALUATION_MISSING_DATA_POLICY_FAIL,
-	}}
+	passRate := float64(passed) / float64(deterministic)
+	taskScore := 0.0
+	if passed == deterministic {
+		taskScore = 1.0
+	}
+	return []*evalv1.DecomposedScoreRecord{
+		{
+			ScoreId:           assignmentID + ":task-score",
+			Dimension:         "task_score",
+			Value:             taskScore,
+			Unit:              evalv1.EvaluationMetricUnit_EVALUATION_METRIC_UNIT_RATIO,
+			Direction:         evalv1.EvaluationMetricDirection_EVALUATION_METRIC_DIRECTION_HIGHER_IS_BETTER,
+			MissingDataPolicy: evalv1.EvaluationMissingDataPolicy_EVALUATION_MISSING_DATA_POLICY_FAIL,
+		},
+		{
+			ScoreId:           assignmentID + ":deterministic-pass-rate",
+			Dimension:         "deterministic_pass_rate",
+			Value:             passRate,
+			Unit:              evalv1.EvaluationMetricUnit_EVALUATION_METRIC_UNIT_RATIO,
+			Direction:         evalv1.EvaluationMetricDirection_EVALUATION_METRIC_DIRECTION_HIGHER_IS_BETTER,
+			MissingDataPolicy: evalv1.EvaluationMissingDataPolicy_EVALUATION_MISSING_DATA_POLICY_FAIL,
+		},
+	}
 }
 
 func newDeterministicGrade(assignmentID, criterionID string, status evalv1.EvaluationVerdictStatus, detail string, score float64) *evalv1.DeterministicGrade {

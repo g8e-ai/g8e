@@ -114,6 +114,9 @@ func enrollCmd() *cobra.Command {
   pending   List pending platform workload enrollment requests (dashboard,
             ensemble, or operator) awaiting an owner decision.
 
+  list      List completed or revoked platform workload enrollments with
+            enrollment request IDs for revocation.
+
   approve   Approve a pending platform workload enrollment request.
 
   deny      Deny a pending platform workload enrollment request.
@@ -125,6 +128,7 @@ Bare ` + "`auth enroll`" + ` (no subcommand) prints this help and exits non-zero
 	cmd.AddCommand(
 		enrollUserCmd(),
 		pendingPlatformEnrollmentCmd(),
+		listPlatformEnrollmentCmd(),
 		approvePlatformEnrollmentCmd(),
 		denyPlatformEnrollmentCmd(),
 		revokePlatformEnrollmentCmd(),

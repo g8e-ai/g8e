@@ -74,7 +74,7 @@ func (queue *CampaignQueue) BuildBatchPlan(req CampaignQueueBatchPlanRequest) []
 	return plan
 }
 
-// TierAVerifyNotes returns the standard queue note for a Tier-A verified run.
-func TierAVerifyNotes(runID string) string {
-	return "75/75 Tier-A verify PASS (--require-provider-observation --require-model-provenance); run " + runID
+// StrictWitnessVerifyNotes returns the standard queue note for a strict-witness verified run.
+func StrictWitnessVerifyNotes(runID string) string {
+	return "75/75 witness verify PASS (--require-provider-observation --require-model-provenance); run " + runID
 }

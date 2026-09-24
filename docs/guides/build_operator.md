@@ -5,8 +5,8 @@ parent: Guides
 
 # Build and Run a g8e Operator
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-24
+Version: v2.1.13
 
 ---
 
@@ -117,7 +117,7 @@ On the target host, start the Operator with the Gateway discovery endpoint:
 
 When no installed Operator credentials exist, `--endpoint` starts the owner-approved platform enrollment protocol. The Operator fetches the Gateway trust bundle from the HTTP discovery endpoint, creates Operator and CLI certificate requests, persists pending enrollment state, waits for Gateway-owner approval, verifies the completion transcript, and writes the issued credentials and canonical trust bundle into `.g8e/pki/`. Restarting the process resumes the same pending enrollment request and key material.
 
-The enrolled owner reviews pending requests with `g8e auth enroll pending`, approves with `g8e auth enroll approve <request-id>`, or denies with `g8e auth enroll deny <request-id>`. See [Authentication and Authorization](../architecture/auth.md) for the full platform enrollment command reference.
+The enrolled owner reviews pending requests with `g8e auth enroll pending`, approves with `g8e auth enroll approve <request-id>`, or denies with `g8e auth enroll deny <request-id>`. Use `g8e auth enroll list` to review completed or revoked enrollments and obtain request IDs for `g8e auth enroll revoke <request-id>`. See [Authentication and Authorization](../architecture/auth.md) for the full platform enrollment command reference.
 
 After enrollment, the Operator loads `.g8e/pki/operator.crt` and `.g8e/pki/operator.key`, connects to the Gateway over mTLS, requests bootstrap configuration, initializes encrypted local services, subscribes to its command channel, and starts automatic heartbeats. The canonical trust bundle is `.g8e/pki/trust/g8eg-ca-bundle.pem`.
 
@@ -276,7 +276,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.12
+go get github.com/g8e-ai/g8e/v2@v2.1.13
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -288,7 +288,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.1.12
+pip install g8e==2.1.13
 ```
 
 See [Protocol Library](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.

@@ -42,6 +42,7 @@ func TestOperatorCmd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := operatorCmd()
 			assert.Equal(t, tt.use, cmd.Use)
+			assert.Contains(t, cmd.Aliases, "operators")
 			assert.Contains(t, cmd.Short, tt.short)
 			assert.Contains(t, cmd.Long, tt.long)
 		})

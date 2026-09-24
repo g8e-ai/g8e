@@ -54,10 +54,18 @@ function jsonResponse(value: unknown, status = 200): Response {
 afterEach(() => stopFeed());
 
 describe('feed cache', () => {
-  it('rejects a cache with a sequence gap', () => {
+  it('accepts a cache with mirror withdrawal sequence gaps', () => {
     const cached = createCachedFeed(mirrorOrigin, snapshot(3, latestHash), [
       record(1, fixtureCatalogExploratory),
       record(3, fixtureModelSummaries[0]!),
+    ]);
+    expect(validateCachedFeed(cached, mirrorOrigin)).toEqual(cached);
+  });
+
+  it('rejects a cache with regressive sequences', () => {
+    const cached = createCachedFeed(mirrorOrigin, snapshot(3, latestHash), [
+      record(3, fixtureCatalogExploratory),
+      record(2, fixtureModelSummaries[0]!),
     ]);
     expect(validateCachedFeed(cached, mirrorOrigin)).toBeNull();
   });

@@ -45,6 +45,13 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 ## Typical workflow
 
 ```bash
+# 0. (Optional) Stage trending Hugging Face GGUF models through Ollama deep HF pulls.
+#    Catalog: eval/rollout-intake-hf.json. Applies canonical served-model aliases
+#    (for example qwen3.8:27b, glm-5.3-flash) after pull/copy.
+./g8e eval models stage --ollama-endpoint "$G8E_OLLAMA_ENDPOINT"
+# Manual-create entries (sharded GGUF, pending single-file) are skipped — create on the
+# provider host with `ollama create <alias>` first, then continue with freeze below.
+
 # 1. Freeze provider inventory (recommended before scored runs on release code)
 ./g8e eval models freeze \
   --campaign-id eval-genesis-homogeneous \
@@ -59,7 +66,9 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 # Or reconcile live digests: freeze first, then filter runtime to base program tags
 ./g8e eval rollout init --from .g8e/eval/model-inventory.json --materialize --merge
 
-./g8e eval rollout run --tier-a --skip-verified --skip-variant granite3-3-2b
+# rollout run defaults: witness, verify, publish, daemon, and skip-verified are all true
+./g8e eval rollout run
+# ./g8e eval rollout run --skip-variant granite3-3-2b
 
 # Or materialize one combined inventory for a multi-model smoke campaign
 ./g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
@@ -79,9 +88,10 @@ go run ./.local.dev/tools/gen-base-model-inventory
 | --- | --- |
 | `g8e eval models freeze` | Discover and freeze all models from the provider |
 | `g8e eval models list` | List variants in a frozen inventory file |
+| `g8e eval models stage` | Pull rollout-intake HF models via Ollama and apply served-model aliases |
 | `g8e eval models materialize` | Write per-model or combined campaign inventory files |
 | `g8e eval rollout init` | Build `.g8e/eval/init-campaign-queue.json` |
-| `g8e eval rollout run` | Unattended rollout: start → verify for every queued model |
+| `g8e eval rollout run` | Unattended rollout: start → strict-witness verify for every queued model (`--require-witness`, `--verify`, `--publish`, `--daemon`, and `--skip-verified` default true) |
 | `g8e eval rollout list` | Inspect queue entries |
 | `g8e eval rollout next` | Show the next pending model |
 | `g8e eval rollout mark` | Manually record verify progress for one entry |
@@ -121,7 +131,7 @@ Runs marked `verified` in the queue but missing under `.g8e/data/eval/runs/<veri
 
 ```bash
 ./g8e eval rollout mark --variant-id qwen3-0-6b --status pending --notes "redo after host artifact loss"
-./g8e eval campaign start --queue qwen3-0-6b --publish --daemon --verify --tier-a
+./g8e eval campaign start --queue qwen3-0-6b --publish --daemon --require-witness
 ```
 
 ### Archive evidence to a directory you choose
@@ -140,7 +150,7 @@ Rollout flags accept repo-relative or absolute paths:
 
 ```bash
 ./g8e eval rollout init --output /data/my-queue.json --inventory-dir /data/my-inventories --materialize --merge
-./g8e eval rollout run --queue-file /data/my-queue.json --tier-a --skip-verified
+./g8e eval rollout run --queue-file /data/my-queue.json
 ```
 
 ## License

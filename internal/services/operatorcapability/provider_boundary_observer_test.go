@@ -72,3 +72,25 @@ func TestSelectProviderBoundaryObserver_Ambiguous(t *testing.T) {
 	_, err := SelectProviderBoundaryObserver(operators, "")
 	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverAmbiguous)
 }
+
+func TestSelectProviderBoundaryObserverForHardware(t *testing.T) {
+	t.Parallel()
+	operators := []models.OperatorDocumentGo{
+		{
+			ID: "observer-other", OperatorSessionID: "sess-other",
+			SystemFingerprint: "hardware-other",
+			Status:            constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
+			RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+		},
+		{
+			ID: "observer-target", OperatorSessionID: "sess-target",
+			SystemFingerprint: "hardware-target",
+			Status:            constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote,
+			RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+		},
+	}
+
+	selected, err := SelectProviderBoundaryObserverForHardware(operators, "", "hardware-target")
+	require.NoError(t, err)
+	assert.Equal(t, "sess-target", selected.OperatorSessionID)
+}

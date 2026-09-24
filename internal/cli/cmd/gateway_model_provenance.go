@@ -14,7 +14,9 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -22,6 +24,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
+
+// modelProvenanceAttestationPreflightAPIClientTimeout covers the synchronous
+// storage attestation probe on the gateway. The default 5s CLI timeout is too
+// short while the provenance operator hashes multi-gigabyte Ollama blobs.
+const modelProvenanceAttestationPreflightAPIClientTimeout = 35 * time.Second
 
 type remoteModelProvenanceClient struct {
 	client apiClient
@@ -110,7 +117,7 @@ func preflightModelProvenanceAttestation(fileSvc fs.RuntimeFileService, cfg *con
 	if !isGatewayHealthy() {
 		return constants.ErrEvaluationObservationUnavailable
 	}
-	client, err := defaultAPIClientFactory(fileSvc, cfg)
+	client, err := api.NewClientWithTimeout(fileSvc, cfg, modelProvenanceAttestationPreflightAPIClientTimeout)
 	if err != nil {
 		return fmt.Errorf("model provenance attestation preflight: create gateway client: %w", err)
 	}

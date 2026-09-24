@@ -211,3 +211,88 @@ func TestFormationRunnerFailsBenchmarkOnOOM(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrFormationOutOfMemory)
 	assert.False(t, result.Passed)
 }
+
+func TestUltraLightSpeedsterMeetsFrozenInventoryRequirements(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+	formation, err := topologies.Formation("ultra-light-speedster")
+	require.NoError(t, err)
+	require.NoError(t, formation.Validate())
+
+	localModels := make([]FormationModel, 0, 3)
+	for _, role := range []FormationRole{FormationRolePrimary, FormationRoleAssistant, FormationRoleLite} {
+		model, modelErr := formation.Model(role)
+		require.NoError(t, modelErr)
+		assert.Equal(t, FormationTrustSovereign, model.Trust)
+		assert.Equal(t, "ollama", model.ProviderClass)
+		assert.NotEmpty(t, model.ServedModelTag)
+		assert.NotEmpty(t, model.Quantization)
+		localModels = append(localModels, model)
+	}
+	assert.Len(t, localModels, 3)
+
+	providers := make(map[string]struct{}, 3)
+	families := make(map[string]struct{}, 3)
+	for _, model := range localModels {
+		providers[formationIdentity(model.Provider)] = struct{}{}
+		families[formationIdentity(model.Family)] = struct{}{}
+	}
+	assert.Len(t, providers, 3)
+	assert.Len(t, families, 3)
+	assert.Equal(t, uint64(5376), formation.EstimatedVRAMMiB())
+	assert.Less(t, formation.EstimatedVRAMMiB(), formation.MaxVRAMMiB)
+
+	stack, err := formation.ToStackDefinition()
+	require.NoError(t, err)
+	require.NoError(t, ValidateHeterogeneousStackDigest(stack))
+}
+
+func TestFormationRunnerRequiresNonEmptySovereignDigest(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+	formation, err := topologies.Formation("ultra-light-speedster")
+	require.NoError(t, err)
+
+	runner, err := NewFormationRunner(&formationTestProvenance{}, &formationTestObserver{}, &formationTestAllocator{}, &formationTestExecutor{}, &formationTestPolicy{}, time.Now, nil)
+	require.NoError(t, err)
+
+	result, err := runner.Run(context.Background(), formation, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFormationAttestationRequired)
+	assert.False(t, result.Passed)
+}
+
+func TestFormationRunnerReleasesModelsInReverseAllocationOrder(t *testing.T) {
+	formation := formationWithDigests(t, "heavy-reasoner")
+	allocator := &formationTestAllocator{}
+	runner, err := NewFormationRunner(&formationTestProvenance{}, &formationTestObserver{}, allocator, &formationTestExecutor{}, &formationTestPolicy{}, time.Now, nil)
+	require.NoError(t, err)
+
+	_, err = runner.Run(context.Background(), formation, []byte("initial"))
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"allocate:qwen25-14b",
+		"allocate:gemma2-2b",
+		"allocate:llama32-1b",
+		"release:llama32-1b",
+		"release:gemma2-2b",
+		"release:qwen25-14b",
+	}, allocator.events)
+}
+
+type formationRejectingPolicy struct{}
+
+func (formationRejectingPolicy) ValidateMutation(_ context.Context, _ string, _ FormationRole, _ []byte) (FormationPolicyValidation, error) {
+	return FormationPolicyValidation{L1Validated: true, L2Validated: true, L3Validated: true, L4Validated: true, L5Validated: false, Intercepted: false}, nil
+}
+
+func TestFormationRunnerFailsOnIncompleteL1L5Validation(t *testing.T) {
+	formation := formationWithDigests(t, "heavy-reasoner")
+	runner, err := NewFormationRunner(&formationTestProvenance{}, &formationTestObserver{}, &formationTestAllocator{}, &formationTestExecutor{}, formationRejectingPolicy{}, time.Now, nil)
+	require.NoError(t, err)
+
+	result, err := runner.Run(context.Background(), formation, []byte("initial"))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFormationPolicyValidation)
+	assert.False(t, result.Passed)
+}

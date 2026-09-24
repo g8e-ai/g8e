@@ -146,6 +146,7 @@ export interface StoreState {
   eventIds: Set<string>;
   errors: string[];
   lastAcceptedAt: string | undefined;
+  proofArtifactCount: number;
 }
 
 function snapshotPinnedFreshness(freshness: FeedSnapshot['freshness']): FreshnessState | undefined {
@@ -190,6 +191,7 @@ function emptyState(): StoreState {
     eventIds: new Set(),
     errors: [],
     lastAcceptedAt: undefined,
+    proofArtifactCount: 0,
   };
 }
 
@@ -273,7 +275,7 @@ export class EvalStore {
     }
     state.feedStatus = withFeedSnapshot(state, snapshot, 'Reconciling feed history.');
     state.feedStatus.connection = 'live';
-    void proofCount;
+    state.proofArtifactCount = proofCount;
     // Mirror bootstrap recent_projections are newest-first; reverse so ingest order
     // matches /history replay (oldest-first) and slice(-N) retention keeps the tail.
     for (const record of [...recentProjections].reverse()) {
@@ -330,13 +332,14 @@ export class EvalStore {
       return;
     }
     if (record.sequence <= this.state.observedSequence) return;
-    if (this.state.observedSequence > 0 && record.sequence !== this.state.observedSequence + 1) {
+    if (this.state.observedSequence > 0 && record.sequence < this.state.observedSequence + 1) {
       this.pushError('public feed sequence gap');
       return;
     }
     // observedSequence === 0: accept whatever sequence the retained feed
-    // starts at (the mirror may have pruned early records); strict +1
-    // ordering applies to every record after the first.
+    // starts at (the mirror may have pruned early records). Later holes are
+    // also valid when the mirror omits withdrawn campaign datasets without
+    // renumbering the signed batch chain.
     const state: StoreState = { ...this.state };
     this.ingestProjection(state, record);
     state.observedSequence = record.sequence;

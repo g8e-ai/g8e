@@ -158,16 +158,17 @@ type ollamaChatOptions struct {
 
 // ollamaChatResponse is one response event from Ollama's /api/chat endpoint.
 type ollamaChatResponse struct {
-	Model              string            `json:"model"`
-	Message            ollamaChatMessage `json:"message"`
-	Done               bool              `json:"done"`
-	DoneReason         string            `json:"done_reason"`
-	PromptEvalCount    *int32            `json:"prompt_eval_count"`
-	EvalCount          *int32            `json:"eval_count"`
-	LoadDuration       *int64            `json:"load_duration"`
-	PromptEvalDuration *int64            `json:"prompt_eval_duration"`
-	EvalDuration       *int64            `json:"eval_duration"`
-	TotalDuration      *int64            `json:"total_duration"`
+	Model                 string            `json:"model"`
+	Message               ollamaChatMessage `json:"message"`
+	Done                  bool              `json:"done"`
+	DoneReason            string            `json:"done_reason"`
+	PromptEvalCount       *int32            `json:"prompt_eval_count"`
+	PromptEvalCachedCount *int32            `json:"prompt_eval_cached_count"`
+	EvalCount             *int32            `json:"eval_count"`
+	LoadDuration          *int64            `json:"load_duration"`
+	PromptEvalDuration    *int64            `json:"prompt_eval_duration"`
+	EvalDuration          *int64            `json:"eval_duration"`
+	TotalDuration         *int64            `json:"total_duration"`
 }
 
 // ollamaTagsResponse is the response body from Ollama's /api/tags endpoint.
@@ -364,6 +365,10 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 			return nil, fmt.Errorf("ollama_backend: generate: token usage: %w", constants.ErrInferenceProviderResponseInvalid)
 		}
 	}
+	cacheTokens := chatResp.PromptEvalCachedCount
+	if cacheTokens != nil && *cacheTokens < 0 {
+		return nil, fmt.Errorf("ollama_backend: generate: token usage: %w", constants.ErrInferenceProviderResponseInvalid)
+	}
 	timings := []*int64{chatResp.LoadDuration, chatResp.PromptEvalDuration, chatResp.EvalDuration, chatResp.TotalDuration, timeToFirstToken}
 	timingSource := operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED
 	for _, duration := range timings {
@@ -396,6 +401,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		CompletionTokens:      completionTokens,
 		TotalTokens:           promptTokens + completionTokens,
 		UsageReported:         usageReported,
+		CacheTokens:           cacheTokens,
 		LoadDurationNS:        chatResp.LoadDuration,
 		PromptEvalDurationNS:  chatResp.PromptEvalDuration,
 		GenerationDurationNS:  chatResp.EvalDuration,

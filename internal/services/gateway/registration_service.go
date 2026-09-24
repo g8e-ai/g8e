@@ -258,17 +258,21 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	var operator *models.OperatorDocumentGo
 	var err error
 
-	// Try fingerprint match first
+	// Resolve the operator slot in three steps:
+	//  1. user_id + system_fingerprint for a non-terminated operator — idempotent
+	//     re-enrollment of the same host identity for this user.
+	//  2. an offline slot for this user — first enrollment into a pre-created slot.
+	//  3. create a new slot when neither match exists.
 	filters := []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedFingerprint))},
+		{Field: "status", Op: "!=", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusTerminated))},
 	}
 	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
 		operator, _ = s.toOperatorDoc(docs[0])
 	}
 
-	// Try offline slot
 	if operator == nil {
 		filters = []models.DocFilter{
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},

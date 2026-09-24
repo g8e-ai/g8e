@@ -72,9 +72,15 @@ jobs:
           PY_LOCK_VERSION=$(sed -n -E '/^name = "g8e"$/{n;s/^version = "([^"]+)"/\1/p;}' protocol/python/uv.lock)
           if [ "$PY_VERSION" != "$VERSION" ] || [ "$PY_INIT_VERSION" != "$VERSION" ] || [ "$PY_LOCK_VERSION" != "$VERSION" ]; then
             echo "Error: pyproject.toml ($PY_VERSION), __init__.py ($PY_INIT_VERSION), uv.lock ($PY_LOCK_VERSION) != VERSION ($VERSION)"
-            echo "Run 'make release' to sync."
             exit 1
           fi
+          for doc in a2a.md constants.md mcp.md spec.md; do
+            DOC_VERSION=$(grep -E '^Version: v' "protocol/docs/$doc" | head -1 | sed 's/^Version: v//')
+            if [ "$DOC_VERSION" != "$VERSION" ]; then
+              echo "Error: protocol/docs/$doc ($DOC_VERSION) != VERSION ($VERSION)"
+              exit 1
+            fi
+          done
           echo "Version sync OK: $VERSION"
 
       - name: Verify Proto & Doctrines

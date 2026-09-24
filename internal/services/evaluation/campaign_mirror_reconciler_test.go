@@ -46,7 +46,7 @@ func TestCampaignMirrorReconciler_ReconcileVerifiedQueueReportsProgressAndBounds
 	queue := &CampaignQueue{Models: []CampaignQueueModel{{Status: "verified", VerifiedRunID: "run-blocked"}}}
 	var progress []CampaignMirrorReconcileProgress
 
-	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Millisecond, func(update CampaignMirrorReconcileProgress) {
+	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Millisecond, true, func(update CampaignMirrorReconcileProgress) {
 		progress = append(progress, update)
 	})
 
@@ -105,7 +105,7 @@ func TestCampaignMirrorReconcilerRestoresMissingVerifiedRuns(t *testing.T) {
 			VerifiedRunID: run.GetRunId(),
 		}},
 	}
-	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Minute, nil)
+	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Minute, true, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{run.GetRunId()}, result.RestoredRunIDs)
 	assert.Greater(t, len(exporter.records), 0)
@@ -119,7 +119,7 @@ func TestCampaignMirrorReconcilerRestoresMissingVerifiedRuns(t *testing.T) {
 	}
 	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), legacyReport))
 	exporter.records = nil
-	result, err = reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Minute, nil)
+	result, err = reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Minute, true, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{run.GetRunId()}, result.RestoredRunIDs)
 	assert.Greater(t, len(exporter.records), 0)

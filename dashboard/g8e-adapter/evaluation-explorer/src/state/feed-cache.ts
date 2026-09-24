@@ -35,7 +35,7 @@ export function validateCachedFeed(value: unknown, mirrorOrigin: string): Cached
     if (value.snapshot.high_water_sequence === 0) return records.length === 0 ? value as unknown as CachedFeed : null;
     if (records.length === 0 || records[records.length - 1]?.sequence !== value.snapshot.high_water_sequence) return null;
     for (let index = 1; index < records.length; index++) {
-      if (records[index]!.sequence !== records[index - 1]!.sequence + 1) return null;
+      if (records[index]!.sequence <= records[index - 1]!.sequence) return null;
     }
     return value as unknown as CachedFeed;
   } catch {

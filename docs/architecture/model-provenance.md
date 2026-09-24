@@ -5,8 +5,8 @@ parent: Architecture
 
 # Model Provenance
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-24
+Version: v2.1.13
 
 ## Scope
 
@@ -35,7 +35,7 @@ All remote Operators connect outbound-only to the Gateway over the governed mTLS
 
 The Provenance Operator is configured with a model storage root, such as `~/.ollama/models`. On `FINALIZE`, its `OllamaStorageAttestor` performs these checks:
 
-1. It resolves `served_model_tag` below `manifests/registry.ollama.ai/`. An unqualified tag such as `smollm3:3b-q4_k_m` uses the `library` namespace; a namespaced tag such as `Impulse2000/smollm3:3b-q4_k_m` uses the supplied namespace.
+1. It resolves `served_model_tag` with Ollama's canonical name parser (`model.ParseName`). Untagged aliases such as `glm-5.3-flash` default to `library/<name>/latest`. Tagged library models such as `smollm3:3b-q4_k_m` resolve under `registry.ollama.ai/library/`. Registry namespaces such as `Impulse2000/smollm3:3b-q4_k_m` keep the supplied namespace. Hugging Face deep pulls such as `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M` resolve under `manifests/huggingface.co/...` on disk.
 2. It reads the manifest and computes its SHA-256 digest. The digest is compared with `expected_model_digest` from the campaign binding.
 3. It parses the manifest's config and layer digest references, opens each corresponding `blobs/sha256-<digest>` file, hashes the file, and verifies its declared size when present. A missing blob, invalid digest reference, content hash mismatch, or size mismatch fails the attestation.
 4. It returns a `ModelProvenanceAttestationWindow` containing the served tag, expected and observed digests, manifest digest, unsigned manifest status, per-blob `ModelWeightAttestation` entries, timestamps, and `digest_match`.
@@ -79,7 +79,7 @@ GET /api/v1/inference/model-provenance/attestations/{provider_attempt_id}
 
 The response wraps the canonical window in a `window` field. The same route exposes owner-authenticated preflight operations used by campaign execution; these operations return readiness or an error and do not replace verification of the persisted window.
 
-Campaign verification loads windows locally and can fall back to the Gateway read API when local evidence is unavailable. It always validates the window's `attestation_digest` and checks the expected campaign digest binding. Missing windows are recorded as unavailable under interim policy. `g8e eval campaign verify --require-model-provenance` selects strict policy, which requires a valid window for every scored inference and requires `digest_match=true`; `--tier-a` on campaign start enables strict provider observation and model provenance requirements together. Without strict policy, missing provenance is incomplete witness telemetry rather than an automatic assignment-verification failure.
+Campaign verification loads windows locally and can fall back to the Gateway read API when local evidence is unavailable. It always validates the window's `attestation_digest` and checks the expected campaign digest binding. Missing windows are recorded as unavailable under interim policy. `g8e eval campaign verify --require-model-provenance` selects strict policy, which requires a valid window for every scored inference and requires `digest_match=true`. On `g8e eval rollout run`, `--require-witness` defaults true and enables strict provider observation and model provenance together; on `g8e eval campaign start` it remains opt-in. Without strict policy, missing provenance is incomplete witness telemetry rather than an automatic assignment-verification failure.
 
 This produces a bounded evidence chain from the frozen campaign model binding to the storage-side manifest and blob hashes and then to the governed inference attempt. It does not prove that an unsigned manifest came from a trusted supply chain, that the Ollama process loaded only those bytes, or that inference performed through a native client or another side channel was governed.
 

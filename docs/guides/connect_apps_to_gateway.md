@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-24
+Version: v2.1.13
 
 ---
 
@@ -400,7 +400,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.12
+go get github.com/g8e-ai/g8e/v2@v2.1.13
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -408,7 +408,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.1.12
+pip install g8e==2.1.13
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.
@@ -527,7 +527,7 @@ curl -X POST https://localhost:8443/mcp \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot use delegated enrollment. Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`: request, status, and completion are token-scoped discovery operations available over plain HTTP, while pending-list and decision operations require the active first owner through mTLS or a web session. The enrolled owner reviews requests with `g8e auth enroll pending`, approves with `g8e auth enroll approve <request-id>`, or denies with `g8e auth enroll deny <request-id>`. The resumable client generates keys, submits its request, waits for an exact request-ID decision, signs the completion transcript, validates the issued identity, and writes credentials atomically.
+The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot use delegated enrollment. Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`: request, status, and completion are token-scoped discovery operations available over plain HTTP, while pending-list and decision operations require the active first owner through mTLS or a web session. The enrolled owner reviews requests with `g8e auth enroll pending`, approves with `g8e auth enroll approve <request-id>`, or denies with `g8e auth enroll deny <request-id>`. Use `g8e auth enroll list` to review completed or revoked enrollments and obtain request IDs for `g8e auth enroll revoke <request-id>`. The resumable client generates keys, submits its request, waits for an exact request-ID decision, signs the completion transcript, validates the issued identity, and writes credentials atomically.
 
 The in-tree Ensemble (`g8ee`) and Dashboard (`g8ed`) clients implement that reserved-component flow during startup. See [Authentication Architecture](../architecture/auth.md), [Ensemble Architecture](../architecture/ensemble.md), [Dashboard Architecture](../architecture/dashboard.md), and [Build a g8e-Compatible Frontend](./build_frontend.md) for their component-specific behavior.
 

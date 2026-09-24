@@ -1,7 +1,7 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-24
+Version: v2.1.13
 
 This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.
 
@@ -126,12 +126,17 @@ Optional rollout queue (multi-model tracking):
 # After inventory freeze, materialize per-model inventories and build the queue
 ./g8e eval rollout init --materialize --merge
 
-# Unattended Tier-A rollout (replaces private batch shell scripts)
-./g8e eval rollout run --tier-a --skip-verified --skip-variant granite3-3-2b
+# Unattended strict-witness rollout (replaces private batch shell scripts).
+# Defaults: --require-witness, --verify, --publish, --daemon, and --skip-verified are all true.
+./g8e eval rollout run
 
-# Or one model at a time
+# Exclude specific variants or re-run verified entries:
+./g8e eval rollout run --skip-variant granite3-3-2b
+./g8e eval rollout run --skip-verified=false
+
+# Or one model at a time (campaign start still requires --require-witness explicitly)
 ./g8e eval rollout next
-./g8e eval campaign start --queue next --publish --daemon --verify --tier-a
+./g8e eval campaign start --queue next --publish --daemon --require-witness
 ```
 
 List variants or materialize subsets without a queue:

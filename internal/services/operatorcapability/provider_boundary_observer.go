@@ -53,7 +53,32 @@ func ActiveProviderBoundaryObservers(operators []models.OperatorDocumentGo) []Pr
 // observer operator. When sessionID is non-empty it must match an active
 // observer; otherwise exactly one active observer must exist.
 func SelectProviderBoundaryObserver(operators []models.OperatorDocumentGo, sessionID string) (*ProviderBoundaryObserverStatus, error) {
+	return SelectProviderBoundaryObserverForHardware(operators, sessionID, "")
+}
+
+// SelectProviderBoundaryObserverForHardware resolves an observer using the
+// exact OperatorDocument system fingerprint when one is available.
+func SelectProviderBoundaryObserverForHardware(
+	operators []models.OperatorDocumentGo,
+	sessionID string,
+	systemFingerprint string,
+) (*ProviderBoundaryObserverStatus, error) {
 	matches := ActiveProviderBoundaryObservers(operators)
+	if systemFingerprint != "" {
+		filtered := make([]ProviderBoundaryObserverStatus, 0, len(matches))
+		for _, op := range operators {
+			if op.SystemFingerprint != systemFingerprint {
+				continue
+			}
+			for _, match := range matches {
+				if match.OperatorSessionID == op.OperatorSessionID {
+					filtered = append(filtered, match)
+					break
+				}
+			}
+		}
+		matches = filtered
+	}
 	if sessionID != "" {
 		for _, match := range matches {
 			if match.OperatorSessionID == sessionID {

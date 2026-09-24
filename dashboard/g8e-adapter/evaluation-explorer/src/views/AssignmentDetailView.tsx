@@ -7,20 +7,17 @@
 // Never shows raw prompts, outputs, trails, or credentials.
 
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import type { AssignmentResult } from '../contract/types';
 import { AssignmentActivitySummary } from '../components/AssignmentActivitySummary';
 import { EvidenceBindingsPanel } from '../components/EvidenceBindingsPanel';
 import { ScenarioContextCard } from '../components/ScenarioContextCard';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import {
-  DetailRow,
   EmptyState,
   ErrorState,
-  MetricCard,
-  QualityBadge,
   SectionHeading,
   Timeline,
-  UnavailableValue,
   formatDuration,
   formatLatency,
   formatTokens,
@@ -28,12 +25,11 @@ import {
 } from '../components/shared';
 import {
   assignmentLifecycleEvents,
-  assignmentMetricEntries,
-  assignmentMetricFormatter,
   isScenarioNotApplicableMetric,
   publicGradeExplanationLabel,
   publicGradeSummaries,
   roleLabel,
+  resourceObservationMissing,
   siblingRepetitions,
 } from './derived';
 
@@ -45,6 +41,31 @@ function formatBytes(value: number): string {
   if (value >= 1024 ** 3) return `${formatNumber(value / 1024 ** 3, 1)} GiB`;
   if (value >= 1024 ** 2) return `${formatNumber(value / 1024 ** 2, 1)} MiB`;
   return `${formatNumber(value)} B`;
+}
+
+function metricValue(metric: { value?: number } | undefined): number | undefined {
+  return metric?.value;
+}
+
+function terminalLabel(status: AssignmentResult['terminal_status']): string {
+  return status.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function verifierLabel(status: AssignmentResult['verification_disposition']): string {
+  if (status === 'not_run') return 'Not verified';
+  if (status === 'not_applicable') return 'Verification not applicable';
+  if (status === 'passed') return 'Verified';
+  if (status === 'failed') return 'Verification failed';
+  return 'Verification not published';
+}
+
+function hasObservedActivity(activity: AssignmentResult['activity_summary']): boolean {
+  return Boolean(
+    activity &&
+      Object.values(activity).some(
+        (family) => family?.availability === 'observed' && family.records.length > 0,
+      ),
+  );
 }
 
 export function AssignmentDetailView() {
@@ -71,12 +92,34 @@ export function AssignmentDetailView() {
   if (!assignmentId || !runId) return <ErrorState message="No assignment selected." />;
   if (!assignment) return <EmptyState hasRecords={false} hasFilters={false} connection={connection} />;
 
-  const eligibleMetrics = assignmentMetricEntries(assignment.metric_values);
   const toolScorecard = assignment.benchmark_observations?.tool_scorecard;
   const toolScorecardEntries = toolScorecard
-    ? Object.entries(toolScorecard).filter(([, metric]) => !isScenarioNotApplicableMetric(metric))
+    ? Object.entries(toolScorecard).filter(
+        ([, metric]) => metric.value !== undefined && !isScenarioNotApplicableMetric(metric),
+      )
     : [];
   const semanticGrades = publicGradeSummaries(assignment);
+  const resource = assignment.resource_summary;
+  const timing = assignment.benchmark_observations?.timing;
+  const gpu = assignment.benchmark_observations?.gpu;
+  const measured = [
+    metricValue(timing?.model_load_ms) !== undefined ? ['Load', formatLatency(timing!.model_load_ms!.value!)] : undefined,
+    metricValue(timing?.generation_ms) !== undefined ? ['Generation', formatLatency(timing!.generation_ms!.value!)] : undefined,
+    metricValue(timing?.whole_task_ms) !== undefined ? ['Task', formatLatency(timing!.whole_task_ms!.value!)] : undefined,
+    metricValue(gpu?.vram_before_bytes) !== undefined ? ['VRAM before', formatBytes(gpu!.vram_before_bytes!.value!)] : undefined,
+    metricValue(gpu?.vram_peak_bytes) !== undefined ? ['VRAM peak', formatBytes(gpu!.vram_peak_bytes!.value!)] : undefined,
+    metricValue(gpu?.system_ram_peak_bytes) !== undefined ? ['RAM peak', formatBytes(gpu!.system_ram_peak_bytes!.value!)] : undefined,
+    metricValue(resource?.latency_ms) !== undefined ? ['Latency', formatLatency(resource!.latency_ms!.value!)] : undefined,
+    metricValue(resource?.input_tokens) !== undefined ? ['Input', formatTokens(resource!.input_tokens!.value!)] : undefined,
+    metricValue(resource?.output_tokens) !== undefined ? ['Output', formatTokens(resource!.output_tokens!.value!)] : undefined,
+    metricValue(resource?.thinking_tokens) !== undefined ? ['Thinking', formatTokens(resource!.thinking_tokens!.value!)] : undefined,
+    metricValue(resource?.cache_tokens) !== undefined ? ['Cache', formatTokens(resource!.cache_tokens!.value!)] : undefined,
+    metricValue(resource?.retries) !== undefined ? ['Retries', formatNumber(resource!.retries!.value!)] : undefined,
+  ].filter((entry): entry is [string, string] => entry !== undefined);
+  const hasResources = !resourceObservationMissing(assignment);
+  const hasEvidence = Boolean(
+    assignment.evidence_bindings?.length || assignment.verification_metadata,
+  );
 
   return (
     <div className="assignment-detail">
@@ -88,141 +131,49 @@ export function AssignmentDetailView() {
         <span>{assignment.assignment_id}</span>
       </nav>
 
-      <SectionHeading kicker="ASSIGNMENT DETAIL" title={assignment.assignment_id} />
+      <header className="assignment-mast">
+        <SectionHeading kicker="ASSIGNMENT DETAIL" title={assignment.task_id} />
+        <p className="assignment-meta">
+          <Link to={`/models/${activeDatasetId}/${assignment.variant_id}`}>{assignment.variant_id}</Link>
+          <span>{roleLabel(assignment.role)}</span>
+          <span>Repetition {assignment.repetition}</span>
+          <strong>{terminalLabel(assignment.terminal_status)}</strong>
+          <code>{assignment.assignment_id}</code>
+        </p>
+      </header>
 
-      <div className="quality-banner">
-        <QualityBadge state={assignment.quality_state} />
-        <span className="lifecycle-state">{assignment.terminal_status}</span>
-        {assignment.missingness_reason ? <span className="missingness">{assignment.missingness_reason}</span> : null}
+      <div className="assignment-verdict" aria-label="Assignment verdict">
+        <span className={`terminal-pill terminal-${assignment.terminal_status}`}>{terminalLabel(assignment.terminal_status)}</span>
+        <span className="verification-pill">{verifierLabel(assignment.verification_disposition)}</span>
+        {assignment.metric_values.pass?.value !== undefined ? (
+          <span className={`grade-chip grade-${assignment.metric_values.pass.value === 1 ? 'pass' : 'fail'}`}>
+            Pass · {assignment.metric_values.pass.value === 1 ? 'Pass' : 'Fail'}
+          </span>
+        ) : null}
+        {semanticGrades.map((grade) => (
+          <span className={`grade-chip grade-${grade.status}`} key={grade.criterion_id}>
+            {grade.criterion_id} · {observationLabel(grade.status)} · {publicGradeExplanationLabel(grade.explanation_code)}
+          </span>
+        ))}
       </div>
 
-      <section className="assignment-identity">
-        <h2>Identity</h2>
-        <dl>
-          <DetailRow label="Assignment ID">{assignment.assignment_id}</DetailRow>
-          <DetailRow label="Run ID">
-            <Link to={`/evaluations/${activeDatasetId}/${assignment.run_id}`}>{assignment.run_id}</Link>
-          </DetailRow>
-          <DetailRow label="Scenario">{assignment.task_id}</DetailRow>
-          <DetailRow label="Variant">
-            <Link to={`/models/${activeDatasetId}/${assignment.variant_id}`}>{assignment.variant_id}</Link>
-          </DetailRow>
-          <DetailRow label="Role">{roleLabel(assignment.role)}</DetailRow>
-          <DetailRow label="Repetition">{assignment.repetition}</DetailRow>
-          <DetailRow label="Terminal status">{assignment.terminal_status}</DetailRow>
-          <DetailRow label="Verification">{assignment.verification_disposition ?? <UnavailableValue />}</DetailRow>
-        </dl>
-      </section>
-
-      <ScenarioContextCard scenario={assignment.scenario_summary} />
-
-      <AssignmentActivitySummary activity={assignment.activity_summary} />
-
-      <section className="assignment-benchmark">
-        <h2>How it scored</h2>
-        <dl>
-          <DetailRow label="Scenario category">{assignment.scenario_category ? observationLabel(assignment.scenario_category) : 'Not observed in this dataset'}</DetailRow>
-          <DetailRow label="Evaluation unit">{assignment.evaluation_unit ? `${observationLabel(assignment.evaluation_unit)} evaluation` : 'Not observed in this dataset'}</DetailRow>
-          <DetailRow label="Stack">{assignment.stack_id ?? 'Not applicable to model evaluation'}</DetailRow>
-          <DetailRow label="Escalation">{assignment.benchmark_observations?.escalation_disposition ? observationLabel(assignment.benchmark_observations.escalation_disposition) : 'Not observed in this dataset'}</DetailRow>
-        </dl>
-
-        <h3>Public grade summaries</h3>
-        {semanticGrades.length > 0 ? (
-          <ul className="grade-summary-list">
-            {semanticGrades.map((grade) => (
-              <li key={grade.criterion_id}>
-                <strong>{grade.criterion_id}</strong>
-                <span>{observationLabel(grade.status)} · {observationLabel(grade.grading_method)}</span>
-                <small>{publicGradeExplanationLabel(grade.explanation_code)}{grade.judge_variant_id ? ` · Judge ${grade.judge_variant_id}` : ''}</small>
-              </li>
-            ))}
-          </ul>
-        ) : <p className="benchmark-empty">Public grade summaries not observed in this dataset.</p>}
-
-        <h3>Tool-calling scorecard</h3>
-        {!toolScorecard || Object.keys(toolScorecard).length === 0 ? (
-          <p className="benchmark-empty">Not observed in this dataset</p>
-        ) : toolScorecardEntries.length === 0 ? (
-          <p className="benchmark-empty">Not applicable to this scenario</p>
-        ) : (
-          <div className="metric-grid">
-            {toolScorecardEntries.map(([key, metric]) => (
-              <MetricCard key={key} label={observationLabel(key)} metric={metric} formatter={formatNumber} />
-            ))}
-          </div>
-        )}
-
-        <h3>Failure why</h3>
-        {assignment.benchmark_observations?.grade_summaries && assignment.benchmark_observations.grade_summaries.length > 0 ? (
-          <dl className="benchmark-event-grid">
-            {assignment.benchmark_observations.grade_summaries.map((summary) => (
-              <DetailRow key={summary.criterion_id} label={observationLabel(summary.criterion_id)}>
-                {observationLabel(summary.status)}
-              </DetailRow>
-            ))}
-          </dl>
-        ) : <p className="benchmark-empty">Not observed in this dataset</p>}
-
-        <h3>Security and privacy events</h3>
-        {assignment.benchmark_observations?.security_privacy_events && Object.keys(assignment.benchmark_observations.security_privacy_events).length > 0 ? (
-          <dl className="benchmark-event-grid">
-            {Object.entries(assignment.benchmark_observations.security_privacy_events).map(([key, count]) => (
-              <DetailRow key={key} label={observationLabel(key)}>{formatNumber(count)}</DetailRow>
-            ))}
-          </dl>
-        ) : <p className="benchmark-empty">Not observed in this dataset</p>}
-
-        <h3>Cold, warm, and GPU telemetry</h3>
-        <div className="metric-grid">
-          <MetricCard label="Model load" metric={assignment.benchmark_observations?.timing?.model_load_ms} formatter={formatLatency} />
-          <MetricCard label="Time to first token" metric={assignment.benchmark_observations?.timing?.time_to_first_token_ms} formatter={formatLatency} />
-          <MetricCard label="Generation" metric={assignment.benchmark_observations?.timing?.generation_ms} formatter={formatLatency} />
-          <MetricCard label="Whole task" metric={assignment.benchmark_observations?.timing?.whole_task_ms} formatter={formatLatency} />
-          <MetricCard label="VRAM before" metric={assignment.benchmark_observations?.gpu?.vram_before_bytes} formatter={formatBytes} />
-          <MetricCard label="VRAM peak" metric={assignment.benchmark_observations?.gpu?.vram_peak_bytes} formatter={formatBytes} />
-          <MetricCard label="System RAM peak" metric={assignment.benchmark_observations?.gpu?.system_ram_peak_bytes} formatter={formatBytes} />
-          <MetricCard label="GPU utilization" metric={assignment.benchmark_observations?.gpu?.utilization_percent} formatter={(value) => `${formatNumber(value, 1)}%`} />
-          <MetricCard label="GPU temperature" metric={assignment.benchmark_observations?.gpu?.temperature_celsius} formatter={(value) => `${formatNumber(value, 1)} °C`} />
-          <MetricCard label="GPU power" metric={assignment.benchmark_observations?.gpu?.power_watts} formatter={(value) => `${formatNumber(value, 1)} W`} />
-          <MetricCard label="GPU clock" metric={assignment.benchmark_observations?.gpu?.clock_mhz} formatter={(value) => `${formatNumber(value)} MHz`} />
+      {assignment.scenario_summary ? <ScenarioContextCard scenario={assignment.scenario_summary} /> : null}
+      {hasResources ? (
+        <div className="assignment-measured" aria-label="Measured values">
+          {measured.map(([label, value]) => <span key={label}><b>{label}</b> {value}</span>)}
         </div>
-
-        {assignment.benchmark_observations?.correlated_failure ? (
-          <dl>
-            <DetailRow label="Failure cluster">{assignment.benchmark_observations.correlated_failure.cluster_id}</DetailRow>
-            <DetailRow label="Semantic error">{observationLabel(assignment.benchmark_observations.correlated_failure.semantic_error_code)}</DetailRow>
-            <DetailRow label="Affected roles">{assignment.benchmark_observations.correlated_failure.affected_roles.map(observationLabel).join(', ')}</DetailRow>
-          </dl>
-        ) : <p className="benchmark-empty">Correlated failure: Not observed in this dataset</p>}
-
-        {assignment.benchmark_observations?.unavailable_reasons.length ? (
-          <ul className="catalog-limitations">
-            {assignment.benchmark_observations.unavailable_reasons.map((reason) => <li key={reason}>{reason}</li>)}
-          </ul>
-        ) : null}
-      </section>
-
-      <section className="assignment-metrics">
-        <h2>Scoring summary</h2>
-        {eligibleMetrics.length === 0 ? (
-          <p>No eligible metric values for this assignment.</p>
-        ) : (
-          <div className="metric-grid">
-            {eligibleMetrics.map(({ key, label, metric }) => (
-              <MetricCard
-                key={key}
-                label={label}
-                metric={metric}
-                formatter={assignmentMetricFormatter(key)}
-              />
+      ) : null}
+      {toolScorecardEntries.length > 0 ? (
+        <section className="assignment-scores">
+          <h2>Scores</h2>
+          <div className="compact-stat-row">
+            {toolScorecardEntries.map(([key, metric]) => (
+              <span key={key}><b>{observationLabel(key)}</b> {formatNumber(metric.value!)}</span>
             ))}
           </div>
-        )}
-        {assignment.missingness_reason ? (
-          <p className="missingness-detail">Missingness: {assignment.missingness_reason}</p>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
+      {hasObservedActivity(assignment.activity_summary) ? <AssignmentActivitySummary activity={assignment.activity_summary} /> : null}
 
       {lifecycleEvents.length > 0 ? (
         <section className="assignment-lifecycle">
@@ -231,11 +182,8 @@ export function AssignmentDetailView() {
         </section>
       ) : null}
 
-      <section className="assignment-stages">
+      {assignment.stage_summary.length > 0 ? <section className="assignment-stages">
         <h2>Stages</h2>
-        {assignment.stage_summary.length === 0 ? (
-          <p className="benchmark-empty">Stage timeline not published for this assignment.</p>
-        ) : (
           <ul className="stage-list">
             {assignment.stage_summary.map((stage, i) => (
               <li key={i}>
@@ -244,21 +192,9 @@ export function AssignmentDetailView() {
               </li>
             ))}
           </ul>
-        )}
-      </section>
+      </section> : null}
 
-      <section className="assignment-resources">
-        <h2>Performance and resources</h2>
-        <h3>Resource observations</h3>
-        <div className="metric-grid">
-          <MetricCard label="Latency" metric={assignment.resource_summary?.latency_ms} formatter={formatLatency} />
-          <MetricCard label="Input tokens" metric={assignment.resource_summary?.input_tokens} formatter={formatTokens} />
-          <MetricCard label="Output tokens" metric={assignment.resource_summary?.output_tokens} formatter={formatTokens} />
-          <MetricCard label="Retries" metric={assignment.resource_summary?.retries} formatter={formatNumber} />
-        </div>
-      </section>
-
-      <EvidenceBindingsPanel bindings={assignment.evidence_bindings} verification={assignment.verification_metadata} />
+      {hasEvidence ? <EvidenceBindingsPanel bindings={assignment.evidence_bindings} verification={assignment.verification_metadata} /> : null}
 
       {siblingAssignments.length > 0 ? (
         <section className="assignment-repetitions">
@@ -275,6 +211,11 @@ export function AssignmentDetailView() {
             ))}
           </ul>
         </section>
+      ) : null}
+      {assignment.missingness_reason || assignment.benchmark_observations?.unavailable_reasons.length ? (
+        <p className="assignment-limitation">
+          {assignment.missingness_reason ?? assignment.benchmark_observations?.unavailable_reasons.join(' · ')}
+        </p>
       ) : null}
     </div>
   );

@@ -26,6 +26,8 @@ func writeCampaignMirrorRestoreProgress(w io.Writer, progress evaluation.Campaig
 		_, _ = fmt.Fprintf(w, "%s already present\n", prefix)
 	case evaluation.CampaignMirrorReconcileHostAbsent:
 		_, _ = fmt.Fprintf(w, "%s skipped (host artifacts absent)\n", prefix)
+	case evaluation.CampaignMirrorReconcileMissing:
+		_, _ = fmt.Fprintf(w, "%s missing from public mirror\n", prefix)
 	case evaluation.CampaignMirrorReconcileFailed:
 		_, _ = fmt.Fprintf(w, "%s failed: %v\n", prefix, progress.Err)
 	}
@@ -84,6 +86,9 @@ func writeCampaignMirrorRestoreInitSummary(stdout io.Writer, result *evaluation.
 	}
 	if hostAbsent > 0 {
 		writeHostAbsentMirrorNote(stdout, result.HostAbsentRunIDs)
+	}
+	if missing := len(result.MissingRunIDs); missing > 0 {
+		_, _ = fmt.Fprintf(stdout, "%d verified dataset(s) missing from public mirror; run 'g8e eval campaign mirror restore --queue' to restore.\n", missing)
 	}
 }
 

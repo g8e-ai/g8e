@@ -36,6 +36,7 @@ const (
 	// Checked-in genesis program inventory.
 	DefaultBaseModelInventoryRelPath    = "eval/base-model-inventory.json"
 	DefaultBaseInitCampaignQueueRelPath = "eval/base-init-campaign-queue.json"
+	DefaultRolloutIntakePriorityRelPath = "eval/rollout-intake-priority.json"
 	DefaultGenesisHomogeneousCampaignID = "eval-genesis-homogeneous"
 )
 
@@ -256,6 +257,50 @@ func SortModelVariantsForRollout(variants []*evalv1.ModelVariant) {
 		}
 		return left.GetVariantId() < right.GetVariantId()
 	})
+}
+
+// PrioritizeRolloutIntake moves configured intake variant IDs to the front while
+// preserving size ordering for the remaining backlog.
+func PrioritizeRolloutIntake(variants []*evalv1.ModelVariant, priorityIDs []string) []*evalv1.ModelVariant {
+	if len(variants) == 0 || len(priorityIDs) == 0 {
+		return variants
+	}
+	byID := make(map[string]*evalv1.ModelVariant, len(variants))
+	for _, variant := range variants {
+		if variant == nil {
+			continue
+		}
+		byID[variant.GetVariantId()] = variant
+	}
+	ordered := make([]*evalv1.ModelVariant, 0, len(variants))
+	for _, id := range priorityIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if variant, ok := byID[id]; ok {
+			ordered = append(ordered, variant)
+			delete(byID, id)
+		}
+	}
+	rest := make([]*evalv1.ModelVariant, 0, len(byID))
+	for _, variant := range byID {
+		rest = append(rest, variant)
+	}
+	SortModelVariantsForRollout(rest)
+	return append(ordered, rest...)
+}
+
+func loadRolloutIntakePriorityIDs() []string {
+	data, err := os.ReadFile(DefaultRolloutIntakePriorityRelPath)
+	if err != nil {
+		return nil
+	}
+	var priority []string
+	if err := json.Unmarshal(data, &priority); err != nil {
+		return nil
+	}
+	return priority
 }
 
 // VariantsByTags returns frozen variants for the requested served model tags.
