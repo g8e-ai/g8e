@@ -339,6 +339,11 @@ export function LiveEventStream({
                 const eventHref = event.assignment_id
                   ? `/evaluations/${event.dataset_id}/${event.run_id}/assignments/${event.assignment_id}`
                   : `/evaluations/${event.dataset_id}/${event.run_id}`;
+                const taskHref =
+                  parts.task !== '—' ? `/tasks/${encodeURIComponent(parts.task)}` : undefined;
+                const categoryHref = assignment?.scenario_category
+                  ? `/tasks#category-${assignment.scenario_category}`
+                  : undefined;
                 const modelHref = event.variant_id
                   ? `/models/${event.dataset_id}/${event.variant_id}${model?.role ? `?role=${model.role}` : ''}`
                   : undefined;
@@ -361,10 +366,18 @@ export function LiveEventStream({
                       </Link>
                     </td>
                     <td>{parts.status}</td>
-                    <td>{parts.category}</td>
                     <td>
-                      {event.assignment_id ? (
-                        <Link to={eventHref} className="stream-assignment-id">
+                      {categoryHref ? (
+                        <Link to={categoryHref} className="stream-category-link">
+                          {parts.category}
+                        </Link>
+                      ) : (
+                        parts.category
+                      )}
+                    </td>
+                    <td>
+                      {taskHref ? (
+                        <Link to={taskHref} className="stream-task-link">
                           {parts.task}
                         </Link>
                       ) : (

@@ -15,6 +15,7 @@ import { EvaluationsView } from './views/EvaluationsView';
 import { EvaluationDetailView } from './views/EvaluationDetailView';
 import { AssignmentDetailView } from './views/AssignmentDetailView';
 import { MethodologyView } from './views/MethodologyView';
+import { TasksView } from './views/TasksView';
 import { G8E_REPO_URL, GITHUB_SPONSORS_URL } from './content/platform';
 
 function CompareRedirect() {
@@ -75,6 +76,7 @@ function Shell() {
             <NavItem to="/evaluations" label="Evals" />
             <NavItem to="/models" label="Models" />
             <NavItem to="/about" label="About" />
+            <NavItem to="/tasks" label="Tasks" />
             <NavItem to="/methodology" label="Docs" />
           </nav>
         </div>
@@ -119,6 +121,8 @@ function Shell() {
           <Route path="/failures" element={<Navigate to="/evaluations" replace />} />
           <Route path="/compare" element={<CompareRedirect />} />
           <Route path="/about" element={<AboutView />} />
+          <Route path="/tasks" element={<TasksView />} />
+          <Route path="/tasks/:taskId" element={<TasksView />} />
           <Route path="/methodology" element={<MethodologyView />} />
         </Routes>
       </main>

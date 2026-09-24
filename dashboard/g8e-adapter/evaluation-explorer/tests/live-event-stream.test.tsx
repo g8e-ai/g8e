@@ -157,7 +157,10 @@ describe('LiveEventStream', () => {
     expect(screen.getByRole('columnheader', { name: 'Pass' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Pass Rate' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Latency' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'security-policy-block-run' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'security-policy-block-run' })).toHaveAttribute(
+      'href',
+      '/tasks/security-policy-block-run',
+    );
     expect(screen.getByText('Pass', { selector: '.stream-metric-value' })).toBeInTheDocument();
     expect(screen.getByText('780 ms')).toBeInTheDocument();
   });
