@@ -258,17 +258,30 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	var operator *models.OperatorDocumentGo
 	var err error
 
-	// A system fingerprint identifies the host, not an Operator identity.
-	// Multiple independent Operators may run on the same machine, so never
-	// reuse a slot solely because its host fingerprint matches. Reuse only an
-	// explicitly available offline slot; otherwise create a new slot.
+	// Resolve the operator slot in three steps:
+	//  1. user_id + system_fingerprint for a non-terminated operator — idempotent
+	//     re-enrollment of the same host identity for this user.
+	//  2. an offline slot for this user — first enrollment into a pre-created slot.
+	//  3. create a new slot when neither match exists.
 	filters := []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
-		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusOffline))},
+		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedFingerprint))},
+		{Field: "status", Op: "!=", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusTerminated))},
 	}
 	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
 		operator, _ = s.toOperatorDoc(docs[0])
+	}
+
+	if operator == nil {
+		filters = []models.DocFilter{
+			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
+			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusOffline))},
+		}
+		docs, err = s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+		if err == nil && len(docs) > 0 {
+			operator, _ = s.toOperatorDoc(docs[0])
+		}
 	}
 
 	// Create new slot
