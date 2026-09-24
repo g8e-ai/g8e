@@ -43,6 +43,7 @@ describe('assignmentMetricFormatter', () => {
     expect(assignmentMetricFormatter('pass')(1)).toBe('Pass');
     expect(assignmentMetricFormatter('pass')(0)).toBe('Fail');
     expect(assignmentMetricFormatter('deterministic_pass_rate')(1)).toBe('100.0%');
+    expect(assignmentMetricFormatter('tokens_per_second')(3.33)).toBe('3.3 tok/s');
   });
 });
 

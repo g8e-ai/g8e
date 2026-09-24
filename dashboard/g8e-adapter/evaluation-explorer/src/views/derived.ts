@@ -33,7 +33,7 @@ import type {
   TerminalStatus,
   VerifierState,
 } from '../contract/types';
-import { formatLatency, formatNumber, formatPercent, formatTokens } from '../utils/format';
+import { formatLatency, formatNumber, formatPercent, formatThroughput, formatTokens } from '../utils/format';
 
 const FAILURE_TERMINAL_STATUSES = new Set<TerminalStatus>([
   'model_failed',
@@ -360,6 +360,8 @@ export function publicGradeSummaries(assignment: AssignmentResult): PublicSemant
 
 /** Formatter for one assignment-level scoring metric card. */
 export function assignmentMetricFormatter(key: string): (value: number) => string {
+  if (key === 'tokens_per_second') return formatThroughput;
+  if (key.includes('throughput')) return formatThroughput;
   if (key.includes('latency')) return formatLatency;
   if (key.includes('token')) return formatTokens;
   if (key === 'deterministic_pass_rate' || key.endsWith('_rate')) return formatPercent;

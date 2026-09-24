@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { EvaluationSummary, LiveEvent } from '../src/contract/types';
+import type { AssignmentResult, EvaluationSummary, LiveEvent } from '../src/contract/types';
 import { LiveEventStream } from '../src/components/LiveEventStream';
 import { evalStore, recordKey } from '../src/state/store';
 import { EvaluationDetailView } from '../src/views/EvaluationDetailView';
@@ -206,6 +206,54 @@ describe('LiveEventStream', () => {
     expect(metricCells).not.toContain('Unavailable');
   });
 
+  it('renders tokens per second from output tokens and generation time', () => {
+    const assignment: AssignmentResult = {
+      schema_version: '1.3.0',
+      kind: 'assignment_result',
+      dataset_id: 'ds-live-a',
+      quality_state: 'live_in_progress',
+      observed_at: '2026-09-17T08:00:00Z',
+      assignment_id: 'assignment-1',
+      run_id: 'run-a',
+      task_id: 'task-throughput',
+      variant_id: 'model-throughput',
+      role: 'primary',
+      repetition: 1,
+      terminal_status: 'completed',
+      metric_values: { pass: { value: 1 } },
+      stage_summary: [],
+      resource_summary: {
+        output_tokens: { value: 180 },
+      },
+      benchmark_observations: {
+        timing: { generation_ms: { value: 780 } },
+        unavailable_reasons: [],
+      },
+    };
+    evalStore.loadFixtures([assignment], []);
+
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-throughput',
+              kind: 'assignment_completed',
+              assignment_id: 'assignment-1',
+              task_id: 'task-throughput',
+              lifecycle_status: 'completed',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Tokens/s' })).toBeInTheDocument();
+    expect(screen.getByText('230.8 tok/s')).toBeInTheDocument();
+  });
+
   it('hides thinking and cache token columns from the live stream', () => {
     render(
       <MemoryRouter>
@@ -291,6 +339,7 @@ describe('LiveEventStream', () => {
       'Latency',
       'Input tokens',
       'Output tokens',
+      'Tokens/s',
       'Retries',
       'Model',
       'Progress',

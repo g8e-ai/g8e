@@ -20,6 +20,7 @@ import {
   Timeline,
   formatDuration,
   formatLatency,
+  formatThroughput,
   formatTokens,
   formatNumber,
 } from '../components/shared';
@@ -101,6 +102,12 @@ export function AssignmentDetailView() {
   const semanticGrades = publicGradeSummaries(assignment);
   const resource = assignment.resource_summary;
   const timing = assignment.benchmark_observations?.timing;
+  const outputTokens = resource?.output_tokens?.value;
+  const generationMs = timing?.generation_ms?.value;
+  const tokensPerSecond =
+    outputTokens !== undefined && generationMs !== undefined && generationMs > 0
+      ? outputTokens / (generationMs / 1000)
+      : undefined;
   const gpu = assignment.benchmark_observations?.gpu;
   const measured = [
     metricValue(timing?.model_load_ms) !== undefined ? ['Load', formatLatency(timing!.model_load_ms!.value!)] : undefined,
@@ -112,11 +119,12 @@ export function AssignmentDetailView() {
     metricValue(resource?.latency_ms) !== undefined ? ['Latency', formatLatency(resource!.latency_ms!.value!)] : undefined,
     metricValue(resource?.input_tokens) !== undefined ? ['Input', formatTokens(resource!.input_tokens!.value!)] : undefined,
     metricValue(resource?.output_tokens) !== undefined ? ['Output', formatTokens(resource!.output_tokens!.value!)] : undefined,
+    tokensPerSecond !== undefined ? ['Tokens/s', formatThroughput(tokensPerSecond)] : undefined,
     metricValue(resource?.thinking_tokens) !== undefined ? ['Thinking', formatTokens(resource!.thinking_tokens!.value!)] : undefined,
     metricValue(resource?.cache_tokens) !== undefined ? ['Cache', formatTokens(resource!.cache_tokens!.value!)] : undefined,
     metricValue(resource?.retries) !== undefined ? ['Retries', formatNumber(resource!.retries!.value!)] : undefined,
   ].filter((entry): entry is [string, string] => entry !== undefined);
-  const hasResources = !resourceObservationMissing(assignment);
+  const hasResources = !resourceObservationMissing(assignment) || tokensPerSecond !== undefined;
   const hasEvidence = Boolean(
     assignment.evidence_bindings?.length || assignment.verification_metadata,
   );

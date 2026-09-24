@@ -80,6 +80,7 @@ type AssignmentMetricColumn =
   | 'latency_ms'
   | 'input_tokens'
   | 'output_tokens'
+  | 'tokens_per_second'
   | 'thinking_tokens'
   | 'cache_tokens'
   | 'retries';
@@ -92,10 +93,25 @@ const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: str
   { key: 'latency_ms', label: 'Latency' },
   { key: 'input_tokens', label: 'Input tokens' },
   { key: 'output_tokens', label: 'Output tokens' },
+  { key: 'tokens_per_second', label: 'Tokens/s' },
   { key: 'retries', label: 'Retries' },
 ];
 
+function assignmentTokensPerSecond(
+  event: LiveEvent,
+  assignment: AssignmentResult | undefined,
+): MetricValue | undefined {
+  const values = assignmentMetricValues(event, assignment);
+  const output = values.output_tokens?.value;
+  const generationMs = assignment?.benchmark_observations?.timing?.generation_ms?.value;
+  if (output === undefined || generationMs === undefined || generationMs <= 0) return undefined;
+  return { value: output / (generationMs / 1000) };
+}
+
 function assignmentMetric(event: LiveEvent, assignment: AssignmentResult | undefined, key: AssignmentMetricColumn): MetricValue | undefined {
+  if (key === 'tokens_per_second') {
+    return assignmentTokensPerSecond(event, assignment);
+  }
   return assignmentMetricValues(event, assignment)[key];
 }
 

@@ -78,6 +78,22 @@ describe('AssignmentDetailView', () => {
     expect(screen.queryByRole('heading', { name: 'What happened' })).not.toBeInTheDocument();
   });
 
+  it('shows tokens per second from output tokens and generation time', () => {
+    renderAssignment([
+      assignmentResult({
+        resource_summary: {
+          output_tokens: { value: 180 },
+        },
+        benchmark_observations: {
+          timing: { generation_ms: { value: 780 } },
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Tokens/s 230.8 tok/s');
+  });
+
   it('preserves explicit zero resource observations', () => {
     renderAssignment([
       assignmentResult({
