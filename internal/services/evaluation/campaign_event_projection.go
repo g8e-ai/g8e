@@ -75,21 +75,21 @@ func ProjectModelRoleInvocationEvent(signal PublicModelRoleInvocationSignal) (ma
 		stageParts = append(stageParts, signal.TaskID)
 	}
 	event := map[string]any{
-		"schema_version":          explorerViewSchemaVersion,
-		"kind":                    "stage_updated",
-		"dataset_id":              CampaignDatasetID(signal.RunID),
-		"quality_state":           "live_in_progress",
-		"observed_at":             signal.ObservedAt,
-		"source_revision_label":   campaignSourceRevision,
-		"event_id":                signal.EventID,
-		"run_id":                  signal.RunID,
-		"assignment_id":           signal.AssignmentID,
-		"variant_id":              signal.VariantID,
-		"role":                    string(signal.Role),
-		"lifecycle_status":        "running",
-		"completed":               signal.Completed,
-		"total":                   signal.Total,
-		"stage_label":             strings.Join(stageParts, " · "),
+		"schema_version":        explorerViewSchemaVersion,
+		"kind":                  "stage_updated",
+		"dataset_id":            CampaignDatasetID(signal.RunID),
+		"quality_state":         "live_in_progress",
+		"observed_at":           signal.ObservedAt,
+		"source_revision_label": campaignSourceRevision,
+		"event_id":              signal.EventID,
+		"run_id":                signal.RunID,
+		"assignment_id":         signal.AssignmentID,
+		"variant_id":            signal.VariantID,
+		"role":                  string(signal.Role),
+		"lifecycle_status":      "running",
+		"completed":             signal.Completed,
+		"total":                 signal.Total,
+		"stage_label":           strings.Join(stageParts, " · "),
 	}
 	if signal.TaskID != "" {
 		event["task_id"] = signal.TaskID

@@ -195,8 +195,8 @@ Start with [Build Apps](docs/guides/build_apps.md), then use the [protocol speci
 ### Use the protocol packages
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.12
-pip install g8e==2.1.12
+go get github.com/g8e-ai/g8e/v2@v2.1.13
+pip install g8e==2.1.13
 ```
 
 The Go module and Python package provide generated protobuf types, canonical models and constants, SPIFFE identity helpers, transaction hashing, and receipt verification. Both share the platform release version. See [Protocol Library](docs/architecture/protocol.md).

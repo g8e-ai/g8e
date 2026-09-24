@@ -74,10 +74,10 @@ function Shell() {
           <nav className="app-nav" aria-label="Primary navigation">
             <NavItem to="/" label="Live" />
             <NavItem to="/evaluations" label="Evals" />
-            <NavItem to="/models" label="Models" />
-            <NavItem to="/about" label="About" />
             <NavItem to="/tasks" label="Tasks" />
+            <NavItem to="/models" label="Models" />
             <NavItem to="/methodology" label="Docs" />
+            <NavItem to="/about" label="About" />
           </nav>
         </div>
         <div className="header-center">

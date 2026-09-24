@@ -29,9 +29,9 @@ func TestMirrorWithdrawCampaignDatasetHidesHistoryAndBootstrap(t *testing.T) {
 	datasetID := campaignMirrorDatasetID(runID)
 	batch := env.buildBatch([]models.PublicFeedRecord{
 		env.makeRecord(1, models.NewPublicFeedObject(map[string]string{
-			"kind":        "evaluation_summary",
-			"dataset_id":  datasetID,
-			"run_id":      runID,
+			"kind":           "evaluation_summary",
+			"dataset_id":     datasetID,
+			"run_id":         runID,
 			"schema_version": "1.5.0",
 		})),
 	}, constants.PublicFeedZeroHashHex)

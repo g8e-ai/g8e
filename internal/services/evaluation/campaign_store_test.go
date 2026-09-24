@@ -74,7 +74,7 @@ func (m *campaignMemoryFileService) OpenForRead(context.Context, string) (*os.Fi
 	return nil, os.ErrInvalid
 }
 
-func (m *campaignMemoryFileService) Resolve(relPath string) string                { return relPath }
+func (m *campaignMemoryFileService) Resolve(relPath string) string { return relPath }
 func (m *campaignMemoryFileService) Remove(_ context.Context, relPath string) error {
 	delete(m.files, relPath)
 	return nil

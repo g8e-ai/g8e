@@ -19,36 +19,36 @@ import (
 // AbandonedCampaignRun summarizes one scheduled campaign run with no terminal
 // progress that is safe to discard.
 type AbandonedCampaignRun struct {
-	RunID              string
-	CampaignID         string
-	Scheduled          uint32
-	Queued             uint32
-	QueueVariantID     string
-	QueueStatus        string
-	ProtectedByQueue   bool
-	ProtectionReason   string
+	RunID            string
+	CampaignID       string
+	Scheduled        uint32
+	Queued           uint32
+	QueueVariantID   string
+	QueueStatus      string
+	ProtectedByQueue bool
+	ProtectionReason string
 }
 
 // ListAbandonedCampaignRunsRequest selects abandoned rollout runs on the host.
 type ListAbandonedCampaignRunsRequest struct {
-	Context            context.Context
-	Store              *Store
-	Controller         *CampaignController
-	Queue              *CampaignQueue
-	ProtectedRunIDs    map[string]string
-	IncludeRunID       string
+	Context         context.Context
+	Store           *Store
+	Controller      *CampaignController
+	Queue           *CampaignQueue
+	ProtectedRunIDs map[string]string
+	IncludeRunID    string
 }
 
 // DiscardAbandonedCampaignRunsRequest removes abandoned host evidence and clears
 // queue references for matching runs.
 type DiscardAbandonedCampaignRunsRequest struct {
-	Context         context.Context
-	FileService     fs.RuntimeFileService
-	Store           *Store
-	Queue           *CampaignQueue
-	QueuePath       string
-	Runs            []AbandonedCampaignRun
-	WithdrawMirror  func(ctx context.Context, runID string) error
+	Context        context.Context
+	FileService    fs.RuntimeFileService
+	Store          *Store
+	Queue          *CampaignQueue
+	QueuePath      string
+	Runs           []AbandonedCampaignRun
+	WithdrawMirror func(ctx context.Context, runID string) error
 }
 
 // DiscardAbandonedCampaignRunsResult reports one discard pass.

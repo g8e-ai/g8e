@@ -130,4 +130,3 @@ func (m *PublicMirrorServer) CampaignDatasetWithdrawn(runID string) bool {
 	}
 	return state.WithdrawnDatasetIDs[campaignMirrorDatasetID(runID)]
 }
-
