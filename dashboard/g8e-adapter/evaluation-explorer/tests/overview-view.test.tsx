@@ -169,10 +169,10 @@ describe('OverviewView', () => {
       'href',
       'https://mirror.example/history?kind=assignment_result&cursor=0&limit=500',
     );
-    expect(data.getByRole('link', { name: /Proofs/i })).toHaveAttribute(
-      'href',
-      'https://mirror.example/proof-catalog',
-    );
+    expect(data.getByText('Cryptographic proofs')).toBeInTheDocument();
+    expect(data.getByText(/No verified proof package has been published yet/i)).toBeInTheDocument();
+    expect(data.queryByRole('link', { name: /Cryptographic proofs/i })).not.toBeInTheDocument();
+    expect(data.queryByRole('link', { name: /Proof manifest/i })).not.toBeInTheDocument();
     expect(data.getByRole('link', { name: /Live updates/i })).toHaveAttribute(
       'href',
       'https://mirror.example/stream',

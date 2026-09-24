@@ -34,6 +34,9 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
 
+      - name: Verify version sync
+        run: bash scripts/verify-version-sync.sh
+
       - name: Validate package metadata
         working-directory: ./protocol/python
         run: |

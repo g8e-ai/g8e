@@ -125,9 +125,20 @@ function RecentCampaigns({
   );
 }
 
+type PublicResourceCard = {
+  label: string;
+  eyebrow: string;
+  description: string;
+  format: string;
+  href?: string;
+  disabledReason?: string;
+};
+
 /** Public-safe evaluation datasets, contract, and raw mirror endpoints. */
 function DownloadsPanel() {
   const [origin, setOrigin] = useState<string | null>(null);
+  const proofArtifactCount = useStoreState((state) => state.proofArtifactCount);
+  const proofsPublished = proofArtifactCount > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -143,13 +154,14 @@ function DownloadsPanel() {
     };
   }, []);
 
-  const resources = [
+  const resources: PublicResourceCard[] = [
     {
       label: 'Campaign summaries',
       eyebrow: 'Analyze runs',
       description: 'Run identity, lifecycle, terminal outcomes, headline metrics, and verifier disposition.',
       format: 'JSON · paginated',
       href: origin ? `${origin}/history?kind=evaluation_summary&cursor=0&limit=500` : undefined,
+      disabledReason: origin ? undefined : 'Mirror origin unavailable.',
     },
     {
       label: 'Assignment results',
@@ -157,6 +169,17 @@ function DownloadsPanel() {
       description: 'Scenario outcomes, closed grades, grouped activity, bounded resources, and evidence bindings.',
       format: 'JSON · paginated',
       href: origin ? `${origin}/history?kind=assignment_result&cursor=0&limit=500` : undefined,
+      disabledReason: origin ? undefined : 'Mirror origin unavailable.',
+    },
+    {
+      label: 'Cryptographic proofs',
+      eyebrow: 'Verify offline',
+      description: proofsPublished
+        ? 'Signed proof manifest, content-addressed artifacts, and catalog entries for offline verification.'
+        : 'No verified proof package has been published yet. Live projections stream separately from signed proof artifacts.',
+      format: proofsPublished ? `JSON · ${formatNumber(proofArtifactCount)} artifact${proofArtifactCount === 1 ? '' : 's'}` : 'JSON · pending',
+      href: origin && proofsPublished ? `${origin}/proof-catalog` : undefined,
+      disabledReason: origin ? undefined : 'Mirror origin unavailable.',
     },
     {
       label: 'View schema',
@@ -176,7 +199,7 @@ function DownloadsPanel() {
         </div>
       </div>
       <p className="public-boundary-note">
-        Includes aggregate results, closed grade metadata, bounded resource metrics, verification state, and approved content bindings. Prompts, outputs, identities, paths, and receipt bodies stay private.
+        Includes aggregate results, closed grade metadata, bounded resource metrics, verification state, and approved content bindings. Prompts, outputs, identities, paths, and receipt bodies stay private. Signed proof packages publish on a separate mirror path after verification completes.
       </p>
       <ul className="public-resource-grid">
         {resources.map((resource) => (
@@ -189,10 +212,12 @@ function DownloadsPanel() {
                 <span className="public-resource-format">{resource.format}<span aria-hidden="true"> ↗</span></span>
               </a>
             ) : (
-              <div className="public-resource-card public-resource-disabled">
+              <div className="public-resource-card public-resource-disabled" aria-disabled="true">
                 <span className="public-resource-eyebrow">{resource.eyebrow}</span>
                 <strong>{resource.label}</strong>
-                <span className="public-resource-description">Mirror origin unavailable.</span>
+                <span className="public-resource-description">
+                  {resource.disabledReason ?? resource.description}
+                </span>
                 <span className="public-resource-format">{resource.format}</span>
               </div>
             )}
@@ -200,12 +225,14 @@ function DownloadsPanel() {
         ))}
       </ul>
       <div className="public-api-strip">
-        <span className="public-api-label">Raw mirror endpoints</span>
+        <span className="public-api-label">Mirror transport</span>
         {origin ? (
           <>
             <a href={`${origin}/history?cursor=0&limit=500`} target="_blank" rel="noopener noreferrer">History <code>JSON</code></a>
             <a href={`${origin}/bootstrap`} target="_blank" rel="noopener noreferrer">Bootstrap <code>JSON</code></a>
-            <a href={`${origin}/proof-catalog`} target="_blank" rel="noopener noreferrer">Proofs <code>JSON</code></a>
+            {proofsPublished ? (
+              <a href={`${origin}/proof-manifest`} target="_blank" rel="noopener noreferrer">Proof manifest <code>JSON</code></a>
+            ) : null}
             <a href={`${origin}/stream`} target="_blank" rel="noopener noreferrer">Live updates <code>SSE</code></a>
           </>
         ) : (

@@ -146,6 +146,7 @@ export interface StoreState {
   eventIds: Set<string>;
   errors: string[];
   lastAcceptedAt: string | undefined;
+  proofArtifactCount: number;
 }
 
 function snapshotPinnedFreshness(freshness: FeedSnapshot['freshness']): FreshnessState | undefined {
@@ -190,6 +191,7 @@ function emptyState(): StoreState {
     eventIds: new Set(),
     errors: [],
     lastAcceptedAt: undefined,
+    proofArtifactCount: 0,
   };
 }
 
@@ -273,7 +275,7 @@ export class EvalStore {
     }
     state.feedStatus = withFeedSnapshot(state, snapshot, 'Reconciling feed history.');
     state.feedStatus.connection = 'live';
-    void proofCount;
+    state.proofArtifactCount = proofCount;
     // Mirror bootstrap recent_projections are newest-first; reverse so ingest order
     // matches /history replay (oldest-first) and slice(-N) retention keeps the tail.
     for (const record of [...recentProjections].reverse()) {
