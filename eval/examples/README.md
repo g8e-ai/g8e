@@ -45,6 +45,13 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 ## Typical workflow
 
 ```bash
+# 0. (Optional) Stage trending Hugging Face GGUF models through Ollama deep HF pulls.
+#    Catalog: eval/rollout-intake-hf.json. Applies canonical served-model aliases
+#    (for example qwen3.8:27b, glm-5.3-flash) after pull/copy.
+./g8e eval models stage --ollama-endpoint "$G8E_OLLAMA_ENDPOINT"
+# Manual-create entries (sharded GGUF, pending single-file) are skipped — create on the
+# provider host with `ollama create <alias>` first, then continue with freeze below.
+
 # 1. Freeze provider inventory (recommended before scored runs on release code)
 ./g8e eval models freeze \
   --campaign-id eval-genesis-homogeneous \
@@ -79,6 +86,7 @@ go run ./.local.dev/tools/gen-base-model-inventory
 | --- | --- |
 | `g8e eval models freeze` | Discover and freeze all models from the provider |
 | `g8e eval models list` | List variants in a frozen inventory file |
+| `g8e eval models stage` | Pull rollout-intake HF models via Ollama and apply served-model aliases |
 | `g8e eval models materialize` | Write per-model or combined campaign inventory files |
 | `g8e eval rollout init` | Build `.g8e/eval/init-campaign-queue.json` |
 | `g8e eval rollout run` | Unattended rollout: start → verify for every queued model |

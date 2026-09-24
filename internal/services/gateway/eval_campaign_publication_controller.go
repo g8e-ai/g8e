@@ -26,12 +26,14 @@ type EvalCampaignPublicationController struct {
 	logger    *slog.Logger
 	responder *response.Writer
 	service   *EvalCampaignPublicationService
+	mirror    func() *PublicMirrorServer
 }
 
 type EvalCampaignPublicationControllerDeps struct {
 	Logger    *slog.Logger
 	Responder *response.Writer
 	Service   *EvalCampaignPublicationService
+	Mirror    func() *PublicMirrorServer
 }
 
 func newEvalCampaignPublicationController(d EvalCampaignPublicationControllerDeps) *EvalCampaignPublicationController {
@@ -39,6 +41,7 @@ func newEvalCampaignPublicationController(d EvalCampaignPublicationControllerDep
 		logger:    d.Logger,
 		responder: d.Responder,
 		service:   d.Service,
+		mirror:    d.Mirror,
 	}
 }
 
@@ -62,6 +65,21 @@ func (c *EvalCampaignPublicationController) handlePublicationState(w http.Respon
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, state)
+	case http.MethodDelete:
+		if err := c.service.Delete(runID); err != nil {
+			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if c.mirror != nil {
+			mirror := c.mirror()
+			if mirror != nil {
+				if err := mirror.WithdrawCampaignDataset(r.Context(), runID); err != nil {
+					c.responder.Error(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
+		}
+		c.responder.JSON(w, http.StatusOK, map[string]string{"run_id": runID, "status": "discarded"})
 	case http.MethodPut:
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, constants.PublicFeedBatchMaxBytes))
 		if err != nil {

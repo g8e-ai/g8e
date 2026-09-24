@@ -66,6 +66,15 @@ type PublicSpectatorRuntime struct {
 	running bool
 }
 
+// Mirror returns the gateway-owned public mirror server when the spectator
+// runtime has started.
+func (runtime *PublicSpectatorRuntime) Mirror() *PublicMirrorServer {
+	if runtime == nil {
+		return nil
+	}
+	return runtime.mirror
+}
+
 // NewPublicSpectatorRuntime prepares the gateway-owned public spectator stack.
 func NewPublicSpectatorRuntime(cfg PublicSpectatorConfig, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*PublicSpectatorRuntime, error) {
 	if logger == nil {

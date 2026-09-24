@@ -33,6 +33,7 @@ func rolloutEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		rolloutEvalMarkCmd(deps),
 		rolloutEvalListCmd(deps),
 		rolloutEvalNextCmd(deps),
+		rolloutEvalDiscardCmd(deps),
 	)
 	return cmd
 }

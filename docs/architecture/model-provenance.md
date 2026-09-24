@@ -35,7 +35,7 @@ All remote Operators connect outbound-only to the Gateway over the governed mTLS
 
 The Provenance Operator is configured with a model storage root, such as `~/.ollama/models`. On `FINALIZE`, its `OllamaStorageAttestor` performs these checks:
 
-1. It resolves `served_model_tag` below `manifests/registry.ollama.ai/`. An unqualified tag such as `smollm3:3b-q4_k_m` uses the `library` namespace; a namespaced tag such as `Impulse2000/smollm3:3b-q4_k_m` uses the supplied namespace.
+1. It resolves `served_model_tag` with Ollama's canonical name parser (`model.ParseName`). Untagged aliases such as `glm-5.3-flash` default to `library/<name>/latest`. Tagged library models such as `smollm3:3b-q4_k_m` resolve under `registry.ollama.ai/library/`. Registry namespaces such as `Impulse2000/smollm3:3b-q4_k_m` keep the supplied namespace. Hugging Face deep pulls such as `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M` resolve under `manifests/huggingface.co/...` on disk.
 2. It reads the manifest and computes its SHA-256 digest. The digest is compared with `expected_model_digest` from the campaign binding.
 3. It parses the manifest's config and layer digest references, opens each corresponding `blobs/sha256-<digest>` file, hashes the file, and verifies its declared size when present. A missing blob, invalid digest reference, content hash mismatch, or size mismatch fails the attestation.
 4. It returns a `ModelProvenanceAttestationWindow` containing the served tag, expected and observed digests, manifest digest, unsigned manifest status, per-blob `ModelWeightAttestation` entries, timestamps, and `digest_match`.

@@ -330,13 +330,14 @@ export class EvalStore {
       return;
     }
     if (record.sequence <= this.state.observedSequence) return;
-    if (this.state.observedSequence > 0 && record.sequence !== this.state.observedSequence + 1) {
+    if (this.state.observedSequence > 0 && record.sequence < this.state.observedSequence + 1) {
       this.pushError('public feed sequence gap');
       return;
     }
     // observedSequence === 0: accept whatever sequence the retained feed
-    // starts at (the mirror may have pruned early records); strict +1
-    // ordering applies to every record after the first.
+    // starts at (the mirror may have pruned early records). Later holes are
+    // also valid when the mirror omits withdrawn campaign datasets without
+    // renumbering the signed batch chain.
     const state: StoreState = { ...this.state };
     this.ingestProjection(state, record);
     state.observedSequence = record.sequence;

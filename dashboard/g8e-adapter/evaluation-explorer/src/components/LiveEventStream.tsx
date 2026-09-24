@@ -110,7 +110,7 @@ function streamMetricDisplay(
   }
   if (metric.value === undefined) {
     return {
-      text: metric.unavailable_reason ? 'Unavailable' : STREAM_EMPTY_METRIC,
+      text: STREAM_EMPTY_METRIC,
       unavailable: true,
       reason: metric.unavailable_reason,
     };

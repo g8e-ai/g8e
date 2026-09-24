@@ -36,6 +36,7 @@ func modelsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		modelsEvalFreezeCmd(),
 		modelsEvalListCmd(deps),
 		modelsEvalMaterializeCmd(deps),
+		modelsEvalStageCmd(),
 	)
 	return cmd
 }

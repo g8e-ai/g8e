@@ -5,7 +5,7 @@ parent: Architecture
 
 # Evaluations
 
-Last Updated: 2026-09-23
+Last Updated: 2026-09-24
 Version: v2.1.12
 
 ## Scope
@@ -166,7 +166,7 @@ The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation comma
 | `g8e eval campaign …` | Initialize, schedule, execute, publish, verify, and export evaluation model campaigns |
 | `g8e eval gate inference …` | Inference-operator status, probe, and acceptance gates |
 | `g8e eval gate chat run` | Chat-path vertical acceptance through production `POST /api/v1/chat` |
-| `g8e eval models …` | Model inventory freeze, list, and materialize helpers |
+| `g8e eval models …` | Provider inventory freeze/list, Hugging Face rollout staging (`stage`), and campaign inventory materialize helpers |
 | `g8e eval rollout …` | Campaign rollout queue init, run, list, next, and mark helpers |
 | `g8e eval dev provider-observer run` | Legacy co-located dev observer only; production uses the enrolled Observer Operator |
 
@@ -227,6 +227,16 @@ Evaluation model campaigns score real models through the production g8ee `POST /
 Scored inference never calls Ollama directly from g8ee or the campaign CLI. The Gateway routes inference envelopes to the exact Inference Operator session, tool intents to the exact Data Operator session, `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) to the exact Observer Operator session, and `ModelProvenanceObservationCommand` (BEGIN/FINALIZE) to the exact Provenance Operator session when provenance is enabled.
 
 See [Model Provenance](model-provenance.md) for the zero-trust weight attestation architecture.
+
+### Model inventory, Hugging Face staging, and rollout intake
+
+Model campaigns bind scored inference to frozen `served_model_tag` and `model_digest` pairs in the campaign registry. The checked-in genesis program inventory (`eval/base-model-inventory.json`) is a reference snapshot; scored runs on a live provider should re-freeze digests from that provider before execute.
+
+**Hugging Face staging.** `g8e eval models stage` reads the rollout intake catalog (`eval/rollout-intake-hf.json`) and uses Ollama's deep Hugging Face compatibility to pull GGUF models (for example `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M`), then applies canonical served-model aliases with `/api/copy` (for example `qwen3.8:27b`). Catalog entries marked `manual_create` (sharded GGUF) or `pending` are skipped until the provider host creates the alias with `ollama create`. Trending untagged aliases such as `glm-5.3-flash` and `glm-5.3-air` are first-class served tags once present on the provider.
+
+**Freeze and materialize.** After staging, `g8e eval models freeze` discovers the live provider inventory (including HF aliases and untagged names), then `g8e eval models materialize` and `g8e eval rollout init --materialize` write per-model campaign inventories and the rollout queue with provider-accurate digests. Placeholder digests in the checked-in base inventory are not valid attestation authorities.
+
+**Execute-time provenance preflight.** Before consuming scored assignments, campaign execute and `g8e eval rollout run` call Gateway preflight endpoints that verify provenance command delivery and run a per-model storage attestation probe for each frozen binding. The probe fails fast when the Provenance Operator cannot resolve or attest the served tag, rather than completing assignments with missing windows. See [Model Provenance](model-provenance.md) for manifest layout and preflight API detail.
 
 ### Campaign lanes and formations
 
@@ -350,13 +360,13 @@ Deploy the Provenance Operator **at the model storage site** — the directory t
 What the Provenance Operator does:
 
 1. Gateway sends `ModelProvenanceObservationCommand` (BEGIN/FINALIZE) on the provenance operator's pub/sub cmd channel when scored inference starts and ends. BEGIN carries `served_model_tag`, `expected_model_digest`, `model_registry_digest`, and `campaign_id` from the frozen campaign registry.
-2. On FINALIZE, the operator reads the Ollama manifest for the served model tag, hashes every referenced blob under `--model-storage-root`, and compares the manifest digest to the expected campaign model digest.
+2. On FINALIZE, the operator resolves the served tag with Ollama's canonical name parser and reads the matching manifest under `--model-storage-root`. Untagged aliases such as `glm-5.3-flash` resolve to `manifests/registry.ollama.ai/library/<name>/latest`; tagged library models such as `qwen3.8:27b` and registry namespaces such as `Impulse2000/smollm3:3b-q4_k_m` resolve under their namespace; Hugging Face deep pulls such as `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M` resolve under `manifests/huggingface.co/...`. The operator hashes every referenced blob and compares the manifest digest to the expected campaign model digest.
 3. The operator publishes `ModelProvenanceObservationCompleted` on its results channel.
 4. Gateway ingests attestation windows under `data/inference/model-provenance/windows/` for campaign verification.
 
-**Fail closed:** If observed and expected model digests do not match, FINALIZE fails and the attestation window is not published. This is independent of the Inference Operator's own digest checks — the Provenance Operator is a storage-side witness, not a self-report from the inference executor.
+**Fail closed:** If the served tag cannot be resolved, a referenced blob is missing, or observed and expected model digests do not match, FINALIZE fails and the attestation window is not published. This is independent of the Inference Operator's own digest checks — the Provenance Operator is a storage-side witness, not a self-report from the inference executor.
 
-**Timing rule:** Assignments that reached a terminal state before the Provenance Operator was enrolled and pub/sub-connected will lack attestation windows. Enroll the provenance operator before `execute` when chain-of-custody claims are required.
+**Timing rule:** Assignments that reached a terminal state before the Provenance Operator was enrolled and pub/sub-connected will lack attestation windows. Enroll the provenance operator before `execute` when chain-of-custody claims are required. Restart the Provenance Operator after upgrading g8e when manifest-resolution behavior changes.
 
 #### Example operator output (provenance)
 
@@ -381,6 +391,8 @@ What to verify:
 - **BEGIN** lines include the correct `served_model_tag` and `expected_model_digest` for the frozen campaign model.
 - **FINALIZE** lines show `observed_model_digest` matching `expected_model_digest` and a non-empty `attestation_digest`.
 - `Publishing result` uses event type `g8e.v1.operator.model.provenance.observation.completed` on the session `results:` channel.
+
+If FINALIZE fails with `invalid served model tag` or `manifest not found`, confirm the alias exists on the provider (`ollama list`), that HF staging or `ollama create` completed, and that `--model-storage-root` points at the host's Ollama model tree. If preflight reports `digest mismatch`, re-freeze the provider inventory and rebuild campaign inventories before execute.
 
 See [Model Provenance](model-provenance.md) for the full zero-trust weight attestation architecture.
 

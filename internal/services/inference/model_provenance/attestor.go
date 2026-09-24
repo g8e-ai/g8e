@@ -21,12 +21,8 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/ollama"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
-)
-
-const (
-	defaultOllamaManifestHost = "registry.ollama.ai"
-	defaultOllamaManifestNS   = "library"
 )
 
 // Attestor independently attests model weight blobs at the storage site.
@@ -161,17 +157,11 @@ func (a *OllamaStorageAttestor) attestBlob(ctx context.Context, digestRef, media
 }
 
 func resolveOllamaManifestPath(storageRoot, servedModelTag string) (string, error) {
-	modelRef, tag, ok := strings.Cut(servedModelTag, ":")
-	if !ok || modelRef == "" || tag == "" {
+	name := ollama.ParseName(servedModelTag)
+	if !name.IsFullyQualified() {
 		return "", fmt.Errorf("model provenance attestor: invalid served model tag %q", servedModelTag)
 	}
-	namespace := defaultOllamaManifestNS
-	modelName := modelRef
-	if ns, name, ok := strings.Cut(modelRef, "/"); ok && ns != "" && name != "" {
-		namespace = ns
-		modelName = name
-	}
-	manifestPath := filepath.Join(storageRoot, "manifests", defaultOllamaManifestHost, namespace, modelName, tag)
+	manifestPath := filepath.Join(storageRoot, "manifests", name.ManifestFilepath())
 	if _, err := os.Stat(manifestPath); err != nil {
 		return "", fmt.Errorf("model provenance attestor: manifest not found for %q: %w", servedModelTag, err)
 	}

@@ -162,7 +162,7 @@ describe('LiveEventStream', () => {
     expect(screen.getByText('780 ms')).toBeInTheDocument();
   });
 
-  it('renders -- for absent metrics and Unavailable only when missingness is explicit', () => {
+  it('renders -- for absent or explicitly unavailable metrics', () => {
     render(
       <MemoryRouter>
         <LiveEventStream
@@ -199,8 +199,8 @@ describe('LiveEventStream', () => {
       (cell) => cell.textContent,
     );
     expect(metricCells).toContain('Pass');
-    expect(metricCells).toContain('Unavailable');
     expect(metricCells.filter((text) => text === '--').length).toBeGreaterThan(0);
+    expect(metricCells).not.toContain('Unavailable');
   });
 
   it('hides thinking and cache token columns from the live stream', () => {

@@ -75,8 +75,23 @@ func (m *campaignMemoryFileService) OpenForRead(context.Context, string) (*os.Fi
 }
 
 func (m *campaignMemoryFileService) Resolve(relPath string) string                { return relPath }
-func (m *campaignMemoryFileService) Remove(context.Context, string) error         { return nil }
-func (m *campaignMemoryFileService) RemoveAll(context.Context, string) error      { return nil }
+func (m *campaignMemoryFileService) Remove(_ context.Context, relPath string) error {
+	delete(m.files, relPath)
+	return nil
+}
+
+func (m *campaignMemoryFileService) RemoveAll(_ context.Context, relPath string) error {
+	if relPath == "" {
+		return nil
+	}
+	prefix := relPath + string(filepath.Separator)
+	for path := range m.files {
+		if path == relPath || strings.HasPrefix(path, prefix) {
+			delete(m.files, path)
+		}
+	}
+	return nil
+}
 func (m *campaignMemoryFileService) Rename(context.Context, string, string) error { return nil }
 func (m *campaignMemoryFileService) ReadDir(_ context.Context, relPath string) ([]os.DirEntry, error) {
 	prefix := relPath + string(filepath.Separator)

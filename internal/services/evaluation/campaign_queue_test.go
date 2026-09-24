@@ -125,6 +125,19 @@ func TestCampaignIDForVariantUsesCanonicalIdentifiers(t *testing.T) {
 	}
 }
 
+func TestPrioritizeRolloutIntakeMovesConfiguredVariantsFirst(t *testing.T) {
+	variants := []*evalv1.ModelVariant{
+		{VariantId: "smollm2-135m", ServedModelTag: "smollm2:135m", ParameterCount: 134_520_000},
+		{VariantId: "qwen3-8-27b", ServedModelTag: "qwen3.8:27b", ParameterCount: 27_000_000_000},
+		{VariantId: "glm-5-3-air", ServedModelTag: "glm-5.3-air", ParameterCount: 9_000_000_000},
+	}
+	ordered := PrioritizeRolloutIntake(variants, []string{"glm-5-3-air", "qwen3-8-27b"})
+	require.Len(t, ordered, 3)
+	assert.Equal(t, "glm-5-3-air", ordered[0].GetVariantId())
+	assert.Equal(t, "qwen3-8-27b", ordered[1].GetVariantId())
+	assert.Equal(t, "smollm2-135m", ordered[2].GetVariantId())
+}
+
 func TestSortModelVariantsForRolloutOrdersByParameterCountAndTag(t *testing.T) {
 	variants := []*evalv1.ModelVariant{
 		{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ParameterCount: 4_000_000_000},
