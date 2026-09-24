@@ -12,6 +12,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -901,6 +902,12 @@ func (s *PlatformEnrollmentService) checkQuota(kind models.PlatformComponentKind
 	return nil
 }
 
+// platformEnrollmentStateRootMaxRetries bounds in-process resubmission when
+// concurrent enrollment CREATE activity advances the bound root between fetch
+// and verification. Each retry rebuilds the envelope with a fresh root, nonce,
+// and transaction hash.
+const platformEnrollmentStateRootMaxRetries = 3
+
 // submitEnvelope builds a GovernanceEnvelope with the given action type
 // and PlatformEnrollmentGovernancePayload, marshals it as protojson,
 // and calls the injected EnvelopeProcessor. The envelope carries the
@@ -913,53 +920,65 @@ func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action c
 		return nil, fmt.Errorf("marshal payload: %w", err)
 	}
 
-	stateRoot, err := s.stateRoot.GetCurrentStateRoot()
-	if err != nil {
-		return nil, fmt.Errorf("get state root: %w", err)
-	}
+	var lastErr error
+	for attempt := 0; attempt <= platformEnrollmentStateRootMaxRetries; attempt++ {
+		stateRoot, err := s.stateRoot.GetCurrentStateRoot()
+		if err != nil {
+			return nil, fmt.Errorf("get state root: %w", err)
+		}
 
-	nonce, err := generateNonce()
-	if err != nil {
-		return nil, fmt.Errorf("generate nonce: %w", err)
-	}
+		nonce, err := generateNonce()
+		if err != nil {
+			return nil, fmt.Errorf("generate nonce: %w", err)
+		}
 
-	env := &commonv1.GovernanceEnvelope{
-		ProtocolVersion: "1.0",
-		Timestamp:       timestamppb.Now(),
-		ExpiresAt:       timestamppb.New(time.Now().Add(5 * time.Minute)),
-		SourceComponent: commonv1.Component_COMPONENT_G8EO,
-		ActionType:      string(action),
-		EventType:       string(constants.MapActionTypeToEventType(constants.ActionType(action))),
-		Payload:         payloadBytes,
-		StateMerkleRoot: stateRoot,
-		Nonce:           nonce,
-		Posture:         s.posture,
-		Governance: &commonv1.GovernanceMetadata{
-			L1: &commonv1.L1Metadata{Validated: true},
-		},
-	}
+		env := &commonv1.GovernanceEnvelope{
+			ProtocolVersion: "1.0",
+			Timestamp:       timestamppb.Now(),
+			ExpiresAt:       timestamppb.New(time.Now().Add(5 * time.Minute)),
+			SourceComponent: commonv1.Component_COMPONENT_G8EO,
+			ActionType:      string(action),
+			EventType:       string(constants.MapActionTypeToEventType(constants.ActionType(action))),
+			Payload:         payloadBytes,
+			StateMerkleRoot: stateRoot,
+			Nonce:           nonce,
+			Posture:         s.posture,
+			Governance: &commonv1.GovernanceMetadata{
+				L1: &commonv1.L1Metadata{Validated: true},
+			},
+		}
 
-	txHash, err := govpkg.GenerateMessageID(env)
-	if err != nil {
-		return nil, fmt.Errorf("generate message ID: %w", err)
-	}
-	env.Id = txHash
-	env.TransactionHash = txHash
+		txHash, err := govpkg.GenerateMessageID(env)
+		if err != nil {
+			return nil, fmt.Errorf("generate message ID: %w", err)
+		}
+		env.Id = txHash
+		env.TransactionHash = txHash
 
-	wire, err := protojson.Marshal(env)
-	if err != nil {
-		return nil, fmt.Errorf("marshal envelope: %w", err)
-	}
+		wire, err := protojson.Marshal(env)
+		if err != nil {
+			return nil, fmt.Errorf("marshal envelope: %w", err)
+		}
 
-	receipt, err := s.envProc.ProcessEnvelope(ctx, wire)
-	if err != nil {
+		submitCtx := ctx
+		if stateRoot != "" {
+			submitCtx = context.WithValue(ctx, constants.ContextKeyStateMerkleRoot, stateRoot)
+		}
+
+		receipt, err := s.envProc.ProcessEnvelope(submitCtx, wire)
+		if err == nil {
+			if receipt == nil {
+				return nil, constants.ErrPlatformEnrollmentGovernanceRejected
+			}
+			return env, nil
+		}
+		lastErr = err
+		if errors.Is(err, constants.ErrTxStateRootMismatch) && attempt < platformEnrollmentStateRootMaxRetries {
+			continue
+		}
 		return nil, fmt.Errorf("%w: %w", constants.ErrPlatformEnrollmentGovernanceRejected, err)
 	}
-	if receipt == nil {
-		return nil, constants.ErrPlatformEnrollmentGovernanceRejected
-	}
-	_ = receipt
-	return env, nil
+	return nil, fmt.Errorf("%w: %w", constants.ErrPlatformEnrollmentGovernanceRejected, lastErr)
 }
 
 // rollbackLease transitions a request from issuing back to approved so

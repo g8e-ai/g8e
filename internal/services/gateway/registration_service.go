@@ -258,26 +258,17 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	var operator *models.OperatorDocumentGo
 	var err error
 
-	// Try fingerprint match first
+	// A system fingerprint identifies the host, not an Operator identity.
+	// Multiple independent Operators may run on the same machine, so never
+	// reuse a slot solely because its host fingerprint matches. Reuse only an
+	// explicitly available offline slot; otherwise create a new slot.
 	filters := []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
-		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedFingerprint))},
+		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusOffline))},
 	}
 	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
 		operator, _ = s.toOperatorDoc(docs[0])
-	}
-
-	// Try offline slot
-	if operator == nil {
-		filters = []models.DocFilter{
-			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
-			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusOffline))},
-		}
-		docs, err = s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
-		if err == nil && len(docs) > 0 {
-			operator, _ = s.toOperatorDoc(docs[0])
-		}
 	}
 
 	// Create new slot

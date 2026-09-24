@@ -439,7 +439,7 @@ func setupCampaignWitnessEnv(t *testing.T) (root string, deps nativeEvalDeps, cm
 }
 
 func TestPreflightCampaignQueueRun_SucceedsWhenWitnessesReady(t *testing.T) {
-	root, deps, cmd, cleanup := setupCampaignWitnessEnv(t)
+	_, _, cmd, cleanup := setupCampaignWitnessEnv(t)
 	defer cleanup()
 
 	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -451,18 +451,16 @@ func TestPreflightCampaignQueueRun_SucceedsWhenWitnessesReady(t *testing.T) {
 	t.Cleanup(health.Close)
 	t.Cleanup(mirror.Close)
 
-	cfg, err := deps.configLoader(root)
-	require.NoError(t, err)
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
-	require.NoError(t, preflightCampaignQueueRun(cmd, deps, cfg, 0, health.URL, mirror.URL))
+	require.NoError(t, preflightCampaignQueueRun(cmd, health.URL, mirror.URL))
 	assert.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Preflight ok (observer=1 provenance=1)")
+	assert.Contains(t, stdout.String(), "Preflight ok (platform health and mirror reachable)")
 }
 
-func TestPreflightCampaignQueueRun_RejectsMissingWitnesses(t *testing.T) {
-	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
+func TestPreflightCampaignQueueRun_DoesNotRequireWitnesses(t *testing.T) {
+	_, _, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 
 	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -474,11 +472,8 @@ func TestPreflightCampaignQueueRun_RejectsMissingWitnesses(t *testing.T) {
 	t.Cleanup(health.Close)
 	t.Cleanup(mirror.Close)
 
-	cfg, err := deps.configLoader(root)
+	err := preflightCampaignQueueRun(cmd, health.URL, mirror.URL)
 	require.NoError(t, err)
-	err = preflightCampaignQueueRun(cmd, deps, cfg, 0, health.URL, mirror.URL)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no active provider-boundary observer")
 }
 
 func TestCampaignWitnessStatus_UsesOperatorList(t *testing.T) {

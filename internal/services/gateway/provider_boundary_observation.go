@@ -106,7 +106,7 @@ func (c *ProviderBoundaryObservationCoordinator) synchronizeObserverSubscription
 		c.logger.Warn("Provider-boundary observation: list operators failed", "error", err)
 		return err
 	}
-	selected, err := operatorcapability.SelectProviderBoundaryObserver(operators, "")
+	selected, err := selectProviderBoundaryObserverForGateway(operators)
 	if err != nil {
 		c.resetObserver()
 		switch {
@@ -158,6 +158,36 @@ func (c *ProviderBoundaryObservationCoordinator) synchronizeObserverSubscription
 		"operator_session_id", observer.OperatorSessionID,
 		"results_channel", resultsChannel)
 	return nil
+}
+
+func selectProviderBoundaryObserverForGateway(operators []models.OperatorDocumentGo) (*operatorcapability.ProviderBoundaryObserverStatus, error) {
+	selected, err := operatorcapability.SelectProviderBoundaryObserver(operators, "")
+	if err == nil || !errors.Is(err, constants.ErrProviderBoundaryObserverAmbiguous) {
+		return selected, err
+	}
+
+	// The observer and inference node are hardware-bound Operator sessions.
+	// When there is one inference node, use the canonical system fingerprint
+	// to disambiguate multiple observer sessions on the owner account. Never
+	// choose by list order or recency.
+	inference := make([]models.OperatorDocumentGo, 0, len(operators))
+	for _, op := range operators {
+		if op.Status == constants.OperatorStatusActive &&
+			op.OperatorType == constants.OperatorTypeRemote &&
+			op.RuntimeConfig != nil &&
+			op.RuntimeConfig.InferenceEnabled &&
+			op.SystemFingerprint != "" {
+			inference = append(inference, op)
+		}
+	}
+	if len(inference) != 1 {
+		return nil, err
+	}
+	return operatorcapability.SelectProviderBoundaryObserverForHardware(
+		operators,
+		"",
+		inference[0].SystemFingerprint,
+	)
 }
 
 func (c *ProviderBoundaryObservationCoordinator) resetObserver() {
