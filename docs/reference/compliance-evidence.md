@@ -1,8 +1,8 @@
 # Proof-Backed Compliance Evidence
 
-**Document Version:** 2.1.12
-**Last Updated:** 2026-09-23
-**Platform:** g8e v2.1.12
+**Document Version:** 2.1.13
+**Last Updated:** 2026-09-24
+**Platform:** g8e v2.1.13
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
