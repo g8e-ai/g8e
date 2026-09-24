@@ -284,7 +284,6 @@ describe('LiveEventStream', () => {
       'Category',
       'Task',
       'Pass',
-      'Task score',
       'Pass Rate',
       'Latency',
       'Input tokens',

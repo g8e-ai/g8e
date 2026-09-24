@@ -20,6 +20,7 @@ import {
   ABOUT_SITE_INTRO_BEFORE,
   G8E_REPO_URL,
   PLATFORM_CONTACT_CALENDLY,
+  PLATFORM_CONTACT_EMAIL,
 } from '../content/platform';
 import { StreamStatusIndicator } from '../components/shared';
 import { useConnection, useStoreState } from '../state/store';
@@ -87,6 +88,10 @@ export function AboutView() {
             {ABOUT_AVAILABILITY_LEDE_AFTER}
           </p>
           <p className="sys-platform-lede about-availability">{ABOUT_AVAILABILITY_DETAIL}</p>
+          <p className="sys-platform-lede about-availability">
+            Reach me at{' '}
+            <a href={`mailto:${PLATFORM_CONTACT_EMAIL}`}>{PLATFORM_CONTACT_EMAIL}</a>.
+          </p>
 
           <div className="sys-platform-cta">
             <div className="sys-platform-links">
@@ -96,7 +101,7 @@ export function AboutView() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Contact Me / Work Together
+                Book a call with Calendly
               </a>
               <a
                 className="sys-platform-cta-architecture"

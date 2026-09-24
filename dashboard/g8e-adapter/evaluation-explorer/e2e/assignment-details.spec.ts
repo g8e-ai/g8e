@@ -178,10 +178,10 @@ test('preserves legacy and unavailable evidence without rendering private fields
 
   await page.goto(`/evaluations/${datasetId}/${runId}/assignments/legacy-assignment`);
   await expect(page.getByText('Historical evidence was not captured.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Evidence and methodology' })).toBeVisible();
-  await expect(page.getByText('No approved public proof bindings were published for this assignment.')).toBeVisible();
-  await expect(page.getByText('Stage timeline not published for this assignment.')).toBeVisible();
-  await expect(page.locator('.assignment-resources [data-testid="metric-latency"]')).toContainText('Unavailable');
+  await expect(page.getByRole('heading', { name: 'Evidence and methodology' })).not.toBeVisible();
+  await expect(page.getByText('No approved public proof bindings were published for this assignment.')).not.toBeVisible();
+  await expect(page.getByText('Stage timeline not published for this assignment.')).not.toBeVisible();
+  await expect(page.locator('.assignment-resources [data-testid="metric-latency"]')).not.toBeVisible();
   await expect(page.getByText('private_prompt')).not.toBeVisible();
   expectPublicOnly(requests);
 });

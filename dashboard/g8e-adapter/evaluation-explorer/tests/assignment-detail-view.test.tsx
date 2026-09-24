@@ -68,18 +68,14 @@ describe('AssignmentDetailView', () => {
     evalStore.loadFixtures([], []);
   });
 
-  it('shows the scoring summary, scenario label, unpublished stages, and unavailable resources', () => {
+  it('shows only observed scoring data for a thin record', () => {
     renderAssignment([assignmentResult()]);
 
-    expect(screen.getByRole('heading', { name: 'Scoring summary' })).toBeInTheDocument();
-    expect(screen.getByText('Scenario').closest('.detail-row')).toHaveTextContent('scenario-1');
-    expect(screen.getByText('Fail')).toBeInTheDocument();
-    expect(screen.getByText('Stage timeline not published for this assignment.')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Resource observations' })).toBeInTheDocument();
-    expect(screen.getByTestId('metric-latency')).toHaveTextContent('Unavailable');
-    expect(screen.getByTestId('metric-input-tokens')).toHaveTextContent('Unavailable');
-    expect(screen.getByTestId('metric-output-tokens')).toHaveTextContent('Unavailable');
-    expect(screen.getByTestId('metric-retries')).toHaveTextContent('Unavailable');
+    expect(screen.getByText('Pass · Fail')).toBeInTheDocument();
+    expect(screen.queryByText('Stage timeline not published for this assignment.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Resource observations' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Assignment context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'What happened' })).not.toBeInTheDocument();
   });
 
   it('preserves explicit zero resource observations', () => {
@@ -94,13 +90,13 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.getByTestId('metric-latency')).toHaveTextContent('0 ms');
-    expect(screen.getByTestId('metric-input-tokens')).toHaveTextContent('0 tok');
-    expect(screen.getByTestId('metric-output-tokens')).toHaveTextContent('0 tok');
-    expect(screen.getByTestId('metric-retries')).toHaveTextContent('0');
+    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Latency 0 ms');
+    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Input 0 tok');
+    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Output 0 tok');
+    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Retries 0');
   });
 
-  it('keeps an all-unavailable resource summary visible', () => {
+  it('omits an all-unavailable resource summary', () => {
     renderAssignment([
       assignmentResult({
         resource_summary: {
@@ -112,11 +108,10 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.getByRole('heading', { name: 'Resource observations' })).toBeInTheDocument();
-    expect(screen.getByTestId('metric-latency')).toHaveTextContent('resource observation missing');
-    expect(screen.getByTestId('metric-input-tokens')).toHaveTextContent('usage not reported');
-    expect(screen.getByTestId('metric-output-tokens')).toHaveTextContent('usage not reported');
-    expect(screen.getByTestId('metric-retries')).toHaveTextContent('retry count not reported');
+    expect(screen.queryByRole('heading', { name: 'Resource observations' })).not.toBeInTheDocument();
+    expect(screen.queryByText('resource observation missing')).not.toBeInTheDocument();
+    expect(screen.queryByText('usage not reported')).not.toBeInTheDocument();
+    expect(screen.queryByText('retry count not reported')).not.toBeInTheDocument();
   });
 
   it('collapses only the exact scenario-not-applicable scorecard dimensions', () => {
@@ -124,8 +119,8 @@ describe('AssignmentDetailView', () => {
       assignmentResult({
         benchmark_observations: {
           tool_scorecard: {
-            tool_recognition: { unavailable_reason: 'tool use not required by this scenario' },
-            tool_selection: { unavailable_reason: 'tool use not required by this scenario' },
+            tool_recognition: { unavailable_reason: 'scenario_not_applicable' },
+            tool_selection: { unavailable_reason: 'scenario_not_applicable' },
             argument_schema: { unavailable_reason: 'required evidence not observed' },
           },
           unavailable_reasons: [],
@@ -135,8 +130,8 @@ describe('AssignmentDetailView', () => {
 
     expect(screen.queryByText('Tool recognition')).not.toBeInTheDocument();
     expect(screen.queryByText('Tool selection')).not.toBeInTheDocument();
-    expect(screen.getByText('Argument schema')).toBeInTheDocument();
-    expect(screen.getByText('required evidence not observed')).toBeInTheDocument();
+    expect(screen.queryByText('Argument schema')).not.toBeInTheDocument();
+    expect(screen.queryByText('required evidence not observed')).not.toBeInTheDocument();
   });
 
   it('renders rich public context, activity, grades, and evidence without private detail', () => {
@@ -168,7 +163,7 @@ describe('AssignmentDetailView', () => {
     expect(screen.getByRole('heading', { name: 'What happened' })).toBeInTheDocument();
     expect(screen.getByText('1 observed')).toBeInTheDocument();
     expect(screen.getByText('Deterministic')).toBeInTheDocument();
-    expect(screen.getByText('Criterion passed')).toBeInTheDocument();
+    expect(screen.getByText(/Criterion passed/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Evidence and methodology' })).toBeInTheDocument();
     expect(screen.getByText('Evaluation projection')).toBeInTheDocument();
     expect(screen.queryByText('private')).not.toBeInTheDocument();

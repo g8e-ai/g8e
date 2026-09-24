@@ -76,7 +76,6 @@ function eventParts(event: LiveEvent, assignment: AssignmentResult | undefined):
 
 type AssignmentMetricColumn =
   | 'pass'
-  | 'task_score'
   | 'deterministic_pass_rate'
   | 'latency_ms'
   | 'input_tokens'
@@ -89,7 +88,6 @@ type StreamSortDirection = 'asc' | 'desc';
 
 const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: string }> = [
   { key: 'pass', label: 'Pass' },
-  { key: 'task_score', label: 'Task score' },
   { key: 'deterministic_pass_rate', label: 'Pass Rate' },
   { key: 'latency_ms', label: 'Latency' },
   { key: 'input_tokens', label: 'Input tokens' },

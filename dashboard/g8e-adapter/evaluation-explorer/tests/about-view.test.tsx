@@ -6,7 +6,7 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { evalStore } from '../src/state/store';
 import { AboutView } from '../src/views/AboutView';
-import { G8E_REPO_URL, PLATFORM_CONTACT_CALENDLY } from '../src/content/platform';
+import { G8E_REPO_URL, PLATFORM_CONTACT_CALENDLY, PLATFORM_CONTACT_EMAIL } from '../src/content/platform';
 
 describe('AboutView', () => {
   beforeEach(() => {
@@ -35,7 +35,8 @@ describe('AboutView', () => {
     expect(panel.getByText(/hands-on leadership roles/i)).toBeInTheDocument();
     expect(panel.getByRole('list', { name: 'Career highlights' })).toBeInTheDocument();
     expect(panel.getByRole('list', { name: 'Areas of practice' })).toBeInTheDocument();
-    expect(panel.getByRole('link', { name: 'Contact Me / Work Together' })).toHaveAttribute('href', PLATFORM_CONTACT_CALENDLY);
+    expect(panel.getByRole('link', { name: PLATFORM_CONTACT_EMAIL })).toHaveAttribute('href', `mailto:${PLATFORM_CONTACT_EMAIL}`);
+    expect(panel.getByRole('link', { name: 'Book a call with Calendly' })).toHaveAttribute('href', PLATFORM_CONTACT_CALENDLY);
     expect(panel.getByRole('link', { name: 'Explore the g8e Codebase on GitHub' })).toHaveAttribute('href', G8E_REPO_URL);
   });
 });

@@ -8,7 +8,7 @@ import { AssignmentActivitySummary } from '../src/components/AssignmentActivityS
 const emptyFamily = { availability: 'observed' as const, records: [] };
 
 describe('AssignmentActivitySummary', () => {
-  it('distinguishes observed empty, unavailable, and not-applicable families', () => {
+  it('omits empty, unavailable, and not-applicable families', () => {
     render(<AssignmentActivitySummary activity={{
       model_activity: emptyFamily,
       tool_decisions: emptyFamily,
@@ -16,8 +16,9 @@ describe('AssignmentActivitySummary', () => {
       policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured', records: [] },
       governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured', records: [] },
     }} />);
-    expect(screen.getAllByText('0 observed')).toHaveLength(2);
-    expect(screen.getByText('Not applicable to this scenario')).toBeInTheDocument();
-    expect(screen.getByText('Unavailable: Historical not captured')).toBeInTheDocument();
+    expect(screen.queryByText('0 observed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not applicable to this scenario')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unavailable: Historical not captured')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What happened' })).toBeInTheDocument();
   });
 });

@@ -141,7 +141,11 @@ describe('adaptCampaignProjectionEnvelope', () => {
       context,
     );
     expect(resultRecords.some((record) => record.kind === 'evaluation_summary')).toBe(false);
-    expect(resultRecords.some((record) => record.kind === 'assignment_result')).toBe(true);
+    const assignment = resultRecords.find((record) => record.kind === 'assignment_result');
+    expect(assignment).toMatchObject({
+      kind: 'assignment_result',
+      verification_disposition: 'not_run',
+    });
     expect(resultRecords.some((record) => record.kind === 'assignment_completed')).toBe(true);
   });
 
