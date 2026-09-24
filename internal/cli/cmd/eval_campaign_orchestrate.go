@@ -57,6 +57,17 @@ func resolveCampaignOperatorSessions(
 	inferenceSessionID string,
 	dataSessionID string,
 ) (campaignOperatorSessions, error) {
+	return resolveCampaignOperatorSessionsForHardware(cmd, deps, cfg, inferenceSessionID, dataSessionID, "")
+}
+
+func resolveCampaignOperatorSessionsForHardware(
+	cmd *cobra.Command,
+	deps nativeEvalDeps,
+	cfg *config.Config,
+	inferenceSessionID string,
+	dataSessionID string,
+	dataSystemFingerprint string,
+) (campaignOperatorSessions, error) {
 	_, _, authContext, err := chatEvalEnvironment(cmd, chatEvalDeps{
 		configLoader:         deps.configLoader,
 		fileSvcFactory:       deps.fileSvcFactory,
@@ -84,7 +95,7 @@ func resolveCampaignOperatorSessions(
 	if err != nil {
 		return campaignOperatorSessions{}, err
 	}
-	dataOperator, err := evaluation.SelectCampaignDataOperator(operators, dataSessionID)
+	dataOperator, err := evaluation.SelectCampaignDataOperatorForHardware(operators, dataSessionID, dataSystemFingerprint)
 	if err != nil {
 		return campaignOperatorSessions{}, err
 	}
@@ -298,7 +309,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		if err != nil {
 			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 		}
-		if err := rejectResidentProviderModels(cmd.Context(), endpoint); err != nil {
+		if err := releaseResidentProviderModels(cmd, deps, opts, cfg, authContext, dataOperator, selected.OperatorSessionID, endpoint); err != nil {
 			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 		}
 	}
@@ -353,6 +364,55 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 	return executed, nil
 }
 
+func releaseResidentProviderModels(
+	cmd *cobra.Command,
+	deps nativeEvalDeps,
+	opts campaignExecuteOptions,
+	cfg *config.Config,
+	authContext *auth.ClientAuthContext,
+	dataOperator *evaluation.DataOperatorStatus,
+	inferenceSessionID string,
+	endpoint string,
+) error {
+	residency, err := inference.ReadProviderResidency(cmd.Context(), inference.ProviderResidencyOptions{Endpoint: endpoint})
+	if err != nil {
+		return fmt.Errorf("evaluation: read provider residency: %w", err)
+	}
+	if len(residency.Models) == 0 {
+		return nil
+	}
+	residentTags := make([]string, 0, len(residency.Models))
+	for _, model := range residency.Models {
+		residentTags = append(residentTags, model.Name)
+	}
+	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
+		configLoader:   deps.configLoader,
+		fileSvcFactory: deps.fileSvcFactory,
+		authLoader:     deps.authLoader,
+		clientFactory:  deps.clientFactory,
+		now:            deps.now,
+		newID:          deps.newID,
+	})
+	if err != nil {
+		return err
+	}
+	if err := evaluation.ReleaseOllamaModels(cmd.Context(), dispatcher, inferenceSessionID, opts.RunID, residentTags, modelCommandEnvironment(endpoint), func(prefix string) string { return prefix + "-" + deps.newID() }); err != nil {
+		return err
+	}
+	waitCtx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
+	defer cancel()
+	if err := inference.WaitForProviderModelsAbsent(waitCtx, inference.ProviderResidencyOptions{Endpoint: endpoint}, residentTags); err != nil {
+		return err
+	}
+	if !opts.JSONOutput {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Released %d resident model(s) at %s\n", len(residentTags), endpoint)
+	}
+	return nil
+}
+
+// rejectResidentProviderModels is retained for callers that only need the
+// residency precondition check. Rollout execution uses releaseResidentProviderModels
+// so stale provider state is drained through the Inference Operator.
 func rejectResidentProviderModels(ctx context.Context, endpoint string) error {
 	residency, err := inference.ReadProviderResidency(ctx, inference.ProviderResidencyOptions{Endpoint: endpoint})
 	if err != nil {
@@ -554,6 +614,7 @@ type campaignStartFlowOptions struct {
 	RunID                      string
 	InferenceSessionID         string
 	DataSessionID              string
+	DataSystemFingerprint      string
 	EnsembleURL                string
 	OllamaEndpoint             string
 	DryRun                     bool
@@ -593,7 +654,7 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	if err != nil {
 		return nil, err
 	}
-	sessions, err := resolveCampaignOperatorSessions(cmd, deps, cfg, opts.InferenceSessionID, opts.DataSessionID)
+	sessions, err := resolveCampaignOperatorSessionsForHardware(cmd, deps, cfg, opts.InferenceSessionID, opts.DataSessionID, opts.DataSystemFingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign start: %w", err)
 	}
@@ -670,7 +731,7 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	return result, nil
 }
 
-func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc fs.RuntimeFileService, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, tierA bool) error {
+func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc fs.RuntimeFileService, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, requireWitness bool) error {
 	if plan == nil || plan.QueueEntry == nil || report == nil {
 		return nil
 	}
@@ -678,8 +739,8 @@ func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc
 		return nil
 	}
 	notes := "75/75 verify PASS; run " + plan.RunID
-	if tierA {
-		notes = evaluation.TierAVerifyNotes(plan.RunID)
+	if requireWitness {
+		notes = evaluation.StrictWitnessVerifyNotes(plan.RunID)
 	}
 	_, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
 		Context:       ctx,

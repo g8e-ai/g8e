@@ -61,6 +61,17 @@ func (s *EvalCampaignPublicationService) Get(runID string) (*models.EvalCampaign
 	return state, nil
 }
 
+func (s *EvalCampaignPublicationService) Delete(runID string) error {
+	if s == nil || s.docStore == nil || runID == "" {
+		return fmt.Errorf("eval campaign publication: %w", constants.ErrMissingRequiredField)
+	}
+	collection := marshaler.CollectionName(constants.CollectionEvalCampaignPublicationState)
+	if err := s.docStore.DocDelete(collection, runID); err != nil {
+		return fmt.Errorf("eval campaign publication: delete: %w", err)
+	}
+	return nil
+}
+
 func (s *EvalCampaignPublicationService) Put(state models.EvalCampaignPublicationState) error {
 	if s == nil || s.docStore == nil || state.RunID == "" {
 		return fmt.Errorf("eval campaign publication: %w", constants.ErrMissingRequiredField)

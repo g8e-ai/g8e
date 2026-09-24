@@ -683,7 +683,7 @@ export function readWorkingSelection(catalog: CatalogSnapshot | undefined): Work
 
 /** Other repetitions of the same task for the same variant within the run —
  *  the repeatability context for an assignment detail page. */
-export const SCENARIO_NOT_APPLICABLE_REASON = 'tool use not required by this scenario';
+export const SCENARIO_NOT_APPLICABLE_REASON = 'scenario_not_applicable';
 
 export function isScenarioNotApplicableMetric(metric: MetricValue): boolean {
   return metric.value === undefined && metric.unavailable_reason === SCENARIO_NOT_APPLICABLE_REASON;

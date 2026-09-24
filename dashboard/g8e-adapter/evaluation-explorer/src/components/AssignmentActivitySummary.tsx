@@ -44,7 +44,7 @@ function GovernedActionRecord({ record }: { record: PublicGovernedActionActivity
 }
 
 function ActivityFamily<T>({ title, family, renderRecord }: { title: string; family: PublicActivityFamily<T> | undefined; renderRecord: (record: T, index: number) => ReactNode }) {
-  if (!family) return <div className="activity-family"><h3>{title}</h3><p className="panel-note">Unavailable: historical activity shape not captured.</p></div>;
+  if (!family || family.availability !== 'observed' || family.records.length === 0) return null;
   return (
     <details className="activity-family" open={family.availability === 'observed' && family.records.length > 0}>
       <summary><span>{title}</span><span className="activity-availability">{availabilityText(family)}</span></summary>
@@ -57,13 +57,13 @@ export function AssignmentActivitySummary({ activity }: { activity: PublicAssign
   return (
     <section className="assignment-activity">
       <h2>What happened</h2>
-      {!activity ? <p className="panel-note">Activity evidence is unavailable for this assignment.</p> : <div className="activity-families">
+      {activity ? <div className="activity-families">
         <ActivityFamily title="Model activity" family={activity.model_activity} renderRecord={(record) => <ModelRecord record={record as PublicModelActivityRecord} />} />
         <ActivityFamily title="Tool decisions" family={activity.tool_decisions} renderRecord={(record) => <ToolDecisionRecord record={record as PublicToolDecisionActivityRecord} />} />
         <ActivityFamily title="Tool calls" family={activity.tool_calls} renderRecord={(record) => <ToolCallRecord record={record as PublicToolCallActivityRecord} />} />
         <ActivityFamily title="Policy decisions" family={activity.policy_decisions} renderRecord={(record) => <PolicyRecord record={record as PublicPolicyDecisionActivityRecord} />} />
         <ActivityFamily title="Governed actions" family={activity.governed_actions} renderRecord={(record) => <GovernedActionRecord record={record as PublicGovernedActionActivityRecord} />} />
-      </div>}
+      </div> : null}
     </section>
   );
 }

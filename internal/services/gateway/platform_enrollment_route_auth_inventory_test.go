@@ -27,6 +27,7 @@
 //   /api/v1/auth/platform-enrollments/status      RouteAuthNone (token-scoped)
 //   /api/v1/auth/platform-enrollments/complete    RouteAuthNone (token-scoped + proof-of-possession)
 //   /api/v1/auth/platform-enrollments/pending     RouteAuthDual (owner: web session or mTLS)
+//   /api/v1/auth/platform-enrollments/enrolled    RouteAuthDual (owner: web session or mTLS)
 //   /api/v1/auth/platform-enrollments/decision    RouteAuthDual (owner: web session or mTLS)
 
 package gateway
@@ -106,6 +107,8 @@ func TestPlatformEnrollmentRouteAuth_NewRoutesClassified(t *testing.T) {
 	// Owner surfaces — dual auth (web session or mTLS).
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentPending),
 		"platform enrollment pending is RouteAuthDual (owner: web session or mTLS)")
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentEnrolled),
+		"platform enrollment enrolled is RouteAuthDual (owner: web session or mTLS)")
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentDecision),
 		"platform enrollment decision is RouteAuthDual (owner: web session or mTLS)")
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentRevoke),

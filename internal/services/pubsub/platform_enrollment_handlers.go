@@ -604,10 +604,13 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		if err != nil {
 			return "", err
 		}
-		if err := h.deps.CLISessions.DeactivateCLISession(req.CLISessionID); err != nil && !errors.Is(err, constants.ErrCLISessionAlreadyDeactivated) {
+		if err := h.deps.CLISessions.DeactivateCLISession(req.CLISessionID); err != nil &&
+			!errors.Is(err, constants.ErrCLISessionAlreadyDeactivated) &&
+			!errors.Is(err, constants.ErrCLISessionNotFound) {
 			return "", fmt.Errorf("platform enrollment: deactivate CLI session: %w", err)
 		}
-		if err := h.deps.OperatorSessions.DeactivateOperatorSession(req.OperatorSessionID); err != nil {
+		if err := h.deps.OperatorSessions.DeactivateOperatorSession(req.OperatorSessionID); err != nil &&
+			!errors.Is(err, constants.ErrGatewayOperatorSessionInvalid) {
 			return "", fmt.Errorf("platform enrollment: deactivate operator session: %w", err)
 		}
 		update, err := json.Marshal(platformOperatorTerminationUpdate{

@@ -288,6 +288,29 @@ func (s *Store) LoadRun(ctx context.Context, runID string) (*evalv1.EvaluationRu
 	return run, nil
 }
 
+// CountAssignments returns the number of persisted assignment records for one run.
+func (s *Store) CountAssignments(ctx context.Context, runID string) (int, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
+		return 0, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	dir := filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname)
+	entries, err := s.files.ReadDir(ctx, dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("evaluation: count assignments: %w", err)
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-result"+constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-trace"+constants.FileExtJSON) {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
 // ListAssignments returns all persisted assignments for one run in deterministic order.
 func (s *Store) ListAssignments(ctx context.Context, runID string) ([]*evalv1.EvaluationAssignment, error) {
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {

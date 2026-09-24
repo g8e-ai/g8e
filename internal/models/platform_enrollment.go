@@ -149,6 +149,25 @@ type PlatformEnrollmentPendingResponse struct {
 	Requests []PlatformEnrollmentPendingRequest `json:"requests"`
 }
 
+type PlatformEnrollmentEnrolledRequest struct {
+	RequestID         string                  `json:"request_id"`
+	ComponentKind     PlatformComponentKind   `json:"component_kind"`
+	ComponentName     string                  `json:"component_name"`
+	InstanceID        string                  `json:"instance_id"`
+	Hostname          string                  `json:"hostname"`
+	State             PlatformEnrollmentState `json:"state"`
+	OperatorID        string                  `json:"operator_id,omitempty"`
+	OperatorSessionID string                  `json:"operator_session_id,omitempty"`
+	CLISessionID      string                  `json:"cli_session_id,omitempty"`
+	PolicyID          string                  `json:"policy_id,omitempty"`
+	CompletedAt       *time.Time              `json:"completed_at,omitempty"`
+	RevokedAt         *time.Time              `json:"revoked_at,omitempty"`
+}
+
+type PlatformEnrollmentEnrolledResponse struct {
+	Enrollments []PlatformEnrollmentEnrolledRequest `json:"enrollments"`
+}
+
 type PlatformEnrollmentDecisionRequest struct {
 	RequestID string                     `json:"request_id"`
 	Decision  PlatformEnrollmentDecision `json:"decision"`
@@ -288,6 +307,23 @@ func (r PlatformEnrollmentRequest) PendingMetadata() PlatformEnrollmentPendingRe
 		State:             r.State,
 		CreatedAt:         r.CreatedAt,
 		ExpiresAt:         r.ExpiresAt,
+	}
+}
+
+func (r PlatformEnrollmentRequest) EnrolledMetadata() PlatformEnrollmentEnrolledRequest {
+	return PlatformEnrollmentEnrolledRequest{
+		RequestID:         r.ID,
+		ComponentKind:     r.ComponentKind,
+		ComponentName:     r.ComponentName,
+		InstanceID:        r.InstanceID,
+		Hostname:          r.Hostname,
+		State:             r.State,
+		OperatorID:        r.OperatorID,
+		OperatorSessionID: r.OperatorSessionID,
+		CLISessionID:      r.CLISessionID,
+		PolicyID:          r.PolicyID,
+		CompletedAt:       r.CompletedAt,
+		RevokedAt:         r.RevokedAt,
 	}
 }
 

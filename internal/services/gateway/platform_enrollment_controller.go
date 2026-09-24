@@ -36,6 +36,8 @@ import (
 //     signatures over the canonical completion transcript for every key)
 //   - pending   (GET  /api/v1/auth/platform-enrollments/pending):    RouteAuthDual
 //     (owner: web session cookie or mTLS CLI; active-first-user enforced)
+//   - enrolled  (GET  /api/v1/auth/platform-enrollments/enrolled):   RouteAuthDual
+//     (owner: web session cookie or mTLS CLI; active-first-user enforced)
 //   - decision  (POST /api/v1/auth/platform-enrollments/decision):   RouteAuthDual
 //     (owner: web session cookie or mTLS CLI; active-first-user enforced)
 //
@@ -226,6 +228,40 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentPending(w http.Re
 	if err != nil {
 		c.logger.Error("platform enrollment: list pending failed", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to list pending requests")
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	c.responder.JSON(w, http.StatusOK, resp)
+}
+
+// handlePlatformEnrollmentEnrolled returns owner-visible metadata for all
+// completed and revoked platform enrollment requests. The response never
+// includes token hashes, CSR PEM, certificates, or raw tokens. The caller
+// must be authenticated as the active first user.
+//
+// GET /api/v1/auth/platform-enrollments/enrolled  (RouteAuthDual)
+func (c *PlatformEnrollmentController) handlePlatformEnrollmentEnrolled(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionAuthRequired.Error())
+		return
+	}
+
+	if err := c.requireActiveFirstUser(userID); err != nil {
+		c.writeEnrollmentError(w, err)
+		return
+	}
+
+	resp, err := c.enrollSvc.ListEnrolled(r.Context())
+	if err != nil {
+		c.logger.Error("platform enrollment: list enrolled failed", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to list enrolled requests")
 		return
 	}
 

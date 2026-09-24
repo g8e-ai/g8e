@@ -44,6 +44,7 @@ type PublicMirrorSourceState struct {
 	Batches                   []models.PublicFeedBatch  `json:"batches"`
 	Freshness                 models.CampaignFreshness  `json:"freshness"`
 	LastAcceptedAt            time.Time                 `json:"last_accepted_at"`
+	WithdrawnDatasetIDs       map[string]bool           `json:"withdrawn_dataset_ids,omitempty"`
 }
 
 type PublicMirrorStoreState struct {
@@ -150,6 +151,9 @@ func normalizePublicMirrorStoreState(state *PublicMirrorStoreState) {
 		}
 		if source.RetainedPreviousBatchHash == "" {
 			source.RetainedPreviousBatchHash = constants.PublicFeedZeroHashHex
+		}
+		if source.WithdrawnDatasetIDs == nil {
+			source.WithdrawnDatasetIDs = make(map[string]bool)
 		}
 	}
 	if state.ActiveSourceID == "" && len(state.Sources) == 1 {
@@ -534,6 +538,7 @@ func newPublicMirrorSourceState() *PublicMirrorSourceState {
 		RetainedFromSequence:      1,
 		RetainedPreviousBatchHash: constants.PublicFeedZeroHashHex,
 		Freshness:                 models.CampaignFreshnessActive,
+		WithdrawnDatasetIDs:       make(map[string]bool),
 	}
 }
 
@@ -1468,6 +1473,9 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 		if rec.Sequence <= cursor {
 			continue
 		}
+		if mirrorRecordWithdrawn(state, rec) {
+			continue
+		}
 		var item models.PublicFeedObject
 		if err := json.Unmarshal([]byte(rec.RecordBytes), &item); err != nil {
 			continue
@@ -1549,9 +1557,10 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 	var replayRecords []models.PublicFeedRecord
 	if stateExists {
 		for _, rec := range state.Records {
-			if rec.Sequence > sinceID {
-				replayRecords = append(replayRecords, rec)
+			if rec.Sequence <= sinceID || mirrorRecordWithdrawn(state, rec) {
+				continue
 			}
+			replayRecords = append(replayRecords, rec)
 		}
 	}
 	m.mu.RUnlock()
@@ -1738,6 +1747,9 @@ func (m *PublicMirrorServer) recentProjectionsLocked(state *PublicMirrorSourceSt
 	for i := len(state.Records) - 1; i >= 0 && len(projections) < max; i-- {
 		rec := state.Records[i]
 		if rec.RecordType != models.PublicFeedRecordTypeProjection {
+			continue
+		}
+		if mirrorRecordWithdrawn(state, rec) {
 			continue
 		}
 		var item models.PublicFeedObject

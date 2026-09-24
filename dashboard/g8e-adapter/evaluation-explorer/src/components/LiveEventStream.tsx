@@ -17,9 +17,8 @@ import {
 import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
 import type { AssignmentResult, LiveEvent, MetricValue } from '../contract/types';
 import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
-import { metricDisplay } from '../utils/format';
-
 const STREAM_PAGE_SIZE = 25;
+const STREAM_EMPTY_METRIC = '--';
 
 function eventTime(iso: string): string {
   const date = new Date(iso);
@@ -77,7 +76,6 @@ function eventParts(event: LiveEvent, assignment: AssignmentResult | undefined):
 
 type AssignmentMetricColumn =
   | 'pass'
-  | 'task_score'
   | 'deterministic_pass_rate'
   | 'latency_ms'
   | 'input_tokens'
@@ -90,7 +88,6 @@ type StreamSortDirection = 'asc' | 'desc';
 
 const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: string }> = [
   { key: 'pass', label: 'Pass' },
-  { key: 'task_score', label: 'Task score' },
   { key: 'deterministic_pass_rate', label: 'Pass Rate' },
   { key: 'latency_ms', label: 'Latency' },
   { key: 'input_tokens', label: 'Input tokens' },
@@ -100,6 +97,23 @@ const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: str
 
 function assignmentMetric(event: LiveEvent, assignment: AssignmentResult | undefined, key: AssignmentMetricColumn): MetricValue | undefined {
   return assignmentMetricValues(event, assignment)[key];
+}
+
+function streamMetricDisplay(
+  metric: MetricValue | undefined,
+  formatter: (value: number) => string,
+): { text: string; unavailable: boolean; reason?: string } {
+  if (!metric) {
+    return { text: STREAM_EMPTY_METRIC, unavailable: true, reason: 'not observed' };
+  }
+  if (metric.value === undefined) {
+    return {
+      text: STREAM_EMPTY_METRIC,
+      unavailable: true,
+      reason: metric.unavailable_reason,
+    };
+  }
+  return { text: formatter(metric.value), unavailable: false };
 }
 
 function streamSortValue(
@@ -325,6 +339,11 @@ export function LiveEventStream({
                 const eventHref = event.assignment_id
                   ? `/evaluations/${event.dataset_id}/${event.run_id}/assignments/${event.assignment_id}`
                   : `/evaluations/${event.dataset_id}/${event.run_id}`;
+                const taskHref =
+                  parts.task !== '—' ? `/tasks/${encodeURIComponent(parts.task)}` : undefined;
+                const categoryHref = assignment?.scenario_category
+                  ? `/tasks#category-${assignment.scenario_category}`
+                  : undefined;
                 const modelHref = event.variant_id
                   ? `/models/${event.dataset_id}/${event.variant_id}${model?.role ? `?role=${model.role}` : ''}`
                   : undefined;
@@ -347,10 +366,18 @@ export function LiveEventStream({
                       </Link>
                     </td>
                     <td>{parts.status}</td>
-                    <td>{parts.category}</td>
                     <td>
-                      {event.assignment_id ? (
-                        <Link to={eventHref} className="stream-assignment-id">
+                      {categoryHref ? (
+                        <Link to={categoryHref} className="stream-category-link">
+                          {parts.category}
+                        </Link>
+                      ) : (
+                        parts.category
+                      )}
+                    </td>
+                    <td>
+                      {taskHref ? (
+                        <Link to={taskHref} className="stream-task-link">
                           {parts.task}
                         </Link>
                       ) : (
@@ -359,8 +386,8 @@ export function LiveEventStream({
                     </td>
                     {ASSIGNMENT_METRIC_COLUMNS.map(({ key }) => {
                       const displayed = !event.assignment_id
-                        ? { text: '—', unavailable: true }
-                        : metricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key));
+                        ? { text: STREAM_EMPTY_METRIC, unavailable: true }
+                        : streamMetricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key));
                       return (
                         <td className="stream-metric-cell" key={key}>
                           <span className={displayed.unavailable ? 'stream-metric-value unavailable' : 'stream-metric-value'}>

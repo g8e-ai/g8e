@@ -44,7 +44,11 @@ func TestGradeHomogeneousScenario_InstructionExactFormatPassesWithMatchingOutput
 	content := findDeterministicGrade(result.DeterministicGrades, "scenario-content")
 	require.NotNil(t, content)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, content.GetStatus())
-	assert.NotEmpty(t, result.DecomposedScores)
+	require.Len(t, result.DecomposedScores, 2)
+	assert.Equal(t, "task_score", result.DecomposedScores[0].GetDimension())
+	assert.Equal(t, 1.0, result.DecomposedScores[0].GetValue())
+	assert.Equal(t, "deterministic_pass_rate", result.DecomposedScores[1].GetDimension())
+	assert.Equal(t, 1.0, result.DecomposedScores[1].GetValue())
 }
 
 func TestGradeHomogeneousScenario_InstructionBoundedCountFailsWithWrongWordCount(t *testing.T) {
@@ -74,6 +78,11 @@ func TestGradeHomogeneousScenario_InstructionBoundedCountFailsWithWrongWordCount
 	content := findDeterministicGrade(result.DeterministicGrades, "scenario-content")
 	require.NotNil(t, content)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, content.GetStatus())
+	require.Len(t, result.DecomposedScores, 2)
+	assert.Equal(t, "task_score", result.DecomposedScores[0].GetDimension())
+	assert.Equal(t, 0.0, result.DecomposedScores[0].GetValue())
+	assert.Equal(t, "deterministic_pass_rate", result.DecomposedScores[1].GetDimension())
+	assert.Less(t, result.DecomposedScores[1].GetValue(), 1.0)
 }
 
 func TestGradeHomogeneousScenario_SemanticScenarioUsesImportedTraceGrades(t *testing.T) {

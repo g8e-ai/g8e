@@ -23,20 +23,13 @@ export function ScenarioContextCard({ scenario }: { scenario: PublicScenarioSumm
             <DetailRow label="Grading method">{displayLabel(scenario.grading_method)}</DetailRow>
             <DetailRow label="Description">{scenario.public_description}</DetailRow>
           </dl>
-          <div className="context-lists">
-            <div>
-              <h3>Allowed tools</h3>
-              {scenario.allowed_tools.length > 0 ? <ul>{scenario.allowed_tools.map((tool) => <li key={tool}>{tool}</li>)}</ul> : <p className="panel-note">No tools published.</p>}
+          {scenario.allowed_tools.length > 0 || scenario.expected_tools.length > 0 || scenario.forbidden_tools.length > 0 ? (
+            <div className="context-lists">
+              {scenario.allowed_tools.length > 0 ? <div><h3>Allowed tools</h3><ul>{scenario.allowed_tools.map((tool) => <li key={tool}>{tool}</li>)}</ul></div> : null}
+              {scenario.expected_tools.length > 0 ? <div><h3>Expected tools</h3><ul>{scenario.expected_tools.map((tool) => <li key={tool}>{tool}</li>)}</ul></div> : null}
+              {scenario.forbidden_tools.length > 0 ? <div><h3>Forbidden tools</h3><ul>{scenario.forbidden_tools.map((tool) => <li key={tool}>{tool}</li>)}</ul></div> : null}
             </div>
-            <div>
-              <h3>Expected tools</h3>
-              {scenario.expected_tools.length > 0 ? <ul>{scenario.expected_tools.map((tool) => <li key={tool}>{tool}</li>)}</ul> : <p className="panel-note">No expected tools published.</p>}
-            </div>
-            <div>
-              <h3>Forbidden tools</h3>
-              {scenario.forbidden_tools.length > 0 ? <ul>{scenario.forbidden_tools.map((tool) => <li key={tool}>{tool}</li>)}</ul> : <p className="panel-note">No forbidden tools published.</p>}
-            </div>
-          </div>
+          ) : null}
           {scenario.criteria.length > 0 ? (
             <div className="context-criteria">
               <h3>Public criteria</h3>

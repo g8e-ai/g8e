@@ -108,7 +108,7 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&queue, "queue", false, "Restore every verified run listed in .g8e/eval/init-campaign-queue.json")
 	cmd.Flags().StringVar(&runID, "run-id", "", "Restore one canonical campaign run")
-	cmd.Flags().DurationVar(&runTimeout, "run-timeout", 2*time.Minute, "Maximum time allowed to reconcile each verified run")
+	cmd.Flags().DurationVar(&runTimeout, "run-timeout", evaluation.CampaignMirrorDefaultRunTimeout, "Base per-run timeout; scales up with assignment count during restore")
 	return cmd
 }
 
@@ -121,7 +121,7 @@ func reconcileVerifiedCampaignMirrorQueue(ctx context.Context, projectRoot strin
 	if err != nil {
 		return nil, err
 	}
-	return reconciler.ReconcileVerifiedQueue(ctx, queue, runTimeout, progress)
+	return reconciler.ReconcileVerifiedQueue(ctx, queue, runTimeout, true, progress)
 }
 
 const dockerInitCampaignMirrorRestoreTimeout = 10 * time.Second
@@ -152,7 +152,11 @@ func reconcileVerifiedCampaignMirrorFromDockerInit(ctx context.Context, fileSvc 
 			evaluation.NewStore(fileSvc),
 			mirrorProbe,
 		)
-		return reconcileVerifiedCampaignMirrorQueue(restoreCtx, cfg.ProjectRoot, reconciler, dockerInitCampaignMirrorRestoreTimeout, nil)
+		queue, err := evaluation.LoadInitCampaignQueueFromRuntime(restoreCtx, fileSvc, evaluation.DefaultInitCampaignQueueRelPath)
+		if err != nil {
+			return nil, err
+		}
+		return reconciler.ReconcileVerifiedQueue(restoreCtx, queue, dockerInitCampaignMirrorRestoreTimeout, false, nil)
 	})
 }
 

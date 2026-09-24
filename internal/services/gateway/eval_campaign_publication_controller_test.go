@@ -101,7 +101,7 @@ func TestEvalCampaignPublicationController_HandlePublicationState_RejectsInvalid
 	}{
 		{name: "wrong suffix", method: http.MethodGet, path: constants.APIPaths.EvalCampaignPublicationStateByRun + runID, wantStatus: http.StatusNotFound},
 		{name: "missing run id", method: http.MethodGet, path: constants.APIPaths.EvalCampaignPublicationStateByRun + "/publication-state", wantStatus: http.StatusBadRequest},
-		{name: "method not allowed", method: http.MethodDelete, path: path, wantStatus: http.StatusMethodNotAllowed},
+		{name: "delete ok", method: http.MethodDelete, path: path, wantStatus: http.StatusOK},
 		{name: "invalid json body", method: http.MethodPut, path: path, body: []byte("{"), wantStatus: http.StatusBadRequest},
 		{
 			name:       "run id mismatch",

@@ -168,6 +168,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// active-first-user authorization after the middleware stamps the
 	// user ID from the verified session or certificate.
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentPending, RouteAuthDual)
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentEnrolled, RouteAuthDual)
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentDecision, RouteAuthDual)
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentRevoke, RouteAuthDual)
 

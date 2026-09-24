@@ -38,6 +38,7 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	var inferenceSessionID string
 	var dataSessionID string
+	var dataSystemFingerprint string
 	var ensembleURL string
 	var ollamaEndpoint string
 	var dryRun bool
@@ -48,7 +49,7 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var requireProviderObservation bool
 	var requireModelProvenance bool
 	var noAutoRefresh bool
-	var tierA bool
+	var requireWitness bool
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Initialize, schedule, and execute one homogeneous campaign run",
@@ -58,11 +59,12 @@ initialize the campaign, schedule assignments, and execute them in one flow.
 Examples:
   g8e eval campaign start --model gemma3:4b --publish --daemon
   g8e eval campaign start --models qwen3:0.6b,qwen3:4b,gemma3:4b --publish --daemon
-  g8e eval campaign start --queue next --publish --daemon --verify --tier-a`,
+  g8e eval campaign start --queue next --publish --daemon --require-witness`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if tierA {
+			if requireWitness {
 				requireProviderObservation = true
 				requireModelProvenance = true
+				verify = true
 			}
 			flowOpts := campaignStartFlowOptions{
 				ModelTag:                   modelTag,
@@ -73,6 +75,7 @@ Examples:
 				RunID:                      runID,
 				InferenceSessionID:         inferenceSessionID,
 				DataSessionID:              dataSessionID,
+				DataSystemFingerprint:      dataSystemFingerprint,
 				EnsembleURL:                ensembleURL,
 				OllamaEndpoint:             ollamaEndpoint,
 				DryRun:                     dryRun,
@@ -122,6 +125,7 @@ Examples:
 	cmd.Flags().StringVar(&runID, "run-id", "", "Override run ID")
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Pin the inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Pin the data Operator session ID")
+	cmd.Flags().StringVar(&dataSystemFingerprint, "data-system-fingerprint", "", "Require the data Operator's exact system_fingerprint")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for model maintenance (default: active inference operator runtime_config, then G8E_OLLAMA_ENDPOINT, then loopback)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the resolved plan without running")
@@ -131,7 +135,7 @@ Examples:
 	cmd.Flags().BoolVar(&verify, "verify", false, "Run campaign verify after execute completes")
 	cmd.Flags().BoolVar(&requireProviderObservation, "require-provider-observation", false, "Fail verify when provider-boundary observation windows are missing")
 	cmd.Flags().BoolVar(&requireModelProvenance, "require-model-provenance", false, "Fail verify when model provenance attestation windows are missing or digest_match is false")
-	cmd.Flags().BoolVar(&tierA, "tier-a", false, "Tier-A verify preset: require provider observation and model provenance")
+	cmd.Flags().BoolVar(&requireWitness, "require-witness", false, "Require provider-boundary observation and model-provenance witness evidence during verification (implies --verify)")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	return cmd
 }

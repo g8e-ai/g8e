@@ -734,3 +734,88 @@ func TestApprovePlatformEnrollmentCmd_ApproveWithYes_FetchesPendingFirst(t *test
 	assert.Equal(t, constants.APIPaths.AuthPlatformEnrollmentPending, mockClient.getCalls[0])
 	require.Len(t, mockClient.postCalls, 1, "must POST exactly one decision")
 }
+
+func sampleEnrolledResponse() models.PlatformEnrollmentEnrolledResponse {
+	completedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	return models.PlatformEnrollmentEnrolledResponse{
+		Enrollments: []models.PlatformEnrollmentEnrolledRequest{
+			{
+				RequestID:         "req-operator-completed-001",
+				ComponentKind:     models.PlatformComponentOperator,
+				ComponentName:     models.PlatformOperatorName,
+				InstanceID:        "operator-host-01",
+				Hostname:          "operator.example.com",
+				State:             models.PlatformEnrollmentStateCompleted,
+				OperatorID:        "59182945-2709-47f6-b573-049b9c92a19e",
+				OperatorSessionID: "3b750b7a-6d88-493a-80b5-fe715a9b8525",
+				CLISessionID:      "cli-session-001",
+				CompletedAt:       &completedAt,
+			},
+			{
+				RequestID:     "req-dashboard-revoked-002",
+				ComponentKind: models.PlatformComponentDashboard,
+				ComponentName: models.PlatformDashboardName,
+				InstanceID:    "dashboard-host-01",
+				Hostname:      "dashboard.example.com",
+				State:         models.PlatformEnrollmentStateRevoked,
+				PolicyID:      "spiffe://g8e.local/app/g8ed",
+				CompletedAt:   &completedAt,
+				RevokedAt:     &completedAt,
+			},
+		},
+	}
+}
+
+func TestListPlatformEnrollmentCmd_ListsEnrollments(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	enrolledBody, err := json.Marshal(sampleEnrolledResponse())
+	require.NoError(t, err)
+
+	mockClient := &mockAPIClient{getResp: enrolledBody}
+
+	cmd := listPlatformEnrollmentCmdWithConfig(
+		configLoaderFor(cfg), mockClientFactory(mockClient), fileSvcFactoryFor(nil))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err = cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+
+	require.Len(t, mockClient.getCalls, 1)
+	assert.Equal(t, constants.APIPaths.AuthPlatformEnrollmentEnrolled, mockClient.getCalls[0])
+
+	output := buf.String()
+	assert.Contains(t, output, "req-operator-completed-001")
+	assert.Contains(t, output, "req-dashboard-revoked-002")
+	assert.Contains(t, output, "operator.example.com")
+	assert.Contains(t, output, "59182945-2709-47f6-b573-049b9c92a19e")
+	assert.NotContains(t, output, "3b750b7a-6d88-493a-80b5-fe715a9b8525")
+}
+
+func TestListPlatformEnrollmentCmd_EmptyListPrintsMessage(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	enrolledBody, err := json.Marshal(models.PlatformEnrollmentEnrolledResponse{Enrollments: nil})
+	require.NoError(t, err)
+
+	mockClient := &mockAPIClient{getResp: enrolledBody}
+
+	cmd := listPlatformEnrollmentCmdWithConfig(
+		configLoaderFor(cfg), mockClientFactory(mockClient), fileSvcFactoryFor(nil))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err = cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "No completed platform enrollment requests")
+}
+
+func TestListPlatformEnrollmentCmd_CommandStructure(t *testing.T) {
+	cmd := listPlatformEnrollmentCmdWithConfig(
+		configLoaderFor(nil), panickingClientFactory(), fileSvcFactoryFor(nil))
+	assert.Equal(t, "list", cmd.Use)
+	assert.NotNil(t, cmd.RunE)
+}

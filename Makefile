@@ -930,7 +930,8 @@ _ci-test:
 # RELEASE
 # =============================================================================
 # VERSION is the single source of truth. `make release` syncs pyproject.toml,
-# __init__.py, and the Python uv.lock package entry from VERSION (if needed), tags the current commit as
+# __init__.py, the Python uv.lock package entry, and maintained protocol specification
+# Version: headers from VERSION (if needed), tags the current commit as
 # v<VERSION> + protocol/v<VERSION>, and pushes both tags. The GitHub Actions
 # workflows create the GitHub release and upload binary assets.
 #
@@ -984,6 +985,18 @@ release:
 	else \
 		echo "  uv.lock already in sync."; \
 	fi; \
+	for doc in a2a.md constants.md mcp.md spec.md; do \
+		DOC_FILE=protocol/docs/$$doc; \
+		DOC_VERSION=$$(grep -E '^Version: v' $$DOC_FILE | head -1 | sed 's/^Version: v//'); \
+		if [ "$$DOC_VERSION" != "$$VERSION" ]; then \
+			echo "Syncing $$DOC_FILE: $$DOC_VERSION -> $$VERSION"; \
+			sed -i.bak -E 's/^Version: v[^[:space:]]+/Version: v'$$VERSION'/' $$DOC_FILE; \
+			rm -f $$DOC_FILE.bak; \
+			echo "  $$DOC_FILE synced."; \
+		else \
+			echo "  $$DOC_FILE already in sync."; \
+		fi; \
+	done; \
 	\
 	if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Error: working tree is dirty after version sync."; \

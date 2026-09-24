@@ -5,8 +5,8 @@ parent: Guides
 
 # Public Spectator Operations Guide
 
-Last Updated: 2026-09-22
-Version: v2.1.12
+Last Updated: 2026-09-24
+Version: v2.1.13
 
 This guide covers the gateway-owned anonymous public mirror and evaluation explorer. It is separate from the passkey-authenticated owner-local observe frontend connected with `./g8e gw connect <origin>`; see [Generator-Neutral Builder Guide](./build_observe_frontend.md) and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend).
 
@@ -24,7 +24,7 @@ The unified Compose deployment binds host ports 8081, 8082, and 5173 to loopback
 
 Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-feed/batches`. Host `g8e public init` is not required for Docker or evaluation campaigns.
 
-Campaign publication emits public-safe assignment records with the enriched `1.1.0` result envelope and Evaluation Explorer summaries with view schema `1.5.0`. Assignment Details show approved scenario context, typed grades, grouped activity, bounded resource observations, verification metadata, and content bindings. Evaluation summaries carry typed pass-rate, latency-p50, and output-throughput-p50 metrics with observed, eligible, and unavailable contributor counts; model evaluations omit system-only routing and correlation metrics. New summaries use `not_run` until a population-bound verification report is published, and later aggregate revisions preserve the bound `passed` or `failed` state and verification metadata. The source run and catalog bindings must match; unavailable capture remains unavailable, and public evidence bindings are references rather than proof of public accessibility. A passing campaign verification report also publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates. The browser reads these stored revisions and does not promote model quality locally.
+Campaign publication emits public-safe assignment records with the enriched `1.1.0` result envelope and Evaluation Explorer summaries with view schema `1.5.0`. Assignment Details use a compact layout with approved scenario context, typed grades, grouped activity when present, bounded resource observations rendered only when the public record contains a value, verification metadata mapped from campaign `unverified` to `not_run`, and content bindings. The Tasks view lists the frozen north-star-25 scenario catalog with disclosure-safe prompts, pass criteria, and source links. Empty sections and values absent from the public record are omitted. Evaluation summaries carry typed pass-rate, latency-p50, and output-throughput-p50 metrics with observed, eligible, and unavailable contributor counts; model evaluations omit system-only routing and correlation metrics. New summaries use `not_run` until a population-bound verification report is published, and later aggregate revisions preserve the bound `passed` or `failed` state and verification metadata. The source run and catalog bindings must match; unavailable capture remains unavailable, and public evidence bindings are references rather than proof of public accessibility. A passing campaign verification report also publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates. The browser reads these stored revisions and does not promote model quality locally.
 
 For an existing run, use verified catch-up after the report is persisted so assignment and model-summary revisions are restored together:
 

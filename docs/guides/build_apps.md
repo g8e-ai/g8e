@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-24
+Version: v2.1.13
 
 ---
 
@@ -149,7 +149,7 @@ An app certificate is accepted only while its `AppPolicy` exists. The current au
 The Go protocol packages are part of the platform module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.12
+go get github.com/g8e-ai/g8e/v2@v2.1.13
 ```
 
 Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `CommandIntent`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers.
@@ -159,7 +159,7 @@ Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. T
 Install the Python protocol package from PyPI:
 
 ```bash
-pip install g8e==2.1.12
+pip install g8e==2.1.13
 ```
 
 The package requires Python 3.10 or later. It includes generated protobuf modules, Pydantic models, protocol constants, deterministic transaction hashing, and receipt parsing and verification helpers. `G8E_PROTOCOL_DIR` overrides the bundled protocol constants directory for development.

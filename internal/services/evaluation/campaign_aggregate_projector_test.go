@@ -113,6 +113,29 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 	assert.Equal(t, "methodology_snapshot", methodology.Kind)
 }
 
+func TestBuildRunAggregateViewRecordsScheduledNoProgress(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT),
+	}
+	state, err := CollectRunAggregateState(assignments, nil)
+	require.NoError(t, err)
+	run := &evalv1.EvaluationRun{
+		RunId:     "run-1",
+		StartedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "eval-smoke-mini",
+		},
+	}
+	records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
+	require.NoError(t, err)
+
+	var summary evaluationSummaryRecord
+	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
+	assert.Equal(t, "queued", summary.LifecycleState)
+	assert.Equal(t, "not_evaluated", summary.QualityState)
+}
+
 func TestBuildRunAggregateViewRecordsPartialProgress(t *testing.T) {
 	assignments := []*evalv1.EvaluationAssignment{
 		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),

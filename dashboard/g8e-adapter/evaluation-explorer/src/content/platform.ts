@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 // Shared copy for how OpenDevOps.ai deploys and presents g8e.
-// Used by the landing System overview and the Docs architecture section.
+// Used by the About page and the Docs architecture section.
 
 export const G8E_REPO_URL = 'https://github.com/g8e-ai/g8e';
 
@@ -30,11 +30,81 @@ export const PLATFORM_SOLO_NOTE = 'Solo operator · home-PC hardware · live pip
 export const PLATFORM_OVERVIEW_LEDE =
   'This site is a live deployment of the g8e AI governance suite, not a separate benchmark product. Evaluations run through the governed execution path and publish public-safe results to this Explorer.';
 
-export const PLATFORM_LEDE =
-  "I bring 30 years in data protection and systems integration, plus hands-on delivery across zero-trust agent runtimes, multi-agent orchestration, LLM-as-judge evaluations, adversarial red teaming, and CI regression detection. Point me in a direction, I'll take care of it.";
+export const ABOUT_SITE_INTRO_BEFORE = 'This Explorer is a live window into ';
+export const ABOUT_SITE_INTRO_AFTER =
+  ' — the sovereign execution-governance platform I designed, built, and operate end-to-end. Every campaign you see here runs through the same governed path a production agent workload would take, with public-safe telemetry and cryptographic proofs published live to this mirror.';
 
-export const PLATFORM_OVERVIEW_PORTFOLIO_NOTE =
-  'Available for roles and select consulting engagements in agentic AI security, governance, evaluation infrastructure, and trustworthy production systems.';
+export const ABOUT_HEADING = 'Who Builds This — And Can Help You Ship Yours?';
+
+export const ABOUT_OPENING_BEFORE = "I'm ";
+export const ABOUT_OPENING_AFTER =
+  ' — Principal Engineer, U.S. Navy veteran, and founder of Lateralus Labs.';
+
+export const ABOUT_BACKGROUND =
+  "For thirty years, I have built and operated mission-critical distributed systems: commissioning shipboard IT from bare steel, running one of the world's largest enterprise backup environments at Nike, scaling petabyte-scale NAS-to-cloud platforms at Igneous and Rubrik, and now shipping sovereign agentic infrastructure that keeps state, credentials, and execution strictly under your control — not the model provider's.";
+
+export const ABOUT_LEADERSHIP =
+  "I don't architect and hand off. I lead from the front — design the system, write the code, stand up the platform, run the incidents, mentor the team, and ship.";
+
+export const ABOUT_EXPERIENCE = [
+  {
+    company: 'At Igneous',
+    text:
+      "I built the SRE practice from 0→1 and carried it through acquisition into Rubrik's NAS Cloud Direct product.",
+  },
+  {
+    company: 'At Rubrik',
+    text:
+      'I owned reliability for a multi-petabyte platform and turned manual operations into observable, automated services.',
+  },
+  {
+    company: 'At Lateralus Labs',
+    text:
+      'I shipped g8e as sole engineer: heterogeneous consensus, zero-trust admission, cryptographic audit state, evaluation infrastructure, edge operators, APIs, SDKs, and this Explorer — work that typically requires entire platform, security, AI, and frontend teams.',
+  },
+] as const;
+
+export const ABOUT_DELIVER_HEADING = 'What I Own & Deliver';
+
+export const ABOUT_DELIVER_INTRO =
+  'I work best with founders and engineering leaders who need someone to own ambiguous, high-stakes problems end to end:';
+
+export const ABOUT_DELIVERABLES = [
+  {
+    label: 'Agentic Execution & Governance',
+    detail:
+      'Multi-agent orchestration, agentic execution environments, and fail-closed governance layers.',
+  },
+  {
+    label: 'Platform Engineering & 0→1 SRE',
+    detail:
+      'Reliability practices, observability pipelines, and infrastructure scaling through acquisition and hypergrowth.',
+  },
+  {
+    label: 'Zero-Trust Security',
+    detail:
+      'Policy enforcement, identity management, and cryptographic attestation for autonomous workloads.',
+  },
+  {
+    label: 'LLM Evaluation & Red-Teaming',
+    detail:
+      'Adversarial testing, benchmark telemetry, and CI-integrated regression detection.',
+  },
+  {
+    label: 'Sovereign Infrastructure',
+    detail:
+      'Petabyte-scale distributed systems, data protection, and air-gapped data plane management.',
+  },
+] as const;
+
+export const ABOUT_AVAILABILITY_HEADING = 'Availability & Engagement';
+
+export const ABOUT_AVAILABILITY_LEDE_BEFORE = 'I am available for ';
+export const ABOUT_AVAILABILITY_LEDE_MIDDLE = ' and open to joining the right team ';
+export const ABOUT_AVAILABILITY_LEDE_AFTER = '.';
+
+export const ABOUT_AVAILABILITY_DETAIL =
+  'I am looking for hands-on leadership roles where I can wear multiple hats — architect and implement, mentor engineers, lead by example, and stay close to production. High agency, low supervision. Give me a hard problem and the authority to execute; I will drive it from design through operations.';
 
 export const WORKSTATION_SPECS = [
   { label: 'CPU', value: 'Intel Core i9-13900K' },

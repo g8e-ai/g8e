@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -195,7 +194,7 @@ func TestFinishCampaignQueueRun_TextAndJSON(t *testing.T) {
 	command.SetOut(&output)
 
 	result := campaignQueueRunResult{Planned: 2, Succeeded: 2, Failed: 0, LogDir: "/tmp/logs"}
-	require.NoError(t, finishCampaignQueueRun(command, "/queue/path", result, nil))
+	require.NoError(t, finishCampaignQueueRun(command, "/queue/path", result))
 	assert.Contains(t, output.String(), "planned=2")
 	assert.Contains(t, output.String(), "/tmp/logs")
 
@@ -203,8 +202,17 @@ func TestFinishCampaignQueueRun_TextAndJSON(t *testing.T) {
 	enableGlobalJSON(t, command)
 	output.Reset()
 	command.SetOut(&output)
-	result = campaignQueueRunResult{Planned: 2, Succeeded: 1, Failed: 1}
-	err := finishCampaignQueueRun(command, "/queue/path", result, fmt.Errorf("boom"))
+	result = campaignQueueRunResult{
+		Planned:   2,
+		Succeeded: 1,
+		Failed:    1,
+		Failures: []campaignQueueRunFailure{{
+			VariantID: "qwen3-4b",
+			Tag:       "qwen3:4b",
+			Error:     "boom",
+		}},
+	}
+	err := finishCampaignQueueRun(command, "/queue/path", result)
 	require.Error(t, err)
 	var payload campaignQueueRunResult
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
@@ -332,9 +340,15 @@ func TestRolloutEvalRunCmd_RecordsStartFailure(t *testing.T) {
 				Status:         "pending",
 				CampaignID:     "north-star-smoke",
 			},
+			{
+				VariantID:      "gemma3-4b",
+				ServedModelTag: "gemma3:4b",
+				Status:         "pending",
+				CampaignID:     "north-star-smoke",
+			},
 		},
 	}
-	writeTestRuntimeQueue(t, root, &queue)
+	fileSvc := writeTestRuntimeQueue(t, root, &queue)
 
 	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -349,13 +363,20 @@ func TestRolloutEvalRunCmd_RecordsStartFailure(t *testing.T) {
 	command.SetOut(&output)
 	command.SetArgs([]string{
 		"rollout", "run", "--project-root", root,
-		"--continue-on-error",
 		"--ensemble-health-url", health.URL,
 		"--mirror-bootstrap-url", mirror.URL,
 	})
 	err := command.Execute()
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "2 model(s) failed")
 	assert.Contains(t, output.String(), "FAIL qwen3-4b")
+	assert.Contains(t, output.String(), "FAIL gemma3-4b")
+	assert.Contains(t, output.String(), "Queue run finished: planned=2 succeeded=0 failed=2")
+
+	loaded, loadErr := evaluation.LoadInitCampaignQueueFromRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath)
+	require.NoError(t, loadErr)
+	assert.Equal(t, "failed", loaded.Models[0].Status)
+	assert.Equal(t, "failed", loaded.Models[1].Status)
 }
 
 func campaignWitnessOperators() []models.OperatorDocumentGo {
@@ -418,7 +439,7 @@ func setupCampaignWitnessEnv(t *testing.T) (root string, deps nativeEvalDeps, cm
 }
 
 func TestPreflightCampaignQueueRun_SucceedsWhenWitnessesReady(t *testing.T) {
-	root, deps, cmd, cleanup := setupCampaignWitnessEnv(t)
+	_, _, cmd, cleanup := setupCampaignWitnessEnv(t)
 	defer cleanup()
 
 	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -430,18 +451,16 @@ func TestPreflightCampaignQueueRun_SucceedsWhenWitnessesReady(t *testing.T) {
 	t.Cleanup(health.Close)
 	t.Cleanup(mirror.Close)
 
-	cfg, err := deps.configLoader(root)
-	require.NoError(t, err)
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
-	require.NoError(t, preflightCampaignQueueRun(cmd, deps, cfg, 0, health.URL, mirror.URL))
+	require.NoError(t, preflightCampaignQueueRun(cmd, health.URL, mirror.URL))
 	assert.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Preflight ok (observer=1 provenance=1)")
+	assert.Contains(t, stdout.String(), "Preflight ok (platform health and mirror reachable)")
 }
 
-func TestPreflightCampaignQueueRun_RejectsMissingWitnesses(t *testing.T) {
-	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
+func TestPreflightCampaignQueueRun_DoesNotRequireWitnesses(t *testing.T) {
+	_, _, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 
 	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -453,11 +472,8 @@ func TestPreflightCampaignQueueRun_RejectsMissingWitnesses(t *testing.T) {
 	t.Cleanup(health.Close)
 	t.Cleanup(mirror.Close)
 
-	cfg, err := deps.configLoader(root)
+	err := preflightCampaignQueueRun(cmd, health.URL, mirror.URL)
 	require.NoError(t, err)
-	err = preflightCampaignQueueRun(cmd, deps, cfg, 0, health.URL, mirror.URL)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no active provider-boundary observer")
 }
 
 func TestCampaignWitnessStatus_UsesOperatorList(t *testing.T) {

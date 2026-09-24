@@ -681,16 +681,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		return fmt.Errorf("gateway: initialize g8e-binary reader: %w", err)
 	}
 	if !g8eReader.HasManifest() {
-		executable, execErr := os.Executable()
-		if execErr != nil {
-			return fmt.Errorf("gateway: resolve executable for g8e-binary reader: %w", execErr)
-		}
-		adjacentReader, readerErr := g8ebinaries.OpenReader(filepath.Join(filepath.Dir(executable), constants.BinDirname))
-		if readerErr != nil {
-			return fmt.Errorf("gateway: initialize adjacent g8e-binary reader: %w", readerErr)
-		}
-		if adjacentReader.HasManifest() {
-			g8eReader = adjacentReader
+		if executable, execErr := os.Executable(); execErr == nil {
+			adjacentReader, readerErr := g8ebinaries.OpenReader(filepath.Join(filepath.Dir(executable), constants.BinDirname))
+			if readerErr == nil && adjacentReader.HasManifest() {
+				g8eReader = adjacentReader
+			}
 		}
 	}
 
@@ -883,6 +878,12 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Logger:    logger,
 			Responder: ls.responder,
 			Service:   NewEvalCampaignPublicationService(ls.docStore),
+			Mirror: func() *PublicMirrorServer {
+				if ls.publicSpectator == nil {
+					return nil
+				}
+				return ls.publicSpectator.Mirror()
+			},
 		},
 		ProviderObservationControllerDeps: providerObservationDeps,
 		ModelProvenanceControllerDeps:     modelProvenanceDeps,

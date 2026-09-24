@@ -599,7 +599,7 @@ func TestReconcileVerifiedCampaignMirrorFromDockerInit_RestoresQueue(t *testing.
 	result, err := reconcileVerifiedCampaignMirrorFromDockerInit(context.Background(), fileSvc, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.NotEmpty(t, result.RestoredRunIDs)
+	assert.Equal(t, []string{run.GetRunId()}, result.MissingRunIDs)
 }
 
 func TestInferenceEvalPrepareProbe_RejectsUnknownSession(t *testing.T) {

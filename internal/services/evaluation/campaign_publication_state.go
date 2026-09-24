@@ -30,6 +30,7 @@ type CampaignPublicationState struct {
 type CampaignPublicationStateStore interface {
 	Load(ctx context.Context, runID string) (*CampaignPublicationState, error)
 	Save(ctx context.Context, state *CampaignPublicationState) error
+	Delete(ctx context.Context, runID string) error
 }
 
 type memoryCampaignPublicationStateStore struct {
@@ -60,6 +61,14 @@ func (s *memoryCampaignPublicationStateStore) Save(_ context.Context, state *Cam
 		return fmt.Errorf("evaluation: save publication state: %w", constants.ErrMissingRequiredField)
 	}
 	s.byRun[state.RunID] = cloneCampaignPublicationState(state)
+	return nil
+}
+
+func (s *memoryCampaignPublicationStateStore) Delete(_ context.Context, runID string) error {
+	if s == nil || runID == "" {
+		return fmt.Errorf("evaluation: delete publication state: %w", constants.ErrMissingRequiredField)
+	}
+	delete(s.byRun, runID)
 	return nil
 }
 

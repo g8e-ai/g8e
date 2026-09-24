@@ -48,6 +48,17 @@ func (s *gatewayCampaignPublicationStateStore) Load(_ context.Context, runID str
 	}, nil
 }
 
+func (s *gatewayCampaignPublicationStateStore) Delete(_ context.Context, runID string) error {
+	if s == nil || s.client == nil || runID == "" {
+		return fmt.Errorf("evaluation: delete publication state: %w", constants.ErrMissingRequiredField)
+	}
+	path := constants.APIPaths.EvalCampaignPublicationStateByRun + runID + "/publication-state"
+	if _, err := s.client.Delete(path); err != nil {
+		return fmt.Errorf("evaluation: delete publication state: %w", err)
+	}
+	return nil
+}
+
 func (s *gatewayCampaignPublicationStateStore) Save(_ context.Context, state *evaluation.CampaignPublicationState) error {
 	if s == nil || s.client == nil || state == nil || state.RunID == "" {
 		return fmt.Errorf("evaluation: save publication state: %w", constants.ErrMissingRequiredField)

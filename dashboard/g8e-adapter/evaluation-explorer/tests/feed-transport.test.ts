@@ -267,13 +267,22 @@ describe('history backfill', () => {
     expect(store.getState().errors.length).toBe(0);
   });
 
-  it('enforces strict contiguity after the first record', () => {
+  it('accepts mirror withdrawal gaps after the first retained record', () => {
     const snapshot: FeedSnapshot = { ...SNAP, high_water_sequence: 5, batch_count: 1 };
     store.initBootstrap(snapshot, [], 0);
     store.acceptProjection(snapshotRecord(fixtureCatalogExploratory, 3));
     store.acceptProjection(snapshotRecord(fixtureModelSummaries[0]!, 5));
+    expect(store.getState().observedSequence).toBe(5);
+    expect(store.getState().errors).toEqual([]);
+  });
+
+  it('ignores replayed or regressive sequences after the first record', () => {
+    const snapshot: FeedSnapshot = { ...SNAP, high_water_sequence: 5, batch_count: 1 };
+    store.initBootstrap(snapshot, [], 0);
+    store.acceptProjection(snapshotRecord(fixtureCatalogExploratory, 3));
+    store.acceptProjection(snapshotRecord(fixtureModelSummaries[0]!, 2));
     expect(store.getState().observedSequence).toBe(3);
-    expect(store.getState().errors).toContain('public feed sequence gap');
+    expect(store.getState().errors).toEqual([]);
   });
 
   it('retains the highest feed sequences after bootstrap-then-history ingest', () => {

@@ -480,6 +480,34 @@ func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSess
 	assert.False(t, opSession.IsActive)
 }
 
+func TestPlatformEnrollmentService_RevokeOperatorSucceedsWhenCLISessionMissing(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	operatorCSR, operatorKey, cliCSR, cliKey := generateOperatorCSRsAndKeys(t)
+	requestID, token, approved := createAndApproveRequest(t, env,
+		models.PlatformComponentOperator, "operator-revoke-missing-cli", "operator.local", "", operatorCSR, cliCSR)
+	resp, err := env.enrollSvc.Complete(context.Background(), token, models.PlatformEnrollmentProofs{
+		Operator: signCompletionTranscript(t, approved, operatorKey),
+		CLI:      signCompletionTranscript(t, approved, cliKey),
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, env.docStore.DocDelete(
+		marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID))
+
+	revoked, err := env.enrollSvc.Revoke(context.Background(), env.ownerID, models.PlatformEnrollmentRevokeRequest{
+		RequestID: requestID,
+		Reason:    "retired",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, models.PlatformEnrollmentStateRevoked, revoked.State)
+
+	block, _ := pem.Decode([]byte(resp.Operator.OperatorCert))
+	require.NotNil(t, block)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+	assert.ErrorIs(t, env.pki.VerifyCertificate(cert), constants.ErrPKICertificateRevoked)
+}
+
 // ============================================================================
 // Operator issuance tests
 // ============================================================================
@@ -1239,6 +1267,50 @@ func TestPlatformEnrollmentService_ListPendingExcludesTerminal(t *testing.T) {
 	list, err := env.enrollSvc.ListPending(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, list.Requests)
+}
+
+// TestPlatformEnrollmentService_ListEnrolledReturnsCompletedAndRevoked proves
+// that ListEnrolled returns completed and revoked enrollment metadata without
+// tokens or CSR PEM, and excludes pending or denied requests.
+func TestPlatformEnrollmentService_ListEnrolledReturnsCompletedAndRevoked(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+
+	pendingCSR, _ := generateAppCSRAndKey(t)
+	pendingResp, err := env.enrollSvc.CreateRequest(context.Background(), models.PlatformEnrollmentCreateRequest{
+		ComponentKind: models.PlatformComponentDashboard,
+		InstanceID:    "dashboard-pending",
+		Hostname:      "dashboard-pending.local",
+		App:           &models.PlatformAppCSRPayload{CSRPEM: pendingCSR},
+	}, "https://gateway.local/console")
+	require.NoError(t, err)
+
+	completedCSR, completedKey := generateAppCSRAndKey(t)
+	requestID, token, approved := createAndApproveRequest(t, env, models.PlatformComponentDashboard, "dashboard-completed", "dashboard-completed.local", completedCSR, "", "")
+	_, err = env.enrollSvc.Complete(context.Background(), token, models.PlatformEnrollmentProofs{App: signCompletionTranscript(t, approved, completedKey)})
+	require.NoError(t, err)
+
+	_, err = env.enrollSvc.Revoke(context.Background(), env.ownerID, models.PlatformEnrollmentRevokeRequest{
+		RequestID: requestID,
+		Reason:    "retired",
+	})
+	require.NoError(t, err)
+
+	list, err := env.enrollSvc.ListEnrolled(context.Background())
+	require.NoError(t, err)
+	require.Len(t, list.Enrollments, 1)
+
+	enrolled := list.Enrollments[0]
+	assert.Equal(t, requestID, enrolled.RequestID)
+	assert.Equal(t, models.PlatformComponentDashboard, enrolled.ComponentKind)
+	assert.Equal(t, "dashboard-completed", enrolled.InstanceID)
+	assert.Equal(t, models.PlatformEnrollmentStateRevoked, enrolled.State)
+	assert.NotNil(t, enrolled.CompletedAt)
+	assert.NotNil(t, enrolled.RevokedAt)
+
+	pendingList, err := env.enrollSvc.ListPending(context.Background())
+	require.NoError(t, err)
+	require.Len(t, pendingList.Requests, 1)
+	assert.Equal(t, pendingResp.RequestID, pendingList.Requests[0].RequestID)
 }
 
 // ============================================================================

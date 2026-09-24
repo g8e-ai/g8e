@@ -49,8 +49,39 @@ func activeGovernedDataOperators(operators []models.OperatorDocumentGo) []DataOp
 }
 
 // SelectCampaignDataOperator resolves exactly one campaign data Operator.
+//
+// Callers that know the target hardware should use
+// SelectCampaignDataOperatorForHardware so that an operator session cannot be
+// selected merely because it has the right capability.
 func SelectCampaignDataOperator(operators []models.OperatorDocumentGo, sessionID string) (*DataOperatorStatus, error) {
+	return SelectCampaignDataOperatorForHardware(operators, sessionID, "")
+}
+
+// SelectCampaignDataOperatorForHardware resolves one campaign data Operator,
+// optionally constrained to the canonical OperatorDocument system fingerprint.
+// An explicit session ID remains the strongest binding, but it must still be
+// an active campaign data operator on the requested hardware.
+func SelectCampaignDataOperatorForHardware(
+	operators []models.OperatorDocumentGo,
+	sessionID string,
+	systemFingerprint string,
+) (*DataOperatorStatus, error) {
 	matches := ActiveCampaignDataOperators(operators)
+	if systemFingerprint != "" {
+		fingerprintMatches := make([]DataOperatorStatus, 0, len(matches))
+		for _, op := range operators {
+			if op.SystemFingerprint != systemFingerprint {
+				continue
+			}
+			for _, match := range matches {
+				if match.OperatorSessionID == op.OperatorSessionID {
+					fingerprintMatches = append(fingerprintMatches, match)
+					break
+				}
+			}
+		}
+		matches = fingerprintMatches
+	}
 	if sessionID != "" {
 		for _, match := range matches {
 			if match.OperatorSessionID == sessionID {
@@ -58,15 +89,24 @@ func SelectCampaignDataOperator(operators []models.OperatorDocumentGo, sessionID
 				return &selected, nil
 			}
 		}
+		if systemFingerprint != "" {
+			return nil, fmt.Errorf("evaluation: campaign data operator session %q not found among active tool operators on system fingerprint %q", sessionID, systemFingerprint)
+		}
 		return nil, fmt.Errorf("evaluation: campaign data operator session %q not found among active tool operators", sessionID)
 	}
 	switch len(matches) {
 	case 0:
+		if systemFingerprint != "" {
+			return nil, fmt.Errorf("evaluation: no active campaign data operator found on system fingerprint %q", systemFingerprint)
+		}
 		return nil, fmt.Errorf("evaluation: no active campaign data operator found")
 	case 1:
 		selected := matches[0]
 		return &selected, nil
 	default:
+		if systemFingerprint != "" {
+			return nil, fmt.Errorf("evaluation: multiple active campaign data operators found on system fingerprint %q; pin one with --data-session", systemFingerprint)
+		}
 		return nil, fmt.Errorf("evaluation: multiple active campaign data operators found; pin one with --data-session")
 	}
 }

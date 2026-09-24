@@ -111,7 +111,7 @@ const events: LiveEvent[] = [
   },
 ];
 
-describe('OverviewView active campaign', () => {
+describe('OverviewView', () => {
   beforeEach(() => {
     evalStore.loadFixtures([catalog, archivedCatalog, suite, evaluation] as SnapshotRecord[], events);
     evalStore.setConnection('live');
@@ -122,52 +122,17 @@ describe('OverviewView active campaign', () => {
     vi.unstubAllGlobals();
   });
 
-  it('prioritizes campaign progress, scope, verification, and latest activity', () => {
+  it('renders the live event stream full width without the system overview panel', () => {
     render(
       <MemoryRouter initialEntries={['/?dataset=ds-verified-archive']}>
         <OverviewView />
       </MemoryRouter>,
     );
 
-    const panel = within(screen.getByRole('region', { name: 'System overview' }));
-    expect(panel.getByText('Live smoke run')).toBeInTheDocument();
-    expect(panel.queryByText('Archived campaign')).not.toBeInTheDocument();
-    expect(panel.queryByTestId('dataset-selector')).not.toBeInTheDocument();
-    expect(panel.getByText(catalog.description)).toBeInTheDocument();
-    const campaignHeader = panel.getByText('Active campaign').parentElement;
-    expect(campaignHeader).not.toBeNull();
-    const campaignStatus = within(campaignHeader as HTMLElement).getByTestId('stream-status');
-    expect(campaignStatus).toHaveTextContent('Live');
-    expect(campaignStatus).toHaveClass('status-ok');
-    expect(panel.getByText('6 of 75 assignments complete')).toBeInTheDocument();
-    expect(panel.getByText('8%')).toBeInTheDocument();
-    expect(panel.getByText('1 failed')).toBeInTheDocument();
-    const scope = panel.getByRole('list', { name: 'Campaign scope and verification' });
-    expect(scope).toHaveTextContent('1 model');
-    expect(scope).toHaveTextContent('1 suite');
-    expect(scope).toHaveTextContent('Verification pending');
-    expect(panel.getByText('Now evaluating')).toBeInTheDocument();
-    expect(panel.getByText('ministral-3-8b')).toBeInTheDocument();
-    expect(panel.getByText('tool-selection-04')).toBeInTheDocument();
-    expect(panel.getByText('Semantic grading')).toBeInTheDocument();
-    expect(panel.getByText('Primary role')).toBeInTheDocument();
-    expect(panel.queryByText('in the future')).not.toBeInTheDocument();
-    expect(panel.getByRole('link', { name: 'View Details' })).toHaveAttribute(
-      'href',
-      `/evaluations/${datasetId}/${evaluation.run_id}`,
-    );
-    expect(panel.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology');
-    expect(panel.getByRole('heading', { name: 'Need help with AI governance and security?' })).toBeInTheDocument();
-    expect(panel.queryByText(/Need an agentic AI security and governance engineer\?/i)).not.toBeInTheDocument();
-    expect(panel.getByText(/live deployment of the g8e AI governance suite/i)).toBeInTheDocument();
-    expect(panel.getByText(/30 years in data protection and systems integration/i)).toBeInTheDocument();
-    expect(panel.getByText(/LLM-as-judge/i)).toBeInTheDocument();
-    expect(panel.getByText(/Point me in a direction, I'll take care of it/i)).toBeInTheDocument();
-    expect(panel.getByRole('link', { name: 'Architecture Overview' })).toHaveAttribute('href', '/methodology#architecture');
-    expect(panel.queryByRole('list', { name: 'Platform data flow, outbound only' })).not.toBeInTheDocument();
-    expect(panel.queryByRole('link', { name: 'Book a Call' })).not.toBeInTheDocument();
-    expect(panel.queryByText('Models evaluated')).not.toBeInTheDocument();
-    expect(panel.queryByText('Current task')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Live event stream' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'System overview' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Active campaign')).not.toBeInTheDocument();
+    expect(screen.queryByText(/live deployment of the g8e AI governance suite/i)).not.toBeInTheDocument();
   });
 
   it('presents campaign coverage and public-safe data surfaces for engineers', async () => {
@@ -204,32 +169,14 @@ describe('OverviewView active campaign', () => {
       'href',
       'https://mirror.example/history?kind=assignment_result&cursor=0&limit=500',
     );
-    expect(data.getByRole('link', { name: /Proofs/i })).toHaveAttribute(
-      'href',
-      'https://mirror.example/proof-catalog',
-    );
+    expect(data.getByText('Cryptographic proofs')).toBeInTheDocument();
+    expect(data.getByText(/No verified proof package has been published yet/i)).toBeInTheDocument();
+    expect(data.queryByRole('link', { name: /Cryptographic proofs/i })).not.toBeInTheDocument();
+    expect(data.queryByRole('link', { name: /Proof manifest/i })).not.toBeInTheDocument();
     expect(data.getByRole('link', { name: /Live updates/i })).toHaveAttribute(
       'href',
       'https://mirror.example/stream',
     );
     expect(data.queryByText('Download data')).not.toBeInTheDocument();
-  });
-
-  it('does not report a running campaign as live while SSE is reconnecting', () => {
-    evalStore.setStreamConnection('reconnecting');
-
-    render(
-      <MemoryRouter>
-        <OverviewView />
-      </MemoryRouter>,
-    );
-
-    const panel = within(screen.getByRole('region', { name: 'System overview' }));
-    const campaignHeader = panel.getByText('Active campaign').parentElement;
-    expect(campaignHeader).not.toBeNull();
-    const campaignStatus = within(campaignHeader as HTMLElement).getByTestId('stream-status');
-    expect(campaignStatus).toHaveTextContent('Reconnecting');
-    expect(campaignStatus).toHaveClass('status-warn');
-    expect(campaignStatus).not.toHaveTextContent('Live');
   });
 });

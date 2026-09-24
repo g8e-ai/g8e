@@ -98,6 +98,59 @@ func TestSelectCampaignDataOperator_ResolvesBySessionID(t *testing.T) {
 	assert.Equal(t, "sess-data-2", selected.OperatorSessionID)
 }
 
+func TestSelectCampaignDataOperatorForHardware_ResolvesBySystemFingerprint(t *testing.T) {
+	t.Parallel()
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "data-other",
+			OperatorSessionID: "sess-other",
+			SystemFingerprint: "hardware-other",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+		},
+		{
+			ID:                "data-target",
+			OperatorSessionID: "sess-target",
+			SystemFingerprint: "hardware-target",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+		},
+	}
+
+	selected, err := SelectCampaignDataOperatorForHardware(operators, "", "hardware-target")
+	require.NoError(t, err)
+	assert.Equal(t, "sess-target", selected.OperatorSessionID)
+	assert.Equal(t, "data-target", selected.OperatorID)
+}
+
+func TestSelectCampaignDataOperatorForHardware_RequiresExactSessionWhenFingerprintIsAmbiguous(t *testing.T) {
+	t.Parallel()
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "data-1",
+			OperatorSessionID: "sess-1",
+			SystemFingerprint: "same-hardware",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+		},
+		{
+			ID:                "data-2",
+			OperatorSessionID: "sess-2",
+			SystemFingerprint: "same-hardware",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+		},
+	}
+
+	_, err := SelectCampaignDataOperatorForHardware(operators, "", "same-hardware")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "same-hardware")
+
+	selected, err := SelectCampaignDataOperatorForHardware(operators, "sess-2", "same-hardware")
+	require.NoError(t, err)
+	assert.Equal(t, "sess-2", selected.OperatorSessionID)
+}
+
 func TestSelectDataOperator_ResolvesSingleActiveOperator(t *testing.T) {
 	t.Parallel()
 	operators := []models.OperatorDocumentGo{

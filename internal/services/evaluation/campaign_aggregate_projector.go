@@ -932,7 +932,7 @@ func buildEvaluationSummaryRecord(input evaluationSummaryInput) (*evaluationSumm
 		Arm:                 armForRun(run),
 		EvaluationUnit:      evaluationUnitForRun(run),
 		ModelRoleMapping:    buildModelRoleMapping(state),
-		LifecycleState:      "running",
+		LifecycleState:      lifecycleStateForAggregate(state),
 		AssignmentTotal:     state.Scheduled,
 		AssignmentCompleted: state.Passed,
 		AssignmentFailed:    state.Failed,
@@ -941,7 +941,6 @@ func buildEvaluationSummaryRecord(input evaluationSummaryInput) (*evaluationSumm
 		HeadlineMetrics:     headlineMetricsForState(state),
 	}
 	if settled {
-		record.LifecycleState = "completed"
 		record.EndedAt = input.ObservedAt
 	}
 	if run.GetStartedAt() != nil {
@@ -1117,6 +1116,23 @@ func qualityStateForModelSummary(terminal uint32) string {
 		return "live_in_progress"
 	}
 	return "not_evaluated"
+}
+
+// lifecycleStateForAggregate maps canonical assignment counters to the explorer
+// lifecycle_state enum. Scheduled runs with no terminal outcomes report queued
+// rather than running so rollout starts that never executed are distinguishable
+// from runs actively processing assignments.
+func lifecycleStateForAggregate(state *runAggregateState) string {
+	if state == nil {
+		return "running"
+	}
+	if runAggregateSettled(state) {
+		return "completed"
+	}
+	if state.Terminal == 0 {
+		return "queued"
+	}
+	return "running"
 }
 
 func assignmentLifecycleIsTerminal(status evalv1.EvaluationAssignmentLifecycleStatus) bool {

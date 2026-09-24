@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Protocol Library
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-24
+Version: v2.1.13
 
 The g8e Protocol Library is the canonical wire contract for governed operations that enter the platform through a g8e ingress. It provides protobuf schemas and generated bindings, JSON constant registries, JSON model schemas, Python Pydantic models, canonicalization and verification helpers, SPIFFE workload identity helpers, and examples for compatible clients and services. Governed mutations use the five-layer interlock; discovery, read-only operations, and the external MCP wrapper have narrower behavior documented in [AI Agents and the g8e Governance Boundary](./agents.md).
 
@@ -60,7 +60,7 @@ The Go protocol package requires Go 1.26.6 or later. The root module directly de
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.12
+go get github.com/g8e-ai/g8e/v2@v2.1.13
 ```
 
 To fetch the latest release:
@@ -127,7 +127,7 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==2.1.12
+pip install g8e==2.1.13
 ```
 
 ### Python Package Overview

@@ -16,7 +16,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -24,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 type campaignQueueRunResult struct {
@@ -51,9 +51,8 @@ func rolloutEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var queueFile string
 	var skipVariantIDs []string
 	var skipVerified bool
-	var continueOnError bool
 	var dryRun bool
-	var tierA bool
+	var requireWitness bool
 	var verify bool
 	var publish bool
 	var daemon bool
@@ -61,7 +60,7 @@ func rolloutEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var ensembleURL string
 	var inferenceSessionID string
 	var dataSessionID string
-	var waitForWitnesses time.Duration
+	var dataSystemFingerprint string
 	var logDir string
 	var ensembleHealthURL string
 	var mirrorBootstrapURL string
@@ -69,15 +68,18 @@ func rolloutEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "run",
 		Short: "Run init-campaign start → verify for every queued model",
 		Long: `Execute the init-campaign rollout queue unattended. Each entry runs the same
-flow as 'g8e eval campaign start --queue <variant> --verify' and updates the queue
-on Tier-A verify PASS.
+flow as 'g8e eval campaign start --queue <variant> --require-witness' and updates the queue
+on strict witness verify PASS.
+
+Defaults: --require-witness, --verify, --publish, --daemon, and --skip-verified are all true.
 
 Examples:
-  g8e eval rollout run --tier-a --skip-verified
+  g8e eval rollout run
   g8e eval rollout run --dry-run --skip-variant granite3-3-2b
-  g8e eval rollout run --tier-a --continue-on-error --log-dir .g8e/eval/logs/batch-001`,
+  g8e eval rollout run --log-dir .g8e/eval/logs/batch-001
+  g8e eval rollout run --skip-verified=false`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
@@ -110,12 +112,12 @@ Examples:
 			if err := fileSvc.MkdirAll(cmd.Context(), logDir, constants.PermDirPrivate); err != nil {
 				return fmt.Errorf("evaluation: queue run: create log dir: %w", err)
 			}
-			if err := preflightCampaignQueueRun(cmd, deps, cfg, waitForWitnesses, ensembleHealthURL, mirrorBootstrapURL); err != nil {
+			if err := preflightCampaignQueueRun(cmd, ensembleHealthURL, mirrorBootstrapURL); err != nil {
 				return fmt.Errorf("evaluation: queue run: %w", err)
 			}
-			requireProviderObservation := tierA
-			requireModelProvenance := tierA
-			if tierA {
+			requireProviderObservation := requireWitness
+			requireModelProvenance := requireWitness
+			if requireWitness {
 				verify = true
 			}
 			result := campaignQueueRunResult{
@@ -140,6 +142,7 @@ Examples:
 					QueueRef:                   entry.VariantID,
 					InferenceSessionID:         inferenceSessionID,
 					DataSessionID:              dataSessionID,
+					DataSystemFingerprint:      dataSystemFingerprint,
 					EnsembleURL:                ensembleURL,
 					OllamaEndpoint:             ollamaEndpoint,
 					Publish:                    publish,
@@ -161,8 +164,8 @@ Examples:
 					if closeErr != nil {
 						_, _ = fmt.Fprintf(stderr, "warning: close log file: %v\n", closeErr)
 					}
-					if !continueOnError {
-						return finishCampaignQueueRun(cmd, queuePath, result, runErr)
+					if markErr := markQueueEntryFailedAfterFailure(cmd.Context(), fileSvc, queuePath, entry, flowResult, runErr); markErr != nil {
+						_, _ = fmt.Fprintf(stderr, "warning: update queue entry %s: %v\n", entry.VariantID, markErr)
 					}
 					continue
 				}
@@ -179,15 +182,14 @@ Examples:
 					_, _ = fmt.Fprintf(stdout, "PASS %s → %s\n", entry.VariantID, flowResult.Plan.RunID)
 				}
 			}
-			return finishCampaignQueueRun(cmd, queuePath, result, nil)
+			return finishCampaignQueueRun(cmd, queuePath, result)
 		},
 	}
 	cmd.Flags().StringVar(&queueFile, "queue-file", "", "Queue manifest path (default: .g8e/eval/init-campaign-queue.json)")
 	cmd.Flags().StringSliceVar(&skipVariantIDs, "skip-variant", nil, "Variant IDs to exclude (repeatable)")
 	cmd.Flags().BoolVar(&skipVerified, "skip-verified", true, "Skip queue entries already marked verified")
-	cmd.Flags().BoolVar(&continueOnError, "continue-on-error", false, "Log failure and continue to the next model")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the rollout plan without executing")
-	cmd.Flags().BoolVar(&tierA, "tier-a", true, "Tier-A verify preset: require provider observation and model provenance")
+	cmd.Flags().BoolVar(&requireWitness, "require-witness", true, "Require provider-boundary observation and model-provenance witness evidence during verification (implies --verify)")
 	cmd.Flags().BoolVar(&verify, "verify", true, "Verify each run after execute completes")
 	cmd.Flags().BoolVar(&publish, "publish", true, "Publish lifecycle projections during schedule and execute")
 	cmd.Flags().BoolVar(&daemon, "daemon", true, "Execute continuously until each model matrix is exhausted")
@@ -195,7 +197,7 @@ Examples:
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Pin the inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Pin the data Operator session ID")
-	cmd.Flags().DurationVar(&waitForWitnesses, "wait-for-witnesses", 0, "Poll up to this duration for active observer and provenance operators")
+	cmd.Flags().StringVar(&dataSystemFingerprint, "data-system-fingerprint", "", "Require the data Operator's exact system_fingerprint")
 	cmd.Flags().StringVar(&logDir, "log-dir", "", "Directory for per-model logs (default: .g8e/eval/logs/queue-run-TIMESTAMP)")
 	cmd.Flags().StringVar(&ensembleHealthURL, "ensemble-health-url", "http://127.0.0.1:8000/health", "Preflight g8ee health URL")
 	cmd.Flags().StringVar(&mirrorBootstrapURL, "mirror-bootstrap-url", "http://127.0.0.1:8082/bootstrap", "Preflight public mirror bootstrap URL")
@@ -228,7 +230,7 @@ func writeCampaignQueueRunPlan(cmd *cobra.Command, plan []evaluation.CampaignQue
 	return nil
 }
 
-func finishCampaignQueueRun(cmd *cobra.Command, queuePath string, result campaignQueueRunResult, runErr error) error {
+func finishCampaignQueueRun(cmd *cobra.Command, queuePath string, result campaignQueueRunResult) error {
 	if output.JSONEnabled(cmd) {
 		payload, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
@@ -244,9 +246,9 @@ func finishCampaignQueueRun(cmd *cobra.Command, queuePath string, result campaig
 		if result.LogDir != "" {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Logs: %s\n", result.LogDir)
 		}
-	}
-	if runErr != nil {
-		return runErr
+		for _, failure := range result.Failures {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Failed: %s (%s): %s\n", failure.VariantID, failure.Tag, failure.Error)
+		}
 	}
 	if result.Failed > 0 {
 		return fmt.Errorf("evaluation: queue run: %d model(s) failed", result.Failed)
@@ -254,11 +256,40 @@ func finishCampaignQueueRun(cmd *cobra.Command, queuePath string, result campaig
 	return nil
 }
 
+func markQueueEntryFailedAfterFailure(
+	ctx context.Context,
+	fileSvc fs.RuntimeFileService,
+	queuePath string,
+	entry evaluation.CampaignQueueModel,
+	flowResult *campaignStartFlowResult,
+	runErr error,
+) error {
+	if runErr == nil || entry.VariantID == "" {
+		return nil
+	}
+	notes := runErr.Error()
+	runID := ""
+	if flowResult != nil && flowResult.Plan != nil && flowResult.Plan.RunID != "" {
+		runID = flowResult.Plan.RunID
+		notes = fmt.Sprintf("run %s: %s", runID, runErr.Error())
+	}
+	_, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
+		Context:       ctx,
+		FileService:   fileSvc,
+		QueuePath:     queuePath,
+		VariantID:     entry.VariantID,
+		Status:        "failed",
+		VerifiedRunID: runID,
+		Notes:         notes,
+	})
+	if err != nil {
+		return fmt.Errorf("evaluation: update init campaign queue: %w", err)
+	}
+	return nil
+}
+
 func preflightCampaignQueueRun(
 	cmd *cobra.Command,
-	deps nativeEvalDeps,
-	cfg *config.Config,
-	waitForWitnesses time.Duration,
 	ensembleHealthURL string,
 	mirrorBootstrapURL string,
 ) error {
@@ -268,36 +299,7 @@ func preflightCampaignQueueRun(
 	if err := checkHTTPReachable(cmd.Context(), mirrorBootstrapURL); err != nil {
 		return fmt.Errorf("preflight mirror bootstrap: %w", err)
 	}
-	deadline := deps.now()
-	if waitForWitnesses > 0 {
-		deadline = deadline.Add(waitForWitnesses)
-	}
-	for {
-		status, err := campaignWitnessStatus(cmd, deps, cfg)
-		if err != nil {
-			return err
-		}
-		if status.Ready {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Preflight ok (observer=%d provenance=%d)\n",
-				status.ActiveObserverCount, status.ActiveProvenanceCount)
-			return nil
-		}
-		if waitForWitnesses <= 0 || !deps.now().Before(deadline) {
-			break
-		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Waiting for active observer and provenance operators...\n")
-		time.Sleep(5 * time.Second)
-	}
-	status, err := campaignWitnessStatus(cmd, deps, cfg)
-	if err != nil {
-		return err
-	}
-	if status.ActiveObserverCount < 1 {
-		return fmt.Errorf("preflight: no active provider-boundary observer enrolled")
-	}
-	if status.ActiveProvenanceCount < 1 {
-		return fmt.Errorf("preflight: no active provenance operator enrolled")
-	}
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Preflight ok (platform health and mirror reachable)")
 	return nil
 }
 

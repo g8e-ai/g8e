@@ -865,6 +865,44 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid system_fingerprint")
 	})
+
+	t.Run("Same user and fingerprint reuses active operator", func(t *testing.T) {
+		logger := testutil.NewTestLogger()
+		fileSvc := newTestFileSvc(t)
+		db, err := openTestDB(t, fileSvc, logger)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+		sm := newTestSecretManager(t, db.db, fileSvc)
+
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
+		err = pki.InitializePKI(nil)
+		require.NoError(t, err)
+
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
+		cfg := &config.GatewayConfig{}
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+
+		fingerprint := "test-fingerprint-idempotent"
+		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
+		req := models.OperatorRegistrationRequest{
+			SystemFingerprint: fingerprint,
+			Hostname:          "test-host",
+			CSR:               opCSR,
+		}
+
+		first, err := regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		require.NoError(t, err)
+		require.NotEmpty(t, first.OperatorID)
+
+		secondCSR := testutil.GenerateTestCSRP256(t, "test-operator-renewed")
+		req.CSR = secondCSR
+		second, err := regSvc.RegisterDeviceCSR("user-123", "org-123", req)
+		require.NoError(t, err)
+		assert.Equal(t, first.OperatorID, second.OperatorID, "re-enrollment must resolve the same operator slot")
+		assert.NotEqual(t, first.OperatorSessionID, second.OperatorSessionID, "re-enrollment mints a fresh operator session")
+	})
 }
 
 func TestRegistrationService_CompleteRegistration(t *testing.T) {

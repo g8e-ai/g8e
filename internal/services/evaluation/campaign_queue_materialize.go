@@ -166,6 +166,7 @@ func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, 
 		}
 	}
 	SortModelVariantsForRollout(variants)
+	variants = PrioritizeRolloutIntake(variants, loadRolloutIntakePriorityIDs())
 
 	inventoryRelDir := req.InventoryRelDir
 	if inventoryRelDir == "" {

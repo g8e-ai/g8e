@@ -813,6 +813,85 @@ func TestOllamaBackend_GenerateDistinguishesUnavailableUsageFromReportedZero(t *
 	}
 }
 
+func TestOllamaBackend_GenerateParsesCacheTokensWithoutInferringThinkingTokens(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name            string
+		responseBody    string
+		wantCacheTokens *int32
+		wantTotalTokens int32
+		wantError       bool
+	}{
+		{
+			name:            "positive",
+			responseBody:    `{"model":"test-model","message":{"role":"assistant","content":"ok"},"done":true,"prompt_eval_count":10,"prompt_eval_cached_count":4,"eval_count":3}`,
+			wantCacheTokens: func() *int32 { value := int32(4); return &value }(),
+			wantTotalTokens: 13,
+		},
+		{
+			name:            "explicit zero",
+			responseBody:    `{"model":"test-model","message":{"role":"assistant","content":"ok"},"done":true,"prompt_eval_count":10,"prompt_eval_cached_count":0,"eval_count":3}`,
+			wantCacheTokens: func() *int32 { value := int32(0); return &value }(),
+			wantTotalTokens: 13,
+		},
+		{
+			name:            "absent",
+			responseBody:    `{"model":"test-model","message":{"role":"assistant","content":"ok"},"done":true,"prompt_eval_count":10,"eval_count":3}`,
+			wantTotalTokens: 13,
+		},
+		{
+			name:            "thinking content without thinking count",
+			responseBody:    `{"model":"test-model","message":{"role":"assistant","thinking":"private thought","content":"ok"},"done":true,"prompt_eval_count":10,"eval_count":3}`,
+			wantTotalTokens: 13,
+		},
+		{
+			name:         "negative",
+			responseBody: `{"model":"test-model","message":{"role":"assistant","content":"ok"},"done":true,"prompt_eval_count":10,"prompt_eval_cached_count":-1,"eval_count":3}`,
+			wantError:    true,
+		},
+		{
+			name: "streaming terminal",
+			responseBody: `{"model":"test-model","message":{"role":"assistant","content":"ok"},"done":false}
+{"model":"test-model","message":{"role":"assistant","content":""},"done":true,"prompt_eval_count":10,"prompt_eval_cached_count":4,"eval_count":3}`,
+			wantCacheTokens: func() *int32 { value := int32(4); return &value }(),
+			wantTotalTokens: 13,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, err := io.WriteString(w, tt.responseBody)
+				require.NoError(t, err)
+			}))
+			defer server.Close()
+
+			backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+			require.NoError(t, err)
+			response, err := backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model"})
+			if tt.wantError {
+				require.Error(t, err)
+				assert.Nil(t, response)
+				assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, response)
+			assert.Equal(t, tt.wantTotalTokens, response.TotalTokens)
+			if tt.wantCacheTokens == nil {
+				assert.Nil(t, response.CacheTokens)
+			} else {
+				require.NotNil(t, response.CacheTokens)
+				assert.Equal(t, *tt.wantCacheTokens, *response.CacheTokens)
+				result := response.ToProtoInferenceResult()
+				require.NotNil(t, result.CacheTokens)
+				assert.Equal(t, *tt.wantCacheTokens, *result.CacheTokens)
+			}
+			assert.Nil(t, response.ThinkingTokens)
+		})
+	}
+}
+
 func TestOllamaBackend_GenerateRejectsContradictoryOrInvalidMetadata(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

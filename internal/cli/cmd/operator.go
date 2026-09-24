@@ -52,9 +52,10 @@ type operatorListOutput struct {
 
 func operatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operator",
-		Short: "Manage Operator instances",
-		Long:  `Manage and view g8e Operator instances connected to the Gateway.`,
+		Use:     "operator",
+		Aliases: []string{"operators"},
+		Short:   "Manage Operator instances",
+		Long:    `Manage and view g8e Operator instances connected to the Gateway.`,
 	}
 
 	cmd.AddCommand(
