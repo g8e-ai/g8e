@@ -199,7 +199,7 @@ func TestMarkQueueEntryVerifiedAfterPass(t *testing.T) {
 	require.NoError(t, markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, plan, report, true))
 	loaded, err = evaluation.LoadInitCampaignQueueFromRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath)
 	require.NoError(t, err)
-	assert.Equal(t, evaluation.TierAVerifyNotes("run-pass-1"), loaded.Models[0].Notes)
+	assert.Equal(t, evaluation.StrictWitnessVerifyNotes("run-pass-1"), loaded.Models[0].Notes)
 
 	require.NoError(t, markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, nil, report, false))
 	require.NoError(t, markQueueEntryVerifiedAfterPassWithFileService(context.Background(), fileSvc, plan, nil, false))

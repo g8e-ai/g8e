@@ -143,7 +143,7 @@ func TestMarkCampaignQueueEntry(t *testing.T) {
 		ServedModelTag: "gemma3:4b",
 		Status:         "verified",
 		VerifiedRunID:  "eval-init-gemma3-4b-123",
-		Notes:          "Tier-A PASS",
+		Notes:          "witness PASS",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "verified", entry.Status)

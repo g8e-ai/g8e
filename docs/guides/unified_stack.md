@@ -126,12 +126,12 @@ Optional rollout queue (multi-model tracking):
 # After inventory freeze, materialize per-model inventories and build the queue
 ./g8e eval rollout init --materialize --merge
 
-# Unattended Tier-A rollout (replaces private batch shell scripts)
-./g8e eval rollout run --tier-a --skip-verified --skip-variant granite3-3-2b
+# Unattended strict-witness rollout (replaces private batch shell scripts)
+./g8e eval rollout run --require-witness --skip-verified --skip-variant granite3-3-2b
 
 # Or one model at a time
 ./g8e eval rollout next
-./g8e eval campaign start --queue next --publish --daemon --verify --tier-a
+./g8e eval campaign start --queue next --publish --daemon --require-witness
 ```
 
 List variants or materialize subsets without a queue:

@@ -170,7 +170,7 @@ The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation comma
 | `g8e eval rollout …` | Campaign rollout queue init, run, list, next, and mark helpers |
 | `g8e eval dev provider-observer run` | Legacy co-located dev observer only; production uses the enrolled Observer Operator |
 
-Campaign lifecycle commands include `start`, `init`, `list`, `schedule`, `stacks generate`, `execute`, `publish`, `verify`, `account`, `status`, `show`, `export`, `mirror restore`, `trace-digests`, `results`, and repair helpers. Use `./g8e eval campaign --help` as the command-surface reference. Verification flags are optional by default; use `--require-provider-observation`, `--require-model-provenance`, or the `--tier-a` start preset when those witness requirements are part of the acceptance scope.
+Campaign lifecycle commands include `start`, `init`, `list`, `schedule`, `stacks generate`, `execute`, `publish`, `verify`, `account`, `status`, `show`, `export`, `mirror restore`, `trace-digests`, `results`, and repair helpers. Use `./g8e eval campaign --help` as the command-surface reference. Verification flags are optional by default; use `--require-provider-observation`, `--require-model-provenance`, or the `--require-witness` preset when those witness requirements are part of the acceptance scope.
 
 ---
 
@@ -249,7 +249,7 @@ The Inference Operator, Observer Operator, and Provenance Operator all use the s
 - `ProviderBoundaryObservationCoordinator` → Observer Operator → `ProviderBoundaryObservationWindow`
 - `ModelProvenanceObservationCoordinator` → Provenance Operator → `ModelProvenanceAttestationWindow`
 
-Campaigns without observer coverage remain explicitly incomplete for hardware-efficiency claims. `g8e eval campaign verify --require-provider-observation` makes provider-observation coverage a fail-closed verification requirement. Model provenance is similarly interim by default and becomes fail-closed when `g8e eval campaign verify --require-model-provenance` is used; `--tier-a` on `g8e eval campaign start` enables both strict witness requirements.
+Campaigns without observer coverage remain explicitly incomplete for hardware-efficiency claims. `g8e eval campaign verify --require-provider-observation` makes provider-observation coverage a fail-closed verification requirement. Model provenance is similarly interim by default and becomes fail-closed when `g8e eval campaign verify --require-model-provenance` is used; `--require-witness` on `g8e eval campaign start` or `g8e eval rollout run` enables both strict witness requirements.
 
 **5. Same pattern as tool scenarios.** Governed tool assignments require an independent observer that cannot mutate the target. Provider-boundary observation and model provenance apply the same separation to inference-side hardware telemetry and storage-side weight attestation.
 

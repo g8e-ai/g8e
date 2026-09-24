@@ -443,6 +443,11 @@ describe('adaptCampaignProjectionEnvelope', () => {
           assignment_id: 'assign-2',
           decomposed_scores: [
             {
+              score_id: 'DE75C1F7F43365D204C26347CD2B7DD2FE030:task-score',
+              dimension: 'task_score',
+              value: 1,
+            },
+            {
               score_id: 'DE75C1F7F43365D204C26347CD2B7DD2FE030:deterministic-pass-rate',
               dimension: 'deterministic_pass_rate',
               value: 1,
@@ -457,11 +462,72 @@ describe('adaptCampaignProjectionEnvelope', () => {
     expect(assignment).toMatchObject({
       assignment_id: 'assign-2',
       metric_values: {
+        task_score: { value: 1 },
         deterministic_pass_rate: { value: 1 },
         pass: { value: 1 },
       },
     });
     expect(assignment?.metric_values).not.toHaveProperty('DE75C1F7F43365D204C26347CD2B7DD2FE030:deterministic-pass-rate');
+  });
+
+  it('maps task_score and deterministic_pass_rate decomposed scores from native grading output', () => {
+    const context = createCampaignAdaptContext();
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-3:lifecycle:running',
+        record: {
+          assignment_id: 'assign-3',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          scenario_category: 'EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE',
+          lane: 'EVALUATION_LANE_MODEL_ROLE',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          repetition: 1,
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'qwen3-4b',
+          observed_at: '2026-09-16T14:00:01Z',
+        },
+      },
+      context,
+    );
+
+    const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
+    const records = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-3:result',
+        record: {
+          ...resultRecord,
+          assignment_id: 'assign-3',
+          decomposed_scores: [
+            {
+              score_id: 'assign-3:task-score',
+              dimension: 'task_score',
+              value: 0,
+            },
+            {
+              score_id: 'assign-3:deterministic-pass-rate',
+              dimension: 'deterministic_pass_rate',
+              value: 0.75,
+            },
+          ],
+        },
+      },
+      context,
+    );
+
+    const assignment = records.find((record) => record.kind === 'assignment_result');
+    expect(assignment).toMatchObject({
+      assignment_id: 'assign-3',
+      metric_values: {
+        task_score: { value: 0 },
+        deterministic_pass_rate: { value: 0.75 },
+        pass: { value: 0 },
+      },
+    });
   });
 
   it('maps published benchmark_observations onto assignment_result records', () => {

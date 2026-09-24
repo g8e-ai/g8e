@@ -59,7 +59,7 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 # Or reconcile live digests: freeze first, then filter runtime to base program tags
 ./g8e eval rollout init --from .g8e/eval/model-inventory.json --materialize --merge
 
-./g8e eval rollout run --tier-a --skip-verified --skip-variant granite3-3-2b
+./g8e eval rollout run --require-witness --skip-verified --skip-variant granite3-3-2b
 
 # Or materialize one combined inventory for a multi-model smoke campaign
 ./g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
@@ -121,7 +121,7 @@ Runs marked `verified` in the queue but missing under `.g8e/data/eval/runs/<veri
 
 ```bash
 ./g8e eval rollout mark --variant-id qwen3-0-6b --status pending --notes "redo after host artifact loss"
-./g8e eval campaign start --queue qwen3-0-6b --publish --daemon --verify --tier-a
+./g8e eval campaign start --queue qwen3-0-6b --publish --daemon --require-witness
 ```
 
 ### Archive evidence to a directory you choose
@@ -140,7 +140,7 @@ Rollout flags accept repo-relative or absolute paths:
 
 ```bash
 ./g8e eval rollout init --output /data/my-queue.json --inventory-dir /data/my-inventories --materialize --merge
-./g8e eval rollout run --queue-file /data/my-queue.json --tier-a --skip-verified
+./g8e eval rollout run --queue-file /data/my-queue.json --require-witness --skip-verified
 ```
 
 ## License

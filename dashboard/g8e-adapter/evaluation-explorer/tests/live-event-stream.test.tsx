@@ -162,6 +162,47 @@ describe('LiveEventStream', () => {
     expect(screen.getByText('780 ms')).toBeInTheDocument();
   });
 
+  it('renders -- for absent metrics and Unavailable only when missingness is explicit', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-platform',
+              kind: 'stage_updated',
+            }),
+            liveEvent({
+              event_id: 'evt-partial',
+              kind: 'assignment_completed',
+              assignment_id: 'assignment-1',
+              metric_delta: {
+                pass: { value: 1 },
+                latency_ms: { unavailable_reason: 'no_scored_calls' },
+              },
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const platformRow = screen.getByRole('link', { name: 'Stage Updated' }).closest('tr');
+    expect(platformRow).not.toBeNull();
+    for (const cell of platformRow?.querySelectorAll('.stream-metric-value') ?? []) {
+      expect(cell).toHaveTextContent('--');
+    }
+
+    const assignmentRow = screen.getByRole('link', { name: 'Assignment Completed' }).closest('tr');
+    expect(assignmentRow).not.toBeNull();
+    const metricCells = Array.from(assignmentRow?.querySelectorAll('.stream-metric-value') ?? []).map(
+      (cell) => cell.textContent,
+    );
+    expect(metricCells).toContain('Pass');
+    expect(metricCells).toContain('Unavailable');
+    expect(metricCells.filter((text) => text === '--').length).toBeGreaterThan(0);
+  });
+
   it('hides thinking and cache token columns from the live stream', () => {
     render(
       <MemoryRouter>

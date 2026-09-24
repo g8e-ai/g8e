@@ -17,9 +17,8 @@ import {
 import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
 import type { AssignmentResult, LiveEvent, MetricValue } from '../contract/types';
 import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
-import { metricDisplay } from '../utils/format';
-
 const STREAM_PAGE_SIZE = 25;
+const STREAM_EMPTY_METRIC = '--';
 
 function eventTime(iso: string): string {
   const date = new Date(iso);
@@ -100,6 +99,23 @@ const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: str
 
 function assignmentMetric(event: LiveEvent, assignment: AssignmentResult | undefined, key: AssignmentMetricColumn): MetricValue | undefined {
   return assignmentMetricValues(event, assignment)[key];
+}
+
+function streamMetricDisplay(
+  metric: MetricValue | undefined,
+  formatter: (value: number) => string,
+): { text: string; unavailable: boolean; reason?: string } {
+  if (!metric) {
+    return { text: STREAM_EMPTY_METRIC, unavailable: true, reason: 'not observed' };
+  }
+  if (metric.value === undefined) {
+    return {
+      text: metric.unavailable_reason ? 'Unavailable' : STREAM_EMPTY_METRIC,
+      unavailable: true,
+      reason: metric.unavailable_reason,
+    };
+  }
+  return { text: formatter(metric.value), unavailable: false };
 }
 
 function streamSortValue(
@@ -359,8 +375,8 @@ export function LiveEventStream({
                     </td>
                     {ASSIGNMENT_METRIC_COLUMNS.map(({ key }) => {
                       const displayed = !event.assignment_id
-                        ? { text: '—', unavailable: true }
-                        : metricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key));
+                        ? { text: STREAM_EMPTY_METRIC, unavailable: true }
+                        : streamMetricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key));
                       return (
                         <td className="stream-metric-cell" key={key}>
                           <span className={displayed.unavailable ? 'stream-metric-value unavailable' : 'stream-metric-value'}>

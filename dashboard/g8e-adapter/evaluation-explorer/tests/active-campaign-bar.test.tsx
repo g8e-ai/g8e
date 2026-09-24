@@ -2,11 +2,11 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { CatalogSnapshot, EvaluationSummary, LiveEvent, SnapshotRecord, SuiteSummary } from '../src/contract/types';
+import { ActiveCampaignBar } from '../src/components/ActiveCampaignBar';
 import { evalStore } from '../src/state/store';
-import { OverviewView } from '../src/views/OverviewView';
 
 const datasetId = 'ds-live-smoke-run';
 
@@ -31,14 +31,6 @@ const catalog: CatalogSnapshot = {
   verifier_passed_count: 0,
   verifier_failed_count: 0,
   generated_at: '2026-09-22T12:05:00Z',
-};
-
-const archivedCatalog: CatalogSnapshot = {
-  ...catalog,
-  dataset_id: 'ds-verified-archive',
-  dataset_kind: 'verified_public_snapshot',
-  quality_state: 'verified_public',
-  title: 'Archived campaign',
 };
 
 const suite: SuiteSummary = {
@@ -111,9 +103,9 @@ const events: LiveEvent[] = [
   },
 ];
 
-describe('OverviewView', () => {
+describe('ActiveCampaignBar', () => {
   beforeEach(() => {
-    evalStore.loadFixtures([catalog, archivedCatalog, suite, evaluation] as SnapshotRecord[], events);
+    evalStore.loadFixtures([catalog, suite, evaluation] as SnapshotRecord[], events);
     evalStore.setConnection('live');
     evalStore.setStreamConnection('connected');
   });
@@ -122,61 +114,19 @@ describe('OverviewView', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders the live event stream full width without the system overview panel', () => {
+  it('shows condensed now-evaluating activity for the live dataset', () => {
     render(
       <MemoryRouter initialEntries={['/?dataset=ds-verified-archive']}>
-        <OverviewView />
+        <ActiveCampaignBar />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('region', { name: 'Live event stream' })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'System overview' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Active campaign')).not.toBeInTheDocument();
-    expect(screen.queryByText(/live deployment of the g8e AI governance suite/i)).not.toBeInTheDocument();
-  });
-
-  it('presents campaign coverage and public-safe data surfaces for engineers', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ schema_version: '1.0.0', mirror_origin: 'https://mirror.example' }),
-    }));
-
-    render(
-      <MemoryRouter>
-        <OverviewView />
-      </MemoryRouter>,
-    );
-
-    const evidence = within(screen.getByRole('region', { name: 'Campaign evidence' }));
-    expect(evidence.getByText('Campaign evidence')).toBeInTheDocument();
-    expect(evidence.getByText('Completed')).toBeInTheDocument();
-    expect(evidence.getByText('Failed')).toBeInTheDocument();
-    expect(evidence.getByText('Remaining')).toBeInTheDocument();
-    const coverage = evidence.getByRole('progressbar', { name: 'smoke-run assignment outcomes' });
-    expect(coverage).toHaveAttribute('aria-valuenow', '6');
-    expect(coverage).toHaveAttribute('aria-valuemax', '75');
-    expect(evidence.getByText('6 / 75 terminal')).toBeInTheDocument();
-    expect(evidence.getByText('Verification pending')).toBeInTheDocument();
-
-    const data = within(screen.getByRole('region', { name: 'Public data and APIs' }));
-    expect(data.getByText('Public data & APIs')).toBeInTheDocument();
-    expect(data.getByText(/public-safe projection/i)).toBeInTheDocument();
-    expect(await data.findByRole('link', { name: /Campaign summaries/i })).toHaveAttribute(
-      'href',
-      'https://mirror.example/history?kind=evaluation_summary&cursor=0&limit=500',
-    );
-    expect(data.getByRole('link', { name: /Assignment results/i })).toHaveAttribute(
-      'href',
-      'https://mirror.example/history?kind=assignment_result&cursor=0&limit=500',
-    );
-    expect(data.getByRole('link', { name: /Proofs/i })).toHaveAttribute(
-      'href',
-      'https://mirror.example/proof-catalog',
-    );
-    expect(data.getByRole('link', { name: /Live updates/i })).toHaveAttribute(
-      'href',
-      'https://mirror.example/stream',
-    );
-    expect(data.queryByText('Download data')).not.toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Now evaluating ministral-3-8b on tool-selection-04/i });
+    expect(link).toHaveAttribute('href', `/evaluations/${datasetId}/${evaluation.run_id}`);
+    expect(link).toHaveTextContent('Now evaluating');
+    expect(link).toHaveTextContent('ministral-3-8b · tool-selection-04');
+    expect(link).toHaveTextContent('Primary');
+    expect(link).toHaveTextContent('8%');
+    expect(link).not.toHaveTextContent('Semantic grading');
   });
 });

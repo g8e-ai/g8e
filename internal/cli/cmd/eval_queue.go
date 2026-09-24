@@ -266,7 +266,7 @@ func rolloutEvalNextCmd(deps nativeEvalDeps) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 				return err
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Next pending model\nTag: %s\nVariant: %s\nCampaign: %s\nInventory: %s\nRegistry digest: %s\nCells: %d\n\nRecommended flow:\n  ./g8e eval campaign start --queue next --publish --daemon --verify --tier-a\n  ./g8e eval rollout run --tier-a --skip-verified\n",
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Next pending model\nTag: %s\nVariant: %s\nCampaign: %s\nInventory: %s\nRegistry digest: %s\nCells: %d\n\nRecommended flow:\n  ./g8e eval campaign start --queue next --publish --daemon --require-witness\n  ./g8e eval rollout run --require-witness --skip-verified\n",
 				entry.ServedModelTag,
 				entry.VariantID,
 				entry.CampaignID,

@@ -670,7 +670,7 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	return result, nil
 }
 
-func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc fs.RuntimeFileService, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, tierA bool) error {
+func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc fs.RuntimeFileService, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, requireWitness bool) error {
 	if plan == nil || plan.QueueEntry == nil || report == nil {
 		return nil
 	}
@@ -678,8 +678,8 @@ func markQueueEntryVerifiedAfterPassWithFileService(ctx context.Context, fileSvc
 		return nil
 	}
 	notes := "75/75 verify PASS; run " + plan.RunID
-	if tierA {
-		notes = evaluation.TierAVerifyNotes(plan.RunID)
+	if requireWitness {
+		notes = evaluation.StrictWitnessVerifyNotes(plan.RunID)
 	}
 	_, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
 		Context:       ctx,
