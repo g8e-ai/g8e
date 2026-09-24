@@ -497,6 +497,33 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 	return &models.PlatformEnrollmentRevokeResponse{RequestID: updated.ID, ComponentKind: updated.ComponentKind, State: updated.State}, nil
 }
 
+// ListEnrolled returns owner-visible metadata for completed and revoked
+// platform enrollment requests. The response never includes token hashes,
+// CSR PEM, certificates, or raw tokens. The caller must be authenticated as
+// the active first user (enforced by the controller before calling this
+// method).
+func (s *PlatformEnrollmentService) ListEnrolled(ctx context.Context) (*models.PlatformEnrollmentEnrolledResponse, error) {
+	_ = ctx
+	docs, err := s.db.DocQuery(platformEnrollmentCollectionName(), nil, "created_at", 0)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: list enrolled: %w", err)
+	}
+
+	resp := &models.PlatformEnrollmentEnrolledResponse{Enrollments: []models.PlatformEnrollmentEnrolledRequest{}}
+	for _, doc := range docs {
+		req, err := decodePlatformEnrollmentRequest(doc)
+		if err != nil {
+			s.logger.Warn("platform enrollment: list enrolled: decode failed", "doc_id", doc.ID, "error", err)
+			continue
+		}
+		switch req.State {
+		case models.PlatformEnrollmentStateCompleted, models.PlatformEnrollmentStateRevoked:
+			resp.Enrollments = append(resp.Enrollments, req.EnrolledMetadata())
+		}
+	}
+	return resp, nil
+}
+
 // ListPending returns owner-visible metadata for all pending, non-expired
 // platform enrollment requests. The response never includes token hashes,
 // CSR PEM, certificates, or raw tokens. The caller must be authenticated as

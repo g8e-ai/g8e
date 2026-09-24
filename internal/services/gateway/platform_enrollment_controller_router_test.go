@@ -746,6 +746,7 @@ func TestPlatformEnrollmentRouter_MethodEnforcement(t *testing.T) {
 		{"status rejects POST", constants.APIPaths.AuthPlatformEnrollmentStatus, http.MethodPost},
 		{"complete rejects GET", constants.APIPaths.AuthPlatformEnrollmentComplete, http.MethodGet},
 		{"pending rejects POST", constants.APIPaths.AuthPlatformEnrollmentPending, http.MethodPost},
+		{"enrolled rejects POST", constants.APIPaths.AuthPlatformEnrollmentEnrolled, http.MethodPost},
 		{"decision rejects GET", constants.APIPaths.AuthPlatformEnrollmentDecision, http.MethodGet},
 		{"revoke rejects GET", constants.APIPaths.AuthPlatformEnrollmentRevoke, http.MethodGet},
 	}
