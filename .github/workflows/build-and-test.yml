@@ -65,7 +65,23 @@ jobs:
           pip install grpcio-tools==1.84.0 uv==0.11.21
 
       - name: Verify Version Sync
-        run: bash scripts/verify-version-sync.sh
+        run: |
+          VERSION=$(cat VERSION | tr -d '\n\r' | sed 's/^v//')
+          PY_VERSION=$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          PY_INIT_VERSION=$(grep -E '^__version__ = ' protocol/python/g8e/__init__.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          PY_LOCK_VERSION=$(sed -n -E '/^name = "g8e"$/{n;s/^version = "([^"]+)"/\1/p;}' protocol/python/uv.lock)
+          if [ "$PY_VERSION" != "$VERSION" ] || [ "$PY_INIT_VERSION" != "$VERSION" ] || [ "$PY_LOCK_VERSION" != "$VERSION" ]; then
+            echo "Error: pyproject.toml ($PY_VERSION), __init__.py ($PY_INIT_VERSION), uv.lock ($PY_LOCK_VERSION) != VERSION ($VERSION)"
+            exit 1
+          fi
+          for doc in a2a.md constants.md mcp.md spec.md; do
+            DOC_VERSION=$(grep -E '^Version: v' "protocol/docs/$doc" | head -1 | sed 's/^Version: v//')
+            if [ "$DOC_VERSION" != "$VERSION" ]; then
+              echo "Error: protocol/docs/$doc ($DOC_VERSION) != VERSION ($VERSION)"
+              exit 1
+            fi
+          done
+          echo "Version sync OK: $VERSION"
 
       - name: Verify Proto & Doctrines
         run: |
@@ -132,9 +148,9 @@ jobs:
 
       - name: Verify version
         run: |
-          bash scripts/verify-version-sync.sh
           VERSION=$(cat VERSION | tr -d '\n\r' | sed 's/^v//')
           python -c "import g8e; assert g8e.__version__ == '$VERSION', f'Version mismatch: {g8e.__version__} != $VERSION'"
+          echo "Python version sync OK: $VERSION"
 
       - name: Run pytest suite
         working-directory: protocol/python

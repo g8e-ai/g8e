@@ -955,7 +955,48 @@ release:
 	NOTES_FILE="docs/release_notes/v$$MAJOR_MINOR.x/v$$VERSION.md"; \
 	echo "=== release: $$TAG ==="; \
 	\
-	bash scripts/verify-version-sync.sh --sync; \
+	PY_FILE=protocol/python/pyproject.toml; \
+	PY_INIT=protocol/python/g8e/__init__.py; \
+	PY_LOCK=protocol/python/uv.lock; \
+	PY_VERSION=$$(grep -E '^version = ' $$PY_FILE | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	PY_INIT_VERSION=$$(grep -E '^__version__ = ' $$PY_INIT | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	PY_LOCK_VERSION=$$(sed -n -E '/^name = "g8e"$$/{n;s/^version = "([^"]+)"/\1/p;}' $$PY_LOCK); \
+	if [ "$$PY_VERSION" != "$$VERSION" ]; then \
+		echo "Syncing $$PY_FILE: $$PY_VERSION -> $$VERSION"; \
+		sed -i.bak -E 's/^version = "[^"]+"/version = "'$$VERSION'"/' $$PY_FILE; \
+		rm -f $$PY_FILE.bak; \
+		echo "  pyproject.toml synced."; \
+	else \
+		echo "  pyproject.toml already in sync."; \
+	fi; \
+	if [ "$$PY_INIT_VERSION" != "$$VERSION" ]; then \
+		echo "Syncing $$PY_INIT: $$PY_INIT_VERSION -> $$VERSION"; \
+		sed -i.bak -E 's/^__version__ = "[^"]+"/__version__ = "'$$VERSION'"/' $$PY_INIT; \
+		rm -f $$PY_INIT.bak; \
+		echo "  __init__.py synced."; \
+	else \
+		echo "  __init__.py already in sync."; \
+	fi; \
+	if [ "$$PY_LOCK_VERSION" != "$$VERSION" ]; then \
+		echo "Syncing $$PY_LOCK: $$PY_LOCK_VERSION -> $$VERSION"; \
+		sed -i.bak -E '/^name = "g8e"$$/{n;s/^version = "[^"]+"/version = "'$$VERSION'"/;}' $$PY_LOCK; \
+		rm -f $$PY_LOCK.bak; \
+		echo "  uv.lock synced."; \
+	else \
+		echo "  uv.lock already in sync."; \
+	fi; \
+	for doc in a2a.md constants.md mcp.md spec.md; do \
+		DOC_FILE=protocol/docs/$$doc; \
+		DOC_VERSION=$$(grep -E '^Version: v' $$DOC_FILE | head -1 | sed 's/^Version: v//'); \
+		if [ "$$DOC_VERSION" != "$$VERSION" ]; then \
+			echo "Syncing $$DOC_FILE: $$DOC_VERSION -> $$VERSION"; \
+			sed -i.bak -E 's/^Version: v[^[:space:]]+/Version: v'$$VERSION'/' $$DOC_FILE; \
+			rm -f $$DOC_FILE.bak; \
+			echo "  $$DOC_FILE synced."; \
+		else \
+			echo "  $$DOC_FILE already in sync."; \
+		fi; \
+	done; \
 	\
 	if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Error: working tree is dirty after version sync."; \

@@ -548,15 +548,14 @@ head -n 20 CHANGELOG.md
 # 3. Verify release notes file exists
 ls "docs/release_notes/${RELEASE_VERSION%.*}.x/${RELEASE_VERSION}.md"
 
-# 4. Verify Python package and protocol specification versions match VERSION.
-#    The agent syncs these files manually during PR prep so CI's version sync
-#    check passes on the PR.
-bash scripts/verify-version-sync.sh
+# 4. Verify Python package version matches VERSION. The agent syncs these files
+#    manually during PR prep so CI's version sync check passes on the PR.
 grep -n '^version' protocol/python/pyproject.toml
 grep -n '__version__' protocol/python/g8e/__init__.py
 grep -A1 '^name = "g8e"' protocol/python/uv.lock
+# All three should show X.Y.Z matching RELEASE_NUM.
 grep -n '^Version: v' protocol/docs/a2a.md protocol/docs/constants.md protocol/docs/mcp.md protocol/docs/spec.md
-# All entries should show X.Y.Z or vX.Y.Z matching RELEASE_VERSION / RELEASE_NUM.
+# All four protocol specification headers should show vX.Y.Z matching RELEASE_VERSION.
 
 # 4b. Verify downstream uv.lock is in sync. `make proto` regenerates this
 #     during PR prep. It must show X.Y.Z matching RELEASE_NUM under the
@@ -593,7 +592,7 @@ grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" do
   | grep -viE "v?${RELEASE_NUM}([^0-9]|$)"
 ```
 
-If step 4 shows a mismatch, sync all Python version entries and protocol specification `Version:` headers to `VERSION` before handoff (`bash scripts/verify-version-sync.sh --sync` applies the Python and protocol-doc updates from `VERSION`). If step 4b shows a mismatch, run `make proto` to regenerate the downstream lockfile. Steps 5 and 6 intentionally show older metadata for untouched documents; compare only the release owner's complete edited-document list, and confirm metadata was updated after each document's audit. Replace the step 7 placeholder identifiers with every renamed or removed identifier from the change inventory and resolve all current-state matches. Classify step 8 matches before changing them so historical and evidence versions remain intact. None of these searches replaces the documented catalog walk, source verification, related-document reconciliation, or final end-to-end read.
+If step 4 shows a mismatch, sync all Python version entries and protocol specification `Version:` headers to `VERSION` before handoff. If step 4b shows a mismatch, run `make proto` to regenerate the downstream lockfile. Steps 5 and 6 intentionally show older metadata for untouched documents; compare only the release owner's complete edited-document list, and confirm metadata was updated after each document's audit. Replace the step 7 placeholder identifiers with every renamed or removed identifier from the change inventory and resolve all current-state matches. Classify step 8 matches before changing them so historical and evidence versions remain intact. None of these searches replaces the documented catalog walk, source verification, related-document reconciliation, or final end-to-end read.
 
 Also require the compliance files to exist and match the verified bundle. Set `BUNDLE` to the retained descriptor used in [Compliance Evidence Generation](#compliance-evidence-generation), confirm its protected product version matches `VERSION`, and run:
 
@@ -630,14 +629,14 @@ The `make release` target handles version syncing, tagging, and pushing in a sin
 
 The `vX.Y.Z` tag triggers the `release-binary.yml` workflow, which builds all platforms, signs binaries, creates the GitHub release, and uploads assets. The `protocol/vX.Y.Z` tag triggers the `release-python-protocol.yml` workflow, which publishes the Python package to PyPI.
 
-> **Lint and tests are handled by CI** (`.github/workflows/build-and-test.yml`) on pull requests, not by `make release`. The CI workflow includes a version sync check (`scripts/verify-version-sync.sh`) that fails if `pyproject.toml`, `__init__.py`, the editable `g8e` entry in `protocol/python/uv.lock`, or the maintained protocol specification `Version:` headers don't match `VERSION`. The Python package test suite also enforces the protocol-doc headers through `test_protocol_documentation_matches_repository_version`. It also runs `uv sync --locked` in `ensemble`, which fails if the downstream `uv.lock` still pins the old `g8e` version — `make proto` regenerates this during PR prep to prevent this.
+> **Lint and tests are handled by CI** (`.github/workflows/build-and-test.yml`) on pull requests, not by `make release`. The CI workflow includes a version sync check that fails if `pyproject.toml`, `__init__.py`, the editable `g8e` entry in `protocol/python/uv.lock`, or the maintained protocol specification `Version:` headers don't match `VERSION`. The Python package test suite also enforces the protocol-doc headers through `test_protocol_documentation_matches_repository_version`. It also runs `uv sync --locked` in `ensemble`, which fails if the downstream `uv.lock` still pins the old `g8e` version — `make proto` regenerates this during PR prep to prevent this.
 
 ### CI Workflows Triggered by Tags
 
 | Tag | Workflow | What It Does |
 |-----|----------|-------------|
 | `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds all platforms, signs binaries with cosign, uploads assets to GitHub release, and verifies fresh `go install` works on Ubuntu, macOS, and Windows |
-| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Verifies version sync, builds and publishes Python package to PyPI, verifies fresh PyPI install and imports on Ubuntu, macOS, and Windows |
+| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds and publishes Python package to PyPI, verifies fresh PyPI install and imports on Ubuntu, macOS, and Windows |
 
 The `protocol/v*` tag is used only as a trigger for the Python PyPI release workflow. It is NOT used for Go module versioning; the Go module is part of the root module and is versioned by `v*` tags.
 
