@@ -156,6 +156,7 @@ class ChatPipelineService:
         validation_errors = []
 
         from app.decision.providers.jev import JevProvider
+        from app.decision.validation import validate_jev_lite_coexistence
 
         # Provider class mapping for validation
         provider_classes = {
@@ -241,6 +242,16 @@ class ChatPipelineService:
                 endpoint_override=lite_endpoint_override,
             )
             check_tier("lite", lite, provider, api_key, endpoint)
+
+        lite_provider, _, _, _ = llm.resolve(
+            "lite",
+            provider_override=lite_provider_override,
+            api_key_override=lite_api_key_override,
+            endpoint_override=lite_endpoint_override,
+            model_override=lite_model_override,
+        )
+        if lite_provider == LLMProvider.JEV.value:
+            validation_errors.extend(validate_jev_lite_coexistence(llm))
 
         if validation_errors:
             raise ConfigurationError(

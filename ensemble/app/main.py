@@ -212,6 +212,19 @@ async def lifespan(app: FastAPI):
         set_settings(settings)
         logger.info("Platform settings merged: port=%s", settings.port)
 
+        from app.decision.validation import (
+            log_jev_generative_lite_warning,
+            validate_jev_lite_coexistence,
+        )
+
+        log_jev_generative_lite_warning(logger, settings.llm)
+        jev_startup_errors = validate_jev_lite_coexistence(settings.llm)
+        if jev_startup_errors:
+            raise ConfigurationError(
+                "Jev lite provider configuration is incompatible with enabled features: "
+                + " ".join(jev_startup_errors)
+            )
+
         # -- Phase 4.5: GovernanceClient for governed collection writes --
         governance_client = GovernanceClient(
             tls_config=tls_config,

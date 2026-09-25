@@ -1,7 +1,7 @@
 # Testing
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-25
+Version: v2.2.x
 
 ## Overview
 
@@ -18,7 +18,7 @@ Every pytest session runs the shared configuration hook, which probes the locall
 | Tier 1 | Unit tests | `ensemble/tests/unit/` | Directory selection and the `unit` marker | Test doubles and in-memory state in the test body |
 | Tier 2 | Integration tests | `ensemble/tests/integration/` | Directory selection and the `integration` marker | In-process fakes, the HTTPS/WebSocket mock Gateway, or locally configured Gateway/Operator services, depending on the fixture |
 | Tier 3 | End-to-end tests | `ensemble/tests/e2e/` | `e2e` marker | Reserved for full-stack tests; no ensemble Tier 3 test cases are currently implemented |
-| Tier 4 | External-provider tests | `ensemble/tests/integration/` | `ai_integration`, `requires_web_search`, or `requires_api` | Configured LLM, Vertex AI Search, or other enabled external API configuration |
+| Tier 4 | External-provider tests | `ensemble/tests/integration/` | `ai_integration`, `requires_web_search`, `requires_api`, or `requires_typesafe` | Configured LLM, TypeSafe/Jev, Vertex AI Search, or other enabled external API configuration |
 
 The root `make ensemble-test` target and the ensemble CI job collect only `tests/unit/` and `tests/integration/`. They do not collect tests located directly under `tests/` or under `tests/fakes/`. Running pytest against `tests/` also collects `tests/test_constants_parity.py` and `tests/fakes/test_fakes_protocol_conformance.py`, as well as any other matching top-level checks.
 
@@ -42,7 +42,7 @@ Run commands from the repository root unless a command explicitly says otherwise
 From the repository root:
 
 - `make ensemble-test` runs `ensemble/tests/unit/` and `ensemble/tests/integration/` with `-m "not ai_integration and not requires_web_search and not requires_api"`.
-- `make test-external` runs only integration tests selected by `ai_integration`, `requires_web_search`, or `requires_api`.
+- `make test-external` runs only integration tests selected by `ai_integration`, `requires_web_search`, `requires_api`, or `requires_typesafe`.
 - `make ensemble-lint` runs Ruff and Pyright against `ensemble/app`.
 - `make ci-ensemble` runs `ensemble-lint` followed by `ensemble-test`.
 - `make build-ensemble` builds the `g8e-ensemble:<VERSION>` Docker image; it does not run tests.
@@ -61,23 +61,24 @@ For focused pytest runs from `ensemble/`:
 
 ```bash
 python -m pytest tests/unit/
-python -m pytest tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api"
-python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not e2e"
+python -m pytest tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe"
+python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe and not e2e"
 python -m pytest tests/integration/ -m ai_integration
-python -m pytest tests/integration/ -m "requires_web_search or requires_api"
+python -m pytest tests/integration/ -m "requires_web_search or requires_api or requires_typesafe"
 ```
 
 The third command includes top-level parity and fake conformance checks while excluding external-provider and E2E-marked tests. The repository `./g8e test` subcommands run the Go platform test suites; they do not run the Python ensemble suite.
 
 ## Markers and External Configuration
 
-The suite registers markers in `ensemble/pyproject.toml` and enforces them with `--strict-markers`. Directory selection remains the primary unit/integration split; markers identify external dependencies and specialized behavior. The currently used markers are `unit`, `integration`, `ai_integration`, `requires_web_search`, `requires_operator`, and `slow`. The harness also applies `thinking` and `tools` dynamically to selected accuracy scenarios. `e2e`, `smoke`, `ai`, `aws`, `intent_workflow`, `requires_api`, and `operator_wire` are registered classifications with no general current test population, although `requires_api` remains part of the external selection and gating commands.
+The suite registers markers in `ensemble/pyproject.toml` and enforces them with `--strict-markers`. Directory selection remains the primary unit/integration split; markers identify external dependencies and specialized behavior. The currently used markers are `unit`, `integration`, `ai_integration`, `requires_web_search`, `requires_typesafe`, `requires_operator`, and `slow`. The harness also applies `thinking` and `tools` dynamically to selected accuracy scenarios. `e2e`, `smoke`, `ai`, `aws`, `intent_workflow`, `requires_api`, and `operator_wire` are registered classifications with no general current test population, although `requires_api` remains part of the external selection and gating commands.
 
 The external markers mean:
 
 - `ai_integration` identifies integration tests that use a configured LLM provider. Without an explicit `G8E_TEST_LLM_PRIMARY_PROVIDER`, collection uses the loaded LLM settings to determine whether an LLM provider is configured. When that environment variable is set, the harness checks the provider-specific key or endpoint fields before allowing those tests to run.
 - `requires_web_search` identifies tests that require enabled Vertex AI Search settings with a project ID, engine ID, and API key.
 - `requires_api` identifies tests that require enabled external search/API settings. The marker is registered and included by the filters, but no current ensemble test is directly marked with it.
+- `requires_typesafe` identifies integration tests that call the live TypeSafe System One (Jev) API. Collection skips these tests when neither `G8E_LLM_JEV_API_KEY` nor `TYPESAFE_API_KEY` is set. Examples: `test_jev_triage_integration.py`, `test_jev_eval_judge_integration.py`.
 - `requires_operator` identifies integration tests that require a live Gateway/Operator path, such as mTLS inference. Integration fixtures can also skip when required CA material or Operator connectivity is unavailable, even when a test does not carry this marker.
 
 The harness accepts environment overrides for external test settings. LLM settings use `G8E_TEST_LLM_PRIMARY_PROVIDER`, provider-appropriate primary credentials or endpoints, optional assistant and lite provider/model/credential/endpoint variables, and optional `G8E_TEST_LLM_MAX_TOKENS`. Web search settings use `G8E_TEST_WEB_SEARCH_PROJECT_ID`, `G8E_TEST_WEB_SEARCH_ENGINE_ID`, `G8E_TEST_WEB_SEARCH_API_KEY`, and optional `G8E_TEST_WEB_SEARCH_LOCATION`, which defaults to `global`.
