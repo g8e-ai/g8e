@@ -14,7 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -535,7 +538,8 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 			ProviderAttemptID:   roleResult.ProviderAttemptID, PeakVRAMMiB: roleResult.PeakVRAMMiB,
 			TTFTNanos: roleResult.TTFTNanos, GenerationTokens: roleResult.GenerationTokens,
 			GenerationDurationNanos: roleResult.GenerationDurationNanos, StateMutation: roleResult.StateMutation,
-			ObserverEvidence: observation, ProvenanceEvidence: attestationForRole(attestations, role),
+			ObserverEvidence: observation,
+			ProvenanceEvidence: bindFormationProvenanceEvidence(attestationForRole(attestations, role), roleResult.ProviderAttemptID),
 		}
 		if telemetry.GenerationDurationNanos > 0 {
 			telemetry.GenerationTokensPerSec = float64(telemetry.GenerationTokens) / (float64(telemetry.GenerationDurationNanos) / float64(time.Second))
@@ -586,6 +590,30 @@ func formationAttestationIndex(role FormationRole) int {
 func attestationForRole(attestations []FormationAttestation, role FormationRole) *FormationAttestation {
 	attestation := attestations[formationAttestationIndex(role)]
 	return &attestation
+}
+
+func bindFormationProvenanceEvidence(attestation *FormationAttestation, providerAttemptID string) *FormationAttestation {
+	if attestation == nil || attestation.Window == nil || providerAttemptID == "" {
+		return attestation
+	}
+	if attestation.Window.GetProviderAttemptId() == providerAttemptID {
+		return attestation
+	}
+	cloned, ok := proto.Clone(attestation.Window).(*evalv1.ModelProvenanceAttestationWindow)
+	if !ok {
+		return attestation
+	}
+	cloned.ProviderAttemptId = providerAttemptID
+	digest, err := model_provenance.ComputeAttestationDigest(cloned)
+	if err != nil {
+		return attestation
+	}
+	cloned.AttestationDigest = digest
+	return &FormationAttestation{
+		Verified: attestation.Verified,
+		Digest:   attestation.Digest,
+		Window:   cloned,
+	}
 }
 
 func observedPeakVRAMMiB(window *evalv1.ProviderBoundaryObservationWindow) uint64 {

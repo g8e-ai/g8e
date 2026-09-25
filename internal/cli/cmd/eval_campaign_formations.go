@@ -504,10 +504,14 @@ type gatewayFormationProvenancePreflight struct {
 }
 
 func (g gatewayFormationProvenancePreflight) PreflightSovereignModel(_ context.Context, model evaluation.FormationModel) (*evaluation.FormationAttestation, error) {
-	if err := preflightModelProvenanceAttestation(g.fileSvc, g.cfg, model.ServedModelTag, model.ModelDigest); err != nil {
-		return nil, err
+	window, err := loadModelProvenanceAttestation(g.fileSvc, g.cfg, model.ServedModelTag, model.ModelDigest)
+	if err != nil {
+		if preflightErr := preflightModelProvenanceAttestation(g.fileSvc, g.cfg, model.ServedModelTag, model.ModelDigest); preflightErr != nil {
+			return nil, preflightErr
+		}
+		return &evaluation.FormationAttestation{Verified: true, Digest: model.ModelDigest}, nil
 	}
-	return &evaluation.FormationAttestation{Verified: true, Digest: model.ModelDigest}, nil
+	return &evaluation.FormationAttestation{Verified: true, Digest: model.ModelDigest, Window: window}, nil
 }
 
 type harnessFormationInferenceDispatcher struct {

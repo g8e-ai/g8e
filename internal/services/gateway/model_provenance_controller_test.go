@@ -122,8 +122,29 @@ func (s stubModelProvenancePreflight) PreflightCommandDelivery(context.Context) 
 	return s.commandErr
 }
 
-func (s stubModelProvenancePreflight) PreflightStorageAttestation(context.Context, string, string) error {
-	return s.attestErr
+func (s stubModelProvenancePreflight) PreflightStorageAttestation(context.Context, string, string) (*evalv1.ModelProvenanceAttestationWindow, error) {
+	if s.attestErr != nil {
+		return nil, s.attestErr
+	}
+	digest := strings.Repeat("a", 64)
+	window := &evalv1.ModelProvenanceAttestationWindow{
+		SchemaVersion:              model_provenance.SchemaVersion,
+		ProviderAttemptId:          "preflight-provenance",
+		ProvenanceOperatorId:       "test-provenance-operator",
+		ServedModelTag:             "probe-model:7b",
+		ExpectedModelDigest:        digest,
+		ObservedModelDigest:        digest,
+		ManifestDigest:             strings.Repeat("b", 64),
+		ManifestVerificationStatus: evalv1.ModelManifestVerificationStatus_MODEL_MANIFEST_VERIFICATION_STATUS_UNSIGNED,
+		AttestedAtUnixMs:           1_700_000_000_000,
+		DigestMatch:                true,
+	}
+	attestationDigest, err := model_provenance.ComputeAttestationDigest(window)
+	if err != nil {
+		return nil, err
+	}
+	window.AttestationDigest = attestationDigest
+	return window, nil
 }
 
 func TestModelProvenanceControllerHandleModelProvenancePreflight_ReturnsReady(t *testing.T) {
@@ -153,5 +174,8 @@ func TestModelProvenanceControllerHandleModelProvenanceAttestPreflight_ReturnsRe
 	rr := httptest.NewRecorder()
 	controller.handleModelProvenance(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Body.String(), `"status":"ready"`)
+	var resp models.ModelProvenanceAttestResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.Equal(t, "ready", resp.Status)
+	assert.NotEmpty(t, resp.Window)
 }

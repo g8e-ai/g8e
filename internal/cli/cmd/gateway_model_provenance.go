@@ -113,6 +113,39 @@ func preflightModelProvenanceDelivery(fileSvc fs.RuntimeFileService, cfg *config
 	return nil
 }
 
+func loadModelProvenanceAttestation(fileSvc fs.RuntimeFileService, cfg *config.Config, servedModelTag, expectedModelDigest string) (*evalv1.ModelProvenanceAttestationWindow, error) {
+	if !isGatewayHealthy() {
+		return nil, constants.ErrEvaluationObservationUnavailable
+	}
+	client, err := api.NewClientWithTimeout(fileSvc, cfg, modelProvenanceAttestationPreflightAPIClientTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("model provenance attestation preflight: create gateway client: %w", err)
+	}
+	query := url.Values{}
+	query.Set("served_model_tag", servedModelTag)
+	query.Set("expected_model_digest", expectedModelDigest)
+	path := constants.APIPaths.InferenceModelProvenanceAttestations + "_attest?" + query.Encode()
+	body, err := client.Get(path)
+	if err != nil {
+		return nil, fmt.Errorf("model provenance attestation preflight for %q: %w", servedModelTag, err)
+	}
+	var resp models.ModelProvenanceAttestResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if resp.Status != "ready" {
+		return nil, fmt.Errorf("model provenance attestation preflight for %q: unexpected status %q", servedModelTag, resp.Status)
+	}
+	if len(resp.Window) == 0 {
+		return nil, fmt.Errorf("model provenance attestation preflight for %q: missing attestation window", servedModelTag)
+	}
+	window := &evalv1.ModelProvenanceAttestationWindow{}
+	if err := evalv1.UnmarshalCanonical(resp.Window, window); err != nil {
+		return nil, fmt.Errorf("model provenance attestation preflight for %q: decode window: %w", servedModelTag, err)
+	}
+	return window, nil
+}
+
 func preflightModelProvenanceAttestation(fileSvc fs.RuntimeFileService, cfg *config.Config, servedModelTag, expectedModelDigest string) error {
 	if !isGatewayHealthy() {
 		return constants.ErrEvaluationObservationUnavailable
