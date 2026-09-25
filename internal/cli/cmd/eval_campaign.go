@@ -196,6 +196,7 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 	var inferenceSessionID string
 	var dataSessionID string
 	var repetitionCount uint32
+	var systemLane bool
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a campaign run with frozen catalog and model registry",
@@ -227,6 +228,10 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign init: %w", err)
 			}
 			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			lane := evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE
+			if systemLane {
+				lane = evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM
+			}
 			run, err := controller.InitializeCampaign(cmd.Context(), evaluation.CampaignInitRequest{
 				CampaignID:                 campaignID,
 				RunID:                      runID,
@@ -234,6 +239,7 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 				Inventory:                  inventory,
 				ScenarioArtifacts:          artifacts,
 				RepetitionCount:            repetitionCount,
+				Lane:                       lane,
 				InferenceOperatorSessionID: inferenceSessionID,
 				DataOperatorSessionID:      dataSessionID,
 				Deployment:                 nativeEvalDeployment(cfg, authContext, runID, ""),
@@ -275,6 +281,7 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().Uint32Var(&repetitionCount, "repetition-count", 1, "Homogeneous repetition count")
+	cmd.Flags().BoolVar(&systemLane, "system-lane", false, "Initialize a heterogeneous system-lane run (required before schedule --heterogeneous)")
 	return cmd
 }
 

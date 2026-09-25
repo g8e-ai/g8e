@@ -174,6 +174,46 @@ func TestCampaignEvalFormationsRun_RejectsUnknownInferenceSession(t *testing.T) 
 	assert.ErrorIs(t, err, constants.ErrInferenceOperatorNotCapable)
 }
 
+func TestCampaignEvalFormationsRun_RejectsUnknownDataSession(t *testing.T) {
+	root, deps, cleanup := setupCampaignFormationsEnv(t, ultraLightSpeedsterTestVariants())
+	defer cleanup()
+	restore := enableCampaignWitnessGateway(t, root, deps)
+	defer restore()
+
+	command := evalCmdWithConfig(deps)
+	command.SilenceUsage = true
+	command.SilenceErrors = true
+	command.SetArgs([]string{
+		"campaign", "formations", "run",
+		"--project-root", root,
+		"--inference-session", "infer-session",
+		"--data-session", "missing-data-session",
+	})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "campaign data operator session")
+}
+
+func TestCampaignEvalFormationsRun_RejectsInferenceSessionAsDataSession(t *testing.T) {
+	root, deps, cleanup := setupCampaignFormationsEnv(t, ultraLightSpeedsterTestVariants())
+	defer cleanup()
+	restore := enableCampaignWitnessGateway(t, root, deps)
+	defer restore()
+
+	command := evalCmdWithConfig(deps)
+	command.SilenceUsage = true
+	command.SilenceErrors = true
+	command.SetArgs([]string{
+		"campaign", "formations", "run",
+		"--project-root", root,
+		"--inference-session", "infer-session",
+		"--data-session", "infer-session",
+	})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "campaign data operator session")
+}
+
 func TestCampaignEvalFormationsShow_RejectsUnknownFormation(t *testing.T) {
 	command := evalCmdWithConfig(panickingNativeEvalDeps(t))
 	command.SilenceUsage = true

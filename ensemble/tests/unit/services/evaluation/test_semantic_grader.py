@@ -12,7 +12,7 @@ import pytest
 from app.models.evaluation_trace import EvaluationToolCallRecord
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
-from app.constants import LLMProvider
+from app.constants import JEV_DEFAULT_MODEL, LLMProvider
 from app.models.settings import EvalJudgeSettings, G8eeUserSettings, LLMSettings
 from app.services.ai.eval_judge import EvalGrade
 from app.services.evaluation.semantic_grader import (
@@ -130,6 +130,49 @@ async def test_grade_campaign_assignment_semantically_uses_lite_model_fallback()
     judge_cls.assert_called_once()
     assert judge_cls.call_args.kwargs["model"] == "qwen3:0.6b"
     assert semantic_grades[0].judge_variant_id == "qwen3:0.6b"
+
+
+@pytest.mark.asyncio
+async def test_grade_campaign_assignment_semantically_uses_jev_decision_provider():
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    settings = G8eeUserSettings(
+        llm=LLMSettings(
+            lite_provider=LLMProvider.JEV,
+            lite_model=JEV_DEFAULT_MODEL,
+            jev_api_key="ts_test_key",
+        ),
+        eval_judge=EvalJudgeSettings(eval_judge_model=JEV_DEFAULT_MODEL),
+    )
+    judge_grade = EvalGrade(
+        score=4,
+        reasoning="Jev rubric score: 4/5 (index 3.00, confidence 0.91).",
+        passed=True,
+        model_calls=[],
+    )
+    with patch(
+        "app.services.evaluation.semantic_grader.get_decision_provider",
+        return_value=object(),
+    ) as decision_fn, patch(
+        "app.services.evaluation.semantic_grader.get_llm_provider"
+    ) as llm_fn, patch(
+        "app.services.evaluation.semantic_grader.EvalJudge"
+    ) as judge_cls:
+        judge_cls.return_value.grade_turn = AsyncMock(return_value=judge_grade)
+        semantic_grades, _ = await grade_campaign_assignment_semantically(
+            evaluation_context=context.evaluation_context,
+            g8e_context=context,
+            request_settings=settings,
+            gold_summary=context.evaluation_context.gold_summary,
+            designated_role_output="checkout-api failed",
+            tool_calls=[],
+        )
+
+    decision_fn.assert_called_once_with(settings.llm)
+    llm_fn.assert_not_called()
+    judge_cls.assert_called_once()
+    assert judge_cls.call_args.kwargs["decision_provider"] is not None
+    assert judge_cls.call_args.kwargs.get("provider") is None
+    assert semantic_grades[0].judge_variant_id == JEV_DEFAULT_MODEL
 
 
 @pytest.mark.asyncio

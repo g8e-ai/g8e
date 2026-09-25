@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 
+from app.constants import LLMProvider
+from app.decision import get_decision_provider
 from app.errors import ConfigurationError
 from app.llm import get_llm_provider
 from app.models.evaluation_trace import (
@@ -60,13 +62,22 @@ async def grade_campaign_assignment_semantically(
     grade_id = f"{evaluation_context.assignment_id}:semantic-judge"
     judge_model = _resolve_eval_judge_model(request_settings)
     try:
-        provider = get_llm_provider(request_settings.llm, is_lite=True)
-        judge = EvalJudge(
-            provider=provider,
-            model=judge_model,
-            settings=request_settings.eval_judge,
-            g8e_context=g8e_context,
-        )
+        if request_settings.llm.lite_provider == LLMProvider.JEV:
+            decision_provider = get_decision_provider(request_settings.llm)
+            judge = EvalJudge(
+                decision_provider=decision_provider,
+                model=judge_model,
+                settings=request_settings.eval_judge,
+                g8e_context=g8e_context,
+            )
+        else:
+            provider = get_llm_provider(request_settings.llm, is_lite=True)
+            judge = EvalJudge(
+                provider=provider,
+                model=judge_model,
+                settings=request_settings.eval_judge,
+                g8e_context=g8e_context,
+            )
         grade = await judge.grade_turn(
             user_query=gold_summary.user_prompt,
             interaction_trace=_build_interaction_trace(designated_role_output, tool_calls),

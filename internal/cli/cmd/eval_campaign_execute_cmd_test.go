@@ -14,6 +14,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -244,9 +245,46 @@ func prepareUnscheduledCampaignRunWithVariants(t *testing.T, root string, deps n
 		"--inventory-file", inventoryPath,
 		"--inference-session", "infer-session",
 		"--data-session", "data-session",
+		"--system-lane",
 	})
 	require.NoError(t, command.Execute())
 	return runID
+}
+
+func TestCampaignEvalSchedule_HeterogeneousMaterializesAssignments(t *testing.T) {
+	root, deps, _, cleanup := setupCampaignOrchestrateEnv(t)
+	defer cleanup()
+
+	variants := []*evalv1.ModelVariant{
+		{VariantId: "gemma4-e4b", ServedModelTag: "gemma4:e4b", ModelDigest: repeatTestHex('a', 64), ProviderClass: "ollama", ParameterCount: 4_000_000_000, ModelFamily: "Gemma"},
+		{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: repeatTestHex('b', 64), ProviderClass: "ollama", ParameterCount: 4_000_000_000, ModelFamily: "Qwen"},
+		{VariantId: "llama3-8b", ServedModelTag: "llama3:8b", ModelDigest: repeatTestHex('c', 64), ProviderClass: "ollama", ParameterCount: 8_000_000_000, ModelFamily: "Llama"},
+	}
+	runID := prepareUnscheduledCampaignRunWithVariants(t, root, deps, variants)
+
+	command := evalCmdWithConfig(deps)
+	command.SetArgs([]string{
+		"campaign", "stacks", "generate", "--project-root", root,
+		"--campaign-id", "north-star-smoke", "--seed", "17",
+	})
+	require.NoError(t, command.Execute())
+
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{
+		"campaign", "schedule", "--project-root", root,
+		"--heterogeneous", runID,
+	})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "heterogeneous")
+
+	fileSvc, err := deps.fileSvcFactory(root, slog.Default())
+	require.NoError(t, err)
+	store := evaluation.NewStore(fileSvc)
+	assignments, err := store.ListAssignments(context.Background(), runID)
+	require.NoError(t, err)
+	require.NotEmpty(t, assignments)
+	assert.NotNil(t, assignments[0].GetHeterogeneous())
 }
 
 func TestCampaignEvalStacksGenerate_PersistsStacks(t *testing.T) {
