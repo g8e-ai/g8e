@@ -16,6 +16,7 @@ import { EvaluationDetailView } from './views/EvaluationDetailView';
 import { AssignmentDetailView } from './views/AssignmentDetailView';
 import { MethodologyView } from './views/MethodologyView';
 import { TasksView } from './views/TasksView';
+import { ThemeToggle } from './components/ThemeToggle';
 import { G8E_REPO_URL, GITHUB_SPONSORS_URL } from './content/platform';
 
 function CompareRedirect() {
@@ -84,6 +85,7 @@ function Shell() {
           <ActiveCampaignBar />
         </div>
         <div className="header-right">
+          <ThemeToggle />
           <a
             className="header-cta header-cta-github"
             href={G8E_REPO_URL}
