@@ -29,13 +29,13 @@ import (
 )
 
 type formationSummaryJSON struct {
-	ID                string `json:"id"`
-	DisplayName       string `json:"display_name"`
-	Description       string `json:"description"`
-	EstimatedVRAMMiB  uint64 `json:"estimated_vram_mib"`
-	MaxVRAMMiB        uint64 `json:"max_vram_mib"`
-	DelegatedPrimary  bool   `json:"delegated_primary"`
-	SovereignModelCount int  `json:"sovereign_model_count"`
+	ID                  string `json:"id"`
+	DisplayName         string `json:"display_name"`
+	Description         string `json:"description"`
+	EstimatedVRAMMiB    uint64 `json:"estimated_vram_mib"`
+	MaxVRAMMiB          uint64 `json:"max_vram_mib"`
+	DelegatedPrimary    bool   `json:"delegated_primary"`
+	SovereignModelCount int    `json:"sovereign_model_count"`
 }
 
 type formationListJSON struct {
@@ -43,13 +43,13 @@ type formationListJSON struct {
 }
 
 type formationShowRoleJSON struct {
-	Role            string `json:"role"`
-	VariantID       string `json:"variant_id"`
-	DisplayName     string `json:"display_name"`
-	Provider        string `json:"provider"`
-	Family          string `json:"family"`
-	ServedModelTag  string `json:"served_model_tag"`
-	Trust           string `json:"trust"`
+	Role             string `json:"role"`
+	VariantID        string `json:"variant_id"`
+	DisplayName      string `json:"display_name"`
+	Provider         string `json:"provider"`
+	Family           string `json:"family"`
+	ServedModelTag   string `json:"served_model_tag"`
+	Trust            string `json:"trust"`
 	EstimatedVRAMMiB uint64 `json:"estimated_vram_mib"`
 }
 
@@ -92,7 +92,6 @@ type formationRunOptions struct {
 	InventoryFile      string
 	InferenceSessionID string
 	DataSessionID      string
-	OllamaEndpoint     string
 	InitialState       string
 	RunID              string
 	AssignmentID       string
@@ -136,7 +135,7 @@ func campaignEvalFormationsListCmd(_ nativeEvalDeps) *cobra.Command {
 					ID:                  formation.ID,
 					DisplayName:         formation.DisplayName,
 					Description:         formation.Description,
-					EstimatedVRAMMiB:  formation.EstimatedVRAMMiB(),
+					EstimatedVRAMMiB:    formation.EstimatedVRAMMiB(),
 					MaxVRAMMiB:          formation.MaxVRAMMiB,
 					DelegatedPrimary:    formation.Primary.Trust == evaluation.FormationTrustDelegated,
 					SovereignModelCount: sovereignCount,
@@ -282,7 +281,6 @@ a scored campaign assignment.`,
 	cmd.Flags().StringVar(&opts.InventoryFile, "inventory-file", "", "Explicit inventory freeze path (runtime-relative or external)")
 	cmd.Flags().StringVar(&opts.InferenceSessionID, "inference-session", "", "Exact inference Operator session ID (required)")
 	cmd.Flags().StringVar(&opts.DataSessionID, "data-session", "", "Exact data Operator session ID for governed model release")
-	cmd.Flags().StringVar(&opts.OllamaEndpoint, "ollama-endpoint", "", "Provider endpoint override for governed model release")
 	cmd.Flags().StringVar(&opts.InitialState, "initial-state", "", "Opaque initial state bytes for the formation run")
 	cmd.Flags().StringVar(&opts.RunID, "run-id", "", "Campaign run ID recorded on governed inference dispatches")
 	cmd.Flags().StringVar(&opts.AssignmentID, "assignment-id", "", "Assignment ID recorded on governed inference dispatches")
@@ -292,7 +290,6 @@ a scored campaign assignment.`,
 type campaignFormationProductionOptions struct {
 	InferenceSessionID string
 	DataSessionID      string
-	OllamaEndpoint     string
 }
 
 func buildCampaignFormationProductionRunner(
@@ -330,7 +327,7 @@ func buildCampaignFormationProductionRunner(
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
 	}
-	endpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, opts.InferenceSessionID)
+	endpoint, err := resolveCampaignOllamaEndpoint(operators, opts.InferenceSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
 	}
@@ -429,7 +426,7 @@ func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts fo
 	if err != nil {
 		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
-	endpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, sessions.InferenceSessionID)
+	endpoint, err := resolveCampaignOllamaEndpoint(operators, sessions.InferenceSessionID)
 	if err != nil {
 		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}

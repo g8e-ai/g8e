@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
@@ -262,10 +263,33 @@ func TestPublicRestore_RejectsBothTargets(t *testing.T) {
 	assert.Contains(t, err.Error(), "mutually exclusive")
 }
 
-func TestResolveCampaignOllamaEndpoint_UsesFlag(t *testing.T) {
-	endpoint, err := resolveCampaignOllamaEndpoint("http://127.0.0.1:11434", nil, "")
+func TestResolveCampaignOllamaEndpoint_UsesExactOperatorRuntimeConfig(t *testing.T) {
+	operators := []models.OperatorDocumentGo{{
+		ID:                "inference-1",
+		OperatorSessionID: "inference-session",
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		RuntimeConfig: &models.RuntimeConfig{
+			InferenceEnabled:        true,
+			InferenceOllamaEndpoint: "http://provider.example:11434",
+		},
+	}}
+	endpoint, err := resolveCampaignOllamaEndpoint(operators, "inference-session")
 	require.NoError(t, err)
-	assert.Equal(t, "http://127.0.0.1:11434", endpoint)
+	assert.Equal(t, "http://provider.example:11434", endpoint)
+}
+
+func TestCampaignCommands_DoNotExposeOllamaEndpointOverride(t *testing.T) {
+	t.Parallel()
+	commands := []*cobra.Command{
+		campaignEvalExecuteCmd(nativeEvalDeps{}),
+		campaignEvalStartCmd(nativeEvalDeps{}),
+		campaignEvalFormationsRunCmd(nativeEvalDeps{}),
+		rolloutEvalRunCmd(nativeEvalDeps{}),
+	}
+	for _, command := range commands {
+		assert.Nil(t, command.Flags().Lookup("ollama-endpoint"), command.Use)
+	}
 }
 
 func TestCampaignEvalVerify_ViaCLIPersistsAndPublishesPopulationBoundReport(t *testing.T) {

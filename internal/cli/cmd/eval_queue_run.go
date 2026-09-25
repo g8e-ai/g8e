@@ -56,7 +56,6 @@ func rolloutEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var verify bool
 	var publish bool
 	var daemon bool
-	var ollamaEndpoint string
 	var ensembleURL string
 	var inferenceSessionID string
 	var dataSessionID string
@@ -144,7 +143,6 @@ Examples:
 					DataSessionID:              dataSessionID,
 					DataSystemFingerprint:      dataSystemFingerprint,
 					EnsembleURL:                ensembleURL,
-					OllamaEndpoint:             ollamaEndpoint,
 					Publish:                    publish,
 					Daemon:                     daemon,
 					Verify:                     verify,
@@ -193,7 +191,6 @@ Examples:
 	cmd.Flags().BoolVar(&verify, "verify", true, "Verify each run after execute completes")
 	cmd.Flags().BoolVar(&publish, "publish", true, "Publish lifecycle projections during schedule and execute")
 	cmd.Flags().BoolVar(&daemon, "daemon", true, "Execute continuously until each model matrix is exhausted")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint (default: G8E_OLLAMA_ENDPOINT)")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Pin the inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Pin the data Operator session ID")

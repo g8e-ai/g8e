@@ -1,6 +1,6 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-24
+Last Updated: 2026-09-25
 Version: v2.1.13
 
 This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.
@@ -108,8 +108,12 @@ Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md
 
 ```bash
 # Freeze your provider's model registry (once per provider snapshot)
+INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
 ./g8e eval models freeze \
   --campaign-id eval-genesis-homogeneous \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
   --output .g8e/eval/model-inventory.json
 
 # Single model — materializes .g8e/eval/inventories/eval-init-<variant>.json automatically
@@ -166,8 +170,12 @@ Build a three-model smoke inventory from your own provider freeze. Tags below ar
 
 ```bash
 # Full provider freeze, then build a three-model smoke inventory:
+INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
 ./g8e eval models freeze \
   --campaign-id eval-genesis-homogeneous \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
   --output .g8e/eval/model-inventory.json
 
 ./g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
@@ -414,10 +422,10 @@ Use this after the evaluation stack, Inference Operator, and **both** witness Op
 ### Prerequisites
 
 1. Observer and Provenance Operators enrolled on the provider host **before** the run (see sections above).
-2. All three formation served tags present on the approved Ollama endpoint:
+2. All three formation served tags present on the approved Ollama endpoint, staged through the exact Inference Operator session:
    - `phi3.5:3.8b-mini-instruct-q4_K_M`
    - `gemma2:2b-instruct-q4_K_M`
-   - `qwen2.5:0.5b-instruct-q4_K_M` (pull on the provider if missing: `ollama pull qwen2.5:0.5b-instruct-q4_K_M`)
+   - `qwen2.5:0.5b-instruct-q4_K_M`
 3. Valid delegated **g8ee** app credentials on the campaign host. Copy from the ensemble volume after enrollment (not the image-baked `/app/.g8e` tree):
 
 ```bash
@@ -433,8 +441,18 @@ If ensemble was re-enrolled, repeat the copy so the host CLI uses the current ap
 Freeze the provider, then materialize a three-model inventory with exact served tags:
 
 ```bash
-G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval models freeze \
+INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
+
+./g8e eval models stage \
+  --formation-catalog \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION"
+
+./g8e eval models freeze \
   --campaign-id eval-formations-smoke \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
   --output .g8e/eval/inventories/eval-formations-provider-freeze.json
 
 ./g8e eval models materialize \
@@ -444,11 +462,18 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval models freeze \
   --output .g8e/eval/inventories/eval-formations-smoke.json
 ```
 
-For the full five-formation benchmark (ten unique served tags), pull every catalog tag on the provider first, freeze, then materialize with `--formation-catalog`. The delegated Hybrid Delegator primary (`gemini-1.5-pro`) is injected with a placeholder digest when absent from the Ollama freeze; weight attestation is skipped at execution time.
+For the full five-formation benchmark (ten unique served tags), stage every sovereign catalog tag through the governed Inference Operator, freeze, then materialize with `--formation-catalog`. The delegated Hybrid Delegator primary (`gemini-1.5-pro`) is injected with a placeholder digest when absent from the Ollama freeze; weight attestation is skipped at execution time.
 
 ```bash
-G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval models freeze \
+./g8e eval models stage \
+  --formation-catalog \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION"
+
+./g8e eval models freeze \
   --campaign-id eval-formations-benchmark \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
   --output .g8e/eval/inventories/eval-formations-provider-freeze.json
 
 ./g8e eval models materialize \
@@ -473,7 +498,6 @@ DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operat
   --registry-file .g8e/eval/inventories/eval-formations-smoke.json \
   --inference-session "$INFERENCE_SESSION" \
   --data-session "$DATA_SESSION" \
-  --ollama-endpoint http://192.168.1.2:11434 \
   --json
 ```
 
@@ -510,8 +534,7 @@ DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operat
   --run-id "$RUN_ID" \
   --limit 1 \
   --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --ollama-endpoint http://192.168.1.2:11434
+  --data-session "$DATA_SESSION"
 
 ./g8e eval campaign verify \
   --run-id "$RUN_ID" \
@@ -562,16 +585,14 @@ Wait for schedule publish to finish (~1 min for 225 cells). **Do not** start exe
 ### Phase C — Execute (serial daemon)
 
 ```bash
-G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 \
-  ./g8e eval campaign execute \
+./g8e eval campaign execute \
   --run-id "$RUN_ID" \
-  --ollama-endpoint http://192.168.1.2:11434 \
   --publish --daemon
 ```
 
 - `--daemon` runs the full matrix in one process.
 - Consecutive assignments keep the provider daemon running; no reset or stable-body `/api/ps` wait occurs between cells.
-- After the queue is exhausted, the controller reads typed `/api/ps` residency and dispatches the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. The governed command uses the existing `OllamaBackend` HTTP client and the Operator's approved endpoint to issue `/api/generate` with `keep_alive: 0`, then the controller confirms the campaign-owned tags are absent. No external Ollama CLI is required.
+- After the queue is exhausted, the controller dispatches governed residency reads and the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. The Operator-owned client uses the endpoint from that session's enrolled `runtime_config` to issue `/api/generate` with `keep_alive: 0`, then governed residency reads confirm the campaign-owned tags are absent. No campaign-host provider call or external Ollama CLI is used.
 - **Never** run `g8e eval campaign publish` concurrently with `execute --publish`.
 
 ### Phase D — Monitor
@@ -678,7 +699,7 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 
 ### Campaign model release fails
 
-- Confirm the exact Inference Operator session is active and its configured provider endpoint matches `G8E_OLLAMA_ENDPOINT`.
+- Confirm the exact Inference Operator session is active and its enrolled `runtime_config.inference_ollama_endpoint` is correct.
 - Inspect typed provider residency at `/api/ps`; malformed responses, endpoint failures, and ambiguous residency fail closed.
 - Do not grant the Observer or Provenance Operator command authority. They are read-only witness boundaries; retry release only after the provider owner resolves the endpoint or Ollama client failure.
 

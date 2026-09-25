@@ -47,17 +47,24 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 ## Typical workflow
 
 ```bash
-# 0. (Optional) Stage trending Hugging Face GGUF models through Ollama deep HF pulls.
+# Resolve the exact governed maintenance sessions.
+INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
+
+# 0. (Optional) Stage trending Hugging Face GGUF models through governed Operator dispatch.
 #    Catalog: eval/rollout-intake-hf.json. Applies canonical served-model aliases
 #    (for example qwen3.8:27b, glm-5.3-flash) after pull/copy.
-./g8e eval models stage --ollama-endpoint "$G8E_OLLAMA_ENDPOINT"
-# Manual-create entries (sharded GGUF, pending single-file) are skipped — create on the
-# provider host with `ollama create <alias>` first, then continue with freeze below.
+./g8e eval models stage \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION"
+# Manual-create entries (sharded GGUF, pending single-file) are skipped until a
+# governed provider-side alias-creation workflow is available.
 
 # 1. Freeze provider inventory (recommended before scored runs on release code)
 ./g8e eval models freeze \
   --campaign-id eval-genesis-homogeneous \
-  --ollama-endpoint "$G8E_OLLAMA_ENDPOINT" \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
   --output .g8e/eval/model-inventory.json
 
 ./g8e eval models list
@@ -88,9 +95,9 @@ go run ./.local.dev/tools/gen-base-model-inventory
 
 | Command | Purpose |
 | --- | --- |
-| `g8e eval models freeze` | Discover and freeze all models from the provider |
+| `g8e eval models freeze` | Discover and freeze provider models through an exact Inference Operator session |
 | `g8e eval models list` | List variants in a frozen inventory file |
-| `g8e eval models stage` | Pull rollout-intake HF models via Ollama and apply served-model aliases |
+| `g8e eval models stage` | Dispatch governed pull/copy maintenance to the exact Inference Operator session |
 | `g8e eval models materialize` | Write per-model or combined campaign inventory files |
 | `g8e eval rollout init` | Build `.g8e/eval/init-campaign-queue.json` |
 | `g8e eval rollout run` | Unattended rollout: start → strict-witness verify for every queued model (`--require-witness`, `--verify`, `--publish`, `--daemon`, and `--skip-verified` default true) |

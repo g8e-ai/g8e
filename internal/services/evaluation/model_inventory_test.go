@@ -118,14 +118,14 @@ func TestToModelRegistryFreeze_ReturnsInferenceShape(t *testing.T) {
 	assert.Equal(t, "qwen3:4b", registry.Variants[0].GetModel())
 }
 
-func TestBuildModelVariantsFromProviderInventory_RequiresProbeBackendWhenRequested(t *testing.T) {
+func TestBuildModelVariantsFromProviderInventory_RequiresGovernedProbeRunnerWhenRequested(t *testing.T) {
 	t.Parallel()
 	entries := []inference.ProviderModelInventoryEntry{
 		{ServedModelTag: "probe:7b", ModelDigest: repeatHex('a', 64)},
 	}
 	_, err := BuildModelVariantsFromProviderInventory(context.Background(), entries, ModelInventoryOptions{RunCapabilityProbes: true})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "probe backend")
+	assert.Contains(t, err.Error(), "governed probe runner")
 }
 
 func TestBuildModelVariantsFromProviderInventory_RejectsEmptyInventory(t *testing.T) {

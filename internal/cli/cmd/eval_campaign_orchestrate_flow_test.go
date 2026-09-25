@@ -40,7 +40,10 @@ func campaignOrchestrateOperators() []models.OperatorDocumentGo {
 			OperatorSessionID: "infer-session",
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+			RuntimeConfig: &models.RuntimeConfig{
+				InferenceEnabled:        true,
+				InferenceOllamaEndpoint: "http://provider.example:11434",
+			},
 		},
 		{
 			ID:                "data-op",

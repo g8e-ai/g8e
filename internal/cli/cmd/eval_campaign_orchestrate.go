@@ -42,7 +42,6 @@ type campaignExecuteOptions struct {
 	InferenceSessionID       string
 	DataSessionID            string
 	EnsembleURL              string
-	OllamaEndpoint           string
 	EnforceProviderResidency bool
 	NoAutoRefresh            bool
 	JSONOutput               bool
@@ -287,7 +286,6 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 			campaignFormationProductionOptions{
 				InferenceSessionID: selected.OperatorSessionID,
 				DataSessionID:      dataOperator.OperatorSessionID,
-				OllamaEndpoint:     opts.OllamaEndpoint,
 			},
 		)
 		if err != nil {
@@ -342,7 +340,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 			cleanupErr = fmt.Errorf("evaluation: campaign execute: release provider models: %w", cleanupErr)
 			runErr = errors.Join(runErr, cleanupErr)
 		}()
-		endpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, selected.OperatorSessionID)
+		endpoint, err := resolveCampaignOllamaEndpoint(operators, selected.OperatorSessionID)
 		if err != nil {
 			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 		}
@@ -485,7 +483,7 @@ func releaseCampaignModels(
 	if inferenceSessionID == "" || spec == nil || len(spec.GetModelRegistry()) == 0 {
 		return nil
 	}
-	endpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, inferenceSessionID)
+	endpoint, err := resolveCampaignOllamaEndpoint(operators, inferenceSessionID)
 	if err != nil {
 		return err
 	}
@@ -665,7 +663,6 @@ type campaignStartFlowOptions struct {
 	DataSessionID              string
 	DataSystemFingerprint      string
 	EnsembleURL                string
-	OllamaEndpoint             string
 	DryRun                     bool
 	PrintPlan                  bool
 	PrepareOnly                bool
@@ -743,7 +740,6 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 		InferenceSessionID:       sessions.InferenceSessionID,
 		DataSessionID:            sessions.DataSessionID,
 		EnsembleURL:              opts.EnsembleURL,
-		OllamaEndpoint:           opts.OllamaEndpoint,
 		EnforceProviderResidency: opts.RequireProviderObservation || opts.RequireModelProvenance,
 		NoAutoRefresh:            opts.NoAutoRefresh,
 		JSONOutput:               opts.JSONOutput,

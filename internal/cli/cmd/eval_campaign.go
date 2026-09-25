@@ -557,7 +557,6 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	var inferenceSessionID string
 	var dataSessionID string
 	var ensembleURL string
-	var ollamaEndpoint string
 	var noAutoRefresh bool
 	var publish bool
 	var daemon bool
@@ -580,7 +579,6 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 				InferenceSessionID: inferenceSessionID,
 				DataSessionID:      dataSessionID,
 				EnsembleURL:        ensembleURL,
-				OllamaEndpoint:     ollamaEndpoint,
 				NoAutoRefresh:      noAutoRefresh,
 				JSONOutput:         output.JSONEnabled(cmd),
 				ResultOutput: func(result *evalv1.EvaluationAssignmentResult) {
@@ -631,7 +629,6 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for model maintenance")
 	cmd.Flags().BoolVar(&daemon, "daemon", false, "Run continuously until the queued matrix is exhausted")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish assignment lifecycle and terminal result projections to the public mirror")
@@ -1141,8 +1138,8 @@ func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func resolveCampaignOllamaEndpoint(flag string, operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
-	endpoint, err := evaluation.ResolveInferenceOllamaEndpoint(flag, operators, inferenceSessionID)
+func resolveCampaignOllamaEndpoint(operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
+	endpoint, err := evaluation.GovernedInferenceOllamaEndpoint(operators, inferenceSessionID)
 	if err != nil {
 		return "", fmt.Errorf("evaluation: campaign execute: %w", err)
 	}

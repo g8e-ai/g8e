@@ -40,7 +40,6 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var dataSessionID string
 	var dataSystemFingerprint string
 	var ensembleURL string
-	var ollamaEndpoint string
 	var dryRun bool
 	var prepareOnly bool
 	var publish bool
@@ -77,7 +76,6 @@ Examples:
 				DataSessionID:              dataSessionID,
 				DataSystemFingerprint:      dataSystemFingerprint,
 				EnsembleURL:                ensembleURL,
-				OllamaEndpoint:             ollamaEndpoint,
 				DryRun:                     dryRun,
 				PrintPlan:                  !dryRun,
 				PrepareOnly:                prepareOnly,
@@ -127,7 +125,6 @@ Examples:
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Pin the data Operator session ID")
 	cmd.Flags().StringVar(&dataSystemFingerprint, "data-system-fingerprint", "", "Require the data Operator's exact system_fingerprint")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for model maintenance (default: active inference operator runtime_config, then G8E_OLLAMA_ENDPOINT, then loopback)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the resolved plan without running")
 	cmd.Flags().BoolVar(&prepareOnly, "prepare-only", false, "Initialize and schedule only; stop before execute")
 	cmd.Flags().BoolVar(&publish, "publish", true, "Publish lifecycle projections to the public mirror during schedule and execute")
