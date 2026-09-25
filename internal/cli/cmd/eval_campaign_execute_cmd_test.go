@@ -309,6 +309,32 @@ func TestCampaignEvalStacksGenerate_PersistsStacks(t *testing.T) {
 	assert.Contains(t, output.String(), "north-star-smoke")
 }
 
+func TestCampaignEvalStacksGenerate_FormationCatalogMaterializesFiveStacks(t *testing.T) {
+	root, deps, _, cleanup := setupCampaignOrchestrateEnv(t)
+	defer cleanup()
+
+	variants := testFormationCatalogCLIVariants()
+	_ = prepareUnscheduledCampaignRunWithVariants(t, root, deps, variants)
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{
+		"campaign", "stacks", "generate", "--project-root", root,
+		"--campaign-id", "north-star-smoke", "--seed", "17", "--formation-catalog",
+	})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "formation catalog")
+	assert.Contains(t, output.String(), evaluation.FormationCatalogStackGenerationRule)
+
+	fileSvc, err := deps.fileSvcFactory(root, slog.Default())
+	require.NoError(t, err)
+	store := evaluation.NewStore(fileSvc)
+	stackSet, err := store.LoadHeterogeneousStackSet(context.Background(), "north-star-smoke")
+	require.NoError(t, err)
+	assert.Len(t, stackSet.Stacks, 5)
+	assert.Equal(t, evaluation.FormationCatalogStackGenerationRule, stackSet.GenerationRule)
+}
+
 func TestCampaignEvalExecute_WithPublishFlag(t *testing.T) {
 	withGatewayHealthCheck(t, true)
 	root, deps, cmd, cleanup := setupCampaignExecuteGatewayEnv(t)
@@ -608,5 +634,20 @@ func setupCampaignExecuteGatewayEnv(t *testing.T) (root string, deps nativeEvalD
 		publicMirrorBootstrapURL = originalBootstrap
 		config.SetEndpointOverride("")
 		orchestrateCleanup()
+	}
+}
+
+func testFormationCatalogCLIVariants() []*evalv1.ModelVariant {
+	return []*evalv1.ModelVariant{
+		{VariantId: "freeze-qwen25-14b", ProviderClass: "ollama", ServedModelTag: "qwen2.5:14b-instruct-q4_K_M", ModelDigest: repeatTestHex('1', 64), ModelFamily: "Qwen 2.5", ParameterCount: 14_000_000_000, Quantization: "Q4_K_M"},
+		{VariantId: "freeze-gemma2-2b", ProviderClass: "ollama", ServedModelTag: "gemma2:2b-instruct-q4_K_M", ModelDigest: repeatTestHex('2', 64), ModelFamily: "Gemma 2", ParameterCount: 2_000_000_000, Quantization: "Q4_K_M"},
+		{VariantId: "freeze-llama32-1b", ProviderClass: "ollama", ServedModelTag: "llama3.2:1b-instruct-q4_K_M", ModelDigest: repeatTestHex('3', 64), ModelFamily: "Llama 3.2", ParameterCount: 1_000_000_000, Quantization: "Q4_K_M"},
+		{VariantId: "freeze-llama31-8b", ProviderClass: "ollama", ServedModelTag: "llama3.1:8b-instruct-q4_K_M", ModelDigest: repeatTestHex('4', 64), ModelFamily: "Llama 3.1", ParameterCount: 8_000_000_000, Quantization: "Q4_K_M"},
+		{VariantId: "freeze-phi35-mini", ProviderClass: "ollama", ServedModelTag: "phi3.5:3.8b-mini-instruct-q4_K_M", ModelDigest: repeatTestHex('5', 64), ModelFamily: "Phi-3.5", ParameterCount: 3_800_000_000, Quantization: "Q4_K_M"},
+		{VariantId: "freeze-qwen25-05b", ProviderClass: "ollama", ServedModelTag: "qwen2.5:0.5b-instruct-q4_K_M", ModelDigest: repeatTestHex('6', 64), ModelFamily: "Qwen 2.5", ParameterCount: 500_000_000, Quantization: "Q4_K_M"},
+		{VariantId: "freeze-gemma2-9b", ProviderClass: "ollama", ServedModelTag: "gemma2:9b-instruct-q4_K_M", ModelDigest: repeatTestHex('7', 64), ModelFamily: "Gemma 2", ParameterCount: 9_000_000_000, Quantization: "Q4_K_M"},
+		{VariantId: "freeze-qwen25-coder-7b", ProviderClass: "ollama", ServedModelTag: "qwen2.5-coder:7b-instruct-q4_K_M", ModelDigest: repeatTestHex('8', 64), ModelFamily: "Qwen 2.5 Coder", ParameterCount: 7_000_000_000, Quantization: "Q4_K_M"},
+		{VariantId: "freeze-gemini15-pro", ProviderClass: "gemini", ServedModelTag: "gemini-1.5-pro", ModelDigest: repeatTestHex('0', 64), ModelFamily: "Gemini 1.5"},
+		{VariantId: "freeze-qwen25-15b", ProviderClass: "ollama", ServedModelTag: "qwen2.5:1.5b-instruct-q4_K_M", ModelDigest: repeatTestHex('9', 64), ModelFamily: "Qwen 2.5 1.5", ParameterCount: 1_500_000_000, Quantization: "Q4_K_M"},
 	}
 }

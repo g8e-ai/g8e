@@ -59,6 +59,35 @@ func FormationBindingFromCatalog(formationID string, variants []*evalv1.ModelVar
 	}, nil
 }
 
+// IsCatalogFormationID reports whether one stable ID matches the checked-in
+// ExecutionTopologies catalog.
+func IsCatalogFormationID(id string) bool {
+	if id == "" {
+		return false
+	}
+	topologies, err := NewExecutionTopologies()
+	if err != nil {
+		return false
+	}
+	_, err = topologies.Formation(id)
+	return err == nil
+}
+
+// ResolveFormationBinding binds one heterogeneous stack using catalog metadata
+// when the stack ID matches ExecutionTopologies, otherwise falling back to the
+// scheduler-derived heterogeneous binding path.
+func ResolveFormationBinding(req FormationBindingRequest) (Formation, error) {
+	formationID := req.FormationID
+	if formationID == "" && req.Stack != nil {
+		formationID = req.Stack.GetStackId()
+	}
+	if IsCatalogFormationID(formationID) {
+		req.FormationID = formationID
+		return BindFormation(req)
+	}
+	return BindHeterogeneousStack(req)
+}
+
 // BindHeterogeneousStack resolves one campaign heterogeneous stack against the
 // frozen registry without requiring a catalog formation entry.
 func BindHeterogeneousStack(req FormationBindingRequest) (Formation, error) {

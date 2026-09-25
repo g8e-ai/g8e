@@ -43,6 +43,15 @@ func sampleAssignmentAuditEvent(t *testing.T) AssignmentAuditSliceEvent {
 	}
 }
 
+func TestBuildAssignmentAuditSlice_VaultKeyIsDeterministic(t *testing.T) {
+	events := []AssignmentAuditSliceEvent{sampleAssignmentAuditEvent(t)}
+	first, err := BuildAssignmentAuditSlice("assignment-1", events)
+	require.NoError(t, err)
+	second, err := BuildAssignmentAuditSlice("assignment-1", events)
+	require.NoError(t, err)
+	assert.Equal(t, first.VaultKeySHA256, second.VaultKeySHA256)
+}
+
 func TestBuildAssignmentAuditSlice_RoundTripAndBindings(t *testing.T) {
 	artifacts, err := BuildAssignmentAuditSlice("assignment-1", []AssignmentAuditSliceEvent{sampleAssignmentAuditEvent(t)})
 	require.NoError(t, err)

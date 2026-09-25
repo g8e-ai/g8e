@@ -97,10 +97,7 @@ button { font-family: inherit; cursor: pointer; }
 /* Header */
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
 .app-header {
-  --header-sticky-offset: 92px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  --header-sticky-offset: 58px;
   padding: 10px 24px 8px;
   background: var(--bg-elev); border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 10;
@@ -126,12 +123,6 @@ button { font-family: inherit; cursor: pointer; }
   min-width: 0;
   flex-shrink: 0;
 }
-.brand {
-  background: none; border: none; color: var(--fg);
-  font-weight: 800; font-size: 18px; letter-spacing: -0.2px; padding: 0;
-  white-space: nowrap; flex-shrink: 0;
-}
-.brand span { color: var(--accent); }
 .app-nav {
   display: flex;
   gap: 4px;
@@ -178,25 +169,35 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap;
 }
 .header-campaign-tail {
-  display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; margin-left: auto;
+  display: flex; align-items: center; flex: 0 0 auto; min-width: 0; margin-left: auto;
 }
 .header-campaign-task {
-  flex: 0 1 auto; max-width: min(280px, 32vw); min-width: 0; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; color: var(--fg);
-  font-size: var(--text-md); font-weight: 600;
+  display: flex; flex: 0 1 auto; align-items: center; justify-content: flex-start;
+  gap: 7px; min-width: 0; max-width: min(360px, 40vw);
+  padding: 5px 10px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: 999px; background: var(--bg-elev);
+}
+.header-campaign-task-label {
+  flex: 0 0 auto; color: var(--fg-dim); font-size: var(--text-xs); font-weight: 700;
+  letter-spacing: 0.45px; text-transform: uppercase; white-space: nowrap;
+}
+.header-campaign-task-id {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: var(--text-lg); font-weight: 700; line-height: 1.2;
 }
 .header-campaign-state {
-  flex: 0 0 auto; color: var(--fg-muted); font-size: var(--text-sm); font-weight: 600;
-  white-space: nowrap; padding: 2px 8px; border-radius: 999px;
-  background: color-mix(in srgb, var(--fg-muted) 10%, transparent);
+  flex: 0 0 auto; color: var(--fg-muted); font-size: var(--text-xs); font-weight: 700;
+  letter-spacing: 0.3px; text-transform: uppercase; white-space: nowrap;
+  padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--fg-muted) 12%, transparent);
 }
 .header-campaign-roles {
   display: flex; flex: 1 1 0; align-items: stretch; gap: 8px;
-  min-width: 0;
+  min-width: 0; overflow: hidden;
 }
 .header-campaign-role {
   display: flex; flex: 1 1 0; flex-direction: row; align-items: center; justify-content: flex-start;
-  gap: 7px; min-width: 0;
+  gap: 7px; min-width: 0; max-width: 100%;
   padding: 5px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elev);
 }
 .header-campaign-role-active {
@@ -1442,14 +1443,14 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   .header-cta-github { gap: 0; padding-inline: 10px; }
 }
 @media (max-width: 1000px) {
-  .app-header { --header-sticky-offset: 128px; }
+  .app-header { --header-sticky-offset: 92px; }
   .header-primary {
     grid-template-columns: auto 1fr;
     grid-template-areas:
-      "brand utilities"
+      "nav utilities"
       "campaign campaign";
   }
-  .header-primary .brand { grid-area: brand; }
+  .header-primary .app-nav { grid-area: nav; }
   .header-campaign-slot { grid-area: campaign; }
   .header-utilities { grid-area: utilities; }
   .header-campaign-role-progress-label { display: none; }
@@ -1487,14 +1488,15 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   .docs-hero-title { font-size: 28px; }
 }
 @media (max-width: 768px) {
-  .app-header { --header-sticky-offset: 138px; padding: 10px 14px 8px; }
+  .app-header { --header-sticky-offset: 102px; padding: 10px 14px 8px; }
   .app-main { padding: 14px; }
   .overview > .stream-panel { --page-gutter: 14px; }
   .header-primary { gap: 8px 10px; }
   .header-utilities { flex-wrap: wrap; justify-content: flex-end; }
   .header-campaign-bar { min-height: 38px; padding: 6px 10px; gap: 8px; }
   .header-campaign-label, .header-campaign-role-status { display: none; }
-  .header-campaign-task { max-width: min(180px, 42vw); font-size: var(--text-sm); }
+  .header-campaign-task { max-width: min(220px, 48vw); }
+  .header-campaign-task-id { font-size: var(--text-md); }
   .about-panel { max-width: 100%; }
   .detail-row { grid-template-columns: 1fr; gap: 2px; }
   .detail-row dt { font-size: var(--text-md); }

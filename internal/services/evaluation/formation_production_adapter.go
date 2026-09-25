@@ -176,7 +176,7 @@ func RunFormationProduction(ctx context.Context, binding FormationBindingRequest
 // RunHeterogeneousFormationProduction binds one campaign heterogeneous stack to
 // frozen digests and executes it through governed production adapters.
 func RunHeterogeneousFormationProduction(ctx context.Context, binding FormationBindingRequest, deps FormationProductionDependencies, initialState []byte) (*FormationRunResult, error) {
-	formation, err := BindHeterogeneousStack(binding)
+	formation, err := ResolveFormationBinding(binding)
 	if err != nil {
 		return nil, err
 	}

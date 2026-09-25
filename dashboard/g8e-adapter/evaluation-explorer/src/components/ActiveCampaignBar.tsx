@@ -121,9 +121,14 @@ export function ActiveCampaignBar() {
           <RoleSlot key={slot.role} slot={slot} />
         ))}
       </div>
-      <div className="header-campaign-tail">
-        <span className="header-campaign-task" title={taskLabel}>{taskLabel}</span>
-        {!isRunning ? <span className="header-campaign-state">{capitalize(currentRun.lifecycle_state)}</span> : null}
+      <div className="header-campaign-tail" aria-label="Current task">
+        <div className="header-campaign-task" title={taskLabel}>
+          <span className="header-campaign-task-label">Task</span>
+          <span className="header-campaign-task-id">{taskLabel}</span>
+          {!isRunning ? (
+            <span className="header-campaign-state">{capitalize(currentRun.lifecycle_state)}</span>
+          ) : null}
+        </div>
       </div>
     </Link>
   );

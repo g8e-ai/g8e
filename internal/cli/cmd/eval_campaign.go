@@ -433,6 +433,7 @@ func campaignEvalStacksCmd(deps nativeEvalDeps) *cobra.Command {
 func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 	var campaignID string
 	var seed uint64
+	var formationCatalog bool
 	cmd := &cobra.Command{
 		Use:   "generate",
 		Short: "Generate and persist the preregistered heterogeneous stack set for one campaign",
@@ -445,7 +446,12 @@ func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 				return err
 			}
 			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
-			stackSet, err := controller.GenerateHeterogeneousStackSet(cmd.Context(), campaignID, seed)
+			var stackSet *evaluation.HeterogeneousStackSet
+			if formationCatalog {
+				stackSet, err = controller.GenerateFormationCatalogStackSet(cmd.Context(), campaignID, seed)
+			} else {
+				stackSet, err = controller.GenerateHeterogeneousStackSet(cmd.Context(), campaignID, seed)
+			}
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign stacks generate: %w", err)
 			}
@@ -465,8 +471,13 @@ func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 				return err
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Generated %d heterogeneous stacks for campaign %s\nGeneration rule: %s\nSeed: %d\nSet digest: %s\nHypothesis stacks: %d\nCoverage stacks: %d\n",
+			label := "heterogeneous"
+			if formationCatalog {
+				label = "formation catalog"
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Generated %d %s stacks for campaign %s\nGeneration rule: %s\nSeed: %d\nSet digest: %s\nHypothesis stacks: %d\nCoverage stacks: %d\n",
 				len(stackSet.Stacks),
+				label,
 				campaignID,
 				stackSet.GenerationRule,
 				stackSet.Seed,
@@ -479,6 +490,7 @@ func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
 	cmd.Flags().Uint64Var(&seed, "seed", 0, "Deterministic heterogeneous stack generation seed")
+	cmd.Flags().BoolVar(&formationCatalog, "formation-catalog", false, "Materialize one stack per checked-in ExecutionTopologies formation")
 	return cmd
 }
 

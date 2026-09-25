@@ -150,5 +150,8 @@ func (c *CampaignPublicationCoordinator) BuildAssignmentAuditBindings(
 	if err := c.proofPublisher.IngestAssignmentAuditSlices(ctx, []AssignmentAuditProofInput{input}, false); err != nil {
 		return nil, err
 	}
+	if err := c.recordPublishedProofArtifacts(ctx, input); err != nil {
+		return nil, err
+	}
 	return AssignmentAuditEvidenceBindings(artifacts), nil
 }

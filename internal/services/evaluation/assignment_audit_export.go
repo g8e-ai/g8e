@@ -552,8 +552,17 @@ func deriveAssignmentAuditVaultKey(assignmentID string, events []AssignmentAudit
 // AssignmentAuditEvidenceBindings returns the public evidence bindings for a
 // built audit slice package.
 func AssignmentAuditEvidenceBindings(artifacts AssignmentAuditSliceArtifacts) []*evalv1.PublicEvidenceBinding {
+	return AssignmentAuditEvidenceBindingsFromHashes(artifacts.DatabaseSHA256, artifacts.VaultKeySHA256)
+}
+
+// AssignmentAuditEvidenceBindingsFromHashes returns public evidence bindings
+// from previously published content-addressed proof hashes.
+func AssignmentAuditEvidenceBindingsFromHashes(databaseSHA256, vaultKeySHA256 string) []*evalv1.PublicEvidenceBinding {
+	if databaseSHA256 == "" || vaultKeySHA256 == "" {
+		return nil
+	}
 	return []*evalv1.PublicEvidenceBinding{
-		{Sha256: artifacts.DatabaseSHA256, SchemaRef: assignmentAuditSchemaRef, Kind: AssignmentAuditSliceKind},
-		{Sha256: artifacts.VaultKeySHA256, SchemaRef: assignmentAuditSchemaRef, Kind: AssignmentAuditVaultKeyKind},
+		{Sha256: databaseSHA256, SchemaRef: assignmentAuditSchemaRef, Kind: AssignmentAuditSliceKind},
+		{Sha256: vaultKeySHA256, SchemaRef: assignmentAuditSchemaRef, Kind: AssignmentAuditVaultKeyKind},
 	}
 }

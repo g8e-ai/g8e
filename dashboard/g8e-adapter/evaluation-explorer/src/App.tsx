@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { useEffect } from 'react';
-import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useSearchParams } from 'react-router-dom';
 import { useFeedStatus, useConnection, useStoreState, evalStore } from './state/store';
 import { startFeed, stopFeed } from './state/startup';
 import { ActiveCampaignBar } from './components/ActiveCampaignBar';
@@ -40,7 +40,6 @@ function Shell() {
   const feedStatus = useFeedStatus();
   const connection = useConnection();
   const errors = useStoreState((state) => state.errors);
-  const navigate = useNavigate();
 
   useEffect(() => {
     // Start the feed. The startup orchestrator retains only accepted mirror
@@ -64,14 +63,14 @@ function Shell() {
       </a>
       <header className="app-header">
         <div className="header-primary">
-          <button
-            type="button"
-            className="brand"
-            onClick={() => navigate('/')}
-            aria-label="OpenDevOps.AI evaluation explorer home"
-          >
-            OpenDevOps<span>.ai</span>
-          </button>
+          <nav className="app-nav" aria-label="Primary navigation">
+            <NavItem to="/" label="Live" />
+            <NavItem to="/evaluations" label="Evals" />
+            <NavItem to="/tasks" label="Tasks" />
+            <NavItem to="/models" label="Models" />
+            <NavItem to="/methodology" label="Docs" />
+            <NavItem to="/about" label="About" />
+          </nav>
           <div className="header-campaign-slot">
             <ActiveCampaignBar />
           </div>
@@ -102,14 +101,6 @@ function Shell() {
             {feedStatus ? <FreshnessBadge feedStatus={feedStatus} /> : null}
           </div>
         </div>
-        <nav className="app-nav" aria-label="Primary navigation">
-          <NavItem to="/" label="Live" />
-          <NavItem to="/evaluations" label="Evals" />
-          <NavItem to="/tasks" label="Tasks" />
-          <NavItem to="/models" label="Models" />
-          <NavItem to="/methodology" label="Docs" />
-          <NavItem to="/about" label="About" />
-        </nav>
       </header>
       <ErrorBanner errors={errors} onDismiss={() => evalStore.clearErrors()} />
       <main id="main" className="app-main">

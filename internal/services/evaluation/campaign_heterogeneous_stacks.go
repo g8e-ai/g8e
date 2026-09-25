@@ -149,6 +149,9 @@ func ValidateHeterogeneousStackSet(set *HeterogeneousStackSet) error {
 			return err
 		}
 	}
+	if set.GenerationRule == FormationCatalogStackGenerationRule {
+		return validateFormationCatalogStackSet(set)
+	}
 	return validateVariantRoleCoverageComplete(set.VariantIDs, set.Stacks)
 }
 

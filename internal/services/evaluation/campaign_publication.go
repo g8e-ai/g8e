@@ -464,6 +464,33 @@ func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context
 		return err
 	}
 	state.PublishedIdempotency = []string{}
+	state.PublishedProofArtifacts = map[string]CampaignPublishedProofArtifacts{}
+	state.LastPublishedSequence = 0
+	if err := c.savePublicationState(ctx, state); err != nil {
+		return err
+	}
+	c.clearPublicationStateCache()
+	return nil
+}
+
+// ResetFeedPublicationIdempotency clears feed export idempotency while
+// preserving published proof artifact hashes so force restore can republish
+// projections without rebuilding unchanged audit exports.
+func (c *CampaignPublicationCoordinator) ResetFeedPublicationIdempotency(ctx context.Context, runID string) error {
+	if c == nil || c.publicationState == nil || runID == "" {
+		return fmt.Errorf("evaluation: reset feed publication idempotency: %w", constants.ErrMissingRequiredField)
+	}
+	state, err := c.publicationState.Load(ctx, runID)
+	if err != nil {
+		return err
+	}
+	preserved := make([]string, 0)
+	for _, key := range state.PublishedIdempotency {
+		if strings.HasSuffix(key, ":audit-proof") {
+			preserved = append(preserved, key)
+		}
+	}
+	state.PublishedIdempotency = preserved
 	state.LastPublishedSequence = 0
 	if err := c.savePublicationState(ctx, state); err != nil {
 		return err
@@ -579,8 +606,14 @@ func (c *CampaignPublicationCoordinator) flushProofCatalog(ctx context.Context) 
 		return nil
 	}
 	if len(c.pendingProofInputs) > 0 {
-		if err := c.proofPublisher.IngestAssignmentAuditSlices(ctx, c.pendingProofInputs, true); err != nil {
+		pending := c.pendingProofInputs
+		if err := c.proofPublisher.IngestAssignmentAuditSlices(ctx, pending, true); err != nil {
 			return fmt.Errorf("evaluation: flush proof catalog: ingest assignment audit slices: %w", err)
+		}
+		for _, input := range pending {
+			if err := c.recordPublishedProofArtifacts(ctx, input); err != nil {
+				return fmt.Errorf("evaluation: flush proof catalog: record proof artifacts: %w", err)
+			}
 		}
 		c.pendingProofInputs = nil
 	}
@@ -598,6 +631,32 @@ func (c *CampaignPublicationCoordinator) clearPublicationStateCache() {
 	if c != nil {
 		c.publicationStateCache = nil
 	}
+}
+
+func (c *CampaignPublicationCoordinator) recordPublishedProofArtifacts(ctx context.Context, input AssignmentAuditProofInput) error {
+	if c == nil || c.publicationState == nil || input.RunID == "" || input.AssignmentID == "" {
+		return nil
+	}
+	if input.Artifacts.DatabaseSHA256 == "" || input.Artifacts.VaultKeySHA256 == "" {
+		return nil
+	}
+	state, err := c.loadPublicationState(ctx, input.RunID)
+	if err != nil {
+		return err
+	}
+	proofKey := AssignmentAuditProofIdempotencyKey(input.RunID, input.AssignmentID)
+	if !containsString(state.PublishedIdempotency, proofKey) {
+		state.PublishedIdempotency = append(state.PublishedIdempotency, proofKey)
+		sort.Strings(state.PublishedIdempotency)
+	}
+	if state.PublishedProofArtifacts == nil {
+		state.PublishedProofArtifacts = map[string]CampaignPublishedProofArtifacts{}
+	}
+	state.PublishedProofArtifacts[input.AssignmentID] = CampaignPublishedProofArtifacts{
+		DatabaseSHA256: input.Artifacts.DatabaseSHA256,
+		VaultKeySHA256: input.Artifacts.VaultKeySHA256,
+	}
+	return c.savePublicationState(ctx, state)
 }
 
 func (c *CampaignPublicationCoordinator) loadPublicationState(ctx context.Context, runID string) (*CampaignPublicationState, error) {
@@ -682,13 +741,22 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 		if publicationState != nil && containsString(publicationState.PublishedIdempotency, resultKey) {
 			continue
 		}
-		liveRequests, err := c.buildAssignmentLiveEventPublishRequests(ctx, assignment, result)
-		if err != nil {
-			return 0, err
+		proofKey := AssignmentAuditProofIdempotencyKey(runID, assignment.GetAssignmentId())
+		var auditBindings []*evalv1.PublicEvidenceBinding
+		if publicationState != nil && containsString(publicationState.PublishedIdempotency, proofKey) {
+			if stored, ok := publicationState.PublishedProofArtifacts[assignment.GetAssignmentId()]; ok {
+				auditBindings = AssignmentAuditEvidenceBindingsFromHashes(stored.DatabaseSHA256, stored.VaultKeySHA256)
+			}
 		}
-		auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests, true)
-		if err != nil {
-			return 0, err
+		if auditBindings == nil {
+			liveRequests, err := c.buildAssignmentLiveEventPublishRequests(ctx, assignment, result)
+			if err != nil {
+				return 0, err
+			}
+			auditBindings, err = c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests, true)
+			if err != nil {
+				return 0, err
+			}
 		}
 		resultRequest, err := c.buildAssignmentResultPublishRequest(
 			ctx,

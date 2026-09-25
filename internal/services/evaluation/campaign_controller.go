@@ -204,6 +204,30 @@ func (c *CampaignController) ScheduleHomogeneousRun(ctx context.Context, runID s
 	return len(assignments), nil
 }
 
+// GenerateFormationCatalogStackSet materializes and persists one heterogeneous
+// stack per checked-in ExecutionTopologies formation.
+func (c *CampaignController) GenerateFormationCatalogStackSet(ctx context.Context, campaignID string, seed uint64) (*HeterogeneousStackSet, error) {
+	if c == nil || c.store == nil {
+		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: %w", constants.ErrMissingRequiredField)
+	}
+	spec, err := c.store.LoadCampaignSpec(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	stackSet, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
+		CampaignID: campaignID,
+		Seed:       seed,
+		Variants:   spec.GetModelRegistry(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := c.store.SaveHeterogeneousStackSet(ctx, campaignID, stackSet); err != nil {
+		return nil, err
+	}
+	return stackSet, nil
+}
+
 // GenerateHeterogeneousStackSet materializes and persists the preregistered
 // heterogeneous stack set for one frozen campaign registry.
 func (c *CampaignController) GenerateHeterogeneousStackSet(ctx context.Context, campaignID string, seed uint64) (*HeterogeneousStackSet, error) {

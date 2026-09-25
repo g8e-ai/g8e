@@ -177,10 +177,7 @@ func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID strin
 
 func (r *CampaignMirrorReconciler) restoreRun(ctx context.Context, runID string, force bool) (int, error) {
 	if force {
-		if err := r.publication.PruneRunProofCatalog(ctx, runID); err != nil {
-			return 0, err
-		}
-		if err := r.publication.ResetPublicationIdempotency(ctx, runID); err != nil {
+		if err := r.publication.ResetFeedPublicationIdempotency(ctx, runID); err != nil {
 			return 0, err
 		}
 	}

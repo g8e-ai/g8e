@@ -33,6 +33,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/publicdisclosure"
 )
 
+const proofMirrorPushChunkSize = 64
+
 // prohibitedRecordFields are field names that must never appear in a public
 // feed record's payload. Their presence causes the record to be rejected
 // before signing.
@@ -1227,16 +1229,36 @@ func (s *PublicPublisherService) PushProofPackage(ctx context.Context) error {
 		}
 	}
 	if len(pendingIDs) == 0 {
-		pendingIDs = catalogArtifactIDs(catalog)
-	}
-	if err := s.postProofIngest(ctx, manifest, catalog, pendingIDs); err != nil {
-		if len(pendingIDs) != len(catalog.Entries) {
-			if err := s.clearProofMirrorSyncState(ctx); err != nil {
-				return err
-			}
-			return s.postProofIngest(ctx, manifest, catalog, catalogArtifactIDs(catalog))
+		switch {
+		case len(catalog.Entries) == 0:
+			return s.saveProofMirrorSyncState(ctx, models.PublicProofMirrorSyncState{
+				SchemaVersion:     constants.PublicProofMirrorSyncSchemaVersion,
+				SourceID:          s.cfg.SourceID,
+				ProofRootSHA256:   manifest.ProofRootSHA256,
+				SyncedArtifactIDs: catalogArtifactIDs(catalog),
+				SyncedAt:          time.Now().UTC(),
+			})
+		case len(synced) >= len(catalog.Entries):
+			pendingIDs = []string{catalog.Entries[0].ArtifactID}
+		default:
+			pendingIDs = catalogArtifactIDs(catalog)
 		}
-		return err
+	}
+	for start := 0; start < len(pendingIDs); start += proofMirrorPushChunkSize {
+		end := start + proofMirrorPushChunkSize
+		if end > len(pendingIDs) {
+			end = len(pendingIDs)
+		}
+		chunk := pendingIDs[start:end]
+		if err := s.postProofIngest(ctx, manifest, catalog, chunk); err != nil {
+			if len(chunk) != len(catalog.Entries) {
+				if err := s.clearProofMirrorSyncState(ctx); err != nil {
+					return err
+				}
+				return s.pushProofPackageFull(ctx, manifest, catalog)
+			}
+			return err
+		}
 	}
 	return s.saveProofMirrorSyncState(ctx, models.PublicProofMirrorSyncState{
 		SchemaVersion:     constants.PublicProofMirrorSyncSchemaVersion,
@@ -1290,6 +1312,26 @@ func (s *PublicPublisherService) loadProofPackage(ctx context.Context) (*models.
 		return nil, models.PublicProofCatalog{}, fmt.Errorf("%w: trailing catalog JSON", constants.ErrPublicFeedProofCatalogMismatch)
 	}
 	return &manifest, catalog, nil
+}
+
+func (s *PublicPublisherService) pushProofPackageFull(ctx context.Context, manifest *models.PublicProofManifest, catalog models.PublicProofCatalog) error {
+	allIDs := catalogArtifactIDs(catalog)
+	for start := 0; start < len(allIDs); start += proofMirrorPushChunkSize {
+		end := start + proofMirrorPushChunkSize
+		if end > len(allIDs) {
+			end = len(allIDs)
+		}
+		if err := s.postProofIngest(ctx, manifest, catalog, allIDs[start:end]); err != nil {
+			return err
+		}
+	}
+	return s.saveProofMirrorSyncState(ctx, models.PublicProofMirrorSyncState{
+		SchemaVersion:     constants.PublicProofMirrorSyncSchemaVersion,
+		SourceID:          s.cfg.SourceID,
+		ProofRootSHA256:   manifest.ProofRootSHA256,
+		SyncedArtifactIDs: allIDs,
+		SyncedAt:          time.Now().UTC(),
+	})
 }
 
 func (s *PublicPublisherService) postProofIngest(ctx context.Context, manifest *models.PublicProofManifest, catalog models.PublicProofCatalog, artifactIDs []string) error {
@@ -1463,6 +1505,14 @@ func (s *PublicPublisherService) writeProofArtifacts(ctx context.Context, campai
 			entry.VerificationCommand = fmt.Sprintf("sha256sum %s", art.Filename)
 		}
 		relPath := filepath.Join(constants.PublicProofsDirname, artifactID)
+		existing, readErr := s.fileSvc.ReadFile(ctx, relPath)
+		if readErr == nil {
+			existingHash := sha256.Sum256(existing)
+			if hex.EncodeToString(existingHash[:]) == artifactID && len(existing) == len(art.Content) {
+				entries = append(entries, entry)
+				continue
+			}
+		}
 		if err := s.fileSvc.WriteFile(ctx, relPath, art.Content, constants.PermFilePrivate); err != nil {
 			return nil, fmt.Errorf("public-feed: build proof: write artifact: %w", err)
 		}

@@ -640,3 +640,58 @@ func TestPublishRunAggregatesProjectsBoundFailure(t *testing.T) {
 	assert.Equal(t, "bound", latest.VerificationMetadata.Provenance)
 	assert.Equal(t, "failed", latest.VerificationMetadata.VerifierState)
 }
+
+func TestResetFeedPublicationIdempotencyPreservesAuditProofKeys(t *testing.T) {
+	publicationState := NewMemoryCampaignPublicationStateStore()
+	runID := "run-feed-reset"
+	require.NoError(t, publicationState.Save(context.Background(), &CampaignPublicationState{
+		SchemaVersion:        campaignPublicationStateSchemaVersion,
+		RunID:                runID,
+		PublishedIdempotency: []string{"run:assignment-1:result", AssignmentAuditProofIdempotencyKey(runID, "assignment-1")},
+		PublishedProofArtifacts: map[string]CampaignPublishedProofArtifacts{
+			"assignment-1": {DatabaseSHA256: strings.Repeat("a", 64), VaultKeySHA256: strings.Repeat("b", 64)},
+		},
+		LastPublishedSequence: 42,
+	}))
+	coordinator := NewCampaignPublicationCoordinator(nil, nil, publicationState, nil, nil)
+	require.NoError(t, coordinator.ResetFeedPublicationIdempotency(context.Background(), runID))
+	loaded, err := publicationState.Load(context.Background(), runID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{AssignmentAuditProofIdempotencyKey(runID, "assignment-1")}, loaded.PublishedIdempotency)
+	assert.Equal(t, strings.Repeat("a", 64), loaded.PublishedProofArtifacts["assignment-1"].DatabaseSHA256)
+	assert.Zero(t, loaded.LastPublishedSequence)
+}
+
+func TestPublishRunCatchUpSkipsProofRebuildWhenHashesRecorded(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	proofPublisher := &recordingCampaignProofPublisher{}
+	publicationState := NewMemoryCampaignPublicationStateStore()
+	coordinator := NewCampaignPublicationCoordinator(store, files, publicationState, exporter, nil).
+		WithProofPublisher(proofPublisher)
+	run := completedTestCampaign(t, store)
+	assignments, err := store.ListAssignments(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	require.NotEmpty(t, assignments)
+	proofKeys := make([]string, 0, len(assignments))
+	proofArtifacts := make(map[string]CampaignPublishedProofArtifacts, len(assignments))
+	for index, assignment := range assignments {
+		assignmentID := assignment.GetAssignmentId()
+		proofKeys = append(proofKeys, AssignmentAuditProofIdempotencyKey(run.GetRunId(), assignmentID))
+		proofArtifacts[assignmentID] = CampaignPublishedProofArtifacts{
+			DatabaseSHA256: fmt.Sprintf("%064x", index*2),
+			VaultKeySHA256: fmt.Sprintf("%064x", index*2+1),
+		}
+	}
+	require.NoError(t, publicationState.Save(context.Background(), &CampaignPublicationState{
+		SchemaVersion:           campaignPublicationStateSchemaVersion,
+		RunID:                   run.GetRunId(),
+		PublishedIdempotency:    proofKeys,
+		PublishedProofArtifacts: proofArtifacts,
+	}))
+	require.NoError(t, coordinator.ResetFeedPublicationIdempotency(context.Background(), run.GetRunId()))
+	_, err = coordinator.PublishRunCatchUp(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	assert.Empty(t, proofPublisher.inputs)
+}

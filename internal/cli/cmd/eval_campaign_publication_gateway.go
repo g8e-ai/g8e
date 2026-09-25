@@ -40,11 +40,19 @@ func (s *gatewayCampaignPublicationStateStore) Load(_ context.Context, runID str
 	if err := json.Unmarshal(body, &remote); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
+	proofArtifacts := make(map[string]evaluation.CampaignPublishedProofArtifacts, len(remote.PublishedProofArtifacts))
+	for assignmentID, artifacts := range remote.PublishedProofArtifacts {
+		proofArtifacts[assignmentID] = evaluation.CampaignPublishedProofArtifacts{
+			DatabaseSHA256: artifacts.DatabaseSHA256,
+			VaultKeySHA256: artifacts.VaultKeySHA256,
+		}
+	}
 	return &evaluation.CampaignPublicationState{
-		SchemaVersion:         remote.SchemaVersion,
-		RunID:                 remote.RunID,
-		PublishedIdempotency:  remote.PublishedIdempotency,
-		LastPublishedSequence: remote.LastPublishedSequence,
+		SchemaVersion:           remote.SchemaVersion,
+		RunID:                   remote.RunID,
+		PublishedIdempotency:      remote.PublishedIdempotency,
+		PublishedProofArtifacts: proofArtifacts,
+		LastPublishedSequence:   remote.LastPublishedSequence,
 	}, nil
 }
 
@@ -64,11 +72,19 @@ func (s *gatewayCampaignPublicationStateStore) Save(_ context.Context, state *ev
 		return fmt.Errorf("evaluation: save publication state: %w", constants.ErrMissingRequiredField)
 	}
 	path := constants.APIPaths.EvalCampaignPublicationStateByRun + state.RunID + "/publication-state"
+	proofArtifacts := make(map[string]models.EvalCampaignPublishedProofArtifacts, len(state.PublishedProofArtifacts))
+	for assignmentID, artifacts := range state.PublishedProofArtifacts {
+		proofArtifacts[assignmentID] = models.EvalCampaignPublishedProofArtifacts{
+			DatabaseSHA256: artifacts.DatabaseSHA256,
+			VaultKeySHA256: artifacts.VaultKeySHA256,
+		}
+	}
 	if _, err := s.client.Put(path, models.EvalCampaignPublicationState{
-		SchemaVersion:         state.SchemaVersion,
-		RunID:                 state.RunID,
-		PublishedIdempotency:  state.PublishedIdempotency,
-		LastPublishedSequence: state.LastPublishedSequence,
+		SchemaVersion:           state.SchemaVersion,
+		RunID:                   state.RunID,
+		PublishedIdempotency:    state.PublishedIdempotency,
+		PublishedProofArtifacts: proofArtifacts,
+		LastPublishedSequence:   state.LastPublishedSequence,
 	}); err != nil {
 		return fmt.Errorf("evaluation: save publication state: %w", err)
 	}

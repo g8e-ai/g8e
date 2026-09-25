@@ -16,13 +16,21 @@ import (
 
 const campaignPublicationStateSchemaVersion = CampaignSchemaVersion
 
+// CampaignPublishedProofArtifacts stores content-addressed proof hashes for one
+// assignment so force restore can skip rebuilding unchanged audit exports.
+type CampaignPublishedProofArtifacts struct {
+	DatabaseSHA256 string
+	VaultKeySHA256 string
+}
+
 // CampaignPublicationState tracks exported public projection idempotency keys
 // for one campaign run. The gateway document store is authoritative.
 type CampaignPublicationState struct {
-	SchemaVersion         string
-	RunID                 string
-	PublishedIdempotency  []string
-	LastPublishedSequence int64
+	SchemaVersion            string
+	RunID                    string
+	PublishedIdempotency     []string
+	PublishedProofArtifacts  map[string]CampaignPublishedProofArtifacts
+	LastPublishedSequence    int64
 }
 
 // CampaignPublicationStateStore persists publication idempotency in the
@@ -48,9 +56,10 @@ func (s *memoryCampaignPublicationStateStore) Load(_ context.Context, runID stri
 	state, ok := s.byRun[runID]
 	if !ok {
 		return &CampaignPublicationState{
-			SchemaVersion:        campaignPublicationStateSchemaVersion,
-			RunID:                runID,
-			PublishedIdempotency: []string{},
+			SchemaVersion:           campaignPublicationStateSchemaVersion,
+			RunID:                   runID,
+			PublishedIdempotency:    []string{},
+			PublishedProofArtifacts: map[string]CampaignPublishedProofArtifacts{},
 		}, nil
 	}
 	return cloneCampaignPublicationState(state), nil
@@ -77,10 +86,15 @@ func cloneCampaignPublicationState(state *CampaignPublicationState) *CampaignPub
 		return nil
 	}
 	keys := append([]string(nil), state.PublishedIdempotency...)
+	proofArtifacts := make(map[string]CampaignPublishedProofArtifacts, len(state.PublishedProofArtifacts))
+	for assignmentID, artifacts := range state.PublishedProofArtifacts {
+		proofArtifacts[assignmentID] = artifacts
+	}
 	return &CampaignPublicationState{
-		SchemaVersion:         state.SchemaVersion,
-		RunID:                 state.RunID,
-		PublishedIdempotency:  keys,
-		LastPublishedSequence: state.LastPublishedSequence,
+		SchemaVersion:           state.SchemaVersion,
+		RunID:                   state.RunID,
+		PublishedIdempotency:    keys,
+		PublishedProofArtifacts: proofArtifacts,
+		LastPublishedSequence:   state.LastPublishedSequence,
 	}
 }
