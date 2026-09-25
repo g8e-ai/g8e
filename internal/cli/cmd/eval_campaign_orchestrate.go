@@ -262,7 +262,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		OperatorID:        dataOperator.OperatorID,
 		OperatorSessionID: dataOperator.OperatorSessionID,
 	}
-	executor := evaluation.NewCampaignChatExecutor(
+	chatExecutor := evaluation.NewCampaignChatExecutor(
 		&campaignChatHarnessClient{client: ensembleClient},
 		persona,
 		dataOperator.OperatorID,
@@ -274,6 +274,32 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		deps.now,
 		func(prefix string) string { return prefix + "-" + deps.newID() },
 	)
+	formationRunner, err := buildCampaignFormationProductionRunner(
+		cmd,
+		deps,
+		cfg,
+		fileSvc,
+		authContext,
+		dataOperator,
+		operators,
+		spec.GetModelRegistry(),
+		spec.GetModelRegistryDigest(),
+		campaignFormationProductionOptions{
+			InferenceSessionID: selected.OperatorSessionID,
+			DataSessionID:      dataOperator.OperatorSessionID,
+			OllamaEndpoint:     opts.OllamaEndpoint,
+		},
+	)
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
+	}
+	formationExecutor := evaluation.NewCampaignFormationExecutor(
+		spec.GetModelRegistry(),
+		formationRunner,
+		deps.now,
+		func(prefix string) string { return prefix + "-" + deps.newID() },
+	)
+	executor := evaluation.NewCampaignAssignmentRouter(chatExecutor, formationExecutor)
 	controller := controllerFactory(executor)
 	var publication *evaluation.CampaignPublicationCoordinator
 	if opts.Publish {

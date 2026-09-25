@@ -30,6 +30,7 @@ type FormationRunContext struct {
 	RunID               string
 	AssignmentID        string
 	EvaluationAttemptID string
+	ScenarioID          string
 	ModelRegistryDigest string
 	InitialState        []byte
 	InferenceSessionID  string
@@ -56,6 +57,48 @@ func FormationBindingFromCatalog(formationID string, variants []*evalv1.ModelVar
 		Stack:       stack,
 		Variants:    variants,
 	}, nil
+}
+
+// BindHeterogeneousStack resolves one campaign heterogeneous stack against the
+// frozen registry without requiring a catalog formation entry.
+func BindHeterogeneousStack(req FormationBindingRequest) (Formation, error) {
+	if req.Stack == nil {
+		return Formation{}, fmt.Errorf("formation: bind heterogeneous stack: %w", constants.ErrMissingRequiredField)
+	}
+	if err := ValidateHeterogeneousStackDigest(req.Stack); err != nil {
+		return Formation{}, err
+	}
+	stackID := req.Stack.GetStackId()
+	if stackID == "" {
+		return Formation{}, fmt.Errorf("formation: bind heterogeneous stack: %w", constants.ErrFormationInvalid)
+	}
+	registry := indexFormationVariants(req.Variants)
+	primary, err := bindHeterogeneousRole(FormationRolePrimary, req.Stack.GetPrimarySlot(), registry)
+	if err != nil {
+		return Formation{}, err
+	}
+	assistant, err := bindHeterogeneousRole(FormationRoleAssistant, req.Stack.GetAssistantSlot(), registry)
+	if err != nil {
+		return Formation{}, err
+	}
+	lite, err := bindHeterogeneousRole(FormationRoleLite, req.Stack.GetLiteSlot(), registry)
+	if err != nil {
+		return Formation{}, err
+	}
+	formation := Formation{
+		ID:                stackID,
+		DisplayName:       stackID,
+		Description:       "heterogeneous campaign stack",
+		MaxVRAMMiB:        FormationMaxVRAMMiB,
+		Primary:           primary,
+		Assistant:         assistant,
+		Lite:              lite,
+		RelaxedValidation: true,
+	}
+	if err := formation.Validate(); err != nil {
+		return Formation{}, err
+	}
+	return formation, nil
 }
 
 // BindFormation resolves catalog metadata and frozen-registry digests for one
@@ -147,4 +190,54 @@ func bindFormationRole(formation Formation, role FormationRole, slot *evalv1.Rol
 	bound.VariantID = variant.GetVariantId()
 	bound.ModelDigest = variant.GetModelDigest()
 	return bound, nil
+}
+
+func bindHeterogeneousRole(role FormationRole, slot *evalv1.RoleAssignment, registry map[string]*evalv1.ModelVariant) (FormationModel, error) {
+	if slot == nil || slot.GetVariantId() == "" {
+		return FormationModel{}, fmt.Errorf("formation role %s: %w", role, constants.ErrFormationRegistryBinding)
+	}
+	variant := registry[slot.GetVariantId()]
+	if variant == nil {
+		return FormationModel{}, fmt.Errorf("formation role %s: variant %q: %w", role, slot.GetVariantId(), constants.ErrFormationRegistryBinding)
+	}
+	model := formationModelFromVariant(variant)
+	if model.Trust == FormationTrustSovereign && model.ModelDigest == "" {
+		return FormationModel{}, fmt.Errorf("formation role %s: %w", role, constants.ErrFormationAttestationRequired)
+	}
+	return model, nil
+}
+
+func formationModelFromVariant(variant *evalv1.ModelVariant) FormationModel {
+	if variant == nil {
+		return FormationModel{}
+	}
+	trust := FormationTrustSovereign
+	providerClass := variant.GetProviderClass()
+	if providerClass == "gemini" {
+		trust = FormationTrustDelegated
+	}
+	provider := variant.GetModelFamily()
+	if provider == "" {
+		provider = variant.GetVariantId()
+	}
+	family := variant.GetModelFamily()
+	if family == "" {
+		family = variant.GetVariantId()
+	}
+	quantization := variant.GetQuantization()
+	if quantization == "" && trust == FormationTrustSovereign {
+		quantization = "Q4_K_M"
+	}
+	return FormationModel{
+		VariantID:      variant.GetVariantId(),
+		DisplayName:    variant.GetServedModelTag(),
+		Provider:       provider,
+		Family:         family,
+		ProviderClass:  providerClass,
+		ServedModelTag: variant.GetServedModelTag(),
+		Trust:          trust,
+		Quantization:   quantization,
+		ParameterCount: variant.GetParameterCount(),
+		ModelDigest:    variant.GetModelDigest(),
+	}
 }

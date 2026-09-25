@@ -210,6 +210,25 @@ type PublicProofIngestResponse struct {
 	ProofRoot     string `json:"proof_root,omitempty"`
 }
 
+// PublicAssignmentAuditProofPublishRequest ingests one assignment audit export
+// package through the gateway-owned public publisher.
+type PublicAssignmentAuditProofPublishRequest struct {
+	CampaignID       string `json:"campaign_id"`
+	CampaignRevision string `json:"campaign_revision"`
+	RunID            string `json:"run_id"`
+	AssignmentID     string `json:"assignment_id"`
+	IndexDigest      string `json:"index_digest"`
+	Database         []byte `json:"database"`
+	VaultKey         []byte `json:"vault_key"`
+}
+
+type PublicAssignmentAuditProofPublishResponse struct {
+	Accepted         bool     `json:"accepted"`
+	DatabaseSHA256   string   `json:"database_sha256,omitempty"`
+	VaultKeySHA256   string   `json:"vault_key_sha256,omitempty"`
+	ProofRootSHA256  string   `json:"proof_root_sha256,omitempty"`
+}
+
 // PublicKeyRevocationRecord is a key revocation record published as a signed
 // batch record before the old key is deactivated.
 type PublicKeyRevocationRecord struct {

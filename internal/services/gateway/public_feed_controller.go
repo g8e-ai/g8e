@@ -8,6 +8,8 @@
 package gateway
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -128,6 +130,77 @@ func (c *PublicFeedController) handlePublicFeedBatches(w http.ResponseWriter, r 
 		HighWaterSequence: snapshot.HighWaterSequence,
 		FeedChainHash:     snapshot.FeedChainHash,
 	})
+}
+
+// @Summary		Publish assignment audit proof
+// @Description	Ingests one assignment audit export package into the gateway-owned public proof catalog (mTLS owner CLI only).
+// @Tags			public-feed
+// @Accept			json
+// @Produce		json
+// @Param			request	body	models.PublicAssignmentAuditProofPublishRequest	true	"Assignment audit proof package"
+// @Success		200	{object}	models.PublicAssignmentAuditProofPublishResponse
+// @Failure		400	{string}	string	"Bad Request"
+// @Failure		405	{string}	string	"Method Not Allowed"
+// @Failure		503	{string}	string	"Public spectator unavailable"
+// @Router			/api/v1/public-feed/proofs [post]
+func (c *PublicFeedController) handlePublicFeedProofs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+
+	publisher, err := c.publisher()
+	if err != nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, constants.PublicFeedProofIngestMaxBytes))
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
+		return
+	}
+
+	var request models.PublicAssignmentAuditProofPublishRequest
+	if err := json.Unmarshal(body, &request); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
+		return
+	}
+
+	manifest, err := publisher.PublishAssignmentAuditProof(r.Context(), request)
+	if err != nil {
+		status, message := publicFeedProofPublishErrorStatus(err)
+		c.responder.Error(w, status, message)
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.PublicAssignmentAuditProofPublishResponse{
+		Accepted:        true,
+		DatabaseSHA256:  hashBytes(request.Database),
+		VaultKeySHA256:  hashBytes(request.VaultKey),
+		ProofRootSHA256: manifest.ProofRootSHA256,
+	})
+}
+
+func publicFeedProofPublishErrorStatus(err error) (int, string) {
+	switch {
+	case errors.Is(err, constants.ErrPublicFeedDisabled):
+		return http.StatusServiceUnavailable, err.Error()
+	case errors.Is(err, constants.ErrMissingRequiredField),
+		errors.Is(err, constants.ErrPublicFeedProofNotVerified),
+		errors.Is(err, constants.ErrPublicFeedBatchEmpty),
+		errors.Is(err, constants.ErrPublicFeedProofOversized),
+		errors.Is(err, constants.ErrPublicFeedProofPathTraversal),
+		errors.Is(err, constants.ErrPublicFeedProofRestricted):
+		return http.StatusBadRequest, err.Error()
+	default:
+		return http.StatusInternalServerError, err.Error()
+	}
+}
+
+func hashBytes(value []byte) string {
+	sum := sha256.Sum256(value)
+	return hex.EncodeToString(sum[:])
 }
 
 func (c *PublicFeedController) publisher() (*PublicPublisherService, error) {

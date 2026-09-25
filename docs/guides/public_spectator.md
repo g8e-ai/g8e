@@ -102,7 +102,15 @@ A public origin additionally requires `--allow-public`, and running it remains a
 go run ./test/capacity --target https://opendevops.ai --allow-public --mode stream --clients 300 --hold 5m
 ```
 
-The harness emits JSON status, outcome, latency, stream-survival, and optional Docker resource samples, and exits nonzero unless every requested lifecycle completes and every stream survives. `--synthetic-client-ips` is accepted only with a loopback target and exercises distinct forwarded identities through the configured Docker trusted peer. One generator host remains one Cloudflare client identity and correctly shares one anonymous request window. A 300-distinct-visitor cold-load claim therefore requires distributed generators with distinct public client addresses; callers never spoof `CF-Connecting-IP` against a public target to manufacture identity cardinality.
+For 300 distinct external cold visitors, run coordinated shards from separate generator hosts (distinct egress / Cloudflare client identity per host). Each host runs one shard:
+
+```bash
+go run ./test/capacity --target https://opendevops.ai --allow-public --mode cold \
+  --clients 100 --shard-index 0 --shard-count 3
+# repeat on other hosts with --shard-index 1 and --shard-index 2
+```
+
+The harness emits JSON status, outcome, latency, stream-survival, shard metadata, and optional Docker resource samples, and exits nonzero unless every requested lifecycle completes and every stream survives. `--synthetic-client-ips` is accepted only with a loopback target and exercises distinct forwarded identities through the configured Docker trusted peer. One generator host remains one Cloudflare client identity and correctly shares one anonymous request window. Callers never spoof `CF-Connecting-IP` against a public target to manufacture identity cardinality.
 
 ## Manual record publish (advanced)
 

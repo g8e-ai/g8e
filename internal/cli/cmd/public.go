@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 )
@@ -274,7 +275,40 @@ func publicCmd() *cobra.Command {
 		publicRepairOutboxCmdWithConfig(loadConfig, newFileSvc),
 		publicStatusCmdWithConfig(loadConfig, newFileSvc),
 		publicRotateKeyCmdWithConfig(loadConfig, newFileSvc),
+		publicVerifyAssignmentCmd(),
 	)
+	return cmd
+}
+
+func publicVerifyAssignmentCmd() *cobra.Command {
+	var dbPath string
+	var vaultKeyPath string
+	cmd := &cobra.Command{
+		Use:   "verify-assignment",
+		Short: "Verify an assignment audit slice offline",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if strings.TrimSpace(dbPath) == "" || strings.TrimSpace(vaultKeyPath) == "" {
+				return constants.ErrMissingRequiredField
+			}
+			dbBytes, err := os.ReadFile(dbPath)
+			if err != nil {
+				return fmt.Errorf("public-feed: read assignment audit db: %w", err)
+			}
+			keyBytes, err := os.ReadFile(vaultKeyPath)
+			if err != nil {
+				return fmt.Errorf("public-feed: read assignment audit vault key: %w", err)
+			}
+			if err := evaluation.VerifyAssignmentAuditSlice(dbBytes, keyBytes); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Assignment audit slice verified")
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&dbPath, "db", "", "Path to the assignment audit SQLite file")
+	cmd.Flags().StringVar(&vaultKeyPath, "vault-key", "", "Path to the assignment audit vault key")
+	_ = cmd.MarkFlagRequired("db")
+	_ = cmd.MarkFlagRequired("vault-key")
 	return cmd
 }
 

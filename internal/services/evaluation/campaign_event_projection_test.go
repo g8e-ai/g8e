@@ -182,7 +182,7 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 	require.NoError(t, store.SaveAssignmentResult(context.Background(), result))
 	require.NoError(t, coordinator.PublishAssignmentLiveEvents(context.Background(), assignment, result))
 	require.NotEmpty(t, exporter.records)
-	foundInvocation := false
+	foundScoredInvocation := false
 	foundMetric := false
 	for _, record := range exporter.records {
 		require.Equal(t, models.PublicFeedRecordTypeEvent, record.RecordType)
@@ -190,13 +190,96 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &body))
 		switch body["kind"] {
 		case "stage_updated":
-			foundInvocation = true
+			foundScoredInvocation = true
 		case "metric_updated":
 			foundMetric = true
 		}
 	}
-	assert.True(t, foundInvocation)
+	assert.True(t, foundScoredInvocation)
 	assert.True(t, foundMetric)
+}
+
+func TestCampaignPublication_PublishesInvocationAtAssignmentStart(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	runID := "run-live-start"
+	assignment := &evalv1.EvaluationAssignment{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    "assign-start",
+		RunId:           runID,
+		CampaignId:      "campaign-1",
+		ScenarioId:      "scenario-1",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING,
+		StartedAt:       timestamppb.New(time.Unix(1_700_000_001, 0).UTC()),
+		Target: &evalv1.EvaluationAssignment_Homogeneous{
+			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
+				DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+				CandidateVariant: &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			},
+		},
+	}
+	store := NewStore(files)
+	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion: CampaignSchemaVersion,
+		RunId:         runID,
+		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "campaign-1"},
+	}))
+	require.NoError(t, store.SaveAssignment(context.Background(), assignment))
+	require.NoError(t, coordinator.PublishAssignmentInvocationLiveEvents(context.Background(), assignment))
+	require.Len(t, exporter.records, 1)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(exporter.records[0].RecordBytes), &body))
+	assert.Equal(t, "stage_updated", body["kind"])
+}
+
+func TestCampaignPublication_PublishesScoredInferenceDuringTraceProgress(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	runID := "run-live-progress"
+	assignment := &evalv1.EvaluationAssignment{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    "assign-progress",
+		RunId:           runID,
+		CampaignId:      "campaign-1",
+		ScenarioId:      "scenario-1",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING,
+		StartedAt:       timestamppb.New(time.Unix(1_700_000_001, 0).UTC()),
+		Target: &evalv1.EvaluationAssignment_Homogeneous{
+			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
+				DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+				CandidateVariant: &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			},
+		},
+	}
+	store := NewStore(files)
+	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion: CampaignSchemaVersion,
+		RunId:         runID,
+		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "campaign-1"},
+	}))
+	require.NoError(t, store.SaveAssignment(context.Background(), assignment))
+	trace := completedHomogeneousTrace(t, "primary")
+	trace["status"] = "running"
+	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
+	call["usage_reported"] = true
+	call["input_tokens"] = 12
+	call["output_tokens"] = 34
+	partial, ok, err := PartialAssignmentResultFromScoredTrace(AssignmentExecutionRequest{
+		Assignment: assignment,
+		AttemptID:  "attempt-1",
+	}, trace, func(prefix string) string { return prefix })
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NotNil(t, partial)
+	require.NoError(t, coordinator.PublishAssignmentScoredInferenceLiveEvents(context.Background(), assignment, partial))
+	require.Len(t, exporter.records, 1)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(exporter.records[0].RecordBytes), &body))
+	assert.Equal(t, "stage_updated", body["kind"])
 }
 
 func ptrFloat64(value float64) *float64 {

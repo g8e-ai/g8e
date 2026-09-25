@@ -411,6 +411,7 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservat
 		attempt: attempt,
 	})
 	assignment := &evalv1.EvaluationAssignment{
+		SchemaVersion:   CampaignSchemaVersion,
 		AssignmentId:    "assign-1",
 		RunId:           run.GetRunId(),
 		CampaignId:      run.GetCampaignBinding().GetCampaignId(),
@@ -418,13 +419,23 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservat
 		ScenarioRef:     &compliancev1.VersionedReference{Id: req.Catalog.GetScenarios()[0].GetScenarioId(), Version: req.Catalog.GetScenarios()[0].GetScenarioVersion()},
 		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		Target: &evalv1.EvaluationAssignment_Homogeneous{
+			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
+				DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+				CandidateVariant: &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			},
+		},
 	}
+	require.NoError(t, store.SaveAssignment(ctx, assignment))
 	result := &evalv1.EvaluationAssignmentResult{
 		AssignmentId: "assign-1",
 		RunId:        run.GetRunId(),
 		ModelInferences: []*evalv1.ModelInferenceRecord{{
 			InferenceRecordId: "inference-1",
 			ProviderAttemptId: "attempt-remote",
+			ModelRole:         evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+			ModelVariant:      &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
 		}},
 	}
 	require.NoError(t, coordinator.PublishAssignmentResult(

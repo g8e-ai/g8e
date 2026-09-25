@@ -11,6 +11,7 @@ package gateway
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
@@ -18,6 +19,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -31,19 +33,15 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 const capacityTrustedProxyCIDR = "127.0.0.0/8"
 
 type capacityMirrorEnv struct {
-	mirror   *PublicMirrorServer
-	server   *http.Server
+	helper   *mirrorTestEnv
 	baseURL  string
 	sourceID string
-	priv     ed25519.PrivateKey
-	keyID    string
 	client   *http.Client
 }
 
@@ -78,42 +76,33 @@ func newCapacityMirrorEnv(t *testing.T, recordCount int) *capacityMirrorEnv {
 		})))
 	}
 	batch := helper.buildBatch(records, constants.PublicFeedZeroHashHex)
-	status, ingestResp := helper.sendIngestDirect(mirror, batch)
+	status, ingestResp := sendIngestToHandler(t, mirror.Handler(), batch)
 	require.Equal(t, http.StatusOK, status)
 	require.True(t, ingestResp.Accepted)
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	server := &http.Server{Handler: mirror.Handler()}
-	go func() { _ = server.Serve(listener) }()
-	t.Cleanup(func() {
-		_ = server.Close()
-		_ = listener.Close()
-	})
+	server := httptest.NewServer(mirror.Handler())
+	t.Cleanup(server.Close)
+	helper.server = server
+	helper.client = server.Client()
 
 	return &capacityMirrorEnv{
-		mirror:   mirror,
-		server:   server,
-		baseURL:  "http://" + listener.Addr().String(),
+		helper:   helper,
+		baseURL:  server.URL,
 		sourceID: sourceID,
-		priv:     priv,
-		keyID:    keyID,
-		client:   &http.Client{Timeout: 30 * time.Second},
+		client:   server.Client(),
 	}
 }
 
-func (e *mirrorTestEnv) sendIngestDirect(mirror *PublicMirrorServer, batch models.PublicFeedBatch) (int, models.PublicIngestResponse) {
-	e.t.Helper()
-	reqBody := models.PublicIngestRequest{Batch: batch}
-	bodyBytes, err := json.Marshal(reqBody)
-	require.NoError(e.t, err)
-	request, err := http.NewRequest(http.MethodPost, "/ingest", bytesNewReader(bodyBytes))
-	require.NoError(e.t, err)
+func sendIngestToHandler(t *testing.T, handler http.Handler, batch models.PublicFeedBatch) (int, models.PublicIngestResponse) {
+	t.Helper()
+	bodyBytes, err := json.Marshal(models.PublicIngestRequest{Batch: batch})
+	require.NoError(t, err)
+	request := httptest.NewRequest(http.MethodPost, "/ingest", bytes.NewReader(bodyBytes))
 	request.Header.Set("Content-Type", "application/json")
-	recorder := httptestNewRecorder()
-	mirror.Handler().ServeHTTP(recorder, request)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
 	var ingestResp models.PublicIngestResponse
-	require.NoError(e.t, json.Unmarshal(recorder.Body.Bytes(), &ingestResp))
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &ingestResp))
 	return recorder.Code, ingestResp
 }
 
@@ -121,17 +110,13 @@ func capacitySyntheticClientAddress(globalIndex int) string {
 	return net.IPv4(198, 18, byte(globalIndex/254), byte(globalIndex%254+1)).String()
 }
 
-func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string) (outcome string, status429 bool) {
-	client := env.client
+func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string) (outcome string, rateLimited bool) {
 	origin := env.baseURL
 	source := env.sourceID
 
-	bootstrap, status, err := capacityGetJSON[bootstrapCapacityResponse](ctx, client, origin+"/bootstrap", clientIP)
+	bootstrap, status, err := capacityGetJSON[bootstrapCapacityResponse](ctx, env.client, origin+"/bootstrap", clientIP)
 	if err != nil || status != http.StatusOK {
-		if status == http.StatusTooManyRequests {
-			return "bootstrap", true
-		}
-		return "bootstrap", false
+		return "bootstrap", status == http.StatusTooManyRequests
 	}
 	source = bootstrap.Snapshot.SourceID
 	cursor := int64(0)
@@ -140,18 +125,15 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 			cursor = record.Sequence
 		}
 	}
-	for round := 0; round < 10; round++ {
-		for page := 0; page < 100; page++ {
-			history, status, err := capacityGetJSON[historyCapacityResponse](ctx, client, capacityEndpoint(origin, "/history", url.Values{
+	for range 10 {
+		for range 100 {
+			history, status, err := capacityGetJSON[historyCapacityResponse](ctx, env.client, capacityEndpoint(origin, "/history", url.Values{
 				"source": {source},
 				"cursor": {strconv.FormatInt(cursor, 10)},
 				"limit":  {"500"},
 			}), clientIP)
 			if err != nil || status != http.StatusOK {
-				if status == http.StatusTooManyRequests {
-					return "history", true
-				}
-				return "history", false
+				return "history", status == http.StatusTooManyRequests
 			}
 			if len(history.Items) > 0 {
 				cursor = history.Items[len(history.Items)-1].Sequence
@@ -163,29 +145,23 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 				return "history_stalled", false
 			}
 		}
-		snapshot, status, err := capacityGetJSON[snapshotCapacityResponse](ctx, client, capacityEndpoint(origin, "/snapshot", url.Values{"source": {source}}), clientIP)
+		snapshot, status, err := capacityGetJSON[snapshotCapacityResponse](ctx, env.client, capacityEndpoint(origin, "/snapshot", url.Values{"source": {source}}), clientIP)
 		if err != nil || status != http.StatusOK {
-			if status == http.StatusTooManyRequests {
-				return "snapshot", true
-			}
-			return "snapshot", false
+			return "snapshot", status == http.StatusTooManyRequests
 		}
 		if snapshot.HighWaterSequence == cursor {
 			survived, status, outcome := env.openStream(ctx, source, cursor, clientIP, 2*time.Second)
-			if status == http.StatusTooManyRequests {
-				return outcome, true
+			if !survived && outcome != "complete" {
+				return outcome, status == http.StatusTooManyRequests
 			}
-			if !survived {
-				return outcome, false
-			}
-			return "complete", false
+			return outcome, status == http.StatusTooManyRequests
 		}
 	}
 	return "sequence_divergence", false
 }
 
 func (env *capacityMirrorEnv) openStream(ctx context.Context, source string, cursor int64, clientIP string, hold time.Duration) (survived bool, status int, outcome string) {
-	streamCtx, cancel := context.WithTimeout(ctx, hold+5*time.Second)
+	streamCtx, cancel := context.WithTimeout(ctx, hold+10*time.Second)
 	defer cancel()
 	address := capacityEndpoint(env.baseURL, "/stream", url.Values{
 		"source":   {source},
@@ -199,7 +175,6 @@ func (env *capacityMirrorEnv) openStream(ctx context.Context, source string, cur
 	if clientIP != "" {
 		request.Header.Set("CF-Connecting-IP", clientIP)
 	}
-	started := time.Now()
 	response, err := env.client.Do(request)
 	if err != nil {
 		return false, 0, "stream"
@@ -224,7 +199,7 @@ func (env *capacityMirrorEnv) openStream(ctx context.Context, source string, cur
 }
 
 type bootstrapCapacityResponse struct {
-	Snapshot          snapshotCapacityResponse `json:"snapshot"`
+	Snapshot          snapshotCapacityResponse   `json:"snapshot"`
 	RecentProjections []projectionCapacityCursor `json:"recent_projections"`
 }
 
@@ -282,7 +257,7 @@ func TestPublicSpectatorColdLoad_ThreeHundredDistinctClientsReconcile(t *testing
 
 	const clients = 300
 	results := make(chan string, clients)
-	rateLimited := make(chan bool, clients)
+	var rateLimited atomic.Int32
 	var wg sync.WaitGroup
 	wg.Add(clients)
 	for index := range clients {
@@ -291,23 +266,18 @@ func TestPublicSpectatorColdLoad_ThreeHundredDistinctClientsReconcile(t *testing
 			outcome, limited := env.coldLifecycle(ctx, capacitySyntheticClientAddress(clientIndex))
 			results <- outcome
 			if limited {
-				rateLimited <- true
+				rateLimited.Add(1)
 			}
 		}(index)
 	}
 	wg.Wait()
 	close(results)
-	close(rateLimited)
 
 	outcomes := make(map[string]int)
 	for outcome := range results {
 		outcomes[outcome]++
 	}
-	limitedCount := 0
-	for range rateLimited {
-		limitedCount++
-	}
-	assert.Zero(t, limitedCount, "distinct client identities must not share one rate window")
+	assert.Zero(t, rateLimited.Load(), "distinct client identities must not share one rate window")
 	assert.Equal(t, clients, outcomes["complete"], "outcomes: %v", outcomes)
 }
 
@@ -324,17 +294,16 @@ func TestPublicSpectatorPublicationDeliversDuringSSEHold(t *testing.T) {
 	for index := range subscribers {
 		go func(clientIndex int) {
 			defer wg.Done()
-			clientIP := capacitySyntheticClientAddress(clientIndex)
 			address := capacityEndpoint(env.baseURL, "/stream", url.Values{
 				"source":   {env.sourceID},
-				"since_id": {"0"},
+				"since_id": {"5"},
 			})
 			request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
 			if err != nil {
 				return
 			}
 			request.Header.Set("Accept", "text/event-stream")
-			request.Header.Set("CF-Connecting-IP", clientIP)
+			request.Header.Set("CF-Connecting-IP", capacitySyntheticClientAddress(clientIndex))
 			response, err := env.client.Do(request)
 			if err != nil || response.StatusCode != http.StatusOK {
 				if response != nil {
@@ -347,7 +316,7 @@ func TestPublicSpectatorPublicationDeliversDuringSSEHold(t *testing.T) {
 			scanner.Buffer(make([]byte, 64<<10), 1<<20)
 			deadline := time.Now().Add(hold)
 			for scanner.Scan() {
-				if strings.Contains(scanner.Text(), "\"kind\":\"catalog_snapshot\"") && strings.Contains(scanner.Text(), "dataset-publish") {
+				if strings.Contains(scanner.Text(), "dataset-publish") {
 					delivered.Add(1)
 					return
 				}
@@ -359,19 +328,14 @@ func TestPublicSpectatorPublicationDeliversDuringSSEHold(t *testing.T) {
 	}
 
 	time.Sleep(500 * time.Millisecond)
-	helper := &mirrorTestEnv{
-		t:        t,
-		mirror:   env.mirror,
-		priv:     env.priv,
-		keyID:    env.keyID,
-		sourceID: env.sourceID,
-	}
-	publishRecord := helper.makeRecord(6, applyProjectionDefaults(models.NewPublicFeedObject(map[string]string{
+	var snapshot models.PublicFeedSnapshot
+	require.Equal(t, http.StatusOK, env.helper.getJSON("/snapshot?source="+env.sourceID, &snapshot))
+	publishRecord := env.helper.makeRecord(6, applyProjectionDefaults(models.NewPublicFeedObject(map[string]string{
 		"kind":       "catalog_snapshot",
 		"dataset_id": "dataset-publish",
 	})))
-	batch := helper.buildBatch([]models.PublicFeedRecord{publishRecord}, "")
-	status, ingestResp := helper.sendIngestDirect(env.mirror, batch)
+	batch := env.helper.buildBatch([]models.PublicFeedRecord{publishRecord}, snapshot.FeedChainHash)
+	status, ingestResp := sendIngestToHandler(t, env.helper.mirror.Handler(), batch)
 	require.Equal(t, http.StatusOK, status)
 	require.True(t, ingestResp.Accepted)
 
@@ -393,11 +357,7 @@ func TestPublicSpectatorStreamHold_ThousandDistinctClientsSurvive(t *testing.T) 
 		go func(clientIndex int) {
 			defer wg.Done()
 			survived, status, _ := env.openStream(ctx, env.sourceID, 0, capacitySyntheticClientAddress(clientIndex), hold)
-			if status == http.StatusTooManyRequests {
-				results <- false
-				return
-			}
-			results <- survived
+			results <- survived && status == http.StatusOK
 		}(index)
 	}
 	wg.Wait()

@@ -693,6 +693,10 @@ func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFil
 	if err != nil {
 		return nil, err
 	}
+	proofPublisher, err := newCampaignProofPublisher(commandContext(cmd), fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
 	remote, err := newProviderObservationRemote(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("campaign publication: provider observation remote: %w", err)
@@ -707,7 +711,7 @@ func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFil
 		publicationState,
 		exporter,
 		remote,
-	)
+	).WithProofPublisher(proofPublisher)
 	if isGatewayHealthy() {
 		coordinator.WithMirrorProbe(newHTTPCampaignMirrorProbe(commandContext(cmd)))
 	}

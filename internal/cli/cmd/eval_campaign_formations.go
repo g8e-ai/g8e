@@ -16,9 +16,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
@@ -285,6 +287,73 @@ a scored campaign assignment.`,
 	cmd.Flags().StringVar(&opts.RunID, "run-id", "", "Campaign run ID recorded on governed inference dispatches")
 	cmd.Flags().StringVar(&opts.AssignmentID, "assignment-id", "", "Assignment ID recorded on governed inference dispatches")
 	return cmd
+}
+
+type campaignFormationProductionOptions struct {
+	InferenceSessionID string
+	DataSessionID      string
+	OllamaEndpoint     string
+}
+
+func buildCampaignFormationProductionRunner(
+	cmd *cobra.Command,
+	deps nativeEvalDeps,
+	cfg *config.Config,
+	fileSvc fs.RuntimeFileService,
+	authContext *auth.ClientAuthContext,
+	dataOperator *evaluation.DataOperatorStatus,
+	operators []models.OperatorDocumentGo,
+	variants []*evalv1.ModelVariant,
+	registryDigest string,
+	opts campaignFormationProductionOptions,
+) (evaluation.CampaignFormationRunner, error) {
+	appClient, err := inferenceEvalAppClient(cfg, fileSvc, authContext, inferenceEvalDeps{
+		configLoader:     deps.configLoader,
+		fileSvcFactory:   deps.fileSvcFactory,
+		authLoader:       deps.authLoader,
+		clientFactory:    deps.clientFactory,
+		appClientFactory: deps.clientFactory,
+		now:              deps.now,
+		newID:            deps.newID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+	}
+	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
+		configLoader:   deps.configLoader,
+		fileSvcFactory: deps.fileSvcFactory,
+		authLoader:     deps.authLoader,
+		clientFactory:  deps.clientFactory,
+		now:            deps.now,
+		newID:          deps.newID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+	}
+	endpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, opts.InferenceSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+	}
+	observationLoader, err := evaluation.NewCampaignFormationObservationLoader(fileSvc)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+	}
+	productionDeps := evaluation.FormationProductionDependencies{
+		Variants:               variants,
+		ProvenancePreflight:    gatewayFormationProvenancePreflight{fileSvc: fileSvc, cfg: cfg},
+		ObservationLoader:      observationLoader,
+		InferenceDispatcher:    &harnessFormationInferenceDispatcher{client: appClient},
+		ModelCommandDispatcher: modelDispatcher,
+		OllamaEnvironment:      modelCommandEnvironment(endpoint),
+		NewID:                  func(prefix string) string { return prefix + "-" + deps.newID() },
+		Now:                    deps.now,
+		RunContext: evaluation.FormationRunContext{
+			ModelRegistryDigest: registryDigest,
+			InferenceSessionID:  opts.InferenceSessionID,
+			DataSessionID:       opts.DataSessionID,
+		},
+	}
+	return evaluation.NewCampaignFormationProductionRunner(productionDeps), nil
 }
 
 func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts formationRunOptions) (*evaluation.FormationRunResult, campaignOperatorSessions, *evaluation.ModelInventoryFreeze, error) {

@@ -80,6 +80,7 @@ var APIPaths = struct {
 	// Public feed routes
 	PublicFeedBatches  string `json:"public_feed_batches"`
 	PublicFeedSnapshot string `json:"public_feed_snapshot"`
+	PublicFeedProofs   string `json:"public_feed_proofs"`
 	// Native eval campaign publication state (gateway-owned idempotency)
 	EvalCampaignPublicationStateByRun string `json:"eval_campaign_publication_state_by_run"`
 	// User routes
@@ -253,6 +254,7 @@ var APIPaths = struct {
 	// Public feed routes
 	PublicFeedBatches:  "/api/v1/public-feed/batches",
 	PublicFeedSnapshot: "/api/v1/public-feed/snapshot",
+	PublicFeedProofs:   "/api/v1/public-feed/proofs",
 	// Native eval campaign publication state
 	EvalCampaignPublicationStateByRun: "/api/v1/eval/campaign/runs/",
 	// User routes

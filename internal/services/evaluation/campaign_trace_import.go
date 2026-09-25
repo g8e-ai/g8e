@@ -110,6 +110,66 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace Evalu
 	return result, nil
 }
 
+// PartialAssignmentResultFromScoredTrace materializes only the scored model
+// inference rows present in a non-terminal trace. It returns false when the
+// trace has not yet reported usage for any governed model call.
+func PartialAssignmentResultFromScoredTrace(req AssignmentExecutionRequest, trace EvaluationTrace, newID func(string) string) (*evalv1.EvaluationAssignmentResult, bool, error) {
+	if req.Assignment == nil || len(trace) == 0 {
+		return nil, false, nil
+	}
+	if !TraceHasReportedModelInference(trace) {
+		return nil, false, nil
+	}
+	if newID == nil {
+		newID = func(prefix string) string { return prefix }
+	}
+	candidate := homogeneousCandidateVariant(req.Assignment)
+	modelInferences, _, err := modelInferenceRecordsFromTrace(req.Assignment, req.AttemptID, candidate, trace, newID)
+	if err != nil {
+		return nil, false, err
+	}
+	partial := &evalv1.EvaluationAssignmentResult{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    req.Assignment.GetAssignmentId(),
+		RunId:           req.Assignment.GetRunId(),
+		CampaignId:      req.Assignment.GetCampaignId(),
+		Lane:            req.Assignment.GetLane(),
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING,
+		ModelInferences: modelInferences,
+	}
+	if len(reportedModelInferences(partial)) == 0 {
+		return nil, false, nil
+	}
+	return partial, true, nil
+}
+
+// TraceHasReportedModelInference reports whether a trace already carries at
+// least one governed model call with reported usage telemetry.
+func TraceHasReportedModelInference(trace EvaluationTrace) bool {
+	modelCalls, ok := trace["model_calls"].([]any)
+	if !ok {
+		return false
+	}
+	for _, rawCall := range modelCalls {
+		call, ok := evaluationTrace(rawCall)
+		if !ok {
+			continue
+		}
+		provider, _ := call["provider"].(string)
+		if !strings.EqualFold(provider, "G8EProvider") {
+			continue
+		}
+		if succeeded, ok := call["succeeded"].(bool); ok && !succeeded {
+			continue
+		}
+		reported, ok := call["usage_reported"].(bool)
+		if ok && reported {
+			return true
+		}
+	}
+	return false
+}
+
 func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (evalv1.EvaluationAssignmentLifecycleStatus, *evalv1.DeterministicGrade) {
 	status, _ := trace["status"].(string)
 	roleOutcome, _ := trace["role_outcome"].(string)

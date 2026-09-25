@@ -23,6 +23,8 @@ func TestValidateOptions_RequiresExplicitSafeTargetAndValidBounds(t *testing.T) 
 		hold:           5 * time.Minute,
 		requestTimeout: 30 * time.Second,
 		sampleInterval: 30 * time.Second,
+		shardIndex:     0,
+		shardCount:     1,
 	}
 	tests := []struct {
 		name    string
@@ -46,6 +48,7 @@ func TestValidateOptions_RequiresExplicitSafeTargetAndValidBounds(t *testing.T) 
 		}, wantErr: true},
 		{name: "unsupported mode rejected", mutate: func(value options) options { value.mode = "burst"; return value }, wantErr: true},
 		{name: "zero clients rejected", mutate: func(value options) options { value.clients = 0; return value }, wantErr: true},
+		{name: "invalid shard index rejected", mutate: func(value options) options { value.shardCount = 3; value.shardIndex = 3; return value }, wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -60,11 +63,17 @@ func TestValidateOptions_RequiresExplicitSafeTargetAndValidBounds(t *testing.T) 
 }
 
 func TestSyntheticClientAddress_ReturnsDistinctUnicastAddresses(t *testing.T) {
-	first := net.ParseIP(syntheticClientAddress(0))
-	last := net.ParseIP(syntheticClientAddress(299))
+	first := net.ParseIP(syntheticClientAddress(0, 1, 0))
+	last := net.ParseIP(syntheticClientAddress(0, 1, 299))
 	assert.NotEqual(t, first.String(), last.String())
 	assert.True(t, first.IsGlobalUnicast())
 	assert.True(t, last.IsGlobalUnicast())
+}
+
+func TestSyntheticClientAddress_SeparatesShardOffsets(t *testing.T) {
+	shardZero := net.ParseIP(syntheticClientAddress(0, 3, 0))
+	shardOne := net.ParseIP(syntheticClientAddress(1, 3, 0))
+	assert.NotEqual(t, shardZero.String(), shardOne.String())
 }
 
 func TestSummarizeLatency_ComputesDeterministicPercentiles(t *testing.T) {

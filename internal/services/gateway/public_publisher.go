@@ -78,11 +78,12 @@ var prohibitedRecordFields = []string{
 // artifact is public_safe by construction — the builder does not accept
 // restricted artifacts.
 type ProofArtifactInput struct {
-	Filename    string
-	MediaType   string
-	Content     []byte
-	CampaignID  string
-	SourceRunID string
+	Filename            string
+	MediaType           string
+	Content             []byte
+	CampaignID          string
+	SourceRunID         string
+	VerificationCommand string
 }
 
 type PublicOutboxStore interface {
@@ -1349,9 +1350,12 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 			Classification:      models.PublicFeedProofClassificationPublicSafe,
 			CampaignID:          campaignID,
 			SourceRunID:         art.SourceRunID,
-			GeneratedAt:         time.Now().UTC(),
-			VerificationCommand: fmt.Sprintf("sha256sum %s", art.Filename),
+			GeneratedAt:           time.Now().UTC(),
+			VerificationCommand: art.VerificationCommand,
 			ImmutableURL:        fmt.Sprintf("/proofs/%s", artifactID),
+		}
+		if entry.VerificationCommand == "" {
+			entry.VerificationCommand = fmt.Sprintf("sha256sum %s", art.Filename)
 		}
 
 		// Write artifact to disk.
@@ -1418,6 +1422,50 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 		s.logger.Warn("public-feed: failed to update proof catalog", "error", err)
 	}
 
+	return manifest, nil
+}
+
+// PublishAssignmentAuditProof ingests one assignment audit export package into
+// the public proof catalog and mirror.
+func (s *PublicPublisherService) PublishAssignmentAuditProof(ctx context.Context, request models.PublicAssignmentAuditProofPublishRequest) (models.PublicProofManifest, error) {
+	if request.CampaignID == "" || request.RunID == "" || request.AssignmentID == "" || len(request.Database) == 0 || len(request.VaultKey) == 0 {
+		return models.PublicProofManifest{}, fmt.Errorf("public-feed: publish assignment audit proof: %w", constants.ErrMissingRequiredField)
+	}
+	revision := request.CampaignRevision
+	if revision == "" {
+		revision = request.CampaignID
+	}
+	indexDigest := request.IndexDigest
+	if indexDigest == "" {
+		indexDigest = request.AssignmentID
+	}
+	dbFilename := fmt.Sprintf("assignment-%s.db", request.AssignmentID)
+	keyFilename := fmt.Sprintf("assignment-%s.vault.key", request.AssignmentID)
+	verifyCommand := fmt.Sprintf("g8e public verify-assignment --db %s --vault-key %s", dbFilename, keyFilename)
+	manifest, err := s.BuildProofPackage(ctx, request.CampaignID, revision, indexDigest, true, []ProofArtifactInput{
+		{
+			Filename:            dbFilename,
+			MediaType:           "application/vnd.sqlite3",
+			Content:             request.Database,
+			CampaignID:          request.CampaignID,
+			SourceRunID:         request.RunID,
+			VerificationCommand: verifyCommand,
+		},
+		{
+			Filename:            keyFilename,
+			MediaType:           "text/plain",
+			Content:             request.VaultKey,
+			CampaignID:          request.CampaignID,
+			SourceRunID:         request.RunID,
+			VerificationCommand: verifyCommand,
+		},
+	})
+	if err != nil {
+		return models.PublicProofManifest{}, err
+	}
+	if err := s.PushProofPackage(ctx); err != nil {
+		return models.PublicProofManifest{}, err
+	}
 	return manifest, nil
 }
 

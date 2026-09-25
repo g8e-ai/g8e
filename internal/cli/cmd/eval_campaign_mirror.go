@@ -165,6 +165,10 @@ func newCampaignPublicationCoordinatorFromConfig(ctx context.Context, fileSvc fs
 	if err != nil {
 		return nil, fmt.Errorf("campaign publication: %w", err)
 	}
+	proofPublisher, err := newCampaignProofPublisher(ctx, fileSvc, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("campaign publication: %w", err)
+	}
 	remote, err := newProviderObservationRemote(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("campaign publication: provider observation remote: %w", err)
@@ -179,5 +183,5 @@ func newCampaignPublicationCoordinatorFromConfig(ctx context.Context, fileSvc fs
 		publicationState,
 		exporter,
 		remote,
-	).WithMirrorProbe(newHTTPCampaignMirrorProbe(ctx)), nil
+	).WithProofPublisher(proofPublisher).WithMirrorProbe(newHTTPCampaignMirrorProbe(ctx)), nil
 }

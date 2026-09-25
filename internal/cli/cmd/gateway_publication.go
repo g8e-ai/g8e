@@ -377,6 +377,51 @@ func newCampaignFeedExporter(cmd context.Context, fileSvc fs.RuntimeFileService,
 	return &remoteGatewayCampaignFeedExporter{client: client}, nil
 }
 
+type remoteGatewayCampaignProofPublisher struct {
+	client apiClient
+}
+
+func (p *remoteGatewayCampaignProofPublisher) IngestAssignmentAuditSlice(ctx context.Context, input evaluation.AssignmentAuditProofInput) error {
+	if p == nil || p.client == nil {
+		return fmt.Errorf("campaign publication: publish assignment audit proof: %w", constants.ErrMissingRequiredField)
+	}
+	body, err := json.Marshal(models.PublicAssignmentAuditProofPublishRequest{
+		CampaignID:       input.CampaignID,
+		CampaignRevision: input.CampaignRevision,
+		RunID:            input.RunID,
+		AssignmentID:     input.AssignmentID,
+		IndexDigest:      input.IndexDigest,
+		Database:         input.Artifacts.Database,
+		VaultKey:         input.Artifacts.VaultKey,
+	})
+	if err != nil {
+		return fmt.Errorf("campaign publication: publish assignment audit proof: %w", err)
+	}
+	responseBody, err := p.client.Post(constants.APIPaths.PublicFeedProofs, body)
+	if err != nil {
+		return fmt.Errorf("campaign publication: publish assignment audit proof: %w", err)
+	}
+	var response models.PublicAssignmentAuditProofPublishResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if !response.Accepted {
+		return constants.ErrPublicFeedProofIngestRejected
+	}
+	return nil
+}
+
+func newCampaignProofPublisher(cmd context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) (evaluation.CampaignProofPublisher, error) {
+	if !isGatewayHealthy() {
+		return nil, fmt.Errorf("campaign publication: gateway is not healthy; start g8e-gateway with --public-spectator")
+	}
+	client, err := defaultAPIClientFactory(fileSvc, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("campaign publication: create gateway proof client: %w", err)
+	}
+	return &remoteGatewayCampaignProofPublisher{client: client}, nil
+}
+
 func isHostPublicFeedConfigured(ctx context.Context, fileSvc fs.RuntimeFileService) bool {
 	exists, err := fileSvc.FileExists(ctx, constants.PublicFeedExportConfigPath)
 	return err == nil && exists

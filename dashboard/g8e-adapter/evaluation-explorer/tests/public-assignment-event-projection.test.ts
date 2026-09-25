@@ -111,7 +111,7 @@ describe('public assignment event projection', () => {
   });
 
   describe('publication wiring', () => {
-    it('documents native event kinds the Go coordinator now publishes at terminal time', () => {
+    it('documents native event kinds the Go coordinator publishes at start, mid-run, and terminal time', () => {
       expect(projectMetricAvailabilityToLiveEvent({
         run_id: 'run-live-1',
         assignment_id: 'assign-1',

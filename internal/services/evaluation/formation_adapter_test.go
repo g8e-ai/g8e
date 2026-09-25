@@ -128,6 +128,26 @@ func TestBindFormation_RejectsUnknownFormationID(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrFormationInvalid)
 }
 
+func TestBindHeterogeneousStack_BindsSchedulerStackFromRegistry(t *testing.T) {
+	variants := ultraLightSpeedsterRegistryVariants()
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+	catalogFormation, err := topologies.Formation("ultra-light-speedster")
+	require.NoError(t, err)
+	stack, err := catalogFormation.ToStackDefinition()
+	require.NoError(t, err)
+
+	formation, err := BindHeterogeneousStack(FormationBindingRequest{
+		FormationID: stack.GetStackId(),
+		Stack:       stack,
+		Variants:    variants,
+	})
+	require.NoError(t, err)
+	assert.True(t, formation.RelaxedValidation)
+	assert.Equal(t, repeatHex('a', 64), formation.Primary.ModelDigest)
+	assert.Equal(t, repeatHex('c', 64), formation.Lite.ModelDigest)
+}
+
 func TestFormationHarness_RunsBoundUltraLightSpeedsterFormation(t *testing.T) {
 	formation, err := BindFormation(ultraLightSpeedsterBindingRequest(t))
 	require.NoError(t, err)

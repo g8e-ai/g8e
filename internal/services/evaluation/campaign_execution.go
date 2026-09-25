@@ -32,6 +32,9 @@ func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID
 	if assignment == nil || attemptID == "" || binding.InferenceOperatorSessionID == "" || binding.DataOperatorID == "" || binding.DataOperatorSessionID == "" {
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: %w", constants.ErrMissingRequiredField)
 	}
+	if IsHeterogeneousAssignment(assignment) {
+		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: heterogeneous assignments execute through formation runner")
+	}
 	homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous)
 	if !ok || homogeneous.Homogeneous == nil || homogeneous.Homogeneous.GetCandidateVariant() == nil {
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: homogeneous target required")
@@ -121,6 +124,10 @@ type AssignmentExecutionRequest struct {
 	RequiredConcepts []string
 	GradingMethod    evalv1.EvaluationGradingMethod
 	Binding          CampaignExecutionBinding
+	// OnTraceProgress is optional. When set, the chat executor invokes it after
+	// each non-terminal trace poll so publication can emit scored-inference live
+	// events before the assignment reaches a terminal result.
+	OnTraceProgress func(ctx context.Context, trace EvaluationTrace) error
 }
 
 // CampaignAssignmentExecutor submits one scored assignment through production chat

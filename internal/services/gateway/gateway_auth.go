@@ -93,6 +93,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// (requires a client certificate and extracts the user ID from it).
 	r.addExact(constants.APIPaths.PublicFeedBatches, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PublicFeedSnapshot, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.PublicFeedProofs, RouteAuthMTLS)
 	r.addPrefix(constants.APIPaths.EvalCampaignPublicationStateByRun, RouteAuthMTLS)
 	r.addPrefix(constants.APIPaths.InferenceProviderObservations, RouteAuthMTLS)
 	r.addPrefix(constants.APIPaths.InferenceModelProvenanceAttestations, RouteAuthMTLS)

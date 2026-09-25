@@ -190,6 +190,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuditReport, h.auditController.handleAuditReport)
 	mux.HandleFunc(constants.APIPaths.PublicFeedBatches, h.publicFeedController.handlePublicFeedBatches)
 	mux.HandleFunc(constants.APIPaths.PublicFeedSnapshot, h.publicFeedController.handlePublicFeedSnapshot)
+	mux.HandleFunc(constants.APIPaths.PublicFeedProofs, h.publicFeedController.handlePublicFeedProofs)
 	mux.Handle(constants.APIPaths.EvalCampaignPublicationStateByRun, http.HandlerFunc(h.evalCampaignPublicationController.handlePublicationState))
 	mux.Handle(constants.APIPaths.InferenceProviderObservations, http.HandlerFunc(h.providerObservationController.handleProviderObservation))
 	mux.Handle(constants.APIPaths.InferenceModelProvenanceAttestations, http.HandlerFunc(h.modelProvenanceController.handleModelProvenance))

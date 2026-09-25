@@ -88,12 +88,18 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	if _, err := e.client.EnsembleChat(ctx, e.persona, chatReq); err != nil {
 		return nil, fmt.Errorf("evaluation: execute assignment: submit chat: %w", err)
 	}
-	if e.waitForTrace == nil {
-		return nil, fmt.Errorf("evaluation: execute assignment: trace waiter is required")
-	}
-	trace, err := e.waitForTrace(ctx, func(pollCtx context.Context) (EvaluationTrace, error) {
+	fetchTrace := func(pollCtx context.Context) (EvaluationTrace, error) {
 		return e.client.GetEvaluationTrace(pollCtx, e.persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
-	})
+	}
+	var trace EvaluationTrace
+	switch {
+	case req.OnTraceProgress != nil:
+		trace, err = WaitForCampaignTrace(ctx, fetchTrace, req.OnTraceProgress)
+	case e.waitForTrace == nil:
+		return nil, fmt.Errorf("evaluation: execute assignment: trace waiter is required")
+	default:
+		trace, err = e.waitForTrace(ctx, fetchTrace)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: execute assignment: wait for trace: %w", err)
 	}

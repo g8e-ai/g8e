@@ -19,9 +19,17 @@ import (
 )
 
 // ModelRoleInvocationIdempotencyKey returns the publication key for one
-// disclosure-safe model-role invocation live event.
+// disclosure-safe model-role invocation live event emitted when an assignment
+// transitions to running.
 func ModelRoleInvocationIdempotencyKey(runID, assignmentID, role string) string {
 	return runID + ":" + assignmentID + ":invocation:" + role
+}
+
+// ScoredModelRoleInvocationIdempotencyKey returns the publication key for one
+// disclosure-safe model-role invocation live event emitted when a scored model
+// inference is first observed for the assignment.
+func ScoredModelRoleInvocationIdempotencyKey(runID, assignmentID, role string) string {
+	return runID + ":" + assignmentID + ":invocation-scored:" + role
 }
 
 // MetricAvailabilityIdempotencyKey returns the publication key for one
@@ -43,24 +51,9 @@ func (c *CampaignPublicationCoordinator) buildAssignmentLiveEventPublishRequests
 		return nil, err
 	}
 	observedAt := assignmentLiveEventObservedAt(assignment, result)
-	requests := make([]campaignFeedPublishRequest, 0, 2)
-	for _, signal := range buildModelRoleInvocationSignals(assignment, result, observedAt, completed, total) {
-		event, err := ProjectModelRoleInvocationEvent(signal)
-		if err != nil {
-			return nil, err
-		}
-		body, err := MarshalPublicLiveEvent(event)
-		if err != nil {
-			return nil, err
-		}
-		if err := publicdisclosure.ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, body); err != nil {
-			return nil, fmt.Errorf("evaluation: build assignment live event publish requests: validate invocation event: %w", err)
-		}
-		requests = append(requests, campaignFeedPublishRequest{
-			IdempotencyKey: ModelRoleInvocationIdempotencyKey(signal.RunID, signal.AssignmentID, string(signal.Role)),
-			RecordType:     models.PublicFeedRecordTypeEvent,
-			Body:           body,
-		})
+	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total)
+	if err != nil {
+		return nil, err
 	}
 	if signal, ok := buildAssignmentPassMetricSignal(assignment, result, observedAt, completed, total); ok {
 		event, err := ProjectMetricAvailabilityEvent(signal)
@@ -76,6 +69,107 @@ func (c *CampaignPublicationCoordinator) buildAssignmentLiveEventPublishRequests
 		}
 		requests = append(requests, campaignFeedPublishRequest{
 			IdempotencyKey: MetricAvailabilityIdempotencyKey(signal.RunID, signal.AssignmentID, signal.MetricID),
+			RecordType:     models.PublicFeedRecordTypeEvent,
+			Body:           body,
+		})
+	}
+	return requests, nil
+}
+
+// PublishAssignmentInvocationLiveEvents emits the planned model-role invocation
+// stage_updated event when an assignment transitions to running.
+func (c *CampaignPublicationCoordinator) PublishAssignmentInvocationLiveEvents(ctx context.Context, assignment *evalv1.EvaluationAssignment) error {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil {
+		return fmt.Errorf("evaluation: publish assignment invocation live events: %w", constants.ErrMissingRequiredField)
+	}
+	completed, total, err := c.assignmentLiveEventProgress(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	observedAt := assignmentLiveEventObservedAt(assignment, nil)
+	requests, err := c.buildPlannedModelRoleInvocationPublishRequests(assignment, observedAt, completed, total)
+	if err != nil {
+		return err
+	}
+	if len(requests) == 0 {
+		return nil
+	}
+	_, err = c.exportFeedRecords(ctx, assignment.GetRunId(), requests)
+	return err
+}
+
+// PublishAssignmentScoredInferenceLiveEvents emits stage_updated rows when one
+// or more scored model inferences are first observed for an in-flight assignment.
+func (c *CampaignPublicationCoordinator) PublishAssignmentScoredInferenceLiveEvents(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) error {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil || result == nil {
+		return fmt.Errorf("evaluation: publish assignment scored inference live events: %w", constants.ErrMissingRequiredField)
+	}
+	completed, total, err := c.assignmentLiveEventProgress(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	observedAt := assignmentLiveEventObservedAt(assignment, result)
+	requests, err := c.buildScoredModelRoleInvocationPublishRequests(assignment, result, observedAt, completed, total)
+	if err != nil {
+		return err
+	}
+	if len(requests) == 0 {
+		return nil
+	}
+	_, err = c.exportFeedRecords(ctx, assignment.GetRunId(), requests)
+	return err
+}
+
+func (c *CampaignPublicationCoordinator) buildPlannedModelRoleInvocationPublishRequests(
+	assignment *evalv1.EvaluationAssignment,
+	observedAt string,
+	completed int,
+	total int,
+) ([]campaignFeedPublishRequest, error) {
+	requests := make([]campaignFeedPublishRequest, 0, 1)
+	for _, signal := range buildPlannedModelRoleInvocationSignals(assignment, observedAt, completed, total) {
+		event, err := ProjectModelRoleInvocationEvent(signal)
+		if err != nil {
+			return nil, err
+		}
+		body, err := MarshalPublicLiveEvent(event)
+		if err != nil {
+			return nil, err
+		}
+		if err := publicdisclosure.ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, body); err != nil {
+			return nil, fmt.Errorf("evaluation: build planned model role invocation publish requests: validate invocation event: %w", err)
+		}
+		requests = append(requests, campaignFeedPublishRequest{
+			IdempotencyKey: ModelRoleInvocationIdempotencyKey(signal.RunID, signal.AssignmentID, string(signal.Role)),
+			RecordType:     models.PublicFeedRecordTypeEvent,
+			Body:           body,
+		})
+	}
+	return requests, nil
+}
+
+func (c *CampaignPublicationCoordinator) buildScoredModelRoleInvocationPublishRequests(
+	assignment *evalv1.EvaluationAssignment,
+	result *evalv1.EvaluationAssignmentResult,
+	observedAt string,
+	completed int,
+	total int,
+) ([]campaignFeedPublishRequest, error) {
+	requests := make([]campaignFeedPublishRequest, 0, len(result.GetModelInferences()))
+	for _, signal := range buildScoredModelRoleInvocationSignals(assignment, result, observedAt, completed, total) {
+		event, err := ProjectModelRoleInvocationEvent(signal)
+		if err != nil {
+			return nil, err
+		}
+		body, err := MarshalPublicLiveEvent(event)
+		if err != nil {
+			return nil, err
+		}
+		if err := publicdisclosure.ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, body); err != nil {
+			return nil, fmt.Errorf("evaluation: build scored model role invocation publish requests: validate invocation event: %w", err)
+		}
+		requests = append(requests, campaignFeedPublishRequest{
+			IdempotencyKey: ScoredModelRoleInvocationIdempotencyKey(signal.RunID, signal.AssignmentID, string(signal.Role)),
 			RecordType:     models.PublicFeedRecordTypeEvent,
 			Body:           body,
 		})
@@ -123,7 +217,30 @@ func assignmentLiveEventObservedAt(assignment *evalv1.EvaluationAssignment, resu
 	return time.Now().UTC().Format(time.RFC3339Nano)
 }
 
-func buildModelRoleInvocationSignals(
+func buildPlannedModelRoleInvocationSignals(
+	assignment *evalv1.EvaluationAssignment,
+	observedAt string,
+	completed int,
+	total int,
+) []PublicModelRoleInvocationSignal {
+	variantID, roleLabel, err := homogeneousVariantRole(assignment)
+	if err != nil {
+		return nil
+	}
+	return []PublicModelRoleInvocationSignal{{
+		RunID:        assignment.GetRunId(),
+		AssignmentID: assignment.GetAssignmentId(),
+		VariantID:    variantID,
+		Role:         models.ModelRole(roleLabel),
+		TaskID:       assignment.GetScenarioId(),
+		ObservedAt:   observedAt,
+		EventID:      ModelRoleInvocationIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), roleLabel) + ":event",
+		Completed:    completed,
+		Total:        total,
+	}}
+}
+
+func buildScoredModelRoleInvocationSignals(
 	assignment *evalv1.EvaluationAssignment,
 	result *evalv1.EvaluationAssignmentResult,
 	observedAt string,
@@ -132,7 +249,7 @@ func buildModelRoleInvocationSignals(
 ) []PublicModelRoleInvocationSignal {
 	seen := make(map[string]struct{})
 	signals := make([]PublicModelRoleInvocationSignal, 0, len(result.GetModelInferences()))
-	for _, record := range scoredModelInferences(result) {
+	for _, record := range reportedModelInferences(result) {
 		if record == nil {
 			continue
 		}
@@ -162,29 +279,26 @@ func buildModelRoleInvocationSignals(
 			Role:         role,
 			TaskID:       assignment.GetScenarioId(),
 			ObservedAt:   observedAt,
-			EventID:      ModelRoleInvocationIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), roleLabel) + ":event",
+			EventID:      ScoredModelRoleInvocationIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), roleLabel) + ":event",
 			Completed:    completed,
 			Total:        total,
 		})
 	}
-	if len(signals) > 0 {
-		return signals
+	return signals
+}
+
+func reportedModelInferences(result *evalv1.EvaluationAssignmentResult) []*evalv1.ModelInferenceRecord {
+	records := make([]*evalv1.ModelInferenceRecord, 0, len(result.GetModelInferences()))
+	for _, record := range result.GetModelInferences() {
+		if record == nil {
+			continue
+		}
+		if record.GetUsageAvailability() != evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED {
+			continue
+		}
+		records = append(records, record)
 	}
-	variantID, roleLabel, err := homogeneousVariantRole(assignment)
-	if err != nil {
-		return nil
-	}
-	return []PublicModelRoleInvocationSignal{{
-		RunID:        assignment.GetRunId(),
-		AssignmentID: assignment.GetAssignmentId(),
-		VariantID:    variantID,
-		Role:         models.ModelRole(roleLabel),
-		TaskID:       assignment.GetScenarioId(),
-		ObservedAt:   observedAt,
-		EventID:      ModelRoleInvocationIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), roleLabel) + ":event",
-		Completed:    completed,
-		Total:        total,
-	}}
+	return records
 }
 
 func buildAssignmentPassMetricSignal(

@@ -9,7 +9,9 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -58,7 +61,14 @@ func setupCampaignFormationsEnv(t *testing.T, variants []*evalv1.ModelVariant) (
 	root, deps, _, cleanup = setupCampaignOrchestrateEnv(t)
 	freeze, err := evaluation.MaterializeModelRegistry("formation-smoke", variants)
 	require.NoError(t, err)
-	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath, freeze.Variants...)
+	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
+	require.NoError(t, err)
+	payload, err := modelInventoryFreezeJSON(freeze)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), evaluation.DefaultModelInventoryRelPath, payload, constants.PermFileReadOnly))
+	certPath, keyPath := writeInferenceAppCredentialFiles(t, root)
+	t.Setenv(string(constants.EnvVar.AppCert), certPath)
+	t.Setenv(string(constants.EnvVar.AppKey), keyPath)
 	return root, deps, cleanup
 }
 
@@ -122,9 +132,9 @@ func TestCampaignEvalFormationsRun_RejectsMissingRegistryVariant(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrFormationRegistryBinding)
 }
 
-func TestCampaignEvalFormationsRun_RejectsEmptySovereignDigest(t *testing.T) {
+func TestCampaignEvalFormationsRun_RejectsServedTagMismatch(t *testing.T) {
 	variants := ultraLightSpeedsterTestVariants()
-	variants[0].ModelDigest = ""
+	variants[0].ServedModelTag = "wrong:tag"
 	root, deps, cleanup := setupCampaignFormationsEnv(t, variants)
 	defer cleanup()
 	restore := enableCampaignWitnessGateway(t, root, deps)
@@ -141,7 +151,7 @@ func TestCampaignEvalFormationsRun_RejectsEmptySovereignDigest(t *testing.T) {
 	})
 	err := command.Execute()
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFormationAttestationRequired)
+	assert.ErrorIs(t, err, constants.ErrFormationStackMismatch)
 }
 
 func TestCampaignEvalFormationsRun_RejectsUnknownInferenceSession(t *testing.T) {

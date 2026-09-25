@@ -9,6 +9,7 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { AssignmentResult } from '../contract/types';
 import { AssignmentActivitySummary } from '../components/AssignmentActivitySummary';
+import { AssignmentAuditProofRow, filterNonAuditEvidenceBindings } from '../components/AssignmentAuditProofRow';
 import { EvidenceBindingsPanel } from '../components/EvidenceBindingsPanel';
 import { ScenarioContextCard } from '../components/ScenarioContextCard';
 import { useActiveDatasetId } from '../state/dataset';
@@ -118,8 +119,9 @@ export function AssignmentDetailView() {
     metricValue(resource?.retries) !== undefined ? ['Retries', formatNumber(resource!.retries!.value!)] : undefined,
   ].filter((entry): entry is [string, string] => entry !== undefined);
   const hasResources = !resourceObservationMissing(assignment) || tokensPerSecond !== undefined;
+  const otherEvidenceBindings = filterNonAuditEvidenceBindings(assignment.evidence_bindings);
   const hasEvidence = Boolean(
-    assignment.evidence_bindings?.length || assignment.verification_metadata,
+    otherEvidenceBindings?.length || assignment.verification_metadata,
   );
 
   return (
@@ -190,6 +192,8 @@ export function AssignmentDetailView() {
         </ol>
       ) : null}
 
+      <AssignmentAuditProofRow bindings={assignment.evidence_bindings} />
+
       {assignment.stage_summary.length > 0 ? <section className="assignment-stages">
         <h2>Stages</h2>
           <ul className="stage-list">
@@ -202,7 +206,7 @@ export function AssignmentDetailView() {
           </ul>
       </section> : null}
 
-      {hasEvidence ? <EvidenceBindingsPanel bindings={assignment.evidence_bindings} verification={assignment.verification_metadata} /> : null}
+      {hasEvidence ? <EvidenceBindingsPanel bindings={otherEvidenceBindings} verification={assignment.verification_metadata} /> : null}
 
       {siblingAssignments.length > 0 ? (
         <section className="assignment-repetitions">

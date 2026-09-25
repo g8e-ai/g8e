@@ -76,6 +76,9 @@ type Formation struct {
 	Primary     FormationModel
 	Assistant   FormationModel
 	Lite        FormationModel
+	// RelaxedValidation skips catalog provider/family/VRAM gates for campaign
+	// heterogeneous stacks that already passed scheduler digest validation.
+	RelaxedValidation bool
 }
 
 // Roles returns the execution order. Lite runs first as the L1 gatekeeper,
@@ -120,8 +123,29 @@ func (f Formation) Validate() error {
 	if f.ID == "" || f.DisplayName == "" || f.Description == "" || f.MaxVRAMMiB == 0 {
 		return fmt.Errorf("formation %q: %w", f.ID, constants.ErrFormationInvalid)
 	}
-	seenProviders := make(map[string]FormationRole, 3)
-	seenFamilies := make(map[string]FormationRole, 3)
+	if !f.RelaxedValidation {
+		seenProviders := make(map[string]FormationRole, 3)
+		seenFamilies := make(map[string]FormationRole, 3)
+		for _, role := range []FormationRole{FormationRolePrimary, FormationRoleAssistant, FormationRoleLite} {
+			model, err := f.Model(role)
+			if err != nil {
+				return err
+			}
+			provider := formationIdentity(model.Provider)
+			if previous, exists := seenProviders[provider]; exists {
+				return fmt.Errorf("formation %q: roles %s and %s share provider %q: %w", f.ID, previous, role, model.Provider, constants.ErrFormationProviderOverlap)
+			}
+			seenProviders[provider] = role
+			family := formationIdentity(model.Family)
+			if previous, exists := seenFamilies[family]; exists {
+				return fmt.Errorf("formation %q: roles %s and %s share family %q: %w", f.ID, previous, role, model.Family, constants.ErrFormationFamilyOverlap)
+			}
+			seenFamilies[family] = role
+		}
+		if f.EstimatedVRAMMiB() >= f.MaxVRAMMiB {
+			return fmt.Errorf("formation %q: estimated %d MiB must remain below %d MiB: %w", f.ID, f.EstimatedVRAMMiB(), f.MaxVRAMMiB, constants.ErrFormationVRAMBudgetExceeded)
+		}
+	}
 	for _, role := range []FormationRole{FormationRolePrimary, FormationRoleAssistant, FormationRoleLite} {
 		model, err := f.Model(role)
 		if err != nil {
@@ -130,19 +154,6 @@ func (f Formation) Validate() error {
 		if err := validateFormationModel(role, model); err != nil {
 			return err
 		}
-		provider := formationIdentity(model.Provider)
-		if previous, exists := seenProviders[provider]; exists {
-			return fmt.Errorf("formation %q: roles %s and %s share provider %q: %w", f.ID, previous, role, model.Provider, constants.ErrFormationProviderOverlap)
-		}
-		seenProviders[provider] = role
-		family := formationIdentity(model.Family)
-		if previous, exists := seenFamilies[family]; exists {
-			return fmt.Errorf("formation %q: roles %s and %s share family %q: %w", f.ID, previous, role, model.Family, constants.ErrFormationFamilyOverlap)
-		}
-		seenFamilies[family] = role
-	}
-	if f.EstimatedVRAMMiB() >= f.MaxVRAMMiB {
-		return fmt.Errorf("formation %q: estimated %d MiB must remain below %d MiB: %w", f.ID, f.EstimatedVRAMMiB(), f.MaxVRAMMiB, constants.ErrFormationVRAMBudgetExceeded)
 	}
 	return nil
 }

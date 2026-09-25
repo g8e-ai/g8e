@@ -398,6 +398,9 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	if err := c.publishAssignmentLifecycle(ctx, assignment); err != nil {
 		return nil, false, err
 	}
+	if err := c.publishAssignmentInvocationLiveEvents(ctx, assignment); err != nil {
+		return nil, false, err
+	}
 	artifact, found := artifacts[assignment.GetScenarioId()]
 	if !found {
 		return nil, false, fmt.Errorf("evaluation: execute next assignment: missing scenario artifacts for %s", assignment.GetScenarioId())
@@ -440,6 +443,7 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 		RequiredConcepts: requiredConcepts,
 		GradingMethod:    gradingMethod,
 		Binding:          binding,
+		OnTraceProgress:  c.assignmentTraceProgressHook(assignment, attemptID),
 	}
 	result, err := c.executor.ExecuteAssignment(ctx, execReq)
 	if err != nil {
@@ -526,6 +530,27 @@ func (c *CampaignController) publishQueuedAssignments(ctx context.Context, runID
 	}
 	_, err = c.publication.PublishRunAggregates(ctx, runID, c.now().UTC())
 	return err
+}
+
+func (c *CampaignController) publishAssignmentInvocationLiveEvents(ctx context.Context, assignment *evalv1.EvaluationAssignment) error {
+	if c == nil || c.publication == nil || assignment == nil {
+		return nil
+	}
+	return c.publication.PublishAssignmentInvocationLiveEvents(ctx, assignment)
+}
+
+func (c *CampaignController) assignmentTraceProgressHook(assignment *evalv1.EvaluationAssignment, attemptID string) func(context.Context, EvaluationTrace) error {
+	if c == nil || c.publication == nil || assignment == nil || attemptID == "" {
+		return nil
+	}
+	return func(ctx context.Context, trace EvaluationTrace) error {
+		req := AssignmentExecutionRequest{Assignment: assignment, AttemptID: attemptID}
+		partial, ok, err := PartialAssignmentResultFromScoredTrace(req, trace, c.newID)
+		if err != nil || !ok {
+			return err
+		}
+		return c.publication.PublishAssignmentScoredInferenceLiveEvents(ctx, assignment, partial)
+	}
 }
 
 func (c *CampaignController) publishAssignmentLifecycle(ctx context.Context, assignment *evalv1.EvaluationAssignment) error {
