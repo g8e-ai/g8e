@@ -111,11 +111,9 @@ class SettingsService:
         else:
             self._logger.info("Auditor HMAC key not available from bootstrap service")
 
-        # operator_session_id is discovered dynamically via the session-auth
-        # listener (ensemble/app/services/operator/session_auth_listener.py),
-        # not from a host env var. The ensemble authenticates to the gateway
-        # exclusively via its mTLS app cert — no host state crosses the
-        # container boundary (per docs/g8e/guides/build_apps.md § Identity
+        # Operator session identity is Gateway-owned. The ensemble authenticates
+        # to the Gateway exclusively via its mTLS app cert — no host state crosses
+        # the container boundary (per docs/g8e/guides/build_apps.md § Identity
         # and Authentication).
 
         # Apply LLM env-var bootstrap defaults (lowest priority). A fresh

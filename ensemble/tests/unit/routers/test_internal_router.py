@@ -455,7 +455,7 @@ async def test_create_operator_slot_success(request_context, g8e_context):
 
 
 @pytest.mark.asyncio
-async def test_claim_operator_slot_success(request_context, g8e_context):
+async def test_claim_operator_slot_rejects_local_authority(request_context, g8e_context):
     request = OperatorSlotClaimRequest(
         context=request_context,
         operator_id="op-123",
@@ -464,17 +464,13 @@ async def test_claim_operator_slot_success(request_context, g8e_context):
         operator_type="REMOTE",
     )
 
-    mock_operator_lifecycle_service = MagicMock()
-    mock_operator_lifecycle_service.claim_operator_slot = AsyncMock(return_value=True)
-
     response = await claim_operator_slot(
         request=request,
-        operator_lifecycle_service=mock_operator_lifecycle_service,
         g8e_context=g8e_context,
     )
 
-    assert response.success is True
-    mock_operator_lifecycle_service.claim_operator_slot.assert_called_once()
+    assert response.success is False
+    assert "Gateway-owned" in (response.error or "")
 
 
 @pytest.mark.asyncio
@@ -484,30 +480,36 @@ async def test_bind_operators_success(request_context, g8e_context):
         operator_ids=["op-123", "op-456"],
     )
 
-    mock_operator_data_service = MagicMock()
-    mock_operator = MagicMock()
-    mock_operator.user_id = "user-123"
-    mock_operator.name = None
-    mock_operator.latest_heartbeat_snapshot = None
-    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
-    mock_operator_data_service.cache = MagicMock()
-    mock_result = MagicMock()
-    mock_result.success = True
-    mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
+    mock_gateway_operator_client = MagicMock()
+    mock_gateway_operator_client.bind = AsyncMock(
+        return_value={
+            "success": True,
+            "bound_count": 2,
+            "failed_count": 0,
+            "bound_operator_ids": ["op-123", "op-456"],
+            "failed_operator_ids": [],
+        }
+    )
+    mock_gateway_operator_client.list = AsyncMock(
+        return_value=[
+            {"id": "op-123", "name": "op-a"},
+            {"id": "op-456", "name": "op-b"},
+        ]
+    )
 
     mock_event_service = MagicMock()
     mock_event_service.publish = AsyncMock(return_value=None)
 
     response = await bind_operators(
         request=request,
-        operator_data_service=mock_operator_data_service,
+        gateway_operator_client=mock_gateway_operator_client,
         event_service=mock_event_service,
         g8e_context=g8e_context,
     )
 
     assert response.success is True
     assert response.bound_count == 2
-    assert mock_operator_data_service.cache.update_document.call_count == 2
+    mock_gateway_operator_client.bind.assert_awaited_once()
     assert mock_event_service.publish.call_count == 2
 
 
@@ -518,19 +520,24 @@ async def test_bind_operators_unauthorized(request_context, g8e_context):
         operator_ids=["op-123"],
     )
 
-    mock_operator_data_service = MagicMock()
-    mock_operator = MagicMock()
-    mock_operator.user_id = "different-user"
-    mock_operator.name = None
-    mock_operator.latest_heartbeat_snapshot = None
-    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    mock_gateway_operator_client = MagicMock()
+    mock_gateway_operator_client.bind = AsyncMock(
+        return_value={
+            "success": False,
+            "bound_count": 0,
+            "failed_count": 1,
+            "bound_operator_ids": [],
+            "failed_operator_ids": ["op-123"],
+            "error": "Unauthorized",
+        }
+    )
 
     mock_event_service = MagicMock()
     mock_event_service.publish = AsyncMock(return_value=None)
 
     response = await bind_operators(
         request=request,
-        operator_data_service=mock_operator_data_service,
+        gateway_operator_client=mock_gateway_operator_client,
         event_service=mock_event_service,
         g8e_context=g8e_context,
     )
@@ -548,23 +555,29 @@ async def test_unbind_operators_success(request_context, g8e_context):
         operator_ids=["op-123", "op-456"],
     )
 
-    mock_operator_data_service = MagicMock()
-    mock_operator = MagicMock()
-    mock_operator.user_id = "user-123"
-    mock_operator.name = None
-    mock_operator.latest_heartbeat_snapshot = None
-    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
-    mock_operator_data_service.cache = MagicMock()
-    mock_result = MagicMock()
-    mock_result.success = True
-    mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
+    mock_gateway_operator_client = MagicMock()
+    mock_gateway_operator_client.unbind = AsyncMock(
+        return_value={
+            "success": True,
+            "unbound_count": 2,
+            "failed_count": 0,
+            "unbound_operator_ids": ["op-123", "op-456"],
+            "failed_operator_ids": [],
+        }
+    )
+    mock_gateway_operator_client.list = AsyncMock(
+        return_value=[
+            {"id": "op-123", "name": "op-a"},
+            {"id": "op-456", "name": "op-b"},
+        ]
+    )
 
     mock_event_service = MagicMock()
     mock_event_service.publish = AsyncMock(return_value=None)
 
     response = await unbind_operators(
         request=request,
-        operator_data_service=mock_operator_data_service,
+        gateway_operator_client=mock_gateway_operator_client,
         event_service=mock_event_service,
         g8e_context=g8e_context,
     )
@@ -573,7 +586,7 @@ async def test_unbind_operators_success(request_context, g8e_context):
     assert response.unbound_count == 2
     assert response.failed_count == 0
     assert len(response.unbound_operator_ids) == 2
-    assert mock_operator_data_service.cache.update_document.call_count == 2
+    mock_gateway_operator_client.unbind.assert_awaited_once()
     assert mock_event_service.publish.call_count == 2
 
 
@@ -584,19 +597,24 @@ async def test_unbind_operators_unauthorized(request_context, g8e_context):
         operator_ids=["op-123"],
     )
 
-    mock_operator_data_service = MagicMock()
-    mock_operator = MagicMock()
-    mock_operator.user_id = "different-user"
-    mock_operator.name = None
-    mock_operator.latest_heartbeat_snapshot = None
-    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    mock_gateway_operator_client = MagicMock()
+    mock_gateway_operator_client.unbind = AsyncMock(
+        return_value={
+            "success": False,
+            "unbound_count": 0,
+            "failed_count": 1,
+            "unbound_operator_ids": [],
+            "failed_operator_ids": ["op-123"],
+            "error": "Unauthorized",
+        }
+    )
 
     mock_event_service = MagicMock()
     mock_event_service.publish = AsyncMock(return_value=None)
 
     response = await unbind_operators(
         request=request,
-        operator_data_service=mock_operator_data_service,
+        gateway_operator_client=mock_gateway_operator_client,
         event_service=mock_event_service,
         g8e_context=g8e_context,
     )

@@ -60,9 +60,14 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 		"second heartbeat observation must be strictly later than the first")
 	assert.Equal(t, constants.OperatorStatusActive, second.Status,
 		"operator must remain active across heartbeat observations")
-	t.Logf("second heartbeat observation: updated_at=%s (advanced by %s)",
+	assert.NotEmpty(t, second.CurrentHostname,
+		"active remote operator CurrentHostname must be populated from heartbeat telemetry")
+	assert.NotEmpty(t, second.LatestHeartbeat,
+		"active remote operator LatestHeartbeat must be populated from heartbeat telemetry")
+	t.Logf("second heartbeat observation: updated_at=%s (advanced by %s), hostname=%s",
 		second.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		second.UpdatedAt.Sub(firstUpdatedAt).Round(time.Second))
+		second.UpdatedAt.Sub(firstUpdatedAt).Round(time.Second),
+		second.CurrentHostname)
 }
 
 // activeOperator fetches the operator list and returns a pointer to the first

@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -61,16 +62,15 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 		assert.NotNil(t, updatedDoc)
 		assert.Contains(t, updatedDoc.Data, "latest_heartbeat_snapshot")
 		assert.Contains(t, updatedDoc.Data, "current_hostname")
-		assert.Contains(t, updatedDoc.Data, "worker-1")
 
-		var stored map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(updatedDoc.Data, &stored))
 		var snapshot map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(stored["latest_heartbeat_snapshot"], &snapshot))
+		require.NoError(t, json.Unmarshal(updatedDoc.Data["latest_heartbeat_snapshot"], &snapshot))
 		var identity map[string]string
 		require.NoError(t, json.Unmarshal(snapshot["system_identity"], &identity))
 		assert.Equal(t, "worker-1", identity["hostname"])
-		assert.Equal(t, "worker-1", string(stored["current_hostname"]))
+		var currentHostname string
+		require.NoError(t, json.Unmarshal(updatedDoc.Data["current_hostname"], &currentHostname))
+		assert.Equal(t, "worker-1", currentHostname)
 	})
 
 	t.Run("Malformed JSON logs and returns", func(t *testing.T) {

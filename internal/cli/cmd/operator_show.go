@@ -110,10 +110,10 @@ func findOperatorByIDOrSession(operators []models.OperatorDocumentGo, idOrSessio
 
 func operatorHostnameValue(op models.OperatorDocumentGo) string {
 	view := parseOperatorHeartbeatView(op.LatestHeartbeat)
-	if view == nil {
-		return ""
+	if view != nil && view.SystemIdentity.Hostname != "" {
+		return view.SystemIdentity.Hostname
 	}
-	return view.SystemIdentity.Hostname
+	return op.CurrentHostname
 }
 
 func operatorHostnameDisplay(op models.OperatorDocumentGo) string {

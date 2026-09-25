@@ -257,3 +257,17 @@ func TestOperatorListCmdWithConfig_IncludesHostname(t *testing.T) {
 	assert.Contains(t, buf.String(), "list-host")
 	assert.Contains(t, buf.String(), "Hostname")
 }
+
+func TestOperatorHostnameValue_FallbackToCurrentHostname(t *testing.T) {
+	op := models.OperatorDocumentGo{
+		ID:              "op-1",
+		CurrentHostname: "cached-worker",
+	}
+	assert.Equal(t, "cached-worker", operatorHostnameValue(op))
+	assert.Equal(t, "cached-worker", operatorHostnameDisplay(op))
+
+	emptyOp := models.OperatorDocumentGo{ID: "op-2"}
+	assert.Equal(t, "", operatorHostnameValue(emptyOp))
+	assert.Equal(t, "-", operatorHostnameDisplay(emptyOp))
+}
+

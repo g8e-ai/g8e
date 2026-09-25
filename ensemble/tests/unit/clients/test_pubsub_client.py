@@ -207,7 +207,7 @@ class TestWsReaderReconnection:
     ):
         """When _ws_reader exits with active subscriptions, it should schedule
         _reconnect_loop to restore the connection."""
-        connected_client._subscribed_channels.add("heartbeat:op-1:sess-1")
+        connected_client._subscribed_channels.add("results:op-1:sess-1")
         mock_ws = connected_client._ws
         mock_ws.__aiter__ = MagicMock(return_value=async_iter([]))
 

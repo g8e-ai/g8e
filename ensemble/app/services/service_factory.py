@@ -41,15 +41,11 @@ from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.auth_service import AuthService
 from app.services.auth.certificate_service import CertificateService
 from app.services.auth.certificate_data_service import CertificateDataService
-from app.services.operator.operator_session_service import OperatorSessionService
-from app.services.operator.operator_auth_service import OperatorAuthService
-from app.services.operator.session_auth_listener import SessionAuthListener
 from app.services.protocols import (
     HTTPServiceProtocol,
     InvestigationServiceProtocol,
     InvestigationDataServiceProtocol,
     OperatorDataServiceProtocol,
-    OperatorLifecycleServiceProtocol,
     MemoryDataServiceProtocol,
     EventServiceProtocol,
     AIResponseAnalyzerProtocol,
@@ -58,7 +54,7 @@ from app.services.protocols import (
 )
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
-from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
+from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.services.data.case_data_service import CaseDataService
 from app.models.settings import G8eeAppSettings
 from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
@@ -95,7 +91,6 @@ class CoreServices:
 class DataServices:
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
-    operator_lifecycle_service: OperatorLifecycleService | OperatorLifecycleServiceProtocol
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
@@ -113,10 +108,7 @@ class DomainServices:
 
 @dataclass(frozen=True)
 class OperatorServices:
-    operator_session_service: OperatorSessionService
-    operator_auth_service: OperatorAuthService
     auth_service: AuthService
-    session_auth_listener: SessionAuthListener
     api_key_service: APIKeyService
     certificate_service: CertificateService
 
@@ -149,7 +141,6 @@ class AllServices:
     settings_service: SettingsService
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
-    operator_lifecycle_service: OperatorLifecycleService | OperatorLifecycleServiceProtocol
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
@@ -159,12 +150,10 @@ class AllServices:
     memory_generation_service: MemoryGenerationService
     reputation_service: ReputationService
     ssh_inventory_service: SshInventoryService
-    operator_session_service: OperatorSessionService
-    operator_auth_service: OperatorAuthService
     auth_service: AuthService
-    session_auth_listener: SessionAuthListener
     api_key_service: APIKeyService
     certificate_service: CertificateService
+    gateway_operator_client: GatewayOperatorClient
 
 
 class ServiceFactory:
@@ -240,15 +229,9 @@ class ServiceFactory:
             governance_client=governance_client,
         )
 
-        # Create lifecycle service after data service is available
-        operator_lifecycle_service = OperatorLifecycleService(
-            operator_data_service=operator_data_service,
-        )
-
         return DataServices(
             investigation_data_service=investigation_data_service,
             operator_data_service=operator_data_service,
-            operator_lifecycle_service=operator_lifecycle_service,
             memory_data_service=memory_data_service,
             case_data_service=case_data_service,
             agent_activity_data_service=agent_activity_data_service,
@@ -290,41 +273,17 @@ class ServiceFactory:
     @staticmethod
     def create_operator_services(
         core_services: CoreServices,
-        data_services: DataServices,
         cache_aside_service: CacheAsideService,
-        pubsub_client: PubSubClient | None = None,
     ) -> OperatorServices:
-        """Create operator-specific services."""
+        """Create auth-adjacent services still used by non-operator g8ee routes."""
         api_key_service = APIKeyService(cache_aside=cache_aside_service)
-
-        operator_session_service = OperatorSessionService(cache_aside=cache_aside_service)
-
         certificate_service = CertificateService(
             data_service=CertificateDataService(cache_aside_service)
         )
-
-        operator_auth_service = OperatorAuthService(
-            api_key_service=api_key_service,
-            session_service=operator_session_service,
-            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
-            lifecycle_service=data_services.operator_lifecycle_service,  # type: ignore[arg-type]
-            certificate_service=certificate_service,
-            cache_aside=cache_aside_service,
-        )
-
         auth_service = AuthService(internal_http_client=core_services.internal_http_client)
 
-        session_auth_listener = SessionAuthListener(
-            pubsub_client=pubsub_client,
-            session_service=operator_session_service,
-            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
-        )
-
         return OperatorServices(
-            operator_session_service=operator_session_service,
-            operator_auth_service=operator_auth_service,
             auth_service=auth_service,
-            session_auth_listener=session_auth_listener,
             api_key_service=api_key_service,
             certificate_service=certificate_service,
         )
@@ -358,15 +317,7 @@ class ServiceFactory:
             settings, data_services, core_services
         )
         operator_services = ServiceFactory.create_operator_services(
-            core_services, data_services, cache_aside_service, pubsub_client
-        )
-
-        # Wire APIKeyService into OperatorLifecycleService now that both exist.
-        # OperatorLifecycleService is built in create_data_services (earlier phase),
-        # while APIKeyService is built in create_operator_services. Setter injection
-        # bridges the factory phase ordering. See operator_lifecycle_service.set_api_key_service.
-        data_services.operator_lifecycle_service.set_api_key_service(  # type: ignore[union-attr]
-            operator_services.api_key_service
+            core_services, cache_aside_service
         )
 
         attachment_service = AttachmentService(
@@ -456,6 +407,8 @@ class ServiceFactory:
             agent_activity_data_service=data_services.agent_activity_data_service,
         )
 
+        gateway_operator_client = GatewayOperatorClient(core_services.internal_http_client)
+
         return AllServices(
             db_service=db_service,
             kv_service=kv_service,
@@ -480,7 +433,6 @@ class ServiceFactory:
             settings_service=core_services.settings_service,
             investigation_data_service=data_services.investigation_data_service,
             operator_data_service=data_services.operator_data_service,
-            operator_lifecycle_service=data_services.operator_lifecycle_service,
             memory_data_service=data_services.memory_data_service,
             case_data_service=data_services.case_data_service,
             agent_activity_data_service=data_services.agent_activity_data_service,
@@ -490,12 +442,10 @@ class ServiceFactory:
             memory_generation_service=domain_services.memory_generation_service,
             reputation_service=domain_services.reputation_service,
             ssh_inventory_service=domain_services.ssh_inventory_service,
-            operator_session_service=operator_services.operator_session_service,
-            operator_auth_service=operator_services.operator_auth_service,
             auth_service=operator_services.auth_service,
-            session_auth_listener=operator_services.session_auth_listener,
             api_key_service=operator_services.api_key_service,
             certificate_service=operator_services.certificate_service,
+            gateway_operator_client=gateway_operator_client,
         )
 
     @staticmethod

@@ -452,40 +452,6 @@ class OperatorDataServiceProtocol(Protocol):
 
 
 @runtime_checkable
-class OperatorLifecycleServiceProtocol(Protocol):
-    """Protocol for operator lifecycle orchestration (domain layer)."""
-
-    async def claim_operator_slot(
-        self,
-        operator_id: str,
-        operator_session_id: str,
-        bound_web_session_id: str | None,
-        bound_cli_session_id: str | None = None,
-        operator_type: OperatorType | str | None = None,
-    ) -> bool:
-        """Claim an operator slot for an active session."""
-        raise NotImplementedError
-
-    async def terminate_operator(
-        self,
-        operator_id: str,
-        actor: HistoryActor = HistoryActor.SYSTEM,
-        summary: str = "Operator terminated",
-        details: dict[str, object] | None = None,
-    ) -> OperatorDocument:
-        """Mark an operator TERMINATED."""
-        raise NotImplementedError
-
-    async def update_operator_status(
-        self,
-        operator_id: str,
-        status: OperatorStatus,
-    ) -> bool:
-        """Update operator status."""
-        raise NotImplementedError
-
-
-@runtime_checkable
 class MemoryDataServiceProtocol(Protocol):
     async def create_memory(
         self, investigation: InvestigationModel, context: RequestContext
