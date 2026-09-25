@@ -80,7 +80,7 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 		failures = append(failures, "result digest validation failed: "+err.Error())
 	}
 	if IsHeterogeneousAssignment(req.Assignment) {
-		failures = append(failures, v.verifyHeterogeneousAssignment(req)...)
+		failures = append(failures, v.verifyHeterogeneousAssignment(ctx, req)...)
 		if req.ProviderObservationReader != nil && len(scoredModelInferences(req.Result)) > 0 {
 			observationFailures, _ := req.ProviderObservationReader.VerifyAssignmentProviderObservations(ctx, req.Result, req.ProviderObservationPolicy)
 			failures = append(failures, observationFailures...)
@@ -130,15 +130,25 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 	return finalizeCampaignVerificationReport(report, failures), nil
 }
 
-func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(req CampaignAssignmentVerificationRequest) []string {
+func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(ctx context.Context, req CampaignAssignmentVerificationRequest) []string {
 	failures := make([]string, 0)
 	if err := VerifyFormationAssignmentEvidence(req.Assignment, req.Result); err != nil {
 		failures = append(failures, "formation assignment evidence validation failed: "+err.Error())
 	}
-	if req.FormationRunEvidence != nil {
+	if req.FormationRunEvidence == nil {
+		failures = append(failures, "formation run evidence is required for heterogeneous verification")
+	} else {
 		if err := VerifyFormationRunEvidenceMatchesResult(req.Assignment, req.FormationRunEvidence, req.Result); err != nil {
 			failures = append(failures, "formation run evidence mismatch: "+err.Error())
 		}
+		failures = append(failures, VerifyFormationWitnessEvidence(
+			ctx,
+			req.FormationRunEvidence,
+			req.ProviderObservationReader,
+			req.ModelProvenanceReader,
+			req.ProviderObservationPolicy,
+			req.ModelProvenancePolicy,
+		)...)
 	}
 	recomputedGrades, err := RecomputeFormationAssignmentGrades(AssignmentExecutionRequest{
 		Assignment: req.Assignment,

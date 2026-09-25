@@ -264,13 +264,20 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 	scheduledVariants := make(map[string]struct{})
 	evaluatedVariants := make(map[string]struct{})
 	for _, assignment := range assignments {
-		variantID, role, err := homogeneousVariantRole(assignment)
+		if assignment == nil {
+			continue
+		}
+		variantRoles, err := assignmentVariantRolePairs(assignment)
 		if err != nil {
 			return nil, err
 		}
-		scheduledVariants[variantID] = struct{}{}
-		bucket := variantRoleAggregateFor(state, variantID, role)
-		bucket.Scheduled++
+		buckets := make([]*variantRoleAggregate, 0, len(variantRoles))
+		for _, pair := range variantRoles {
+			scheduledVariants[pair.variantID] = struct{}{}
+			bucket := variantRoleAggregateFor(state, pair.variantID, pair.role)
+			bucket.Scheduled++
+			buckets = append(buckets, bucket)
+		}
 		result := results[assignment.GetAssignmentId()]
 		if result == nil {
 			if !assignmentLifecycleIsTerminal(assignment.GetLifecycleStatus()) {
@@ -281,14 +288,21 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 			passed := terminalStatus == "completed"
 			if passed {
 				state.Passed++
-				bucket.Passed++
 			} else {
 				state.Failed++
-				bucket.Failed++
 			}
-			bucket.Terminal++
-			bucket.Outcomes[terminalStatus]++
-			evaluatedVariants[variantID] = struct{}{}
+			for _, bucket := range buckets {
+				if passed {
+					bucket.Passed++
+				} else {
+					bucket.Failed++
+				}
+				bucket.Terminal++
+				bucket.Outcomes[terminalStatus]++
+			}
+			for _, pair := range variantRoles {
+				evaluatedVariants[pair.variantID] = struct{}{}
+			}
 			continue
 		}
 		state.Terminal++
@@ -296,14 +310,21 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 		passed := terminalStatus == "completed"
 		if passed {
 			state.Passed++
-			bucket.Passed++
 		} else {
 			state.Failed++
-			bucket.Failed++
 		}
-		bucket.Terminal++
-		bucket.Outcomes[terminalStatus]++
-		evaluatedVariants[variantID] = struct{}{}
+		for _, bucket := range buckets {
+			if passed {
+				bucket.Passed++
+			} else {
+				bucket.Failed++
+			}
+			bucket.Terminal++
+			bucket.Outcomes[terminalStatus]++
+		}
+		for _, pair := range variantRoles {
+			evaluatedVariants[pair.variantID] = struct{}{}
+		}
 	}
 	state.ModelCount = uint32(len(scheduledVariants))
 	state.EvaluatedCount = uint32(len(evaluatedVariants))
@@ -356,12 +377,14 @@ func populateVariantRoleMetrics(state *runAggregateState, assignments []*evalv1.
 		if assignment == nil {
 			continue
 		}
-		variantID, role, err := homogeneousVariantRole(assignment)
+		variantRoles, err := assignmentVariantRolePairs(assignment)
 		if err != nil {
 			return err
 		}
-		key := variantID + ":" + role
-		byBucket[key] = append(byBucket[key], assignment)
+		for _, pair := range variantRoles {
+			key := pair.variantID + ":" + pair.role
+			byBucket[key] = append(byBucket[key], assignment)
+		}
 	}
 	for key, bucket := range state.VariantRoles {
 		if bucket == nil {
@@ -1396,6 +1419,47 @@ func homogeneousVariantRole(assignment *evalv1.EvaluationAssignment) (string, st
 		return "", "", err
 	}
 	return homogeneous.Homogeneous.GetCandidateVariant().GetVariantId(), role, nil
+}
+
+type assignmentVariantRolePair struct {
+	variantID string
+	role      string
+}
+
+func assignmentVariantRolePairs(assignment *evalv1.EvaluationAssignment) ([]assignmentVariantRolePair, error) {
+	if IsHeterogeneousAssignment(assignment) {
+		stack, err := HeterogeneousStackFromAssignment(assignment)
+		if err != nil {
+			return nil, err
+		}
+		pairs := make([]assignmentVariantRolePair, 0, 3)
+		for _, slot := range []struct {
+			role evalv1.ModelCampaignRole
+			bind *evalv1.RoleAssignment
+		}{
+			{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, stack.GetPrimarySlot()},
+			{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT, stack.GetAssistantSlot()},
+			{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE, stack.GetLiteSlot()},
+		} {
+			if slot.bind == nil || slot.bind.GetVariantId() == "" {
+				continue
+			}
+			roleLabel, err := modelCampaignRoleLabel(slot.role)
+			if err != nil {
+				return nil, err
+			}
+			pairs = append(pairs, assignmentVariantRolePair{variantID: slot.bind.GetVariantId(), role: roleLabel})
+		}
+		if len(pairs) == 0 {
+			return nil, fmt.Errorf("evaluation: heterogeneous variant role lookup: %w", constants.ErrMissingRequiredField)
+		}
+		return pairs, nil
+	}
+	variantID, role, err := homogeneousVariantRole(assignment)
+	if err != nil {
+		return nil, err
+	}
+	return []assignmentVariantRolePair{{variantID: variantID, role: role}}, nil
 }
 
 func variantRoleAggregateFor(state *runAggregateState, variantID, role string) *variantRoleAggregate {

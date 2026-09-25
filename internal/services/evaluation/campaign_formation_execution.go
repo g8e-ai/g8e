@@ -84,12 +84,19 @@ type CampaignFormationExecutor struct {
 	variants       []*evalv1.ModelVariant
 	runner         CampaignFormationRunner
 	formationStore CampaignFormationRunStore
+	witnessReader  *CampaignFormationWitnessReader
 	now            func() time.Time
 	newID          func(string) string
 }
 
 // NewCampaignFormationExecutor constructs the heterogeneous campaign executor.
 func NewCampaignFormationExecutor(variants []*evalv1.ModelVariant, runner CampaignFormationRunner, formationStore CampaignFormationRunStore, now func() time.Time, newID func(string) string) *CampaignFormationExecutor {
+	return NewCampaignFormationExecutorWithWitness(variants, runner, formationStore, nil, now, newID)
+}
+
+// NewCampaignFormationExecutorWithWitness constructs the heterogeneous campaign
+// executor with optional witness evidence persistence.
+func NewCampaignFormationExecutorWithWitness(variants []*evalv1.ModelVariant, runner CampaignFormationRunner, formationStore CampaignFormationRunStore, witnessReader *CampaignFormationWitnessReader, now func() time.Time, newID func(string) string) *CampaignFormationExecutor {
 	if now == nil {
 		now = time.Now
 	}
@@ -100,6 +107,7 @@ func NewCampaignFormationExecutor(variants []*evalv1.ModelVariant, runner Campai
 		variants:       variants,
 		runner:         runner,
 		formationStore: formationStore,
+		witnessReader:  witnessReader,
 		now:            now,
 		newID:          newID,
 	}
@@ -133,27 +141,53 @@ func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req A
 		DataSessionID:       req.Binding.DataOperatorSessionID,
 	}
 	formationResult, err := e.runner.RunHeterogeneousFormation(ctx, binding, runContext, initialState)
-	if formationResult != nil {
-		if persistErr := e.persistFormationRunEvidence(ctx, req, runContext, formationResult); persistErr != nil && err == nil {
-			return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", persistErr)
-		}
-	}
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
 	}
-	return ImportAssignmentResultFromFormationRun(req, formationResult, e.now().UTC(), e.newID)
+	if e.witnessReader != nil {
+		if err := e.witnessReader.PersistFormationWitnessEvidence(ctx, formationResult); err != nil {
+			return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+		}
+	}
+	result, err := ImportAssignmentResultFromFormationRun(req, formationResult, e.now().UTC(), e.newID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+	}
+	if e.witnessReader != nil {
+		if err := e.witnessReader.BindFormationWitnessRefs(ctx, result); err != nil {
+			return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+		}
+	}
+	if formationResult != nil {
+		if persistErr := e.persistFormationRunEvidence(ctx, req, runContext, formationResult, result); persistErr != nil {
+			return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", persistErr)
+		}
+	}
+	return result, nil
 }
 
-func (e *CampaignFormationExecutor) persistFormationRunEvidence(ctx context.Context, req AssignmentExecutionRequest, runContext FormationRunContext, formationResult *FormationRunResult) error {
+func (e *CampaignFormationExecutor) persistFormationRunEvidence(ctx context.Context, req AssignmentExecutionRequest, runContext FormationRunContext, formationResult *FormationRunResult, result *evalv1.EvaluationAssignmentResult) error {
 	if e == nil || e.formationStore == nil || formationResult == nil {
 		return nil
 	}
-	body, _, err := BuildFormationRunEvidence(req, runContext, formationResult)
+	body, evidence, err := BuildFormationRunEvidence(req, runContext, formationResult)
 	if err != nil {
 		return err
 	}
 	if err := e.formationStore.SaveAssignmentFormationRun(ctx, req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), body); err != nil {
 		return fmt.Errorf("persist formation run evidence: %w", err)
+	}
+	if result != nil && evidence != nil {
+		ref, err := BuildAssignmentFormationRunEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, evidence, e.now().UTC())
+		if err != nil {
+			return err
+		}
+		result.EvidenceRefs = appendUniqueReference(result.EvidenceRefs, ref)
+		digest, err := ComputeAssignmentResultDigest(result)
+		if err != nil {
+			return err
+		}
+		result.ResultDigest = digest
 	}
 	return nil
 }
@@ -279,6 +313,9 @@ func modelInferenceRecordsFromFormationRun(assignment *evalv1.EvaluationAssignme
 			CompletionTokens:        role.GenerationTokens,
 			GenerationDurationNanos: role.GenerationDurationNanos,
 			UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+		}
+		if role.ObserverEvidence != nil && role.ObserverEvidence.Window != nil {
+			record.ProviderBoundaryObservationRef = providerBoundaryObservationRef(role.ObserverEvidence.Window)
 		}
 		if role.TTFTNanos > 0 {
 			record.FirstTokenAtUnixNanos = role.TTFTNanos

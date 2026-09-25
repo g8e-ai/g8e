@@ -47,6 +47,7 @@ func (o *FormationHarnessObserver) Finalize(_ context.Context, attemptID string,
 	}
 	return &FormationObserverEvidence{Window: &evalv1.ProviderBoundaryObservationWindow{
 		ProviderAttemptId: attemptID,
+		ObservationDigest: "harness-observation-" + attemptID,
 		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
 			VramBytesAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
 			VramUsedBytes:         2 * 1024 * 1024 * 1024,

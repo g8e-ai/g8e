@@ -293,10 +293,19 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
 	}
-	formationExecutor := evaluation.NewCampaignFormationExecutor(
+	observationReader, err := newCampaignProviderObservationReader(fileSvc, cfg)
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
+	}
+	provenanceReader, err := newCampaignModelProvenanceReader(fileSvc, cfg)
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
+	}
+	formationExecutor := evaluation.NewCampaignFormationExecutorWithWitness(
 		spec.GetModelRegistry(),
 		formationRunner,
 		store,
+		evaluation.NewCampaignFormationWitnessReader(observationReader, provenanceReader),
 		deps.now,
 		func(prefix string) string { return prefix + "-" + deps.newID() },
 	)

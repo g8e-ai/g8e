@@ -52,22 +52,24 @@ type persistedFormationRunResult struct {
 }
 
 type persistedFormationRoleTelemetry struct {
-	Role                    string  `json:"role"`
-	VariantID               string  `json:"variant_id"`
-	ProviderClass           string  `json:"provider_class"`
-	ServedModelTag          string  `json:"served_model_tag"`
-	ModelDigest             string  `json:"model_digest"`
-	Family                  string  `json:"family"`
-	AttemptID               string  `json:"attempt_id"`
-	AttestationStatus       string  `json:"attestation_status"`
-	AttestationVerified     bool    `json:"attestation_verified"`
-	AttestationDigest       string  `json:"attestation_digest,omitempty"`
-	ProviderAttemptID       string  `json:"provider_attempt_id"`
-	PeakVRAMMiB             uint64  `json:"peak_vram_mib,omitempty"`
-	TTFTNanos               uint64  `json:"ttft_nanos,omitempty"`
-	GenerationTokens        uint32  `json:"generation_tokens,omitempty"`
-	GenerationDurationNanos uint64  `json:"generation_duration_nanos,omitempty"`
-	GenerationTokensPerSec  float64 `json:"generation_tokens_per_sec,omitempty"`
+	Role                         string  `json:"role"`
+	VariantID                    string  `json:"variant_id"`
+	ProviderClass                string  `json:"provider_class"`
+	ServedModelTag               string  `json:"served_model_tag"`
+	ModelDigest                  string  `json:"model_digest"`
+	Family                       string  `json:"family"`
+	AttemptID                    string  `json:"attempt_id"`
+	AttestationStatus            string  `json:"attestation_status"`
+	AttestationVerified          bool    `json:"attestation_verified"`
+	AttestationDigest            string  `json:"attestation_digest,omitempty"`
+	ProviderAttemptID            string  `json:"provider_attempt_id"`
+	ObserverObservationDigest    string  `json:"observer_observation_digest,omitempty"`
+	ProvenanceAttestationDigest  string  `json:"provenance_attestation_digest,omitempty"`
+	PeakVRAMMiB                  uint64  `json:"peak_vram_mib,omitempty"`
+	TTFTNanos                    uint64  `json:"ttft_nanos,omitempty"`
+	GenerationTokens             uint32  `json:"generation_tokens,omitempty"`
+	GenerationDurationNanos      uint64  `json:"generation_duration_nanos,omitempty"`
+	GenerationTokensPerSec       float64 `json:"generation_tokens_per_sec,omitempty"`
 }
 
 // CampaignFormationRunStore persists canonical formation-run evidence for one
@@ -269,23 +271,26 @@ func formationRunResultToPersisted(result *FormationRunResult) persistedFormatio
 		Roles:                make([]persistedFormationRoleTelemetry, 0, len(result.Roles)),
 	}
 	for _, role := range result.Roles {
+		observerDigest, provenanceDigest := formationRoleWitnessDigests(role)
 		out.Roles = append(out.Roles, persistedFormationRoleTelemetry{
-			Role:                    string(role.Role),
-			VariantID:               role.Model.VariantID,
-			ProviderClass:           role.Model.ProviderClass,
-			ServedModelTag:          role.Model.ServedModelTag,
-			ModelDigest:             role.Model.ModelDigest,
-			Family:                  role.Model.Family,
-			AttemptID:               role.AttemptID,
-			AttestationStatus:       string(role.AttestationStatus),
-			AttestationVerified:     role.AttestationVerified,
-			AttestationDigest:       role.AttestationDigest,
-			ProviderAttemptID:       role.ProviderAttemptID,
-			PeakVRAMMiB:             role.PeakVRAMMiB,
-			TTFTNanos:               role.TTFTNanos,
-			GenerationTokens:        role.GenerationTokens,
-			GenerationDurationNanos: role.GenerationDurationNanos,
-			GenerationTokensPerSec:  role.GenerationTokensPerSec,
+			Role:                        string(role.Role),
+			VariantID:                   role.Model.VariantID,
+			ProviderClass:               role.Model.ProviderClass,
+			ServedModelTag:              role.Model.ServedModelTag,
+			ModelDigest:                 role.Model.ModelDigest,
+			Family:                      role.Model.Family,
+			AttemptID:                   role.AttemptID,
+			AttestationStatus:           string(role.AttestationStatus),
+			AttestationVerified:         role.AttestationVerified,
+			AttestationDigest:           role.AttestationDigest,
+			ProviderAttemptID:           role.ProviderAttemptID,
+			ObserverObservationDigest:   observerDigest,
+			ProvenanceAttestationDigest: provenanceDigest,
+			PeakVRAMMiB:                 role.PeakVRAMMiB,
+			TTFTNanos:                   role.TTFTNanos,
+			GenerationTokens:            role.GenerationTokens,
+			GenerationDurationNanos:     role.GenerationDurationNanos,
+			GenerationTokensPerSec:      role.GenerationTokensPerSec,
 		})
 	}
 	return out
@@ -302,20 +307,39 @@ func persistedFormationRunResultToDomain(result persistedFormationRunResult) *Fo
 		Roles:                make([]FormationRoleTelemetry, 0, len(result.Roles)),
 	}
 	for _, role := range result.Roles {
-		out.Roles = append(out.Roles, FormationRoleTelemetry{
-			Role:                FormationRole(role.Role),
-			Model:               formationModelFromPersisted(role),
-			AttemptID:           role.AttemptID,
-			AttestationStatus:   FormationAttestationStatus(role.AttestationStatus),
-			AttestationVerified: role.AttestationVerified,
-			AttestationDigest:   role.AttestationDigest,
-			ProviderAttemptID:   role.ProviderAttemptID,
-			PeakVRAMMiB:         role.PeakVRAMMiB,
-			TTFTNanos:             role.TTFTNanos,
-			GenerationTokens:      role.GenerationTokens,
+		telemetry := FormationRoleTelemetry{
+			Role:                    FormationRole(role.Role),
+			Model:                   formationModelFromPersisted(role),
+			AttemptID:               role.AttemptID,
+			AttestationStatus:       FormationAttestationStatus(role.AttestationStatus),
+			AttestationVerified:     role.AttestationVerified,
+			AttestationDigest:       role.AttestationDigest,
+			ProviderAttemptID:       role.ProviderAttemptID,
+			PeakVRAMMiB:             role.PeakVRAMMiB,
+			TTFTNanos:               role.TTFTNanos,
+			GenerationTokens:        role.GenerationTokens,
 			GenerationDurationNanos: role.GenerationDurationNanos,
-			GenerationTokensPerSec: role.GenerationTokensPerSec,
-		})
+			GenerationTokensPerSec:  role.GenerationTokensPerSec,
+		}
+		if role.ObserverObservationDigest != "" {
+			telemetry.ObserverEvidence = &FormationObserverEvidence{
+				Window: &evalv1.ProviderBoundaryObservationWindow{
+					ProviderAttemptId: role.ProviderAttemptID,
+					ObservationDigest: role.ObserverObservationDigest,
+				},
+			}
+		}
+		if role.ProvenanceAttestationDigest != "" {
+			telemetry.ProvenanceEvidence = &FormationAttestation{
+				Verified: role.AttestationVerified,
+				Digest:   role.AttestationDigest,
+				Window: &evalv1.ModelProvenanceAttestationWindow{
+					ProviderAttemptId: role.ProviderAttemptID,
+					AttestationDigest: role.ProvenanceAttestationDigest,
+				},
+			}
+		}
+		out.Roles = append(out.Roles, telemetry)
 	}
 	return out
 }
