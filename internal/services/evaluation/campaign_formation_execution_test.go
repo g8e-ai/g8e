@@ -141,6 +141,37 @@ func (e *recordingCampaignExecutor) ExecuteAssignment(context.Context, Assignmen
 	return nil, assert.AnError
 }
 
+func TestImportAssignmentResultFromFormationRun_SetsAgentPersonaForPublication(t *testing.T) {
+	variants := testHeterogeneousVariants()
+	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
+		CampaignID: "north-star-heterogeneous",
+		Seed:       11,
+		Variants:   variants,
+	})
+	require.NoError(t, err)
+	harness, err := NewFormationHarness(
+		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
+		func(prefix string) string { return prefix + "-attempt" },
+	)
+	require.NoError(t, err)
+	formation, err := BindHeterogeneousStack(FormationBindingRequest{Stack: stackSet.Stacks[0], Variants: variants})
+	require.NoError(t, err)
+	formationResult, err := harness.RunBoundFormation(context.Background(), formation, []byte("initial"))
+	require.NoError(t, err)
+
+	req := heterogeneousAssignmentExecutionRequest(t, stackSet.Stacks[0], variants)
+	result, err := ImportAssignmentResultFromFormationRun(req, formationResult, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	require.Len(t, result.GetModelInferences(), 3)
+
+	activity, _, err := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{Result: result})
+	require.NoError(t, err)
+	require.Len(t, activity.Summary.ModelActivity.Records, 3)
+	for _, record := range activity.Summary.ModelActivity.Records {
+		assert.NotEmpty(t, record.GetAgentPersona())
+	}
+}
+
 func TestImportAssignmentResultFromFormationRun_MaterializesRoleTelemetry(t *testing.T) {
 	variants := testHeterogeneousVariants()
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{

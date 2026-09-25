@@ -1498,6 +1498,67 @@ func TestMirror_ProofIngest_AcceptsIncrementalArtifactDelta(t *testing.T) {
 	assert.Equal(t, secondContent, stored)
 }
 
+func TestMirror_ProofIngest_AcceptsManyArtifactDeltaInOneRequest(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	env.mirror.SetIngestAuthToken("proof-token")
+
+	first := env.makeProofIngestRequest("proof-a.json", []byte(`{"campaign_id":"c1","artifact":"a"}`))
+	firstBody, err := json.Marshal(first)
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, env.server.URL+"/proof-ingest", bytes.NewReader(firstBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer proof-token")
+	req.Header.Set("Content-Type", "application/json")
+	response, err := env.client.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	require.Equal(t, http.StatusOK, response.StatusCode)
+
+	newEntries := make([]models.PublicProofIngestArtifact, 0, 3)
+	newCatalogEntries := append([]models.PublicProofCatalogEntry(nil), first.Catalog.Entries[0])
+	for i := 0; i < 3; i++ {
+		content := []byte(`{"campaign_id":"c1","artifact":"delta-` + string(rune('b'+i)) + `"}`)
+		hash := sha256.Sum256(content)
+		id := hex.EncodeToString(hash[:])
+		newCatalogEntries = append(newCatalogEntries, models.PublicProofCatalogEntry{
+			ArtifactID:          id,
+			Filename:            "proof-delta-" + string(rune('b'+i)) + ".json",
+			MediaType:           "application/json",
+			ByteSize:            int64(len(content)),
+			SHA256:              id,
+			Classification:      models.PublicFeedProofClassificationPublicSafe,
+			CampaignID:          "c1",
+			GeneratedAt:         time.Now().UTC(),
+			VerificationCommand: "sha256sum proof-delta.json",
+			ImmutableURL:        "/proofs/" + id,
+		})
+		newEntries = append(newEntries, models.PublicProofIngestArtifact{ArtifactID: id, Content: content})
+	}
+	manifest := first.Manifest
+	manifest.ArtifactCount = len(newCatalogEntries)
+	manifest.Artifacts = newCatalogEntries
+	manifest.ProofRootSHA256 = (&PublicPublisherService{}).computeProofRootHash(manifest)
+	rootBytes, err := hex.DecodeString(manifest.ProofRootSHA256)
+	require.NoError(t, err)
+	manifest.Signature = hex.EncodeToString(ed25519.Sign(env.priv, rootBytes))
+	delta := models.PublicProofIngestRequest{
+		SourceID:  env.sourceID,
+		Manifest:  manifest,
+		Catalog:   models.PublicProofCatalog{SchemaVersion: constants.PublicProofCatalogSchemaVersion, Entries: manifest.Artifacts, GeneratedAt: time.Now().UTC()},
+		Artifacts: newEntries,
+	}
+	deltaBody, err := json.Marshal(delta)
+	require.NoError(t, err)
+	req, err = http.NewRequest(http.MethodPost, env.server.URL+"/proof-ingest", bytes.NewReader(deltaBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer proof-token")
+	req.Header.Set("Content-Type", "application/json")
+	response, err = env.client.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+}
+
 func TestMirror_ProofIngest_RejectsCatalogExceedingMaxArtifacts(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	env.mirror.SetIngestAuthToken("proof-token")

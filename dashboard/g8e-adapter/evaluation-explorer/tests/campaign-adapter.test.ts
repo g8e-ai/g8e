@@ -308,6 +308,38 @@ describe('adaptCampaignProjectionEnvelope', () => {
     });
   });
 
+  it('uses primary variant_id for heterogeneous system-lane lifecycle events', () => {
+    const context = createCampaignAdaptContext();
+    const runId = 'formation-benchmark-live';
+    const records = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: `${runId}:assign-1:lifecycle:running`,
+        record: {
+          assignment_id: 'assign-1',
+          run_id: runId,
+          scenario_id: 'security-policy-deny-delete',
+          lane: 'EVALUATION_LANE_SYSTEM',
+          stack_id: 'heavy-reasoner',
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'phi35mini38b-speed',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          observed_at: '2026-09-25T18:00:00Z',
+        },
+      },
+      context,
+    );
+
+    const started = records.find((record) => record.kind === 'assignment_started');
+    expect(started).toMatchObject({
+      variant_id: 'phi35mini38b-speed',
+      role: 'primary',
+    });
+    expect(started?.variant_id).not.toBe('unknown');
+    expect(started?.variant_id).not.toBe('assignment');
+  });
+
   it('tracks terminal progress separately from passing verdicts', () => {
     const context = createCampaignAdaptContext();
     for (const assignmentId of ['assign-1', 'assign-2', 'assign-3', 'assign-4']) {

@@ -86,7 +86,7 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	chatReq.Context.UserID = e.persona.UserID
 	chatReq.Context.CLISessionID = e.persona.CLISessionID
 	if _, err := e.client.EnsembleChat(ctx, e.persona, chatReq); err != nil {
-		return nil, fmt.Errorf("evaluation: execute assignment: submit chat: %w", err)
+		return nil, assignmentExecutionError("evaluation: execute assignment: submit chat", err)
 	}
 	fetchTrace := func(pollCtx context.Context) (EvaluationTrace, error) {
 		return e.client.GetEvaluationTrace(pollCtx, e.persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
@@ -101,21 +101,25 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 		trace, err = e.waitForTrace(ctx, fetchTrace)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: execute assignment: wait for trace: %w", err)
+		return nil, assignmentExecutionError("evaluation: execute assignment: wait for trace", err)
 	}
 	traceBody, err := marshalSortedJSON(trace)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: execute assignment: canonicalize trace: %w", err)
+		return nil, assignmentExecutionError("evaluation: execute assignment: canonicalize trace", err)
 	}
 	var traceEvidence *compliancev1.ComplianceEvidenceReference
 	if e.traceStore != nil {
 		if err := e.traceStore.SaveAssignmentTrace(ctx, req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), traceBody); err != nil {
-			return nil, fmt.Errorf("evaluation: execute assignment: persist trace evidence: %w", err)
+			return nil, assignmentExecutionError("evaluation: execute assignment: persist trace evidence", err)
 		}
 		traceEvidence, err = BuildAssignmentTraceEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, trace, e.now().UTC())
 		if err != nil {
-			return nil, fmt.Errorf("evaluation: execute assignment: build trace evidence reference: %w", err)
+			return nil, assignmentExecutionError("evaluation: execute assignment: build trace evidence reference", err)
 		}
 	}
-	return ImportAssignmentResultFromTrace(req, trace, traceEvidence, e.now().UTC(), e.newID)
+	result, err := ImportAssignmentResultFromTrace(req, trace, traceEvidence, e.now().UTC(), e.newID)
+	if err != nil {
+		return nil, assignmentExecutionError("evaluation: import assignment result from trace", err)
+	}
+	return result, nil
 }

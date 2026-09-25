@@ -10,6 +10,7 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -112,14 +113,15 @@ func classifyExecutorFailureLifecycle(execErr error) evalv1.EvaluationAssignment
 	}
 }
 
-func isRecoverableAssignmentExecutionError(err error) bool {
+func assignmentExecutionError(scope string, err error) error {
 	if err == nil {
-		return false
+		return nil
 	}
-	message := err.Error()
-	return strings.Contains(message, "evaluation: execute assignment:") ||
-		strings.Contains(message, "evaluation: import assignment result from trace:") ||
-		strings.Contains(message, "evaluation: import formation assignment result")
+	return fmt.Errorf("%w: %s: %w", constants.ErrEvaluationAssignmentExecutionFailed, scope, err)
+}
+
+func isRecoverableAssignmentExecutionError(err error) bool {
+	return errors.Is(err, constants.ErrEvaluationAssignmentExecutionFailed)
 }
 
 func (c *CampaignController) buildFailureAssignmentResult(ctx context.Context, req AssignmentExecutionRequest, execErr error) (*evalv1.EvaluationAssignmentResult, error) {

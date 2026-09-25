@@ -128,7 +128,7 @@ func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req A
 	}
 	initialState, err := BuildFormationInitialState(req.ScenarioInput)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+		return nil, assignmentExecutionError("evaluation: execute heterogeneous assignment: build initial state", err)
 	}
 	runContext := FormationRunContext{
 		CampaignID:          req.Assignment.GetCampaignId(),
@@ -142,25 +142,25 @@ func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req A
 	}
 	formationResult, err := e.runner.RunHeterogeneousFormation(ctx, binding, runContext, initialState)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+		return nil, assignmentExecutionError("evaluation: execute heterogeneous assignment", err)
 	}
 	if e.witnessReader != nil {
 		if err := e.witnessReader.PersistFormationWitnessEvidence(ctx, formationResult); err != nil {
-			return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+			return nil, assignmentExecutionError("evaluation: execute heterogeneous assignment: persist witness evidence", err)
 		}
 	}
 	result, err := ImportAssignmentResultFromFormationRun(req, formationResult, e.now().UTC(), e.newID)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+		return nil, assignmentExecutionError("evaluation: import formation assignment result", err)
 	}
 	if e.witnessReader != nil {
 		if err := e.witnessReader.BindFormationWitnessRefs(ctx, result); err != nil {
-			return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+			return nil, assignmentExecutionError("evaluation: execute heterogeneous assignment: bind witness refs", err)
 		}
 	}
 	if formationResult != nil {
 		if persistErr := e.persistFormationRunEvidence(ctx, req, runContext, formationResult, result); persistErr != nil {
-			return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", persistErr)
+			return nil, assignmentExecutionError("evaluation: execute heterogeneous assignment: persist formation run evidence", persistErr)
 		}
 	}
 	return result, nil
@@ -334,6 +334,7 @@ func modelInferenceRecordsFromFormationRun(assignment *evalv1.EvaluationAssignme
 			AssignmentId:            assignment.GetAssignmentId(),
 			EvaluationAttemptId:     attemptID,
 			ModelRole:               formationRoleToCampaignRole(role.Role),
+			AgentPersona:            string(role.Role),
 			CallSite:                "formation:" + string(role.Role),
 			ModelVariant:            formationModelToVariant(role.Model),
 			PrivacyAttested:         role.AttestationVerified || role.AttestationStatus == FormationAttestationNotNeeded,
