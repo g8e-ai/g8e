@@ -257,7 +257,7 @@ Examples:
 	cmd.Flags().StringVar(&tag, "tag", "", "Materialize one served model tag")
 	cmd.Flags().StringVar(&tags, "tags", "", "Materialize multiple served model tags (comma-separated)")
 	cmd.Flags().BoolVar(&all, "all", false, "Materialize every variant in the source inventory")
-	cmd.Flags().BoolVar(&formationCatalog, "formation-catalog", false, "Materialize the ten served tags required by ExecutionTopologies (delegated Gemini placeholder injected when absent)")
+	cmd.Flags().BoolVar(&formationCatalog, "formation-catalog", false, "Materialize the sovereign served tags required by ExecutionTopologies")
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Write one combined multi-model inventory for this campaign ID")
 	cmd.Flags().StringVar(&outputPath, "output", "", "Output path for --campaign-id combined inventory")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for per-model inventories (default: .g8e/eval/inventories)")

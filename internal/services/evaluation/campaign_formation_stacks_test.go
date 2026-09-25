@@ -31,10 +31,8 @@ func formationCatalogTestVariants() []*evalv1.ModelVariant {
 		"llama3.1:8b-instruct-q4_K_M":     '4',
 		"phi3.5:3.8b-mini-instruct-q4_K_M": '5',
 		"qwen2.5:0.5b-instruct-q4_K_M":    '6',
-		"gemma2:9b-instruct-q4_K_M":       '7',
+		"gemma2:9b-instruct-q4_K_M":        '7',
 		"qwen2.5-coder:7b-instruct-q4_K_M": '8',
-		"gemini-1.5-pro":                  '0',
-		"qwen2.5:1.5b-instruct-q4_K_M":    '9',
 	}
 	return FormationCatalogFixtureVariants(func(tag string) string {
 		ch := digestByTag[tag]
@@ -45,7 +43,7 @@ func formationCatalogTestVariants() []*evalv1.ModelVariant {
 	})
 }
 
-func TestGenerateFormationCatalogStackSet_ReturnsFiveCatalogFormations(t *testing.T) {
+func TestGenerateFormationCatalogStackSet_ReturnsFourCatalogFormations(t *testing.T) {
 	set, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
 		CampaignID: "eval-formations-benchmark",
 		Seed:       17,
@@ -53,10 +51,10 @@ func TestGenerateFormationCatalogStackSet_ReturnsFiveCatalogFormations(t *testin
 	})
 	require.NoError(t, err)
 	assert.Equal(t, FormationCatalogStackGenerationRule, set.GenerationRule)
-	assert.Len(t, set.Stacks, 5)
-	assert.Equal(t, 5, set.Coverage.HypothesisStackCount)
+	assert.Len(t, set.Stacks, 4)
+	assert.Equal(t, 4, set.Coverage.HypothesisStackCount)
 	assert.Equal(t, 0, set.Coverage.CoverageStackCount)
-	assert.Len(t, set.VariantIDs, 10)
+	assert.Len(t, set.VariantIDs, 8)
 	require.NoError(t, ValidateHeterogeneousStackSet(set))
 
 	stackIDs := make([]string, 0, len(set.Stacks))
@@ -67,7 +65,6 @@ func TestGenerateFormationCatalogStackSet_ReturnsFiveCatalogFormations(t *testin
 		"code-logic-edge",
 		"enterprise-polyglot",
 		"heavy-reasoner",
-		"hybrid-delegator",
 		"ultra-light-speedster",
 	}, stackIDs)
 }

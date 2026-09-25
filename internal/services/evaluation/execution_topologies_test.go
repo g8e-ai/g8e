@@ -20,22 +20,16 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func TestNewExecutionTopologies_ReturnsFiveValidTargetFormations(t *testing.T) {
+func TestNewExecutionTopologies_ReturnsFourValidTargetFormations(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
 	formations := topologies.Formations()
-	require.Len(t, formations, 5)
+	require.Len(t, formations, 4)
 	for _, formation := range formations {
 		require.NoError(t, formation.Validate())
 		assert.Less(t, formation.EstimatedVRAMMiB(), formation.MaxVRAMMiB)
 		assert.Less(t, formation.EstimatedVRAMMiB(), FormationMaxVRAMMiB)
 	}
-
-	hybrid, err := topologies.Formation("hybrid-delegator")
-	require.NoError(t, err)
-	assert.Equal(t, FormationTrustDelegated, hybrid.Primary.Trust)
-	assert.Equal(t, FormationAttestationNotNeeded, formationAttestationStatus(hybrid.Primary.Trust))
-	assert.Equal(t, "gemini-1.5-pro", hybrid.Primary.ServedModelTag)
 }
 
 func TestFormationValidateRejectsProviderAndFamilyOverlap(t *testing.T) {
@@ -183,7 +177,19 @@ func TestFormationRunnerAttestsBeforeAllocationAndPassesStateThroughGovernance(t
 }
 
 func TestFormationRunnerSkipsProvenanceForDelegatedPrimary(t *testing.T) {
-	formation := formationWithDigests(t, "hybrid-delegator")
+	formation := Formation{
+		ID: "delegated-smoke", MaxVRAMMiB: FormationMaxVRAMMiB,
+		Primary: FormationModel{
+			VariantID: "delegated-primary", Provider: "Cloud", Family: "Delegated",
+			ProviderClass: "delegated", ServedModelTag: "delegated-primary", Trust: FormationTrustDelegated,
+		},
+		Assistant: formationModel("assistant-local", "Assistant", "Local", "Local", "assistant:local", 1_000_000_000, "Q4_K_M", 1024, 256),
+		Lite:      formationModel("lite-local", "Lite", "Local", "Local", "lite:local", 500_000_000, "Q4_K_M", 512, 256),
+	}
+	formation.Primary.ModelDigest = "primary-digest"
+	formation.Assistant.ModelDigest = "assistant-digest"
+	formation.Lite.ModelDigest = "lite-digest"
+
 	provenance := &formationTestProvenance{}
 	runner, err := NewFormationRunner(provenance, &formationTestObserver{}, &formationTestAllocator{}, &formationTestExecutor{}, &formationTestPolicy{}, time.Now, nil)
 	require.NoError(t, err)

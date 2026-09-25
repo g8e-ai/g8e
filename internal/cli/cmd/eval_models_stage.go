@@ -34,7 +34,7 @@ func modelsEvalStageCmd(deps nativeEvalDeps) *cobra.Command {
 		Long: `Pull rollout-intake models from Hugging Face via the governed Inference Operator.
 
 Reads eval/rollout-intake-hf.json and dispatches model pull and alias commands to
-the exact Inference Operator session. Use --formation-catalog to stage the nine
+the exact Inference Operator session. Use --formation-catalog to stage the eight
 sovereign ExecutionTopologies served tags.
 
 Examples:

@@ -288,12 +288,6 @@ func defaultExecutionTopologies() []Formation {
 			Assistant: formationModel("gemma2-2b-speed", "Gemma 2 2B", "Google", "Gemma 2", "gemma2:2b-instruct-q4_K_M", 2_000_000_000, "Q4_K_M", 1536, 256),
 			Lite:      formationModel("qwen25-05b-speed", "Qwen 2.5 0.5B", "Alibaba", "Qwen 2.5", "qwen2.5:0.5b-instruct-q4_K_M", 500_000_000, "Q4_K_M", 512, 256),
 		},
-		{
-			ID: "hybrid-delegator", DisplayName: "Hybrid Delegator", Description: "Delegated cloud reasoning with sovereign edge execution and gatekeeping.", MaxVRAMMiB: FormationMaxVRAMMiB,
-			Primary:   FormationModel{VariantID: "gemini15-pro", DisplayName: "Gemini 1.5 Pro", Provider: "Google Cloud", Family: "Gemini 1.5", ProviderClass: "gemini", ServedModelTag: "gemini-1.5-pro", Trust: FormationTrustDelegated, ParameterCount: 0},
-			Assistant: formationModel("llama31-8b-hybrid", "Llama 3.1 8B", "Meta", "Llama 3.1", "llama3.1:8b-instruct-q4_K_M", 8_000_000_000, "Q4_K_M", 5120, 512),
-			Lite:      formationModel("qwen25-15b-hybrid", "Qwen 2.5 1.5B", "Alibaba", "Qwen 2.5 1.5", "qwen2.5:1.5b-instruct-q4_K_M", 1_500_000_000, "Q4_K_M", 1024, 256),
-		},
 	}
 }
 

@@ -309,7 +309,7 @@ func TestCampaignEvalStacksGenerate_PersistsStacks(t *testing.T) {
 	assert.Contains(t, output.String(), "north-star-smoke")
 }
 
-func TestCampaignEvalStacksGenerate_FormationCatalogMaterializesFiveStacks(t *testing.T) {
+func TestCampaignEvalStacksGenerate_FormationCatalogMaterializesFourStacks(t *testing.T) {
 	root, deps, _, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 
@@ -331,7 +331,7 @@ func TestCampaignEvalStacksGenerate_FormationCatalogMaterializesFiveStacks(t *te
 	store := evaluation.NewStore(fileSvc)
 	stackSet, err := store.LoadHeterogeneousStackSet(context.Background(), "north-star-smoke")
 	require.NoError(t, err)
-	assert.Len(t, stackSet.Stacks, 5)
+	assert.Len(t, stackSet.Stacks, 4)
 	assert.Equal(t, evaluation.FormationCatalogStackGenerationRule, stackSet.GenerationRule)
 }
 
@@ -682,8 +682,6 @@ func testFormationCatalogCLIVariants() []*evalv1.ModelVariant {
 		"qwen2.5:0.5b-instruct-q4_K_M":     '6',
 		"gemma2:9b-instruct-q4_K_M":        '7',
 		"qwen2.5-coder:7b-instruct-q4_K_M": '8',
-		"gemini-1.5-pro":                   '0',
-		"qwen2.5:1.5b-instruct-q4_K_M":     '9',
 	}
 	return evaluation.FormationCatalogFixtureVariants(func(tag string) string {
 		ch := digestByTag[tag]

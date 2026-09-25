@@ -18,27 +18,25 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func TestFormationCatalogServedTags_ReturnsTenUniqueTags(t *testing.T) {
+func TestFormationCatalogServedTags_ReturnsEightUniqueTags(t *testing.T) {
 	tags := FormationCatalogServedTags()
-	require.Len(t, tags, 10)
+	require.Len(t, tags, 8)
 	sort.Strings(tags)
 	assert.Equal(t, FormationCatalogServedTags(), tags)
-	assert.Contains(t, tags, "gemini-1.5-pro")
 	assert.Contains(t, tags, "qwen2.5:14b-instruct-q4_K_M")
 }
 
-func TestFormationCatalogIntakeModels_ReturnsNineSovereignLibraryPulls(t *testing.T) {
+func TestFormationCatalogIntakeModels_ReturnsEightSovereignLibraryPulls(t *testing.T) {
 	models, err := FormationCatalogIntakeModels()
 	require.NoError(t, err)
-	require.Len(t, models, 9)
+	require.Len(t, models, 8)
 	for _, model := range models {
 		assert.Equal(t, "ollama_library_pull", model.Staging.Method)
 		assert.Equal(t, model.ServedModelTag, model.Staging.OllamaPull)
-		assert.NotEqual(t, "gemini-1.5-pro", model.ServedModelTag)
 	}
 }
 
-func TestMaterializeFormationCatalogVariants_SelectsSovereignAndInjectsDelegated(t *testing.T) {
+func TestMaterializeFormationCatalogVariants_SelectsAllSovereignCatalogTags(t *testing.T) {
 	partial := []*evalv1.ModelVariant{
 		{VariantId: "freeze-phi35-mini", ProviderClass: "ollama", ServedModelTag: "phi3.5:3.8b-mini-instruct-q4_K_M", ModelDigest: repeatHex('5', 64), ModelFamily: "Phi-3.5", Quantization: "Q4_K_M"},
 		{VariantId: "freeze-gemma2-2b", ProviderClass: "ollama", ServedModelTag: "gemma2:2b-instruct-q4_K_M", ModelDigest: repeatHex('2', 64), ModelFamily: "Gemma 2", Quantization: "Q4_K_M"},
@@ -48,27 +46,10 @@ func TestMaterializeFormationCatalogVariants_SelectsSovereignAndInjectsDelegated
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInferenceModelNotFound)
 
-	source := FormationCatalogFixtureVariants(func(tag string) string {
-		if tag == "gemini-1.5-pro" {
-			return FormationDelegatedRegistryDigestPlaceholder
-		}
-		return repeatHex('a', 64)
-	})
-	sovereignOnly := make([]*evalv1.ModelVariant, 0, 9)
-	for _, variant := range source {
-		if variant.GetServedModelTag() == "gemini-1.5-pro" {
-			continue
-		}
-		sovereignOnly = append(sovereignOnly, variant)
-	}
-	selected, err := MaterializeFormationCatalogVariants(sovereignOnly)
+	source := FormationCatalogFixtureVariants(func(string) string { return repeatHex('a', 64) })
+	selected, err := MaterializeFormationCatalogVariants(source)
 	require.NoError(t, err)
-	require.Len(t, selected, 10)
-
-	gemini, err := VariantsByTags(selected, []string{"gemini-1.5-pro"})
-	require.NoError(t, err)
-	assert.Equal(t, FormationDelegatedRegistryDigestPlaceholder, gemini[0].GetModelDigest())
-	assert.Equal(t, "gemini", gemini[0].GetProviderClass())
+	require.Len(t, selected, 8)
 
 	freeze, err := MaterializeModelRegistry("eval-formations-benchmark", selected)
 	require.NoError(t, err)
@@ -83,7 +64,7 @@ func TestMaterializeFormationCatalogVariants_SelectsSovereignAndInjectsDelegated
 
 func TestFormationCatalogFixtureVariants_MatchesCatalogServedTags(t *testing.T) {
 	variants := FormationCatalogFixtureVariants(func(string) string { return repeatHex('b', 64) })
-	require.Len(t, variants, 10)
+	require.Len(t, variants, 8)
 	tags := make([]string, 0, len(variants))
 	for _, variant := range variants {
 		tags = append(tags, variant.GetServedModelTag())

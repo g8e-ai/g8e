@@ -84,6 +84,34 @@ func TestBindFormation_BindsUltraLightSpeedsterDigestsFromFrozenRegistry(t *test
 	assert.Equal(t, "phi3.5:3.8b-mini-instruct-q4_K_M", formation.Primary.ServedModelTag)
 }
 
+func TestBindFormation_PrefersServedTagOverCollidingVariantID(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+	formation, err := topologies.Formation("code-logic-edge")
+	require.NoError(t, err)
+	stack, err := formation.ToStackDefinition()
+	require.NoError(t, err)
+
+	variants := formationCatalogTestVariants()
+	variants = append(variants, &evalv1.ModelVariant{
+		VariantId:      "gemma2-9b",
+		ProviderClass:  "ollama",
+		ServedModelTag: "gemma2:9b",
+		ModelDigest:    repeatHex('x', 64),
+		ModelFamily:    "gemma2",
+		Quantization:   "Q4_0",
+	})
+
+	bound, err := BindFormation(FormationBindingRequest{
+		FormationID: "code-logic-edge",
+		Stack:       stack,
+		Variants:    variants,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "gemma2:9b-instruct-q4_K_M", bound.Primary.ServedModelTag)
+	assert.Equal(t, repeatHex('7', 64), bound.Primary.ModelDigest)
+}
+
 func TestBindFormation_BindsUltraLightSpeedsterByServedTagWhenFreezeVariantIDsDiffer(t *testing.T) {
 	req := ultraLightSpeedsterBindingRequest(t)
 	req.Variants = []*evalv1.ModelVariant{
@@ -147,32 +175,6 @@ func TestBindFormation_RejectsServedTagMismatch(t *testing.T) {
 	req.Variants[0].ServedModelTag = "wrong:tag"
 
 	_, err := BindFormation(req)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFormationStackMismatch)
-}
-
-func TestBindFormation_RejectsDelegatedProviderClassMismatch(t *testing.T) {
-	topologies, err := NewExecutionTopologies()
-	require.NoError(t, err)
-	formation, err := topologies.Formation("hybrid-delegator")
-	require.NoError(t, err)
-	stack, err := formation.ToStackDefinition()
-	require.NoError(t, err)
-	variants := FormationCatalogFixtureVariants(func(string) string {
-		return repeatHex('d', 64)
-	})
-	for _, variant := range variants {
-		if variant.GetServedModelTag() == "gemini-1.5-pro" {
-			variant.ProviderClass = "ollama"
-			break
-		}
-	}
-
-	_, err = BindFormation(FormationBindingRequest{
-		FormationID: "hybrid-delegator",
-		Stack:       stack,
-		Variants:    variants,
-	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFormationStackMismatch)
 }

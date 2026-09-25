@@ -102,21 +102,9 @@ func TestQueueEvalMarkVerified(t *testing.T) {
 
 func TestInventoryEvalMaterializeFormationCatalog(t *testing.T) {
 	root := t.TempDir()
-	variants := evaluation.FormationCatalogFixtureVariants(func(tag string) string {
-		if tag == "gemini-1.5-pro" {
-			return evaluation.FormationDelegatedRegistryDigestPlaceholder
-		}
-		return repeatTestHex('f', 64)
-	})
-	sovereignOnly := make([]*evalv1.ModelVariant, 0, len(variants)-1)
-	for _, variant := range variants {
-		if variant.GetServedModelTag() == "gemini-1.5-pro" {
-			continue
-		}
-		sovereignOnly = append(sovereignOnly, variant)
-	}
+	variants := evaluation.FormationCatalogFixtureVariants(func(string) string { return repeatTestHex('f', 64) })
 	sourcePath := filepath.Join(root, "provider-freeze.json")
-	freeze, err := evaluation.MaterializeModelRegistry("provider-freeze", sovereignOnly)
+	freeze, err := evaluation.MaterializeModelRegistry("provider-freeze", variants)
 	require.NoError(t, err)
 	require.NoError(t, writeModelInventoryFreezeFile(sourcePath, freeze))
 
@@ -133,7 +121,7 @@ func TestInventoryEvalMaterializeFormationCatalog(t *testing.T) {
 		"--output", outputRel,
 	})
 	require.NoError(t, command.Execute())
-	assert.Contains(t, output.String(), "10 models")
+	assert.Contains(t, output.String(), "8 models")
 	assertTestRuntimeFileExists(t, root, outputRel)
 
 	fileSvc, err := fs.NewRuntimeFileService(root, slog.Default())
@@ -141,7 +129,7 @@ func TestInventoryEvalMaterializeFormationCatalog(t *testing.T) {
 	loaded, err := evaluation.LoadModelInventoryFreezeFromRuntime(context.Background(), fileSvc, outputRel)
 	require.NoError(t, err)
 	assert.Equal(t, "eval-formations-benchmark", loaded.CampaignID)
-	assert.Len(t, loaded.Variants, 10)
+	assert.Len(t, loaded.Variants, 8)
 	require.NoError(t, evaluation.ValidateModelRegistry(loaded))
 }
 

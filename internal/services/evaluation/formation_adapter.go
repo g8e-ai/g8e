@@ -9,6 +9,7 @@ package evaluation
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -203,10 +204,12 @@ func indexFormationVariants(variants []*evalv1.ModelVariant) formationVariantReg
 }
 
 func lookupFormationVariant(registry formationVariantRegistry, variantID, servedModelTag string) *evalv1.ModelVariant {
-	if variant := registry.byVariantID[variantID]; variant != nil {
-		return variant
+	if tag := strings.TrimSpace(servedModelTag); tag != "" {
+		if variant := registry.byServedModelTag[tag]; variant != nil {
+			return variant
+		}
 	}
-	return registry.byServedModelTag[servedModelTag]
+	return registry.byVariantID[variantID]
 }
 
 func bindFormationRole(formation Formation, role FormationRole, slot *evalv1.RoleAssignment, registry formationVariantRegistry) (FormationModel, error) {

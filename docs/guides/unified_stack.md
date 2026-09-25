@@ -462,7 +462,7 @@ DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operat
   --output .g8e/eval/inventories/eval-formations-smoke.json
 ```
 
-For the full five-formation benchmark (ten unique served tags), stage every sovereign catalog tag through the governed Inference Operator, freeze, then materialize with `--formation-catalog`. The delegated Hybrid Delegator primary (`gemini-1.5-pro`) is injected with a placeholder digest when absent from the Ollama freeze; weight attestation is skipped at execution time.
+For the four-formation sovereign benchmark (eight unique served tags), stage every catalog tag through the governed Inference Operator, freeze, then materialize with `--formation-catalog`.
 
 ```bash
 ./g8e eval models stage \
