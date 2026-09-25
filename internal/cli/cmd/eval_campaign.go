@@ -178,7 +178,6 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalStacksCmd(deps),
 		campaignEvalExecuteCmd(deps),
 		campaignEvalPublishCmd(deps),
-		campaignEvalMirrorCmd(deps),
 		campaignEvalVerifyCmd(deps),
 		campaignEvalAccountCmd(deps),
 		campaignEvalExportCmd(deps),

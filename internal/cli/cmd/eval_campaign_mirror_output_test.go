@@ -24,7 +24,7 @@ func TestWriteCampaignMirrorRestoreQueueResult(t *testing.T) {
 		SkippedRunIDs:    []string{"run-2"},
 		HostAbsentRunIDs: []string{"run-3"},
 		FailedRuns:       map[string]string{"run-4": "mirror unavailable"},
-	})
+	}, false)
 	out := stdout.String()
 	assert.Contains(t, out, "Restored 1 verified dataset(s)")
 	assert.Contains(t, out, "already present")
@@ -35,11 +35,23 @@ func TestWriteCampaignMirrorRestoreQueueResult(t *testing.T) {
 
 func TestWriteCampaignMirrorRestoreRunResult(t *testing.T) {
 	var stdout bytes.Buffer
-	writeCampaignMirrorRestoreRunResult(&stdout, "run-1", 0)
+	writeCampaignMirrorRestoreRunResult(&stdout, "run-1", 0, false)
 	assert.Contains(t, stdout.String(), "already present")
 	stdout.Reset()
-	writeCampaignMirrorRestoreRunResult(&stdout, "run-1", 3)
+	writeCampaignMirrorRestoreRunResult(&stdout, "run-1", 3, false)
 	assert.Contains(t, stdout.String(), "Restored run run-1")
+	stdout.Reset()
+	writeCampaignMirrorRestoreRunResult(&stdout, "run-1", 3, true)
+	assert.Contains(t, stdout.String(), "Republished run run-1")
+}
+
+func TestWriteCampaignMirrorRestoreQueueResult_ForceRepublish(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	writeCampaignMirrorRestoreQueueResult(&stdout, &stderr, &evaluation.CampaignMirrorReconcileResult{
+		RepublishedRunIDs: []string{"run-1", "run-2"},
+		PublishedRecords:  24,
+	}, true)
+	assert.Contains(t, stdout.String(), "Republished 2 verified dataset(s)")
 }
 
 func TestWriteCampaignMirrorRestoreInitSummary(t *testing.T) {

@@ -1217,7 +1217,7 @@ func validatePublicProofPackage(request models.PublicProofIngestRequest, state P
 	if request.SourceID == "" || !manifest.VerificationOK || manifest.SchemaVersion != constants.PublicProofManifestSchemaVersion || request.Catalog.SchemaVersion != constants.PublicProofCatalogSchemaVersion {
 		return constants.ErrPublicFeedProofManifestInvalid
 	}
-	if manifest.ArtifactCount <= 0 || manifest.ArtifactCount > constants.PublicFeedProofMaxArtifacts || manifest.ArtifactCount != len(manifest.Artifacts) || manifest.ArtifactCount != len(request.Catalog.Entries) || manifest.ArtifactCount != len(request.Artifacts) {
+	if manifest.ArtifactCount <= 0 || manifest.ArtifactCount > constants.PublicFeedProofMaxArtifacts || manifest.ArtifactCount != len(manifest.Artifacts) || manifest.ArtifactCount != len(request.Catalog.Entries) || len(request.Artifacts) == 0 || len(request.Artifacts) > manifest.ArtifactCount {
 		return constants.ErrPublicFeedProofCatalogMismatch
 	}
 	keyRegistryID := request.SourceID + ":" + manifest.SigningKeyID
@@ -1241,15 +1241,20 @@ func validatePublicProofPackage(request models.PublicProofIngestRequest, state P
 		return constants.ErrPublicFeedSignatureInvalid
 	}
 
-	artifacts := make(map[string][]byte, len(request.Artifacts))
+	return validatePublicProofCatalogArtifacts(request, state.ProofArtifacts)
+}
+
+func validatePublicProofCatalogArtifacts(request models.PublicProofIngestRequest, existingArtifacts map[string][]byte) error {
+	manifest := request.Manifest
+	inlineArtifacts := make(map[string][]byte, len(request.Artifacts))
 	for _, artifact := range request.Artifacts {
 		if artifact.ArtifactID == "" {
 			return constants.ErrPublicFeedProofHashMismatch
 		}
-		if _, duplicate := artifacts[artifact.ArtifactID]; duplicate {
+		if _, duplicate := inlineArtifacts[artifact.ArtifactID]; duplicate {
 			return constants.ErrPublicFeedProofCatalogMismatch
 		}
-		artifacts[artifact.ArtifactID] = artifact.Content
+		inlineArtifacts[artifact.ArtifactID] = artifact.Content
 	}
 	for index, entry := range request.Catalog.Entries {
 		if entry != manifest.Artifacts[index] || entry.Classification != models.PublicFeedProofClassificationPublicSafe || entry.ArtifactID != entry.SHA256 {
@@ -1258,9 +1263,13 @@ func validatePublicProofPackage(request models.PublicProofIngestRequest, state P
 		if !safePublicProofFilename(entry.Filename) || entry.ImmutableURL != "/proofs/"+entry.ArtifactID {
 			return constants.ErrPublicFeedProofPathTraversal
 		}
-		content, ok := artifacts[entry.ArtifactID]
+		content, ok := inlineArtifacts[entry.ArtifactID]
 		if !ok {
-			return constants.ErrPublicFeedProofCatalogMismatch
+			stored, storedOK := existingArtifacts[entry.ArtifactID]
+			if !storedOK {
+				return constants.ErrPublicFeedProofCatalogMismatch
+			}
+			content = stored
 		}
 		if len(content) > constants.PublicFeedMaxArtifactBytes || int64(len(content)) != entry.ByteSize {
 			return constants.ErrPublicFeedProofSizeMismatch

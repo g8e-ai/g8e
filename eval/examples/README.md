@@ -96,7 +96,7 @@ go run ./.local.dev/tools/gen-base-model-inventory
 | `g8e eval rollout next` | Show the next pending model |
 | `g8e eval rollout mark` | Manually record verify progress for one entry |
 | `g8e eval campaign export` | Export one run to a directory you choose (`--output-dir`) |
-| `g8e eval campaign mirror restore` | Republish verified runs to the gateway-owned public mirror |
+| `g8e public restore` | Republish verified runs to the gateway-owned public mirror |
 
 See [Unified Docker Stack Guide](../../docs/guides/unified_stack.md) and [Evaluations architecture](../../docs/architecture/evals.md) for full campaign operations.
 
@@ -116,13 +116,13 @@ Host evidence and queue remain. Restore the public mirror from verified queue en
 ```bash
 curl -sf http://127.0.0.1:8082/bootstrap | jq '{freshness: .source_freshness, high_water: .snapshot.high_water_sequence}'
 
-./g8e eval campaign mirror restore --queue
+./g8e public restore --queue
 ```
 
 `docker init` runs this automatically when the queue and run artifacts are present. For one run:
 
 ```bash
-./g8e eval campaign mirror restore --run-id eval-init-granite3-3-2b-1789754079
+./g8e public restore --run-id eval-init-granite3-3-2b-1789754079
 ```
 
 If `campaign publish` exports zero records after a mirror wipe (host `public-projection-state.json` still lists old idempotency keys), use `--force` on publish instead — see [Unified Docker Stack Guide](../../docs/guides/unified_stack.md#mirror-empty-after-docker-init---clean-but-host-run-artifacts-remain).

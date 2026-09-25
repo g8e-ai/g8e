@@ -23,20 +23,22 @@ type CampaignMirrorProbe interface {
 
 // CampaignMirrorReconcileResult summarizes one queue or run reconcile pass.
 type CampaignMirrorReconcileResult struct {
-	RestoredRunIDs   []string          `json:"restored_run_ids"`
-	SkippedRunIDs    []string          `json:"skipped_run_ids"`
-	MissingRunIDs    []string          `json:"missing_run_ids,omitempty"`
-	HostAbsentRunIDs []string          `json:"host_absent_run_ids"`
-	FailedRuns       map[string]string `json:"failed_runs,omitempty"`
-	PublishedRecords int               `json:"published_records"`
+	RestoredRunIDs    []string          `json:"restored_run_ids"`
+	RepublishedRunIDs []string          `json:"republished_run_ids,omitempty"`
+	SkippedRunIDs     []string          `json:"skipped_run_ids"`
+	MissingRunIDs     []string          `json:"missing_run_ids,omitempty"`
+	HostAbsentRunIDs  []string          `json:"host_absent_run_ids"`
+	FailedRuns        map[string]string `json:"failed_runs,omitempty"`
+	PublishedRecords  int               `json:"published_records"`
 }
 
 type CampaignMirrorReconcileStatus string
 
 const (
 	CampaignMirrorReconcileChecking   CampaignMirrorReconcileStatus = "checking"
-	CampaignMirrorReconcileRestored   CampaignMirrorReconcileStatus = "restored"
-	CampaignMirrorReconcilePresent    CampaignMirrorReconcileStatus = "already_present"
+	CampaignMirrorReconcileRestored    CampaignMirrorReconcileStatus = "restored"
+	CampaignMirrorReconcileRepublished CampaignMirrorReconcileStatus = "republished"
+	CampaignMirrorReconcilePresent     CampaignMirrorReconcileStatus = "already_present"
 	CampaignMirrorReconcileMissing    CampaignMirrorReconcileStatus = "missing"
 	CampaignMirrorReconcileHostAbsent CampaignMirrorReconcileStatus = "host_absent"
 	CampaignMirrorReconcileFailed     CampaignMirrorReconcileStatus = "failed"
@@ -73,8 +75,11 @@ func NewCampaignMirrorReconciler(publication *CampaignPublicationCoordinator, st
 
 // ReconcileVerifiedQueue compares verified queue entries against the public
 // mirror. When restoreMissing is true, it republishes canonical host artifacts
-// for datasets that are absent from the mirror.
-func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, queue *CampaignQueue, runTimeout time.Duration, restoreMissing bool, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
+// for datasets that are absent from the mirror. Present datasets are always
+// skipped so queue restores can resume after partial failures. When force is
+// true, host publication idempotency is cleared before restoring each missing
+// dataset. Use ReconcileRun with force to republish one already-present run.
+func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, queue *CampaignQueue, runTimeout time.Duration, restoreMissing bool, force bool, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
 	if r == nil || r.publication == nil || r.store == nil || queue == nil || runTimeout <= 0 {
 		return nil, fmt.Errorf("evaluation: reconcile verified queue: missing required dependencies")
 	}
@@ -132,26 +137,33 @@ func (r *CampaignMirrorReconciler) ReconcileVerifiedQueue(ctx context.Context, q
 			update(CampaignMirrorReconcileMissing, 0, nil)
 			continue
 		}
-		published, err := r.restoreRun(runCtx, runID)
+		published, err := r.restoreRun(runCtx, runID, force)
 		cancel()
 		if err != nil {
 			result.FailedRuns[runID] = err.Error()
 			update(CampaignMirrorReconcileFailed, published, err)
+			if campaignMirrorGatewayUnreachable(err) {
+				for _, remainingRunID := range runIDs[index+1:] {
+					result.FailedRuns[remainingRunID] = "skipped after gateway publication failure"
+				}
+				break
+			}
 			continue
 		}
 		result.RestoredRunIDs = append(result.RestoredRunIDs, runID)
-		result.PublishedRecords += published
 		update(CampaignMirrorReconcileRestored, published, nil)
+		result.PublishedRecords += published
 	}
 	return result, nil
 }
 
 // ReconcileRun restores one run when its dataset is missing from the mirror.
-func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID string) (int, error) {
+// When force is true, it republishes even when the dataset is already present.
+func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID string, force bool) (int, error) {
 	if r == nil || r.publication == nil || r.store == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: reconcile run: missing required dependencies")
 	}
-	if r.probe != nil {
+	if r.probe != nil && !force {
 		present, err := r.probe.DatasetPresent(ctx, CampaignDatasetID(runID))
 		if err != nil {
 			return 0, err
@@ -160,10 +172,18 @@ func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID strin
 			return 0, nil
 		}
 	}
-	return r.restoreRun(ctx, runID)
+	return r.restoreRun(ctx, runID, force)
 }
 
-func (r *CampaignMirrorReconciler) restoreRun(ctx context.Context, runID string) (int, error) {
+func (r *CampaignMirrorReconciler) restoreRun(ctx context.Context, runID string, force bool) (int, error) {
+	if force {
+		if err := r.publication.PruneRunProofCatalog(ctx, runID); err != nil {
+			return 0, err
+		}
+		if err := r.publication.ResetPublicationIdempotency(ctx, runID); err != nil {
+			return 0, err
+		}
+	}
 	report, err := r.store.LoadCampaignVerification(ctx, runID)
 	if err != nil || legacyCampaignVerificationReport(report) {
 		return r.publication.PublishRunCatchUp(ctx, runID)

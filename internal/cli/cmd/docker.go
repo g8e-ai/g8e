@@ -374,7 +374,7 @@ already-enrolled CLI.`,
 				result, err := reconcileVerifiedCampaignMirrorFromDockerInit(cmd.Context(), fileSvc, cfg)
 				if err != nil {
 					cmd.Printf("Warning: verified campaign mirror restore failed: %v\n", err)
-					cmd.Println("Run 'g8e eval campaign mirror restore --queue' to retry outside Docker init.")
+					cmd.Println("Run 'g8e public restore --queue' to retry outside Docker init.")
 				} else {
 					writeCampaignMirrorRestoreInitSummary(cmd.OutOrStdout(), result)
 				}

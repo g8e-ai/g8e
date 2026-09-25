@@ -340,6 +340,37 @@ func (s *Store) ListAssignments(ctx context.Context, runID string) ([]*evalv1.Ev
 	return assignments, nil
 }
 
+// LoadAssignmentResults reads persisted terminal assignment results for the
+// provided assignments in one pass.
+func (s *Store) LoadAssignmentResults(ctx context.Context, runID string, assignments []*evalv1.EvaluationAssignment) (map[string]*evalv1.EvaluationAssignmentResult, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
+		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	results := make(map[string]*evalv1.EvaluationAssignmentResult, len(assignments))
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		assignmentID := assignment.GetAssignmentId()
+		if !complianceevidence.ValidPathElement(assignmentID) {
+			return nil, fmt.Errorf("%w: assignment ID is required", constants.ErrEvidenceArtifactMalformed)
+		}
+		exists, err := s.files.FileExists(ctx, assignmentResultPath(runID, assignmentID))
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: load assignment results: %w", err)
+		}
+		if !exists {
+			continue
+		}
+		result, err := s.LoadAssignmentResult(ctx, runID, assignmentID)
+		if err != nil {
+			return nil, err
+		}
+		results[assignmentID] = result
+	}
+	return results, nil
+}
+
 // AssignmentResultExists reports whether a terminal assignment result is persisted.
 func (s *Store) AssignmentResultExists(ctx context.Context, runID, assignmentID string) (bool, error) {
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {

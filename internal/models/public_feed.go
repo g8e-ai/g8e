@@ -220,6 +220,41 @@ type PublicAssignmentAuditProofPublishRequest struct {
 	IndexDigest      string `json:"index_digest"`
 	Database         []byte `json:"database"`
 	VaultKey         []byte `json:"vault_key"`
+	DeferMirrorPush  bool   `json:"defer_mirror_push,omitempty"`
+}
+
+// PublicAssignmentAuditProofBatchPublishRequest ingests many assignment audit
+// export packages in one gateway round trip. The gateway stages all artifacts,
+// rebuilds the proof manifest once, and optionally pushes to the mirror.
+type PublicAssignmentAuditProofBatchPublishRequest struct {
+	Proofs          []PublicAssignmentAuditProofPublishRequest `json:"proofs"`
+	DeferMirrorPush bool                                       `json:"defer_mirror_push,omitempty"`
+}
+
+type PublicProofCatalogPushResponse struct {
+	Accepted        bool   `json:"accepted"`
+	ArtifactCount   int    `json:"artifact_count,omitempty"`
+	ProofRootSHA256 string `json:"proof_root_sha256,omitempty"`
+}
+
+type PublicProofCatalogPruneRequest struct {
+	RunID string `json:"run_id"`
+}
+
+type PublicProofCatalogPruneResponse struct {
+	Accepted      bool `json:"accepted"`
+	RemovedCount  int  `json:"removed_count"`
+	RemainingCount int `json:"remaining_count"`
+}
+
+// PublicProofMirrorSyncState tracks the last proof package successfully pushed
+// to the public mirror so incremental pushes can omit already-synced artifacts.
+type PublicProofMirrorSyncState struct {
+	SchemaVersion       string    `json:"schema_version"`
+	SourceID            string    `json:"source_id"`
+	ProofRootSHA256     string    `json:"proof_root_sha256"`
+	SyncedArtifactIDs   []string  `json:"synced_artifact_ids"`
+	SyncedAt            time.Time `json:"synced_at"`
 }
 
 type PublicAssignmentAuditProofPublishResponse struct {
@@ -227,6 +262,12 @@ type PublicAssignmentAuditProofPublishResponse struct {
 	DatabaseSHA256   string   `json:"database_sha256,omitempty"`
 	VaultKeySHA256   string   `json:"vault_key_sha256,omitempty"`
 	ProofRootSHA256  string   `json:"proof_root_sha256,omitempty"`
+}
+
+type PublicAssignmentAuditProofBatchPublishResponse struct {
+	Accepted        bool   `json:"accepted"`
+	IngestedProofs  int    `json:"ingested_proofs,omitempty"`
+	ProofRootSHA256 string `json:"proof_root_sha256,omitempty"`
 }
 
 // PublicKeyRevocationRecord is a key revocation record published as a signed

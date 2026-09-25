@@ -22,6 +22,8 @@ func writeCampaignMirrorRestoreProgress(w io.Writer, progress evaluation.Campaig
 		_, _ = fmt.Fprintf(w, "Checking verified run %d/%d: %s\n", progress.Index, progress.Total, progress.RunID)
 	case evaluation.CampaignMirrorReconcileRestored:
 		_, _ = fmt.Fprintf(w, "%s restored (%d record(s))\n", prefix, progress.PublishedRecords)
+	case evaluation.CampaignMirrorReconcileRepublished:
+		_, _ = fmt.Fprintf(w, "%s republished (%d record(s))\n", prefix, progress.PublishedRecords)
 	case evaluation.CampaignMirrorReconcilePresent:
 		_, _ = fmt.Fprintf(w, "%s already present\n", prefix)
 	case evaluation.CampaignMirrorReconcileHostAbsent:
@@ -33,22 +35,35 @@ func writeCampaignMirrorRestoreProgress(w io.Writer, progress evaluation.Campaig
 	}
 }
 
-func writeCampaignMirrorRestoreQueueResult(stdout, stderr io.Writer, result *evaluation.CampaignMirrorReconcileResult) {
+func writeCampaignMirrorRestoreQueueResult(stdout, stderr io.Writer, result *evaluation.CampaignMirrorReconcileResult, force bool) {
 	if result == nil {
 		return
 	}
 	restored := len(result.RestoredRunIDs)
+	republished := len(result.RepublishedRunIDs)
 	skipped := len(result.SkippedRunIDs)
 	hostAbsent := len(result.HostAbsentRunIDs)
 
 	switch {
+	case republished > 0:
+		_, _ = fmt.Fprintf(stdout, "Republished %d verified dataset(s) to public mirror (%d record(s)).\n", republished, result.PublishedRecords)
+		if restored > 0 {
+			_, _ = fmt.Fprintf(stdout, "Restored %d additional verified dataset(s) that were missing from public mirror.\n", restored)
+		}
+		if skipped > 0 {
+			_, _ = fmt.Fprintf(stdout, "%d verified dataset(s) were already present in public mirror.\n", skipped)
+		}
 	case restored > 0:
 		_, _ = fmt.Fprintf(stdout, "Restored %d verified dataset(s) to public mirror (%d record(s)).\n", restored, result.PublishedRecords)
 		if skipped > 0 {
 			_, _ = fmt.Fprintf(stdout, "%d verified dataset(s) were already present in public mirror.\n", skipped)
 		}
 	case skipped > 0:
-		_, _ = fmt.Fprintf(stdout, "Verified campaign mirror restore complete: %d verified dataset(s) already present in public mirror (nothing to do).\n", skipped)
+		if force {
+			_, _ = fmt.Fprintf(stdout, "Verified campaign mirror restore complete: %d verified dataset(s) already present; none were republished.\n", skipped)
+		} else {
+			_, _ = fmt.Fprintf(stdout, "Verified campaign mirror restore complete: %d verified dataset(s) already present in public mirror (nothing to do).\n", skipped)
+		}
 	default:
 		_, _ = fmt.Fprintln(stdout, "Verified campaign mirror restore complete: nothing to do.")
 	}
@@ -62,9 +77,17 @@ func writeCampaignMirrorRestoreQueueResult(stdout, stderr io.Writer, result *eva
 	}
 }
 
-func writeCampaignMirrorRestoreRunResult(stdout io.Writer, runID string, published int) {
+func writeCampaignMirrorRestoreRunResult(stdout io.Writer, runID string, published int, force bool) {
 	if published == 0 {
+		if force {
+			_, _ = fmt.Fprintf(stdout, "Verified campaign mirror restore complete: run %s already present in public mirror; nothing was republished.\n", runID)
+			return
+		}
 		_, _ = fmt.Fprintf(stdout, "Verified campaign mirror restore complete: run %s already present in public mirror (nothing to do).\n", runID)
+		return
+	}
+	if force {
+		_, _ = fmt.Fprintf(stdout, "Republished run %s to public mirror (%d record(s)).\n", runID, published)
 		return
 	}
 	_, _ = fmt.Fprintf(stdout, "Restored run %s to public mirror (%d record(s)).\n", runID, published)
@@ -88,7 +111,7 @@ func writeCampaignMirrorRestoreInitSummary(stdout io.Writer, result *evaluation.
 		writeHostAbsentMirrorNote(stdout, result.HostAbsentRunIDs)
 	}
 	if missing := len(result.MissingRunIDs); missing > 0 {
-		_, _ = fmt.Fprintf(stdout, "%d verified dataset(s) missing from public mirror; run 'g8e eval campaign mirror restore --queue' to restore.\n", missing)
+		_, _ = fmt.Fprintf(stdout, "%d verified dataset(s) missing from public mirror; run 'g8e public restore --queue' to restore.\n", missing)
 	}
 }
 

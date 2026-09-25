@@ -57,6 +57,10 @@ type CampaignPublicationCoordinator struct {
 	proofPublisher    CampaignProofPublisher
 	observationRemote ProviderObservationRemote
 	mirrorProbe       CampaignMirrorProbe
+	deferProofMirrorPush   bool
+	pendingProofMirrorPush bool
+	pendingProofInputs     []AssignmentAuditProofInput
+	publicationStateCache  *CampaignPublicationState
 }
 
 func NewCampaignPublicationCoordinator(store CampaignStore, files fs.RuntimeFileService, publicationState CampaignPublicationStateStore, exporter CampaignFeedExporter, observationRemote ProviderObservationRemote) *CampaignPublicationCoordinator {
@@ -126,7 +130,7 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentResult(ctx context.Con
 	if err != nil {
 		return err
 	}
-	auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests)
+	auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests, true)
 	if err != nil {
 		return err
 	}
@@ -294,6 +298,12 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" || report == nil || report.GetRunId() != runID {
 		return 0, fmt.Errorf("evaluation: publish run verification: %w", constants.ErrMissingRequiredField)
 	}
+	c.deferProofMirrorPush = true
+	defer func() {
+		c.deferProofMirrorPush = false
+		c.pendingProofInputs = nil
+		c.clearPublicationStateCache()
+	}()
 	run, assignments, results, state, err := c.loadRunAggregateState(ctx, runID)
 	if err != nil {
 		return 0, err
@@ -349,7 +359,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 			if err != nil {
 				return 0, err
 			}
-			auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests)
+			auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests, false)
 			if err != nil {
 				return 0, err
 			}
@@ -399,6 +409,9 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	}
 	published, err := c.exportFeedRecords(ctx, runID, verifiedRequests)
 	if err != nil {
+		return published, err
+	}
+	if err := c.flushProofCatalog(ctx); err != nil {
 		return published, err
 	}
 	records, err := BuildRunVerificationViewRecords(run, state, report, observedAt)
@@ -452,7 +465,11 @@ func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context
 	}
 	state.PublishedIdempotency = []string{}
 	state.LastPublishedSequence = 0
-	return c.publicationState.Save(ctx, state)
+	if err := c.savePublicationState(ctx, state); err != nil {
+		return err
+	}
+	c.clearPublicationStateCache()
+	return nil
 }
 
 // PublishRunCatchUpWithVerification republishes one run and, when the persisted
@@ -547,12 +564,80 @@ func (c *CampaignPublicationCoordinator) validateRunVerificationApplicability(ct
 	return nil
 }
 
+func (c *CampaignPublicationCoordinator) PruneRunProofCatalog(ctx context.Context, runID string) error {
+	if c == nil || c.proofPublisher == nil || runID == "" {
+		return nil
+	}
+	if err := c.proofPublisher.PruneRunProofCatalog(ctx, runID); err != nil {
+		return fmt.Errorf("evaluation: prune run proof catalog: %w", err)
+	}
+	return nil
+}
+
+func (c *CampaignPublicationCoordinator) flushProofCatalog(ctx context.Context) error {
+	if c == nil || c.proofPublisher == nil {
+		return nil
+	}
+	if len(c.pendingProofInputs) > 0 {
+		if err := c.proofPublisher.IngestAssignmentAuditSlices(ctx, c.pendingProofInputs, true); err != nil {
+			return fmt.Errorf("evaluation: flush proof catalog: ingest assignment audit slices: %w", err)
+		}
+		c.pendingProofInputs = nil
+	}
+	if !c.pendingProofMirrorPush {
+		return nil
+	}
+	if err := c.proofPublisher.FlushProofCatalog(ctx); err != nil {
+		return fmt.Errorf("evaluation: flush proof catalog: %w", err)
+	}
+	c.pendingProofMirrorPush = false
+	return nil
+}
+
+func (c *CampaignPublicationCoordinator) clearPublicationStateCache() {
+	if c != nil {
+		c.publicationStateCache = nil
+	}
+}
+
+func (c *CampaignPublicationCoordinator) loadPublicationState(ctx context.Context, runID string) (*CampaignPublicationState, error) {
+	if c == nil || c.publicationState == nil || runID == "" {
+		return nil, fmt.Errorf("evaluation: load publication state: %w", constants.ErrMissingRequiredField)
+	}
+	if c.publicationStateCache != nil && c.publicationStateCache.RunID == runID {
+		return cloneCampaignPublicationState(c.publicationStateCache), nil
+	}
+	state, err := c.publicationState.Load(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	c.publicationStateCache = cloneCampaignPublicationState(state)
+	return state, nil
+}
+
+func (c *CampaignPublicationCoordinator) savePublicationState(ctx context.Context, state *CampaignPublicationState) error {
+	if c == nil || c.publicationState == nil || state == nil || state.RunID == "" {
+		return fmt.Errorf("evaluation: save publication state: %w", constants.ErrMissingRequiredField)
+	}
+	if err := c.publicationState.Save(ctx, state); err != nil {
+		return err
+	}
+	c.publicationStateCache = cloneCampaignPublicationState(state)
+	return nil
+}
+
 // PublishRunCatchUp scans one run and publishes any missing lifecycle and
 // terminal result projections derived from canonical records.
 func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, runID string) (int, error) {
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: publish run catch-up: %w", constants.ErrMissingRequiredField)
 	}
+	c.deferProofMirrorPush = true
+	defer func() {
+		c.deferProofMirrorPush = false
+		c.pendingProofInputs = nil
+		c.clearPublicationStateCache()
+	}()
 	resetRequired, err := c.mirrorCatchUpResetRequired(ctx, runID)
 	if err != nil {
 		return 0, err
@@ -574,6 +659,10 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: publish run catch-up: load scenario artifacts: %w", err)
 	}
+	publicationState, err := c.loadPublicationState(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
 	requests := make([]campaignFeedPublishRequest, 0, len(assignments)*2)
 	for _, assignment := range assignments {
 		category, err := ScenarioCategoryForAssignment(catalog, assignment)
@@ -589,11 +678,15 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 		if result == nil {
 			continue
 		}
+		resultKey := AssignmentResultIdempotencyKey(runID, assignment.GetAssignmentId())
+		if publicationState != nil && containsString(publicationState.PublishedIdempotency, resultKey) {
+			continue
+		}
 		liveRequests, err := c.buildAssignmentLiveEventPublishRequests(ctx, assignment, result)
 		if err != nil {
 			return 0, err
 		}
-		auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests)
+		auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests, true)
 		if err != nil {
 			return 0, err
 		}
@@ -627,7 +720,11 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	if err != nil {
 		return published, err
 	}
-	return published + completionCount, nil
+	published += completionCount
+	if err := c.flushProofCatalog(ctx); err != nil {
+		return published, err
+	}
+	return published, nil
 }
 
 func (c *CampaignPublicationCoordinator) mirrorCatchUpResetRequired(ctx context.Context, runID string) (bool, error) {
@@ -660,20 +757,9 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 	if len(assignments) == 0 {
 		return run, assignments, map[string]*evalv1.EvaluationAssignmentResult{}, &runAggregateState{VariantRoles: map[string]*variantRoleAggregate{}}, nil
 	}
-	results := make(map[string]*evalv1.EvaluationAssignmentResult, len(assignments))
-	for _, assignment := range assignments {
-		exists, err := c.store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		if !exists {
-			continue
-		}
-		result, err := c.store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		results[assignment.GetAssignmentId()] = result
+	results, err := c.store.LoadAssignmentResults(ctx, runID, assignments)
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
 	state, err := CollectRunAggregateState(assignments, results)
 	if err != nil {
@@ -705,7 +791,7 @@ func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, 
 	if c.publicationState == nil {
 		return 0, fmt.Errorf("evaluation: export feed records: %w", constants.ErrMissingRequiredField)
 	}
-	state, err := c.publicationState.Load(ctx, runID)
+	state, err := c.loadPublicationState(ctx, runID)
 	if err != nil {
 		return 0, err
 	}
@@ -742,7 +828,7 @@ func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, 
 		}
 		sort.Strings(state.PublishedIdempotency)
 		state.LastPublishedSequence = records[len(records)-1].Sequence
-		if err := c.publicationState.Save(ctx, state); err != nil {
+		if err := c.savePublicationState(ctx, state); err != nil {
 			return 0, err
 		}
 		return len(pending), nil

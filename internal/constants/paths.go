@@ -978,6 +978,7 @@ const (
 	PublicProofsDirname                      = "public-proofs"
 	PublicProofCatalogFilename               = "proof-catalog.json"
 	PublicProofManifestFilename              = "proof-manifest.json"
+	PublicProofMirrorSyncFilename            = "proof-mirror-sync.json"
 )
 
 // Public feed schema and protocol version constants.
@@ -986,6 +987,7 @@ const (
 	PublicFeedSchemaVersion           = "1.0.0"
 	PublicProofManifestSchemaVersion  = "1.0.0"
 	PublicProofCatalogSchemaVersion   = "1.0.0"
+	PublicProofMirrorSyncSchemaVersion  = "1.0.0"
 	PublicFeedBatchMaxRecords         = 100
 	PublicFeedBatchMaxBytes           = 4 << 20
 	PublicFeedRetryMaxAttempts        = 5
@@ -995,7 +997,9 @@ const (
 	PublicFeedMaxArtifactBytes        = 64 << 20
 	PublicFeedProofIngestMaxBytes     = 512 << 20
 	PublicFeedKeyRegistrationMaxBytes = 16 << 10
-	PublicFeedProofMaxArtifacts       = 1000
+	// Init-campaign restore publishes two proof artifacts per assignment across
+	// many verified runs; keep headroom above ~3k assignment-audit artifacts.
+	PublicFeedProofMaxArtifacts       = 8192
 	PublicFeedFreshnessDelayedSeconds = 60
 	PublicFeedFreshnessStaleSeconds   = 300
 	PublicFeedFreshnessOfflineSeconds = 900

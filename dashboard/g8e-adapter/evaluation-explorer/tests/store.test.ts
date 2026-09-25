@@ -546,6 +546,36 @@ describe('EvalStore', () => {
     expect(summary?.headline_metrics.output_throughput_p50_tokens_per_second?.unavailable_reason).toBe('no_scored_calls');
   });
 
+  it('ingests campaign envelopes when mirror transport metadata is embedded in record_bytes', () => {
+    const runId = 'run-transport-metadata';
+    const datasetId = `ds-live-${runId}`;
+    store.acceptProjection({
+      sequence: 42,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: `${runId}:assign-1:result`,
+        sequence: 42,
+        record_type: 'projection',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: runId,
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          result_digest: '0'.repeat(64),
+          verification_status: 'unverified',
+          completed_at: '2026-09-20T00:00:00Z',
+        },
+      }),
+    });
+
+    expect(store.getAssignments(runId, datasetId)).toHaveLength(1);
+    expect(store.getEvents(runId, datasetId).some((event) => event.kind === 'assignment_failed')).toBe(true);
+    expect(store.getState().errors.some((error) => error.includes('undefined'))).toBe(false);
+  });
+
   it('rejects malformed campaign results atomically before indexing or progressing', () => {
     const runId = 'run-atomic-reject';
     const datasetId = `ds-live-${runId}`;

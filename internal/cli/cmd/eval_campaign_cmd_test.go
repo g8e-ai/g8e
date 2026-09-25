@@ -237,24 +237,24 @@ func TestCampaignEvalVerify_RejectsMissingRun(t *testing.T) {
 	assert.Contains(t, err.Error(), "campaign verify")
 }
 
-func TestCampaignEvalMirrorRestore_RequiresTarget(t *testing.T) {
+func TestPublicRestore_RequiresTarget(t *testing.T) {
 	root, deps, _, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 
-	command := evalCmdWithConfig(deps)
-	command.SetArgs([]string{"campaign", "mirror", "restore", "--project-root", root})
+	command := publicRestoreCmdWithConfig(deps.configLoader, deps.fileSvcFactory)
+	command.SetArgs([]string{"--project-root", root})
 	err := command.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "specify --queue or --run-id")
 }
 
-func TestCampaignEvalMirrorRestore_RejectsBothTargets(t *testing.T) {
+func TestPublicRestore_RejectsBothTargets(t *testing.T) {
 	root, deps, _, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 
-	command := evalCmdWithConfig(deps)
+	command := publicRestoreCmdWithConfig(deps.configLoader, deps.fileSvcFactory)
 	command.SetArgs([]string{
-		"campaign", "mirror", "restore", "--project-root", root,
+		"--project-root", root,
 		"--queue", "--run-id", "run-1",
 	})
 	err := command.Execute()

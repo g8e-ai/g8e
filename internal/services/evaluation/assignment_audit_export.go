@@ -9,7 +9,6 @@ package evaluation
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -71,10 +70,7 @@ func BuildAssignmentAuditSlice(assignmentID string, events []AssignmentAuditSlic
 		return AssignmentAuditSliceArtifacts{}, err
 	}
 
-	privateKey := make([]byte, vault.KeySize)
-	if _, err := rand.Read(privateKey); err != nil {
-		return AssignmentAuditSliceArtifacts{}, fmt.Errorf("evaluation: build assignment audit slice: %w", constants.ErrVaultKeyGenerateFailed)
-	}
+	privateKey := deriveAssignmentAuditVaultKey(assignmentID, normalized)
 	header, dek, err := vault.NewVaultHeader(privateKey)
 	if err != nil {
 		vault.SecureZero(privateKey)
@@ -530,6 +526,27 @@ func decodeAssignmentAuditVaultKey(vaultKey []byte) ([]byte, error) {
 func hashBytes(value []byte) string {
 	sum := sha256.Sum256(value)
 	return hex.EncodeToString(sum[:])
+}
+
+// deriveAssignmentAuditVaultKey derives a stable vault key from assignment
+// events so restore republish produces the same content-addressed artifacts.
+func deriveAssignmentAuditVaultKey(assignmentID string, events []AssignmentAuditSliceEvent) []byte {
+	h := sha256.New()
+	h.Write([]byte(assignmentID))
+	for _, event := range events {
+		h.Write([]byte(event.Type))
+		h.Write([]byte(event.Timestamp))
+		h.Write(event.Payload)
+	}
+	digest := h.Sum(nil)
+	key := make([]byte, vault.KeySize)
+	copy(key, digest)
+	for offset := len(digest); offset < vault.KeySize; offset += len(digest) {
+		next := sha256.Sum256(digest)
+		digest = next[:]
+		copy(key[offset:], digest[:min(len(digest), vault.KeySize-offset)])
+	}
+	return key
 }
 
 // AssignmentAuditEvidenceBindings returns the public evidence bindings for a

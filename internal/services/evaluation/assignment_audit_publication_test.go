@@ -23,8 +23,16 @@ type recordingCampaignProofPublisher struct {
 	inputs []AssignmentAuditProofInput
 }
 
-func (r *recordingCampaignProofPublisher) IngestAssignmentAuditSlice(_ context.Context, input AssignmentAuditProofInput) error {
-	r.inputs = append(r.inputs, input)
+func (r *recordingCampaignProofPublisher) IngestAssignmentAuditSlices(_ context.Context, inputs []AssignmentAuditProofInput, _ bool) error {
+	r.inputs = append(r.inputs, inputs...)
+	return nil
+}
+
+func (r *recordingCampaignProofPublisher) PruneRunProofCatalog(context.Context, string) error {
+	return nil
+}
+
+func (r *recordingCampaignProofPublisher) FlushProofCatalog(context.Context) error {
 	return nil
 }
 
@@ -116,7 +124,7 @@ func TestCampaignPublicationCoordinator_BuildAssignmentAuditBindings(t *testing.
 	require.NoError(t, err)
 	require.NotEmpty(t, liveRequests)
 
-	bindings, err := coordinator.BuildAssignmentAuditBindings(context.Background(), assignment, result, liveRequests)
+	bindings, err := coordinator.BuildAssignmentAuditBindings(context.Background(), assignment, result, liveRequests, true)
 	require.NoError(t, err)
 	require.Len(t, bindings, 2)
 	assert.Equal(t, AssignmentAuditSliceKind, bindings[0].GetKind())
@@ -125,6 +133,25 @@ func TestCampaignPublicationCoordinator_BuildAssignmentAuditBindings(t *testing.
 	assert.Equal(t, assignmentID, proofPublisher.inputs[0].AssignmentID)
 	assert.NotEmpty(t, proofPublisher.inputs[0].Artifacts.Database)
 	assert.NotEmpty(t, proofPublisher.inputs[0].Artifacts.VaultKey)
+}
+
+func TestCampaignPublicationCoordinator_FlushesDeferredProofBatch(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	exporter := &recordingCampaignFeedExporter{}
+	proofPublisher := &recordingCampaignProofPublisher{}
+	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil).
+		WithProofPublisher(proofPublisher)
+	coordinator.deferProofMirrorPush = true
+	coordinator.pendingProofInputs = []AssignmentAuditProofInput{
+		{AssignmentID: "assignment-1"},
+		{AssignmentID: "assignment-2"},
+	}
+	coordinator.pendingProofMirrorPush = true
+
+	require.NoError(t, coordinator.flushProofCatalog(context.Background()))
+	require.Len(t, proofPublisher.inputs, 2)
+	assert.Equal(t, "assignment-1", proofPublisher.inputs[0].AssignmentID)
+	assert.Equal(t, "assignment-2", proofPublisher.inputs[1].AssignmentID)
 }
 
 func TestCollectAssignmentAuditEventBodies_SkipsProjections(t *testing.T) {

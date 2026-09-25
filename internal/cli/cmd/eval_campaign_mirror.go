@@ -9,110 +9,15 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
-
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
-	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-type campaignMirrorRestoreRunJSON struct {
-	RunID            string `json:"run_id"`
-	PublishedRecords int    `json:"published_records"`
-}
-
-func campaignEvalMirrorCmd(deps nativeEvalDeps) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "mirror",
-		Short: "Reconcile campaign datasets with the gateway-owned public mirror",
-	}
-	cmd.AddCommand(campaignEvalMirrorRestoreCmd(deps))
-	return cmd
-}
-
-func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
-	var queue bool
-	var runID string
-	var runTimeout time.Duration
-	cmd := &cobra.Command{
-		Use:   "restore",
-		Short: "Restore missing campaign datasets to the public mirror",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if !queue && runID == "" {
-				return fmt.Errorf("evaluation: campaign mirror restore: specify --queue or --run-id")
-			}
-			if queue && runID != "" {
-				return fmt.Errorf("evaluation: campaign mirror restore: --queue and --run-id are mutually exclusive")
-			}
-			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
-			if err != nil {
-				return err
-			}
-			publication, err := newCampaignPublicationCoordinator(cmd, fileSvc)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign mirror restore: %w", err)
-			}
-			mirrorProbe := newHTTPCampaignMirrorProbe(cmd.Context())
-			publication.WithMirrorProbe(mirrorProbe)
-			reconciler := evaluation.NewCampaignMirrorReconciler(
-				publication,
-				evaluation.NewStore(fileSvc),
-				mirrorProbe,
-			)
-			if queue {
-				result, err := reconcileVerifiedCampaignMirrorQueue(cmd.Context(), cfg.ProjectRoot, reconciler, runTimeout, func(progress evaluation.CampaignMirrorReconcileProgress) {
-					writeCampaignMirrorRestoreProgress(cmd.ErrOrStderr(), progress)
-				})
-				if err != nil {
-					return fmt.Errorf("evaluation: campaign mirror restore: %w", err)
-				}
-				if output.JSONEnabled(cmd) {
-					payload, err := json.MarshalIndent(result, "", "  ")
-					if err != nil {
-						return err
-					}
-					if _, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload)); err != nil {
-						return err
-					}
-				} else {
-					writeCampaignMirrorRestoreQueueResult(cmd.OutOrStdout(), cmd.ErrOrStderr(), result)
-				}
-				if len(result.FailedRuns) > 0 {
-					return fmt.Errorf("evaluation: campaign mirror restore: %d run(s) failed", len(result.FailedRuns))
-				}
-				return nil
-			}
-			published, err := reconciler.ReconcileRun(cmd.Context(), runID)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign mirror restore: %w", err)
-			}
-			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(campaignMirrorRestoreRunJSON{
-					RunID:            runID,
-					PublishedRecords: published,
-				}, "", "  ")
-				if err != nil {
-					return err
-				}
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-				return err
-			}
-			writeCampaignMirrorRestoreRunResult(cmd.OutOrStdout(), runID, published)
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&queue, "queue", false, "Restore every verified run listed in .g8e/eval/init-campaign-queue.json")
-	cmd.Flags().StringVar(&runID, "run-id", "", "Restore one canonical campaign run")
-	cmd.Flags().DurationVar(&runTimeout, "run-timeout", evaluation.CampaignMirrorDefaultRunTimeout, "Base per-run timeout; scales up with assignment count during restore")
-	return cmd
-}
-
-func reconcileVerifiedCampaignMirrorQueue(ctx context.Context, projectRoot string, reconciler *evaluation.CampaignMirrorReconciler, runTimeout time.Duration, progress evaluation.CampaignMirrorReconcileProgressFunc) (*evaluation.CampaignMirrorReconcileResult, error) {
+func reconcileVerifiedCampaignMirrorQueue(ctx context.Context, projectRoot string, reconciler *evaluation.CampaignMirrorReconciler, runTimeout time.Duration, force bool, progress evaluation.CampaignMirrorReconcileProgressFunc) (*evaluation.CampaignMirrorReconcileResult, error) {
 	fileSvc, err := fs.NewRuntimeFileService(projectRoot, nil)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign mirror queue file service: %w", err)
@@ -121,7 +26,7 @@ func reconcileVerifiedCampaignMirrorQueue(ctx context.Context, projectRoot strin
 	if err != nil {
 		return nil, err
 	}
-	return reconciler.ReconcileVerifiedQueue(ctx, queue, runTimeout, true, progress)
+	return reconciler.ReconcileVerifiedQueue(ctx, queue, runTimeout, true, force, progress)
 }
 
 const dockerInitCampaignMirrorRestoreTimeout = 10 * time.Second
@@ -156,7 +61,7 @@ func reconcileVerifiedCampaignMirrorFromDockerInit(ctx context.Context, fileSvc 
 		if err != nil {
 			return nil, err
 		}
-		return reconciler.ReconcileVerifiedQueue(restoreCtx, queue, dockerInitCampaignMirrorRestoreTimeout, false, nil)
+		return reconciler.ReconcileVerifiedQueue(restoreCtx, queue, dockerInitCampaignMirrorRestoreTimeout, false, false, nil)
 	})
 }
 

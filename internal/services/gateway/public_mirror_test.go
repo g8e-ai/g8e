@@ -1435,6 +1435,99 @@ func TestMirror_ProofIngest_AuthenticatesValidatesAndAtomicallyStoresPackage(t *
 	assert.Equal(t, content, stored)
 }
 
+func TestMirror_ProofIngest_AcceptsIncrementalArtifactDelta(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	env.mirror.SetIngestAuthToken("proof-token")
+
+	first := env.makeProofIngestRequest("proof-a.json", []byte(`{"campaign_id":"c1","artifact":"a"}`))
+	firstBody, err := json.Marshal(first)
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, env.server.URL+"/proof-ingest", bytes.NewReader(firstBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer proof-token")
+	req.Header.Set("Content-Type", "application/json")
+	response, err := env.client.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	require.Equal(t, http.StatusOK, response.StatusCode)
+
+	secondContent := []byte(`{"campaign_id":"c1","artifact":"b"}`)
+	secondHash := sha256.Sum256(secondContent)
+	secondID := hex.EncodeToString(secondHash[:])
+	secondEntry := models.PublicProofCatalogEntry{
+		ArtifactID:          secondID,
+		Filename:            "proof-b.json",
+		MediaType:           "application/json",
+		ByteSize:            int64(len(secondContent)),
+		SHA256:              secondID,
+		Classification:      models.PublicFeedProofClassificationPublicSafe,
+		CampaignID:          "c1",
+		GeneratedAt:         time.Now().UTC(),
+		VerificationCommand: "sha256sum proof-b.json",
+		ImmutableURL:        "/proofs/" + secondID,
+	}
+	manifest := first.Manifest
+	manifest.ArtifactCount = 2
+	manifest.Artifacts = append([]models.PublicProofCatalogEntry(nil), first.Catalog.Entries[0], secondEntry)
+	manifest.ProofRootSHA256 = (&PublicPublisherService{}).computeProofRootHash(manifest)
+	rootBytes, err := hex.DecodeString(manifest.ProofRootSHA256)
+	require.NoError(t, err)
+	manifest.Signature = hex.EncodeToString(ed25519.Sign(env.priv, rootBytes))
+	delta := models.PublicProofIngestRequest{
+		SourceID:  env.sourceID,
+		Manifest:  manifest,
+		Catalog:   models.PublicProofCatalog{SchemaVersion: constants.PublicProofCatalogSchemaVersion, Entries: manifest.Artifacts, GeneratedAt: time.Now().UTC()},
+		Artifacts: []models.PublicProofIngestArtifact{{ArtifactID: secondID, Content: secondContent}},
+	}
+	deltaBody, err := json.Marshal(delta)
+	require.NoError(t, err)
+	req, err = http.NewRequest(http.MethodPost, env.server.URL+"/proof-ingest", bytes.NewReader(deltaBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer proof-token")
+	req.Header.Set("Content-Type", "application/json")
+	response, err = env.client.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+
+	response, err = env.client.Get(env.server.URL + "/proofs/" + secondID)
+	require.NoError(t, err)
+	stored, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, secondContent, stored)
+}
+
+func TestMirror_ProofIngest_RejectsCatalogExceedingMaxArtifacts(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	env.mirror.SetIngestAuthToken("proof-token")
+	request := env.makeProofIngestRequest("proof.json", []byte(`{"campaign_id":"c1"}`))
+	request.Manifest.ArtifactCount = constants.PublicFeedProofMaxArtifacts + 1
+	request.Catalog.Entries = make([]models.PublicProofCatalogEntry, constants.PublicFeedProofMaxArtifacts+1)
+	for i := range request.Catalog.Entries {
+		request.Catalog.Entries[i] = request.Manifest.Artifacts[0]
+	}
+	request.Manifest.Artifacts = request.Catalog.Entries
+	request.Artifacts = make([]models.PublicProofIngestArtifact, constants.PublicFeedProofMaxArtifacts+1)
+	for i := range request.Artifacts {
+		request.Artifacts[i] = models.PublicProofIngestArtifact{
+			ArtifactID: request.Manifest.Artifacts[0].ArtifactID,
+			Content:    []byte(`{"campaign_id":"c1"}`),
+		}
+	}
+	requestBody, err := json.Marshal(request)
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, env.server.URL+"/proof-ingest", bytes.NewReader(requestBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer proof-token")
+	req.Header.Set("Content-Type", "application/json")
+	response, err := env.client.Do(req)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, http.StatusBadRequest, response.StatusCode)
+	assert.Empty(t, env.mirror.state.ProofArtifacts)
+}
+
 func TestMirror_ProofIngest_RejectsInvalidPackageWithoutPartialPersistence(t *testing.T) {
 	testCases := []struct {
 		name     string

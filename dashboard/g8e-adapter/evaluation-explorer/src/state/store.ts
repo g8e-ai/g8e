@@ -38,13 +38,13 @@ import {
   type FeedStatus,
   type StreamConnectionState,
 } from '../utils/feed-state';
+import { CAMPAIGN_MESSAGE_TYPES } from '../contract/campaign-wire';
 import {
   adaptCampaignProjectionEnvelope,
   campaignProgressCounts,
   campaignRunIdFromDatasetId,
   cloneCampaignAdaptContext,
   createCampaignAdaptContext,
-  isCampaignProjectionEnvelope,
   recordCampaignMatrixTotal,
   type CampaignAdaptContext,
 } from './campaign-adapter';
@@ -59,6 +59,26 @@ export function recordKey(datasetId: string, id: string): string {
 /** Model summaries are unique per dataset, variant, and designated role. */
 export function modelRecordKey(datasetId: string, variantId: string, role: ModelRole): string {
   return recordKey(datasetId, `${variantId}:${role}`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Mirror transport metadata must never reach campaign/view decoders. */
+function parseProjectionPayload(recordBytes: string): Record<string, unknown> {
+  const payload: unknown = JSON.parse(recordBytes);
+  if (!isRecord(payload)) {
+    throw new ValidationError('expected object', 'projection');
+  }
+  delete payload.sequence;
+  delete payload.record_type;
+  return payload;
+}
+
+function isCampaignProjectionPayload(payload: Record<string, unknown>): boolean {
+  const messageType = payload.message_type;
+  return typeof messageType === 'string' && (CAMPAIGN_MESSAGE_TYPES as readonly string[]).includes(messageType);
 }
 
 function normalizeQualityRecord<T extends SnapshotRecord | LiveEvent>(record: T): T {
@@ -378,7 +398,7 @@ export class EvalStore {
     try {
       isProjectionRecord(record);
       if (record.record_type !== 'projection' && record.record_type !== 'event') return;
-      const payload = JSON.parse(record.record_bytes);
+      const payload = parseProjectionPayload(record.record_bytes);
       if (
         payload.kind === 'evaluation_summary' &&
         payload.native_result === undefined &&
@@ -386,7 +406,7 @@ export class EvalStore {
       ) {
         payload.model_role_mapping = {};
       }
-      if (isCampaignProjectionEnvelope(payload)) {
+      if (isCampaignProjectionPayload(payload)) {
         const candidateContext = cloneCampaignAdaptContext(this.campaignContext);
         const adapted = adaptCampaignProjectionEnvelope(payload, candidateContext);
         const validated = adapted.map((decoded) => decodeViewRecord(decoded.kind, decoded));
@@ -396,7 +416,11 @@ export class EvalStore {
         }
         return;
       }
-      const decoded = decodeViewRecord(payload.kind, payload);
+      const kind = payload.kind;
+      if (typeof kind !== 'string' || kind.length === 0) {
+        throw new ValidationError('expected string', 'projection.kind');
+      }
+      const decoded = decodeViewRecord(kind, payload);
       this.indexRecord(state, decoded, record.sequence);
     } catch (error) {
       const message = error instanceof ValidationError ? `${error.path}: ${error.message}` : 'invalid public feed record';

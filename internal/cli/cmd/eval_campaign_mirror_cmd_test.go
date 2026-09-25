@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -80,7 +81,7 @@ func TestReconcileVerifiedCampaignMirrorQueue_LoadsQueueAndRestores(t *testing.T
 	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
 	reconciler := evaluation.NewCampaignMirrorReconciler(coordinator, store, probe)
-	result, err := reconcileVerifiedCampaignMirrorQueue(context.Background(), root, reconciler, time.Minute, nil)
+	result, err := reconcileVerifiedCampaignMirrorQueue(context.Background(), root, reconciler, time.Minute, false, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, []string{run.GetRunId()}, result.RestoredRunIDs)
@@ -216,11 +217,11 @@ func TestCampaignEvalMirrorRestoreQueue_ViaCLI(t *testing.T) {
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
-	command := evalCmdWithConfig(deps)
+	command := publicRestoreCmdWithConfig(deps.configLoader, deps.fileSvcFactory)
 	var output, progress bytes.Buffer
 	command.SetOut(&output)
 	command.SetErr(&progress)
-	command.SetArgs([]string{"campaign", "mirror", "restore", "--project-root", root, "--queue"})
+	command.SetArgs([]string{"--project-root", root, "--queue"})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), "Restored")
 	assert.Contains(t, progress.String(), "Checking verified run 1/1")
@@ -244,13 +245,15 @@ func TestCampaignEvalMirrorRestoreQueue_JSONReturnsFailureWhenRunsFail(t *testin
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 	require.NoError(t, evaluation.SaveInitCampaignQueueToRuntime(context.Background(), fileSvc, evaluation.DefaultInitCampaignQueueRelPath, queue))
 
-	command := evalCmdWithConfig(deps)
-	rootCmd := globalJSONRoot(t, command)
+	restoreCmd := publicRestoreCmdWithConfig(deps.configLoader, deps.fileSvcFactory)
+	publicRoot := &cobra.Command{Use: "public"}
+	publicRoot.AddCommand(restoreCmd)
+	rootCmd := globalJSONRoot(t, publicRoot)
 	rootCmd.SilenceErrors = true
 	rootCmd.SilenceUsage = true
 	var output bytes.Buffer
 	rootCmd.SetOut(&output)
-	rootCmd.SetArgs([]string{"eval", "campaign", "mirror", "restore", "--project-root", root, "--queue", "--run-timeout", "1ns"})
+	rootCmd.SetArgs([]string{"public", "restore", "--project-root", root, "--queue", "--run-timeout", "1ns"})
 	err = rootCmd.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "1 run(s) failed")
@@ -294,10 +297,10 @@ func TestCampaignEvalMirrorRestoreRun_ViaCLI(t *testing.T) {
 	}, req.ScenarioArtifacts)
 	require.NoError(t, err)
 
-	command := evalCmdWithConfig(deps)
+	command := publicRestoreCmdWithConfig(deps.configLoader, deps.fileSvcFactory)
 	var output bytes.Buffer
 	command.SetOut(&output)
-	command.SetArgs([]string{"campaign", "mirror", "restore", "--project-root", root, "--run-id", run.GetRunId()})
+	command.SetArgs([]string{"--project-root", root, "--run-id", run.GetRunId()})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), run.GetRunId())
 }

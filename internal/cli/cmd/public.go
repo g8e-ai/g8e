@@ -273,6 +273,7 @@ func publicCmd() *cobra.Command {
 		publicPublishCmdWithConfig(loadConfig, newFileSvc),
 		publicPushCmdWithConfig(loadConfig, newFileSvc),
 		publicRepairOutboxCmdWithConfig(loadConfig, newFileSvc),
+		publicRestoreCmdWithConfig(loadConfig, newFileSvc),
 		publicStatusCmdWithConfig(loadConfig, newFileSvc),
 		publicRotateKeyCmdWithConfig(loadConfig, newFileSvc),
 		publicVerifyAssignmentCmd(),

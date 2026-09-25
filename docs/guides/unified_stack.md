@@ -679,13 +679,13 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 Restore every verified queue entry to the gateway-owned mirror:
 
 ```bash
-./g8e eval campaign mirror restore --queue
+./g8e public restore --queue
 ```
 
 Or one run:
 
 ```bash
-./g8e eval campaign mirror restore --run-id <run-id>
+./g8e public restore --run-id <run-id>
 ```
 
 `docker init` attempts `--queue` restore automatically when the queue and run artifacts exist. Queue entries whose `verified_run_id` directory is missing are reported as host-absent and must be re-executed — mirror restore cannot recreate inference evidence.

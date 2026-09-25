@@ -26,12 +26,15 @@ type AssignmentAuditProofInput struct {
 	AssignmentID     string
 	IndexDigest      string
 	Artifacts        AssignmentAuditSliceArtifacts
+	DeferMirrorPush  bool
 }
 
 // CampaignProofPublisher ingests assignment audit exports into the public proof
 // catalog. Nil publishers skip proof publication.
 type CampaignProofPublisher interface {
-	IngestAssignmentAuditSlice(ctx context.Context, input AssignmentAuditProofInput) error
+	IngestAssignmentAuditSlices(ctx context.Context, inputs []AssignmentAuditProofInput, deferMirrorPush bool) error
+	PruneRunProofCatalog(ctx context.Context, runID string) error
+	FlushProofCatalog(ctx context.Context) error
 }
 
 // AssignmentAuditProofIdempotencyKey returns the publication idempotency key for
@@ -94,17 +97,17 @@ func collectAssignmentAuditEventBodies(requests []campaignFeedPublishRequest) []
 	return bodies
 }
 
-// BuildAssignmentAuditBindings builds and optionally ingests one assignment
-// audit export package from the live events about to be published for a
-// terminal assignment. Returns nil bindings when proof publication is disabled
-// or no disclosure-safe events are available.
+// BuildAssignmentAuditBindings builds one assignment audit export package from
+// the live events about to be published for a terminal assignment. When
+// ingestProofs is true, the proof publisher ingests the export package.
 func (c *CampaignPublicationCoordinator) BuildAssignmentAuditBindings(
 	ctx context.Context,
 	assignment *evalv1.EvaluationAssignment,
 	result *evalv1.EvaluationAssignmentResult,
 	liveRequests []campaignFeedPublishRequest,
+	ingestProofs bool,
 ) ([]*evalv1.PublicEvidenceBinding, error) {
-	if c == nil || c.proofPublisher == nil || assignment == nil || result == nil {
+	if c == nil || assignment == nil || result == nil {
 		return nil, nil
 	}
 	bodies := collectAssignmentAuditEventBodies(liveRequests)
@@ -115,6 +118,9 @@ func (c *CampaignPublicationCoordinator) BuildAssignmentAuditBindings(
 	artifacts, err := BuildAssignmentAuditSlice(assignment.GetAssignmentId(), events)
 	if err != nil {
 		return nil, err
+	}
+	if !ingestProofs || c.proofPublisher == nil {
+		return AssignmentAuditEvidenceBindings(artifacts), nil
 	}
 	spec, err := c.store.LoadCampaignSpec(ctx, assignment.GetCampaignId())
 	if err != nil {
@@ -128,14 +134,20 @@ func (c *CampaignPublicationCoordinator) BuildAssignmentAuditBindings(
 	if indexDigest == "" {
 		indexDigest = assignment.GetAssignmentId()
 	}
-	if err := c.proofPublisher.IngestAssignmentAuditSlice(ctx, AssignmentAuditProofInput{
+	input := AssignmentAuditProofInput{
 		CampaignID:       assignment.GetCampaignId(),
 		CampaignRevision: revision,
 		RunID:            assignment.GetRunId(),
 		AssignmentID:     assignment.GetAssignmentId(),
 		IndexDigest:      indexDigest,
 		Artifacts:        artifacts,
-	}); err != nil {
+	}
+	if c.deferProofMirrorPush {
+		c.pendingProofInputs = append(c.pendingProofInputs, input)
+		c.pendingProofMirrorPush = true
+		return AssignmentAuditEvidenceBindings(artifacts), nil
+	}
+	if err := c.proofPublisher.IngestAssignmentAuditSlices(ctx, []AssignmentAuditProofInput{input}, false); err != nil {
 		return nil, err
 	}
 	return AssignmentAuditEvidenceBindings(artifacts), nil

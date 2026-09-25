@@ -19,12 +19,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/api"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
+
+// campaignPublicationAPIClientTimeout covers bulk mirror restore work such as
+// large proof-catalog flushes while the gateway is signing and ingesting.
+const campaignPublicationAPIClientTimeout = 10 * time.Minute
+
+func campaignPublicationAPIClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Config) (apiClient, error) {
+	return api.NewClientWithTimeout(fileSvc, cfg, campaignPublicationAPIClientTimeout)
+}
 
 type remoteGatewayCampaignFeedExporter struct {
 	client    apiClient
@@ -370,7 +379,7 @@ func newCampaignFeedExporter(cmd context.Context, fileSvc fs.RuntimeFileService,
 	if !isGatewayHealthy() {
 		return nil, fmt.Errorf("campaign publication: gateway is not healthy; start g8e-gateway with --public-spectator")
 	}
-	client, err := defaultAPIClientFactory(fileSvc, cfg)
+	client, err := campaignPublicationAPIClientFactory(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("campaign publication: create gateway client: %w", err)
 	}
@@ -381,27 +390,91 @@ type remoteGatewayCampaignProofPublisher struct {
 	client apiClient
 }
 
-func (p *remoteGatewayCampaignProofPublisher) IngestAssignmentAuditSlice(ctx context.Context, input evaluation.AssignmentAuditProofInput) error {
+func (p *remoteGatewayCampaignProofPublisher) IngestAssignmentAuditSlices(ctx context.Context, inputs []evaluation.AssignmentAuditProofInput, deferMirrorPush bool) error {
 	if p == nil || p.client == nil {
 		return fmt.Errorf("campaign publication: publish assignment audit proof: %w", constants.ErrMissingRequiredField)
 	}
-	body, err := json.Marshal(models.PublicAssignmentAuditProofPublishRequest{
-		CampaignID:       input.CampaignID,
-		CampaignRevision: input.CampaignRevision,
-		RunID:            input.RunID,
-		AssignmentID:     input.AssignmentID,
-		IndexDigest:      input.IndexDigest,
-		Database:         input.Artifacts.Database,
-		VaultKey:         input.Artifacts.VaultKey,
-	})
+	if len(inputs) == 0 {
+		return nil
+	}
+	proofs := make([]models.PublicAssignmentAuditProofPublishRequest, len(inputs))
+	for index, input := range inputs {
+		proofs[index] = models.PublicAssignmentAuditProofPublishRequest{
+			CampaignID:       input.CampaignID,
+			CampaignRevision: input.CampaignRevision,
+			RunID:            input.RunID,
+			AssignmentID:     input.AssignmentID,
+			IndexDigest:      input.IndexDigest,
+			Database:         input.Artifacts.Database,
+			VaultKey:         input.Artifacts.VaultKey,
+		}
+	}
+	path := constants.APIPaths.PublicFeedProofsBatch
+	if len(proofs) == 1 {
+		path = constants.APIPaths.PublicFeedProofs
+	}
+	var responseBody []byte
+	var err error
+	if len(proofs) == 1 {
+		proof := proofs[0]
+		proof.DeferMirrorPush = deferMirrorPush
+		responseBody, err = p.client.Post(path, proof)
+	} else {
+		responseBody, err = p.client.Post(path, models.PublicAssignmentAuditProofBatchPublishRequest{
+			Proofs:          proofs,
+			DeferMirrorPush: deferMirrorPush,
+		})
+	}
 	if err != nil {
 		return fmt.Errorf("campaign publication: publish assignment audit proof: %w", err)
 	}
-	responseBody, err := p.client.Post(constants.APIPaths.PublicFeedProofs, body)
-	if err != nil {
-		return fmt.Errorf("campaign publication: publish assignment audit proof: %w", err)
+	if len(proofs) == 1 {
+		var response models.PublicAssignmentAuditProofPublishResponse
+		if err := json.Unmarshal(responseBody, &response); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+		}
+		if !response.Accepted {
+			return constants.ErrPublicFeedProofIngestRejected
+		}
+		return nil
 	}
-	var response models.PublicAssignmentAuditProofPublishResponse
+	var response models.PublicAssignmentAuditProofBatchPublishResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if !response.Accepted {
+		return constants.ErrPublicFeedProofIngestRejected
+	}
+	return nil
+}
+
+func (p *remoteGatewayCampaignProofPublisher) PruneRunProofCatalog(ctx context.Context, runID string) error {
+	if p == nil || p.client == nil || runID == "" {
+		return nil
+	}
+	responseBody, err := p.client.Post(constants.APIPaths.PublicFeedProofsPrune, models.PublicProofCatalogPruneRequest{RunID: runID})
+	if err != nil {
+		return fmt.Errorf("campaign publication: prune run proof catalog: %w", err)
+	}
+	var response models.PublicProofCatalogPruneResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if !response.Accepted {
+		return constants.ErrPublicFeedProofIngestRejected
+	}
+	return nil
+}
+
+func (p *remoteGatewayCampaignProofPublisher) FlushProofCatalog(ctx context.Context) error {
+	if p == nil || p.client == nil {
+		return fmt.Errorf("campaign publication: flush proof catalog: %w", constants.ErrMissingRequiredField)
+	}
+	responseBody, err := p.client.Post(constants.APIPaths.PublicFeedProofsPush, struct{}{})
+	if err != nil {
+		return fmt.Errorf("campaign publication: flush proof catalog: %w", err)
+	}
+	var response models.PublicProofCatalogPushResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
@@ -415,7 +488,7 @@ func newCampaignProofPublisher(cmd context.Context, fileSvc fs.RuntimeFileServic
 	if !isGatewayHealthy() {
 		return nil, fmt.Errorf("campaign publication: gateway is not healthy; start g8e-gateway with --public-spectator")
 	}
-	client, err := defaultAPIClientFactory(fileSvc, cfg)
+	client, err := campaignPublicationAPIClientFactory(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("campaign publication: create gateway proof client: %w", err)
 	}
