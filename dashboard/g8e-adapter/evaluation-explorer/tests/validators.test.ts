@@ -9,6 +9,7 @@ import {
   isSuiteSummary,
   isFeedSnapshot,
   isFeedBootstrap,
+  isProofCatalog,
   decodeViewRecord,
   normalizeVerifierFailureSummary,
 } from '../src/contract/validators';
@@ -151,6 +152,48 @@ describe('isFeedBootstrap', () => {
       generated_at: '2026-09-14T08:00:00Z',
     };
     expect(() => isFeedBootstrap(bad)).toThrow(ValidationError);
+  });
+});
+
+describe('proof catalog contract', () => {
+  const artifactID = 'a'.repeat(64);
+
+  it('accepts a mirror proof catalog entry', () => {
+    expect(() => isProofCatalog({
+      schema_version: '1.0.0',
+      generated_at: '2026-09-20T00:00:00Z',
+      entries: [{
+        artifact_id: artifactID,
+        filename: 'assignment.db',
+        media_type: 'application/vnd.sqlite3',
+        byte_size: 512,
+        sha256: artifactID,
+        classification: 'public_safe',
+        campaign_id: 'campaign-1',
+        generated_at: '2026-09-20T00:00:00Z',
+        verification_command: 'g8e public verify-assignment --db assignment.db --vault-key assignment.vault.key',
+        immutable_url: `/proofs/${artifactID}`,
+      }],
+    })).not.toThrow();
+  });
+
+  it('rejects a catalog entry whose immutable_url does not match the hash', () => {
+    expect(() => isProofCatalog({
+      schema_version: '1.0.0',
+      generated_at: '2026-09-20T00:00:00Z',
+      entries: [{
+        artifact_id: artifactID,
+        filename: 'assignment.db',
+        media_type: 'application/vnd.sqlite3',
+        byte_size: 512,
+        sha256: artifactID,
+        classification: 'public_safe',
+        campaign_id: 'campaign-1',
+        generated_at: '2026-09-20T00:00:00Z',
+        verification_command: 'g8e public verify-assignment --db assignment.db --vault-key assignment.vault.key',
+        immutable_url: '/proofs/deadbeef',
+      }],
+    })).toThrow(ValidationError);
   });
 });
 

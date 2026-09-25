@@ -50,6 +50,7 @@ const (
 	ArtifactTypeEvaluationScenarioInput   ArtifactType = "evaluation-scenario-input"
 	ArtifactTypeEvaluationScenarioGold    ArtifactType = "evaluation-scenario-gold"
 	ArtifactTypeEvaluationAssignmentTrace ArtifactType = "evaluation-assignment-trace"
+	ArtifactTypeEvaluationAssignmentFormationRun ArtifactType = "evaluation-assignment-formation-run"
 	ArtifactTypeAuditRecord               ArtifactType = "audit-record"
 	ArtifactTypeLedgerCommit              ArtifactType = "ledger-commit"
 	ArtifactTypeLedgerState               ArtifactType = "ledger-state"

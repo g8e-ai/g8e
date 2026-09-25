@@ -118,23 +118,36 @@ func isRecoverableAssignmentExecutionError(err error) bool {
 	}
 	message := err.Error()
 	return strings.Contains(message, "evaluation: execute assignment:") ||
-		strings.Contains(message, "evaluation: import assignment result from trace:")
+		strings.Contains(message, "evaluation: import assignment result from trace:") ||
+		strings.Contains(message, "evaluation: import formation assignment result")
 }
 
 func (c *CampaignController) buildFailureAssignmentResult(ctx context.Context, req AssignmentExecutionRequest, execErr error) (*evalv1.EvaluationAssignmentResult, error) {
 	if c == nil || c.store == nil || req.Assignment == nil {
 		return nil, fmt.Errorf("evaluation: build failure assignment result: %w", constants.ErrMissingRequiredField)
 	}
-	trace, err := c.store.LoadAssignmentTrace(ctx, req.Assignment.GetRunId(), req.Assignment.GetAssignmentId())
-	if err == nil && len(trace) > 0 {
-		var traceEvidence *compliancev1.ComplianceEvidenceReference
-		traceEvidence, err = BuildAssignmentTraceEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, trace, c.now().UTC())
-		if err != nil {
-			traceEvidence = nil
+	if IsHeterogeneousAssignment(req.Assignment) {
+		evidence, err := c.store.LoadAssignmentFormationRun(ctx, req.Assignment.GetRunId(), req.Assignment.GetAssignmentId())
+		if err == nil && evidence != nil {
+			result, importErr := importAssignmentResultFromFormationRunEvidence(req, evidence, c.now().UTC(), c.newID)
+			if importErr == nil {
+				return result, nil
+			}
 		}
-		result, importErr := ImportAssignmentResultFromTrace(req, trace, traceEvidence, c.now().UTC(), c.newID)
-		if importErr == nil {
-			return result, nil
+		return BuildExecutorFailureAssignmentResult(req, execErr, c.now().UTC())
+	}
+	if !IsHeterogeneousAssignment(req.Assignment) {
+		trace, err := c.store.LoadAssignmentTrace(ctx, req.Assignment.GetRunId(), req.Assignment.GetAssignmentId())
+		if err == nil && len(trace) > 0 {
+			var traceEvidence *compliancev1.ComplianceEvidenceReference
+			traceEvidence, err = BuildAssignmentTraceEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, trace, c.now().UTC())
+			if err != nil {
+				traceEvidence = nil
+			}
+			result, importErr := ImportAssignmentResultFromTrace(req, trace, traceEvidence, c.now().UTC(), c.newID)
+			if importErr == nil {
+				return result, nil
+			}
 		}
 	}
 	return BuildExecutorFailureAssignmentResult(req, execErr, c.now().UTC())
@@ -241,40 +254,52 @@ func (c *CampaignController) RepairAssignmentsWithoutResults(ctx context.Context
 }
 
 func (c *CampaignController) recoverTerminalAssignmentResult(ctx context.Context, assignment *evalv1.EvaluationAssignment, artifacts map[string]ScenarioArtifacts) (*evalv1.EvaluationAssignmentResult, error) {
-	trace, traceErr := c.store.LoadAssignmentTrace(ctx, assignment.GetRunId(), assignment.GetAssignmentId())
-	if traceErr == nil && len(trace) > 0 && artifacts != nil {
-		artifact, ok := artifacts[assignment.GetScenarioId()]
-		if ok {
-			var scenarioInput ScenarioInputFixture
-			if err := json.Unmarshal(artifact.Input.Body, &scenarioInput); err == nil {
-				var scenarioGold ScenarioGoldCriteria
-				if err := json.Unmarshal(artifact.Gold.Body, &scenarioGold); err == nil {
-					run, err := c.store.LoadRun(ctx, assignment.GetRunId())
-					if err == nil {
-						catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if IsHeterogeneousAssignment(assignment) {
+		evidence, err := c.store.LoadAssignmentFormationRun(ctx, assignment.GetRunId(), assignment.GetAssignmentId())
+		if err == nil && evidence != nil {
+			req := AssignmentExecutionRequest{Assignment: assignment, AttemptID: evidence.EvaluationAttemptID}
+			result, importErr := importAssignmentResultFromFormationRunEvidence(req, evidence, c.now().UTC(), c.newID)
+			if importErr == nil {
+				return result, nil
+			}
+		}
+	}
+	if !IsHeterogeneousAssignment(assignment) {
+		trace, traceErr := c.store.LoadAssignmentTrace(ctx, assignment.GetRunId(), assignment.GetAssignmentId())
+		if traceErr == nil && len(trace) > 0 && artifacts != nil {
+			artifact, ok := artifacts[assignment.GetScenarioId()]
+			if ok {
+				var scenarioInput ScenarioInputFixture
+				if err := json.Unmarshal(artifact.Input.Body, &scenarioInput); err == nil {
+					var scenarioGold ScenarioGoldCriteria
+					if err := json.Unmarshal(artifact.Gold.Body, &scenarioGold); err == nil {
+						run, err := c.store.LoadRun(ctx, assignment.GetRunId())
 						if err == nil {
-							gradingMethod, err := scenarioGradingMethodForAssignment(catalog, assignment)
+							catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
 							if err == nil {
-								scenarioTools, err := scenarioToolsForAssignment(catalog, assignment)
+								gradingMethod, err := scenarioGradingMethodForAssignment(catalog, assignment)
 								if err == nil {
-									requiredConcepts, err := scenarioRequiredConceptsForAssignment(catalog, assignment)
+									scenarioTools, err := scenarioToolsForAssignment(catalog, assignment)
 									if err == nil {
-										req := AssignmentExecutionRequest{
-											Assignment:       assignment,
-											AttemptID:        "recovered",
-											ScenarioInput:    scenarioInput,
-											ScenarioGold:     scenarioGold,
-											ScenarioTools:    scenarioTools,
-											RequiredConcepts: requiredConcepts,
-											GradingMethod:    gradingMethod,
-										}
-										traceEvidence, err := BuildAssignmentTraceEvidenceReference(assignment.GetRunId(), assignment.GetAssignmentId(), req.AttemptID, trace, c.now().UTC())
-										if err != nil {
-											traceEvidence = nil
-										}
-										result, importErr := ImportAssignmentResultFromTrace(req, trace, traceEvidence, c.now().UTC(), c.newID)
-										if importErr == nil {
-											return result, nil
+										requiredConcepts, err := scenarioRequiredConceptsForAssignment(catalog, assignment)
+										if err == nil {
+											req := AssignmentExecutionRequest{
+												Assignment:       assignment,
+												AttemptID:        "recovered",
+												ScenarioInput:    scenarioInput,
+												ScenarioGold:     scenarioGold,
+												ScenarioTools:    scenarioTools,
+												RequiredConcepts: requiredConcepts,
+												GradingMethod:    gradingMethod,
+											}
+											traceEvidence, err := BuildAssignmentTraceEvidenceReference(assignment.GetRunId(), assignment.GetAssignmentId(), req.AttemptID, trace, c.now().UTC())
+											if err != nil {
+												traceEvidence = nil
+											}
+											result, importErr := ImportAssignmentResultFromTrace(req, trace, traceEvidence, c.now().UTC(), c.newID)
+											if importErr == nil {
+												return result, nil
+											}
 										}
 									}
 								}
@@ -286,8 +311,10 @@ func (c *CampaignController) recoverTerminalAssignmentResult(ctx context.Context
 		}
 	}
 	recoveredErr := constants.ErrEvaluationRecoveredResultMissing
-	if traceErr != nil {
-		recoveredErr = fmt.Errorf("%w: %v", recoveredErr, traceErr)
+	if !IsHeterogeneousAssignment(assignment) {
+		if _, traceErr := c.store.LoadAssignmentTrace(ctx, assignment.GetRunId(), assignment.GetAssignmentId()); traceErr != nil {
+			recoveredErr = fmt.Errorf("%w: %v", recoveredErr, traceErr)
+		}
 	}
 	req := AssignmentExecutionRequest{Assignment: assignment, AttemptID: "recovered"}
 	result, err := BuildExecutorFailureAssignmentResult(req, recoveredErr, c.now().UTC())

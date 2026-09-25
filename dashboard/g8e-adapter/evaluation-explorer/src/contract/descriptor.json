@@ -206,7 +206,9 @@
       "comparison_row",
       "efficiency_observation",
       "statistical_analysis",
-      "source_manifest"
+      "source_manifest",
+      "assignment_audit_slice",
+      "assignment_audit_vault_key"
     ],
     "PublicActivityEvidenceSource": [
       "application_reported",

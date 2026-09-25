@@ -9,6 +9,7 @@ package evaluation
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -80,14 +81,15 @@ func (r *campaignFormationProductionRunner) RunHeterogeneousFormation(ctx contex
 // CampaignFormationExecutor runs heterogeneous system-lane assignments through
 // Lite → Assistant → Primary governed formation execution.
 type CampaignFormationExecutor struct {
-	variants []*evalv1.ModelVariant
-	runner   CampaignFormationRunner
-	now      func() time.Time
-	newID    func(string) string
+	variants       []*evalv1.ModelVariant
+	runner         CampaignFormationRunner
+	formationStore CampaignFormationRunStore
+	now            func() time.Time
+	newID          func(string) string
 }
 
 // NewCampaignFormationExecutor constructs the heterogeneous campaign executor.
-func NewCampaignFormationExecutor(variants []*evalv1.ModelVariant, runner CampaignFormationRunner, now func() time.Time, newID func(string) string) *CampaignFormationExecutor {
+func NewCampaignFormationExecutor(variants []*evalv1.ModelVariant, runner CampaignFormationRunner, formationStore CampaignFormationRunStore, now func() time.Time, newID func(string) string) *CampaignFormationExecutor {
 	if now == nil {
 		now = time.Now
 	}
@@ -95,10 +97,11 @@ func NewCampaignFormationExecutor(variants []*evalv1.ModelVariant, runner Campai
 		newID = func(prefix string) string { return prefix }
 	}
 	return &CampaignFormationExecutor{
-		variants: variants,
-		runner:   runner,
-		now:      now,
-		newID:    newID,
+		variants:       variants,
+		runner:         runner,
+		formationStore: formationStore,
+		now:            now,
+		newID:          newID,
 	}
 }
 
@@ -115,7 +118,10 @@ func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req A
 	if err != nil {
 		return nil, err
 	}
-	initialState := []byte(req.ScenarioInput.UserPrompt)
+	initialState, err := BuildFormationInitialState(req.ScenarioInput)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
+	}
 	runContext := FormationRunContext{
 		CampaignID:          req.Assignment.GetCampaignId(),
 		RunID:               req.Assignment.GetRunId(),
@@ -127,10 +133,43 @@ func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req A
 		DataSessionID:       req.Binding.DataOperatorSessionID,
 	}
 	formationResult, err := e.runner.RunHeterogeneousFormation(ctx, binding, runContext, initialState)
+	if formationResult != nil {
+		if persistErr := e.persistFormationRunEvidence(ctx, req, runContext, formationResult); persistErr != nil && err == nil {
+			return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", persistErr)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: execute heterogeneous assignment: %w", err)
 	}
 	return ImportAssignmentResultFromFormationRun(req, formationResult, e.now().UTC(), e.newID)
+}
+
+func (e *CampaignFormationExecutor) persistFormationRunEvidence(ctx context.Context, req AssignmentExecutionRequest, runContext FormationRunContext, formationResult *FormationRunResult) error {
+	if e == nil || e.formationStore == nil || formationResult == nil {
+		return nil
+	}
+	body, _, err := BuildFormationRunEvidence(req, runContext, formationResult)
+	if err != nil {
+		return err
+	}
+	if err := e.formationStore.SaveAssignmentFormationRun(ctx, req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), body); err != nil {
+		return fmt.Errorf("persist formation run evidence: %w", err)
+	}
+	return nil
+}
+
+func importAssignmentResultFromFormationRunEvidence(req AssignmentExecutionRequest, evidence *FormationRunEvidence, now time.Time, newID func(string) string) (*evalv1.EvaluationAssignmentResult, error) {
+	if evidence == nil {
+		return nil, fmt.Errorf("evaluation: import formation assignment result from evidence: %w", constants.ErrMissingRequiredField)
+	}
+	if req.AttemptID == "" {
+		req.AttemptID = evidence.EvaluationAttemptID
+	}
+	formationResult, err := FormationRunResultFromEvidence(evidence)
+	if err != nil {
+		return nil, err
+	}
+	return ImportAssignmentResultFromFormationRun(req, formationResult, now, newID)
 }
 
 // CampaignAssignmentRouter dispatches one assignment to the homogeneous chat
@@ -278,4 +317,109 @@ func formationModelToVariant(model FormationModel) *evalv1.ModelVariant {
 		ParameterCount: model.ParameterCount,
 		Quantization:   model.Quantization,
 	}
+}
+
+// BuildFormationInitialState materializes the frozen scenario input fixture
+// into opaque bytes passed through Lite → Assistant → Primary state handoff.
+func BuildFormationInitialState(input ScenarioInputFixture) ([]byte, error) {
+	if input.UserPrompt == "" {
+		return nil, fmt.Errorf("evaluation: build formation initial state: scenario %s missing user prompt", input.ScenarioID)
+	}
+	body, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: build formation initial state: %w", err)
+	}
+	return body, nil
+}
+
+func formationOutcomeFromResult(result *evalv1.EvaluationAssignmentResult) *FormationRunResult {
+	if result == nil {
+		return nil
+	}
+	return &FormationRunResult{
+		Passed: result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		Roles:  make([]FormationRoleTelemetry, len(result.GetModelInferences())),
+	}
+}
+
+// VerifyFormationAssignmentEvidence independently checks persisted heterogeneous
+// assignment results without requiring a g8ee chat trace.
+func VerifyFormationAssignmentEvidence(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) error {
+	if assignment == nil || result == nil {
+		return fmt.Errorf("evaluation: verify formation assignment evidence: %w", constants.ErrMissingRequiredField)
+	}
+	if !IsHeterogeneousAssignment(assignment) {
+		return fmt.Errorf("evaluation: verify formation assignment evidence: heterogeneous target required")
+	}
+	inferences := result.GetModelInferences()
+	switch result.GetLifecycleStatus() {
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
+		if len(inferences) != 3 {
+			return fmt.Errorf("completed heterogeneous assignment requires three model inferences")
+		}
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL:
+		if len(inferences) == 0 || len(inferences) >= 3 {
+			return fmt.Errorf("partial heterogeneous assignment requires one or two model inferences")
+		}
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED:
+		if len(inferences) != 0 {
+			return fmt.Errorf("provider-failed heterogeneous assignment must not report model inferences")
+		}
+	}
+	expectedRoles := []evalv1.ModelCampaignRole{
+		evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE,
+		evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT,
+		evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+	}
+	for index, record := range inferences {
+		if record.GetProviderAttemptId() == "" {
+			return fmt.Errorf("model inference %d missing provider attempt id", index)
+		}
+		if record.GetAssignmentId() != assignment.GetAssignmentId() {
+			return fmt.Errorf("model inference %d assignment binding mismatch", index)
+		}
+		if index < len(expectedRoles) && record.GetModelRole() != expectedRoles[index] {
+			return fmt.Errorf("model inference %d role order mismatch", index)
+		}
+		expectedCallSite := "formation:" + formationRoleToCampaignRoleLabel(record.GetModelRole())
+		if record.GetCallSite() != expectedCallSite {
+			return fmt.Errorf("model inference %d call site mismatch", index)
+		}
+	}
+	if span := result.GetScoredInferenceSpanNanos(); span > 0 {
+		var total uint64
+		for _, record := range inferences {
+			total += record.GetGenerationDurationNanos()
+		}
+		if total != span {
+			return fmt.Errorf("scored inference span mismatch")
+		}
+	}
+	return nil
+}
+
+func formationRoleToCampaignRoleLabel(role evalv1.ModelCampaignRole) string {
+	switch role {
+	case evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY:
+		return string(FormationRolePrimary)
+	case evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT:
+		return string(FormationRoleAssistant)
+	case evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE:
+		return string(FormationRoleLite)
+	default:
+		return "unspecified"
+	}
+}
+
+// RecomputeFormationAssignmentGrades derives the formation-role grade from one
+// persisted heterogeneous assignment result.
+func RecomputeFormationAssignmentGrades(req AssignmentExecutionRequest, result *evalv1.EvaluationAssignmentResult) ([]*evalv1.DeterministicGrade, error) {
+	if req.Assignment == nil || result == nil {
+		return nil, fmt.Errorf("evaluation: recompute formation assignment grades: %w", constants.ErrMissingRequiredField)
+	}
+	lifecycle, grades := classifyFormationAssignmentOutcome(req, formationOutcomeFromResult(result))
+	if lifecycle != result.GetLifecycleStatus() {
+		return nil, fmt.Errorf("stored lifecycle does not match formation outcome")
+	}
+	return grades, nil
 }

@@ -296,6 +296,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 	formationExecutor := evaluation.NewCampaignFormationExecutor(
 		spec.GetModelRegistry(),
 		formationRunner,
+		store,
 		deps.now,
 		func(prefix string) string { return prefix + "-" + deps.newID() },
 	)

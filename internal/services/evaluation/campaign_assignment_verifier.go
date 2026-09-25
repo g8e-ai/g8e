@@ -31,6 +31,7 @@ type CampaignAssignmentVerificationRequest struct {
 	ScenarioTools             ScenarioToolExpectations
 	GradingMethod             evalv1.EvaluationGradingMethod
 	Trace                     EvaluationTrace
+	FormationRunEvidence      *FormationRunEvidence
 	ProviderObservationReader *CampaignProviderObservationReader
 	ProviderObservationPolicy ProviderObservationPolicy
 	ModelProvenanceReader     *CampaignModelProvenanceReader
@@ -78,6 +79,18 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 	if err := ValidateAssignmentResultDigest(req.Result); err != nil {
 		failures = append(failures, "result digest validation failed: "+err.Error())
 	}
+	if IsHeterogeneousAssignment(req.Assignment) {
+		failures = append(failures, v.verifyHeterogeneousAssignment(req)...)
+		if req.ProviderObservationReader != nil && len(scoredModelInferences(req.Result)) > 0 {
+			observationFailures, _ := req.ProviderObservationReader.VerifyAssignmentProviderObservations(ctx, req.Result, req.ProviderObservationPolicy)
+			failures = append(failures, observationFailures...)
+		}
+		if req.ModelProvenanceReader != nil && len(scoredModelInferences(req.Result)) > 0 {
+			provenanceFailures, _ := req.ModelProvenanceReader.VerifyAssignmentModelProvenance(ctx, req.Result, req.ModelProvenancePolicy)
+			failures = append(failures, provenanceFailures...)
+		}
+		return finalizeCampaignVerificationReport(report, failures), nil
+	}
 	if len(req.Trace) == 0 {
 		failures = append(failures, "imported assignment trace is required for verification")
 	} else if err := validateImportedTraceDigest(req.Trace); err != nil {
@@ -115,6 +128,27 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 		failures = append(failures, provenanceFailures...)
 	}
 	return finalizeCampaignVerificationReport(report, failures), nil
+}
+
+func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(req CampaignAssignmentVerificationRequest) []string {
+	failures := make([]string, 0)
+	if err := VerifyFormationAssignmentEvidence(req.Assignment, req.Result); err != nil {
+		failures = append(failures, "formation assignment evidence validation failed: "+err.Error())
+	}
+	if req.FormationRunEvidence != nil {
+		if err := VerifyFormationRunEvidenceMatchesResult(req.Assignment, req.FormationRunEvidence, req.Result); err != nil {
+			failures = append(failures, "formation run evidence mismatch: "+err.Error())
+		}
+	}
+	recomputedGrades, err := RecomputeFormationAssignmentGrades(AssignmentExecutionRequest{
+		Assignment: req.Assignment,
+	}, req.Result)
+	if err != nil {
+		failures = append(failures, "formation grade recomputation failed: "+err.Error())
+	} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputedGrades) {
+		failures = append(failures, "stored deterministic grades do not match formation recomputation")
+	}
+	return failures
 }
 
 func finalizeCampaignVerificationReport(report *evalv1.EvaluationVerificationReport, failures []string) *evalv1.EvaluationVerificationReport {

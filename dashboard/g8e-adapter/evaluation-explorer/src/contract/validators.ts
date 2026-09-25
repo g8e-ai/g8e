@@ -39,6 +39,8 @@ import {
   type EvaluationSummary,
   type AssignmentResult,
   type MethodologySnapshot,
+  type ProofCatalog,
+  type ProofCatalogEntry,
   ACTIVITY_AVAILABILITIES,
   PUBLIC_ACTIVITY_EVIDENCE_SOURCES,
   PUBLIC_EVIDENCE_KINDS,
@@ -1001,6 +1003,54 @@ export function isFeedHistoryPage(value: unknown): asserts value is FeedHistoryP
   assertInteger(value.limit, 'feed_history.limit');
   assert(value.limit >= 0, 'feed_history.limit', 'must be >= 0');
   if (value.cursor !== undefined) assertString(value.cursor, 'feed_history.cursor');
+}
+
+function isProofCatalogEntry(value: unknown): asserts value is ProofCatalogEntry {
+  assertObject(value, 'proof_catalog_entry');
+  rejectUnknown(
+    value,
+    [
+      'artifact_id',
+      'filename',
+      'media_type',
+      'byte_size',
+      'sha256',
+      'classification',
+      'campaign_id',
+      'source_run_id',
+      'generated_at',
+      'verification_command',
+      'immutable_url',
+    ],
+    'proof_catalog_entry',
+  );
+  assertString(value.artifact_id, 'proof_catalog_entry.artifact_id');
+  assertString(value.filename, 'proof_catalog_entry.filename');
+  assertString(value.media_type, 'proof_catalog_entry.media_type');
+  assertInteger(value.byte_size, 'proof_catalog_entry.byte_size');
+  assert(value.byte_size >= 0, 'proof_catalog_entry.byte_size', 'must be >= 0');
+  assertString(value.sha256, 'proof_catalog_entry.sha256');
+  assert(/^[0-9a-f]{64}$/.test(value.sha256), 'proof_catalog_entry.sha256', 'expected sha256 hex');
+  assert(value.artifact_id === value.sha256, 'proof_catalog_entry.artifact_id', 'must match sha256');
+  assertString(value.classification, 'proof_catalog_entry.classification');
+  assertString(value.campaign_id, 'proof_catalog_entry.campaign_id');
+  assertOptional(value.source_run_id, 'proof_catalog_entry.source_run_id', assertString);
+  assertString(value.generated_at, 'proof_catalog_entry.generated_at');
+  assertString(value.verification_command, 'proof_catalog_entry.verification_command');
+  assertString(value.immutable_url, 'proof_catalog_entry.immutable_url');
+  assert(value.immutable_url === `/proofs/${value.sha256}`, 'proof_catalog_entry.immutable_url', 'must match content address');
+}
+
+export function isProofCatalog(value: unknown): asserts value is ProofCatalog {
+  assertObject(value, 'proof_catalog');
+  rejectUnknown(value, ['schema_version', 'entries', 'generated_at'], 'proof_catalog');
+  assertString(value.schema_version, 'proof_catalog.schema_version');
+  assert(value.schema_version === '1.0.0', 'proof_catalog.schema_version', 'expected 1.0.0');
+  assert(Array.isArray(value.entries), 'proof_catalog.entries', 'expected array');
+  for (let index = 0; index < value.entries.length; index++) {
+    isProofCatalogEntry(value.entries[index]);
+  }
+  assertString(value.generated_at, 'proof_catalog.generated_at');
 }
 
 /** Validate a snapshot record kind against the closed set. */

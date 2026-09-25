@@ -750,3 +750,25 @@ export interface FeedHistoryPage {
   has_more: boolean;
   limit: number;
 }
+
+/** One content-addressed artifact from the mirror proof catalog. */
+export interface ProofCatalogEntry {
+  artifact_id: string;
+  filename: string;
+  media_type: string;
+  byte_size: number;
+  sha256: string;
+  classification: string;
+  campaign_id: string;
+  source_run_id?: string;
+  generated_at: string;
+  verification_command: string;
+  immutable_url: string;
+}
+
+/** Full public proof catalog served by the mirror. */
+export interface ProofCatalog {
+  schema_version: string;
+  entries: ProofCatalogEntry[];
+  generated_at: string;
+}

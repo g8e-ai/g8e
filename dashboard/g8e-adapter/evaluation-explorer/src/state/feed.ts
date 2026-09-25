@@ -17,11 +17,13 @@ import type {
   FeedBootstrap,
   FeedHistoryPage,
   FeedSnapshot,
+  ProofCatalog,
   ProjectionRecord,
 } from '../contract/types';
 import {
   isFeedBootstrap,
   isFeedHistoryPage,
+  isProofCatalog,
   isProjectionRecord,
   isFeedSnapshot,
 } from '../contract/validators';
@@ -127,6 +129,16 @@ export async function fetchHistoryPage(
   const history = await client(mirrorOrigin, fetchImpl).history(sourceId, cursor, limit);
   isFeedHistoryPage(history);
   return history;
+}
+
+export async function fetchProofCatalog(
+  mirrorOrigin: string,
+  sourceId: string,
+  fetchImpl: typeof fetch = fetch.bind(globalThis),
+): Promise<ProofCatalog> {
+  const catalog = await client(mirrorOrigin, fetchImpl).proofCatalog(sourceId);
+  isProofCatalog(catalog);
+  return catalog;
 }
 
 export interface StreamHandlers {

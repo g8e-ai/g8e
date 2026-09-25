@@ -25,6 +25,7 @@ import type {
   ModelRole,
   ModelSummary,
   ProjectionRecord,
+  ProofCatalogEntry,
   SnapshotRecord,
   SuiteSummary,
 } from '../contract/types';
@@ -147,6 +148,7 @@ export interface StoreState {
   errors: string[];
   lastAcceptedAt: string | undefined;
   proofArtifactCount: number;
+  proofArtifacts: Map<string, ProofCatalogEntry>;
 }
 
 function snapshotPinnedFreshness(freshness: FeedSnapshot['freshness']): FreshnessState | undefined {
@@ -192,6 +194,7 @@ function emptyState(): StoreState {
     errors: [],
     lastAcceptedAt: undefined,
     proofArtifactCount: 0,
+    proofArtifacts: new Map(),
   };
 }
 
@@ -283,6 +286,19 @@ export class EvalStore {
     }
     this.state = state;
     this.emitIfNotBatching();
+  }
+
+  /** Index mirror proof-catalog entries by content address for download resolution. */
+  initProofCatalog(entries: ProofCatalogEntry[]): void {
+    const proofArtifacts = new Map<string, ProofCatalogEntry>();
+    for (const entry of entries) {
+      proofArtifacts.set(entry.sha256, entry);
+    }
+    this.setState((state) => ({
+      ...state,
+      proofArtifacts,
+      proofArtifactCount: entries.length > 0 ? entries.length : state.proofArtifactCount,
+    }));
   }
 
   acceptSnapshot(snapshot: FeedSnapshot): void {
@@ -511,6 +527,10 @@ export class EvalStore {
   }
 
   /** Load deterministic fixtures supplied by test code. */
+  loadProofCatalog(entries: ProofCatalogEntry[]): void {
+    this.initProofCatalog(entries);
+  }
+
   loadFixtures(snapshotRecords: SnapshotRecord[], liveEvents: LiveEvent[]): void {
     this.campaignContext = createCampaignAdaptContext();
     const state = emptyState();
