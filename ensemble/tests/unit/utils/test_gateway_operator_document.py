@@ -60,3 +60,24 @@ def test_operator_document_from_gateway_parses_canonical_heartbeat_snapshot():
     assert doc.latest_heartbeat_snapshot is not None
     assert doc.latest_heartbeat_snapshot.system_identity.hostname == "worker-1"
     assert doc.latest_heartbeat_snapshot.status == "automatic"
+
+
+def test_operator_document_validator_tolerates_magicmock_in_enriched_context():
+    """Regression: after-validator must not break MagicMock(spec=OperatorDocument) test doubles."""
+    from unittest.mock import MagicMock
+
+    from app.models.investigations import EnrichedInvestigationContext
+
+    mock_op = MagicMock(spec=OperatorDocument)
+    mock_op.id = "op-mock"
+    mock_op.operator_session_id = "sess-mock"
+
+    investigation = EnrichedInvestigationContext(
+        id="inv-1",
+        case_id="case-1",
+        user_id="user-1",
+        sentinel_mode=False,
+        operator_documents=[mock_op],
+    )
+
+    assert investigation.operator_documents == [mock_op]

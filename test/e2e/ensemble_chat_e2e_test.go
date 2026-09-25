@@ -43,17 +43,11 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	require.True(t, operators.Success, "operator list response must report success")
 	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
 
-	var targetOperatorID string
-	var targetSessionID string
-	for _, op := range operators.Operators {
-		if op.Status == constants.OperatorStatusActive && op.OperatorType == constants.OperatorTypeRemote {
-			targetOperatorID = op.ID
-			targetSessionID = op.OperatorSessionID
-			break
-		}
-	}
-	require.NotEmpty(t, targetOperatorID, "active operator must exist")
-	require.NotEmpty(t, targetSessionID, "active operator session must exist")
+	target := findLiveActiveRemoteOperator(operators.Operators)
+	require.NotNil(t, target, "a live active remote operator must exist")
+	targetOperatorID := target.ID
+	targetSessionID := target.OperatorSessionID
+	require.NotEmpty(t, targetSessionID, "live active operator session must exist")
 
 	runID := fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
 	filePath := fmt.Sprintf("/tmp/g8e-e2e-smoke-%s.txt", runID)

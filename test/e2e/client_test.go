@@ -163,6 +163,67 @@ func (c *E2EClient) ListOperators(ctx context.Context) (models.OperatorSlotRespo
 	return decodeJSON[models.OperatorSlotResponse](body, "operator list")
 }
 
+// findLiveActiveRemoteOperator returns the active remote operator with the most
+// recent UpdatedAt among operators reporting heartbeat telemetry. Multi-operator
+// stacks may retain stale active registrations from prior sessions; heartbeat
+// assertions must target a live operator rather than the first list entry.
+// When several operators share a fresh UpdatedAt window, prefer the one whose
+// CurrentHostname differs from enrollment Name — that signals canonical
+// heartbeat telemetry rather than stale enrollment metadata.
+func findLiveActiveRemoteOperator(operators []models.OperatorDocumentGo) *models.OperatorDocumentGo {
+	var candidates []*models.OperatorDocumentGo
+	for i := range operators {
+		op := &operators[i]
+		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+			continue
+		}
+		if op.CurrentHostname == "" && len(op.LatestHeartbeat) == 0 {
+			continue
+		}
+		candidates = append(candidates, op)
+	}
+	if len(candidates) == 0 {
+		var fallback *models.OperatorDocumentGo
+		for i := range operators {
+			op := &operators[i]
+			if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+				continue
+			}
+			if fallback == nil || op.UpdatedAt.After(fallback.UpdatedAt) {
+				fallback = op
+			}
+		}
+		return fallback
+	}
+
+	best := candidates[0]
+	for _, op := range candidates[1:] {
+		if op.UpdatedAt.After(best.UpdatedAt) {
+			best = op
+		}
+	}
+
+	const freshWindow = 90 * time.Second
+	for _, op := range candidates {
+		if best.UpdatedAt.Sub(op.UpdatedAt) > freshWindow {
+			continue
+		}
+		if op.CurrentHostname != "" && op.Name != "" && op.CurrentHostname != op.Name {
+			return op
+		}
+	}
+	return best
+}
+
+func findOperatorByID(operators []models.OperatorDocumentGo, id string) *models.OperatorDocumentGo {
+	for i := range operators {
+		if operators[i].ID == id {
+			return &operators[i]
+		}
+	}
+	return nil
+}
+
 // GetOperatorBySession fetches a single operator by session ID via the
 // owner-authenticated session lookup endpoint and returns the typed response.
 func (c *E2EClient) GetOperatorBySession(ctx context.Context, sessionID string) (models.OperatorResponse, error) {
@@ -341,15 +402,10 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
 
 	var target *models.OperatorDocumentGo
-	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
-			target = &operators.Operators[i]
-			break
-		}
-	}
-	require.NotNil(t, target, "an active operator must exist as the dispatch target")
+	target = findLiveActiveRemoteOperator(operators.Operators)
+	require.NotNil(t, target, "a live active remote operator must exist as the dispatch target")
 	require.NotEmpty(t, target.OperatorSessionID, "target operator must have a session ID")
-	t.Logf("dispatch target: id=%s session=%s", target.ID, target.OperatorSessionID)
+	t.Logf("dispatch target: id=%s session=%s hostname=%s", target.ID, target.OperatorSessionID, target.CurrentHostname)
 
 	fsReadReq := &operatorv1.FsReadRequested{Path: constants.PathEtcHostname}
 	payload, err := proto.Marshal(fsReadReq)

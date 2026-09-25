@@ -759,6 +759,7 @@ func (c *DispatchController) HandleDispatch(w http.ResponseWriter, r *http.Reque
 
 	// Extract the requestor's user ID from the mTLS identity context.
 	requestorUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	actingAppID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 
 	result, err := c.dispatchSvc.Dispatch(r.Context(), DispatchRequest{
 		TargetOperatorSessionID: req.TargetOperatorSessionID,
@@ -766,6 +767,7 @@ func (c *DispatchController) HandleDispatch(w http.ResponseWriter, r *http.Reque
 		Payload:                 req.Payload,
 		TargetResource:          req.TargetResource,
 		RequestorUserID:         requestorUserID,
+		ActingAppID:             actingAppID,
 		CaseID:                  req.CaseID,
 		InvestigationID:         req.InvestigationID,
 		TaskID:                  req.TaskID,

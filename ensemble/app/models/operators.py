@@ -220,6 +220,10 @@ class OperatorDocument(G8eIdentifiableModel):
 
     @model_validator(mode="after")
     def populate_current_hostname_from_snapshot(self) -> OperatorDocument:
+        # Pydantic may invoke this validator on test doubles (e.g. MagicMock(spec=...))
+        # when EnrichedInvestigationContext uses arbitrary_types_allowed.
+        if type(self) is not OperatorDocument:
+            return self
         if self.current_hostname is None and self.latest_heartbeat_snapshot:
             identity = self.latest_heartbeat_snapshot.system_identity
             if identity and identity.hostname:

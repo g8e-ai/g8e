@@ -39,6 +39,15 @@ DELETED_OPERATOR_AUTH_MODULES = {
     "heartbeat_stale_monitor.py",
 }
 
+DELETED_OPERATOR_IMPORT_PREFIXES = (
+    "app.services.operator.operator_auth_service",
+    "app.services.operator.operator_session_service",
+    "app.services.operator.session_auth_listener",
+    "app.services.operator.operator_lifecycle_service",
+    "app.services.operator.heartbeat_service",
+    "app.services.operator.heartbeat_stale_monitor",
+)
+
 ALLOWED_DIRECT_PUBSUB_PUBLISHERS = {
     REPO_ROOT / "ensemble" / "app" / "services" / "operator" / "lfaa_service.py",
 }
@@ -111,4 +120,32 @@ class TestOperatorGatewayBoundary:
         assert offenders == [], (
             "Unexpected direct pub/sub command publishers outside allowlist: "
             f"{offenders}. Route through GatewayOperatorClient.dispatch() or extend the allowlist."
+        )
+
+    def test_deleted_operator_modules_are_not_imported_in_g8ee_app(self):
+        offenders: list[str] = []
+        for path in _python_files_under(ENSEMBLE_APP):
+            text = _read(path)
+            for prefix in DELETED_OPERATOR_IMPORT_PREFIXES:
+                if prefix in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)} imports {prefix}")
+        assert offenders == [], f"Deleted operator authority modules still imported: {offenders}"
+
+    def test_operator_data_service_does_not_write_operator_documents(self):
+        path = ENSEMBLE_APP / "services" / "operator" / "operator_data_service.py"
+        text = _read(path)
+        write_markers = (
+            "cache.set_document",
+            "cache.upsert",
+            "cache.write",
+            "cache.put",
+            "cache.update",
+            "cache.delete",
+            "create_document",
+            "update_document",
+        )
+        offenders = [marker for marker in write_markers if marker in text]
+        assert offenders == [], (
+            "OperatorDataService must not write operator documents locally: "
+            f"found {offenders}"
         )
