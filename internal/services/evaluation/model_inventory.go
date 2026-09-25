@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"sort"
 
@@ -41,22 +40,30 @@ type ModelInventoryFreeze struct {
 
 // ModelInventoryOptions controls optional inventory freeze behavior.
 type ModelInventoryOptions struct {
-	RunCapabilityProbes bool
-	ProbeBackend        CapabilityProbeBackend
+	RunCapabilityProbes    bool
+	CapabilityProbeRunner  GovernedCapabilityProbeRunner
 }
 
-// FreezeModelInventoryFromProvider discovers the complete provider
-// inventory, optionally runs bounded capability probes, and freezes the eval
-// model registry digest for campaignID.
-func FreezeModelInventoryFromProvider(ctx context.Context, endpoint, campaignID string, logger *slog.Logger, opts ModelInventoryOptions) (*ModelInventoryFreeze, error) {
+// GovernedCapabilityProbeRunner executes bounded non-scored capability probes
+// through the exact Inference Operator session.
+type GovernedCapabilityProbeRunner interface {
+	RunCapabilityProbes(context.Context, *evalv1.ModelVariant) ([]*evalv1.ModelCapabilityObservation, error)
+}
+
+// FreezeModelInventoryFromProvider discovers the complete provider inventory
+// through the governed Inference Operator session, optionally runs bounded
+// capability probes, and freezes the eval model registry digest for campaignID.
+func FreezeModelInventoryFromProvider(
+	ctx context.Context,
+	dispatcher OllamaModelCommandDispatcher,
+	maintenance OllamaModelMaintenanceContext,
+	campaignID string,
+	opts ModelInventoryOptions,
+) (*ModelInventoryFreeze, error) {
 	if campaignID == "" {
 		return nil, fmt.Errorf("evaluation: freeze model inventory: %w", constants.ErrMissingRequiredField)
 	}
-	backend, err := inference.NewOllamaBackend(endpoint, logger)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: freeze model inventory: %w", err)
-	}
-	entries, err := backend.ListProviderModelInventory(ctx)
+	entries, err := ListOllamaProviderInventory(ctx, dispatcher, maintenance)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: freeze model inventory: %w", err)
 	}
@@ -100,10 +107,10 @@ func BuildModelVariantsFromProviderInventory(ctx context.Context, entries []infe
 		}
 		seenIDs[variant.GetVariantId()] = struct{}{}
 		if opts.RunCapabilityProbes {
-			if opts.ProbeBackend == nil {
-				return nil, fmt.Errorf("evaluation: build model variants: capability probes requested without probe backend")
+			if opts.CapabilityProbeRunner == nil {
+				return nil, fmt.Errorf("evaluation: build model variants: capability probes requested without governed probe runner")
 			}
-			observations, err := RunModelCapabilityProbes(ctx, opts.ProbeBackend, variant)
+			observations, err := opts.CapabilityProbeRunner.RunCapabilityProbes(ctx, variant)
 			if err != nil {
 				return nil, err
 			}

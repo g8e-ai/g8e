@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,17 +32,18 @@ func modelsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Discover, freeze, and materialize evaluation model inventories",
 	}
 	cmd.AddCommand(
-		modelsEvalFreezeCmd(),
+		modelsEvalFreezeCmd(deps),
 		modelsEvalListCmd(deps),
 		modelsEvalMaterializeCmd(deps),
-		modelsEvalStageCmd(),
+		modelsEvalStageCmd(deps),
 	)
 	return cmd
 }
 
-func modelsEvalFreezeCmd() *cobra.Command {
+func modelsEvalFreezeCmd(deps nativeEvalDeps) *cobra.Command {
 	var campaignID string
-	var ollamaEndpoint string
+	var inferenceSessionID string
+	var dataSessionID string
 	var outputPath string
 	var probeCapabilities bool
 	cmd := &cobra.Command{
@@ -53,21 +53,15 @@ func modelsEvalFreezeCmd() *cobra.Command {
 			if campaignID == "" {
 				return fmt.Errorf("evaluation: inventory freeze: %w", constants.ErrMissingRequiredField)
 			}
-			if ollamaEndpoint == "" {
-				ollamaEndpoint = os.Getenv("G8E_OLLAMA_ENDPOINT")
-			}
-			if ollamaEndpoint == "" {
-				return fmt.Errorf("evaluation: inventory freeze: set --ollama-endpoint or G8E_OLLAMA_ENDPOINT")
+			maintenanceEnv, err := resolveGovernedModelMaintenance(cmd, deps, inferenceSessionID, dataSessionID)
+			if err != nil {
+				return fmt.Errorf("evaluation: inventory freeze: %w", err)
 			}
 			opts := evaluation.ModelInventoryOptions{RunCapabilityProbes: probeCapabilities}
 			if probeCapabilities {
-				probeBackend, err := evaluation.NewOllamaCapabilityProbeBackend(ollamaEndpoint, slog.Default())
-				if err != nil {
-					return fmt.Errorf("evaluation: inventory freeze: probe backend: %w", err)
-				}
-				opts.ProbeBackend = probeBackend
+				opts.CapabilityProbeRunner = maintenanceEnv.ProbeRunner
 			}
-			freeze, err := evaluation.FreezeModelInventoryFromProvider(cmd.Context(), ollamaEndpoint, campaignID, slog.Default(), opts)
+			freeze, err := evaluation.FreezeModelInventoryFromProvider(cmd.Context(), maintenanceEnv.ModelDispatcher, maintenanceEnv.Maintenance, campaignID, opts)
 			if err != nil {
 				return fmt.Errorf("evaluation: inventory freeze: %w", err)
 			}
@@ -109,7 +103,8 @@ func modelsEvalFreezeCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint (default: G8E_OLLAMA_ENDPOINT)")
+	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID (required)")
+	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID (required)")
 	cmd.Flags().StringVar(&outputPath, "output", "", "Write the inventory freeze JSON to this path")
 	cmd.Flags().BoolVar(&probeCapabilities, "probe-capabilities", false, "Run bounded non-scored capability probes for each discovered model")
 	return cmd

@@ -10,24 +10,25 @@ package evaluation
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/ollama"
 )
 
-// RolloutIntakeStageRequest stages catalog models on a remote Ollama provider.
+// RolloutIntakeStageRequest stages catalog models through the governed Inference
+// Operator session.
 type RolloutIntakeStageRequest struct {
-	Context        context.Context
-	CatalogPath    string
-	OllamaEndpoint string
-	PullTimeout    time.Duration
-	VariantIDs     []string
-	DryRun         bool
-	Progress       func(RolloutIntakeStageEvent)
+	Context              context.Context
+	CatalogPath          string
+	PullTimeout          time.Duration
+	VariantIDs           []string
+	DryRun               bool
+	Progress             func(RolloutIntakeStageEvent)
+	Dispatcher           OllamaModelCommandDispatcher
+	InferenceSessionID   string
+	Environment          map[string]string
+	NewID                func(string) string
+	CaseID               string
 }
 
 // RolloutIntakeStageEvent reports pull/copy progress for one catalog entry.
@@ -61,42 +62,56 @@ type RolloutIntakeStageFailure struct {
 	Err            string
 }
 
-// StageRolloutIntake pulls Hugging Face GGUF models through Ollama's deep HF
-// compatibility and applies canonical served-model aliases from the catalog.
+func validateRolloutIntakeStageRequest(req RolloutIntakeStageRequest) error {
+	if req.Dispatcher == nil || req.InferenceSessionID == "" || req.NewID == nil {
+		return fmt.Errorf("evaluation: stage rollout intake: governed inference session and dispatcher are required")
+	}
+	return nil
+}
+
+func rolloutIntakeMaintenanceContext(req RolloutIntakeStageRequest) OllamaModelMaintenanceContext {
+	return OllamaModelMaintenanceContext{
+		TargetOperatorSessionID: req.InferenceSessionID,
+		Environment:             req.Environment,
+		Timeout:                 req.PullTimeout,
+		CaseID:                  req.CaseID,
+		NewID:                   req.NewID,
+	}
+}
+
+// StageRolloutIntake pulls Hugging Face GGUF models through the governed
+// Inference Operator and applies canonical served-model aliases from the catalog.
 func StageRolloutIntake(req RolloutIntakeStageRequest) (*RolloutIntakeStageResult, error) {
+	if err := validateRolloutIntakeStageRequest(req); err != nil {
+		return nil, err
+	}
 	catalog, err := LoadRolloutIntakeCatalog(req.CatalogPath)
 	if err != nil {
 		return nil, err
-	}
-	endpoint := strings.TrimSpace(req.OllamaEndpoint)
-	if endpoint == "" {
-		endpoint = strings.TrimSpace(catalog.OllamaEndpoint)
-	}
-	if endpoint == "" {
-		return nil, fmt.Errorf("evaluation: stage rollout intake: set ollama endpoint or G8E_OLLAMA_ENDPOINT")
 	}
 	pullTimeout := req.PullTimeout
 	if pullTimeout <= 0 {
 		pullTimeout = catalog.pullTimeout()
 	}
+	req.PullTimeout = pullTimeout
 	if req.Context == nil {
 		req.Context = context.Background()
 	}
 	selected := filterRolloutIntakeModels(catalog.Models, req.VariantIDs)
-	return stageRolloutIntakeModels(req, endpoint, pullTimeout, selected)
+	return stageRolloutIntakeModels(req, selected)
 }
 
-// StageFormationCatalogIntake pulls sovereign ExecutionTopologies served tags to
-// the approved remote Ollama provider through the official Ollama client.
+// StageFormationCatalogIntake pulls sovereign ExecutionTopologies served tags
+// through the governed Inference Operator session.
 func StageFormationCatalogIntake(req RolloutIntakeStageRequest) (*RolloutIntakeStageResult, error) {
-	endpoint := strings.TrimSpace(req.OllamaEndpoint)
-	if endpoint == "" {
-		return nil, fmt.Errorf("evaluation: stage formation catalog intake: set ollama endpoint or G8E_OLLAMA_ENDPOINT")
+	if err := validateRolloutIntakeStageRequest(req); err != nil {
+		return nil, err
 	}
 	pullTimeout := req.PullTimeout
 	if pullTimeout <= 0 {
 		pullTimeout = DefaultRolloutIntakePullTimeout()
 	}
+	req.PullTimeout = pullTimeout
 	if req.Context == nil {
 		req.Context = context.Background()
 	}
@@ -105,20 +120,16 @@ func StageFormationCatalogIntake(req RolloutIntakeStageRequest) (*RolloutIntakeS
 		return nil, fmt.Errorf("evaluation: stage formation catalog intake: %w", err)
 	}
 	selected := filterRolloutIntakeModels(models, req.VariantIDs)
-	return stageRolloutIntakeModels(req, endpoint, pullTimeout, selected)
+	return stageRolloutIntakeModels(req, selected)
 }
 
-func stageRolloutIntakeModels(req RolloutIntakeStageRequest, endpoint string, pullTimeout time.Duration, models []RolloutIntakeModel) (*RolloutIntakeStageResult, error) {
-	client, err := newRolloutIntakeOllamaClient(endpoint, pullTimeout)
-	if err != nil {
-		return nil, err
-	}
-
+func stageRolloutIntakeModels(req RolloutIntakeStageRequest, models []RolloutIntakeModel) (*RolloutIntakeStageResult, error) {
+	maintenance := rolloutIntakeMaintenanceContext(req)
 	result := &RolloutIntakeStageResult{}
 	for _, model := range models {
 		switch model.Staging.Method {
 		case "ollama_hf_pull", "ollama_library_pull":
-			if err := stageRolloutIntakePull(req, client, model, result); err != nil {
+			if err := stageRolloutIntakePull(req, maintenance, model, result); err != nil {
 				result.Failed = append(result.Failed, RolloutIntakeStageFailure{
 					VariantID:      model.VariantID,
 					ServedModelTag: model.ServedModelTag,
@@ -164,7 +175,7 @@ func stageRolloutIntakeModels(req RolloutIntakeStageRequest, endpoint string, pu
 	return result, nil
 }
 
-func stageRolloutIntakePull(req RolloutIntakeStageRequest, client *ollama.Client, model RolloutIntakeModel, result *RolloutIntakeStageResult) error {
+func stageRolloutIntakePull(req RolloutIntakeStageRequest, maintenance OllamaModelMaintenanceContext, model RolloutIntakeModel, result *RolloutIntakeStageResult) error {
 	pullTag := strings.TrimSpace(model.Staging.OllamaPull)
 	if pullTag == "" {
 		return fmt.Errorf("evaluation: stage rollout intake: missing ollama_pull for %q", model.VariantID)
@@ -190,24 +201,16 @@ func stageRolloutIntakePull(req RolloutIntakeStageRequest, client *ollama.Client
 		return nil
 	}
 
-	lastStatus := ""
-	if err := client.Pull(req.Context, pullTag, func(progress ollama.ProgressResponse) error {
-		status := strings.TrimSpace(progress.Status)
-		if status == "" || status == lastStatus {
-			return nil
-		}
-		lastStatus = status
-		emitStageEvent(req, RolloutIntakeStageEvent{
-			VariantID:      model.VariantID,
-			ServedModelTag: model.ServedModelTag,
-			Action:         "pull",
-			Status:         status,
-			Detail:         pullTag,
-		})
-		return nil
-	}); err != nil {
+	if err := PullOllamaModel(req.Context, req.Dispatcher, maintenance, pullTag); err != nil {
 		return fmt.Errorf("pull %s: %w", pullTag, err)
 	}
+	emitStageEvent(req, RolloutIntakeStageEvent{
+		VariantID:      model.VariantID,
+		ServedModelTag: model.ServedModelTag,
+		Action:         "pull",
+		Status:         "success",
+		Detail:         pullTag,
+	})
 	result.Pulled = append(result.Pulled, pullTag)
 
 	if alias != "" && alias != pullTag {
@@ -218,7 +221,7 @@ func stageRolloutIntakePull(req RolloutIntakeStageRequest, client *ollama.Client
 			Status:         "starting",
 			Detail:         alias,
 		})
-		if err := client.Copy(req.Context, pullTag, alias); err != nil {
+		if err := CopyOllamaModel(req.Context, req.Dispatcher, maintenance, pullTag, alias); err != nil {
 			return fmt.Errorf("alias %s -> %s: %w", pullTag, alias, err)
 		}
 		result.Aliased = append(result.Aliased, alias)
@@ -231,17 +234,6 @@ func stageRolloutIntakePull(req RolloutIntakeStageRequest, client *ollama.Client
 		})
 	}
 	return nil
-}
-
-func newRolloutIntakeOllamaClient(endpoint string, pullTimeout time.Duration) (*ollama.Client, error) {
-	base, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: stage rollout intake: endpoint: %w: %w", constants.ErrInferenceEndpointInvalid, err)
-	}
-	if (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
-		return nil, fmt.Errorf("evaluation: stage rollout intake: endpoint %q: %w", endpoint, constants.ErrInferenceEndpointInvalid)
-	}
-	return ollama.NewClient(base, &http.Client{Timeout: pullTimeout}), nil
 }
 
 func filterRolloutIntakeModels(models []RolloutIntakeModel, variantIDs []string) []RolloutIntakeModel {

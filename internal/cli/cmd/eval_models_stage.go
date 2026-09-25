@@ -10,7 +10,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -20,41 +19,46 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
-func modelsEvalStageCmd() *cobra.Command {
+func modelsEvalStageCmd(deps nativeEvalDeps) *cobra.Command {
 	var catalogPath string
-	var ollamaEndpoint string
 	var pullTimeout time.Duration
 	var variantIDs []string
 	var dryRun bool
 	var formationCatalog bool
+	var inferenceSessionID string
+	var dataSessionID string
 
 	cmd := &cobra.Command{
 		Use:   "stage",
-		Short: "Stage rollout-intake models from Hugging Face through Ollama",
-		Long: `Pull rollout-intake models from Hugging Face via Ollama deep HF compatibility.
+		Short: "Stage rollout-intake models through the governed Inference Operator",
+		Long: `Pull rollout-intake models from Hugging Face via the governed Inference Operator.
 
-Reads eval/rollout-intake-hf.json, uses the official Ollama Go client for /api/pull
-and /api/copy, and applies canonical served-model aliases for the rollout queue.
-
-Use --formation-catalog to pull the nine sovereign ExecutionTopologies served tags
-to the approved remote Ollama provider through the same staging path.
+Reads eval/rollout-intake-hf.json and dispatches model pull and alias commands to
+the exact Inference Operator session. Use --formation-catalog to stage the nine
+sovereign ExecutionTopologies served tags.
 
 Examples:
-  g8e eval models stage
+  g8e eval models stage --inference-session <sess> --data-session <sess>
   g8e eval models stage --variant-id qwen3-8-27b --variant-id gpt-oss-20b
-  g8e eval models stage --formation-catalog --ollama-endpoint http://192.168.1.2:11434
+  g8e eval models stage --formation-catalog --inference-session <sess> --data-session <sess>
   g8e eval models stage --pull-timeout 24h --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if ollamaEndpoint == "" {
-				ollamaEndpoint = os.Getenv("G8E_OLLAMA_ENDPOINT")
+			maintenanceEnv, err := resolveGovernedModelMaintenance(cmd, deps, inferenceSessionID, dataSessionID)
+			if err != nil {
+				return fmt.Errorf("evaluation: models stage: %w", err)
 			}
+			maintenanceEnv.Maintenance.Timeout = pullTimeout
 			stageReq := evaluation.RolloutIntakeStageRequest{
-				Context:        cmd.Context(),
-				CatalogPath:    catalogPath,
-				OllamaEndpoint: ollamaEndpoint,
-				PullTimeout:    pullTimeout,
-				VariantIDs:     variantIDs,
-				DryRun:         dryRun,
+				Context:            cmd.Context(),
+				CatalogPath:        catalogPath,
+				PullTimeout:        pullTimeout,
+				VariantIDs:         variantIDs,
+				DryRun:             dryRun,
+				Dispatcher:         maintenanceEnv.ModelDispatcher,
+				InferenceSessionID: maintenanceEnv.Maintenance.TargetOperatorSessionID,
+				Environment:        maintenanceEnv.Maintenance.Environment,
+				NewID:              maintenanceEnv.Maintenance.NewID,
+				CaseID:             "eval-models-stage",
 				Progress: func(event evaluation.RolloutIntakeStageEvent) {
 					if output.JSONEnabled(cmd) {
 						return
@@ -70,10 +74,7 @@ Examples:
 					_, _ = fmt.Fprintln(cmd.OutOrStdout())
 				},
 			}
-			var (
-				result *evaluation.RolloutIntakeStageResult
-				err    error
-			)
+			var result *evaluation.RolloutIntakeStageResult
 			if formationCatalog {
 				result, err = evaluation.StageFormationCatalogIntake(stageReq)
 			} else {
@@ -118,7 +119,8 @@ Examples:
 				if err != nil {
 					return err
 				}
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "  G8E_OLLAMA_ENDPOINT=%s g8e eval models freeze --campaign-id eval-formations-benchmark --output .g8e/eval/inventories/eval-formations-provider-freeze.json\n", ollamaEndpoint)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "  g8e eval models freeze --campaign-id eval-formations-benchmark --inference-session %s --data-session %s --output .g8e/eval/inventories/eval-formations-provider-freeze.json\n",
+					maintenanceEnv.Maintenance.TargetOperatorSessionID, dataSessionID)
 				if err != nil {
 					return err
 				}
@@ -129,7 +131,8 @@ Examples:
 			if err != nil {
 				return err
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "  g8e eval models freeze --campaign-id eval-genesis-homogeneous --ollama-endpoint %s --output .g8e/eval/model-inventory.json\n", ollamaEndpoint)
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "  g8e eval models freeze --campaign-id eval-genesis-homogeneous --inference-session %s --data-session %s --output .g8e/eval/model-inventory.json\n",
+				maintenanceEnv.Maintenance.TargetOperatorSessionID, dataSessionID)
 			if err != nil {
 				return err
 			}
@@ -139,10 +142,11 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&catalogPath, "catalog", evaluation.DefaultRolloutIntakeCatalogRelPath, "Rollout intake catalog JSON path")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint (default: G8E_OLLAMA_ENDPOINT)")
 	cmd.Flags().DurationVar(&pullTimeout, "pull-timeout", evaluation.DefaultRolloutIntakePullTimeout(), "Maximum time to wait for each Hugging Face pull")
 	cmd.Flags().StringArrayVar(&variantIDs, "variant-id", nil, "Stage only these catalog variant IDs (repeatable)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the staging plan without pulling")
-	cmd.Flags().BoolVar(&formationCatalog, "formation-catalog", false, "Pull sovereign ExecutionTopologies served tags to the remote provider")
+	cmd.Flags().BoolVar(&formationCatalog, "formation-catalog", false, "Pull sovereign ExecutionTopologies served tags through the Inference Operator")
+	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID (required)")
+	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID (required)")
 	return cmd
 }

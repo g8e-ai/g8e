@@ -24,7 +24,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -412,17 +411,6 @@ func releaseResidentProviderModels(
 	inferenceSessionID string,
 	endpoint string,
 ) error {
-	residency, err := inference.ReadProviderResidency(cmd.Context(), inference.ProviderResidencyOptions{Endpoint: endpoint})
-	if err != nil {
-		return fmt.Errorf("evaluation: read provider residency: %w", err)
-	}
-	if len(residency.Models) == 0 {
-		return nil
-	}
-	residentTags := make([]string, 0, len(residency.Models))
-	for _, model := range residency.Models {
-		residentTags = append(residentTags, model.Name)
-	}
 	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
 		configLoader:   deps.configLoader,
 		fileSvcFactory: deps.fileSvcFactory,
@@ -434,16 +422,33 @@ func releaseResidentProviderModels(
 	if err != nil {
 		return err
 	}
-	if err := evaluation.ReleaseOllamaModels(cmd.Context(), dispatcher, inferenceSessionID, opts.RunID, residentTags, modelCommandEnvironment(endpoint), func(prefix string) string { return prefix + "-" + deps.newID() }); err != nil {
+	maintenance := evaluation.OllamaModelMaintenanceContext{
+		TargetOperatorSessionID: inferenceSessionID,
+		Environment:             modelCommandEnvironment(endpoint),
+		CaseID:                  opts.RunID,
+		NewID:                   func(prefix string) string { return prefix + "-" + deps.newID() },
+	}
+	residency, err := evaluation.ReadOllamaProviderResidency(cmd.Context(), dispatcher, maintenance)
+	if err != nil {
+		return fmt.Errorf("evaluation: read provider residency: %w", err)
+	}
+	if len(residency.Models) == 0 {
+		return nil
+	}
+	residentTags := make([]string, 0, len(residency.Models))
+	for _, model := range residency.Models {
+		residentTags = append(residentTags, model.Name)
+	}
+	if err := evaluation.ReleaseOllamaModels(cmd.Context(), dispatcher, inferenceSessionID, opts.RunID, residentTags, modelCommandEnvironment(endpoint), maintenance.NewID); err != nil {
 		return err
 	}
 	waitCtx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
 	defer cancel()
-	if err := inference.WaitForProviderModelsAbsent(waitCtx, inference.ProviderResidencyOptions{Endpoint: endpoint}, residentTags); err != nil {
+	if err := evaluation.WaitForOllamaModelsAbsent(waitCtx, dispatcher, maintenance, residentTags); err != nil {
 		return err
 	}
 	if !opts.JSONOutput {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Released %d resident model(s) at %s\n", len(residentTags), endpoint)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Released %d resident model(s) through inference session %s\n", len(residentTags), inferenceSessionID)
 	}
 	return nil
 }
@@ -451,8 +456,8 @@ func releaseResidentProviderModels(
 // rejectResidentProviderModels is retained for callers that only need the
 // residency precondition check. Rollout execution uses releaseResidentProviderModels
 // so stale provider state is drained through the Inference Operator.
-func rejectResidentProviderModels(ctx context.Context, endpoint string) error {
-	residency, err := inference.ReadProviderResidency(ctx, inference.ProviderResidencyOptions{Endpoint: endpoint})
+func rejectResidentProviderModels(ctx context.Context, dispatcher evaluation.OllamaModelCommandDispatcher, maintenance evaluation.OllamaModelMaintenanceContext) error {
+	residency, err := evaluation.ReadOllamaProviderResidency(ctx, dispatcher, maintenance)
 	if err != nil {
 		return fmt.Errorf("evaluation: read provider residency: %w", err)
 	}
@@ -490,7 +495,24 @@ func releaseCampaignModels(
 			modelTags = append(modelTags, variant.GetServedModelTag())
 		}
 	}
-	residency, err := inference.ReadProviderResidency(cmd.Context(), inference.ProviderResidencyOptions{Endpoint: endpoint})
+	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
+		configLoader:   deps.configLoader,
+		fileSvcFactory: deps.fileSvcFactory,
+		authLoader:     deps.authLoader,
+		clientFactory:  deps.clientFactory,
+		now:            deps.now,
+		newID:          deps.newID,
+	})
+	if err != nil {
+		return err
+	}
+	maintenance := evaluation.OllamaModelMaintenanceContext{
+		TargetOperatorSessionID: inferenceSessionID,
+		Environment:             modelCommandEnvironment(endpoint),
+		CaseID:                  opts.RunID,
+		NewID:                   func(prefix string) string { return prefix + "-" + deps.newID() },
+	}
+	residency, err := evaluation.ReadOllamaProviderResidency(cmd.Context(), dispatcher, maintenance)
 	if err != nil {
 		return err
 	}
@@ -506,27 +528,16 @@ func releaseCampaignModels(
 	if len(residentTags) == 0 {
 		return nil
 	}
-	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
-		configLoader:   deps.configLoader,
-		fileSvcFactory: deps.fileSvcFactory,
-		authLoader:     deps.authLoader,
-		clientFactory:  deps.clientFactory,
-		now:            deps.now,
-		newID:          deps.newID,
-	})
-	if err != nil {
-		return err
-	}
-	if err := evaluation.ReleaseOllamaModels(cmd.Context(), dispatcher, inferenceSessionID, opts.RunID, residentTags, modelCommandEnvironment(endpoint), func(prefix string) string { return prefix + "-" + deps.newID() }); err != nil {
+	if err := evaluation.ReleaseOllamaModels(cmd.Context(), dispatcher, inferenceSessionID, opts.RunID, residentTags, modelCommandEnvironment(endpoint), maintenance.NewID); err != nil {
 		return err
 	}
 	waitCtx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
 	defer cancel()
-	if err := inference.WaitForProviderModelsAbsent(waitCtx, inference.ProviderResidencyOptions{Endpoint: endpoint}, residentTags); err != nil {
+	if err := evaluation.WaitForOllamaModelsAbsent(waitCtx, dispatcher, maintenance, residentTags); err != nil {
 		return err
 	}
 	if !opts.JSONOutput {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Released %d campaign model(s) at %s\n", len(residentTags), endpoint)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Released %d campaign model(s) through inference session %s\n", len(residentTags), inferenceSessionID)
 	}
 	return nil
 }

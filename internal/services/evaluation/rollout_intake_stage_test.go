@@ -10,45 +10,30 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
+
+type stagingOllamaModelCommandDispatcher struct {
+	commands []string
+}
+
+func (d *stagingOllamaModelCommandDispatcher) DispatchOllamaModelCommand(_ context.Context, request OllamaModelCommandDispatchRequest) (*OllamaModelCommandDispatchResult, error) {
+	d.commands = append(d.commands, request.Command)
+	return &OllamaModelCommandDispatchResult{
+		Status:  200,
+		Success: true,
+		Result:  &operatorv1.CommandResult{Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
+	}, nil
+}
 
 func TestStageRolloutIntakePullsAndAliases(t *testing.T) {
 	t.Parallel()
-
-	var pullModel string
-	var copySource string
-	var copyDestination string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/pull":
-			var payload struct {
-				Model string `json:"model"`
-			}
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-			pullModel = payload.Model
-			w.Header().Set("Content-Type", "application/x-ndjson")
-			_, _ = w.Write([]byte(`{"status":"success"}`))
-		case "/api/copy":
-			var payload struct {
-				Source      string `json:"source"`
-				Destination string `json:"destination"`
-			}
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-			copySource = payload.Source
-			copyDestination = payload.Destination
-			w.WriteHeader(http.StatusOK)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
 
 	catalogPath := writeRolloutIntakeCatalog(t, RolloutIntakeCatalog{
 		Models: []RolloutIntakeModel{{
@@ -61,28 +46,25 @@ func TestStageRolloutIntakePullsAndAliases(t *testing.T) {
 			},
 		}},
 	})
-
+	dispatcher := &stagingOllamaModelCommandDispatcher{}
 	result, err := StageRolloutIntake(RolloutIntakeStageRequest{
-		Context:        context.Background(),
-		CatalogPath:    catalogPath,
-		OllamaEndpoint: server.URL,
+		Context:            context.Background(),
+		CatalogPath:        catalogPath,
+		Dispatcher:         dispatcher,
+		InferenceSessionID: "infer-session",
+		NewID:              func(prefix string) string { return prefix },
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, []string{"huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M"}, result.Pulled)
 	assert.Equal(t, []string{"qwen3.8:27b"}, result.Aliased)
-	assert.Equal(t, "huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M", pullModel)
-	assert.Equal(t, "huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M", copySource)
-	assert.Equal(t, "qwen3.8:27b", copyDestination)
+	require.Len(t, dispatcher.commands, 2)
+	assert.True(t, strings.Contains(dispatcher.commands[0], "operator model pull"))
+	assert.True(t, strings.Contains(dispatcher.commands[1], "operator model copy"))
 }
 
 func TestStageRolloutIntakeSkipsManualAndPendingEntries(t *testing.T) {
 	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request: %s", r.URL.Path)
-	}))
-	t.Cleanup(server.Close)
 
 	catalogPath := writeRolloutIntakeCatalog(t, RolloutIntakeCatalog{
 		Models: []RolloutIntakeModel{
@@ -103,9 +85,11 @@ func TestStageRolloutIntakeSkipsManualAndPendingEntries(t *testing.T) {
 	})
 
 	result, err := StageRolloutIntake(RolloutIntakeStageRequest{
-		Context:        context.Background(),
-		CatalogPath:    catalogPath,
-		OllamaEndpoint: server.URL,
+		Context:            context.Background(),
+		CatalogPath:        catalogPath,
+		Dispatcher:         &stagingOllamaModelCommandDispatcher{},
+		InferenceSessionID: "infer-session",
+		NewID:              func(prefix string) string { return prefix },
 	})
 	require.NoError(t, err)
 	require.Len(t, result.Skipped, 2)
@@ -116,32 +100,19 @@ func TestStageRolloutIntakeSkipsManualAndPendingEntries(t *testing.T) {
 func TestStageFormationCatalogIntake_PullsMissingLibraryTag(t *testing.T) {
 	t.Parallel()
 
-	pulled := make([]string, 0)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/pull":
-			var payload struct {
-				Model string `json:"model"`
-			}
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-			pulled = append(pulled, payload.Model)
-			w.Header().Set("Content-Type", "application/x-ndjson")
-			_, _ = w.Write([]byte(`{"status":"success"}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-
+	dispatcher := &stagingOllamaModelCommandDispatcher{}
 	result, err := StageFormationCatalogIntake(RolloutIntakeStageRequest{
-		Context:        context.Background(),
-		OllamaEndpoint: server.URL,
-		VariantIDs:     []string{"gemma2-2b"},
+		Context:            context.Background(),
+		Dispatcher:         dispatcher,
+		InferenceSessionID: "infer-session",
+		VariantIDs:         []string{"gemma2-2b"},
+		NewID:              func(prefix string) string { return prefix },
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, []string{"gemma2:2b-instruct-q4_K_M"}, result.Pulled)
-	assert.Equal(t, []string{"gemma2:2b-instruct-q4_K_M"}, pulled)
+	require.Len(t, dispatcher.commands, 1)
+	assert.True(t, strings.Contains(dispatcher.commands[0], "gemma2:2b-instruct-q4_K_M"))
 }
 
 func writeRolloutIntakeCatalog(t *testing.T, catalog RolloutIntakeCatalog) string {

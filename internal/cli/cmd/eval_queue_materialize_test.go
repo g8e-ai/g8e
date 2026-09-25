@@ -205,7 +205,7 @@ func TestInventoryEvalFreeze_RequiresCampaignID(t *testing.T) {
 	command := evalCmdWithConfig(testNativeEvalDeps(t.TempDir()))
 	command.SilenceUsage = true
 	command.SilenceErrors = true
-	command.SetArgs([]string{"models", "freeze", "--ollama-endpoint", "http://127.0.0.1:11434"})
+	command.SetArgs([]string{"models", "freeze"})
 	err := command.Execute()
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)

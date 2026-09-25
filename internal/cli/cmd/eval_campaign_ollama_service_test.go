@@ -22,41 +22,51 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-func TestEnsureProviderModelsAbsent_RejectsResidentModels(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/ps", r.URL.Path)
-		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(struct {
-			Models []struct {
-				Name string `json:"name"`
-			} `json:"models"`
-		}{Models: []struct {
-			Name string `json:"name"`
-		}{{Name: "granite4.2:3b"}}}))
-	}))
-	t.Cleanup(server.Close)
+type residencyTestDispatcher struct {
+	stdout string
+}
 
-	err := rejectResidentProviderModels(context.Background(), server.URL)
+func (d *residencyTestDispatcher) DispatchOllamaModelCommand(_ context.Context, request evaluation.OllamaModelCommandDispatchRequest) (*evaluation.OllamaModelCommandDispatchResult, error) {
+	return &evaluation.OllamaModelCommandDispatchResult{
+		Status:  200,
+		Success: true,
+		Result: &operatorv1.CommandResult{
+			Status:     operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			Stdout:     d.stdout,
+			ReturnCode: 0,
+		},
+	}, nil
+}
+
+func TestEnsureProviderModelsAbsent_RejectsResidentModels(t *testing.T) {
+	payload, err := json.Marshal(inference.ProviderResidency{Models: []inference.ProviderResidencyModel{{Name: "granite4.2:3b"}}})
+	require.NoError(t, err)
+	dispatcher := &residencyTestDispatcher{stdout: string(payload)}
+	maintenance := evaluation.OllamaModelMaintenanceContext{
+		TargetOperatorSessionID: "infer-session",
+		NewID:                   func(prefix string) string { return prefix },
+	}
+
+	err = rejectResidentProviderModels(context.Background(), dispatcher, maintenance)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvaluationProviderModelsResident)
 	assert.Contains(t, err.Error(), "granite4.2:3b")
 }
 
 func TestEnsureProviderModelsAbsent_AllowsEmptyResidency(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/ps", r.URL.Path)
-		w.Header().Set("Content-Type", "application/json")
-		_, err := w.Write([]byte(`{"models":[]}`))
-		require.NoError(t, err)
-	}))
-	t.Cleanup(server.Close)
+	dispatcher := &residencyTestDispatcher{stdout: `{"models":[]}`}
+	maintenance := evaluation.OllamaModelMaintenanceContext{
+		TargetOperatorSessionID: "infer-session",
+		NewID:                   func(prefix string) string { return prefix },
+	}
 
-	require.NoError(t, rejectResidentProviderModels(context.Background(), server.URL))
+	require.NoError(t, rejectResidentProviderModels(context.Background(), dispatcher, maintenance))
 }
 
 func TestDispatchOllamaModelCommand_RejectsMissingFields(t *testing.T) {

@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/stream"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/ollama"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	"github.com/spf13/cobra"
@@ -81,8 +84,118 @@ func boolPointer(value bool) *bool {
 
 func operatorModelCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "model", Hidden: true}
-	cmd.AddCommand(operatorModelReleaseCmd())
+	cmd.AddCommand(
+		operatorModelPullCmd(),
+		operatorModelCopyCmd(),
+		operatorModelInventoryCmd(),
+		operatorModelResidencyCmd(),
+		operatorModelReleaseCmd(),
+	)
 	return cmd
+}
+
+func operatorOllamaEndpoint() (string, error) {
+	endpoint := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+	if endpoint == "" {
+		return "", fmt.Errorf("operator: model maintenance: %w", constants.ErrInferenceEndpointInvalid)
+	}
+	return endpoint, nil
+}
+
+func operatorModelPullCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "pull <model>",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			endpoint, err := operatorOllamaEndpoint()
+			if err != nil {
+				return err
+			}
+			base, err := url.Parse(endpoint)
+			if err != nil {
+				return fmt.Errorf("operator: pull model: %w", err)
+			}
+			client := ollama.NewClient(base, &http.Client{Timeout: inference.ProviderRequestTimeout})
+			if err := client.Pull(cmd.Context(), args[0], nil); err != nil {
+				return fmt.Errorf("operator: pull model: %w", err)
+			}
+			return nil
+		},
+	}
+}
+
+func operatorModelCopyCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "copy <source> <destination>",
+		Hidden: true,
+		Args:   cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			endpoint, err := operatorOllamaEndpoint()
+			if err != nil {
+				return err
+			}
+			base, err := url.Parse(endpoint)
+			if err != nil {
+				return fmt.Errorf("operator: copy model: %w", err)
+			}
+			client := ollama.NewClient(base, &http.Client{Timeout: inference.ProviderRequestTimeout})
+			if err := client.Copy(cmd.Context(), args[0], args[1]); err != nil {
+				return fmt.Errorf("operator: copy model: %w", err)
+			}
+			return nil
+		},
+	}
+}
+
+func operatorModelInventoryCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "inventory",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			endpoint, err := operatorOllamaEndpoint()
+			if err != nil {
+				return err
+			}
+			backend, err := inference.NewOllamaBackend(endpoint, slog.Default())
+			if err != nil {
+				return fmt.Errorf("operator: model inventory: %w", err)
+			}
+			entries, err := backend.ListProviderModelInventory(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("operator: model inventory: %w", err)
+			}
+			payload, err := json.Marshal(entries)
+			if err != nil {
+				return fmt.Errorf("operator: model inventory: %w", err)
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+			return err
+		},
+	}
+}
+
+func operatorModelResidencyCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "residency",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			endpoint, err := operatorOllamaEndpoint()
+			if err != nil {
+				return err
+			}
+			residency, err := inference.ReadProviderResidency(cmd.Context(), inference.ProviderResidencyOptions{Endpoint: endpoint})
+			if err != nil {
+				return fmt.Errorf("operator: model residency: %w", err)
+			}
+			payload, err := json.Marshal(residency)
+			if err != nil {
+				return fmt.Errorf("operator: model residency: %w", err)
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+			return err
+		},
+	}
 }
 
 func operatorModelReleaseCmd() *cobra.Command {
@@ -91,9 +204,9 @@ func operatorModelReleaseCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			endpoint := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
-			if endpoint == "" {
-				return fmt.Errorf("operator: release model: %w", constants.ErrInferenceEndpointInvalid)
+			endpoint, err := operatorOllamaEndpoint()
+			if err != nil {
+				return err
 			}
 			backend, err := inference.NewOllamaBackend(endpoint, slog.Default())
 			if err != nil {
