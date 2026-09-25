@@ -132,8 +132,8 @@ class ModelCallTelemetry(G8eBaseModel):
     monotonic_end: float
     input_tokens: int = 0
     output_tokens: int = 0
-    thinking_tokens: int = 0
-    cache_tokens: int = 0
+    thinking_tokens: int | None = None
+    cache_tokens: int | None = None
     total_tokens: int = 0
     usage_reported: bool = False
     finish_reason: str | None = None

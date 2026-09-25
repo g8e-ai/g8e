@@ -282,7 +282,7 @@ class TestBuildUsage:
         assert result.prompt_token_count == 0
         assert result.candidates_token_count == 0
         assert result.total_token_count == 0
-        assert result.cache_token_count == 0
+        assert result.cache_token_count is None
         assert result.usage_reported is False
 
 

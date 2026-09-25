@@ -305,8 +305,8 @@ class TurnResult(G8eBaseModel):
     input_tokens: int
     output_tokens: int
     total_tokens: int
-    thinking_tokens: int = 0
-    cache_tokens: int = 0
+    thinking_tokens: int | None = None
+    cache_tokens: int | None = None
     usage_reported: bool = False
     time_to_first_token_seconds: float | None = None
     prompt_eval_duration_seconds: float | None = None

@@ -5113,8 +5113,8 @@ type ModelInferenceRecord struct {
 	UsageAvailability              EvaluationUsageAvailability     `protobuf:"varint,16,opt,name=usage_availability,json=usageAvailability,proto3,enum=g8e.eval.v1.EvaluationUsageAvailability" json:"usage_availability,omitempty"`
 	PromptTokens                   uint32                          `protobuf:"varint,17,opt,name=prompt_tokens,json=promptTokens,proto3" json:"prompt_tokens,omitempty"`
 	CompletionTokens               uint32                          `protobuf:"varint,18,opt,name=completion_tokens,json=completionTokens,proto3" json:"completion_tokens,omitempty"`
-	ThinkingTokens                 uint32                          `protobuf:"varint,19,opt,name=thinking_tokens,json=thinkingTokens,proto3" json:"thinking_tokens,omitempty"`
-	CacheTokens                    uint32                          `protobuf:"varint,20,opt,name=cache_tokens,json=cacheTokens,proto3" json:"cache_tokens,omitempty"`
+	ThinkingTokens                 *uint32                         `protobuf:"varint,19,opt,name=thinking_tokens,json=thinkingTokens,proto3,oneof" json:"thinking_tokens,omitempty"`
+	CacheTokens                    *uint32                         `protobuf:"varint,20,opt,name=cache_tokens,json=cacheTokens,proto3,oneof" json:"cache_tokens,omitempty"`
 	RequestStartedAtUnixNanos      uint64                          `protobuf:"varint,21,opt,name=request_started_at_unix_nanos,json=requestStartedAtUnixNanos,proto3" json:"request_started_at_unix_nanos,omitempty"`
 	FirstTokenAtUnixNanos          uint64                          `protobuf:"varint,22,opt,name=first_token_at_unix_nanos,json=firstTokenAtUnixNanos,proto3" json:"first_token_at_unix_nanos,omitempty"`
 	GenerationDurationNanos        uint64                          `protobuf:"varint,23,opt,name=generation_duration_nanos,json=generationDurationNanos,proto3" json:"generation_duration_nanos,omitempty"`
@@ -5288,15 +5288,15 @@ func (x *ModelInferenceRecord) GetCompletionTokens() uint32 {
 }
 
 func (x *ModelInferenceRecord) GetThinkingTokens() uint32 {
-	if x != nil {
-		return x.ThinkingTokens
+	if x != nil && x.ThinkingTokens != nil {
+		return *x.ThinkingTokens
 	}
 	return 0
 }
 
 func (x *ModelInferenceRecord) GetCacheTokens() uint32 {
-	if x != nil {
-		return x.CacheTokens
+	if x != nil && x.CacheTokens != nil {
+		return *x.CacheTokens
 	}
 	return 0
 }
@@ -7775,8 +7775,8 @@ type PublicModelActivityRecord struct {
 	UsageAvailability       EvaluationUsageAvailability `protobuf:"varint,4,opt,name=usage_availability,json=usageAvailability,proto3,enum=g8e.eval.v1.EvaluationUsageAvailability" json:"usage_availability,omitempty"`
 	InputTokens             uint64                      `protobuf:"varint,5,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
 	OutputTokens            uint64                      `protobuf:"varint,6,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
-	ThinkingTokens          uint64                      `protobuf:"varint,7,opt,name=thinking_tokens,json=thinkingTokens,proto3" json:"thinking_tokens,omitempty"`
-	CacheTokens             uint64                      `protobuf:"varint,8,opt,name=cache_tokens,json=cacheTokens,proto3" json:"cache_tokens,omitempty"`
+	ThinkingTokens          *uint64                     `protobuf:"varint,7,opt,name=thinking_tokens,json=thinkingTokens,proto3,oneof" json:"thinking_tokens,omitempty"`
+	CacheTokens             *uint64                     `protobuf:"varint,8,opt,name=cache_tokens,json=cacheTokens,proto3,oneof" json:"cache_tokens,omitempty"`
 	TotalDurationNanos      uint64                      `protobuf:"varint,9,opt,name=total_duration_nanos,json=totalDurationNanos,proto3" json:"total_duration_nanos,omitempty"`
 	GenerationDurationNanos uint64                      `protobuf:"varint,10,opt,name=generation_duration_nanos,json=generationDurationNanos,proto3" json:"generation_duration_nanos,omitempty"`
 	RetryCount              *uint32                     `protobuf:"varint,11,opt,name=retry_count,json=retryCount,proto3,oneof" json:"retry_count,omitempty"`
@@ -7859,15 +7859,15 @@ func (x *PublicModelActivityRecord) GetOutputTokens() uint64 {
 }
 
 func (x *PublicModelActivityRecord) GetThinkingTokens() uint64 {
-	if x != nil {
-		return x.ThinkingTokens
+	if x != nil && x.ThinkingTokens != nil {
+		return *x.ThinkingTokens
 	}
 	return 0
 }
 
 func (x *PublicModelActivityRecord) GetCacheTokens() uint64 {
-	if x != nil {
-		return x.CacheTokens
+	if x != nil && x.CacheTokens != nil {
+		return *x.CacheTokens
 	}
 	return 0
 }
@@ -9235,7 +9235,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\vcampaign_id\x18\v \x01(\tR\n" +
 	"campaignId\"l\n" +
 	"#ModelProvenanceObservationCompleted\x12E\n" +
-	"\x06window\x18\x01 \x01(\v2-.g8e.eval.v1.ModelProvenanceAttestationWindowR\x06window\"\xe2\f\n" +
+	"\x06window\x18\x01 \x01(\v2-.g8e.eval.v1.ModelProvenanceAttestationWindowR\x06window\"\x91\r\n" +
 	"\x14ModelInferenceRecord\x12.\n" +
 	"\x13inference_record_id\x18\x01 \x01(\tR\x11inferenceRecordId\x12.\n" +
 	"\x13provider_attempt_id\x18\x02 \x01(\tR\x11providerAttemptId\x12#\n" +
@@ -9258,9 +9258,9 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"outputHash\x12W\n" +
 	"\x12usage_availability\x18\x10 \x01(\x0e2(.g8e.eval.v1.EvaluationUsageAvailabilityR\x11usageAvailability\x12#\n" +
 	"\rprompt_tokens\x18\x11 \x01(\rR\fpromptTokens\x12+\n" +
-	"\x11completion_tokens\x18\x12 \x01(\rR\x10completionTokens\x12'\n" +
-	"\x0fthinking_tokens\x18\x13 \x01(\rR\x0ethinkingTokens\x12!\n" +
-	"\fcache_tokens\x18\x14 \x01(\rR\vcacheTokens\x12@\n" +
+	"\x11completion_tokens\x18\x12 \x01(\rR\x10completionTokens\x12,\n" +
+	"\x0fthinking_tokens\x18\x13 \x01(\rH\x03R\x0ethinkingTokens\x88\x01\x01\x12&\n" +
+	"\fcache_tokens\x18\x14 \x01(\rH\x04R\vcacheTokens\x88\x01\x01\x12@\n" +
 	"\x1drequest_started_at_unix_nanos\x18\x15 \x01(\x04R\x19requestStartedAtUnixNanos\x128\n" +
 	"\x19first_token_at_unix_nanos\x18\x16 \x01(\x04R\x15firstTokenAtUnixNanos\x12:\n" +
 	"\x19generation_duration_nanos\x18\x17 \x01(\x04R\x17generationDurationNanos\x120\n" +
@@ -9268,7 +9268,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x13load_duration_nanos\x18\x19 \x01(\x04R\x11loadDurationNanos\x12?\n" +
 	"\n" +
 	"load_state\x18\x1a \x01(\x0e2 .g8e.eval.v1.EvaluationLoadStateR\tloadState\x12$\n" +
-	"\vretry_count\x18\x1b \x01(\rH\x03R\n" +
+	"\vretry_count\x18\x1b \x01(\rH\x05R\n" +
 	"retryCount\x88\x01\x01\x12#\n" +
 	"\rfinish_reason\x18\x1c \x01(\tR\ffinishReason\x12)\n" +
 	"\x10privacy_attested\x18\x1d \x01(\bR\x0fprivacyAttested\x12`\n" +
@@ -9277,7 +9277,9 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"!provider_boundary_observation_ref\x18  \x01(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\x1eproviderBoundaryObservationRefB\b\n" +
 	"\x06_top_pB\b\n" +
 	"\x06_top_kB\a\n" +
-	"\x05_seedB\x0e\n" +
+	"\x05_seedB\x12\n" +
+	"\x10_thinking_tokensB\x0f\n" +
+	"\r_cache_tokensB\x0e\n" +
 	"\f_retry_count\"\xc8\x02\n" +
 	"\x12ToolDecisionRecord\x12\x1f\n" +
 	"\vdecision_id\x18\x01 \x01(\tR\n" +
@@ -9541,7 +9543,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\x06status\x12K\n" +
 	"\x0egrading_method\x18\x03 \x01(\x0e2$.g8e.eval.v1.EvaluationGradingMethodR\rgradingMethod\x12(\n" +
 	"\x10judge_variant_id\x18\x04 \x01(\tR\x0ejudgeVariantId\x12R\n" +
-	"\x10explanation_code\x18\x05 \x01(\x0e2'.g8e.eval.v1.PublicGradeExplanationCodeR\x0fexplanationCode\"\xb3\x05\n" +
+	"\x10explanation_code\x18\x05 \x01(\x0e2'.g8e.eval.v1.PublicGradeExplanationCodeR\x0fexplanationCode\"\xe2\x05\n" +
 	"\x19PublicModelActivityRecord\x12=\n" +
 	"\n" +
 	"model_role\x18\x01 \x01(\x0e2\x1e.g8e.eval.v1.ModelCampaignRoleR\tmodelRole\x12#\n" +
@@ -9550,17 +9552,19 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"variant_id\x18\x03 \x01(\tR\tvariantId\x12W\n" +
 	"\x12usage_availability\x18\x04 \x01(\x0e2(.g8e.eval.v1.EvaluationUsageAvailabilityR\x11usageAvailability\x12!\n" +
 	"\finput_tokens\x18\x05 \x01(\x04R\vinputTokens\x12#\n" +
-	"\routput_tokens\x18\x06 \x01(\x04R\foutputTokens\x12'\n" +
-	"\x0fthinking_tokens\x18\a \x01(\x04R\x0ethinkingTokens\x12!\n" +
-	"\fcache_tokens\x18\b \x01(\x04R\vcacheTokens\x120\n" +
+	"\routput_tokens\x18\x06 \x01(\x04R\foutputTokens\x12,\n" +
+	"\x0fthinking_tokens\x18\a \x01(\x04H\x00R\x0ethinkingTokens\x88\x01\x01\x12&\n" +
+	"\fcache_tokens\x18\b \x01(\x04H\x01R\vcacheTokens\x88\x01\x01\x120\n" +
 	"\x14total_duration_nanos\x18\t \x01(\x04R\x12totalDurationNanos\x12:\n" +
 	"\x19generation_duration_nanos\x18\n" +
 	" \x01(\x04R\x17generationDurationNanos\x12$\n" +
-	"\vretry_count\x18\v \x01(\rH\x00R\n" +
+	"\vretry_count\x18\v \x01(\rH\x02R\n" +
 	"retryCount\x88\x01\x01\x12A\n" +
 	"\ffinish_state\x18\f \x01(\x0e2\x1e.g8e.eval.v1.PublicFinishStateR\vfinishState\x12?\n" +
 	"\n" +
-	"load_state\x18\r \x01(\x0e2 .g8e.eval.v1.EvaluationLoadStateR\tloadStateB\x0e\n" +
+	"load_state\x18\r \x01(\x0e2 .g8e.eval.v1.EvaluationLoadStateR\tloadStateB\x12\n" +
+	"\x10_thinking_tokensB\x0f\n" +
+	"\r_cache_tokensB\x0e\n" +
 	"\f_retry_count\"\xde\x02\n" +
 	" PublicToolDecisionActivityRecord\x12\x1d\n" +
 	"\n" +

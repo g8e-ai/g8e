@@ -35,7 +35,7 @@ from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
 
-_TRACE_SCHEMA_VERSION = "1"
+_TRACE_SCHEMA_VERSION = "2"
 
 
 def _trace_root() -> Path:

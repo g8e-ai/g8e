@@ -76,6 +76,14 @@ from app.utils.ids import generate_command_execution_id
 logger = logging.getLogger(__name__)
 
 
+def _sum_optional_usage_counts(values: list[int | None]) -> int | None:
+    if not values:
+        return None
+    if any(value is None for value in values):
+        return None
+    return sum(values)
+
+
 def _resolve_agent_model_role(inputs: AgentInputs) -> str:
     if inputs.designated_model_role:
         return inputs.designated_model_role
@@ -358,8 +366,6 @@ class g8eEnsemble:
             model_calls = [triage_call] if triage_call else []
         total_input_tokens = sum(call.input_tokens for call in model_calls)
         total_output_tokens = sum(call.output_tokens for call in model_calls)
-        total_thinking_tokens = sum(call.thinking_tokens for call in model_calls)
-        total_cache_tokens = sum(call.cache_tokens for call in model_calls)
         total_tokens = sum(call.total_tokens for call in model_calls)
         grounding_metadata: GroundingMetadata | None = None
         final_finish_reason: str = DEFAULT_FINISH_REASON
@@ -491,8 +497,6 @@ class g8eEnsemble:
 
                 total_input_tokens += turn_result.input_tokens
                 total_output_tokens += turn_result.output_tokens
-                total_thinking_tokens += turn_result.thinking_tokens
-                total_cache_tokens += turn_result.cache_tokens
                 total_tokens += turn_result.total_tokens
                 if turn_result.finish_reason:
                     final_finish_reason = turn_result.finish_reason
@@ -574,8 +578,12 @@ class g8eEnsemble:
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
                 total_tokens=total_tokens,
-                thinking_tokens=total_thinking_tokens,
-                cache_tokens=total_cache_tokens,
+                thinking_tokens=_sum_optional_usage_counts(
+                    [call.thinking_tokens for call in model_calls]
+                ),
+                cache_tokens=_sum_optional_usage_counts(
+                    [call.cache_tokens for call in model_calls]
+                ),
                 usage_reported=all(call.usage_reported for call in model_calls),
             )
             if model_calls

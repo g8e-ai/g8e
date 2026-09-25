@@ -866,8 +866,8 @@ ModelInferenceRecord captures one governed scored inference call.
 | usage_availability | [EvaluationUsageAvailability](#g8e-eval-v1-EvaluationUsageAvailability) |  |  |
 | prompt_tokens | [uint32](#uint32) |  |  |
 | completion_tokens | [uint32](#uint32) |  |  |
-| thinking_tokens | [uint32](#uint32) |  |  |
-| cache_tokens | [uint32](#uint32) |  |  |
+| thinking_tokens | [uint32](#uint32) | optional |  |
+| cache_tokens | [uint32](#uint32) | optional |  |
 | request_started_at_unix_nanos | [uint64](#uint64) |  |  |
 | first_token_at_unix_nanos | [uint64](#uint64) |  |  |
 | generation_duration_nanos | [uint64](#uint64) |  |  |
@@ -1294,8 +1294,8 @@ to one governed inference provider attempt.
 | usage_availability | [EvaluationUsageAvailability](#g8e-eval-v1-EvaluationUsageAvailability) |  |  |
 | input_tokens | [uint64](#uint64) |  |  |
 | output_tokens | [uint64](#uint64) |  |  |
-| thinking_tokens | [uint64](#uint64) |  |  |
-| cache_tokens | [uint64](#uint64) |  |  |
+| thinking_tokens | [uint64](#uint64) | optional |  |
+| cache_tokens | [uint64](#uint64) | optional |  |
 | total_duration_nanos | [uint64](#uint64) |  |  |
 | generation_duration_nanos | [uint64](#uint64) |  |  |
 | retry_count | [uint32](#uint32) | optional |  |
