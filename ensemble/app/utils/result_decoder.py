@@ -5,11 +5,11 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Inbound result envelope decoding for g8eo -> g8ee pub/sub messages.
+"""Inbound result envelope decoding for Gateway -> g8ee application messages.
 
-Decodes GovernanceEnvelope protojson payloads published by the g8eo
-operator on the ``results:`` and ``heartbeat:`` channels into typed
-Pydantic models (``G8eoResultEnvelope``, ``G8eoHeartbeatPayload``).
+Decodes GovernanceEnvelope protojson payloads published by g8eo on the
+``results:`` channel into the typed ``G8eoResultEnvelope`` model. Heartbeats
+are Gateway-owned and are not decoded or subscribed to by g8ee.
 
 These functions were previously in ``app.utils.envelope_builder``, which
 has been deleted. Envelope construction for the HTTP governance path now
@@ -31,11 +31,8 @@ from app.models.pubsub_messages import (
     G8eoResultEnvelope,
     G8eoResultPayload,
     G8eoResultPayloadAdapter,
-    G8eoHeartbeatPayload,
 )
 from g8e.common.v1 import common_pb2
-from g8e.operator.v1 import operator_pb2
-from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict, ParseDict
 
 
@@ -173,102 +170,3 @@ def decode_and_validate_uap_result(
         )
     except PydanticValidationError as e:
         raise ValidationError(f"Invalid G8eoResultEnvelope: {e}", component="g8ee") from e
-
-
-def _parse_governance_envelope(
-    envelope_data: bytes | str | dict[str, Any],
-) -> common_pb2.GovernanceEnvelope:
-    if isinstance(envelope_data, (bytes, str)):
-        raw_json = (
-            envelope_data.decode("utf-8") if isinstance(envelope_data, bytes) else envelope_data
-        )
-    else:
-        raw_json = json.dumps(envelope_data)
-
-    envelope = common_pb2.GovernanceEnvelope()
-    ParseDict(json.loads(raw_json), envelope, ignore_unknown_fields=True)
-    return envelope
-
-
-def _parse_heartbeat_result_from_envelope(
-    envelope: common_pb2.GovernanceEnvelope,
-) -> operator_pb2.HeartbeatResult:
-    heartbeat = operator_pb2.HeartbeatResult()
-    if envelope.payload:
-        heartbeat.ParseFromString(envelope.payload)
-        return heartbeat
-
-    if envelope.HasField("intent_data") and envelope.intent_data.fields:
-        intent_dict = MessageToDict(envelope.intent_data)
-        json_format.ParseDict(intent_dict, heartbeat, ignore_unknown_fields=True)
-    return heartbeat
-
-
-def _heartbeat_payload_dict_from_proto(
-    heartbeat: operator_pb2.HeartbeatResult,
-    *,
-    event_type: str | None,
-    timestamp: Any,
-    operator_id: str,
-    operator_session_id: str,
-) -> dict[str, object]:
-    payload = json_format.MessageToDict(heartbeat, preserving_proto_field_name=True)
-    if event_type:
-        payload["event_type"] = event_type
-    if timestamp is not None:
-        payload["timestamp"] = timestamp
-    if not payload.get("operator_id"):
-        payload["operator_id"] = operator_id
-    if not payload.get("operator_session_id"):
-        payload["operator_session_id"] = operator_session_id
-    if heartbeat.status:
-        payload["heartbeat_type"] = heartbeat.status
-    return payload
-
-
-def decode_and_validate_uap_heartbeat(
-    data: str | bytes | dict[str, object],
-    operator_id: str,
-    operator_session_id: str,
-) -> G8eoHeartbeatPayload:
-    """Decode and validate a UAP heartbeat envelope from g8eo.
-
-    Args:
-        data: Raw envelope data (JSON string, bytes, or dict)
-        operator_id: Operator ID from channel routing
-        operator_session_id: Operator session ID from channel routing
-
-    Returns:
-        A validated G8eoHeartbeatPayload instance
-
-    Raises:
-        ValidationError: If decoding or validation fails
-    """
-    if not isinstance(data, (str, bytes, dict)):
-        raise ValidationError(
-            "Heartbeat must be a UAP envelope (string, bytes, or dict)", component="g8ee"
-        )
-
-    try:
-        envelope = _parse_governance_envelope(data)
-        heartbeat_proto = _parse_heartbeat_result_from_envelope(envelope)
-    except (ValueError, TypeError) as e:
-        raise ValidationError(
-            f"Failed to decode UAP heartbeat envelope: {e}", component="g8ee"
-        ) from e
-
-    envelope_timestamp = (
-        envelope.timestamp.ToDatetime(tzinfo=UTC) if envelope.HasField("timestamp") else None
-    )
-    raw = _heartbeat_payload_dict_from_proto(
-        heartbeat_proto,
-        event_type=envelope.event_type or None,
-        timestamp=envelope_timestamp,
-        operator_id=envelope.operator_id or operator_id,
-        operator_session_id=envelope.operator_session_id or operator_session_id,
-    )
-
-    try:
-        return G8eoHeartbeatPayload.model_validate(raw)
-    except PydanticValidationError as e:
-        raise ValidationError(f"Invalid G8eoHeartbeatPayload: {e}", component="g8ee") from e

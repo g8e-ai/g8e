@@ -69,8 +69,6 @@ from app.models.internal_api import (
     OperatorCertificateRevokeRequest,
     OperatorCertificateRevokeResponse,
     OperatorListenSessionAuthRequest,
-    OperatorSessionRegisteredResponse,
-    OperatorSessionRegistrationRequest,
     OperatorSessionRefreshRequest,
     OperatorSessionRefreshResponse,
     OperatorSessionValidateRequest,
@@ -114,7 +112,6 @@ from app.models.events import SessionEvent
 from app.models.operators import OperatorDocument, OperatorStatusUpdatedPayload
 from app.services.operator.session_auth_listener import SessionAuthListener
 from app.services.operator.operator_data_service import OperatorDataService
-from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from app.services.operator.approval_service import OperatorApprovalService
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_session_service import OperatorSessionService
@@ -146,7 +143,6 @@ from app.dependencies import (
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_event_service,
-    get_g8ee_heartbeat_service,
     get_g8ee_investigation_service,
     get_g8ee_operator_command_service,
     get_g8ee_operator_data_service,
@@ -1580,85 +1576,6 @@ async def refresh_operator_session(
     except Exception as e:
         logger.error("[INTERNAL-HTTP] Session refresh failed: %s", e)
         return OperatorSessionRefreshResponse(success=False, error=str(e))
-
-
-@router.post(
-    InternalAPIPaths.G8EE_OPERATORS_REGISTER_SESSION,
-    response_model=OperatorSessionRegisteredResponse,
-)
-async def register_operator_session(
-    request: OperatorSessionRegistrationRequest,
-    heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
-    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
-):
-    """
-    Subscribe g8ee to the heartbeat pub/sub channel for an operator session.
-
-    Called by client immediately after operator authentication succeeds so g8ee
-    is listening before the first heartbeat arrives.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    await heartbeat_service.register_operator_session(
-        operator_id=request.operator_id,
-        operator_session_id=request.operator_session_id,
-    )
-
-    logger.info(
-        "[INTERNAL-HTTP] Operator session registered for heartbeat subscription",
-        extra={
-            "operator_id": request.operator_id,
-            "operator_session_id": request.operator_session_id[:12] + "...",
-            "user_id": g8e_context.user_id,
-        },
-    )
-
-    return OperatorSessionRegisteredResponse(
-        success=True,
-        operator_id=request.operator_id,
-        operator_session_id=request.operator_session_id,
-    )
-
-
-@router.post(
-    InternalAPIPaths.G8EE_OPERATORS_DEREGISTER_SESSION,
-    response_model=OperatorSessionRegisteredResponse,
-)
-async def deregister_operator_session(
-    request: OperatorSessionRegistrationRequest,
-    heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
-    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
-):
-    """
-    Unsubscribe g8ee from the heartbeat pub/sub channel for an operator session.
-
-    Called by client when an operator goes offline, is stopped, or is terminated.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    await heartbeat_service.deregister_operator_session(
-        operator_id=request.operator_id,
-        operator_session_id=request.operator_session_id,
-    )
-
-    logger.info(
-        "[INTERNAL-HTTP] Operator session deregistered from heartbeat subscription",
-        extra={
-            "operator_id": request.operator_id,
-            "operator_session_id": request.operator_session_id[:12] + "...",
-            "user_id": g8e_context.user_id,
-        },
-    )
-
-    return OperatorSessionRegisteredResponse(
-        success=True,
-        operator_id=request.operator_id,
-        operator_session_id=request.operator_session_id,
-    )
 
 
 @router.post(InternalAPIPaths.G8EE_OPERATORS_STOP, response_model=OperatorStoppedResponse)

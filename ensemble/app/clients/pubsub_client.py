@@ -9,8 +9,8 @@
 PubSubClient - WebSocket-based Pub/Sub client for the Gateway.
 
 Talks to the Gateway via WebSocket (constants.APIPaths.PubSubStream = "/api/v1/pubsub/stream").
-Supports: subscribe, psubscribe, publish,
-publish_command, subscribe_execution_results, subscribe_heartbeats.
+Supports: subscribe, psubscribe, publish, publish_command, and
+subscribe_execution_results.
 
 The ensemble publishes a ``CommandIntent`` (protojson) to the operator's
 ``cmd:`` channel. The Gateway intercepts the publish, validates
@@ -18,9 +18,7 @@ authorization, decodes the ``CommandIntent`` via protojson, constructs the
 governed GovernanceEnvelope with the current state Merkle root, and
 forwards it to the operator. The ensemble never constructs governance
 envelopes for operator command dispatch and never fetches state roots.
-Operator online status is not the ensemble's responsibility; operators
-announce health on ``heartbeat:<operator_id>`` and the ensemble subscribes
-to that channel.
+Operator online status and heartbeat handling are Gateway responsibilities.
 """
 
 import asyncio
@@ -554,7 +552,7 @@ class PubSubClient:
         self._pmessage_handlers.setdefault(pattern, []).append(handler)
 
     # =========================================================================
-    # Domain pub/sub - g8eo Operator command/result/heartbeat channels
+    # Protocol pub/sub - Gateway command and result channels
     # =========================================================================
 
     async def publish_command(
@@ -697,50 +695,3 @@ class PubSubClient:
         await self.unsubscribe(channel)
         self.off_channel_message(channel, callback)
 
-    async def subscribe_heartbeats(
-        self,
-        operator_id: str,
-        operator_session_id: str,
-        callback: Callable[[str, Any], Any],
-    ) -> None:
-        """Subscribe to the exact heartbeat channel for one operator session."""
-        channel = OperatorChannel.heartbeat(operator_id, operator_session_id)
-
-        logger.info(
-            "[PUBSUB-CLIENT] Subscribing to heartbeats for operator %s session %s",
-            operator_id,
-            operator_session_id,
-            extra={
-                "operator_id": operator_id,
-                "operator_session_id": operator_session_id,
-                "channel": channel,
-                "subscription_type": "heartbeats",
-            },
-        )
-
-        self.on_channel_message(channel, callback)
-        await self.subscribe(channel)
-
-    async def unsubscribe_heartbeats(
-        self,
-        operator_id: str,
-        operator_session_id: str,
-        callback: Callable[[str, Any], Any],
-    ) -> None:
-        """Unsubscribe from the exact heartbeat channel for one operator session."""
-        channel = OperatorChannel.heartbeat(operator_id, operator_session_id)
-
-        logger.info(
-            "[PUBSUB-CLIENT] Unsubscribing from heartbeats for operator %s session %s",
-            operator_id,
-            operator_session_id,
-            extra={
-                "operator_id": operator_id,
-                "operator_session_id": operator_session_id,
-                "channel": channel,
-                "subscription_type": "heartbeats",
-            },
-        )
-
-        await self.unsubscribe(channel)
-        self.off_channel_message(channel, callback)

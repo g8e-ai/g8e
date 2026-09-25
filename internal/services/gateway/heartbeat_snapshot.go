@@ -33,11 +33,14 @@ func heartbeatResultFromEnvelope(env *commonv1.GovernanceEnvelope) (*operatorv1.
 		if err := proto.Unmarshal(env.Payload, heartbeat); err != nil {
 			return nil, fmt.Errorf("heartbeat payload decode failed: %w", err)
 		}
+		if proto.Size(heartbeat) == 0 {
+			return nil, fmt.Errorf("heartbeat payload is empty")
+		}
 		return heartbeat, nil
 	}
 
 	if env.IntentData == nil || len(env.IntentData.Fields) == 0 {
-		return heartbeat, nil
+		return nil, fmt.Errorf("heartbeat envelope has no payload")
 	}
 
 	intentJSON, err := protojson.Marshal(env.IntentData)
@@ -46,6 +49,9 @@ func heartbeatResultFromEnvelope(env *commonv1.GovernanceEnvelope) (*operatorv1.
 	}
 	if err := protojson.Unmarshal(intentJSON, heartbeat); err != nil {
 		return nil, fmt.Errorf("heartbeat intent_data decode failed: %w", err)
+	}
+	if proto.Size(heartbeat) == 0 {
+		return nil, fmt.Errorf("heartbeat intent_data is empty")
 	}
 	return heartbeat, nil
 }

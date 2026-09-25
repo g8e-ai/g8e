@@ -105,7 +105,8 @@ Bound Operators emit heartbeat telemetry every **30 seconds** (default; configur
 - **Heartbeat interval**: `heartbeatIntervalOrDefault` defaults to 30s (`internal/config/config.go`).
 - **Heartbeat scheduler**: `HeartbeatService.StartScheduler` runs a periodic ticker (`internal/services/pubsub/heartbeat_service.go`).
 - **Heartbeat payload**: System telemetry wrapped in a `GovernanceEnvelope` with `operator_id`.
-- **Gateway handling**: `handleHeartbeatPublish` updates the operator document's `latest_heartbeat_snapshot` and `updated_at` in the database (`internal/services/gateway/gateway_service.go`).
+- **Gateway handling**: `handleHeartbeatPublish` is the sole heartbeat persistence path. It decodes the authoritative `GovernanceEnvelope.payload` (falling back to `intent_data` only when payload bytes are absent), stores canonical `HeartbeatResult` protojson with protobuf field names in `latest_heartbeat_snapshot`, denormalizes `system_identity.hostname` to `current_hostname`, and updates `updated_at` (`internal/services/gateway/gateway_service.go`).
+- **Ensemble handling**: g8ee is not on the heartbeat channel. Application consumers receive Gateway-owned operator events through the Gateway protocol.
 - **Protocol events**:
   - `g8e.v1.operator.heartbeat.sent` — Operator sent heartbeat
   - `g8e.v1.operator.heartbeat.received` — Gateway received heartbeat

@@ -111,7 +111,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         """Query Operator documents.
 
         ``bypass_cache=True`` mirrors client's ``queryOperatorsFresh`` and is used
-        by reconcilers (e.g. HeartbeatStaleMonitorService) where stale query
+        by Gateway-owned reconcilers where stale query
         cache results would produce false STALE/OFFLINE transitions.
         """
         rows = await self.cache.query_documents(

@@ -15,7 +15,6 @@ import pytest
 from app.constants import EventType, ExecutionStatus, PubSubChannel
 from app.models.pubsub_messages import G8eoResultEnvelope, ExecutionResultsPayload
 from app.services.operator.command_service import OperatorCommandService
-from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from tests.fakes.builder import build_command_service
 from tests.fakes.factories import build_g8eo_result_envelope
 
@@ -46,28 +45,6 @@ def command_service() -> OperatorCommandService:
     return _make_service()
 
 
-def _make_mock_hb_pubsub_client() -> MagicMock:
-    client = MagicMock()
-    client.ensure_connected = AsyncMock()
-    client.subscribe = AsyncMock()
-    client.unsubscribe = AsyncMock()
-    client.on_channel_message = MagicMock()
-    client.off_channel_message = MagicMock()
-    client.on_disconnect = MagicMock()
-    client.off_disconnect = MagicMock()
-    return client
-
-
-@pytest.fixture
-def heartbeat_service() -> HeartbeatSnapshotService:
-    svc = HeartbeatSnapshotService(
-        operator_data_service=MagicMock(),
-        event_service=MagicMock(),
-    )
-    svc.set_pubsub_client(_make_mock_hb_pubsub_client())
-    return svc
-
-
 class TestStartPubSubListeners:
     """Test pub/sub client startup."""
 
@@ -76,11 +53,10 @@ class TestStartPubSubListeners:
         await command_service.start_pubsub_listeners()
         assert command_service._pubsub_service._pubsub_ready is True
 
-    async def test_no_handlers_registered_at_startup(self, command_service, heartbeat_service):
+    async def test_no_handlers_registered_at_startup(self, command_service):
         """Test no channel handlers are registered at startup - only at register_operator_session."""
         await command_service.start_pubsub_listeners()
         command_service._pubsub_service.pubsub_client.on_channel_message.assert_not_called()
-        heartbeat_service._pubsub_client.on_channel_message.assert_not_called()
 
     async def test_idempotent_when_called_twice(self, command_service):
         """Test second call is a no-op."""
@@ -88,11 +64,10 @@ class TestStartPubSubListeners:
         await command_service.start_pubsub_listeners()
         assert command_service._pubsub_service.pubsub_client.ensure_connected.call_count == 1
 
-    async def test_no_channel_subscriptions_at_startup(self, command_service, heartbeat_service):
+    async def test_no_channel_subscriptions_at_startup(self, command_service):
         """Test no operator channels are subscribed at startup."""
         await command_service.start_pubsub_listeners()
         command_service._pubsub_service.pubsub_client.subscribe.assert_not_called()
-        heartbeat_service._pubsub_client.subscribe.assert_not_called()
 
 
 class TestStopPubSubListeners:
@@ -125,16 +100,15 @@ class TestStopPubSubListeners:
 class TestRegisterOperatorSession:
     """Test per-operator exact channel subscription."""
 
-    async def test_subscribes_exact_channels(self, command_service, heartbeat_service):
+    async def test_subscribes_exact_channels(self, command_service):
         """Test subscribes to the exact results channel for the operator session."""
         await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
 
         command_service._pubsub_service.pubsub_client.subscribe.assert_called_once_with(
             PubSubChannel.results("op-abc", "sess-xyz")
         )
-        heartbeat_service._pubsub_client.subscribe.assert_not_called()
 
-    async def test_registers_per_channel_handlers(self, command_service, heartbeat_service):
+    async def test_registers_per_channel_handlers(self, command_service):
         """Test registers on_channel_message handler for the results channel only."""
         await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
 
@@ -142,7 +116,6 @@ class TestRegisterOperatorSession:
             PubSubChannel.results("op-abc", "sess-xyz"),
             command_service._pubsub_service._dispatch_results_message,
         )
-        heartbeat_service._pubsub_client.on_channel_message.assert_not_called()
 
     async def test_tracks_active_session(self, command_service):
         """Test adds session to _active_operator_sessions."""
@@ -174,7 +147,7 @@ class TestRegisterOperatorSession:
 class TestDeregisterOperatorSession:
     """Test per-operator exact channel unsubscription."""
 
-    async def test_unsubscribes_exact_channels(self, command_service, heartbeat_service):
+    async def test_unsubscribes_exact_channels(self, command_service):
         """Test unsubscribes the exact results channel for the operator session."""
         await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
         await command_service._pubsub_service.deregister_operator_session("op-abc", "sess-xyz")
@@ -182,9 +155,8 @@ class TestDeregisterOperatorSession:
         command_service._pubsub_service.pubsub_client.unsubscribe.assert_called_once_with(
             PubSubChannel.results("op-abc", "sess-xyz")
         )
-        heartbeat_service._pubsub_client.unsubscribe.assert_not_called()
 
-    async def test_deregisters_per_channel_handlers(self, command_service, heartbeat_service):
+    async def test_deregisters_per_channel_handlers(self, command_service):
         """Test removes the results channel on_channel_message handler on deregister."""
         await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
         await command_service._pubsub_service.deregister_operator_session("op-abc", "sess-xyz")
@@ -193,7 +165,6 @@ class TestDeregisterOperatorSession:
             PubSubChannel.results("op-abc", "sess-xyz"),
             command_service._pubsub_service._dispatch_results_message,
         )
-        heartbeat_service._pubsub_client.off_channel_message.assert_not_called()
 
     async def test_removes_from_active_sessions(self, command_service):
         """Test removes session from _active_operator_sessions."""

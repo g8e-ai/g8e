@@ -123,7 +123,6 @@ def _configure_factory(mocks):
     mock_services.settings_service = MagicMock()
     mock_services.operator_lifecycle_service = MagicMock()
     mock_services.operator_data_service = MagicMock()
-    mock_services.heartbeat_service = MagicMock()
     mock_services.operator_auth_service = MagicMock()
     mock_services.session_auth_listener = MagicMock()
     mock_services.certificate_service = MagicMock()

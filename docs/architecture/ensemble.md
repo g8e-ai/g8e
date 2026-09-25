@@ -46,8 +46,8 @@ g8ee's FastAPI lifespan performs startup in a fixed order:
 2. Load a valid enrolled app identity or run owner-approved platform enrollment for component `g8ee` and kind `ensemble`.
 3. Create the app mTLS configuration and connect the DB, KV, pub/sub, and blob clients.
 4. Build handler services, load platform settings through the Gateway-backed cache-aside service, and merge them with local settings.
-5. Construct `GovernanceClient`, domain services, Operator workflow services, the chat pipeline, and the LLM provider integration.
-6. Start certificate, command-pub/sub, HTTP, heartbeat, and stale-heartbeat services. Only then does the FastAPI lifespan yield readiness.
+5. Construct `GovernanceClient`, application domain services, Gateway protocol clients, the chat pipeline, and the LLM provider integration.
+6. Start certificate, command-pub/sub, and HTTP services. Only then does the FastAPI lifespan yield readiness; heartbeat and Operator lifecycle processing remain in the Gateway.
 
 Enrollment uses the Gateway's plain-HTTP discovery surface to request, poll, and complete approval. The service generates a P-256 key and CSR, persists an atomic pending attempt with restrictive permissions, resumes an unexpired pending request after restart, verifies the issued chain, SANs, public key, and component kind, and atomically installs the certificate, key, and trust bundle. Existing credentials are renewed when they are within one day of expiry. Approval occurs in the Gateway console; g8ee does not become ready while enrollment is pending. The app certificate and pending state live in g8ee's own runtime volume.
 
@@ -80,6 +80,8 @@ The current implementation uses the enrolled g8ee app certificate for this HTTPS
 ## Persistence and ownership
 
 g8ee has no local durable application database. The Gateway owns durable application documents, KV values, and blob objects in its own runtime storage. g8ee owns application service logic and uses those Gateway-backed stores for cases, investigations, conversation history, memories, settings, Operator workflow records, agent activity, reputation, and stake resolutions.
+
+The Gateway is the sole owner of the Operator domain: documents, auth/session state, binding, lifecycle, command dispatch, results, `latest_heartbeat_snapshot`, and denormalized `current_hostname`. It stores the canonical `operator.v1.HeartbeatResult` protojson snapshot. g8ee does not subscribe to heartbeat channels, persist Operator fields, or maintain an Operator service; it calls Gateway protocol endpoints when application features need Operator data or execution.
 
 The g8ee process owns only ephemeral coordination: active model turns, background task tracking, pending application approvals, and command-result correlations. These do not survive an ensemble restart. Its certificate, key, trust bundle, and resumable enrollment state persist in the separate ensemble runtime volume. The executing Operator owns authoritative receipts, audit, replay, execution-vault, command output, and file-mutation evidence in its own runtime; g8ee may copy selected results into application records or model context but does not replace that evidence.
 

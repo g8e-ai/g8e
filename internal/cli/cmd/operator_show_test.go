@@ -72,6 +72,17 @@ func TestParseOperatorHeartbeatView_AcceptsProtojsonCamelCase(t *testing.T) {
 	assert.Equal(t, 5.0, view.PerformanceMetrics.CPUPercent)
 }
 
+func TestParseOperatorHeartbeatView_RejectsLegacyPythonShape(t *testing.T) {
+	raw := json.RawMessage(`{
+		"timestamp": "2026-09-18T12:00:00Z",
+		"heartbeat_type": "automatic",
+		"system_identity": {"hostname": "legacy-host"},
+		"performance": {"cpu_percent": 5.0}
+	}`)
+
+	assert.Nil(t, parseOperatorHeartbeatView(raw))
+}
+
 func TestFindOperatorByIDOrSession(t *testing.T) {
 	operators := []models.OperatorDocumentGo{
 		{ID: "op-1", OperatorSessionID: "session-1"},

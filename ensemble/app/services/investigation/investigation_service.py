@@ -477,7 +477,7 @@ def extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
 
     if hb:
         system_identity = hb.system_identity
-        network = hb.network
+        network = hb.network_info
         os_details = hb.os_details
         user_details = hb.user_details
         environment = hb.environment

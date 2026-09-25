@@ -62,7 +62,6 @@ from app.models.operators import (
     FileEditApprovalRequest,
     IntentApprovalRequest,
     OperatorDocument,
-    HeartbeatSnapshot,
     PendingApproval,
     StreamApprovalRequest,
     TargetSystem,
@@ -411,9 +410,8 @@ class OperatorDataServiceProtocol(Protocol):
     ) -> bool:
         """Update an operator's ``status`` field (no history entry).
 
-        Used by reconcilers (e.g. ``HeartbeatStaleMonitorService``) that need a
-        plain status write without the audit-trail semantics of
-        ``add_history_entry``.
+        Legacy operator-domain method. Operator status is owned and updated by
+        the Gateway; g8ee adapters must not use this as a persistence path.
         """
         raise NotImplementedError
 
@@ -745,44 +743,6 @@ class PubSubServiceProtocol(Protocol):
     async def publish_command(
         self, operator_id: str, operator_session_id: str, command_data: G8eMessage
     ) -> int:
-        raise NotImplementedError
-
-
-@runtime_checkable
-class HeartbeatSnapshotStaleMonitorServiceProtocol(Protocol):
-    async def start(self) -> None:
-        raise NotImplementedError
-
-    async def stop(self) -> None:
-        raise NotImplementedError
-
-    async def tick(self) -> None:
-        raise NotImplementedError
-
-
-@runtime_checkable
-class HeartbeatSnapshotServiceProtocol(Protocol):
-    @property
-    def operator_data_service(self) -> OperatorDataServiceProtocol:
-        raise NotImplementedError
-
-    @property
-    def event_service(self) -> EventServiceProtocol:
-        raise NotImplementedError
-
-    async def start(self) -> None:
-        raise NotImplementedError
-
-    async def stop(self) -> None:
-        raise NotImplementedError
-
-    async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        raise NotImplementedError
-
-    async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        raise NotImplementedError
-
-    def set_pubsub_client(self, client: PubSubClient) -> None:
         raise NotImplementedError
 
 

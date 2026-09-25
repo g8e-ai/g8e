@@ -108,7 +108,7 @@ class TestPubSubClientSubscribe:
         """Regression: channel must be added to _subscribed_channels after
         _ensure_ws() so reconnect doesn't re-subscribe before ACK handler
         exists."""
-        channel = "heartbeat:op-1:sess-1"
+        channel = "results:op-1:sess-1"
 
         async def mock_ack():
             await asyncio.sleep(0.01)
@@ -139,7 +139,7 @@ class TestPubSubClientSubscribe:
 @pytest.mark.asyncio
 class TestPubSubClientPsubscribe:
     async def test_psubscribe_sends_action(self, connected_client, task_tracker):
-        pattern = "heartbeat:*"
+        pattern = "results:*"
 
         async def mock_ack():
             await asyncio.sleep(0.01)
@@ -279,7 +279,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
     treated as a correlation token on results). Previously, pubsub_client
     tracked outbound envelope ids in `_sent_ids` and dropped any inbound
     message whose id matched -- labelling it a "self-broadcast". g8ee
-    publishes only to `cmd:*` and subscribes only to `results:*` / `heartbeat:*`
+    publishes only to `cmd:*` and subscribes only to `results:*`
     (disjoint channels), so there is no real self-broadcast scenario on this
     wire path. The filter silently ate legitimate results, causing the
     awaiting Future on PubSubService to time out and the UI spinner to spin
@@ -667,7 +667,7 @@ class TestPubSubClientCoverage:
         assert not connected_client._channel_refcounts
 
     async def test_domain_methods(self, connected_client, task_tracker):
-        """Test high-level domain methods: publish_command, subscribe_heartbeats, etc."""
+        """Test high-level protocol methods: publish_command and result subscription."""
         from app.models.pubsub_messages import G8eMessage
         from app.models.command_request_payloads import CommandRequestPayload
         from app.constants import EventType
@@ -711,27 +711,6 @@ class TestPubSubClientCoverage:
         await connected_client.unsubscribe_execution_results(op_id, sess_id, callback_res)
         assert channel_res not in connected_client._subscribed_channels
         assert channel_res not in connected_client._channel_handlers
-
-        # subscribe_heartbeats
-        async def mock_ack():
-            await asyncio.sleep(0.01)
-            channel = f"heartbeat:{op_id}:{sess_id}"
-            if channel in connected_client._pending_acks:
-                for ack in connected_client._pending_acks[channel]:
-                    ack.set()
-
-        task = task_tracker.track(asyncio.create_task(mock_ack()))
-        callback = AsyncMock()
-        await connected_client.subscribe_heartbeats(op_id, sess_id, callback)
-        await task
-        channel = f"heartbeat:{op_id}:{sess_id}"
-        assert channel in connected_client._subscribed_channels
-        assert callback in connected_client._channel_handlers[channel]
-
-        # unsubscribe_heartbeats
-        await connected_client.unsubscribe_heartbeats(op_id, sess_id, callback)
-        assert channel not in connected_client._subscribed_channels
-        assert channel not in connected_client._channel_handlers
 
 
 @pytest.mark.asyncio

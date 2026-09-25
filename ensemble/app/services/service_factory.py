@@ -44,7 +44,6 @@ from app.services.auth.certificate_data_service import CertificateDataService
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_auth_service import OperatorAuthService
 from app.services.operator.session_auth_listener import SessionAuthListener
-from app.services.operator.heartbeat_stale_monitor import HeartbeatStaleMonitorService
 from app.services.protocols import (
     HTTPServiceProtocol,
     InvestigationServiceProtocol,
@@ -52,8 +51,6 @@ from app.services.protocols import (
     OperatorDataServiceProtocol,
     OperatorLifecycleServiceProtocol,
     MemoryDataServiceProtocol,
-    HeartbeatSnapshotServiceProtocol,
-    HeartbeatSnapshotStaleMonitorServiceProtocol,
     EventServiceProtocol,
     AIResponseAnalyzerProtocol,
     ToolExecutorProtocol,
@@ -63,7 +60,6 @@ from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 from app.services.data.case_data_service import CaseDataService
-from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from app.models.settings import G8eeAppSettings
 from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
 from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
@@ -83,7 +79,6 @@ if TYPE_CHECKING:
     from app.services.investigation.investigation_data_service import InvestigationDataService
     from app.services.operator.operator_data_service import OperatorDataService
     from app.services.investigation.memory_data_service import MemoryDataService
-    from app.services.operator.heartbeat_service import HeartbeatSnapshotService
     from app.services.ai.response_analyzer import AIResponseAnalyzer
     from app.services.operator.approval_service import OperatorApprovalService
 
@@ -118,10 +113,6 @@ class DomainServices:
 
 @dataclass(frozen=True)
 class OperatorServices:
-    heartbeat_service: HeartbeatSnapshotService | HeartbeatSnapshotServiceProtocol
-    heartbeat_stale_monitor: (
-        HeartbeatStaleMonitorService | HeartbeatSnapshotStaleMonitorServiceProtocol
-    )
     operator_session_service: OperatorSessionService
     operator_auth_service: OperatorAuthService
     auth_service: AuthService
@@ -168,10 +159,6 @@ class AllServices:
     memory_generation_service: MemoryGenerationService
     reputation_service: ReputationService
     ssh_inventory_service: SshInventoryService
-    heartbeat_service: HeartbeatSnapshotService | HeartbeatSnapshotServiceProtocol
-    heartbeat_stale_monitor: (
-        HeartbeatStaleMonitorService | HeartbeatSnapshotStaleMonitorServiceProtocol
-    )
     operator_session_service: OperatorSessionService
     operator_auth_service: OperatorAuthService
     auth_service: AuthService
@@ -333,19 +320,7 @@ class ServiceFactory:
             operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
         )
 
-        heartbeat_service = HeartbeatSnapshotService(
-            operator_data_service=data_services.operator_data_service,
-            event_service=core_services.event_service,
-        )
-
-        heartbeat_stale_monitor = HeartbeatStaleMonitorService(
-            operator_data_service=data_services.operator_data_service,
-            event_service=core_services.event_service,
-        )
-
         return OperatorServices(
-            heartbeat_service=heartbeat_service,
-            heartbeat_stale_monitor=heartbeat_stale_monitor,
             operator_session_service=operator_session_service,
             operator_auth_service=operator_auth_service,
             auth_service=auth_service,
@@ -446,9 +421,6 @@ class ServiceFactory:
 
         if pubsub_client is not None:
             operator_command_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
-            operator_services.heartbeat_service.set_pubsub_client(
-                cast("PubSubClient", pubsub_client)
-            )
 
         chat_task_manager = BackgroundTaskManager()
 
@@ -518,8 +490,6 @@ class ServiceFactory:
             memory_generation_service=domain_services.memory_generation_service,
             reputation_service=domain_services.reputation_service,
             ssh_inventory_service=domain_services.ssh_inventory_service,
-            heartbeat_service=operator_services.heartbeat_service,
-            heartbeat_stale_monitor=operator_services.heartbeat_stale_monitor,
             operator_session_service=operator_services.operator_session_service,
             operator_auth_service=operator_services.operator_auth_service,
             auth_service=operator_services.auth_service,
@@ -540,8 +510,6 @@ class ServiceFactory:
         await services.certificate_service.initialize()
         await services.operator_command_service.start_pubsub_listeners()
         await services.http_service.start()
-        await services.heartbeat_service.start()
-        await services.heartbeat_stale_monitor.start()
 
     @staticmethod
     async def stop_services(services: AllServices) -> None:
@@ -558,16 +526,6 @@ class ServiceFactory:
             )
         except Exception as exc:
             _logger.error("Error awaiting background tasks: %s", exc)
-
-        try:
-            await services.heartbeat_stale_monitor.stop()
-        except Exception as exc:
-            _logger.error("Error stopping heartbeat stale monitor: %s", exc)
-
-        try:
-            await services.heartbeat_service.stop()
-        except Exception as exc:
-            _logger.error("Error stopping heartbeat service: %s", exc)
 
         try:
             await services.http_service.stop()

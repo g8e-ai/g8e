@@ -199,7 +199,7 @@ After enrolling the host CLI with `g8e auth enroll user` and starting one or mor
 ./g8e operator show <operator-id-or-session-id>
 ```
 
-`operator list` prints operator ID, type, hostname (from the latest heartbeat), session ID, and status. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata plus the latest heartbeat snapshot.
+`operator list` prints operator ID, type, hostname (decoded from the Gateway-persisted latest heartbeat), session ID, and status. This hostname is live operator telemetry; it is distinct from the enrollment-time `name` metadata shown by `auth enroll list`. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata plus the same canonical latest heartbeat snapshot.
 
 ### Bind the CLI session to an operator
 

@@ -62,6 +62,15 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 		assert.Contains(t, updatedDoc.Data, "latest_heartbeat_snapshot")
 		assert.Contains(t, updatedDoc.Data, "current_hostname")
 		assert.Contains(t, updatedDoc.Data, "worker-1")
+
+		var stored map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(updatedDoc.Data, &stored))
+		var snapshot map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(stored["latest_heartbeat_snapshot"], &snapshot))
+		var identity map[string]string
+		require.NoError(t, json.Unmarshal(snapshot["system_identity"], &identity))
+		assert.Equal(t, "worker-1", identity["hostname"])
+		assert.Equal(t, "worker-1", string(stored["current_hostname"]))
 	})
 
 	t.Run("Malformed JSON logs and returns", func(t *testing.T) {

@@ -73,6 +73,22 @@ func TestHeartbeatResultFromEnvelope_IntentDataProtojson(t *testing.T) {
 	assert.Equal(t, "protojson-host", decoded.SystemIdentity.Hostname)
 }
 
+func TestHeartbeatResultFromEnvelope_RejectsEmptyEnvelope(t *testing.T) {
+	_, err := heartbeatResultFromEnvelope(&commonv1.GovernanceEnvelope{
+		OperatorId: "op-1",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no payload")
+}
+
+func TestHeartbeatResultFromEnvelope_RejectsEmptyBinaryPayload(t *testing.T) {
+	_, err := heartbeatResultFromEnvelope(&commonv1.GovernanceEnvelope{
+		OperatorId: "op-1",
+		Payload:    []byte{0x00},
+	})
+	require.Error(t, err)
+}
+
 func TestMarshalHeartbeatSnapshot_UsesProtoFieldNames(t *testing.T) {
 	heartbeat := &operatorv1.HeartbeatResult{
 		Status: "automatic",

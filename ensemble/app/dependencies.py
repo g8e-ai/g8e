@@ -51,7 +51,6 @@ from .services.infra.event_service import EventService
 from .services.infra.internal_http_client import InternalHttpClient
 from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
-from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from .services.operator.operator_data_service import OperatorDataService
 from .services.operator.operator_lifecycle_service import OperatorLifecycleService
 from .services.operator.operator_session_service import OperatorSessionService
@@ -275,17 +274,6 @@ async def get_g8ee_operator_command_service(request: Request) -> OperatorCommand
         raise ServiceUnavailableError("Operator Command Service not available")
 
     return service
-
-
-async def get_g8ee_heartbeat_service(request: Request) -> HeartbeatSnapshotService:
-    state = cast(G8eeAppState, request.app.state)
-    service = state.services.heartbeat_service
-    if not service:
-        logger.error(
-            "Heartbeat service not found in app state - g8ee initialization may have failed"
-        )
-        raise ServiceUnavailableError("Heartbeat service not available")
-    return cast(HeartbeatSnapshotService, service)
 
 
 async def get_g8ee_operator_data_service(request: Request) -> OperatorDataService:
@@ -526,7 +514,6 @@ __all__ = [
     "get_g8ee_current_active_user",
     "get_g8ee_event_service",
     "get_g8ee_grounding_service",
-    "get_g8ee_heartbeat_service",
     "get_g8ee_investigation_data_service",
     "get_g8ee_investigation_service",
     "get_g8ee_kv_cache_client",

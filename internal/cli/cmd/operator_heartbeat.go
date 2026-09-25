@@ -17,7 +17,10 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-var heartbeatSnapshotUnmarshalOptions = protojson.UnmarshalOptions{DiscardUnknown: true}
+// Gateway heartbeat snapshots are canonical HeartbeatResult protojson. Protojson
+// accepts both the documented snake_case storage names and protobuf's camelCase
+// names, but unknown legacy Python fields must fail closed.
+var heartbeatSnapshotUnmarshalOptions = protojson.UnmarshalOptions{}
 
 func parseOperatorHeartbeatView(raw json.RawMessage) *operatorHeartbeatView {
 	if len(raw) == 0 {
@@ -137,8 +140,8 @@ func operatorHeartbeatViewFromResult(heartbeat *operatorv1.HeartbeatResult) *ope
 	if heartbeat.CapabilityFlags != nil {
 		view.CapabilityFlags = models.HeartbeatCapabilityFlags{
 			ExecutionVaultEnabled: heartbeat.CapabilityFlags.LocalStorageEnabled,
-			GitAvailable:        heartbeat.CapabilityFlags.GitAvailable,
-			LedgerMirrorEnabled: heartbeat.CapabilityFlags.LedgerMirrorEnabled,
+			GitAvailable:          heartbeat.CapabilityFlags.GitAvailable,
+			LedgerMirrorEnabled:   heartbeat.CapabilityFlags.LedgerMirrorEnabled,
 		}
 	}
 
