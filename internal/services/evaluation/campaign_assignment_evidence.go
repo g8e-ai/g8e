@@ -24,6 +24,7 @@ var publicEvidenceKinds = map[string]struct{}{
 	"campaign_profile": {}, "model_registry": {}, "verification_report": {},
 	"evaluation_projection": {}, "comparison_row": {}, "efficiency_observation": {},
 	"statistical_analysis": {}, "source_manifest": {},
+	AssignmentAuditSliceKind: {}, AssignmentAuditVaultKeyKind: {},
 }
 
 var publicActivityUnavailable = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED

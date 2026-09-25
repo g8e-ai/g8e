@@ -14,7 +14,53 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
+
+func ultraLightSpeedsterTestVariants() []*evalv1.ModelVariant {
+	digest := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	return []*evalv1.ModelVariant{
+		{
+			VariantId:      "phi35-mini-38b-speed",
+			ProviderClass:  "ollama",
+			ServedModelTag: "phi3.5:3.8b-mini-instruct-q4_K_M",
+			ModelDigest:    digest,
+			ModelFamily:    "Phi-3.5",
+			ParameterCount: 3_800_000_000,
+			Quantization:   "Q4_K_M",
+		},
+		{
+			VariantId:      "gemma2-2b-speed",
+			ProviderClass:  "ollama",
+			ServedModelTag: "gemma2:2b-instruct-q4_K_M",
+			ModelDigest:    digest,
+			ModelFamily:    "Gemma 2",
+			ParameterCount: 2_000_000_000,
+			Quantization:   "Q4_K_M",
+		},
+		{
+			VariantId:      "qwen25-05b-speed",
+			ProviderClass:  "ollama",
+			ServedModelTag: "qwen2.5:0.5b-instruct-q4_K_M",
+			ModelDigest:    digest,
+			ModelFamily:    "Qwen 2.5",
+			ParameterCount: 500_000_000,
+			Quantization:   "Q4_K_M",
+		},
+	}
+}
+
+func setupCampaignFormationsEnv(t *testing.T, variants []*evalv1.ModelVariant) (root string, deps nativeEvalDeps, cleanup func()) {
+	t.Helper()
+	root, deps, _, cleanup = setupCampaignOrchestrateEnv(t)
+	freeze, err := evaluation.MaterializeModelRegistry("formation-smoke", variants)
+	require.NoError(t, err)
+	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath, freeze.Variants...)
+	return root, deps, cleanup
+}
 
 func TestCampaignEvalFormationsList_ShowCatalog(t *testing.T) {
 	command := evalCmdWithConfig(panickingNativeEvalDeps(t))
@@ -52,4 +98,78 @@ func TestCampaignEvalFormationsRun_RequiresInferenceSession(t *testing.T) {
 	err := command.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--inference-session is required")
+}
+
+func TestCampaignEvalFormationsRun_RejectsMissingRegistryVariant(t *testing.T) {
+	root, deps, cleanup := setupCampaignFormationsEnv(t, []*evalv1.ModelVariant{
+		ultraLightSpeedsterTestVariants()[0],
+	})
+	defer cleanup()
+	restore := enableCampaignWitnessGateway(t, root, deps)
+	defer restore()
+
+	command := evalCmdWithConfig(deps)
+	command.SilenceUsage = true
+	command.SilenceErrors = true
+	command.SetArgs([]string{
+		"campaign", "formations", "run",
+		"--project-root", root,
+		"--inference-session", "infer-session",
+		"--data-session", "data-session",
+	})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFormationRegistryBinding)
+}
+
+func TestCampaignEvalFormationsRun_RejectsEmptySovereignDigest(t *testing.T) {
+	variants := ultraLightSpeedsterTestVariants()
+	variants[0].ModelDigest = ""
+	root, deps, cleanup := setupCampaignFormationsEnv(t, variants)
+	defer cleanup()
+	restore := enableCampaignWitnessGateway(t, root, deps)
+	defer restore()
+
+	command := evalCmdWithConfig(deps)
+	command.SilenceUsage = true
+	command.SilenceErrors = true
+	command.SetArgs([]string{
+		"campaign", "formations", "run",
+		"--project-root", root,
+		"--inference-session", "infer-session",
+		"--data-session", "data-session",
+	})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFormationAttestationRequired)
+}
+
+func TestCampaignEvalFormationsRun_RejectsUnknownInferenceSession(t *testing.T) {
+	root, deps, cleanup := setupCampaignFormationsEnv(t, ultraLightSpeedsterTestVariants())
+	defer cleanup()
+	restore := enableCampaignWitnessGateway(t, root, deps)
+	defer restore()
+
+	command := evalCmdWithConfig(deps)
+	command.SilenceUsage = true
+	command.SilenceErrors = true
+	command.SetArgs([]string{
+		"campaign", "formations", "run",
+		"--project-root", root,
+		"--inference-session", "missing-inference-session",
+		"--data-session", "data-session",
+	})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceOperatorNotCapable)
+}
+
+func TestCampaignEvalFormationsShow_RejectsUnknownFormation(t *testing.T) {
+	command := evalCmdWithConfig(panickingNativeEvalDeps(t))
+	command.SilenceUsage = true
+	command.SilenceErrors = true
+	command.SetArgs([]string{"campaign", "formations", "show", "not-a-real-formation", "--project-root", t.TempDir()})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFormationInvalid)
 }

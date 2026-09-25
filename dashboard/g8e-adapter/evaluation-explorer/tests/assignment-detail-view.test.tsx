@@ -187,7 +187,8 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.getByRole('heading', { name: 'Assignment context' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Assignment context' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Public criteria')).toHaveTextContent('Tool choice · required');
     expect(screen.getByText('<b>Choose</b> the approved tool.')).toBeInTheDocument();
     expect(screen.queryByText('Choose', { selector: 'b' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What happened' })).toBeInTheDocument();

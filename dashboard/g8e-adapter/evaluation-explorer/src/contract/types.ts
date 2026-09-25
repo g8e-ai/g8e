@@ -56,6 +56,8 @@ export const PUBLIC_EVIDENCE_KINDS = [
   'efficiency_observation',
   'statistical_analysis',
   'source_manifest',
+  'assignment_audit_slice',
+  'assignment_audit_vault_key',
 ] as const;
 export type PublicEvidenceKind = (typeof PUBLIC_EVIDENCE_KINDS)[number];
 

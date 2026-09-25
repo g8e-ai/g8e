@@ -144,6 +144,8 @@ export function AssignmentDetailView() {
         </p>
       </header>
 
+      {assignment.scenario_summary ? <ScenarioContextCard scenario={assignment.scenario_summary} /> : null}
+
       <div className="assignment-verdict" aria-label="Assignment verdict">
         <span className={`terminal-pill terminal-${assignment.terminal_status}`}>
           {assignmentVerdictLabel(assignment.terminal_status, assignment.verification_disposition)}
@@ -156,7 +158,6 @@ export function AssignmentDetailView() {
         ))}
       </div>
 
-      {assignment.scenario_summary ? <ScenarioContextCard scenario={assignment.scenario_summary} /> : null}
       {hasResources ? (
         <div className="assignment-measured" aria-label="Measured values">
           {measured.map(([label, value]) => <span key={label}><b>{label}</b> {value}</span>)}

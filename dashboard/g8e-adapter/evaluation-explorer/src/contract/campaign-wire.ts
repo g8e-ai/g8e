@@ -109,6 +109,8 @@ const EVIDENCE_KINDS = [
   'efficiency_observation',
   'statistical_analysis',
   'source_manifest',
+  'assignment_audit_slice',
+  'assignment_audit_vault_key',
 ] as const;
 const TOOL_DIMENSIONS = [
   'PUBLIC_TOOL_SCORE_DIMENSION_TOOL_RECOGNITION',
