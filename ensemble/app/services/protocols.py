@@ -382,39 +382,6 @@ class OperatorDataServiceProtocol(Protocol):
         """Query operator documents. ``bypass_cache=True`` skips the query cache."""
         raise NotImplementedError
 
-    async def create_operator(self, operator: OperatorDocument) -> bool:
-        """Create a new operator document."""
-        raise NotImplementedError
-
-    async def update_operator(self, operator: OperatorDocument) -> bool:
-        """Update an existing operator document."""
-        raise NotImplementedError
-
-    async def add_history_entry(
-        self,
-        operator_id: str,
-        event_type: OperatorHistoryEventType,
-        actor: HistoryActor,
-        summary: str,
-        details: dict[str, object] | None = None,
-        additional_updates: dict[str, object] | None = None,
-        status_check: tuple[OperatorStatus, ...] | None = None,
-    ) -> OperatorDocument:
-        """Atomic status + history update under a keyed lock."""
-        raise NotImplementedError
-
-    async def update_operator_status(
-        self,
-        operator_id: str,
-        status: OperatorStatus,
-    ) -> bool:
-        """Update an operator's ``status`` field (no history entry).
-
-        Legacy operator-domain method. Operator status is owned and updated by
-        the Gateway; g8ee adapters must not use this as a persistence path.
-        """
-        raise NotImplementedError
-
     async def update_document(
         self,
         collection: str,
@@ -423,31 +390,6 @@ class OperatorDataServiceProtocol(Protocol):
         merge: bool = True,
     ) -> CacheOperationResult:
         """Update a document."""
-        raise NotImplementedError
-
-    async def append_command_result(
-        self, operator_id: str, command_result: CommandResultRecord
-    ) -> bool:
-        """Append a command result to operator history."""
-        raise NotImplementedError
-
-    async def add_operator_activity(
-        self,
-        operator_id: str,
-        sender: str,
-        content: str,
-        metadata: ConversationMessageMetadata,
-    ) -> bool:
-        """Log operator-specific activity message."""
-        raise NotImplementedError
-
-    async def add_operator_approval(
-        self,
-        operator_id: str,
-        event_type: EventType,
-        metadata: ConversationMessageMetadata,
-    ) -> bool:
-        """Log an approval lifecycle event in the operator activity log."""
         raise NotImplementedError
 
 

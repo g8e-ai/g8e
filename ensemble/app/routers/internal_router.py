@@ -18,8 +18,6 @@ Note: g8eo Operator commands still use PubSub (external agent communication).
 
 import asyncio
 import logging
-import uuid
-import secrets
 from fastapi import APIRouter, Depends, Request, status
 from app.models.http_context import G8eHttpContext, RequestContext
 
@@ -110,7 +108,6 @@ InvestigationGetRequest.model_rebuild()
 from app.models.events import SessionEvent
 from app.models.operators import (
     HeartbeatSnapshot,
-    OperatorDocument,
     OperatorStatusUpdatedPayload,
 )
 from app.clients.gateway_operator_client import GatewayOperatorClient
@@ -1009,93 +1006,18 @@ async def listen_session_auth(
 )
 async def create_operator_slot(
     request: OperatorSlotCreationRequest,
-    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
-    api_key_service: APIKeyService = Depends(get_g8ee_api_key_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Create an operator slot.
-
-    Called by client during user initialization and device link creation.
-    g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, client has no business writing to operators.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    try:
-        operator_id = str(uuid.uuid4())
-
-        # Generate API key (authority: g8ee for operator bootstrap)
-        operator_suffix = operator_id.rsplit("-", maxsplit=1)[-1][:8]
-        random_token = secrets.token_hex(32)
-        api_key = f"g8e_{operator_suffix}_{random_token}"
-
-        # Create operator document
-        operator_doc = OperatorDocument(
-            id=operator_id,
-            user_id=g8e_context.user_id,
-            organization_id=g8e_context.organization_id,
-            name=f"{request.name_prefix}-{request.slot_number}",
-            slot_number=request.slot_number,
-            operator_type=request.operator_type,
-            status=OperatorStatus.OFFLINE,
-            api_key=api_key,
-            created_at=now(),
-            updated_at=now(),
-        )
-
-        await operator_data_service.create_operator(operator_doc)
-
-        # Issue API key to api_keys collection (canonical)
-        key_issued = await api_key_service.issue_operator_key(
-            api_key=api_key,
-            user_id=g8e_context.user_id,
-            organization_id=g8e_context.organization_id,
-            operator_id=operator_id,
-            settings_service=settings_service,
-            client_name="operator",
-            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
-        )
-
-        if not key_issued:
-            logger.error(
-                "[INTERNAL-HTTP] Failed to issue API key to api_keys collection",
-                extra={"operator_id": operator_id, "user_id": g8e_context.user_id},
-            )
-            return OperatorSlotCreationResponse(
-                success=False,
-                operator_id=None,
-                error="Failed to issue API key",
-            )
-
-        logger.info(
-            "[INTERNAL-HTTP] Operator slot created",
-            extra={
-                "operator_id": operator_id,
-                "user_id": g8e_context.user_id,
-                "slot_number": request.slot_number,
-            },
-        )
-
-        return OperatorSlotCreationResponse(
-            success=True,
-            operator_id=operator_id,
-            api_key=api_key,
-        )
-
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to create operator slot",
-            extra={"error": str(e), "user_id": g8e_context.user_id},
-        )
-        return OperatorSlotCreationResponse(
-            success=False,
-            operator_id=None,
-            error=str(e),
-        )
+    """Removed: operator slots are Gateway-owned during enrollment and registration."""
+    logger.warning(
+        "[INTERNAL-HTTP] Rejected legacy operator slot creation",
+        extra={"user_id": g8e_context.user_id, "slot_number": request.slot_number},
+    )
+    return OperatorSlotCreationResponse(
+        success=False,
+        operator_id=None,
+        error=_GATEWAY_OPERATOR_AUTHORITY_ERROR,
+    )
 
 
 @router.post(
@@ -1103,72 +1025,14 @@ async def create_operator_slot(
 )
 async def update_operator_api_key(
     request: OperatorUpdateAPIKeyRequest,
-    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
-    api_key_service: APIKeyService = Depends(get_g8ee_api_key_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Update an operator's API key.
-
-    Called by client during initialization to issue API keys for existing slots
-    that were created without keys during setup.
-    g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, client has no business writing to operators.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    try:
-        operator = await operator_data_service.get_operator(request.operator_id)
-        if not operator:
-            logger.error(
-                "[INTERNAL-HTTP] Operator not found for API key update",
-                extra={"operator_id": request.operator_id},
-            )
-            return OperatorUpdateAPIKeyResponse(success=False, error="Operator not found")
-
-        # Rotate the API key in the canonical store BEFORE updating the operator doc.
-        # Failure here means the operator doc is left untouched and the old key remains
-        # authoritative - no phantom keys, no split-brain.
-        rotated = await api_key_service.rotate_operator_key(
-            old_api_key=operator.api_key,
-            new_api_key=request.api_key,
-            user_id=g8e_context.user_id,
-            organization_id=g8e_context.organization_id,
-            operator_id=operator.id,
-            settings_service=settings_service,
-            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
-        )
-        if not rotated:
-            logger.error(
-                "[INTERNAL-HTTP] Failed to rotate operator API key",
-                extra={"operator_id": request.operator_id},
-            )
-            return OperatorUpdateAPIKeyResponse(success=False, error="Failed to rotate API key")
-
-        updated_operator = operator.model_copy(
-            update={
-                "api_key": request.api_key,
-                "updated_at": now(),
-            }
-        )
-
-        await operator_data_service.update_operator(updated_operator)
-
-        logger.info(
-            "[INTERNAL-HTTP] Operator API key updated", extra={"operator_id": request.operator_id}
-        )
-
-        return OperatorUpdateAPIKeyResponse(success=True)
-
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to update operator API key",
-            extra={"error": str(e), "operator_id": request.operator_id},
-        )
-        return OperatorUpdateAPIKeyResponse(success=False, error=str(e))
+    """Removed: operator API keys are Gateway-owned during enrollment and reauth."""
+    logger.warning(
+        "[INTERNAL-HTTP] Rejected legacy operator API key update",
+        extra={"operator_id": request.operator_id, "user_id": g8e_context.user_id},
+    )
+    return OperatorUpdateAPIKeyResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
 
 
 @router.post(InternalAPIPaths.G8EE_AUTH_GENERATE_KEY, response_model=APIKeyGenerationResponse)

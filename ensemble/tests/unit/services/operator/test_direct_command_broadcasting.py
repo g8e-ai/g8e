@@ -1,4 +1,3 @@
-from app.models.pubsub_messages import ExecutionResultsPayload
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -7,6 +6,7 @@ from app.models.pubsub_messages import ExecutionResultsPayload
 # released under the Apache License, Version 2.0.
 
 import asyncio
+import base64
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -20,54 +20,62 @@ from app.models.operators import (
     CommandResultBroadcastEvent,
     DirectCommandResult,
 )
-
 from app.services.operator.execution_service import OperatorExecutionService
-from app.services.operator.pubsub_service import OperatorPubSubService
+from g8e.operator.v1 import operator_pb2
 from tests.fakes.factories import (
     build_bound_operator,
     build_g8e_http_context,
-    build_g8eo_result_envelope,
 )
-from tests.fakes.fake_operator_clients import FakePubSubClient
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 
-def _build_execution_service() -> tuple[
-    OperatorExecutionService, OperatorPubSubService, FakePubSubClient, MagicMock
-]:
-    """Wire an OperatorExecutionService with a fake pubsub and mocked event service."""
-    pubsub_service = OperatorPubSubService()
-    pubsub_client = FakePubSubClient()
-    pubsub_service.set_pubsub_client(pubsub_client)
+def _build_execution_service(
+    dispatch_result: dict,
+) -> tuple[OperatorExecutionService, MagicMock, MagicMock]:
+    gateway_client = MagicMock()
+    gateway_client.dispatch = AsyncMock(return_value=dispatch_result)
 
     event_service = MagicMock()
     event_service.publish_command_event = AsyncMock()
 
-    # We use __new__ to avoid full __init__ complexity
     svc = OperatorExecutionService.__new__(OperatorExecutionService)
-    svc._pubsub_service = pubsub_service
+    svc._pubsub_service = MagicMock()
     svc._event_service = event_service
     svc._approval_service = None
     svc._settings = None
     svc._operator_data_service = None
     svc._ai_response_analyzer = None
     svc._investigation_service = None
+    svc._gateway_operator_client = gateway_client
     svc._background_tasks = set()
 
-    return svc, pubsub_service, pubsub_client, event_service
+    return svc, gateway_client, event_service
 
 
 class TestDirectCommandBroadcasting:
     async def test_send_command_to_operator_broadcasts_result_in_background(self):
-        """Test that send_command_to_operator launches a task that broadcasts the result."""
-        svc, pubsub_service, _client, event_service = _build_execution_service()
-        await pubsub_service.start()
+        """Direct commands dispatch through Gateway and broadcast the terminal result."""
+        command_result = operator_pb2.CommandResult(
+            execution_id="direct-exec-1",
+            status=operator_pb2.ExecutionStatus.EXECUTION_STATUS_COMPLETED,
+            stdout="file1\nfile2",
+            return_code=0,
+            execution_time_seconds=1.5,
+        )
+        svc, gateway_client, event_service = _build_execution_service(
+            {
+                "success": True,
+                "transaction_id": "tx-1",
+                "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
+                "result_payload": base64.b64encode(command_result.SerializeToString()).decode(
+                    "ascii"
+                ),
+            }
+        )
 
         exec_id = "direct-exec-1"
         command = "ls -la"
-
-        # Setup context with bound operator
         bound_op = build_bound_operator(operator_id="op-1", operator_session_id="sess-1")
         g8e_context = build_g8e_http_context()
         g8e_context.bound_operators = [bound_op]
@@ -81,38 +89,21 @@ class TestDirectCommandBroadcasting:
             ),
         )
 
-        # 1. Call send_command_to_operator
         result = await svc.send_command_to_operator(request, g8e_context)
 
         assert isinstance(result, DirectCommandResult)
         assert result.status == ExecutionStatus.EXECUTING
         assert result.execution_id == exec_id
 
-        # Verify Future is registered
-        assert exec_id in pubsub_service._pending_futures
-
-        # 2. Simulate inbound result message from operator
-        envelope = build_g8eo_result_envelope(
-            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
-            operator_id="op-1",
-            operator_session_id="sess-1",
-            payload=ExecutionResultsPayload(
-                payload_type="execution_result",
-                execution_id=exec_id,
-                status=ExecutionStatus.COMPLETED,
-                stdout="file1\nfile2",
-                return_code=0,
-                duration_seconds=1.5,
-            ),
-        )
-        await pubsub_service._handle_pubsub_result_message(envelope)
-
-        # 3. Wait for the background task to complete and publish the event
-        # We need to yield to the event loop multiple times to allow the background task to progress
         for _ in range(5):
             await asyncio.sleep(0)
 
-        # 4. Verify the event was published to client
+        gateway_client.dispatch.assert_called_once()
+        dispatch_kwargs = gateway_client.dispatch.call_args.kwargs
+        assert dispatch_kwargs["action_type"] == "EXECUTE_BASH"
+        assert dispatch_kwargs["operator_session_id"] == "sess-1"
+        assert dispatch_kwargs["context"] == g8e_context
+
         event_service.publish_command_event.assert_called_once()
         args, kwargs = event_service.publish_command_event.call_args
 
@@ -132,17 +123,14 @@ class TestDirectCommandBroadcasting:
         assert ctx == g8e_context
         assert task_id_kwarg == AITaskId.DIRECT_COMMAND
 
-        # Verify Future was released
-        assert exec_id not in pubsub_service._pending_futures
-
     async def test_send_command_to_operator_broadcasts_failure_result(self):
-        """Test that send_command_to_operator broadcasts failure results."""
-        svc, pubsub_service, _client, event_service = _build_execution_service()
-        await pubsub_service.start()
+        """Gateway dispatch failures are broadcast to the terminal client."""
+        svc, gateway_client, event_service = _build_execution_service(
+            {"success": False, "error": "No operator available"}
+        )
 
         exec_id = "direct-exec-fail"
         command = "invalid-cmd"
-
         bound_op = build_bound_operator(operator_id="op-1", operator_session_id="sess-1")
         g8e_context = build_g8e_http_context()
         g8e_context.bound_operators = [bound_op]
@@ -157,25 +145,10 @@ class TestDirectCommandBroadcasting:
 
         await svc.send_command_to_operator(request, g8e_context)
 
-        # Simulate failure result
-        envelope = build_g8eo_result_envelope(
-            event_type=EventType.OPERATOR_COMMAND_FAILED,
-            operator_id="op-1",
-            operator_session_id="sess-1",
-            payload=ExecutionResultsPayload(
-                payload_type="execution_result",
-                execution_id=exec_id,
-                status=ExecutionStatus.FAILED,
-                stderr="command not found",
-                return_code=127,
-                error_message="Execution failed",
-            ),
-        )
-        await pubsub_service._handle_pubsub_result_message(envelope)
-
         for _ in range(5):
             await asyncio.sleep(0)
 
+        gateway_client.dispatch.assert_called_once()
         event_service.publish_command_event.assert_called_once()
         args, _ = event_service.publish_command_event.call_args
 
@@ -184,6 +157,5 @@ class TestDirectCommandBroadcasting:
 
         assert event_type == EventType.OPERATOR_COMMAND_FAILED
         assert event_data.status == ExecutionStatus.FAILED
-        assert event_data.stderr == "command not found"
-        assert event_data.error == "Execution failed"
+        assert event_data.error == "No operator available"
         assert event_data.direct_execution is True

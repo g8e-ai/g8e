@@ -215,23 +215,8 @@ class OperatorApprovalService:
         context: RequestContext,
         log_tag: str,
     ) -> None:
-        """Record an approval lifecycle event to both operator activity_log and conversation_history."""
-        # Ensure event_type is set on metadata for audit trail
+        """Record an approval lifecycle event in conversation_history."""
         metadata.event_type = event_type
-        if operator_id:
-            try:
-                await self.operator_data_service.add_operator_approval(
-                    operator_id=operator_id,
-                    event_type=event_type,
-                    metadata=metadata,
-                )
-                logger.info("[%s] Recorded in operator activity_log", log_tag)
-            except ResourceNotFoundError:
-                logger.info(
-                    "[%s] Operator document not found (may be deleted during test cleanup)", log_tag
-                )
-            except Exception as e:
-                logger.error("[AUDIT-FAILURE] %s operator: %s", log_tag, e, exc_info=True)
 
         try:
             await self.investigation_data_service.add_approval_record(

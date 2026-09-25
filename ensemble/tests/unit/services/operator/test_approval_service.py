@@ -941,7 +941,7 @@ class TestAudit:
     """Test _audit method."""
 
     async def test_audit_with_operator_id(self):
-        """Records audit to both operator activity_log and conversation_history."""
+        """Records audit to conversation_history."""
         event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
@@ -973,7 +973,6 @@ class TestAudit:
             log_tag="APPROVAL",
         )
 
-        operator_data_service.add_operator_approval.assert_called_once()
         investigation_data_service.add_approval_record.assert_called_once()
 
     async def test_audit_without_operator_id(self):
@@ -1009,7 +1008,6 @@ class TestAudit:
             log_tag="APPROVAL",
         )
 
-        operator_data_service.add_operator_approval.assert_not_called()
         investigation_data_service.add_approval_record.assert_called_once()
 
     async def test_audit_populates_event_type_in_metadata(self):

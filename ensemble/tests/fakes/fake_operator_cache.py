@@ -9,7 +9,6 @@ from __future__ import annotations
 
 """Typed fake for OperatorDataServiceProtocol."""
 
-from app.constants import HistoryActor, OperatorHistoryEventType, OperatorStatus
 from app.models.cache import CacheOperationResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
@@ -20,13 +19,6 @@ class FakeOperatorCache:
 
     Records all calls for assertion in tests. Does not perform any real I/O.
     """
-
-    def __init__(self) -> None:
-        self.status_updates: list[dict] = []
-
-    async def update_operator_status(self, operator_id: str, status: OperatorStatus) -> bool:
-        self.status_updates.append({"operator_id": operator_id, "status": status})
-        return True
 
     collection: str = "operators"
     cache: CacheAsideService = None
@@ -45,37 +37,10 @@ class FakeOperatorCache:
     async def query_operators(self, field_filters=None, limit=1000, bypass_cache=False):
         return []
 
-    async def create_operator(self, operator) -> bool:
-        return True
-
-    async def update_operator(self, operator) -> bool:
-        return True
-
-    async def add_history_entry(
-        self,
-        operator_id: str,
-        event_type: OperatorHistoryEventType,
-        actor: HistoryActor,
-        summary: str,
-        details: dict[str, object] | None = None,
-        additional_updates: dict[str, object] | None = None,
-        status_check: tuple[OperatorStatus, ...] | None = None,
-    ):
-        return None
-
     async def update_document(
         self, collection: str, document_id: str, data: dict, merge: bool = True
     ) -> CacheOperationResult:
         return CacheOperationResult(success=True, document_id=document_id)
-
-    async def append_command_result(self, operator_id, command_result):
-        return True
-
-    async def add_operator_activity(self, operator_id, sender, content, metadata):
-        return True
-
-    async def add_operator_approval(self, operator_id, event_type, metadata):
-        return True
 
 
 _: OperatorDataServiceProtocol = FakeOperatorCache()

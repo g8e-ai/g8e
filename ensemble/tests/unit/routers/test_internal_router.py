@@ -422,7 +422,7 @@ async def test_delete_case_not_found_idempotent(request_context, g8e_context):
 
 
 @pytest.mark.asyncio
-async def test_create_operator_slot_success(request_context, g8e_context):
+async def test_create_operator_slot_rejects_local_authority(request_context, g8e_context):
     request = OperatorSlotCreationRequest(
         context=request_context,
         slot_number=1,
@@ -430,28 +430,14 @@ async def test_create_operator_slot_success(request_context, g8e_context):
         name_prefix="operator",
     )
 
-    mock_operator_data_service = MagicMock()
-    mock_operator_data_service.create_operator = AsyncMock(return_value=True)
-    mock_settings_service = MagicMock()
-    mock_api_key_service = MagicMock()
-    mock_api_key_service.issue_operator_key = AsyncMock(return_value=True)
-
     response = await create_operator_slot(
         request=request,
-        operator_data_service=mock_operator_data_service,
-        settings_service=mock_settings_service,
-        api_key_service=mock_api_key_service,
         g8e_context=g8e_context,
     )
 
-    assert response.success is True
-    assert response.operator_id is not None
-    mock_operator_data_service.create_operator.assert_called_once()
-
-    # Verify API key format in response matches canonical pattern
-    assert API_KEY_OPERATOR_REGEX.match(response.api_key), (
-        f"API key {response.api_key} does not match canonical format g8e_[8hex]_[64hex]"
-    )
+    assert response.success is False
+    assert response.operator_id is None
+    assert "Gateway-owned" in (response.error or "")
 
 
 @pytest.mark.asyncio

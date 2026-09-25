@@ -342,6 +342,8 @@ class ServiceFactory:
             investigation_data_service=data_services.investigation_data_service,
         )
 
+        gateway_operator_client = GatewayOperatorClient(core_services.internal_http_client)
+
         stream_executor = OperatorStreamExecutor(
             approval_service=approval_service,
             internal_http_client=core_services.internal_http_client,
@@ -365,6 +367,7 @@ class ServiceFactory:
             ai_response_analyzer=response_analyzer,  # type: ignore[arg-type]
             internal_http_client=core_services.internal_http_client,
             approval_service=approval_service,  # type: ignore[arg-type]
+            gateway_operator_client=gateway_operator_client,
             whitelist_validator=whitelist_validator,
             blacklist_validator=blacklist_validator,
             auto_approved_validator=auto_approved_validator,
@@ -406,8 +409,6 @@ class ServiceFactory:
             memory_generation_service=domain_services.memory_generation_service,
             agent_activity_data_service=data_services.agent_activity_data_service,
         )
-
-        gateway_operator_client = GatewayOperatorClient(core_services.internal_http_client)
 
         return AllServices(
             db_service=db_service,

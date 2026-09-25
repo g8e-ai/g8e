@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 from app.clients.pubsub_client import PubSubClient
+from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.constants.generated_status import CommandErrorType, RiskLevel
 from app.constants.config import ExecutionStatus
@@ -180,6 +181,7 @@ class OperatorCommandService:
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         internal_http_client: G8eClientProtocol,
         approval_service: ApprovalServiceProtocol,
+        gateway_operator_client: GatewayOperatorClient | None = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
         auto_approved_validator: CommandAutoApprovedValidator | None = None,
@@ -199,6 +201,7 @@ class OperatorCommandService:
             ai_response_analyzer=ai_response_analyzer,
             operator_data_service=operator_data_service,
             investigation_service=investigation_service,
+            gateway_operator_client=gateway_operator_client,
         )
 
         filesystem_service = OperatorFilesystemService(

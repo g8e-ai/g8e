@@ -1,5 +1,5 @@
 from __future__ import annotations
-from app.models.pubsub_messages import ExecutionResultsPayload
+
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -7,17 +7,10 @@ from app.models.pubsub_messages import ExecutionResultsPayload
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Regression tests for OperatorExecutionService Future correlation.
+"""Regression tests for Gateway-owned operator dispatch correlation."""
 
-The primary command-execution path correlates inbound g8eo results to the
-awaiting Future via the per-message execution_id carried on
-g8e_message.payload.execution_id. It must NOT be keyed on
-g8e_context.execution_id (which is the HTTP request id and has a different
-lifetime). See the docstring on G8eoResultEnvelope.id.
-"""
-
-
-import asyncio
+import base64
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -27,30 +20,23 @@ from app.constants import ExecutionStatus, G8EE_COMPONENT
 from app.models.command_request_payloads import CommandRequestPayload
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
-from app.services.operator.pubsub_service import OperatorPubSubService
-from tests.fakes.factories import build_g8e_http_context, build_g8eo_result_envelope
-from tests.fakes.fake_operator_clients import FakePubSubClient
+from g8e.operator.v1 import operator_pb2
+from tests.fakes.factories import build_g8e_http_context
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 
-def _build_execution_service() -> tuple[
-    OperatorExecutionService, OperatorPubSubService, FakePubSubClient
-]:
-    """Wire a real OperatorExecutionService atop a real OperatorPubSubService + fake client."""
-    pubsub_service = OperatorPubSubService()
-    pubsub_client = FakePubSubClient()
-    pubsub_service.set_pubsub_client(pubsub_client)
-    # Minimal collaborators not exercised by dispatch_command itself.
-    svc = OperatorExecutionService.__new__(OperatorExecutionService)
-    svc._pubsub_service = pubsub_service
-    svc._approval_service = None
-    svc._event_service = None
-    svc._settings = None
-    svc._operator_data_service = None
-    svc._ai_response_analyzer = None
-    svc._investigation_service = None
-    return svc, pubsub_service, pubsub_client
+def _build_execution_service(mock_gateway_client: MagicMock) -> OperatorExecutionService:
+    return OperatorExecutionService(
+        pubsub_service=MagicMock(),
+        approval_service=MagicMock(),
+        event_service=MagicMock(),
+        settings=MagicMock(),
+        ai_response_analyzer=MagicMock(),
+        operator_data_service=MagicMock(),
+        investigation_service=MagicMock(),
+        gateway_operator_client=mock_gateway_client,
+    )
 
 
 def _build_command_message(
@@ -70,66 +56,58 @@ def _build_command_message(
     )
 
 
-class TestDispatchCommandCorrelation:
-    """dispatch_command must correlate results via payload.execution_id."""
-
-    async def test_completes_when_payload_execution_id_differs_from_http_request_id(self):
-        """Regression: the Future must be keyed on payload.execution_id, not g8e_context.execution_id.
-
-        Before the fix, dispatch_command registered the Future under
-        g8e_context.execution_id while the pubsub dispatcher completed Futures
-        under payload.execution_id. Every command timed out.
-        """
-        svc, pubsub_service, _client = _build_execution_service()
-        await pubsub_service.start()
-
+class TestGatewayDispatchCorrelation:
+    async def test_uses_payload_execution_id_not_http_request_id(self):
+        mock_gateway = MagicMock()
         per_message_exec_id = "per-msg-exec-id"
+        command_result = operator_pb2.CommandResult(
+            execution_id=per_message_exec_id,
+            status=operator_pb2.ExecutionStatus.EXECUTION_STATUS_COMPLETED,
+            stdout="hi",
+            return_code=0,
+        )
+        mock_gateway.dispatch = AsyncMock(
+            return_value={
+                "success": True,
+                "transaction_id": "tx-1",
+                "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
+                "result_payload": base64.b64encode(command_result.SerializeToString()).decode(
+                    "ascii"
+                ),
+            }
+        )
+        svc = _build_execution_service(mock_gateway)
         g8e_context = build_g8e_http_context()
-        assert g8e_context.execution_id != per_message_exec_id, (
-            "sanity: the HTTP request id must differ from the per-message id for this test"
-        )
-        msg = _build_command_message(per_message_exec_id)
+        assert g8e_context.execution_id != per_message_exec_id
 
-        dispatch_task = asyncio.create_task(
-            svc.dispatch_command(msg, g8e_context, timeout_seconds=5)
+        internal_result, envelope = await svc.dispatch_command(
+            _build_command_message(per_message_exec_id),
+            g8e_context,
+            timeout_seconds=5,
         )
-        # Yield so dispatch_command registers its Future and publishes.
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
 
-        envelope = build_g8eo_result_envelope(
-            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
-            payload=ExecutionResultsPayload(
-                payload_type="execution_result",
-                execution_id=per_message_exec_id,
-                status=ExecutionStatus.COMPLETED,
-                stdout="hi",
-                stderr="",
-                return_code=0,
-            ),
-            operator_id="op-1",
-            operator_session_id="sess-1",
-        )
-        await pubsub_service._handle_pubsub_result_message(envelope)
-
-        internal_result, envelope = await asyncio.wait_for(dispatch_task, timeout=5)
         assert internal_result.status == ExecutionStatus.COMPLETED
         assert internal_result.execution_id == per_message_exec_id
         assert envelope is not None
         assert envelope.payload.execution_id == per_message_exec_id
 
-    async def test_times_out_cleanly_when_no_result_arrives(self):
-        """Sanity: with no matching result, dispatch_command returns TIMEOUT (not hangs)."""
-        svc, pubsub_service, _client = _build_execution_service()
-        await pubsub_service.start()
+    async def test_times_out_when_gateway_dispatch_hangs(self):
+        async def slow_dispatch(**kwargs):
+            import asyncio
 
-        msg = _build_command_message("lonely-exec-id")
-        g8e_context = build_g8e_http_context()
+            await asyncio.sleep(1)
+            return {"success": True}
+
+        mock_gateway = MagicMock()
+        mock_gateway.dispatch = slow_dispatch
+        svc = _build_execution_service(mock_gateway)
 
         internal_result, envelope = await svc.dispatch_command(
-            msg, g8e_context, timeout_seconds=0.1
+            _build_command_message("lonely-exec-id"),
+            build_g8e_http_context(),
+            timeout_seconds=0.1,
         )
+
         assert internal_result.status == ExecutionStatus.TIMEOUT
         assert internal_result.execution_id == "lonely-exec-id"
         assert envelope is None
-        assert "lonely-exec-id" not in pubsub_service._pending_futures

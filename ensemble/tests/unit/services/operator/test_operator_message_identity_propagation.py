@@ -214,13 +214,8 @@ class TestExecutionServiceIdentityPropagation:
         command_service = build_command_service()
         exec_service = command_service._execution_service
 
-        # Stub pubsub so the background _wait_and_broadcast task completes fast.
-        done_future: asyncio.Future = asyncio.get_event_loop().create_future()
-        done_future.set_result(MagicMock())
-        exec_service.pubsub_service.register_future = MagicMock(return_value=done_future)
-        exec_service.pubsub_service.register_operator_session = AsyncMock()
-        exec_service.pubsub_service.release_future = MagicMock()
-        exec_service.pubsub_service.publish_command = AsyncMock(return_value=1)
+        exec_service._gateway_operator_client = MagicMock()
+        exec_service._gateway_operator_client.dispatch = AsyncMock(return_value={"success": True})
         exec_service._event_service.publish_command_event = AsyncMock()
 
         mock_op = MagicMock()
@@ -242,17 +237,20 @@ class TestExecutionServiceIdentityPropagation:
         )
 
         await exec_service.send_command_to_operator(command_payload, g8e_context)
+        for _ in range(5):
+            await asyncio.sleep(0)
 
-        msg = exec_service.pubsub_service.publish_command.call_args.kwargs["command_data"]
-        assert msg.user_id == "user-123", "user_id must be propagated from g8e_context"
-        assert msg.cli_session_id == "cli-456", "cli_session_id must be propagated from g8e_context"
+        dispatch_kwargs = exec_service._gateway_operator_client.dispatch.call_args.kwargs
+        assert dispatch_kwargs["context"].user_id == "user-123"
+        assert dispatch_kwargs["context"].cli_session_id == "cli-456"
 
     @pytest.mark.asyncio
     async def test_cancel_command_propagates_user_id_and_cli_session_id(self):
         command_service = build_command_service()
         exec_service = command_service._execution_service
 
-        exec_service.pubsub_service.publish_command = AsyncMock(return_value=1)
+        exec_service._gateway_operator_client = MagicMock()
+        exec_service._gateway_operator_client.dispatch = AsyncMock(return_value={"success": True})
 
         g8e_context = _identity_context()
 
@@ -263,9 +261,9 @@ class TestExecutionServiceIdentityPropagation:
             g8e_context=g8e_context,
         )
 
-        msg = exec_service.pubsub_service.publish_command.call_args.kwargs["command_data"]
-        assert msg.user_id == "user-123", "user_id must be propagated from g8e_context"
-        assert msg.cli_session_id == "cli-456", "cli_session_id must be propagated from g8e_context"
+        dispatch_kwargs = exec_service._gateway_operator_client.dispatch.call_args.kwargs
+        assert dispatch_kwargs["context"].user_id == "user-123"
+        assert dispatch_kwargs["context"].cli_session_id == "cli-456"
 
 
 class TestLFAAServiceIdentityPropagation:

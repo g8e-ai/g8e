@@ -54,6 +54,7 @@ from app.constants import (
     OperatorType,
     Priority,
 )
+from app.constants.collections import DB_COLLECTION_OPERATORS
 from app.errors import ResourceNotFoundError
 from app.models.agent import OperatorContext
 from app.models.http_context import BoundOperator
@@ -71,6 +72,7 @@ from app.models.operators import (
     HeartbeatSnapshot,
     HeartbeatSystemIdentity,
     HeartbeatUserDetails,
+    OperatorDocument,
 )
 from app.services.investigation.investigation_service import (
     extract_all_operators_context,
@@ -86,6 +88,18 @@ from tests.fakes.factories import (
 )
 
 pytestmark = [pytest.mark.integration]
+
+
+async def seed_operator_document(
+    cache_aside_service,
+    operator: OperatorDocument,
+) -> None:
+    """Seed a read-only operator document for integration tests."""
+    await cache_aside_service.create_document(
+        collection=DB_COLLECTION_OPERATORS,
+        document_id=operator.id,
+        data=operator.model_dump(mode="json"),
+    )
 
 
 @pytest.fixture
@@ -557,7 +571,7 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(operator)
+        await seed_operator_document(all_services.cache_aside_service, operator)
 
         # Create g8e context with bound operator
         bound_operator = BoundOperator(
@@ -617,9 +631,9 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(operator1)
-        await operator_data_service.create_operator(operator2)
-        await operator_data_service.create_operator(operator3)
+        await seed_operator_document(all_services.cache_aside_service, operator1)
+        await seed_operator_document(all_services.cache_aside_service, operator2)
+        await seed_operator_document(all_services.cache_aside_service, operator3)
 
         # Create g8e context with multiple bound operators
         bound_operators = [
@@ -687,9 +701,9 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(bound_operator)
-        await operator_data_service.create_operator(claimed_operator)
-        await operator_data_service.create_operator(offline_operator)
+        await seed_operator_document(all_services.cache_aside_service, bound_operator)
+        await seed_operator_document(all_services.cache_aside_service, claimed_operator)
+        await seed_operator_document(all_services.cache_aside_service, offline_operator)
 
         # Create g8e context with mixed status operators
         bound_operators = [
@@ -804,7 +818,7 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(remote_operator)
+        await seed_operator_document(all_services.cache_aside_service, remote_operator)
 
         # Create g8e context and enrich
         bound_operator = BoundOperator(
@@ -891,8 +905,8 @@ class TestCompleteContextAssembly:
             user_id=created_investigation.user_id,
         )
         await memory_data_service.save_memory(memory, is_new=True, context=memory_context)
-        await operator_data_service.create_operator(operator1)
-        await operator_data_service.create_operator(operator2)
+        await seed_operator_document(all_services.cache_aside_service, operator1)
+        await seed_operator_document(all_services.cache_aside_service, operator2)
 
         # Create g8e context with both operators
         bound_operators = [

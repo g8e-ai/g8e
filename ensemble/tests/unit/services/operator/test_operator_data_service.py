@@ -12,15 +12,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.clients.http_client import HTTPClient
-from app.constants import EventType, OperatorStatus
-from app.models.investigations import ConversationMessageMetadata
-from app.errors import ExternalServiceError, ValidationError
-from app.models.cache import CacheOperationResult
+from app.constants import OperatorStatus
+from app.errors import ValidationError
 from app.models.sessions import CliSessionDocument
-from app.models.operators import (
-    CommandResultRecord,
-    OperatorDocument,
-)
+from app.models.operators import OperatorDocument
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import OperatorDataServiceProtocol
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -114,74 +109,9 @@ class TestOperatorDataService:
         is_owned = await service.validate_cli_session_ownership(cli_session_id, operator_session_id)
         assert is_owned is False
 
-    async def test_append_command_result(self, service, mock_cache):
-        operator_id = "op-123"
-        command_result = CommandResultRecord(
-            execution_id="exec-1", command="ls", status="completed"
-        )
-        mock_cache.update_document.return_value = CacheOperationResult(success=True)
-
-        success = await service.append_command_result(operator_id, command_result)
-
-        assert success is True
-        mock_cache.update_document.assert_called_once()
-        _, kwargs = mock_cache.update_document.call_args
-        assert "command_results_history" in kwargs["data"]
-
-    async def test_add_operator_activity(self, service, mock_cache):
-        operator_id = "op-123"
-        mock_cache.append_to_array.return_value = CacheOperationResult(success=True)
-
-        success = await service.add_operator_activity(
-            operator_id=operator_id,
-            sender=EventType.OPERATOR_COMMAND_REQUESTED,
-            content="test activity",
-            metadata=ConversationMessageMetadata(),
-        )
-
-        assert success is True
-        mock_cache.append_to_array.assert_called_once()
-        _, kwargs = mock_cache.append_to_array.call_args
-        assert kwargs["document_id"] == operator_id
-        assert kwargs["array_field"] == "activity_log"
-
-    async def test_update_operator_status_success(self, service, mock_cache):
-        operator_id = "op-123"
-        mock_cache.update_document.return_value = CacheOperationResult(success=True)
-
-        success = await service.update_operator_status(operator_id, OperatorStatus.STALE)
-
-        assert success is True
-        mock_cache.update_document.assert_called_once()
-        _, kwargs = mock_cache.update_document.call_args
-        assert kwargs["document_id"] == operator_id
-        assert kwargs["data"]["status"] == OperatorStatus.STALE
-        assert "updated_at" in kwargs["data"]
-        assert kwargs["merge"] is True
-
-    async def test_update_operator_status_empty_id_raises_validation_error(self, service):
-        with pytest.raises(ValidationError, match="operator_id is required"):
-            await service.update_operator_status("", OperatorStatus.OFFLINE)
-
-    async def test_update_operator_status_failure_raises_external_service_error(
-        self, service, mock_cache
-    ):
-        operator_id = "op-123"
-        mock_cache.update_document.return_value = CacheOperationResult(
-            success=False, error="db down"
-        )
-
-        with pytest.raises(
-            ExternalServiceError,
-            match="Failed to update Operator op-123 status: db down",
-        ):
-            await service.update_operator_status(operator_id, OperatorStatus.STALE)
-
     async def test_satisfies_operator_data_service_protocol(self, service):
-        """Regression: ``HeartbeatStaleMonitorService`` is typed against
-        ``OperatorDataServiceProtocol`` and calls ``update_operator_status``.
-        A protocol-conformance check would have caught the gap where the
-        protocol declared a method the implementation lacked (or vice versa).
-        """
         assert isinstance(service, OperatorDataServiceProtocol)
-        assert hasattr(service, "update_operator_status")
+        assert hasattr(service, "get_operator")
+        assert hasattr(service, "query_operators")
+        assert not hasattr(service, "create_operator")
+        assert not hasattr(service, "update_operator_status")
