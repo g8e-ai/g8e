@@ -35,7 +35,6 @@ from tests.fakes.factories import (
 )
 from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.fake_execution_service import FakeExecutionService
-from tests.fakes.fake_pubsub_service import FakePubSubService
 
 pytestmark = pytest.mark.unit
 
@@ -67,26 +66,20 @@ def _make_operator(
 
 def _make_service(
     *,
-    pubsub_ready: bool = True,
     resolved_operator: OperatorDocument | None = None,
     resolve_error: Exception | None = None,
-) -> tuple[OperatorPortService, FakePubSubService, FakeExecutionService]:
-    pubsub = FakePubSubService()
-    if pubsub_ready:
-        pubsub._ready = True
+) -> tuple[OperatorPortService, FakeExecutionService]:
     operator = resolved_operator or _make_operator()
     event_service = FakeEventService()
     execution = FakeExecutionService(
         resolved_operator=operator,
         resolve_error=resolve_error,
         event_service=event_service,
-        pubsub_service=pubsub,
     )
     service = OperatorPortService(
-        pubsub_service=pubsub,
         execution_service=execution,
     )
-    return service, pubsub, execution
+    return service, execution
 
 
 def _make_args(
@@ -161,7 +154,7 @@ def _make_failed_envelope(
 class TestPortCheckSuccess:
     @pytest.mark.asyncio
     async def test_port_open(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
         args = _make_args()
 
@@ -178,7 +171,7 @@ class TestPortCheckSuccess:
 
     @pytest.mark.asyncio
     async def test_port_closed(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
         args = _make_args()
 
@@ -191,8 +184,8 @@ class TestPortCheckSuccess:
         assert result.latency_ms is None
 
     @pytest.mark.asyncio
-    async def test_publishes_command_to_pubsub(self, task_tracker):
-        service, pubsub, execution = _make_service()
+    async def test_dispatches_via_execution_service(self, task_tracker):
+        service, execution = _make_service()
         investigation = _make_investigation()
         args = _make_args(port=6379, host="redis-server")
 
@@ -200,24 +193,11 @@ class TestPortCheckSuccess:
 
         await service.execute_port_check(args, investigation, _make_context())
 
-        # PortService calls execution_service.execute, which calls pubsub_service.publish_command
-        assert len(pubsub.published_commands) == 1
-        msg = pubsub.published_commands[0]
+        assert len(execution.execute_calls) == 1
+        msg = execution.execute_calls[0]["g8e_message"]
         assert msg.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED
         assert msg.operator_id == "op-1"
         assert msg.operator_session_id == "session-1"
-
-    @pytest.mark.asyncio
-    async def test_registers_operator_session_before_publish(self, task_tracker):
-        service, pubsub, execution = _make_service()
-        investigation = _make_investigation()
-        args = _make_args()
-
-        execution.envelope = _make_success_envelope()
-
-        await service.execute_port_check(args, investigation, _make_context())
-
-        assert ("op-1", "session-1") in pubsub.registered_sessions
 
 
 # ---------------------------------------------------------------------------
@@ -262,7 +242,7 @@ class TestPortValidation:
 
     @pytest.mark.asyncio
     async def test_port_1_accepted(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
 
         execution.envelope = _make_success_envelope(port=1)
 
@@ -275,7 +255,7 @@ class TestPortValidation:
 
     @pytest.mark.asyncio
     async def test_port_65535_accepted(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
 
         execution.envelope = _make_success_envelope(port=65535)
 
@@ -343,7 +323,7 @@ class TestOperatorResolution:
     @pytest.mark.asyncio
     async def test_resolve_called_with_correct_args(self, task_tracker):
         op = _make_operator()
-        service, _, execution = _make_service(resolved_operator=op)
+        service, execution = _make_service(resolved_operator=op)
         investigation = _make_investigation(operators=[op])
 
         execution.envelope = _make_success_envelope()
@@ -362,7 +342,7 @@ class TestOperatorResolution:
     @pytest.mark.asyncio
     async def test_resolve_called_with_none_target_for_single_operator(self, task_tracker):
         op = _make_operator()
-        service, _, execution = _make_service(resolved_operator=op)
+        service, execution = _make_service(resolved_operator=op)
         investigation = _make_investigation(operators=[op])
 
         execution.envelope = _make_success_envelope()
@@ -377,25 +357,6 @@ class TestOperatorResolution:
 
 
 # ---------------------------------------------------------------------------
-# Pubsub not ready
-# ---------------------------------------------------------------------------
-
-
-class TestPubsubNotReady:
-    @pytest.mark.asyncio
-    async def test_returns_error_when_pubsub_not_ready(self):
-        service, *_ = _make_service(pubsub_ready=False)
-        result = await service.execute_port_check(
-            _make_args(),
-            _make_investigation(),
-            _make_context(),
-        )
-        assert result.success is False
-        assert result.error_type == CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY
-        assert "not ready" in result.error
-
-
-# ---------------------------------------------------------------------------
 # Timeout
 # ---------------------------------------------------------------------------
 
@@ -403,7 +364,7 @@ class TestPubsubNotReady:
 class TestTimeout:
     @pytest.mark.asyncio
     async def test_timeout_returns_error(self):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
         args = _make_args()
 
@@ -435,7 +396,7 @@ class TestTimeout:
 class TestG8eoResultHandling:
     @pytest.mark.asyncio
     async def test_failed_event_type_returns_port_check_failed(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
 
         execution.envelope = _make_failed_envelope("Connection refused")
@@ -448,7 +409,7 @@ class TestG8eoResultHandling:
 
     @pytest.mark.asyncio
     async def test_failed_event_with_no_error_msg_uses_default(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
 
         execution.envelope = build_g8eo_result_envelope(
@@ -465,7 +426,7 @@ class TestG8eoResultHandling:
 
     @pytest.mark.asyncio
     async def test_unexpected_payload_type_returns_error(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
 
         execution.envelope = "not_an_envelope"
@@ -478,7 +439,7 @@ class TestG8eoResultHandling:
 
     @pytest.mark.asyncio
     async def test_envelope_with_wrong_payload_type_returns_error(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
 
         execution.envelope = build_g8eo_result_envelope(
@@ -505,7 +466,7 @@ class TestG8eoResultHandling:
 class TestExceptionHandling:
     @pytest.mark.asyncio
     async def test_unexpected_exception_returns_execution_error(self):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
 
         async def _explode(*args, **kwargs):
@@ -565,7 +526,7 @@ class TestExceptionHandling:
 class TestProtocol:
     @pytest.mark.asyncio
     async def test_udp_protocol_accepted(self, task_tracker):
-        service, _, execution = _make_service()
+        service, execution = _make_service()
         investigation = _make_investigation()
 
         envelope = _make_success_envelope()

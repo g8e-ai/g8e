@@ -205,18 +205,15 @@ class OperatorCommandService:
         )
 
         filesystem_service = OperatorFilesystemService(
-            pubsub_service=pubsub_service,
             execution_service=execution_service,
             investigation_service=investigation_service,
         )
 
         port_service = OperatorPortService(
-            pubsub_service=pubsub_service,
             execution_service=execution_service,
         )
 
         file_service = OperatorFileService(
-            pubsub_service=pubsub_service,
             approval_service=approval_service,
             event_service=event_service,
             execution_service=execution_service,

@@ -18,7 +18,6 @@ from app.services.protocols import (
     ExecutionServiceProtocol,
     AIResponseAnalyzerProtocol,
     InvestigationServiceProtocol,
-    PubSubServiceProtocol,
 )
 from app.constants import EventType, FileOperation, G8EE_COMPONENT
 from app.constants.generated_status import (
@@ -66,23 +65,17 @@ class OperatorFileService:
 
     def __init__(
         self,
-        pubsub_service: PubSubServiceProtocol,
         approval_service: ApprovalServiceProtocol,
         event_service: EventServiceProtocol,
         execution_service: ExecutionServiceProtocol,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self._pubsub_service = pubsub_service
         self._approval_service = approval_service
         self._event_service = event_service
         self._execution_service = execution_service
         self._ai_response_analyzer = ai_response_analyzer
         self._investigation_service = investigation_service
-
-    @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        return self._pubsub_service
 
     @property
     def approval_service(self) -> ApprovalServiceProtocol:

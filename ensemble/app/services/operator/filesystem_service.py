@@ -15,7 +15,6 @@ import logging
 from app.services.protocols import (
     ExecutionServiceProtocol,
     InvestigationServiceProtocol,
-    PubSubServiceProtocol,
 )
 from app.constants import EventType, G8EE_COMPONENT
 from app.constants.generated_status import AITaskId
@@ -44,17 +43,11 @@ class OperatorFilesystemService:
 
     def __init__(
         self,
-        pubsub_service: PubSubServiceProtocol,
         execution_service: ExecutionServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self._pubsub_service = pubsub_service
         self._execution_service = execution_service
         self._investigation_service = investigation_service
-
-    @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        return self._pubsub_service
 
     @property
     def execution_service(self) -> ExecutionServiceProtocol:

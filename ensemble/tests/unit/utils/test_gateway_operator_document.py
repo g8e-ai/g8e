@@ -34,3 +34,29 @@ def test_operator_document_from_gateway_normalizes_operator_id_alias():
     )
 
     assert doc.id == "op-2"
+
+
+def test_operator_document_from_gateway_parses_canonical_heartbeat_snapshot():
+    doc = operator_document_from_gateway(
+        {
+            "id": "op-3",
+            "user_id": "user-1",
+            "status": OperatorStatus.ACTIVE,
+            "latest_heartbeat_snapshot": {
+                "timestamp": "2026-09-18T12:00:00Z",
+                "status": "automatic",
+                "system_identity": {
+                    "hostname": "worker-1",
+                    "os": "linux",
+                },
+                "performance_metrics": {
+                    "cpu_percent": 12.5,
+                },
+            },
+        }
+    )
+
+    assert doc.current_hostname == "worker-1"
+    assert doc.latest_heartbeat_snapshot is not None
+    assert doc.latest_heartbeat_snapshot.system_identity.hostname == "worker-1"
+    assert doc.latest_heartbeat_snapshot.status == "automatic"

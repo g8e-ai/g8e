@@ -281,6 +281,33 @@ func TestCampaignPublication_PublishesScoredInferenceDuringTraceProgress(t *test
 	assertScoredInvocationMetricDelta(t, exporter.records[0].RecordBytes, "primary", 12, 34)
 }
 
+func TestCampaignPublication_PublishesFormationRoleInvocationIncrementally(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	variants := testHeterogeneousVariants()
+	stack := mustHeterogeneousStack(t)
+	assignment := heterogeneousAssignmentExecutionRequest(t, stack, variants).Assignment
+	assignment.SchemaVersion = CampaignSchemaVersion
+	store := NewStore(files)
+	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion:   CampaignSchemaVersion,
+		RunId:           assignment.GetRunId(),
+		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: assignment.GetCampaignId()},
+	}))
+	require.NoError(t, store.SaveAssignment(context.Background(), assignment))
+
+	require.NoError(t, coordinator.PublishFormationRoleInvocationLiveEvent(context.Background(), assignment, FormationRoleLite))
+	require.NoError(t, coordinator.PublishFormationRoleInvocationLiveEvent(context.Background(), assignment, FormationRoleAssistant))
+	require.Len(t, exporter.records, 2)
+	for _, record := range exporter.records {
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &body))
+		assert.Equal(t, "stage_updated", body["kind"])
+		assert.NotContains(t, body, "metric_delta")
+	}
+}
+
 func TestCampaignPublication_PublishesFormationRoleProgressWithPerRoleMetrics(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	exporter := &recordingCampaignFeedExporter{}

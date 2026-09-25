@@ -420,6 +420,7 @@ type FormationRunner struct {
 	allocator      FormationAllocator
 	executor       FormationRoleExecutor
 	policy         FormationPolicyGate
+	onRoleStarting func(context.Context, FormationRole) error
 	onRoleProgress func(context.Context, *FormationRunResult) error
 	now            func() time.Time
 	newID          func(string) string
@@ -437,6 +438,14 @@ func NewFormationRunner(provenance FormationProvenanceOperator, observer Formati
 		newID = func(prefix string) string { return fmt.Sprintf("%s-%d", prefix, now().UTC().UnixNano()) }
 	}
 	return &FormationRunner{provenance: provenance, observer: observer, allocator: allocator, executor: executor, policy: policy, now: now, newID: newID}, nil
+}
+
+// WithRoleStarting publishes one planned invocation row before a role executes.
+func (r *FormationRunner) WithRoleStarting(callback func(context.Context, FormationRole) error) *FormationRunner {
+	if r != nil {
+		r.onRoleStarting = callback
+	}
+	return r
 }
 
 // WithRoleProgress publishes a completed role snapshot before the next role
@@ -515,6 +524,11 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 	state := append([]byte(nil), initialState...)
 	for _, role := range formation.Roles() {
 		model, _ := formation.Model(role)
+		if r.onRoleStarting != nil {
+			if startErr := r.onRoleStarting(ctx, role); startErr != nil {
+				return result, fmt.Errorf("formation: role starting: %w", startErr)
+			}
+		}
 		attemptID := r.newID(fmt.Sprintf("%s-%s", formation.ID, role))
 		if err := r.observer.Begin(ctx, attemptID, model); err != nil {
 			return result, fmt.Errorf("formation: observer begin %s: %w", role, err)

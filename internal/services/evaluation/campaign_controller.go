@@ -425,8 +425,10 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	if err := c.publishAssignmentLifecycle(ctx, assignment); err != nil {
 		return nil, false, err
 	}
-	if err := c.publishAssignmentInvocationLiveEvents(ctx, assignment); err != nil {
-		return nil, false, err
+	if !IsHeterogeneousAssignment(assignment) {
+		if err := c.publishAssignmentInvocationLiveEvents(ctx, assignment); err != nil {
+			return nil, false, err
+		}
 	}
 	artifact, found := artifacts[assignment.GetScenarioId()]
 	if !found {
@@ -470,8 +472,9 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 		RequiredConcepts:        requiredConcepts,
 		GradingMethod:           gradingMethod,
 		Binding:                 binding,
-		OnTraceProgress:         c.assignmentTraceProgressHook(assignment, attemptID),
-		OnFormationRoleProgress: c.assignmentFormationProgressHook(assignment, attemptID),
+		OnTraceProgress:          c.assignmentTraceProgressHook(assignment, attemptID),
+		OnFormationRoleStarting:  c.assignmentFormationRoleStartingHook(assignment),
+		OnFormationRoleProgress:  c.assignmentFormationProgressHook(assignment, attemptID),
 	}
 	result, err := c.executor.ExecuteAssignment(ctx, execReq)
 	if err != nil {
@@ -578,6 +581,15 @@ func (c *CampaignController) assignmentTraceProgressHook(assignment *evalv1.Eval
 			return err
 		}
 		return c.publication.PublishAssignmentScoredInferenceLiveEvents(ctx, assignment, partial)
+	}
+}
+
+func (c *CampaignController) assignmentFormationRoleStartingHook(assignment *evalv1.EvaluationAssignment) func(context.Context, FormationRole) error {
+	if c == nil || c.publication == nil || assignment == nil {
+		return nil
+	}
+	return func(ctx context.Context, role FormationRole) error {
+		return c.publication.PublishFormationRoleInvocationLiveEvent(ctx, assignment, role)
 	}
 }
 

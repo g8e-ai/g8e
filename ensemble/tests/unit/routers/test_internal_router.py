@@ -31,8 +31,10 @@ from app.models.internal_api import (
     StopAIRequest,
     SettingsSyncRequest,
 )
+from app.constants import OperatorStatus
 from app.routers.internal_router import (
     _generate_and_update_title,
+    _status_payload_from_gateway_doc,
     bind_operators,
     claim_operator_slot,
     create_operator_slot,
@@ -610,6 +612,29 @@ async def test_unbind_operators_unauthorized(request_context, g8e_context):
     assert response.failed_count == 1
     assert len(response.errors) == 1
     assert "Unauthorized" in response.errors[0]["error"]
+
+
+def test_status_payload_from_gateway_doc_prefers_snapshot_hostname():
+    payload = _status_payload_from_gateway_doc(
+        {
+            "id": "op-123",
+            "name": "worker-slot",
+            "current_hostname": "stale-host",
+            "latest_heartbeat_snapshot": {
+                "timestamp": "2026-09-18T12:00:00Z",
+                "status": "automatic",
+                "system_identity": {"hostname": "live-host"},
+                "system_fingerprint": "fp-abc",
+            },
+        },
+        OperatorStatus.ACTIVE,
+    )
+
+    assert payload.operator_id == "op-123"
+    assert payload.hostname == "live-host"
+    assert payload.system_fingerprint == "fp-abc"
+    assert payload.metrics is not None
+    assert payload.metrics.system_identity.hostname == "live-host"
 
 
 @pytest.mark.asyncio

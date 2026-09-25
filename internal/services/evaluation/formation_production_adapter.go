@@ -102,6 +102,7 @@ func NewFormationProductionRunner(deps FormationProductionDependencies) (*Format
 	if err != nil {
 		return nil, err
 	}
+	runner = runner.WithRoleStarting(deps.RunContext.OnRoleStarting)
 	return runner.WithRoleProgress(deps.RunContext.OnRoleProgress), nil
 }
 

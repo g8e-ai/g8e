@@ -123,7 +123,7 @@ describe('ActiveCampaignBar', () => {
 
     const link = screen.getByRole('link', { name: /Now evaluating ministral-3-8b on tool-selection-04/i });
     expect(link).toHaveAttribute('href', `/evaluations/${datasetId}/${evaluation.run_id}`);
-    expect(link).toHaveTextContent('Now evaluating');
+    expect(link).not.toHaveTextContent('Now evaluating');
     expect(link).toHaveTextContent('tool-selection-04');
     expect(link).toHaveTextContent('Primary');
     expect(link).toHaveTextContent('ministral-3-8b');

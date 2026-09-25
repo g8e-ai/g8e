@@ -128,6 +128,10 @@ type AssignmentExecutionRequest struct {
 	// each non-terminal trace poll so publication can emit scored-inference live
 	// events before the assignment reaches a terminal result.
 	OnTraceProgress func(ctx context.Context, trace EvaluationTrace) error
+	// OnFormationRoleStarting is optional. When set, the heterogeneous formation
+	// executor invokes it before each role executes so one planned invocation row
+	// reaches the live feed instead of batching all roles at assignment start.
+	OnFormationRoleStarting func(ctx context.Context, role FormationRole) error
 	// OnFormationRoleProgress is optional. When set, the heterogeneous formation
 	// executor invokes it after each completed role so role telemetry reaches the
 	// live feed before the terminal assignment result exists.

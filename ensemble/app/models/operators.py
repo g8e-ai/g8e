@@ -131,12 +131,11 @@ class OperatorHistoryEntry(G8eBaseModel):
 
 
 class OperatorDocument(G8eIdentifiableModel):
-    """g8ee read-side projection of the client OperatorDocument.
+    """g8ee read-side projection of the Gateway OperatorDocument.
 
-    Maps to operator_status_info in protocol/models/operator_document.json.
-    Populated from operator KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
-    GET /api/internal/operators/:id/status.
-    client is the authority - g8ee only reads this document.
+    Populated from Gateway GET /api/v1/operators and session lookups via
+    GatewayOperatorClient. The Gateway owns operator persistence, heartbeat
+    fields, and lifecycle state; g8ee never writes operator documents.
     """
 
     user_id: str = Field(description="User ID who owns this operator (always set by client)")
@@ -166,7 +165,7 @@ class OperatorDocument(G8eIdentifiableModel):
     )
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
     case_id: str | None = Field(default=None, description="Current case ID")
-    api_key: str | None = Field(default=None, description="Operator API key (authority: g8ee)")
+    api_key: str | None = Field(default=None, description="Operator API key (Gateway-owned)")
     is_active: bool = Field(default=False, description="Whether Operator is in active status")
     operator_type: OperatorType = Field(
         default=OperatorType.REMOTE, description="Operator deployment type"
@@ -194,7 +193,7 @@ class OperatorDocument(G8eIdentifiableModel):
     )
     history_trail: list[OperatorHistoryEntry] = Field(
         default_factory=list,
-        description="Operator lifecycle audit trail (append-only). Authority: g8ee.",
+        description="Operator lifecycle audit trail (Gateway-owned append-only history).",
     )
 
     @property
@@ -208,11 +207,24 @@ class OperatorDocument(G8eIdentifiableModel):
         """Ensure current_hostname stays in sync with latest_heartbeat_snapshot.system_identity.hostname."""
         if v is not None:
             return v
-        if info.data.get("latest_heartbeat_snapshot") and isinstance(
-            info.data["latest_heartbeat_snapshot"], HeartbeatSnapshot
-        ):
-            return info.data["latest_heartbeat_snapshot"].system_identity.hostname
+        snapshot = info.data.get("latest_heartbeat_snapshot")
+        if isinstance(snapshot, HeartbeatSnapshot):
+            return snapshot.system_identity.hostname
+        if isinstance(snapshot, dict):
+            identity = snapshot.get("system_identity")
+            if isinstance(identity, dict):
+                hostname = identity.get("hostname")
+                if isinstance(hostname, str) and hostname:
+                    return hostname
         return None
+
+    @model_validator(mode="after")
+    def populate_current_hostname_from_snapshot(self) -> OperatorDocument:
+        if self.current_hostname is None and self.latest_heartbeat_snapshot:
+            identity = self.latest_heartbeat_snapshot.system_identity
+            if identity and identity.hostname:
+                object.__setattr__(self, "current_hostname", identity.hostname)
+        return self
 
     @field_validator("latest_heartbeat_snapshot", mode="before")
     @classmethod

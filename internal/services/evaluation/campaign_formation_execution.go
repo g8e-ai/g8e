@@ -140,6 +140,11 @@ func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req A
 		InferenceSessionID:  req.Binding.InferenceOperatorSessionID,
 		DataSessionID:       req.Binding.DataOperatorSessionID,
 	}
+	if req.OnFormationRoleStarting != nil {
+		runContext.OnRoleStarting = func(startCtx context.Context, role FormationRole) error {
+			return req.OnFormationRoleStarting(startCtx, role)
+		}
+	}
 	if req.OnFormationRoleProgress != nil {
 		runContext.OnRoleProgress = func(progressCtx context.Context, formationResult *FormationRunResult) error {
 			return req.OnFormationRoleProgress(progressCtx, formationResult)

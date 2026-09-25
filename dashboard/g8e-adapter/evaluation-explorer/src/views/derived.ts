@@ -87,6 +87,9 @@ function streamDedupeKey(event: LiveEvent): string {
   if (event.assignment_id && COLLAPSIBLE_ASSIGNMENT_KINDS.has(event.kind)) {
     return `${event.run_id}:${event.assignment_id}:${event.kind}`;
   }
+  if (event.kind === 'stage_updated' && event.assignment_id && event.role) {
+    return `${event.run_id}:${event.assignment_id}:${event.role}:stage_updated`;
+  }
   return event.event_id;
 }
 

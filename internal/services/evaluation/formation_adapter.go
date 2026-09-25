@@ -37,6 +37,7 @@ type FormationRunContext struct {
 	InitialState        []byte
 	InferenceSessionID  string
 	DataSessionID       string
+	OnRoleStarting      func(context.Context, FormationRole) error
 	OnRoleProgress      func(context.Context, *FormationRunResult) error
 }
 

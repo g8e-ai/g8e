@@ -8,7 +8,7 @@
 """
 Operator Services
 
-Operator cache, heartbeat, operator service, and user cache warmer.
+Application-level operator tool orchestration wired to Gateway protocol clients.
 """
 
 from .approval_service import OperatorApprovalService
