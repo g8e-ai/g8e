@@ -56,6 +56,7 @@ class LLMProvider(StrEnum):
     LLAMACPP = "llamacpp"
     FAKE = "fake"
     G8E = "g8e"
+    JEV = "jev"
 
 
 class ThinkingLevel(StrEnum):
@@ -372,6 +373,9 @@ ANTHROPIC_DEFAULT_MODEL = ANTHROPIC_CLAUDE_OPUS_4_6
 GEMINI_DEFAULT_MODEL = GEMINI_3_FLASH
 LLAMACPP_DEFAULT_MODEL = LLAMACPP_GEMMA4_E2B
 
+JEV_LATEST = "jev-latest"
+JEV_DEFAULT_MODEL = JEV_LATEST
+
 
 # Provider default endpoints
 OPENAI_DEFAULT_ENDPOINT = "https://api.openai.com/v1"
@@ -379,6 +383,7 @@ OLLAMA_DEFAULT_ENDPOINT = "http://localhost:11434"
 ANTHROPIC_DEFAULT_ENDPOINT = "https://api.anthropic.com"
 GEMINI_DEFAULT_ENDPOINT = ""  # Gemini uses different discovery mechanism
 LLAMACPP_DEFAULT_ENDPOINT = "http://localhost:11444"
+JEV_DEFAULT_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 
 
 # Ollama host normalization defaults

@@ -128,12 +128,15 @@ def _get_provider_cache_key(
 
 async def clear_provider_cache() -> None:
     """Close and clear all cached provider instances. Intended for shutdown/testing."""
+    from app.decision.factory import clear_decision_provider_cache
+
     for provider in _provider_cache.values():
         try:
             await provider.force_close()
         except Exception as exc:
             logger.info("Error closing provider during cache clear: %s", exc)
     _provider_cache.clear()
+    await clear_decision_provider_cache()
 
 
 def reset_settings() -> None:
@@ -210,6 +213,13 @@ def get_llm_provider(
                 "at startup via set_internal_http_client()"
             )
         provider = G8EProvider(internal_http_client=_internal_http_client)
+    elif provider_type == LLMProvider.JEV:
+        from app.errors import ConfigurationError
+
+        raise ConfigurationError(
+            "Provider 'jev' does not support lite text generation; use jev only "
+            "for triage/eval_judge or select a generative lite provider."
+        )
     else:
         from app.errors import ConfigurationError
 

@@ -683,7 +683,7 @@ ensemble-test:
 .PHONY: test-external
 test-external:
 	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
-	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_typesafe"
 
 .PHONY: ensemble-lint
 ensemble-lint:

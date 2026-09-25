@@ -187,6 +187,14 @@ class SettingsService:
             llm.llamacpp_api_key = env(EnvVar.LLM_LLAMACPP_API_KEY)
         if env(EnvVar.LLM_LLAMACPP_ENDPOINT):
             llm.llamacpp_endpoint = env(EnvVar.LLM_LLAMACPP_ENDPOINT)
+        if env(EnvVar.LLM_JEV_MODEL):
+            llm.jev_model = env(EnvVar.LLM_JEV_MODEL)
+        if env(EnvVar.LLM_JEV_API_KEY):
+            llm.jev_api_key = env(EnvVar.LLM_JEV_API_KEY)
+        elif env(EnvVar.TYPESAFE_API_KEY):
+            llm.jev_api_key = env(EnvVar.TYPESAFE_API_KEY)
+        if env(EnvVar.LLM_JEV_ENDPOINT):
+            llm.jev_endpoint = env(EnvVar.LLM_JEV_ENDPOINT)
 
     def overlay_platform_data(
         self, settings: G8eeAppSettings, app_settings: G8eeAppSettings
