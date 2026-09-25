@@ -7,58 +7,82 @@
 
 """Unit tests for OperatorDataService."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.clients.http_client import HTTPClient
 from app.constants import OperatorStatus
 from app.errors import ValidationError
 from app.models.sessions import CliSessionDocument
 from app.models.operators import OperatorDocument
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import OperatorDataServiceProtocol
+
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 
 class TestOperatorDataService:
     @pytest.fixture
-    def mock_client_http_client(self):
-        return AsyncMock(spec=HTTPClient)
+    def mock_gateway_client(self):
+        return MagicMock()
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service, mock_client_http_client):
-        return OperatorDataService(mock_cache_aside_service, mock_client_http_client)
+    def service(self, mock_cache_aside_service, mock_gateway_client):
+        return OperatorDataService(mock_cache_aside_service, mock_gateway_client)
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):
         return mock_cache_aside_service
 
-    async def test_get_operator_success(self, service, mock_cache):
+    async def test_get_operator_success(self, service, mock_gateway_client):
         operator_id = "op-123"
-        mock_cache.get_document_with_cache.return_value = {
-            "id": operator_id,
-            "user_id": "user-test",
-            "status": OperatorStatus.ACTIVE,
-            "bound_web_session_id": None,
-        }
+        mock_gateway_client.list = AsyncMock(
+            return_value=[
+                {
+                    "id": operator_id,
+                    "user_id": "user-test",
+                    "status": OperatorStatus.ACTIVE,
+                    "bound_web_session_id": None,
+                }
+            ]
+        )
 
-        result = await service.get_operator(operator_id)
+        result = await service.get_operator(operator_id, user_id="user-test")
 
         assert result is not None
         assert isinstance(result, OperatorDocument)
         assert result.id == operator_id
         assert result.status == OperatorStatus.ACTIVE
-        mock_cache.get_document_with_cache.assert_called_once_with(service.collection, operator_id)
+        mock_gateway_client.list.assert_awaited_once_with(user_id="user-test")
 
-    async def test_get_operator_not_found(self, service, mock_cache):
-        mock_cache.get_document_with_cache.return_value = None
-        result = await service.get_operator("nonexistent")
+    async def test_get_operator_by_session_success(self, service, mock_gateway_client):
+        mock_gateway_client.get_by_session = AsyncMock(
+            return_value={
+                "id": "op-123",
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": "sess-123",
+            }
+        )
+
+        result = await service.get_operator_by_session("sess-123")
+
+        assert result is not None
+        assert result.id == "op-123"
+        assert result.operator_session_id == "sess-123"
+
+    async def test_get_operator_not_found(self, service, mock_gateway_client):
+        mock_gateway_client.list = AsyncMock(return_value=[])
+        result = await service.get_operator("nonexistent", user_id="user-test")
         assert result is None
 
     async def test_get_operator_empty_id_raises_error(self, service):
         with pytest.raises(ValidationError, match="operator_id is required"):
-            await service.get_operator("")
+            await service.get_operator("", user_id="user-test")
+
+    async def test_get_operator_requires_user_id(self, service):
+        with pytest.raises(ValidationError, match="user_id is required"):
+            await service.get_operator("op-123")
 
     async def test_get_cli_session_success(self, service, mock_cache):
         cli_session_id = "cli-123"
@@ -109,9 +133,24 @@ class TestOperatorDataService:
         is_owned = await service.validate_cli_session_ownership(cli_session_id, operator_session_id)
         assert is_owned is False
 
+    async def test_query_operators_lists_from_gateway(self, service, mock_gateway_client):
+        mock_gateway_client.list = AsyncMock(
+            return_value=[
+                {"id": "op-1", "user_id": "user-test", "status": OperatorStatus.ACTIVE},
+                {"id": "op-2", "user_id": "user-test", "status": OperatorStatus.BOUND},
+            ]
+        )
+
+        result = await service.query_operators(user_id="user-test")
+
+        assert len(result) == 2
+        assert result[0].id == "op-1"
+        assert result[1].id == "op-2"
+
     async def test_satisfies_operator_data_service_protocol(self, service):
         assert isinstance(service, OperatorDataServiceProtocol)
         assert hasattr(service, "get_operator")
+        assert hasattr(service, "get_operator_by_session")
         assert hasattr(service, "query_operators")
         assert not hasattr(service, "create_operator")
         assert not hasattr(service, "update_operator_status")

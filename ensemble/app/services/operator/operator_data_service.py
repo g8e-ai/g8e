@@ -6,43 +6,60 @@
 # released under the Apache License, Version 2.0.
 
 import logging
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from app.clients.http_client import HTTPClient
-    from app.services.cache.cache_aside import CacheAsideService
-from app.constants.collections import (
-    DB_COLLECTION_OPERATORS,
-    DB_COLLECTION_CLI_SESSIONS,
-)
+from app.clients.gateway_operator_client import GatewayOperatorClient
+from app.constants.collections import DB_COLLECTION_CLI_SESSIONS, DB_COLLECTION_OPERATORS
 from app.errors import ValidationError
 from app.models.sessions import CliSessionDocument
 from app.models.operators import OperatorDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
-from app.clients.http_client import HTTPClient
+from app.utils.gateway_operator_document import operator_document_from_gateway
 
 logger = logging.getLogger(__name__)
 
 
 class OperatorDataService(OperatorDataServiceProtocol):
-    """Read-oriented operator document access for application orchestration."""
+    """Gateway-backed operator reads and local CLI session cache access."""
 
-    def __init__(self, cache: CacheAsideService, internal_http_client: HTTPClient):
+    def __init__(
+        self,
+        cache: CacheAsideService,
+        gateway_operator_client: GatewayOperatorClient,
+    ) -> None:
         self.cache = cache
-        self.internal_http_client = internal_http_client
+        self._gateway_operator_client = gateway_operator_client
         self.collection = DB_COLLECTION_OPERATORS
 
-    async def get_operator(self, operator_id: str) -> OperatorDocument | None:
-        """Get Operator document using cache-aside pattern."""
+    async def get_operator(
+        self, operator_id: str, *, user_id: str | None = None
+    ) -> OperatorDocument | None:
+        """Get an operator document from the Gateway operator registry."""
         if not operator_id:
             raise ValidationError("operator_id is required")
+        if not user_id:
+            raise ValidationError("user_id is required for Gateway operator reads")
 
-        data = await self.cache.get_document_with_cache(self.collection, operator_id)
-        if not data:
+        operators = await self._gateway_operator_client.list(user_id=user_id)
+        for operator_doc in operators:
+            if not isinstance(operator_doc, dict):
+                continue
+            doc_id = operator_doc.get("id") or operator_doc.get("operator_id")
+            if str(doc_id) == operator_id:
+                return operator_document_from_gateway(operator_doc)
+        return None
+
+    async def get_operator_by_session(self, session_id: str) -> OperatorDocument | None:
+        """Get an operator document by active operator session ID."""
+        if not session_id:
+            raise ValidationError("session_id is required")
+
+        operator_doc = await self._gateway_operator_client.get_by_session(session_id=session_id)
+        if not operator_doc:
             return None
-
-        return OperatorDocument.model_validate(data)
+        if not isinstance(operator_doc, dict):
+            return None
+        return operator_document_from_gateway(operator_doc)
 
     async def get_cli_session(self, cli_session_id: str) -> CliSessionDocument | None:
         """Get CLI session document using cache-aside pattern."""
@@ -58,11 +75,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
     async def validate_cli_session_ownership(
         self, cli_session_id: str, operator_session_id: str
     ) -> bool:
-        """Verify that the given cli_session_id is owned by the given operator_session_id.
-
-        This prevents a malicious client with a valid operator session from draining
-        or publishing to someone else's CLI session.
-        """
+        """Verify that the given cli_session_id is owned by the given operator_session_id."""
         if not cli_session_id or not operator_session_id:
             return False
 
@@ -87,17 +100,35 @@ class OperatorDataService(OperatorDataServiceProtocol):
         field_filters: list[dict[str, object]] | None = None,
         limit: int = 1000,
         bypass_cache: bool = False,
+        *,
+        user_id: str,
     ) -> list[OperatorDocument]:
-        """Query Operator documents.
+        """List operator documents from the Gateway registry for a user."""
+        if not user_id:
+            raise ValidationError("user_id is required for Gateway operator reads")
 
-        ``bypass_cache=True`` mirrors client's ``queryOperatorsFresh`` and is used
-        by Gateway-owned reconcilers where stale query
-        cache results would produce false STALE/OFFLINE transitions.
-        """
-        rows = await self.cache.query_documents(
-            collection=self.collection,
-            field_filters=field_filters or [],
-            limit=limit,
-            bypass_cache=bypass_cache,
-        )
-        return [OperatorDocument.model_validate(row) for row in rows]
+        operators = await self._gateway_operator_client.list(user_id=user_id)
+        docs = [
+            operator_document_from_gateway(operator_doc)
+            for operator_doc in operators
+            if isinstance(operator_doc, dict)
+        ]
+
+        if field_filters:
+            docs = [doc for doc in docs if self._matches_filters(doc, field_filters)]
+
+        return docs[:limit]
+
+    @staticmethod
+    def _matches_filters(
+        doc: OperatorDocument, field_filters: list[dict[str, object]]
+    ) -> bool:
+        payload = doc.model_dump(mode="json")
+        for field_filter in field_filters:
+            field = field_filter.get("field")
+            if not isinstance(field, str):
+                continue
+            expected = field_filter.get("value")
+            if payload.get(field) != expected:
+                return False
+        return True

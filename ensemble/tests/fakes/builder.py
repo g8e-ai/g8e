@@ -144,8 +144,12 @@ def build_command_service(
     investigation_service = investigation_service or FakeInvestigationService()
     settings = settings or G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
 
+    from app.clients.gateway_operator_client import GatewayOperatorClient
+
+    gateway_operator_client = GatewayOperatorClient(internal_http_client)
     operator_data_service = OperatorDataService(
-        cache=cache_aside_service, internal_http_client=internal_http_client
+        cache=cache_aside_service,
+        gateway_operator_client=gateway_operator_client,
     )
 
     approval_service = approval_service or FakeApprovalService()

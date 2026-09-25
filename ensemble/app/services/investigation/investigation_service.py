@@ -227,17 +227,25 @@ class InvestigationService:
             if bound_op.status != OperatorStatus.BOUND:
                 continue
             try:
-                op = await self.operator_data_service.get_operator(bound_op.operator_id)
+                if bound_op.operator_session_id:
+                    op = await self.operator_data_service.get_operator_by_session(
+                        bound_op.operator_session_id
+                    )
+                else:
+                    op = await self.operator_data_service.get_operator(
+                        bound_op.operator_id,
+                        user_id=user_id,
+                    )
                 if op:
                     operator_docs.append(op)
                 else:
                     logger.warning(
-                        "Bound Operator not found in cache",
+                        "Bound Operator not found in Gateway registry",
                         extra={"operator_id": bound_op.operator_id},
                     )
             except Exception as e:
                 logger.error(
-                    "Failed to fetch Operator document from cache: %s",
+                    "Failed to fetch Operator document from Gateway: %s",
                     e,
                     extra={"operator_id": bound_op.operator_id, "error": str(e)},
                 )

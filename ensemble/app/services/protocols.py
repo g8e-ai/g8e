@@ -57,7 +57,6 @@ from app.models.operators import (
     AgentContinueApprovalRequest,
     ApprovalResult,
     CommandApprovalRequest,
-    CommandResultRecord,
     DirectCommandResult,
     FileEditApprovalRequest,
     IntentApprovalRequest,
@@ -359,8 +358,14 @@ class OperatorDataServiceProtocol(Protocol):
     collection: str
     cache: CacheAsideService
 
-    async def get_operator(self, operator_id: str) -> OperatorDocument | None:
-        """Retrieve operator metadata."""
+    async def get_operator(
+        self, operator_id: str, *, user_id: str | None = None
+    ) -> OperatorDocument | None:
+        """Retrieve operator metadata from the Gateway registry."""
+        raise NotImplementedError
+
+    async def get_operator_by_session(self, session_id: str) -> OperatorDocument | None:
+        """Retrieve operator metadata by active operator session ID."""
         raise NotImplementedError
 
     async def get_cli_session(self, cli_session_id: str) -> CliSessionDocument | None:
@@ -378,8 +383,10 @@ class OperatorDataServiceProtocol(Protocol):
         field_filters: list[dict[str, object]] | None = None,
         limit: int = 1000,
         bypass_cache: bool = False,
+        *,
+        user_id: str,
     ) -> list[OperatorDocument]:
-        """Query operator documents. ``bypass_cache=True`` skips the query cache."""
+        """List operator documents from the Gateway registry for a user."""
         raise NotImplementedError
 
     async def update_document(

@@ -44,6 +44,7 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -54,7 +55,6 @@ from app.constants import (
     OperatorType,
     Priority,
 )
-from app.constants.collections import DB_COLLECTION_OPERATORS
 from app.errors import ResourceNotFoundError
 from app.models.agent import OperatorContext
 from app.models.http_context import BoundOperator
@@ -90,16 +90,30 @@ from tests.fakes.factories import (
 pytestmark = [pytest.mark.integration]
 
 
+def wire_gateway_operator_registry(gateway_operator_client) -> list[dict]:
+    """Route operator reads in integration tests through an in-memory Gateway registry."""
+    registry: list[dict] = []
+
+    async def list_operators(user_id: str) -> list[dict]:
+        return [op for op in registry if op.get("user_id") == user_id]
+
+    async def get_by_session(session_id: str) -> dict | None:
+        for operator_doc in registry:
+            if operator_doc.get("operator_session_id") == session_id:
+                return operator_doc
+        return None
+
+    gateway_operator_client.list = AsyncMock(side_effect=list_operators)
+    gateway_operator_client.get_by_session = AsyncMock(side_effect=get_by_session)
+    return registry
+
+
 async def seed_operator_document(
-    cache_aside_service,
+    operator_registry: list[dict],
     operator: OperatorDocument,
 ) -> None:
-    """Seed a read-only operator document for integration tests."""
-    await cache_aside_service.create_document(
-        collection=DB_COLLECTION_OPERATORS,
-        document_id=operator.id,
-        data=operator.model_dump(mode="json"),
-    )
+    """Seed a Gateway-owned operator document for integration tests."""
+    operator_registry.append(operator.model_dump(mode="json"))
 
 
 @pytest.fixture
@@ -121,6 +135,9 @@ async def all_services(cache_aside_service, test_settings):
         kv_service=MagicMock(),
         blob_service=MagicMock(),
         governance_client=make_write_through_governance_client(cache_aside_service),
+    )
+    services.gateway_operator_client._operator_registry = wire_gateway_operator_registry(
+        services.gateway_operator_client
     )
     yield services
     await ServiceFactory.stop_services(services)
@@ -571,7 +588,7 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await seed_operator_document(all_services.cache_aside_service, operator)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator)
 
         # Create g8e context with bound operator
         bound_operator = BoundOperator(
@@ -631,9 +648,9 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await seed_operator_document(all_services.cache_aside_service, operator1)
-        await seed_operator_document(all_services.cache_aside_service, operator2)
-        await seed_operator_document(all_services.cache_aside_service, operator3)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator1)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator2)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator3)
 
         # Create g8e context with multiple bound operators
         bound_operators = [
@@ -701,9 +718,15 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await seed_operator_document(all_services.cache_aside_service, bound_operator)
-        await seed_operator_document(all_services.cache_aside_service, claimed_operator)
-        await seed_operator_document(all_services.cache_aside_service, offline_operator)
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, bound_operator
+        )
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, claimed_operator
+        )
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, offline_operator
+        )
 
         # Create g8e context with mixed status operators
         bound_operators = [
@@ -818,7 +841,9 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await seed_operator_document(all_services.cache_aside_service, remote_operator)
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, remote_operator
+        )
 
         # Create g8e context and enrich
         bound_operator = BoundOperator(
@@ -905,8 +930,8 @@ class TestCompleteContextAssembly:
             user_id=created_investigation.user_id,
         )
         await memory_data_service.save_memory(memory, is_new=True, context=memory_context)
-        await seed_operator_document(all_services.cache_aside_service, operator1)
-        await seed_operator_document(all_services.cache_aside_service, operator2)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator1)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator2)
 
         # Create g8e context with both operators
         bound_operators = [

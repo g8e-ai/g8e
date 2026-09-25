@@ -23,7 +23,10 @@ class FakeOperatorCache:
     collection: str = "operators"
     cache: CacheAsideService = None
 
-    async def get_operator(self, operator_id: str):
+    async def get_operator(self, operator_id: str, *, user_id: str | None = None):
+        return None
+
+    async def get_operator_by_session(self, session_id: str):
         return None
 
     async def get_cli_session(self, cli_session_id: str):
@@ -34,7 +37,14 @@ class FakeOperatorCache:
     ) -> bool:
         return True
 
-    async def query_operators(self, field_filters=None, limit=1000, bypass_cache=False):
+    async def query_operators(
+        self,
+        field_filters=None,
+        limit=1000,
+        bypass_cache=False,
+        *,
+        user_id: str,
+    ):
         return []
 
     async def update_document(

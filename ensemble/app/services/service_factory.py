@@ -91,6 +91,7 @@ class CoreServices:
 class DataServices:
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
+    gateway_operator_client: GatewayOperatorClient
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
@@ -197,9 +198,10 @@ class ServiceFactory:
             governance_client=governance_client,
         )
 
+        gateway_operator_client = GatewayOperatorClient(core_services.internal_http_client)
         operator_data_service = OperatorDataService(
             cache=cache_aside_service,
-            internal_http_client=core_services.internal_http_client,  # type: ignore[arg-type]
+            gateway_operator_client=gateway_operator_client,
         )
 
         memory_data_service = MemoryDataService(
@@ -232,6 +234,7 @@ class ServiceFactory:
         return DataServices(
             investigation_data_service=investigation_data_service,
             operator_data_service=operator_data_service,
+            gateway_operator_client=gateway_operator_client,
             memory_data_service=memory_data_service,
             case_data_service=case_data_service,
             agent_activity_data_service=agent_activity_data_service,
@@ -342,7 +345,7 @@ class ServiceFactory:
             investigation_data_service=data_services.investigation_data_service,
         )
 
-        gateway_operator_client = GatewayOperatorClient(core_services.internal_http_client)
+        gateway_operator_client = data_services.gateway_operator_client
 
         stream_executor = OperatorStreamExecutor(
             approval_service=approval_service,
