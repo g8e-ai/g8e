@@ -322,11 +322,11 @@ func TestDockerReset_WithComposeFileButNoDocker(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestResolveDockerProfile(t *testing.T) {
-	assert.Equal(t, "", resolveDockerProfile(false, ""))
-	assert.Equal(t, constants.DockerBootstrappedProfile, resolveDockerProfile(true, ""))
-	assert.Equal(t, constants.DockerBootstrappedProfile, resolveDockerProfile(false, constants.DockerBootstrappedProfile))
-	assert.Equal(t, "custom", resolveDockerProfile(true, "custom"), "explicit profile overrides --full")
+func TestResolveDockerProfiles(t *testing.T) {
+	assert.Nil(t, resolveDockerProfiles(false, ""))
+	assert.Equal(t, dockerFullStackProfiles(), resolveDockerProfiles(true, ""))
+	assert.Equal(t, []string{constants.DockerBootstrappedProfile}, resolveDockerProfiles(false, constants.DockerBootstrappedProfile))
+	assert.Equal(t, []string{"custom"}, resolveDockerProfiles(true, "custom"), "explicit profile overrides --full")
 }
 
 func TestDockerTeardownProfiles(t *testing.T) {
@@ -393,9 +393,18 @@ func TestDockerBuildArgs_UsesSourceTreeHashForUnstampedBuildID(t *testing.T) {
 	assert.Contains(t, args, "BUILD_ID="+hash)
 }
 
-func TestDockerBuildArgs_RejectsUnstampedSourceHash(t *testing.T) {
-	_, err := dockerBuildArgs(serve.VersionInfo{SourceTreeStateHash: string(constants.SystemHealthUnknown)}, false)
-	assert.ErrorIs(t, err, constants.ErrSourceTreeHashInvalid)
+func TestDockerBuildArgs_ComputesSourceHashForUnstampedBinary(t *testing.T) {
+	args, err := dockerBuildArgs(serve.VersionInfo{SourceTreeStateHash: string(constants.SystemHealthUnknown)}, false)
+	require.NoError(t, err)
+	hashArg := ""
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--build-arg" && strings.HasPrefix(args[i+1], "SOURCE_TREE_HASH=") {
+			hashArg = strings.TrimPrefix(args[i+1], "SOURCE_TREE_HASH=")
+			break
+		}
+	}
+	assert.Len(t, hashArg, 64)
+	assert.Contains(t, args, "BUILD_ID="+hashArg)
 }
 
 func TestDockerComposePath_ResolvesFromCwd(t *testing.T) {

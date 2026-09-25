@@ -36,10 +36,14 @@ func (d *residencyTestDispatcher) DispatchOllamaModelCommand(_ context.Context, 
 	return &evaluation.OllamaModelCommandDispatchResult{
 		Status:  200,
 		Success: true,
-		Result: &operatorv1.CommandResult{
-			Status:     operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-			Stdout:     d.stdout,
-			ReturnCode: 0,
+		ResidencyResult: &operatorv1.OllamaModelResidencyResult{
+			Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			Models: func() []*operatorv1.OllamaModelResidencyModel {
+				if d.stdout == `{"models":[]}` {
+					return nil
+				}
+				return []*operatorv1.OllamaModelResidencyModel{{Name: "granite4.2:3b"}}
+			}(),
 		},
 	}, nil
 }

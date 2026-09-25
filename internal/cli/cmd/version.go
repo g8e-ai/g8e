@@ -94,6 +94,23 @@ func isUnstampedMetadata(value string) bool {
 	}
 }
 
+// effectiveSourceTreeHash prefers the ldflags stamp and falls back to the
+// canonical provenance manifest so plain `go build` binaries can still stamp
+// Docker images and other local build artifacts.
+func effectiveSourceTreeHash(vi serve.VersionInfo) (string, error) {
+	if isHex64(vi.SourceTreeStateHash) {
+		return vi.SourceTreeStateHash, nil
+	}
+	hash, err := buildinfo.ComputeProvenanceManifestHash(".")
+	if err != nil {
+		return "", err
+	}
+	if !isHex64(hash) {
+		return "", constants.ErrSourceTreeHashInvalid
+	}
+	return hash, nil
+}
+
 // effectiveBuildID prefers the explicit build identity and falls back to the
 // source-tree state hash for local builds without release metadata.
 func effectiveBuildID(vi serve.VersionInfo) string {

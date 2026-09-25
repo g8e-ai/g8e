@@ -787,6 +787,47 @@ message PortCheckResult {
   string error_type = 5;
 }
 
+message OllamaModelInventoryRequested {
+  string execution_id = 1;
+}
+
+message ProviderModelInventoryEntry {
+  string provider_class = 1;
+  string served_model_tag = 2;
+  string model_digest = 3;
+  string model_family = 4;
+  string parameter_size = 5;
+  uint64 parameter_count = 6;
+  string quantization = 7;
+  string format = 8;
+  uint32 context_limit = 9;
+  repeated string advertised_capabilities = 10;
+}
+
+message OllamaModelInventoryResult {
+  string execution_id = 1;
+  ExecutionStatus status = 2;
+  repeated ProviderModelInventoryEntry entries = 3;
+  string error_message = 4;
+  string error_type = 5;
+}
+
+message OllamaModelResidencyRequested {
+  string execution_id = 1;
+}
+
+message OllamaModelResidencyModel {
+  string name = 1;
+}
+
+message OllamaModelResidencyResult {
+  string execution_id = 1;
+  ExecutionStatus status = 2;
+  repeated OllamaModelResidencyModel models = 3;
+  string error_message = 4;
+  string error_type = 5;
+}
+
 message FetchLogsResult {
   string execution_id = 1;
   string command = 2;

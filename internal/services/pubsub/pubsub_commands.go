@@ -68,6 +68,7 @@ type OperatorPubSubService struct {
 	commands  *CommandService
 	fileOps   *FileOpsService
 	ports     *PortService
+	ollama    *OllamaMaintenanceService
 	audit     *AuditService
 	history   *HistoryService
 
@@ -203,6 +204,10 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	rs.ports = NewPortService(c.Config, c.Logger, client)
 	rs.ports.SetScrubbingService(c.Scrubbing)
 	rs.ports.auditStore = c.AuditStore
+
+	rs.ollama = NewOllamaMaintenanceService(c.Config, c.Logger, client)
+	rs.ollama.SetScrubbingService(c.Scrubbing)
+	rs.ollama.auditStore = c.AuditStore
 
 	rs.audit = NewAuditService(c.Config, c.Logger, c.AuditStore)
 
@@ -383,6 +388,8 @@ func (rs *OperatorPubSubService) buildHandlers() {
 		constants.Event.Operator.FsRead.Requested:           rs.fileOps.HandleFsReadRequest,
 		constants.Event.Operator.FsGrep.Requested:           rs.fileOps.HandleFsGrepRequest,
 		constants.Event.Operator.PortCheck.Requested:        rs.ports.HandlePortCheckRequest,
+		constants.Event.Operator.OllamaModelInventory.Requested: rs.ollama.HandleInventoryRequest,
+		constants.Event.Operator.OllamaModelResidency.Requested: rs.ollama.HandleResidencyRequest,
 		constants.Event.Operator.FetchLogs.Requested:        rs.history.HandleFetchLogsRequest,
 		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,
 		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,

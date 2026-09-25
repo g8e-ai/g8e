@@ -147,6 +147,12 @@ const EventOperatorNetworkPortCheckStarted EventType = "g8e.v1.operator.network.
 const EventOperatorNetworkPortCheckReceived EventType = "g8e.v1.operator.network.port.check.received"
 const EventOperatorNetworkPortCheckCompleted EventType = "g8e.v1.operator.network.port.check.completed"
 const EventOperatorNetworkPortCheckFailed EventType = "g8e.v1.operator.network.port.check.failed"
+const EventOperatorOllamaModelInventoryRequested EventType = "g8e.v1.operator.ollama.model.inventory.requested"
+const EventOperatorOllamaModelInventoryCompleted EventType = "g8e.v1.operator.ollama.model.inventory.completed"
+const EventOperatorOllamaModelInventoryFailed EventType = "g8e.v1.operator.ollama.model.inventory.failed"
+const EventOperatorOllamaModelResidencyRequested EventType = "g8e.v1.operator.ollama.model.residency.requested"
+const EventOperatorOllamaModelResidencyCompleted EventType = "g8e.v1.operator.ollama.model.residency.completed"
+const EventOperatorOllamaModelResidencyFailed EventType = "g8e.v1.operator.ollama.model.residency.failed"
 const EventOperatorAuditUserRecorded EventType = "g8e.v1.operator.audit.user.recorded"
 const EventOperatorAuditAiRecorded EventType = "g8e.v1.operator.audit.ai.recorded"
 const EventOperatorAuditCommandRecorded EventType = "g8e.v1.operator.audit.command.recorded"
@@ -532,6 +538,16 @@ type _EventOperatorPortCheck struct {
 	Requested EventType
 	Started   EventType
 }
+type _EventOperatorOllamaModelInventory struct {
+	Completed EventType
+	Failed    EventType
+	Requested EventType
+}
+type _EventOperatorOllamaModelResidency struct {
+	Completed EventType
+	Failed    EventType
+	Requested EventType
+}
 type _EventOperatorReceipt struct {
 	Recorded EventType
 }
@@ -588,6 +604,8 @@ type _EventOperator struct {
 	Notary                      _EventOperatorNotary
 	PanelListUpdated            EventType
 	PortCheck                   _EventOperatorPortCheck
+	OllamaModelInventory        _EventOperatorOllamaModelInventory
+	OllamaModelResidency        _EventOperatorOllamaModelResidency
 	Receipt                     _EventOperatorReceipt
 	RestoreFile                 _EventOperatorRestoreFile
 	ShutdownAcknowledged        EventType
@@ -760,6 +778,16 @@ var Event = struct {
 			Received:  EventOperatorNetworkPortCheckReceived,
 			Requested: EventOperatorNetworkPortCheckRequested,
 			Started:   EventOperatorNetworkPortCheckStarted,
+		},
+		OllamaModelInventory: _EventOperatorOllamaModelInventory{
+			Completed: EventOperatorOllamaModelInventoryCompleted,
+			Failed:    EventOperatorOllamaModelInventoryFailed,
+			Requested: EventOperatorOllamaModelInventoryRequested,
+		},
+		OllamaModelResidency: _EventOperatorOllamaModelResidency{
+			Completed: EventOperatorOllamaModelResidencyCompleted,
+			Failed:    EventOperatorOllamaModelResidencyFailed,
+			Requested: EventOperatorOllamaModelResidencyRequested,
 		},
 		Receipt: _EventOperatorReceipt{
 			Recorded: EventOperatorReceiptRecorded,

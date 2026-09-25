@@ -50,6 +50,8 @@ const (
 	ActionTypePlatformEnrollmentCreateSession ActionType = "PLATFORM_ENROLLMENT_CREATE_SESSION"
 	ActionTypePlatformEnrollmentRevoke        ActionType = "PLATFORM_ENROLLMENT_REVOKE"
 	ActionTypePortCheck                       ActionType = "PORT_CHECK"
+	ActionTypeOllamaModelInventory            ActionType = "OLLAMA_MODEL_INVENTORY"
+	ActionTypeOllamaModelResidency            ActionType = "OLLAMA_MODEL_RESIDENCY"
 	ActionTypeProviderBoundaryObservation     ActionType = "PROVIDER_BOUNDARY_OBSERVATION"
 	ActionTypeModelProvenanceObservation      ActionType = "MODEL_PROVENANCE_OBSERVATION"
 	ActionTypeRestoreFile                     ActionType = "RESTORE_FILE"
@@ -87,6 +89,8 @@ var AllActionTypes = []ActionType{
 	ActionTypePlatformEnrollmentCreateSession,
 	ActionTypePlatformEnrollmentRevoke,
 	ActionTypePortCheck,
+	ActionTypeOllamaModelInventory,
+	ActionTypeOllamaModelResidency,
 	ActionTypeProviderBoundaryObservation,
 	ActionTypeModelProvenanceObservation,
 	ActionTypeRestoreFile,

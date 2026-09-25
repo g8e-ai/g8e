@@ -1124,6 +1124,76 @@ class PortCheckResult(_message.Message):
     error_type: str
     def __init__(self, execution_id: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., results: _Optional[_Iterable[_Union[PortCheckEntry, _Mapping]]] = ..., error_message: _Optional[str] = ..., error_type: _Optional[str] = ...) -> None: ...
 
+class OllamaModelInventoryRequested(_message.Message):
+    __slots__ = ("execution_id",)
+    EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
+    execution_id: str
+    def __init__(self, execution_id: _Optional[str] = ...) -> None: ...
+
+class ProviderModelInventoryEntry(_message.Message):
+    __slots__ = ("provider_class", "served_model_tag", "model_digest", "model_family", "parameter_size", "parameter_count", "quantization", "format", "context_limit", "advertised_capabilities")
+    PROVIDER_CLASS_FIELD_NUMBER: _ClassVar[int]
+    SERVED_MODEL_TAG_FIELD_NUMBER: _ClassVar[int]
+    MODEL_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FAMILY_FIELD_NUMBER: _ClassVar[int]
+    PARAMETER_SIZE_FIELD_NUMBER: _ClassVar[int]
+    PARAMETER_COUNT_FIELD_NUMBER: _ClassVar[int]
+    QUANTIZATION_FIELD_NUMBER: _ClassVar[int]
+    FORMAT_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_LIMIT_FIELD_NUMBER: _ClassVar[int]
+    ADVERTISED_CAPABILITIES_FIELD_NUMBER: _ClassVar[int]
+    provider_class: str
+    served_model_tag: str
+    model_digest: str
+    model_family: str
+    parameter_size: str
+    parameter_count: int
+    quantization: str
+    format: str
+    context_limit: int
+    advertised_capabilities: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, provider_class: _Optional[str] = ..., served_model_tag: _Optional[str] = ..., model_digest: _Optional[str] = ..., model_family: _Optional[str] = ..., parameter_size: _Optional[str] = ..., parameter_count: _Optional[int] = ..., quantization: _Optional[str] = ..., format: _Optional[str] = ..., context_limit: _Optional[int] = ..., advertised_capabilities: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class OllamaModelInventoryResult(_message.Message):
+    __slots__ = ("execution_id", "status", "entries", "error_message", "error_type")
+    EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    ENTRIES_FIELD_NUMBER: _ClassVar[int]
+    ERROR_MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    ERROR_TYPE_FIELD_NUMBER: _ClassVar[int]
+    execution_id: str
+    status: ExecutionStatus
+    entries: _containers.RepeatedCompositeFieldContainer[ProviderModelInventoryEntry]
+    error_message: str
+    error_type: str
+    def __init__(self, execution_id: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., entries: _Optional[_Iterable[_Union[ProviderModelInventoryEntry, _Mapping]]] = ..., error_message: _Optional[str] = ..., error_type: _Optional[str] = ...) -> None: ...
+
+class OllamaModelResidencyRequested(_message.Message):
+    __slots__ = ("execution_id",)
+    EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
+    execution_id: str
+    def __init__(self, execution_id: _Optional[str] = ...) -> None: ...
+
+class OllamaModelResidencyModel(_message.Message):
+    __slots__ = ("name",)
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    def __init__(self, name: _Optional[str] = ...) -> None: ...
+
+class OllamaModelResidencyResult(_message.Message):
+    __slots__ = ("execution_id", "status", "models", "error_message", "error_type")
+    EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    MODELS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    ERROR_TYPE_FIELD_NUMBER: _ClassVar[int]
+    execution_id: str
+    status: ExecutionStatus
+    models: _containers.RepeatedCompositeFieldContainer[OllamaModelResidencyModel]
+    error_message: str
+    error_type: str
+    def __init__(self, execution_id: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., models: _Optional[_Iterable[_Union[OllamaModelResidencyModel, _Mapping]]] = ..., error_message: _Optional[str] = ..., error_type: _Optional[str] = ...) -> None: ...
+
 class FetchLogsResult(_message.Message):
     __slots__ = ("execution_id", "command", "return_code", "duration_ms", "stdout", "stderr", "stdout_size", "stderr_size", "timestamp", "vault_mode", "error")
     EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]

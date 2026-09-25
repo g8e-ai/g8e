@@ -198,17 +198,17 @@ func dockerFullStackProfiles() []string {
 	}
 }
 
-// resolveDockerProfile returns the bootstrapped profile name when full is true,
-// or the explicit profile override when set, otherwise the empty string
-// (gateway-only startup).
-func resolveDockerProfile(full bool, profile string) string {
+// resolveDockerProfiles returns compose profiles to activate for start/build.
+// When full is true and no explicit profile override is set, returns bootstrapped
+// and evaluation so the inference operator starts with the rest of the stack.
+func resolveDockerProfiles(full bool, profile string) []string {
 	if profile != "" {
-		return profile
+		return []string{profile}
 	}
 	if full {
-		return constants.DockerBootstrappedProfile
+		return dockerFullStackProfiles()
 	}
-	return ""
+	return nil
 }
 
 func dockerInitCmd() *cobra.Command {
@@ -531,10 +531,10 @@ walkthrough (the workloads will block waiting for manual approval).`,
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
-			resolved := resolveDockerProfile(full, profile)
+			profiles := resolveDockerProfiles(full, profile)
 			scope := "gateway"
-			if resolved != "" {
-				scope = fmt.Sprintf("full stack (profile %s)", resolved)
+			if len(profiles) > 0 {
+				scope = fmt.Sprintf("full stack (profiles %s)", strings.Join(profiles, ", "))
 			}
 
 			fileSvc, err := fileSvcFactory("", slog.Default())
@@ -546,7 +546,7 @@ walkthrough (the workloads will block waiting for manual approval).`,
 			}
 
 			var walkthroughDeps *dockerStartDeps
-			if resolved != "" && !skipEnroll {
+			if len(profiles) > 0 && !skipEnroll {
 				cfg, err := configLoader("")
 				if err != nil {
 					return err
@@ -562,14 +562,14 @@ walkthrough (the workloads will block waiting for manual approval).`,
 			}
 
 			cmd.Printf("Starting Docker Compose %s...\n", scope)
-			if err := runDockerCompose([]string{"up", "-d"}, resolved); err != nil {
+			if err := runDockerCompose([]string{"up", "-d"}, profiles...); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 			cmd.Printf("\nDocker Compose %s started successfully.\n", scope)
 			cmd.Println("Run 'g8e docker status' to check service status.")
 			cmd.Println("Run 'g8e docker logs' to follow logs.")
 
-			if resolved == "" {
+			if len(profiles) == 0 {
 				cmd.Println()
 				cmd.Println("To bring up the operator, ensemble, and dashboard after enrolling")
 				cmd.Println("the first owner, run 'g8e docker start --full'.")
@@ -588,7 +588,7 @@ walkthrough (the workloads will block waiting for manual approval).`,
 			return runDockerStartWalkthrough(cmd, *walkthroughDeps)
 		},
 	}
-	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + ensemble + dashboard)")
+	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Start the bootstrapped profile without the interactive enrollment walkthrough")
 	return cmd
@@ -967,8 +967,9 @@ func dockerStatusCmd() *cobra.Command {
 }
 
 func dockerBuildArgs(vi serve.VersionInfo, noCache bool) ([]string, error) {
-	if !isHex64(vi.SourceTreeStateHash) {
-		return nil, constants.ErrSourceTreeHashInvalid
+	sourceTreeHash, err := effectiveSourceTreeHash(vi)
+	if err != nil {
+		return nil, err
 	}
 	version := strings.TrimSpace(vi.Version)
 	if version == "" {
@@ -979,6 +980,9 @@ func dockerBuildArgs(vi serve.VersionInfo, noCache bool) ([]string, error) {
 		buildTime = time.Now().UTC().Format(time.RFC3339)
 	}
 	buildID := effectiveBuildID(vi)
+	if buildID == "" {
+		buildID = sourceTreeHash
+	}
 	if buildID == "" {
 		buildID = string(constants.SystemHealthUnknown)
 	}
@@ -992,7 +996,7 @@ func dockerBuildArgs(vi serve.VersionInfo, noCache bool) ([]string, error) {
 		"--build-arg", "BUILD_TIME=" + buildTime,
 		"--build-arg", "BUILD_ID=" + buildID,
 		"--build-arg", "SOURCE_REVISION=" + sourceRevision,
-		"--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash,
+		"--build-arg", "SOURCE_TREE_HASH=" + sourceTreeHash,
 	}
 	if noCache {
 		args = append(args, "--no-cache")
@@ -1017,7 +1021,7 @@ func dockerBuildCmd() *cobra.Command {
 				return fmt.Errorf("docker: build arguments: %w", err)
 			}
 			cmd.Println("Building Docker images...")
-			if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, resolveDockerProfile(true, profile)); err != nil {
+			if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, resolveDockerProfiles(true, profile)...); err != nil {
 				return err
 			}
 			cmd.Println("\nDocker images built and runtime binary exported to ./g8e.")
@@ -1100,20 +1104,20 @@ func dockerResetCmd() *cobra.Command {
 			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
 				return err
 			}
-			resolved := resolveDockerProfile(full, profile)
+			profiles := resolveDockerProfiles(full, profile)
 			scope := "gateway"
-			if resolved != "" {
-				scope = fmt.Sprintf("full stack (profile %s)", resolved)
+			if len(profiles) > 0 {
+				scope = fmt.Sprintf("full stack (profiles %s)", strings.Join(profiles, ", "))
 			}
 			cmd.Printf("\nStarting Docker Compose %s...\n", scope)
-			if err := runDockerCompose([]string{"up", "-d"}, resolved); err != nil {
+			if err := runDockerCompose([]string{"up", "-d"}, profiles...); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 			cmd.Printf("\nDocker Compose %s reset successfully.\n", scope)
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + ensemble + dashboard)")
+	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	return cmd
 }
@@ -1152,17 +1156,17 @@ Use --no-cache=false to reuse the Docker build cache.`,
 			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
 				return err
 			}
-			resolved := resolveDockerProfile(full, profile)
+			profiles := resolveDockerProfiles(full, profile)
 			scope := "gateway"
-			if resolved != "" {
-				scope = fmt.Sprintf("full stack (profile %s)", resolved)
+			if len(profiles) > 0 {
+				scope = fmt.Sprintf("full stack (profiles %s)", strings.Join(profiles, ", "))
 			} else {
 				cmd.Println("\nWarning: restarting gateway only. Operator, ensemble, inference-operator, and dashboard stay down.")
 				cmd.Println("Provider-boundary observation ingest will not run until the full stack is up.")
 				cmd.Println("Use --full (or ./g8e docker init --headless) before eval campaign execute.")
 			}
 			cmd.Printf("\nStarting Docker Compose %s...\n", scope)
-			if err := runDockerCompose([]string{"up", "-d"}, resolved); err != nil {
+			if err := runDockerCompose([]string{"up", "-d"}, profiles...); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 			cmd.Printf("\nDocker Compose %s rebuilt and started successfully.\n", scope)
@@ -1170,7 +1174,7 @@ Use --no-cache=false to reuse the Docker build cache.`,
 		},
 	}
 	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Rebuild without using the Docker cache")
-	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + ensemble + dashboard)")
+	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	return cmd
 }

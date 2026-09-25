@@ -41,6 +41,10 @@ func mapProtoToPayloadType(msg proto.Message) string {
 		return "fs_read_result"
 	case *operatorv1.PortCheckResult:
 		return "port_check_result"
+	case *operatorv1.OllamaModelInventoryResult:
+		return "ollama_model_inventory_result"
+	case *operatorv1.OllamaModelResidencyResult:
+		return "ollama_model_residency_result"
 	case *operatorv1.FetchLogsResult:
 		if m.Error != "" {
 			return "fetch_logs_error"
@@ -167,6 +171,10 @@ func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Mess
 		m = &operatorv1.FsGrepRequested{}
 	case constants.Event.Operator.PortCheck.Requested:
 		m = &operatorv1.CheckPortRequested{}
+	case constants.Event.Operator.OllamaModelInventory.Requested:
+		m = &operatorv1.OllamaModelInventoryRequested{}
+	case constants.Event.Operator.OllamaModelResidency.Requested:
+		m = &operatorv1.OllamaModelResidencyRequested{}
 	case constants.Event.Operator.FetchLogs.Requested:
 		m = &operatorv1.FetchLogsRequested{}
 	case constants.Event.Operator.FetchHistory.Requested:

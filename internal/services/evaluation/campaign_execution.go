@@ -185,6 +185,25 @@ type CampaignModelBinding struct {
 	ModelDigest    string
 }
 
+// CampaignModelBindingsFromFormation returns provenance preflight bindings for
+// the sovereign roles in one bound formation. Delegated roles are omitted.
+func CampaignModelBindingsFromFormation(formation Formation) []CampaignModelBinding {
+	bindings := make([]CampaignModelBinding, 0, 3)
+	for _, model := range []FormationModel{formation.Primary, formation.Assistant, formation.Lite} {
+		if model.Trust == FormationTrustDelegated || model.ServedModelTag == "" || model.ModelDigest == "" {
+			continue
+		}
+		if model.ModelDigest == FormationDelegatedRegistryDigestPlaceholder {
+			continue
+		}
+		bindings = append(bindings, CampaignModelBinding{
+			ServedModelTag: model.ServedModelTag,
+			ModelDigest:    model.ModelDigest,
+		})
+	}
+	return bindings
+}
+
 // CampaignModelBindingsFromSpec returns attestation bindings for every frozen
 // model variant in one campaign spec.
 func CampaignModelBindingsFromSpec(spec *evalv1.EvaluationCampaignSpec) ([]CampaignModelBinding, error) {

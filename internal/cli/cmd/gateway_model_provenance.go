@@ -182,6 +182,9 @@ func preflightCampaignModelProvenance(fileSvc fs.RuntimeFileService, cfg *config
 		if strings.TrimSpace(binding.ServedModelTag) == "" || strings.TrimSpace(binding.ModelDigest) == "" {
 			continue
 		}
+		if binding.ModelDigest == evaluation.FormationDelegatedRegistryDigestPlaceholder {
+			continue
+		}
 		if err := preflightModelProvenanceAttestation(fileSvc, cfg, binding.ServedModelTag, binding.ModelDigest); err != nil {
 			return err
 		}

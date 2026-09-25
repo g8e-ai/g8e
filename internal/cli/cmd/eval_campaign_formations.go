@@ -372,15 +372,15 @@ func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts fo
 	if err := preflightProviderObservationDelivery(fileSvc, cfg); err != nil {
 		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
-	modelBindings, err := evaluation.CampaignModelBindingsFromSpec(evalv1CampaignSpecFromFreeze(freeze))
-	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	if err := preflightCampaignModelProvenance(fileSvc, cfg, modelBindings); err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
 	binding, err := evaluation.FormationBindingFromCatalog(opts.FormationID, freeze.Variants)
 	if err != nil {
+		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+	}
+	formation, err := evaluation.BindFormation(binding)
+	if err != nil {
+		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+	}
+	if err := preflightCampaignModelProvenance(fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation)); err != nil {
 		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	chatDeps := chatEvalDeps{

@@ -53,7 +53,7 @@ func validPublicProjectionBytes(campaignID string) string {
 
 func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
 	cmd := publicCmd()
-	expected := []string{"config", "init", "publish", "push", "repair-outbox", "restore", "rotate-key", "source", "status"}
+	expected := []string{"config", "init", "publish", "push", "repair-outbox", "restore", "rotate-key", "source", "status", "verify-assignment"}
 	require.Len(t, cmd.Commands(), len(expected))
 	for _, name := range expected {
 		child, _, err := cmd.Find([]string{name})

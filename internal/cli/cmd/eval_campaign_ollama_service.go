@@ -45,16 +45,27 @@ func newHarnessOllamaModelCommandDispatcher(cfg *config.Config, authContext *aut
 }
 
 func (d *harnessOllamaModelCommandDispatcher) DispatchOllamaModelCommand(ctx context.Context, request evaluation.OllamaModelCommandDispatchRequest) (*evaluation.OllamaModelCommandDispatchResult, error) {
-	if d == nil || d.client == nil || request.TargetOperatorSessionID == "" || request.Command == "" || request.ExecutionID == "" {
+	if d == nil || d.client == nil || request.TargetOperatorSessionID == "" || request.ExecutionID == "" {
 		return nil, fmt.Errorf("evaluation: Ollama model command dispatch: %w", constants.ErrMissingRequiredField)
 	}
-	payload, err := evaluation.MarshalOllamaModelCommandPayload(request)
-	if err != nil {
-		return nil, err
+	actionType := request.ActionType
+	if actionType == "" {
+		actionType = constants.ActionTypeExecuteBash
+	}
+	payload := request.Payload
+	if len(payload) == 0 && actionType == constants.ActionTypeExecuteBash {
+		marshaled, err := evaluation.MarshalOllamaModelCommandPayload(request)
+		if err != nil {
+			return nil, err
+		}
+		payload = marshaled
+	}
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("evaluation: Ollama model command dispatch: %w", constants.ErrMissingRequiredField)
 	}
 	status, response, body, err := d.client.DispatchCommand(ctx, d.persona, harnessclient.DispatchCommandRequest{
 		TargetOperatorSessionID: request.TargetOperatorSessionID,
-		ActionType:              string(constants.ActionTypeExecuteBash),
+		ActionType:              string(actionType),
 		Payload:                 payload,
 		TargetResource:          "ollama-model",
 		CaseID:                  request.CaseID,
@@ -68,14 +79,31 @@ func (d *harnessOllamaModelCommandDispatcher) DispatchOllamaModelCommand(ctx con
 	result := &evaluation.OllamaModelCommandDispatchResult{
 		Status:       status,
 		Success:      response != nil && response.Success,
+		ActionType:   actionType,
 		ResponseBody: body,
 	}
-	if response != nil && len(response.ResultPayload) > 0 {
+	if response == nil || len(response.ResultPayload) == 0 {
+		return result, nil
+	}
+	switch actionType {
+	case constants.ActionTypeOllamaModelInventory:
+		inventoryResult := &operatorv1.OllamaModelInventoryResult{}
+		if err := proto.Unmarshal(response.ResultPayload, inventoryResult); err != nil {
+			return nil, fmt.Errorf("evaluation: Ollama model command dispatch: decode inventory result: %w", err)
+		}
+		result.InventoryResult = inventoryResult
+	case constants.ActionTypeOllamaModelResidency:
+		residencyResult := &operatorv1.OllamaModelResidencyResult{}
+		if err := proto.Unmarshal(response.ResultPayload, residencyResult); err != nil {
+			return nil, fmt.Errorf("evaluation: Ollama model command dispatch: decode residency result: %w", err)
+		}
+		result.ResidencyResult = residencyResult
+	default:
 		commandResult := &operatorv1.CommandResult{}
 		if err := proto.Unmarshal(response.ResultPayload, commandResult); err != nil {
 			return nil, fmt.Errorf("evaluation: Ollama model command dispatch: decode command result: %w", err)
 		}
-		result.Result = commandResult
+		result.CommandResult = commandResult
 	}
 	return result, nil
 }

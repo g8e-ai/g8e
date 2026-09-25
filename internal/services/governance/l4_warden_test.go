@@ -72,6 +72,10 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 		msg = &operatorv1.FsGrepRequested{Path: constants.PathCurrentDir, Pattern: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypePortCheck:
 		msg = &operatorv1.CheckPortRequested{Port: 8080, ExecutionId: "exec-1"}
+	case constants.ActionTypeOllamaModelInventory:
+		msg = &operatorv1.OllamaModelInventoryRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypeOllamaModelResidency:
+		msg = &operatorv1.OllamaModelResidencyRequested{ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchLogs:
 		msg = &operatorv1.FetchLogsRequested{ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchHistory:

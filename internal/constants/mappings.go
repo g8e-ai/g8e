@@ -27,6 +27,8 @@ var eventToAction = map[EventType]ActionType{
 	Event.Operator.Mcp.CallRequested:                     ActionTypeMcpCall,
 	Event.Operator.A2a.CallRequested:                     ActionTypeA2aCall,
 	Event.Operator.PortCheck.Requested:                   ActionTypePortCheck,
+	Event.Operator.OllamaModelInventory.Requested:        ActionTypeOllamaModelInventory,
+	Event.Operator.OllamaModelResidency.Requested:        ActionTypeOllamaModelResidency,
 	Event.Operator.Inference.Requested:                   ActionTypeInference,
 	Event.Operator.ProviderBoundaryObservation.Requested: ActionTypeProviderBoundaryObservation,
 	Event.Operator.ModelProvenanceObservation.Requested:  ActionTypeModelProvenanceObservation,
@@ -123,6 +125,15 @@ var eventToResultAction = map[EventType]ActionType{
 
 	Event.Operator.FsGrep.Completed: actionResult(ActionTypeFsGrep),
 	Event.Operator.FsGrep.Failed:    actionResult(ActionTypeFsGrep),
+
+	Event.Operator.PortCheck.Completed: actionResult(ActionTypePortCheck),
+	Event.Operator.PortCheck.Failed:    actionResult(ActionTypePortCheck),
+
+	Event.Operator.OllamaModelInventory.Completed: actionResult(ActionTypeOllamaModelInventory),
+	Event.Operator.OllamaModelInventory.Failed:    actionResult(ActionTypeOllamaModelInventory),
+
+	Event.Operator.OllamaModelResidency.Completed: actionResult(ActionTypeOllamaModelResidency),
+	Event.Operator.OllamaModelResidency.Failed:    actionResult(ActionTypeOllamaModelResidency),
 
 	Event.Operator.Inference.Completed:       actionResult(ActionTypeInference),
 	Event.Operator.Inference.Failed:          actionResult(ActionTypeInference),

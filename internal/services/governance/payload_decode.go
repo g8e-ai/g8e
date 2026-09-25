@@ -42,6 +42,10 @@ func DecodePayloadForAction(actionType constants.ActionType, payload []byte) (pr
 		msg = &operatorv1.FsGrepRequested{}
 	case constants.ActionTypePortCheck:
 		msg = &operatorv1.CheckPortRequested{}
+	case constants.ActionTypeOllamaModelInventory:
+		msg = &operatorv1.OllamaModelInventoryRequested{}
+	case constants.ActionTypeOllamaModelResidency:
+		msg = &operatorv1.OllamaModelResidencyRequested{}
 	case constants.ActionTypeFetchLogs:
 		msg = &operatorv1.FetchLogsRequested{}
 	case constants.ActionTypeFetchHistory:
