@@ -555,7 +555,7 @@ class EvalJudge:
 
     @staticmethod
     def _jev_score_to_rubric(score_answer: ScoreAnswer) -> int:
-        index = int(round(score_answer.score))
+        index = round(score_answer.score)
         if index < 0 or index >= len(JEV_RUBRIC_CRITERIA):
             raise EvalJudgeError(
                 f"Jev returned out-of-range score index: {score_answer.score}"
@@ -570,7 +570,7 @@ class EvalJudge:
         score_answer: ScoreAnswer,
         noul_answer: NoulAnswer | None,
     ) -> str:
-        index = int(round(score_answer.score))
+        index = round(score_answer.score)
         selected = (
             JEV_RUBRIC_CRITERIA[index]
             if 0 <= index < len(JEV_RUBRIC_CRITERIA)

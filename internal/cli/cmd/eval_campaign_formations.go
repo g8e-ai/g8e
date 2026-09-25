@@ -334,7 +334,7 @@ func buildCampaignFormationProductionRunner(
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
 	}
-	observationLoader, err := evaluation.NewCampaignFormationObservationLoader(fileSvc)
+	observationLoader, err := newCampaignFormationObservationLoader(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
 	}
@@ -433,7 +433,7 @@ func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts fo
 	if err != nil {
 		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
-	observationLoader, err := evaluation.NewCampaignFormationObservationLoader(fileSvc)
+	observationLoader, err := newCampaignFormationObservationLoader(fileSvc, cfg)
 	if err != nil {
 		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}

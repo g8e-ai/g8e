@@ -185,16 +185,6 @@ button { font-family: inherit; cursor: pointer; }
 .freshness-badge.tone-warn { color: var(--tone-warn); }
 .freshness-badge.tone-critical { color: var(--tone-critical); }
 .freshness-badge-anchor { position: relative; display: inline-flex; }
-.header-right .freshness-badge-anchor {
-  flex: 0 0 calc(8ch + 1.75rem);
-  width: calc(8ch + 1.75rem);
-}
-.header-right .freshness-badge {
-  width: 100%;
-  justify-content: flex-start;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .freshness-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .freshness-tooltip {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -91,6 +92,14 @@ func newCampaignProviderObservationReader(fileSvc fs.RuntimeFileService, cfg *co
 		return nil, err
 	}
 	return evaluation.NewCampaignProviderObservationReaderWithRemote(fileSvc, remote)
+}
+
+func newCampaignFormationObservationLoader(fileSvc fs.RuntimeFileService, cfg *config.Config) (evaluation.FormationObservationLoader, error) {
+	reader, err := newCampaignProviderObservationReader(fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return evaluation.NewRetryingFormationObservationLoader(reader.LoadObservationWindow, 12, 250*time.Millisecond), nil
 }
 
 func preflightProviderObservationDelivery(fileSvc fs.RuntimeFileService, cfg *config.Config) error {

@@ -149,18 +149,38 @@ func BindFormation(req FormationBindingRequest) (Formation, error) {
 	return formation, nil
 }
 
-func indexFormationVariants(variants []*evalv1.ModelVariant) map[string]*evalv1.ModelVariant {
-	index := make(map[string]*evalv1.ModelVariant, len(variants))
-	for _, variant := range variants {
-		if variant == nil || variant.GetVariantId() == "" {
-			continue
-		}
-		index[variant.GetVariantId()] = variant
-	}
-	return index
+type formationVariantRegistry struct {
+	byVariantID    map[string]*evalv1.ModelVariant
+	byServedModelTag map[string]*evalv1.ModelVariant
 }
 
-func bindFormationRole(formation Formation, role FormationRole, slot *evalv1.RoleAssignment, registry map[string]*evalv1.ModelVariant) (FormationModel, error) {
+func indexFormationVariants(variants []*evalv1.ModelVariant) formationVariantRegistry {
+	registry := formationVariantRegistry{
+		byVariantID:      make(map[string]*evalv1.ModelVariant, len(variants)),
+		byServedModelTag: make(map[string]*evalv1.ModelVariant, len(variants)),
+	}
+	for _, variant := range variants {
+		if variant == nil {
+			continue
+		}
+		if variant.GetVariantId() != "" {
+			registry.byVariantID[variant.GetVariantId()] = variant
+		}
+		if tag := variant.GetServedModelTag(); tag != "" {
+			registry.byServedModelTag[tag] = variant
+		}
+	}
+	return registry
+}
+
+func lookupFormationVariant(registry formationVariantRegistry, variantID, servedModelTag string) *evalv1.ModelVariant {
+	if variant := registry.byVariantID[variantID]; variant != nil {
+		return variant
+	}
+	return registry.byServedModelTag[servedModelTag]
+}
+
+func bindFormationRole(formation Formation, role FormationRole, slot *evalv1.RoleAssignment, registry formationVariantRegistry) (FormationModel, error) {
 	catalogModel, err := formation.Model(role)
 	if err != nil {
 		return FormationModel{}, err
@@ -171,9 +191,9 @@ func bindFormationRole(formation Formation, role FormationRole, slot *evalv1.Rol
 	if slot.GetVariantId() != catalogModel.VariantID {
 		return FormationModel{}, fmt.Errorf("formation %q role %s: variant %q does not match catalog %q: %w", formation.ID, role, slot.GetVariantId(), catalogModel.VariantID, constants.ErrFormationStackMismatch)
 	}
-	variant := registry[slot.GetVariantId()]
+	variant := lookupFormationVariant(registry, slot.GetVariantId(), catalogModel.ServedModelTag)
 	if variant == nil {
-		return FormationModel{}, fmt.Errorf("formation %q role %s: variant %q: %w", formation.ID, role, slot.GetVariantId(), constants.ErrFormationRegistryBinding)
+		return FormationModel{}, fmt.Errorf("formation %q role %s: variant %q served tag %q: %w", formation.ID, role, slot.GetVariantId(), catalogModel.ServedModelTag, constants.ErrFormationRegistryBinding)
 	}
 	if variant.GetServedModelTag() != catalogModel.ServedModelTag {
 		return FormationModel{}, fmt.Errorf("formation %q role %s: served tag %q does not match catalog %q: %w", formation.ID, role, variant.GetServedModelTag(), catalogModel.ServedModelTag, constants.ErrFormationStackMismatch)
@@ -192,11 +212,11 @@ func bindFormationRole(formation Formation, role FormationRole, slot *evalv1.Rol
 	return bound, nil
 }
 
-func bindHeterogeneousRole(role FormationRole, slot *evalv1.RoleAssignment, registry map[string]*evalv1.ModelVariant) (FormationModel, error) {
+func bindHeterogeneousRole(role FormationRole, slot *evalv1.RoleAssignment, registry formationVariantRegistry) (FormationModel, error) {
 	if slot == nil || slot.GetVariantId() == "" {
 		return FormationModel{}, fmt.Errorf("formation role %s: %w", role, constants.ErrFormationRegistryBinding)
 	}
-	variant := registry[slot.GetVariantId()]
+	variant := registry.byVariantID[slot.GetVariantId()]
 	if variant == nil {
 		return FormationModel{}, fmt.Errorf("formation role %s: variant %q: %w", role, slot.GetVariantId(), constants.ErrFormationRegistryBinding)
 	}

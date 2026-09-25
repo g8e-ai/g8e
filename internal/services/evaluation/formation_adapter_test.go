@@ -84,6 +84,46 @@ func TestBindFormation_BindsUltraLightSpeedsterDigestsFromFrozenRegistry(t *test
 	assert.Equal(t, "phi3.5:3.8b-mini-instruct-q4_K_M", formation.Primary.ServedModelTag)
 }
 
+func TestBindFormation_BindsUltraLightSpeedsterByServedTagWhenFreezeVariantIDsDiffer(t *testing.T) {
+	req := ultraLightSpeedsterBindingRequest(t)
+	req.Variants = []*evalv1.ModelVariant{
+		{
+			VariantId:      "phi3-5-3-8b-mini-instruct-q4-k-m",
+			ProviderClass:  "ollama",
+			ServedModelTag: "phi3.5:3.8b-mini-instruct-q4_K_M",
+			ModelDigest:    repeatHex('a', 64),
+			ModelFamily:    "Phi-3.5",
+			ParameterCount: 3_800_000_000,
+			Quantization:   "Q4_K_M",
+		},
+		{
+			VariantId:      "gemma2-2b-instruct-q4-k-m",
+			ProviderClass:  "ollama",
+			ServedModelTag: "gemma2:2b-instruct-q4_K_M",
+			ModelDigest:    repeatHex('b', 64),
+			ModelFamily:    "Gemma 2",
+			ParameterCount: 2_000_000_000,
+			Quantization:   "Q4_K_M",
+		},
+		{
+			VariantId:      "qwen2-5-0-5b-instruct-q4-k-m",
+			ProviderClass:  "ollama",
+			ServedModelTag: "qwen2.5:0.5b-instruct-q4_K_M",
+			ModelDigest:    repeatHex('c', 64),
+			ModelFamily:    "Qwen 2.5",
+			ParameterCount: 500_000_000,
+			Quantization:   "Q4_K_M",
+		},
+	}
+
+	formation, err := BindFormation(req)
+	require.NoError(t, err)
+	assert.Equal(t, "phi3-5-3-8b-mini-instruct-q4-k-m", formation.Primary.VariantID)
+	assert.Equal(t, repeatHex('a', 64), formation.Primary.ModelDigest)
+	assert.Equal(t, "gemma2-2b-instruct-q4-k-m", formation.Assistant.VariantID)
+	assert.Equal(t, "qwen2-5-0-5b-instruct-q4-k-m", formation.Lite.VariantID)
+}
+
 func TestBindFormation_RejectsMissingRegistryVariant(t *testing.T) {
 	req := ultraLightSpeedsterBindingRequest(t)
 	req.Variants = req.Variants[:2]

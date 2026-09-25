@@ -407,6 +407,104 @@ After approval, confirm the provenance operator appears in `./g8e operator list`
 
 For architecture detail and example console output, see [Evaluations — Storage-side Provenance Operator](../architecture/evals.md#storage-side-provenance-operator) and [Model Provenance](../architecture/model-provenance.md).
 
+## Formation smoke (`ultra-light-speedster`)
+
+Use this after the evaluation stack, Inference Operator, and **both** witness Operators (Observer + Provenance) are enrolled. It validates the three-model execution-topology path (Lite → Assistant → Primary) without scheduling a full campaign matrix.
+
+### Prerequisites
+
+1. Observer and Provenance Operators enrolled on the provider host **before** the run (see sections above).
+2. All three formation served tags present on the approved Ollama endpoint:
+   - `phi3.5:3.8b-mini-instruct-q4_K_M`
+   - `gemma2:2b-instruct-q4_K_M`
+   - `qwen2.5:0.5b-instruct-q4_K_M` (pull on the provider if missing: `ollama pull qwen2.5:0.5b-instruct-q4_K_M`)
+3. Valid delegated **g8ee** app credentials on the campaign host. Copy from the ensemble volume after enrollment (not the image-baked `/app/.g8e` tree):
+
+```bash
+mkdir -p .g8e/pki/issued/apps
+docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.crt .g8e/pki/issued/apps/g8ee.crt
+docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.key .g8e/pki/issued/apps/g8ee.key
+```
+
+If ensemble was re-enrolled, repeat the copy so the host CLI uses the current app cert.
+
+### Build formation inventory
+
+Freeze the provider, then materialize a three-model inventory with exact served tags:
+
+```bash
+G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval models freeze \
+  --campaign-id eval-formations-smoke \
+  --output .g8e/eval/inventories/eval-formations-provider-freeze.json
+
+./g8e eval models materialize \
+  --from .g8e/eval/inventories/eval-formations-provider-freeze.json \
+  --tags phi3.5:3.8b-mini-instruct-q4_K_M,gemma2:2b-instruct-q4_K_M,qwen2.5:0.5b-instruct-q4_K_M \
+  --campaign-id eval-formations-smoke \
+  --output .g8e/eval/inventories/eval-formations-smoke.json
+```
+
+Catalog formation variant IDs (`phi35-mini-38b-speed`, etc.) differ from freeze variant IDs; binding resolves frozen digests by **served model tag**.
+
+### Run formation smoke
+
+```bash
+INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
+
+./g8e eval campaign formations run \
+  --formation-id ultra-light-speedster \
+  --registry-file .g8e/eval/inventories/eval-formations-smoke.json \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
+  --ollama-endpoint http://192.168.1.2:11434 \
+  --json
+```
+
+Expect `"passed": true` with three role entries (lite, assistant, primary), per-role attestation, generation throughput, and peak VRAM. Observer evidence is loaded from the gateway volume via mTLS (`/api/v1/inference/provider-observations/{attempt_id}`); host `.g8e/data` does not mirror gateway witness stores.
+
+Inspect the catalog without running:
+
+```bash
+./g8e eval campaign formations list
+./g8e eval campaign formations show ultra-light-speedster
+```
+
+### Heterogeneous campaign assignment (Phase 2)
+
+After formation smoke passes, run one assignment through the full campaign lifecycle:
+
+```bash
+RUN_ID=formation-live-$(date +%s)
+INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
+
+./g8e eval campaign init \
+  --campaign-id eval-formations-smoke \
+  --run-id "$RUN_ID" \
+  --inventory-file .g8e/eval/inventories/eval-formations-smoke.json \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
+  --system-lane
+
+./g8e eval campaign stacks generate --campaign-id eval-formations-smoke --seed 17
+./g8e eval campaign schedule --heterogeneous --run-id "$RUN_ID"
+
+./g8e eval campaign execute \
+  --run-id "$RUN_ID" \
+  --limit 1 \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
+  --ollama-endpoint http://192.168.1.2:11434
+
+./g8e eval campaign verify \
+  --run-id "$RUN_ID" \
+  --require-provider-observation \
+  --require-model-provenance
+```
+
+With three models this schedules 200 assignments (8 hypothesis stacks × 25 scenarios). Use `--limit 1` for a single smoke cell. Formation-run evidence is persisted at `.g8e/data/eval/runs/<run-id>/assignments/<assignment-id>-formation-run.json`.
+
 ## Mini smoke campaign workflow
 
 Use this to validate the full pipeline (schedule → execute → publish → explorer) in hours instead of days.

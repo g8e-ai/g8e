@@ -157,7 +157,7 @@ export function classifyFreshness(freshness: FreshnessState | 'unknown'): {
     case 'safety_stopped':
       return { label: 'Safety stopped', tone: 'critical', description: 'The feed was stopped for a safety reason.' };
     case 'source_offline':
-      return { label: 'Source offline', tone: 'critical', description: 'The mirror source is unreachable.' };
+      return { label: 'Offline', tone: 'critical', description: 'The mirror source is unreachable.' };
     case 'unknown':
       return { label: 'Connecting', tone: 'warn', description: 'Connecting to the public mirror.' };
   }

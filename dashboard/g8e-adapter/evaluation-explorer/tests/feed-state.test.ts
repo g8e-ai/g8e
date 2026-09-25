@@ -25,6 +25,7 @@ describe('classifyFreshness', () => {
 
   it('classifies source_offline as critical', () => {
     expect(classifyFreshness('source_offline').tone).toBe('critical');
+    expect(classifyFreshness('source_offline').label).toBe('Offline');
   });
 
   it('classifies unknown as warn with Connecting label', () => {
