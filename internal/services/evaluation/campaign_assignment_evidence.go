@@ -27,7 +27,6 @@ var publicEvidenceKinds = map[string]struct{}{
 	AssignmentAuditSliceKind: {}, AssignmentAuditVaultKeyKind: {},
 }
 
-var publicActivityUnavailable = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED
 
 // BuildPublicAssignmentEvidence creates the disclosure-approved activity
 // families and copies only already-classified public proof bindings.
@@ -88,14 +87,10 @@ func buildPublicActivity(result *evalv1.EvaluationAssignmentResult) (*PublicAssi
 }
 
 func buildPublicModelActivity(records []*evalv1.ModelInferenceRecord) (*evalv1.PublicModelActivity, error) {
-	family := &evalv1.PublicModelActivity{}
 	if len(records) == 0 {
-		family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE
-		family.UnavailableReason = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS
-		return family, nil
+		return publicModelActivityUnavailable(evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS), nil
 	}
-	family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED
-	family.Records = make([]*evalv1.PublicModelActivityRecord, 0, len(records))
+	observed := make([]*evalv1.PublicModelActivityRecord, 0, len(records))
 	for _, record := range records {
 		if record == nil || !validModelRole(record.GetModelRole()) || !validPublicLabel(record.GetAgentPersona()) || !validPublicLabel(record.GetModelVariant().GetVariantId()) || record.GetUsageAvailability() > evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE {
 			return nil, fmt.Errorf("evaluation: build public assignment evidence: malformed model activity record: %w", constants.ErrEvidenceArtifactMalformed)
@@ -132,70 +127,58 @@ func buildPublicModelActivity(records []*evalv1.ModelInferenceRecord) (*evalv1.P
 			value := record.GetRetryCount()
 			out.RetryCount = &value
 		}
-		family.Records = append(family.Records, out)
+		observed = append(observed, out)
 	}
-	return family, nil
+	return publicModelActivityObserved(observed), nil
 }
 
 func buildPublicToolDecisionActivity(result *evalv1.EvaluationAssignmentResult) (*evalv1.PublicToolDecisionActivity, error) {
-	family := &evalv1.PublicToolDecisionActivity{}
 	if !result.GetToolDecisionsCaptured() {
-		family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE
-		family.UnavailableReason = publicActivityUnavailable
-		return family, nil
+		return publicToolDecisionActivityUnavailable(publicActivitySourceNotCaptured), nil
 	}
-	family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED
+	records := make([]*evalv1.PublicToolDecisionActivityRecord, 0, len(result.GetToolDecisions()))
 	for _, record := range result.GetToolDecisions() {
 		if record == nil || !validPublicLabel(record.GetToolName()) || !validVerdict(record.GetOutcome()) {
 			return nil, fmt.Errorf("evaluation: build public assignment evidence: malformed tool decision: %w", constants.ErrEvidenceArtifactMalformed)
 		}
-		family.Records = append(family.Records, &evalv1.PublicToolDecisionActivityRecord{ToolLabel: record.GetToolName(), Recognized: record.GetRecognized(), Selected: record.GetSelected(), PermissionCompliant: record.GetPermissionCompliant(), Unnecessary: record.GetUnnecessary(), Outcome: record.GetOutcome(), EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
+		records = append(records, &evalv1.PublicToolDecisionActivityRecord{ToolLabel: record.GetToolName(), Recognized: record.GetRecognized(), Selected: record.GetSelected(), PermissionCompliant: record.GetPermissionCompliant(), Unnecessary: record.GetUnnecessary(), Outcome: record.GetOutcome(), EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
 	}
-	return family, nil
+	return publicToolDecisionActivityObserved(records), nil
 }
 
 func buildPublicToolCallActivity(result *evalv1.EvaluationAssignmentResult) (*evalv1.PublicToolCallActivity, error) {
-	family := &evalv1.PublicToolCallActivity{}
 	if !result.GetToolCallsCaptured() {
-		family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE
-		family.UnavailableReason = publicActivityUnavailable
-		return family, nil
+		return publicToolCallActivityUnavailable(publicActivitySourceNotCaptured), nil
 	}
-	family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED
+	records := make([]*evalv1.PublicToolCallActivityRecord, 0, len(result.GetToolCalls()))
 	for _, record := range result.GetToolCalls() {
 		if record == nil || !validPublicLabel(record.GetToolName()) || !validVerdict(record.GetSchemaOutcome()) || !validVerdict(record.GetSemanticOutcome()) {
 			return nil, fmt.Errorf("evaluation: build public assignment evidence: malformed tool call: %w", constants.ErrEvidenceArtifactMalformed)
 		}
-		family.Records = append(family.Records, &evalv1.PublicToolCallActivityRecord{ToolLabel: record.GetToolName(), ExecutionOutcome: record.GetSchemaOutcome(), SemanticOutcome: record.GetSemanticOutcome(), EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
+		records = append(records, &evalv1.PublicToolCallActivityRecord{ToolLabel: record.GetToolName(), ExecutionOutcome: record.GetSchemaOutcome(), SemanticOutcome: record.GetSemanticOutcome(), EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
 	}
-	return family, nil
+	return publicToolCallActivityObserved(records), nil
 }
 
 func buildPublicPolicyActivity(result *evalv1.EvaluationAssignmentResult) (*evalv1.PublicPolicyDecisionActivity, error) {
-	family := &evalv1.PublicPolicyDecisionActivity{}
 	if !result.GetPolicyDecisionsCaptured() {
-		family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE
-		family.UnavailableReason = publicActivityUnavailable
-		return family, nil
+		return publicPolicyActivityUnavailable(publicActivitySourceNotCaptured), nil
 	}
-	family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED
+	records := make([]*evalv1.PublicPolicyDecisionActivityRecord, 0, len(result.GetPolicyDecisions()))
 	for _, record := range result.GetPolicyDecisions() {
 		if record == nil || !validPolicyOutcome(record.GetOutcome()) || !validPublicLabelAllowEmpty(record.GetToolName()) {
 			return nil, fmt.Errorf("evaluation: build public assignment evidence: malformed policy decision: %w", constants.ErrEvidenceArtifactMalformed)
 		}
-		family.Records = append(family.Records, &evalv1.PublicPolicyDecisionActivityRecord{ToolLabel: record.GetToolName(), Outcome: record.GetOutcome(), EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
+		records = append(records, &evalv1.PublicPolicyDecisionActivityRecord{ToolLabel: record.GetToolName(), Outcome: record.GetOutcome(), EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
 	}
-	return family, nil
+	return publicPolicyActivityObserved(records), nil
 }
 
 func buildPublicGovernedActionActivity(result *evalv1.EvaluationAssignmentResult) (*evalv1.PublicGovernedActionActivity, error) {
-	family := &evalv1.PublicGovernedActionActivity{}
 	if !result.GetGovernedActionsCaptured() {
-		family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE
-		family.UnavailableReason = publicActivityUnavailable
-		return family, nil
+		return publicGovernedActionActivityUnavailable(publicActivitySourceNotCaptured), nil
 	}
-	family.Availability = evalv1.PublicActivityAvailability_PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED
+	records := make([]*evalv1.PublicGovernedActionActivityRecord, 0, len(result.GetGovernedActions()))
 	for _, record := range result.GetGovernedActions() {
 		if record == nil {
 			return nil, fmt.Errorf("evaluation: build public assignment evidence: nil governed action: %w", constants.ErrEvidenceArtifactMalformed)
@@ -204,9 +187,9 @@ func buildPublicGovernedActionActivity(result *evalv1.EvaluationAssignmentResult
 		if err != nil {
 			return nil, err
 		}
-		family.Records = append(family.Records, &evalv1.PublicGovernedActionActivityRecord{ActionLabel: "governed action", ReportedPolicyOutcome: outcome, ReceiptStatus: evalv1.PublicReceiptStatus_PUBLIC_RECEIPT_STATUS_UNAVAILABLE, EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
+		records = append(records, &evalv1.PublicGovernedActionActivityRecord{ActionLabel: "governed action", ReportedPolicyOutcome: outcome, ReceiptStatus: evalv1.PublicReceiptStatus_PUBLIC_RECEIPT_STATUS_UNAVAILABLE, EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
 	}
-	return family, nil
+	return publicGovernedActionActivityObserved(records), nil
 }
 
 func validPublicLabel(value string) bool {

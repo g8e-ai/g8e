@@ -34,6 +34,8 @@ from app.models.pubsub_messages import (
     G8eoHeartbeatPayload,
 )
 from g8e.common.v1 import common_pb2
+from g8e.operator.v1 import operator_pb2
+from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict, ParseDict
 
 
@@ -173,6 +175,57 @@ def decode_and_validate_uap_result(
         raise ValidationError(f"Invalid G8eoResultEnvelope: {e}", component="g8ee") from e
 
 
+def _parse_governance_envelope(
+    envelope_data: bytes | str | dict[str, Any],
+) -> common_pb2.GovernanceEnvelope:
+    if isinstance(envelope_data, (bytes, str)):
+        raw_json = (
+            envelope_data.decode("utf-8") if isinstance(envelope_data, bytes) else envelope_data
+        )
+    else:
+        raw_json = json.dumps(envelope_data)
+
+    envelope = common_pb2.GovernanceEnvelope()
+    ParseDict(json.loads(raw_json), envelope, ignore_unknown_fields=True)
+    return envelope
+
+
+def _parse_heartbeat_result_from_envelope(
+    envelope: common_pb2.GovernanceEnvelope,
+) -> operator_pb2.HeartbeatResult:
+    heartbeat = operator_pb2.HeartbeatResult()
+    if envelope.payload:
+        heartbeat.ParseFromString(envelope.payload)
+        return heartbeat
+
+    if envelope.HasField("intent_data") and envelope.intent_data.fields:
+        intent_dict = MessageToDict(envelope.intent_data)
+        json_format.ParseDict(intent_dict, heartbeat, ignore_unknown_fields=True)
+    return heartbeat
+
+
+def _heartbeat_payload_dict_from_proto(
+    heartbeat: operator_pb2.HeartbeatResult,
+    *,
+    event_type: str | None,
+    timestamp: Any,
+    operator_id: str,
+    operator_session_id: str,
+) -> dict[str, object]:
+    payload = json_format.MessageToDict(heartbeat, preserving_proto_field_name=True)
+    if event_type:
+        payload["event_type"] = event_type
+    if timestamp is not None:
+        payload["timestamp"] = timestamp
+    if not payload.get("operator_id"):
+        payload["operator_id"] = operator_id
+    if not payload.get("operator_session_id"):
+        payload["operator_session_id"] = operator_session_id
+    if heartbeat.status:
+        payload["heartbeat_type"] = heartbeat.status
+    return payload
+
+
 def decode_and_validate_uap_heartbeat(
     data: str | bytes | dict[str, object],
     operator_id: str,
@@ -197,25 +250,23 @@ def decode_and_validate_uap_heartbeat(
         )
 
     try:
-        envelope_dict = decode_g8eo_result_envelope(data)
+        envelope = _parse_governance_envelope(data)
+        heartbeat_proto = _parse_heartbeat_result_from_envelope(envelope)
     except (ValueError, TypeError) as e:
         raise ValidationError(
             f"Failed to decode UAP heartbeat envelope: {e}", component="g8ee"
         ) from e
 
-    raw = envelope_dict.get("payload", {})
-    if not isinstance(raw, dict):
-        raw = {}
-
-    # Ensure identity fields from envelope are present in payload
-    if not raw.get("operator_id"):
-        raw["operator_id"] = envelope_dict.get("operator_id") or operator_id
-    if not raw.get("operator_session_id"):
-        raw["operator_session_id"] = envelope_dict.get("operator_session_id") or operator_session_id
-    if not raw.get("event_type"):
-        raw["event_type"] = str(envelope_dict.get("event_type", ""))
-    if not raw.get("timestamp"):
-        raw["timestamp"] = envelope_dict.get("timestamp")
+    envelope_timestamp = (
+        envelope.timestamp.ToDatetime(tzinfo=UTC) if envelope.HasField("timestamp") else None
+    )
+    raw = _heartbeat_payload_dict_from_proto(
+        heartbeat_proto,
+        event_type=envelope.event_type or None,
+        timestamp=envelope_timestamp,
+        operator_id=envelope.operator_id or operator_id,
+        operator_session_id=envelope.operator_session_id or operator_session_id,
+    )
 
     try:
         return G8eoHeartbeatPayload.model_validate(raw)

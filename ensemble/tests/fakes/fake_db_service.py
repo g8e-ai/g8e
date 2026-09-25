@@ -23,7 +23,6 @@ class FakeDBService:
         self.operator_activities: list[dict] = []
         self.chat_messages: list[dict] = []
         self.command_results: list[dict] = []
-        self.heartbeat_updates: list[dict] = []
 
     @property
     def kv(self):
@@ -155,10 +154,5 @@ class FakeDBService:
                 "command_result": command_result,
             }
         )
-
-    async def update_operator_heartbeat(self, operator_id: str, **kwargs) -> bool:
-        self.heartbeat_updates.append({"operator_id": operator_id, **kwargs})
-        return True
-
 
 _: DocumentServiceProtocol = FakeDBService()

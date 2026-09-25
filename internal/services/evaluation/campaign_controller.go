@@ -462,15 +462,16 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	}
 	attemptID := c.newID("attempt")
 	execReq := AssignmentExecutionRequest{
-		Assignment:       assignment,
-		AttemptID:        attemptID,
-		ScenarioInput:    scenarioInput,
-		ScenarioGold:     scenarioGold,
-		ScenarioTools:    scenarioTools,
-		RequiredConcepts: requiredConcepts,
-		GradingMethod:    gradingMethod,
-		Binding:          binding,
-		OnTraceProgress:  c.assignmentTraceProgressHook(assignment, attemptID),
+		Assignment:              assignment,
+		AttemptID:               attemptID,
+		ScenarioInput:           scenarioInput,
+		ScenarioGold:            scenarioGold,
+		ScenarioTools:           scenarioTools,
+		RequiredConcepts:        requiredConcepts,
+		GradingMethod:           gradingMethod,
+		Binding:                 binding,
+		OnTraceProgress:         c.assignmentTraceProgressHook(assignment, attemptID),
+		OnFormationRoleProgress: c.assignmentFormationProgressHook(assignment, attemptID),
 	}
 	result, err := c.executor.ExecuteAssignment(ctx, execReq)
 	if err != nil {
@@ -574,6 +575,27 @@ func (c *CampaignController) assignmentTraceProgressHook(assignment *evalv1.Eval
 		req := AssignmentExecutionRequest{Assignment: assignment, AttemptID: attemptID}
 		partial, ok, err := PartialAssignmentResultFromScoredTrace(req, trace, c.newID)
 		if err != nil || !ok {
+			return err
+		}
+		return c.publication.PublishAssignmentScoredInferenceLiveEvents(ctx, assignment, partial)
+	}
+}
+
+func (c *CampaignController) assignmentFormationProgressHook(assignment *evalv1.EvaluationAssignment, attemptID string) func(context.Context, *FormationRunResult) error {
+	if c == nil || c.publication == nil || assignment == nil || attemptID == "" {
+		return nil
+	}
+	return func(ctx context.Context, formationResult *FormationRunResult) error {
+		partial, err := ImportAssignmentResultFromFormationRun(
+			AssignmentExecutionRequest{
+				Assignment: assignment,
+				AttemptID:  attemptID,
+			},
+			formationResult,
+			c.now().UTC(),
+			c.newID,
+		)
+		if err != nil {
 			return err
 		}
 		return c.publication.PublishAssignmentScoredInferenceLiveEvents(ctx, assignment, partial)

@@ -17,7 +17,6 @@ from app.constants.collections import (
 )
 from app.constants.config import (
     MAX_COMMAND_RESULTS_HISTORY,
-    MAX_HEARTBEAT_HISTORY,
 )
 from app.constants import EventType
 from app.constants.generated_status import (
@@ -32,7 +31,6 @@ from app.models.operators import (
     CommandResultRecord,
     OperatorDocument,
     OperatorHistoryEntry,
-    HeartbeatSnapshot,
 )
 from app.models.cache import ArrayUnion
 from app.services.cache.cache_aside import CacheAsideService
@@ -243,48 +241,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
             if not refreshed:
                 raise ExternalServiceError(f"Operator {operator_id} vanished after update")
             return refreshed
-
-    async def update_operator_heartbeat(
-        self,
-        operator_id: str,
-        heartbeat: HeartbeatSnapshot,
-        investigation_id: str | None,
-        case_id: str | None,
-    ) -> bool:
-        """Update Operator heartbeat and session status.
-
-        investigation_id/case_id are None when the heartbeat arrives outside an
-        investigation context; callers MUST NOT coerce absence to sentinel strings.
-        """
-        now_timestamp = now()
-        heartbeat_record = heartbeat.model_dump(mode="json")
-
-        update_data: dict[str, object] = {
-            "updated_at": now_timestamp,
-            "current_hostname": heartbeat.system_identity.hostname,
-            "latest_heartbeat_snapshot": heartbeat_record,
-            "heartbeat_history": ArrayUnion([heartbeat_record], max_length=MAX_HEARTBEAT_HISTORY),
-        }
-        if investigation_id is not None:
-            update_data["investigation_id"] = investigation_id
-        if case_id is not None:
-            update_data["case_id"] = case_id
-
-        result = await self.cache.update_document(
-            collection=self.collection,
-            document_id=operator_id,
-            data=update_data,
-            merge=True,
-        )
-
-        if result.success:
-            logger.info("Updated Operator %s heartbeat", operator_id)
-            return True
-
-        raise ExternalServiceError(
-            f"Failed to update Operator {operator_id} heartbeat: {result.error}",
-            service_name="operator_service",
-        )
 
     async def append_command_result(
         self, operator_id: str, command_result: CommandResultRecord

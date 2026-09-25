@@ -29,6 +29,7 @@ type PublicModelRoleInvocationSignal struct {
 	EventID      string
 	Completed    int
 	Total        int
+	MetricDelta  map[string]any
 }
 
 // PublicMetricAvailabilitySignal is the disclosure-safe input for projecting
@@ -93,6 +94,9 @@ func ProjectModelRoleInvocationEvent(signal PublicModelRoleInvocationSignal) (ma
 	}
 	if signal.TaskID != "" {
 		event["task_id"] = signal.TaskID
+	}
+	if len(signal.MetricDelta) > 0 {
+		event["metric_delta"] = signal.MetricDelta
 	}
 	return event, nil
 }

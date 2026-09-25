@@ -268,28 +268,11 @@ class HeartbeatSnapshotService:
             return False
 
         logger.info(
-            "[HEARTBEAT] Converting payload to HeartbeatSnapshot",
-            extra={"operator_id": operator_id, "operator_status": operator.status},
-        )
-        heartbeat = HeartbeatSnapshot.from_wire(payload)
-
-        logger.info("[HEARTBEAT] Updating operator heartbeat in database")
-        db_success = await self.operator_data_service.update_operator_heartbeat(
-            operator_id=operator_id,
-            heartbeat=heartbeat,
-            investigation_id=payload.investigation_id,
-            case_id=payload.case_id,
-        )
-
-        if not db_success:
-            logger.warning("[HEARTBEAT] Database update failed for operator %s", operator_id)
-            return False
-
-        logger.info(
             "[HEARTBEAT] Building SSE envelope for operator %s (status: %s)",
             operator_id,
             operator.status,
         )
+        heartbeat = HeartbeatSnapshot.from_wire(payload)
         envelope = HeartbeatSSEEnvelope.from_heartbeat(operator_id, operator.status, heartbeat)
         await self._push_heartbeat_sse(envelope, payload, operator)
 

@@ -26,11 +26,6 @@ function writeCookie(theme: Theme): void {
   document.cookie = `${COOKIE_NAME}=${theme}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
 }
 
-function systemTheme(): Theme {
-  if (typeof window.matchMedia !== 'function') return DEFAULT_THEME;
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-}
-
 function updateThemeColorMeta(theme: Theme): void {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
@@ -42,6 +37,17 @@ export function getDefaultTheme(): Theme {
   return DEFAULT_THEME;
 }
 
+export function getSystemTheme(): Theme {
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  return DEFAULT_THEME;
+}
+
+function resolveTheme(): Theme {
+  return readCookie() ?? getSystemTheme();
+}
+
 export function applyTheme(theme: Theme): void {
   document.documentElement.setAttribute('data-theme', theme);
   updateThemeColorMeta(theme);
@@ -50,7 +56,7 @@ export function applyTheme(theme: Theme): void {
 export function getTheme(): Theme {
   const attr = document.documentElement.getAttribute('data-theme');
   if (isValidTheme(attr)) return attr;
-  return readCookie() ?? systemTheme();
+  return resolveTheme();
 }
 
 export function setTheme(theme: Theme): void {
@@ -77,17 +83,28 @@ function handleThemeMessage(event: MessageEvent): void {
   setTheme(data.theme);
 }
 
+function handleSystemThemeChange(): void {
+  if (readCookie()) return;
+  const theme = getSystemTheme();
+  applyTheme(theme);
+  listeners.forEach((listener) => listener(theme));
+}
+
 /** Wire postMessage sync (dashboard iframe host) after the inline boot script runs. */
 export function initTheme(): () => void {
   const current = document.documentElement.getAttribute('data-theme');
   if (!isValidTheme(current)) {
-    const theme = readCookie() ?? systemTheme();
-    setTheme(theme);
+    applyTheme(resolveTheme());
   } else {
-    writeCookie(current);
     updateThemeColorMeta(current);
   }
 
+  const media = window.matchMedia?.('(prefers-color-scheme: light)');
+  media?.addEventListener('change', handleSystemThemeChange);
+
   window.addEventListener('message', handleThemeMessage);
-  return () => window.removeEventListener('message', handleThemeMessage);
+  return () => {
+    media?.removeEventListener('change', handleSystemThemeChange);
+    window.removeEventListener('message', handleThemeMessage);
+  };
 }

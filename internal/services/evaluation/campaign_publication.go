@@ -216,16 +216,15 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 			return campaignFeedPublishRequest{}, projectionErr
 		}
 		projection.VerificationMetadata = nil
-		if len(auditBindings) > 0 {
-			_, bindings, evidenceErr := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{
-				Result:       result,
-				PublicProofs: auditBindings,
-			})
-			if evidenceErr != nil {
-				return campaignFeedPublishRequest{}, evidenceErr
-			}
-			projection.EvidenceBindings = bindings
+		activity, bindings, evidenceErr := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{
+			Result:       result,
+			PublicProofs: auditBindings,
+		})
+		if evidenceErr != nil {
+			return campaignFeedPublishRequest{}, evidenceErr
 		}
+		projection.ActivitySummary = activity.Summary
+		projection.EvidenceBindings = bindings
 		record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
 	}
 	if err != nil {
@@ -385,16 +384,15 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 					return 0, projectionErr
 				}
 				projection.VerificationMetadata = exportVerificationMetadata(report, true)
-				if len(auditBindings) > 0 {
-					_, bindings, evidenceErr := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{
-						Result:       result,
-						PublicProofs: auditBindings,
-					})
-					if evidenceErr != nil {
-						return 0, evidenceErr
-					}
-					projection.EvidenceBindings = bindings
+				activity, bindings, evidenceErr := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{
+					Result:       result,
+					PublicProofs: auditBindings,
+				})
+				if evidenceErr != nil {
+					return 0, evidenceErr
 				}
+				projection.ActivitySummary = activity.Summary
+				projection.EvidenceBindings = bindings
 				record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
 			}
 			if err != nil {

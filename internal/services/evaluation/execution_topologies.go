@@ -415,13 +415,14 @@ type FormationRunResult struct {
 // governance dependencies. It never allocates a sovereign model before its
 // storage-side attestation passes.
 type FormationRunner struct {
-	provenance FormationProvenanceOperator
-	observer   FormationProviderObserver
-	allocator  FormationAllocator
-	executor   FormationRoleExecutor
-	policy     FormationPolicyGate
-	now        func() time.Time
-	newID      func(string) string
+	provenance     FormationProvenanceOperator
+	observer       FormationProviderObserver
+	allocator      FormationAllocator
+	executor       FormationRoleExecutor
+	policy         FormationPolicyGate
+	onRoleProgress func(context.Context, *FormationRunResult) error
+	now            func() time.Time
+	newID          func(string) string
 }
 
 // NewFormationRunner constructs a runner for one governed execution topology.
@@ -436,6 +437,16 @@ func NewFormationRunner(provenance FormationProvenanceOperator, observer Formati
 		newID = func(prefix string) string { return fmt.Sprintf("%s-%d", prefix, now().UTC().UnixNano()) }
 	}
 	return &FormationRunner{provenance: provenance, observer: observer, allocator: allocator, executor: executor, policy: policy, now: now, newID: newID}, nil
+}
+
+// WithRoleProgress publishes a completed role snapshot before the next role
+// begins. The callback is observational and must not mutate the supplied
+// result; the runner continues to own the terminal result.
+func (r *FormationRunner) WithRoleProgress(callback func(context.Context, *FormationRunResult) error) *FormationRunner {
+	if r != nil {
+		r.onRoleProgress = callback
+	}
+	return r
 }
 
 // Run executes one formation and returns canonical role telemetry. State is
@@ -565,6 +576,13 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 			result.AllPolicyLayersValid = true
 		}
 		result.Roles = append(result.Roles, telemetry)
+		if r.onRoleProgress != nil {
+			progress := *result
+			progress.Roles = append([]FormationRoleTelemetry(nil), result.Roles...)
+			if progressErr := r.onRoleProgress(ctx, &progress); progressErr != nil {
+				return result, fmt.Errorf("formation: role progress: %w", progressErr)
+			}
+		}
 		state = append([]byte(nil), roleResult.OutputState...)
 	}
 	result.Passed = true

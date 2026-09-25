@@ -8,7 +8,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -122,55 +121,6 @@ func operatorHostnameDisplay(op models.OperatorDocumentGo) string {
 		return hostname
 	}
 	return "-"
-}
-
-func parseOperatorHeartbeatView(raw json.RawMessage) *operatorHeartbeatView {
-	if len(raw) == 0 {
-		return nil
-	}
-
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil
-	}
-
-	view := &operatorHeartbeatView{}
-	unmarshalHeartbeatField(fields, "timestamp", &view.Timestamp)
-	unmarshalHeartbeatField(fields, "heartbeat_type", &view.HeartbeatType)
-	unmarshalHeartbeatField(fields, "system_identity", &view.SystemIdentity)
-	unmarshalHeartbeatField(fields, "os_details", &view.OSDetails)
-	unmarshalHeartbeatField(fields, "user_details", &view.UserDetails)
-	unmarshalHeartbeatField(fields, "disk_details", &view.DiskDetails)
-	unmarshalHeartbeatField(fields, "memory_details", &view.MemoryDetails)
-	unmarshalHeartbeatField(fields, "environment", &view.Environment)
-	unmarshalHeartbeatField(fields, "version_info", &view.VersionInfo)
-	unmarshalHeartbeatField(fields, "capability_flags", &view.CapabilityFlags)
-	unmarshalHeartbeatField(fields, "system_fingerprint", &view.SystemFingerprint)
-
-	if !unmarshalHeartbeatField(fields, "performance_metrics", &view.PerformanceMetrics) {
-		unmarshalHeartbeatField(fields, "performance", &view.PerformanceMetrics)
-	}
-	if !unmarshalHeartbeatField(fields, "network_info", &view.NetworkInfo) {
-		unmarshalHeartbeatField(fields, "network", &view.NetworkInfo)
-	}
-	if !unmarshalHeartbeatField(fields, "uptime_info", &view.UptimeInfo) {
-		unmarshalHeartbeatField(fields, "uptime", &view.UptimeInfo)
-	}
-
-	if view.SystemIdentity.Hostname == "" &&
-		view.PerformanceMetrics.CPUPercent == 0 &&
-		view.Timestamp == "" {
-		return nil
-	}
-	return view
-}
-
-func unmarshalHeartbeatField(fields map[string]json.RawMessage, key string, dest any) bool {
-	raw, ok := fields[key]
-	if !ok || len(raw) == 0 {
-		return false
-	}
-	return json.Unmarshal(raw, dest) == nil
 }
 
 type operatorShowOutput struct {

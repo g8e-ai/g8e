@@ -153,8 +153,15 @@ func TestFormationRunnerAttestsBeforeAllocationAndPassesStateThroughGovernance(t
 	allocator := &formationTestAllocator{}
 	executor := &formationTestExecutor{}
 	policy := &formationTestPolicy{}
+	var roleProgress []FormationRole
 	runner, err := NewFormationRunner(provenance, observer, allocator, executor, policy, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-attempt" })
 	require.NoError(t, err)
+	runner.WithRoleProgress(func(_ context.Context, progress *FormationRunResult) error {
+		require.NotNil(t, progress)
+		require.NotEmpty(t, progress.Roles)
+		roleProgress = append(roleProgress, progress.Roles[len(progress.Roles)-1].Role)
+		return nil
+	})
 
 	result, err := runner.Run(context.Background(), formation, []byte("initial"))
 	require.NoError(t, err)
@@ -171,6 +178,7 @@ func TestFormationRunnerAttestsBeforeAllocationAndPassesStateThroughGovernance(t
 	assert.Len(t, provenance.events, 3)
 	assert.Equal(t, []string{"allocate:qwen25-14b", "allocate:gemma2-2b", "allocate:llama32-1b"}, allocator.events[:3])
 	assert.Len(t, result.Roles, 3)
+	assert.Equal(t, []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary}, roleProgress)
 	assert.Equal(t, FormationAttestationVerified, result.Roles[0].AttestationStatus)
 	assert.InDelta(t, 2000.0, result.Roles[0].GenerationTokensPerSec, 0.1)
 	assert.Len(t, allocator.events, 6)

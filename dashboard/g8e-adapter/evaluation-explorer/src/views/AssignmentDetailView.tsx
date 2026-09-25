@@ -7,6 +7,7 @@
 // Never shows raw prompts, outputs, trails, or credentials.
 
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { activityFamilyHasObservedRecords } from '../contract/activity-family';
 import type { AssignmentResult } from '../contract/types';
 import { AssignmentActivitySummary } from '../components/AssignmentActivitySummary';
 import { AssignmentAuditProofRow, filterNonAuditEvidenceBindings } from '../components/AssignmentAuditProofRow';
@@ -55,12 +56,7 @@ function terminalLabel(status: AssignmentResult['terminal_status']): string {
 }
 
 function hasObservedActivity(activity: AssignmentResult['activity_summary']): boolean {
-  return Boolean(
-    activity &&
-      Object.values(activity).some(
-        (family) => family?.availability === 'observed' && family.records.length > 0,
-      ),
-  );
+  return Boolean(activity && Object.values(activity).some((family) => activityFamilyHasObservedRecords(family)));
 }
 
 export function AssignmentDetailView() {

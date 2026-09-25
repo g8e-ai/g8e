@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyTheme,
   getDefaultTheme,
+  getSystemTheme,
   getTheme,
   initTheme,
   isValidTheme,
@@ -12,6 +13,16 @@ import {
   setTheme,
   toggleTheme,
 } from '../src/utils/theme';
+
+function stubMatchMedia(matches: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(
+      () =>
+        ({ matches, addEventListener: vi.fn(), removeEventListener: vi.fn() }) as unknown as MediaQueryList,
+    ),
+  );
+}
 
 describe('theme', () => {
   beforeEach(() => {
@@ -74,7 +85,28 @@ describe('theme', () => {
     cleanup();
   });
 
-  it('defaults to dark to match the g8ed dashboard', () => {
+  it('falls back to dark when no preference is stored', () => {
     expect(getDefaultTheme()).toBe('dark');
+    stubMatchMedia(false);
+    expect(getSystemTheme()).toBe('dark');
+    expect(getTheme()).toBe('dark');
+    vi.unstubAllGlobals();
+  });
+
+  it('uses the system light preference when no cookie is set', () => {
+    stubMatchMedia(true);
+    expect(getSystemTheme()).toBe('light');
+    expect(getTheme()).toBe('light');
+    const cleanup = initTheme();
+    expect(getTheme()).toBe('light');
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('prefers the stored cookie over the system preference', () => {
+    stubMatchMedia(true);
+    setTheme('dark');
+    expect(getTheme()).toBe('dark');
+    vi.unstubAllGlobals();
   });
 });

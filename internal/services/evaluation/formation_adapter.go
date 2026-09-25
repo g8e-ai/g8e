@@ -8,6 +8,7 @@
 package evaluation
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -36,6 +37,7 @@ type FormationRunContext struct {
 	InitialState        []byte
 	InferenceSessionID  string
 	DataSessionID       string
+	OnRoleProgress      func(context.Context, *FormationRunResult) error
 }
 
 // FormationBindingFromCatalog materializes the canonical stack for one catalog

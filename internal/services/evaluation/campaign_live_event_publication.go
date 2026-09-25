@@ -286,9 +286,29 @@ func buildScoredModelRoleInvocationSignals(
 			EventID:      ScoredModelRoleInvocationIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), roleLabel) + ":event",
 			Completed:    completed,
 			Total:        total,
+			MetricDelta:  modelInferenceMetricDelta(record),
 		})
 	}
 	return signals
+}
+
+func modelInferenceMetricDelta(record *evalv1.ModelInferenceRecord) map[string]any {
+	if record == nil || record.GetUsageAvailability() != evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED {
+		return nil
+	}
+	delta := map[string]any{
+		"input_tokens":  map[string]any{"value": record.GetPromptTokens()},
+		"output_tokens": map[string]any{"value": record.GetCompletionTokens()},
+	}
+	if generationNanos := record.GetGenerationDurationNanos(); generationNanos > 0 {
+		delta["latency_ms"] = map[string]any{"value": float64(generationNanos) / float64(time.Millisecond)}
+		if completionTokens := record.GetCompletionTokens(); completionTokens > 0 {
+			delta["tokens_per_second"] = map[string]any{
+				"value": float64(completionTokens) / (float64(generationNanos) / float64(time.Second)),
+			}
+		}
+	}
+	return delta
 }
 
 func reportedModelInferences(result *evalv1.EvaluationAssignmentResult) []*evalv1.ModelInferenceRecord {

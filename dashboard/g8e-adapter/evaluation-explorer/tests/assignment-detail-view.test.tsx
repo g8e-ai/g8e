@@ -178,9 +178,9 @@ describe('AssignmentDetailView', () => {
         activity_summary: {
           model_activity: { availability: 'observed', records: [{ model_role: 'primary', variant_id: 'model-1', usage_availability: 'reported', input_tokens: { value: 0 }, output_tokens: { value: 2 }, retry_count: { value: 0 }, finish_state: 'stop', load_state: 'warm' }] },
           tool_decisions: { availability: 'observed', records: [] },
-          tool_calls: { availability: 'not_applicable', records: [] },
-          policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured', records: [] },
-          governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured', records: [] },
+          tool_calls: { availability: 'not_applicable' },
+          policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured' },
+          governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured' },
         },
         evidence_bindings: [{ sha256: 'a'.repeat(64), schema_ref: 'eval/v1', kind: 'evaluation_projection' }],
         verification_metadata: { provenance: 'bound', verifier_state: 'passed', verifier_contract_version: '2.0.0' },

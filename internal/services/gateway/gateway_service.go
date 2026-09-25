@@ -1426,6 +1426,7 @@ func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) 
 // heartbeatUpdate is the typed patch payload for operator document heartbeat updates.
 type heartbeatUpdate struct {
 	LatestHeartbeatSnapshot json.RawMessage `json:"latest_heartbeat_snapshot"`
+	CurrentHostname         string          `json:"current_hostname,omitempty"`
 	UpdatedAt               time.Time       `json:"updated_at"`
 }
 
@@ -1442,20 +1443,21 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	var snapshot json.RawMessage
-	if env.IntentData != nil {
-		snapshotBytes, err := protojson.Marshal(env.IntentData)
-		if err != nil {
-			ls.logger.Warn("heartbeat: failed to marshal intent data", "operator_id", env.GetOperatorId(), "error", err)
-			return
-		}
-		snapshot = snapshotBytes
-	} else {
-		snapshot = json.RawMessage(data)
+	heartbeat, err := heartbeatResultFromEnvelope(&env)
+	if err != nil {
+		ls.logger.Warn("heartbeat: failed to decode result", "operator_id", env.GetOperatorId(), "error", err)
+		return
+	}
+
+	snapshot, err := marshalHeartbeatSnapshot(heartbeat)
+	if err != nil {
+		ls.logger.Warn("heartbeat: failed to marshal snapshot", "operator_id", env.GetOperatorId(), "error", err)
+		return
 	}
 
 	update, err := json.Marshal(heartbeatUpdate{
 		LatestHeartbeatSnapshot: snapshot,
+		CurrentHostname:         currentHostnameFromHeartbeat(heartbeat),
 		UpdatedAt:               time.Now().UTC(),
 	})
 	if err != nil {

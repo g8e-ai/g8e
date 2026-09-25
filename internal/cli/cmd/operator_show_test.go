@@ -22,10 +22,10 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-func TestParseOperatorHeartbeatView_ProtoFormat(t *testing.T) {
+func TestParseOperatorHeartbeatView_HeartbeatResultSnapshot(t *testing.T) {
 	raw := json.RawMessage(`{
 		"timestamp": "2026-09-18T12:00:00Z",
-		"heartbeat_type": "automatic",
+		"status": "automatic",
 		"system_identity": {
 			"hostname": "worker-1",
 			"os": "linux",
@@ -49,34 +49,27 @@ func TestParseOperatorHeartbeatView_ProtoFormat(t *testing.T) {
 	require.NotNil(t, view)
 	assert.Equal(t, "worker-1", view.SystemIdentity.Hostname)
 	assert.Equal(t, constants.Platform("linux"), view.SystemIdentity.OS)
+	assert.Equal(t, "automatic", view.HeartbeatType)
 	assert.Equal(t, 12.5, view.PerformanceMetrics.CPUPercent)
 	assert.Equal(t, "2h 15m", view.UptimeInfo.Uptime)
 }
 
-func TestParseOperatorHeartbeatView_PythonFormat(t *testing.T) {
+func TestParseOperatorHeartbeatView_AcceptsProtojsonCamelCase(t *testing.T) {
 	raw := json.RawMessage(`{
 		"timestamp": "2026-09-18T12:00:00Z",
-		"heartbeat_type": "automatic",
-		"system_identity": {
-			"hostname": "web-server-1"
+		"status": "automatic",
+		"systemIdentity": {
+			"hostname": "legacy-host"
 		},
-		"performance": {
-			"cpu_percent": 5.0
-		},
-		"network": {
-			"interfaces": ["eth0"]
-		},
-		"uptime": {
-			"uptime_seconds": 120
+		"performanceMetrics": {
+			"cpuPercent": 5.0
 		}
 	}`)
 
 	view := parseOperatorHeartbeatView(raw)
 	require.NotNil(t, view)
-	assert.Equal(t, "web-server-1", view.SystemIdentity.Hostname)
+	assert.Equal(t, "legacy-host", view.SystemIdentity.Hostname)
 	assert.Equal(t, 5.0, view.PerformanceMetrics.CPUPercent)
-	assert.Equal(t, int64(120), view.UptimeInfo.UptimeSeconds)
-	assert.Equal(t, []string{"eth0"}, view.NetworkInfo.Interfaces)
 }
 
 func TestFindOperatorByIDOrSession(t *testing.T) {
@@ -120,7 +113,7 @@ func TestOperatorShowCmdWithConfig_PrintsHeartbeatDetails(t *testing.T) {
 
 	heartbeat := json.RawMessage(`{
 		"timestamp": "2026-09-18T12:00:00Z",
-		"heartbeat_type": "automatic",
+		"status": "automatic",
 		"system_identity": {
 			"hostname": "dev-host",
 			"os": "linux",

@@ -623,18 +623,23 @@ function assertPublicScenarioSummary(value: unknown, path: string): void {
 
 function assertPublicActivityFamily(value: unknown, path: string, validateRecord: (value: unknown, path: string) => void): void {
   assertObject(value, path);
-  rejectUnknown(value, ['availability', 'unavailable_reason', 'records'], path);
   assertEnum(value.availability, ACTIVITY_AVAILABILITIES, `${path}.availability`);
   if (value.availability === 'observed') {
+    rejectUnknown(value, ['availability', 'records'], path);
     assert(value.unavailable_reason === undefined, `${path}.unavailable_reason`, 'observed activity cannot have unavailable_reason');
-  } else {
-    assertEnum(value.unavailable_reason, PUBLIC_UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
-    if (value.availability === 'not_applicable') assert(value.unavailable_reason === 'scenario_not_applicable', `${path}.unavailable_reason`, 'not_applicable activity requires scenario_not_applicable');
+    assert(Array.isArray(value.records), `${path}.records`, 'expected array');
+    assert(value.records.length <= 128, `${path}.records`, 'expected at most 128 entries');
+    for (let index = 0; index < value.records.length; index++) validateRecord(value.records[index], `${path}.records[${index}]`);
+    return;
   }
-  assert(Array.isArray(value.records), `${path}.records`, 'expected array');
-  assert(value.records.length <= 128, `${path}.records`, 'expected at most 128 entries');
-  for (let index = 0; index < value.records.length; index++) validateRecord(value.records[index], `${path}.records[${index}]`);
-  if (value.availability !== 'observed') assert(value.records.length === 0, `${path}.records`, 'unavailable activity cannot contain records');
+  if (value.availability === 'unavailable') {
+    rejectUnknown(value, ['availability', 'unavailable_reason'], path);
+    assertEnum(value.unavailable_reason, PUBLIC_UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
+    return;
+  }
+  rejectUnknown(value, ['availability'], path);
+  assert(value.unavailable_reason === undefined, `${path}.unavailable_reason`, 'not_applicable activity cannot have unavailable_reason');
+  assert(value.records === undefined, `${path}.records`, 'not_applicable activity cannot contain records');
 }
 
 function assertPublicModelActivityRecord(value: unknown, path: string): void {

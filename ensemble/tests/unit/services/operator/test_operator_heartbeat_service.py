@@ -362,13 +362,12 @@ class TestHeartbeatSnapshotServiceOperatorValidation:
 
 
 class TestHeartbeatSnapshotServiceProcessMessage:
-    """process_heartbeat_message - full pipeline using G8eoHeartbeatPayload directly."""
+    """process_heartbeat_message - SSE delivery using G8eoHeartbeatPayload directly."""
 
     @pytest.fixture
     def mock_operator_data_service(self):
         svc = MagicMock()
         svc.get_operator = AsyncMock()
-        svc.update_operator_heartbeat = AsyncMock(return_value=True)
         return svc
 
     @pytest.fixture
@@ -392,7 +391,7 @@ class TestHeartbeatSnapshotServiceProcessMessage:
             bound_web_session_id="web-999",
         )
 
-    async def test_success_writes_cache_and_publishes_sse(
+    async def test_success_publishes_sse(
         self, service, mock_operator_data_service, mock_event_service, bound_operator
     ):
         mock_operator_data_service.get_operator.return_value = bound_operator
@@ -402,24 +401,7 @@ class TestHeartbeatSnapshotServiceProcessMessage:
         )
 
         assert result is True
-        mock_operator_data_service.update_operator_heartbeat.assert_called_once()
         mock_event_service.publish.assert_called()
-
-    async def test_cache_write_called_with_typed_heartbeat(
-        self, service, mock_operator_data_service, bound_operator
-    ):
-        mock_operator_data_service.get_operator.return_value = bound_operator
-
-        await service.process_heartbeat_message(
-            "op-222",
-            "op-session-111",
-            _make_payload(investigation_id="inv-789", case_id="case-456"),
-        )
-
-        _, kwargs = mock_operator_data_service.update_operator_heartbeat.call_args
-        assert isinstance(kwargs["heartbeat"], HeartbeatSnapshot)
-        assert kwargs["investigation_id"] == "inv-789"
-        assert kwargs["case_id"] == "case-456"
 
     async def test_sse_payload_status_set_from_operator(
         self, service, mock_operator_data_service, mock_event_service
@@ -439,27 +421,13 @@ class TestHeartbeatSnapshotServiceProcessMessage:
         assert isinstance(event, SessionEvent)
         assert event.payload.status == OperatorStatus.BOUND
 
-    async def test_stale_timestamp_never_reaches_cache(self, service, mock_operator_data_service):
+    async def test_stale_timestamp_is_rejected(self, service, mock_operator_data_service):
         result = await service.process_heartbeat_message(
             "op-222", "op-session-111", _make_payload(timestamp="2000-01-01T00:00:00+00:00")
         )
 
         assert result is False
-        mock_operator_data_service.update_operator_heartbeat.assert_not_called()
         mock_operator_data_service.get_operator.assert_not_called()
-
-    async def test_cache_write_failure_returns_false(
-        self, service, mock_operator_data_service, bound_operator
-    ):
-        mock_operator_data_service.get_operator.return_value = bound_operator
-        # Explicitly return False to simulate a CacheAside write failure
-        mock_operator_data_service.update_operator_heartbeat = AsyncMock(return_value=False)
-
-        result = await service.process_heartbeat_message(
-            "op-222", "op-session-111", _make_payload()
-        )
-
-        assert result is False
 
     async def test_identity_mismatch_returns_false(
         self, service, mock_operator_data_service, bound_operator

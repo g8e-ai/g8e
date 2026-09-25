@@ -15,7 +15,7 @@ import {
   visibleStreamEvents,
 } from '../views/derived';
 import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
-import type { AssignmentResult, LiveEvent, MetricValue } from '../contract/types';
+import type { AssignmentResult, LiveEvent, MetricValue, PublicModelActivityRecord } from '../contract/types';
 import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
 const STREAM_PAGE_SIZE = 25;
 const STREAM_EMPTY_METRIC = '--';
@@ -26,19 +26,102 @@ function eventTime(iso: string): string {
   return date.toLocaleTimeString('en-US', { hour12: false });
 }
 
-function assignmentMetricValues(event: LiveEvent, assignment: AssignmentResult | undefined): Record<string, MetricValue> {
-  const values: Record<string, MetricValue> = {
-    ...(event.metric_delta ?? {}),
-    ...(assignment?.metric_values ?? {}),
-  };
-  const resources = assignment?.resource_summary;
-  if (values.latency_ms === undefined && resources?.latency_ms) values.latency_ms = resources.latency_ms;
-  if (values.input_tokens === undefined && resources?.input_tokens) values.input_tokens = resources.input_tokens;
-  if (values.output_tokens === undefined && resources?.output_tokens) values.output_tokens = resources.output_tokens;
-  if (values.thinking_tokens === undefined && resources?.thinking_tokens) values.thinking_tokens = resources.thinking_tokens;
-  if (values.cache_tokens === undefined && resources?.cache_tokens) values.cache_tokens = resources.cache_tokens;
-  if (values.retries === undefined && resources?.retries) values.retries = resources.retries;
+function isAssignmentLevelEvent(event: LiveEvent): boolean {
+  return (
+    event.kind === 'assignment_started' ||
+    event.kind === 'assignment_completed' ||
+    event.kind === 'assignment_failed' ||
+    event.kind === 'metric_updated'
+  );
+}
+
+function normalizeMetricDelta(delta: Record<string, MetricValue> | undefined): Record<string, MetricValue> {
+  if (!delta) return {};
+  const values: Record<string, MetricValue> = { ...delta };
+  const passRate = values.pass_rate;
+  if (passRate !== undefined) {
+    if (values.deterministic_pass_rate === undefined) {
+      values.deterministic_pass_rate = passRate;
+    }
+    if (values.pass === undefined) {
+      if (passRate.value !== undefined) {
+        values.pass = { value: passRate.value >= 1 ? 1 : 0 };
+      } else if (passRate.unavailable_reason) {
+        values.pass = { unavailable_reason: passRate.unavailable_reason };
+      }
+    }
+    delete values.pass_rate;
+  }
   return values;
+}
+
+function findModelActivityRecord(
+  event: LiveEvent,
+  assignment: AssignmentResult | undefined,
+): PublicModelActivityRecord | undefined {
+  const modelActivity = assignment?.activity_summary?.model_activity;
+  const records = modelActivity?.availability === 'observed' ? modelActivity.records : undefined;
+  if (!records?.length || !event.role) return undefined;
+  const roleMatches = records.filter((record) => record.model_role === event.role);
+  if (roleMatches.length === 0) return undefined;
+  if (event.variant_id) {
+    const exact = roleMatches.find((record) => record.variant_id === event.variant_id);
+    if (exact) return exact;
+  }
+  return roleMatches[0];
+}
+
+function roleActivityMetricValues(record: PublicModelActivityRecord): Record<string, MetricValue> {
+  const values: Record<string, MetricValue> = {};
+  if (record.input_tokens) values.input_tokens = record.input_tokens;
+  if (record.output_tokens) values.output_tokens = record.output_tokens;
+  if (record.thinking_tokens) values.thinking_tokens = record.thinking_tokens;
+  if (record.cache_tokens) values.cache_tokens = record.cache_tokens;
+  if (record.retry_count) values.retries = record.retry_count;
+  if (record.total_duration_nanos?.value !== undefined) {
+    values.latency_ms = { value: record.total_duration_nanos.value / 1_000_000 };
+  } else if (record.total_duration_nanos?.unavailable_reason) {
+    values.latency_ms = { unavailable_reason: record.total_duration_nanos.unavailable_reason };
+  }
+  return values;
+}
+
+function applyAssignmentResourceSummary(
+  values: Record<string, MetricValue>,
+  assignment: AssignmentResult | undefined,
+): Record<string, MetricValue> {
+  const resources = assignment?.resource_summary;
+  if (!resources) return values;
+  if (values.latency_ms === undefined && resources.latency_ms) values.latency_ms = resources.latency_ms;
+  if (values.input_tokens === undefined && resources.input_tokens) values.input_tokens = resources.input_tokens;
+  if (values.output_tokens === undefined && resources.output_tokens) values.output_tokens = resources.output_tokens;
+  if (values.thinking_tokens === undefined && resources.thinking_tokens) values.thinking_tokens = resources.thinking_tokens;
+  if (values.cache_tokens === undefined && resources.cache_tokens) values.cache_tokens = resources.cache_tokens;
+  if (values.retries === undefined && resources.retries) values.retries = resources.retries;
+  return values;
+}
+
+function assignmentMetricValues(event: LiveEvent, assignment: AssignmentResult | undefined): Record<string, MetricValue> {
+  const normalizedDelta = normalizeMetricDelta(event.metric_delta);
+  if (isAssignmentLevelEvent(event)) {
+    return applyAssignmentResourceSummary(
+      {
+        ...normalizedDelta,
+        ...(assignment?.metric_values ?? {}),
+      },
+      assignment,
+    );
+  }
+
+  const roleRecord = findModelActivityRecord(event, assignment);
+  if (roleRecord) {
+    return {
+      ...normalizedDelta,
+      ...roleActivityMetricValues(roleRecord),
+    };
+  }
+
+  return normalizedDelta;
 }
 
 function displayLabel(value: string | undefined): string | undefined {
@@ -101,6 +184,14 @@ function assignmentTokensPerSecond(
   event: LiveEvent,
   assignment: AssignmentResult | undefined,
 ): MetricValue | undefined {
+  const roleRecord = !isAssignmentLevelEvent(event) ? findModelActivityRecord(event, assignment) : undefined;
+  if (roleRecord?.output_tokens?.value !== undefined && roleRecord.generation_duration_nanos?.value !== undefined) {
+    const generationSeconds = roleRecord.generation_duration_nanos.value / 1_000_000_000;
+    if (generationSeconds > 0) {
+      return { value: roleRecord.output_tokens.value / generationSeconds };
+    }
+  }
+
   const values = assignmentMetricValues(event, assignment);
   const output = values.output_tokens?.value;
   const generationMs = assignment?.benchmark_observations?.timing?.generation_ms?.value;

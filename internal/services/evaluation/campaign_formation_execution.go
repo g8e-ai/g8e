@@ -140,6 +140,11 @@ func (e *CampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req A
 		InferenceSessionID:  req.Binding.InferenceOperatorSessionID,
 		DataSessionID:       req.Binding.DataOperatorSessionID,
 	}
+	if req.OnFormationRoleProgress != nil {
+		runContext.OnRoleProgress = func(progressCtx context.Context, formationResult *FormationRunResult) error {
+			return req.OnFormationRoleProgress(progressCtx, formationResult)
+		}
+	}
 	formationResult, err := e.runner.RunHeterogeneousFormation(ctx, binding, runContext, initialState)
 	if err != nil {
 		return nil, assignmentExecutionError("evaluation: execute heterogeneous assignment", err)

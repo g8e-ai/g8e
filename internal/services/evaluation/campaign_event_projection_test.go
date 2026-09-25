@@ -146,7 +146,7 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		Target: &evalv1.EvaluationAssignment_Homogeneous{
 			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
-				DesignatedRole: evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+				DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
 				CandidateVariant: &evalv1.ModelVariant{VariantId: "qwen3-4b"},
 			},
 		},
@@ -160,8 +160,8 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		CompletedAt:     timestamppb.New(time.Unix(1_700_000_010, 0).UTC()),
 		ModelInferences: []*evalv1.ModelInferenceRecord{{
-			ModelRole: evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
-			ModelVariant: &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			ModelRole:         evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+			ModelVariant:      &evalv1.ModelVariant{VariantId: "qwen3-4b"},
 			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
 		}},
 		DeterministicGrades: []*evalv1.DeterministicGrade{{
@@ -174,8 +174,8 @@ func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *test
 	result.ResultDigest = digest
 	store := NewStore(files)
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
-		SchemaVersion: CampaignSchemaVersion,
-		RunId:         runID,
+		SchemaVersion:   CampaignSchemaVersion,
+		RunId:           runID,
 		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "campaign-1"},
 	}))
 	require.NoError(t, store.SaveAssignment(context.Background(), assignment))
@@ -222,8 +222,8 @@ func TestCampaignPublication_PublishesInvocationAtAssignmentStart(t *testing.T) 
 	}
 	store := NewStore(files)
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
-		SchemaVersion: CampaignSchemaVersion,
-		RunId:         runID,
+		SchemaVersion:   CampaignSchemaVersion,
+		RunId:           runID,
 		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "campaign-1"},
 	}))
 	require.NoError(t, store.SaveAssignment(context.Background(), assignment))
@@ -232,6 +232,7 @@ func TestCampaignPublication_PublishesInvocationAtAssignmentStart(t *testing.T) 
 	var body map[string]any
 	require.NoError(t, json.Unmarshal([]byte(exporter.records[0].RecordBytes), &body))
 	assert.Equal(t, "stage_updated", body["kind"])
+	assert.NotContains(t, body, "metric_delta")
 }
 
 func TestCampaignPublication_PublishesScoredInferenceDuringTraceProgress(t *testing.T) {
@@ -257,8 +258,8 @@ func TestCampaignPublication_PublishesScoredInferenceDuringTraceProgress(t *test
 	}
 	store := NewStore(files)
 	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
-		SchemaVersion: CampaignSchemaVersion,
-		RunId:         runID,
+		SchemaVersion:   CampaignSchemaVersion,
+		RunId:           runID,
 		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "campaign-1"},
 	}))
 	require.NoError(t, store.SaveAssignment(context.Background(), assignment))
@@ -277,9 +278,114 @@ func TestCampaignPublication_PublishesScoredInferenceDuringTraceProgress(t *test
 	require.NotNil(t, partial)
 	require.NoError(t, coordinator.PublishAssignmentScoredInferenceLiveEvents(context.Background(), assignment, partial))
 	require.Len(t, exporter.records, 1)
+	assertScoredInvocationMetricDelta(t, exporter.records[0].RecordBytes, "primary", 12, 34)
+}
+
+func TestCampaignPublication_PublishesFormationRoleProgressWithPerRoleMetrics(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	variants := testHeterogeneousVariants()
+	stack := mustHeterogeneousStack(t)
+	req := heterogeneousAssignmentExecutionRequest(t, stack, variants)
+	assignment := req.Assignment
+	assignment.SchemaVersion = CampaignSchemaVersion
+	store := NewStore(files)
+	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion:   CampaignSchemaVersion,
+		RunId:           assignment.GetRunId(),
+		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: assignment.GetCampaignId()},
+	}))
+	require.NoError(t, store.SaveAssignment(context.Background(), assignment))
+	observedAt := time.Unix(1_700_000_100, 0).UTC()
+	newID := func(prefix string) string { return prefix + "-1" }
+
+	publishProgress := func(roles []partialFormationRoleSpec) {
+		formationResult := partialFormationRunResult(stack, variants, roles)
+		partial, err := ImportAssignmentResultFromFormationRun(req, formationResult, observedAt, newID)
+		require.NoError(t, err)
+		require.NoError(t, coordinator.PublishAssignmentScoredInferenceLiveEvents(context.Background(), assignment, partial))
+	}
+
+	publishProgress([]partialFormationRoleSpec{{FormationRoleLite, 116, 8, 40}})
+	require.Len(t, exporter.records, 1)
+	assertScoredInvocationMetricDelta(t, exporter.records[0].RecordBytes, "lite", 116, 8)
+
+	publishProgress([]partialFormationRoleSpec{
+		{FormationRoleLite, 116, 8, 40},
+		{FormationRoleAssistant, 152, 12, 55},
+	})
+	require.Len(t, exporter.records, 2)
+	assertScoredInvocationMetricDelta(t, exporter.records[1].RecordBytes, "assistant", 152, 12)
+
+	publishProgress([]partialFormationRoleSpec{
+		{FormationRoleLite, 116, 8, 40},
+		{FormationRoleAssistant, 152, 12, 55},
+		{FormationRolePrimary, 168, 16, 57},
+	})
+	require.Len(t, exporter.records, 3)
+	assertScoredInvocationMetricDelta(t, exporter.records[2].RecordBytes, "primary", 168, 16)
+}
+
+type partialFormationRoleSpec struct {
+	role             FormationRole
+	promptTokens     uint32
+	completionTokens uint32
+	latencyMs        int
+}
+
+func partialFormationRunResult(stack *evalv1.HeterogeneousStackDefinition, variants []*evalv1.ModelVariant, roles []partialFormationRoleSpec) *FormationRunResult {
+	result := &FormationRunResult{
+		FormationID: stack.GetStackId(),
+		Roles:       make([]FormationRoleTelemetry, 0, len(roles)),
+	}
+	for _, spec := range roles {
+		variant := variantForFormationRole(stack, spec.role, variants)
+		result.Roles = append(result.Roles, FormationRoleTelemetry{
+			Role:                    spec.role,
+			Model:                   formationModelFromVariant(variant),
+			ProviderAttemptID:       "provider-" + string(spec.role),
+			UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+			PromptTokens:            spec.promptTokens,
+			GenerationTokens:        spec.completionTokens,
+			GenerationDurationNanos: uint64(spec.latencyMs) * uint64(time.Millisecond),
+		})
+	}
+	return result
+}
+
+func variantForFormationRole(stack *evalv1.HeterogeneousStackDefinition, role FormationRole, variants []*evalv1.ModelVariant) *evalv1.ModelVariant {
+	variantID := ""
+	switch role {
+	case FormationRolePrimary:
+		variantID = stack.GetPrimarySlot().GetVariantId()
+	case FormationRoleAssistant:
+		variantID = stack.GetAssistantSlot().GetVariantId()
+	case FormationRoleLite:
+		variantID = stack.GetLiteSlot().GetVariantId()
+	}
+	for _, variant := range variants {
+		if variant.GetVariantId() == variantID {
+			return variant
+		}
+	}
+	return nil
+}
+
+func assertScoredInvocationMetricDelta(t *testing.T, recordBytes string, role string, inputTokens float64, outputTokens float64) {
+	t.Helper()
 	var body map[string]any
-	require.NoError(t, json.Unmarshal([]byte(exporter.records[0].RecordBytes), &body))
+	require.NoError(t, json.Unmarshal([]byte(recordBytes), &body))
 	assert.Equal(t, "stage_updated", body["kind"])
+	assert.Equal(t, role, body["role"])
+	delta, ok := body["metric_delta"].(map[string]any)
+	require.True(t, ok)
+	input, ok := delta["input_tokens"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, inputTokens, input["value"])
+	output, ok := delta["output_tokens"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, outputTokens, output["value"])
 }
 
 func ptrFloat64(value float64) *float64 {

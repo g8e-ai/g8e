@@ -427,20 +427,6 @@ class OperatorDataServiceProtocol(Protocol):
         """Update a document."""
         raise NotImplementedError
 
-    async def update_operator_heartbeat(
-        self,
-        operator_id: str,
-        heartbeat: HeartbeatSnapshot,
-        investigation_id: str | None,
-        case_id: str | None,
-    ) -> bool:
-        """Update operator heartbeat and session status.
-
-        investigation_id/case_id are None when the heartbeat arrives outside an
-        investigation context; callers MUST NOT coerce absence to sentinel strings.
-        """
-        raise NotImplementedError
-
     async def append_command_result(
         self, operator_id: str, command_result: CommandResultRecord
     ) -> bool:

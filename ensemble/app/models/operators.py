@@ -475,8 +475,7 @@ class HeartbeatSnapshot(G8eBaseModel):
         """Create HeartbeatSnapshot from the typed g8eo wire payload.
 
         Canonical shape defined in protocol/proto/operator.proto (HeartbeatSnapshot message).
-        Validation happens once at the pub/sub boundary in heartbeat_service.py
-        before this is called.
+        Validation happens once at the pub/sub boundary before this is called.
         """
         return cls(
             timestamp=now(),

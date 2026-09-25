@@ -581,11 +581,10 @@ export interface PublicGovernedActionActivityRecord {
   evidence_source: PublicActivityEvidenceSource;
 }
 
-export interface PublicActivityFamily<T> {
-  availability: ActivityAvailability;
-  unavailable_reason?: PublicUnavailableReason;
-  records: T[];
-}
+export type PublicActivityFamily<T> =
+  | { availability: 'observed'; records: T[] }
+  | { availability: 'unavailable'; unavailable_reason: PublicUnavailableReason }
+  | { availability: 'not_applicable' };
 
 export interface PublicAssignmentActivity {
   model_activity: PublicActivityFamily<PublicModelActivityRecord>;

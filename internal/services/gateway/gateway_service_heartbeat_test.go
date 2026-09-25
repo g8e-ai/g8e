@@ -16,11 +16,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
@@ -36,17 +37,19 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 		err = ls.GetDocStore().DocSet("operators", "op-123", opBytes)
 		require.NoError(t, err)
 
+		heartbeat := &operatorv1.HeartbeatResult{
+			OperatorId: "op-123",
+			Status:     "automatic",
+			SystemIdentity: &operatorv1.SystemIdentity{
+				Hostname: "worker-1",
+			},
+		}
+		payload, err := proto.Marshal(heartbeat)
+		require.NoError(t, err)
+
 		envelope := &commonv1.GovernanceEnvelope{
 			OperatorId: "op-123",
-			IntentData: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					"uptime": structpb.NewStructValue(&structpb.Struct{
-						Fields: map[string]*structpb.Value{
-							"seconds": structpb.NewNumberValue(12345),
-						},
-					}),
-				},
-			},
+			Payload:    payload,
 		}
 		heartbeatBytes, err := protojson.Marshal(envelope)
 		require.NoError(t, err)
@@ -57,6 +60,8 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, updatedDoc)
 		assert.Contains(t, updatedDoc.Data, "latest_heartbeat_snapshot")
+		assert.Contains(t, updatedDoc.Data, "current_hostname")
+		assert.Contains(t, updatedDoc.Data, "worker-1")
 	})
 
 	t.Run("Malformed JSON logs and returns", func(t *testing.T) {

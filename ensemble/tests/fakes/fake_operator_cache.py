@@ -68,9 +68,6 @@ class FakeOperatorCache:
     ) -> CacheOperationResult:
         return CacheOperationResult(success=True, document_id=document_id)
 
-    async def update_operator_heartbeat(self, operator_id, heartbeat, investigation_id, case_id):
-        return True
-
     async def append_command_result(self, operator_id, command_result):
         return True
 

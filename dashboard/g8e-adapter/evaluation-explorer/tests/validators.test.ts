@@ -337,13 +337,15 @@ describe('schema 1.4 assignment contract', () => {
   });
 
   it('rejects an unknown nested activity field', () => {
+    const modelActivity = fixtureEnrichedAssignmentResult.activity_summary!.model_activity;
+    if (modelActivity.availability !== 'observed') throw new Error('fixture must provide observed model activity');
     const bad = {
       ...fixtureEnrichedAssignmentResult,
       activity_summary: {
         ...fixtureEnrichedAssignmentResult.activity_summary!,
         model_activity: {
-          ...fixtureEnrichedAssignmentResult.activity_summary!.model_activity,
-          records: [{ ...fixtureEnrichedAssignmentResult.activity_summary!.model_activity.records[0]!, private_inference_id: 'secret' }],
+          ...modelActivity,
+          records: [{ ...modelActivity.records[0]!, private_inference_id: 'secret' }],
         },
       },
     };
@@ -355,7 +357,7 @@ describe('schema 1.4 assignment contract', () => {
       ...fixtureEnrichedAssignmentResult,
       activity_summary: {
         ...fixtureEnrichedAssignmentResult.activity_summary!,
-        tool_calls: { availability: 'unavailable', unavailable_reason: 'because', records: [] },
+        tool_calls: { availability: 'unavailable', unavailable_reason: 'because' },
       },
     };
     expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);

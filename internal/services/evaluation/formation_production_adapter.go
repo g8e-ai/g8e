@@ -77,7 +77,7 @@ func NewFormationProductionRunner(deps FormationProductionDependencies) (*Format
 		newID = func(prefix string) string { return fmt.Sprintf("%s-%d", prefix, now().UTC().UnixNano()) }
 	}
 	registry := InferenceVariantsFromEvalRegistry(deps.Variants)
-	return NewFormationRunner(
+	runner, err := NewFormationRunner(
 		&formationProductionProvenance{preflight: deps.ProvenancePreflight},
 		&formationProductionObserver{loader: deps.ObservationLoader},
 		&formationProductionAllocator{
@@ -99,6 +99,10 @@ func NewFormationProductionRunner(deps FormationProductionDependencies) (*Format
 		now,
 		newID,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return runner.WithRoleProgress(deps.RunContext.OnRoleProgress), nil
 }
 
 // NewCampaignFormationObservationLoader constructs a reader-backed observation

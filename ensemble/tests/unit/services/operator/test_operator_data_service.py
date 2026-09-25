@@ -23,8 +23,6 @@ from app.models.operators import (
 )
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import OperatorDataServiceProtocol
-from tests.fakes.factories import build_operator_heartbeat
-
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 
@@ -115,38 +113,6 @@ class TestOperatorDataService:
 
         is_owned = await service.validate_cli_session_ownership(cli_session_id, operator_session_id)
         assert is_owned is False
-
-    async def test_update_operator_heartbeat_success(self, service, mock_cache):
-        operator_id = "op-123"
-        hb = build_operator_heartbeat()
-        mock_cache.update_document.return_value = CacheOperationResult(success=True)
-
-        success = await service.update_operator_heartbeat(
-            operator_id, hb, investigation_id="inv-123", case_id="case-123"
-        )
-
-        assert success is True
-        mock_cache.update_document.assert_called_once()
-        _, kwargs = mock_cache.update_document.call_args
-        assert kwargs["document_id"] == operator_id
-        assert "current_hostname" in kwargs["data"]
-        assert "heartbeat_history" in kwargs["data"]
-
-    async def test_update_operator_heartbeat_failure_raises_external_service_error(
-        self, service, mock_cache
-    ):
-        operator_id = "op-123"
-        hb = build_operator_heartbeat()
-        mock_cache.update_document.return_value = CacheOperationResult(
-            success=False, error="db error"
-        )
-
-        with pytest.raises(
-            ExternalServiceError, match="Failed to update Operator op-123 heartbeat: db error"
-        ):
-            await service.update_operator_heartbeat(
-                operator_id, hb, investigation_id="inv-123", case_id="case-123"
-            )
 
     async def test_append_command_result(self, service, mock_cache):
         operator_id = "op-123"

@@ -2,6 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import type { ReactNode } from 'react';
+import { activityFamilyHasObservedRecords, activityFamilySummaryText } from '../contract/activity-family';
 import type {
   PublicActivityFamily,
   PublicAssignmentActivity,
@@ -15,12 +16,6 @@ import { formatNumber, formatTokens } from './shared';
 
 function label(value: string): string {
   return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function availabilityText<T>(family: PublicActivityFamily<T>): string {
-  if (family.availability === 'observed') return `${family.records.length} observed`;
-  if (family.availability === 'not_applicable') return 'Not applicable to this scenario';
-  return family.unavailable_reason ? `Unavailable: ${label(family.unavailable_reason)}` : 'Unavailable';
 }
 
 function ModelRecord({ record }: { record: PublicModelActivityRecord }) {
@@ -44,11 +39,12 @@ function GovernedActionRecord({ record }: { record: PublicGovernedActionActivity
 }
 
 function ActivityFamily<T>({ title, family, renderRecord }: { title: string; family: PublicActivityFamily<T> | undefined; renderRecord: (record: T, index: number) => ReactNode }) {
-  if (!family || family.availability !== 'observed' || family.records.length === 0) return null;
+  if (!activityFamilyHasObservedRecords(family)) return null;
+  const records = family!.availability === 'observed' ? family!.records : [];
   return (
-    <details className="activity-family" open={family.availability === 'observed' && family.records.length > 0}>
-      <summary><span>{title}</span><span className="activity-availability">{availabilityText(family)}</span></summary>
-      {family.records.length > 0 ? <ol>{family.records.map((record, index) => <li key={`${title}-${index}`}>{renderRecord(record, index)}</li>)}</ol> : null}
+    <details className="activity-family" open>
+      <summary><span>{title}</span><span className="activity-availability">{activityFamilySummaryText(family!)}</span></summary>
+      <ol>{records.map((record, index) => <li key={`${title}-${index}`}>{renderRecord(record, index)}</li>)}</ol>
     </details>
   );
 }
