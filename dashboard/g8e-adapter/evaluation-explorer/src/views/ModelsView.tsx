@@ -16,7 +16,6 @@ import { ModelComparisonPanel } from '../components/ModelComparisonPanel';
 import {
   EmptyState,
   ErrorState,
-  IntervalDisplay,
   QualityBadge,
   SectionHeading,
   UnavailableValue,
@@ -186,7 +185,7 @@ export function ModelsView() {
         accessorFn: (row: ModelSummary) => row.pass_rate?.estimate ?? -1,
         cell: ({ row }: CellContext<ModelSummary, unknown>) =>
           row.original.pass_rate ? (
-            <IntervalDisplay interval={row.original.pass_rate} label="pass rate" />
+            formatPercent(row.original.pass_rate.estimate)
           ) : (
             <UnavailableValue reason="not evaluated" />
           ),

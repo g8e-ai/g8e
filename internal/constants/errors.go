@@ -1508,6 +1508,8 @@ var (
 	ErrFormationPolicyValidation        = errors.New("formation: state mutation failed L1-L5 validation")
 	ErrFormationWitnessUnavailable      = errors.New("formation: observer or provenance witness unavailable")
 	ErrFormationRunnerDependency        = errors.New("formation: runner dependency is missing")
+	ErrFormationRegistryBinding         = errors.New("formation: frozen registry binding failed")
+	ErrFormationStackMismatch           = errors.New("formation: stack binding does not match catalog")
 	ErrInferenceModelRegistryInvalid    = errors.New("inference: model registry invalid")
 	ErrInferenceCampaignBindingInvalid  = errors.New("inference: campaign binding invalid")
 	ErrInferenceProviderAttemptConflict = errors.New("inference: provider attempt already recorded")
