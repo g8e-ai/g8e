@@ -110,19 +110,32 @@ describe('public assignment event projection', () => {
     });
   });
 
-  describe('publication wiring gate (deferred)', () => {
-    it.fails('campaign publication exports native metric_updated events', () => {
-      // Wiring milestone: CampaignPublicationCoordinator must emit
-      // record_type "event" with kind metric_updated when per-assignment
-      // metrics become available mid-run. Today all campaign exports are
-      // record_type "projection" only.
-      expect(false).toBe(true);
-    });
-
-    it.fails('campaign publication exports native stage_updated on model-role invocation', () => {
-      // Wiring milestone: invocation signals must publish stage_updated events
-      // distinct from queued lifecycle synthesis in campaign-adapter.ts.
-      expect(false).toBe(true);
+  describe('publication wiring', () => {
+    it('documents native event kinds the Go coordinator now publishes at terminal time', () => {
+      expect(projectMetricAvailabilityToLiveEvent({
+        run_id: 'run-live-1',
+        assignment_id: 'assign-1',
+        variant_id: 'qwen3-4b',
+        metric_id: 'pass_rate',
+        numerator: 1,
+        denominator: 1,
+        rate: 1,
+        observed_at: '2026-09-24T12:00:05.000Z',
+        event_id: 'run-live-1:assign-1:metric:pass_rate:event',
+        completed: 1,
+        total: 5,
+      }).kind).toBe('metric_updated');
+      expect(projectModelRoleInvocationToLiveEvent({
+        run_id: 'run-live-1',
+        assignment_id: 'assign-1',
+        variant_id: 'qwen3-4b',
+        role: 'primary',
+        task_id: 'instruction-exact-format',
+        observed_at: '2026-09-24T12:00:00.000Z',
+        event_id: 'run-live-1:assign-1:invocation:primary:event',
+        completed: 1,
+        total: 5,
+      }).kind).toBe('stage_updated');
     });
   });
 });

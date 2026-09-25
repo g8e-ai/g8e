@@ -65,6 +65,14 @@ func ultraLightSpeedsterBindingRequest(t *testing.T) FormationBindingRequest {
 	}
 }
 
+func TestFormationBindingFromCatalog_MaterializesUltraLightSpeedsterStack(t *testing.T) {
+	binding, err := FormationBindingFromCatalog("ultra-light-speedster", ultraLightSpeedsterRegistryVariants())
+	require.NoError(t, err)
+	assert.Equal(t, "ultra-light-speedster", binding.FormationID)
+	assert.Equal(t, "ultra-light-speedster", binding.Stack.GetStackId())
+	require.NoError(t, ValidateHeterogeneousStackDigest(binding.Stack))
+}
+
 func TestBindFormation_BindsUltraLightSpeedsterDigestsFromFrozenRegistry(t *testing.T) {
 	req := ultraLightSpeedsterBindingRequest(t)
 

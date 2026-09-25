@@ -551,6 +551,9 @@ func (c *CampaignController) publishAssignmentTerminal(ctx context.Context, assi
 	if c == nil || c.publication == nil || assignment == nil || result == nil {
 		return nil
 	}
+	if err := c.publication.PublishAssignmentLiveEvents(ctx, assignment, result); err != nil {
+		return err
+	}
 	if err := c.publishAssignmentLifecycle(ctx, assignment); err != nil {
 		return err
 	}

@@ -17,21 +17,22 @@ import {
   EmptyState,
   ErrorState,
   SectionHeading,
-  Timeline,
   formatDuration,
   formatLatency,
   formatThroughput,
   formatTokens,
   formatNumber,
 } from '../components/shared';
+import { formatRelativeTime } from '../utils/format';
 import {
+  assignmentGradeChips,
   assignmentLifecycleEvents,
+  assignmentVerdictLabel,
   isScenarioNotApplicableMetric,
-  publicGradeExplanationLabel,
-  publicGradeSummaries,
   roleLabel,
   resourceObservationMissing,
   siblingRepetitions,
+  streamProgressLabel,
 } from './derived';
 
 function observationLabel(value: string): string {
@@ -50,14 +51,6 @@ function metricValue(metric: { value?: number } | undefined): number | undefined
 
 function terminalLabel(status: AssignmentResult['terminal_status']): string {
   return status.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function verifierLabel(status: AssignmentResult['verification_disposition']): string {
-  if (status === 'not_run') return 'Not verified';
-  if (status === 'not_applicable') return 'Verification not applicable';
-  if (status === 'passed') return 'Verified';
-  if (status === 'failed') return 'Verification failed';
-  return 'Verification not published';
 }
 
 function hasObservedActivity(activity: AssignmentResult['activity_summary']): boolean {
@@ -99,7 +92,7 @@ export function AssignmentDetailView() {
         ([, metric]) => metric.value !== undefined && !isScenarioNotApplicableMetric(metric),
       )
     : [];
-  const semanticGrades = publicGradeSummaries(assignment);
+  const gradeChips = assignmentGradeChips(assignment);
   const resource = assignment.resource_summary;
   const timing = assignment.benchmark_observations?.timing;
   const outputTokens = resource?.output_tokens?.value;
@@ -145,22 +138,20 @@ export function AssignmentDetailView() {
           <Link to={`/models/${activeDatasetId}/${assignment.variant_id}`}>{assignment.variant_id}</Link>
           <span>{roleLabel(assignment.role)}</span>
           <span>Repetition {assignment.repetition}</span>
-          <strong>{terminalLabel(assignment.terminal_status)}</strong>
+          <span>{terminalLabel(assignment.terminal_status)}</span>
+          <span>{formatRelativeTime(assignment.observed_at)}</span>
           <code>{assignment.assignment_id}</code>
         </p>
       </header>
 
       <div className="assignment-verdict" aria-label="Assignment verdict">
-        <span className={`terminal-pill terminal-${assignment.terminal_status}`}>{terminalLabel(assignment.terminal_status)}</span>
-        <span className="verification-pill">{verifierLabel(assignment.verification_disposition)}</span>
-        {assignment.metric_values.pass?.value !== undefined ? (
-          <span className={`grade-chip grade-${assignment.metric_values.pass.value === 1 ? 'pass' : 'fail'}`}>
-            Pass · {assignment.metric_values.pass.value === 1 ? 'Pass' : 'Fail'}
-          </span>
-        ) : null}
-        {semanticGrades.map((grade) => (
+        <span className={`terminal-pill terminal-${assignment.terminal_status}`}>
+          {assignmentVerdictLabel(assignment.terminal_status, assignment.verification_disposition)}
+        </span>
+        {gradeChips.map((grade) => (
           <span className={`grade-chip grade-${grade.status}`} key={grade.criterion_id}>
-            {grade.criterion_id} · {observationLabel(grade.status)} · {publicGradeExplanationLabel(grade.explanation_code)}
+            {grade.criterion_id.replace(/-/g, ' ')} · {observationLabel(grade.status)}
+            {grade.explanation ? ` · ${grade.explanation}` : ''}
           </span>
         ))}
       </div>
@@ -184,10 +175,18 @@ export function AssignmentDetailView() {
       {hasObservedActivity(assignment.activity_summary) ? <AssignmentActivitySummary activity={assignment.activity_summary} /> : null}
 
       {lifecycleEvents.length > 0 ? (
-        <section className="assignment-lifecycle">
-          <h2>Lifecycle timeline</h2>
-          <Timeline events={lifecycleEvents} />
-        </section>
+        <ol className="assignment-feed-timeline" aria-label="Feed timeline">
+          {lifecycleEvents.map((event) => (
+            <li key={event.event_id}>
+              <span className="feed-time">{formatRelativeTime(event.observed_at)}</span>
+              <span className="feed-kind">{event.kind.replace(/_/g, ' ')}</span>
+              {event.feed_sequence !== undefined ? (
+                <span className="feed-sequence">#{event.feed_sequence}</span>
+              ) : null}
+              <span className="feed-progress">{streamProgressLabel(event)}</span>
+            </li>
+          ))}
+        </ol>
       ) : null}
 
       {assignment.stage_summary.length > 0 ? <section className="assignment-stages">

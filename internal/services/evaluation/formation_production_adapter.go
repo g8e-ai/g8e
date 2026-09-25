@@ -9,12 +9,14 @@ package evaluation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -97,6 +99,68 @@ func NewFormationProductionRunner(deps FormationProductionDependencies) (*Format
 		now,
 		newID,
 	)
+}
+
+// NewCampaignFormationObservationLoader constructs a reader-backed observation
+// loader with bounded retries for post-dispatch evidence persistence.
+func NewCampaignFormationObservationLoader(fileSvc fs.RuntimeFileService) (FormationObservationLoader, error) {
+	reader, err := NewCampaignProviderObservationReader(fileSvc)
+	if err != nil {
+		return nil, err
+	}
+	return NewRetryingFormationObservationLoader(reader.LoadObservationWindow, 12, 250*time.Millisecond), nil
+}
+
+type retryingFormationObservationLoader struct {
+	load     func(context.Context, string) (*evalv1.ProviderBoundaryObservationWindow, error)
+	attempts int
+	delay    time.Duration
+}
+
+// NewRetryingFormationObservationLoader polls for provider-boundary windows when
+// gateway evidence persistence trails governed inference completion.
+func NewRetryingFormationObservationLoader(
+	load func(context.Context, string) (*evalv1.ProviderBoundaryObservationWindow, error),
+	attempts int,
+	delay time.Duration,
+) FormationObservationLoader {
+	if attempts <= 0 {
+		attempts = 1
+	}
+	return &retryingFormationObservationLoader{load: load, attempts: attempts, delay: delay}
+}
+
+func (l *retryingFormationObservationLoader) LoadObservationWindow(ctx context.Context, providerAttemptID string) (*evalv1.ProviderBoundaryObservationWindow, error) {
+	if l == nil || l.load == nil {
+		return nil, fmt.Errorf("formation: observation loader: %w", constants.ErrFormationRunnerDependency)
+	}
+	var lastErr error
+	for attempt := 0; attempt < l.attempts; attempt++ {
+		window, err := l.load(ctx, providerAttemptID)
+		if err == nil && window != nil {
+			return window, nil
+		}
+		lastErr = err
+		if attempt+1 == l.attempts {
+			break
+		}
+		if l.delay > 0 {
+			timer := time.NewTimer(l.delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	if lastErr == nil {
+		lastErr = constants.ErrFormationWitnessUnavailable
+	}
+	if errors.Is(lastErr, constants.ErrNotFound) {
+		return nil, fmt.Errorf("formation: observation window %q: %w", providerAttemptID, constants.ErrFormationWitnessUnavailable)
+	}
+	return nil, fmt.Errorf("formation: observation window %q: %w", providerAttemptID, lastErr)
 }
 
 // RunFormationProduction binds one campaign stack to frozen digests and executes

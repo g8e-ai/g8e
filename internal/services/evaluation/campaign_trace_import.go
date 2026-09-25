@@ -318,7 +318,43 @@ func boolValue(raw any) bool {
 	return ok && value
 }
 
+func traceSchemaVersion(trace EvaluationTrace) string {
+	version, _ := trace["schema_version"].(string)
+	if version == "" {
+		return "1"
+	}
+	return version
+}
+
+func optionalUint32FromTraceCall(call EvaluationTrace, name, schemaVersion string) (*uint32, error) {
+	if schemaVersion == "1" {
+		return nil, nil
+	}
+	raw, present := call[name]
+	if !present || raw == nil {
+		return nil, nil
+	}
+	converted, err := uint32Value(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return &converted, nil
+}
+
+func requiredUint32FromTraceCall(call EvaluationTrace, name string) (uint32, error) {
+	raw, present := call[name]
+	if !present {
+		return 0, fmt.Errorf("usage_reported call missing %s", name)
+	}
+	converted, err := uint32Value(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", name, err)
+	}
+	return converted, nil
+}
+
 func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, attemptID string, candidate *evalv1.ModelVariant, trace EvaluationTrace, newID func(string) string) ([]*evalv1.ModelInferenceRecord, *uint64, error) {
+	schemaVersion := traceSchemaVersion(trace)
 	modelCalls, ok := trace["model_calls"].([]any)
 	if !ok {
 		return nil, nil, fmt.Errorf("model_calls must be an array")
@@ -365,24 +401,26 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			}
 			if value {
 				record.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
-				counters := []struct {
-					name string
-					dest *uint32
-				}{
-					{"input_tokens", &record.PromptTokens}, {"output_tokens", &record.CompletionTokens},
-					{"thinking_tokens", &record.ThinkingTokens}, {"cache_tokens", &record.CacheTokens},
+				promptTokens, err := requiredUint32FromTraceCall(call, "input_tokens")
+				if err != nil {
+					return nil, nil, err
 				}
-				for _, counter := range counters {
-					value, present := call[counter.name]
-					if !present {
-						return nil, nil, fmt.Errorf("usage_reported call missing %s", counter.name)
-					}
-					converted, err := uint32Value(value)
-					if err != nil {
-						return nil, nil, fmt.Errorf("%s: %w", counter.name, err)
-					}
-					*counter.dest = converted
+				completionTokens, err := requiredUint32FromTraceCall(call, "output_tokens")
+				if err != nil {
+					return nil, nil, err
 				}
+				record.PromptTokens = promptTokens
+				record.CompletionTokens = completionTokens
+				thinkingTokens, err := optionalUint32FromTraceCall(call, "thinking_tokens", schemaVersion)
+				if err != nil {
+					return nil, nil, err
+				}
+				cacheTokens, err := optionalUint32FromTraceCall(call, "cache_tokens", schemaVersion)
+				if err != nil {
+					return nil, nil, err
+				}
+				record.ThinkingTokens = thinkingTokens
+				record.CacheTokens = cacheTokens
 			} else {
 				record.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE
 			}

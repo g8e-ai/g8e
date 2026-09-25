@@ -19,15 +19,17 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	"google.golang.org/protobuf/proto"
 )
 
-// CampaignPublicFeedRecord is one append-only public projection payload ready
-// for signing by the host publisher.
+// CampaignPublicFeedRecord is one append-only public feed payload ready for
+// signing by the host publisher.
 type CampaignPublicFeedRecord struct {
 	Sequence    int64
+	RecordType  models.PublicFeedRecordType
 	RecordHash  string
 	RecordBytes string
 }
@@ -41,6 +43,7 @@ type CampaignFeedExporter interface {
 
 type campaignFeedPublishRequest struct {
 	IdempotencyKey string
+	RecordType     models.PublicFeedRecordType
 	Body           []byte
 }
 
@@ -72,6 +75,20 @@ func (c *CampaignPublicationCoordinator) WithMirrorProbe(probe CampaignMirrorPro
 		c.mirrorProbe = probe
 	}
 	return c
+}
+
+// PublishAssignmentLiveEvents emits disclosure-safe stage_updated and
+// metric_updated records for one terminal assignment result.
+func (c *CampaignPublicationCoordinator) PublishAssignmentLiveEvents(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) error {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil || result == nil {
+		return fmt.Errorf("evaluation: publish assignment live events: %w", constants.ErrMissingRequiredField)
+	}
+	requests, err := c.buildAssignmentLiveEventPublishRequests(ctx, assignment, result)
+	if err != nil {
+		return err
+	}
+	_, err = c.exportFeedRecords(ctx, assignment.GetRunId(), requests)
+	return err
 }
 
 // PublishAssignmentLifecycle emits one lifecycle projection when it has not yet
@@ -183,7 +200,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 	if err != nil {
 		return campaignFeedPublishRequest{}, err
 	}
-	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, Body: body}, nil
+	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, RecordType: models.PublicFeedRecordTypeProjection, Body: body}, nil
 }
 
 func buildAssignmentLifecyclePublishRequest(assignment *evalv1.EvaluationAssignment, scenarioCategory evalv1.EvaluationScenarioCategory, observedAt time.Time) (campaignFeedPublishRequest, error) {
@@ -199,7 +216,7 @@ func buildAssignmentLifecyclePublishRequest(assignment *evalv1.EvaluationAssignm
 	if err != nil {
 		return campaignFeedPublishRequest{}, err
 	}
-	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, Body: body}, nil
+	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, RecordType: models.PublicFeedRecordTypeProjection, Body: body}, nil
 }
 
 func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ctx context.Context, result *evalv1.EvaluationAssignmentResult) (*PublicBenchmarkObservations, error) {
@@ -236,10 +253,7 @@ func (c *CampaignPublicationCoordinator) PublishRunAggregates(ctx context.Contex
 	if err != nil {
 		return 0, err
 	}
-	requests := make([]campaignFeedPublishRequest, 0, len(records))
-	for _, record := range records {
-		requests = append(requests, campaignFeedPublishRequest(record))
-	}
+	requests := viewRecordsToPublishRequests(records)
 	return c.exportFeedRecords(ctx, runID, requests)
 }
 
@@ -330,7 +344,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 			if err != nil {
 				return 0, err
 			}
-			verifiedRequests = append(verifiedRequests, campaignFeedPublishRequest{IdempotencyKey: key, Body: body})
+			verifiedRequests = append(verifiedRequests, campaignFeedPublishRequest{IdempotencyKey: key, RecordType: models.PublicFeedRecordTypeProjection, Body: body})
 		}
 	}
 	published, err := c.exportFeedRecords(ctx, runID, verifiedRequests)
@@ -341,10 +355,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	if err != nil {
 		return published, err
 	}
-	summaryRequests := make([]campaignFeedPublishRequest, 0, len(records))
-	for _, record := range records {
-		summaryRequests = append(summaryRequests, campaignFeedPublishRequest(record))
-	}
+	summaryRequests := viewRecordsToPublishRequests(records)
 	summaryCount, err := c.exportFeedRecords(ctx, runID, summaryRequests)
 	if err != nil {
 		return published, err
@@ -375,10 +386,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCompletion(ctx context.Contex
 	if err != nil {
 		return 0, err
 	}
-	requests := make([]campaignFeedPublishRequest, 0, len(records))
-	for _, record := range records {
-		requests = append(requests, campaignFeedPublishRequest(record))
-	}
+	requests := viewRecordsToPublishRequests(records)
 	return c.exportFeedRecords(ctx, runID, requests)
 }
 
@@ -622,6 +630,7 @@ func (c *CampaignPublicationCoordinator) publishEnvelope(ctx context.Context, ru
 	}
 	_, err = c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{{
 		IdempotencyKey: idempotencyKey,
+		RecordType:     models.PublicFeedRecordTypeProjection,
 		Body:           body,
 	}})
 	return err
@@ -661,7 +670,7 @@ func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, 
 		}
 		records := make([]CampaignPublicFeedRecord, len(pending))
 		for index, request := range pending {
-			records[index] = buildCampaignPublicFeedRecord(nextSequence+1+int64(index), request.Body)
+			records[index] = buildCampaignPublicFeedRecord(nextSequence+1+int64(index), request.RecordType, request.Body)
 		}
 		if err := c.exportFeedRecordsInBatches(ctx, records); err != nil {
 			if attempt == 0 && isCampaignFeedSequenceOutOfOrder(err) {
@@ -699,10 +708,26 @@ func isCampaignFeedSequenceOutOfOrder(err error) bool {
 	return err != nil && strings.Contains(err.Error(), constants.ErrPublicFeedSequenceOutOfOrder.Error())
 }
 
-func buildCampaignPublicFeedRecord(sequence int64, body []byte) CampaignPublicFeedRecord {
+func viewRecordsToPublishRequests(records []CampaignViewRecord) []campaignFeedPublishRequest {
+	requests := make([]campaignFeedPublishRequest, 0, len(records))
+	for _, record := range records {
+		requests = append(requests, campaignFeedPublishRequest{
+			IdempotencyKey: record.IdempotencyKey,
+			RecordType:     models.PublicFeedRecordTypeProjection,
+			Body:           record.Body,
+		})
+	}
+	return requests
+}
+
+func buildCampaignPublicFeedRecord(sequence int64, recordType models.PublicFeedRecordType, body []byte) CampaignPublicFeedRecord {
+	if recordType == "" {
+		recordType = models.PublicFeedRecordTypeProjection
+	}
 	digest := sha256.Sum256(body)
 	return CampaignPublicFeedRecord{
 		Sequence:    sequence,
+		RecordType:  recordType,
 		RecordHash:  hex.EncodeToString(digest[:]),
 		RecordBytes: string(body),
 	}

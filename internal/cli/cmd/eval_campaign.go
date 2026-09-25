@@ -173,6 +173,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalStartCmd(deps),
 		campaignEvalInitCmd(deps),
 		campaignEvalListCmd(deps),
+		campaignEvalFormationsCmd(deps),
 		campaignEvalScheduleCmd(deps),
 		campaignEvalStacksCmd(deps),
 		campaignEvalExecuteCmd(deps),

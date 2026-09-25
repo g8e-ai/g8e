@@ -126,12 +126,77 @@ func TestCampaignPublicationCoordinator_ExportsProjectionRecordsOnly(t *testing.
 	}
 }
 
-// Wiring gate: flip to true only after CampaignPublicationCoordinator publishes
-// native record_type "event" live events from invocation/metric signals.
-const campaignPublicationEmitsNativeLiveEvents = false
+const campaignPublicationEmitsNativeLiveEvents = true
 
-func TestCampaignPublication_WiringGate_NativeLiveEventsDeferred(t *testing.T) {
-	assert.False(t, campaignPublicationEmitsNativeLiveEvents, "native metric_updated and invocation stage_updated export remain deferred; see worker5 design packet")
+func TestCampaignPublication_PublishesNativeLiveEventsFromTerminalResult(t *testing.T) {
+	require.True(t, campaignPublicationEmitsNativeLiveEvents)
+	files := newCampaignMemoryFileService()
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	runID := "run-live-1"
+	assignmentID := "assign-1"
+	assignment := &evalv1.EvaluationAssignment{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    assignmentID,
+		RunId:           runID,
+		CampaignId:      "campaign-1",
+		ScenarioId:      "scenario-1",
+		Repetition:      1,
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		Target: &evalv1.EvaluationAssignment_Homogeneous{
+			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
+				DesignatedRole: evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+				CandidateVariant: &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			},
+		},
+	}
+	result := &evalv1.EvaluationAssignmentResult{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    assignmentID,
+		RunId:           runID,
+		CampaignId:      "campaign-1",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		CompletedAt:     timestamppb.New(time.Unix(1_700_000_010, 0).UTC()),
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			ModelRole: evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+			ModelVariant: &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+		}},
+		DeterministicGrades: []*evalv1.DeterministicGrade{{
+			CriterionId: "role-invoked",
+			Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		}},
+	}
+	digest, err := ComputeAssignmentResultDigest(result)
+	require.NoError(t, err)
+	result.ResultDigest = digest
+	store := NewStore(files)
+	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion: CampaignSchemaVersion,
+		RunId:         runID,
+		CampaignBinding: &evalv1.ModelCampaignBinding{CampaignId: "campaign-1"},
+	}))
+	require.NoError(t, store.SaveAssignment(context.Background(), assignment))
+	require.NoError(t, store.SaveAssignmentResult(context.Background(), result))
+	require.NoError(t, coordinator.PublishAssignmentLiveEvents(context.Background(), assignment, result))
+	require.NotEmpty(t, exporter.records)
+	foundInvocation := false
+	foundMetric := false
+	for _, record := range exporter.records {
+		require.Equal(t, models.PublicFeedRecordTypeEvent, record.RecordType)
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &body))
+		switch body["kind"] {
+		case "stage_updated":
+			foundInvocation = true
+		case "metric_updated":
+			foundMetric = true
+		}
+	}
+	assert.True(t, foundInvocation)
+	assert.True(t, foundMetric)
 }
 
 func ptrFloat64(value float64) *float64 {

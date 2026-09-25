@@ -81,9 +81,13 @@ func isPublicFeedOutboxPublicationError(err error) bool {
 func (e *remoteGatewayCampaignFeedExporter) exportBatchOnce(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {
 	batch := make([]models.PublicFeedRecord, len(records))
 	for index, record := range records {
+		recordType := record.RecordType
+		if recordType == "" {
+			recordType = models.PublicFeedRecordTypeProjection
+		}
 		batch[index] = models.PublicFeedRecord{
 			Sequence:    record.Sequence,
-			RecordType:  models.PublicFeedRecordTypeProjection,
+			RecordType:  recordType,
 			RecordHash:  record.RecordHash,
 			RecordBytes: record.RecordBytes,
 		}

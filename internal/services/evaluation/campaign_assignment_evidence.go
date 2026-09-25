@@ -116,7 +116,16 @@ func buildPublicModelActivity(records []*evalv1.ModelInferenceRecord) (*evalv1.P
 		}
 		out := &evalv1.PublicModelActivityRecord{ModelRole: record.GetModelRole(), AgentPersona: record.GetAgentPersona(), VariantId: record.GetModelVariant().GetVariantId(), UsageAvailability: usage, TotalDurationNanos: record.GetTotalDurationNanos(), GenerationDurationNanos: record.GetGenerationDurationNanos(), FinishState: finish, LoadState: load}
 		if usage == evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED {
-			out.InputTokens, out.OutputTokens, out.ThinkingTokens, out.CacheTokens = uint64(record.GetPromptTokens()), uint64(record.GetCompletionTokens()), uint64(record.GetThinkingTokens()), uint64(record.GetCacheTokens())
+			out.InputTokens = uint64(record.GetPromptTokens())
+			out.OutputTokens = uint64(record.GetCompletionTokens())
+			if record.ThinkingTokens != nil {
+				value := uint64(*record.ThinkingTokens)
+				out.ThinkingTokens = &value
+			}
+			if record.CacheTokens != nil {
+				value := uint64(*record.CacheTokens)
+				out.CacheTokens = &value
+			}
 		}
 		if record.RetryCount != nil {
 			value := record.GetRetryCount()

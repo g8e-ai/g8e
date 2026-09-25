@@ -69,13 +69,27 @@ describe('AssignmentDetailView', () => {
   });
 
   it('shows only observed scoring data for a thin record', () => {
-    renderAssignment([assignmentResult()]);
+    renderAssignment([
+      assignmentResult({
+        verification_disposition: 'not_run',
+        benchmark_observations: {
+          grade_summaries: [
+            { criterion_id: 'role-invoked', status: 'pass' },
+            { criterion_id: 'scenario-content', status: 'fail' },
+          ],
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
 
-    expect(screen.getByText('Pass · Fail')).toBeInTheDocument();
+    expect(screen.getByLabelText('Assignment verdict')).toHaveTextContent('Completed · not verified');
+    expect(screen.getByText('scenario content · Fail')).toBeInTheDocument();
+    expect(screen.getByText('role invoked · Pass')).toBeInTheDocument();
     expect(screen.queryByText('Stage timeline not published for this assignment.')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Resource observations' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Assignment context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'What happened' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Lifecycle timeline' })).not.toBeInTheDocument();
   });
 
   it('shows tokens per second from output tokens and generation time', () => {
@@ -178,8 +192,7 @@ describe('AssignmentDetailView', () => {
     expect(screen.queryByText('Choose', { selector: 'b' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What happened' })).toBeInTheDocument();
     expect(screen.getByText('1 observed')).toBeInTheDocument();
-    expect(screen.getByText('Deterministic')).toBeInTheDocument();
-    expect(screen.getByText(/Criterion passed/)).toBeInTheDocument();
+    expect(screen.getByText(/selection · Pass · Criterion passed/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Evidence and methodology' })).toBeInTheDocument();
     expect(screen.getByText('Evaluation projection')).toBeInTheDocument();
     expect(screen.queryByText('private')).not.toBeInTheDocument();

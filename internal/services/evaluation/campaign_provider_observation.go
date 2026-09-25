@@ -248,6 +248,19 @@ func isProviderEvidenceNotFound(err error) bool {
 	return isGatewayEvidenceNotFound(err)
 }
 
+// LoadObservationWindow returns one provider-boundary observation window for a
+// governed provider attempt ID.
+func (r *CampaignProviderObservationReader) LoadObservationWindow(ctx context.Context, providerAttemptID string) (*evalv1.ProviderBoundaryObservationWindow, error) {
+	if r == nil || r.windows == nil || providerAttemptID == "" {
+		return nil, fmt.Errorf("evaluation: load provider observation window: %w", constants.ErrMissingRequiredField)
+	}
+	window, err := r.windows.Load(ctx, providerAttemptID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: load provider observation window: %w", err)
+	}
+	return window, nil
+}
+
 // BindProviderBoundaryObservationRefs attaches observation evidence references
 // to scored model inferences when durable windows exist.
 func (r *CampaignProviderObservationReader) BindProviderBoundaryObservationRefs(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error {

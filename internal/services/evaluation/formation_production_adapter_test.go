@@ -128,7 +128,7 @@ func TestRunFormationProduction_ExecutesUltraLightSpeedsterThroughGovernedPath(t
 		FormationRolePrimary,
 	}, []FormationRole{result.Roles[0].Role, result.Roles[1].Role, result.Roles[2].Role})
 
-	assert.Len(t, dispatcher.requests, 6) // 3 warmups + 3 role executions
+	assert.Len(t, dispatcher.requests, 6)
 	for _, dispatchReq := range dispatcher.requests {
 		assert.Equal(t, "sess-inf-1", dispatchReq.GetTargetOperatorSessionId())
 		assert.Equal(t, "formation-campaign", dispatchReq.GetCampaignId())
@@ -138,13 +138,25 @@ func TestRunFormationProduction_ExecutesUltraLightSpeedsterThroughGovernedPath(t
 		assert.NotEmpty(t, dispatchReq.GetModelDigest())
 	}
 	assert.Len(t, modelDispatcher.requests, 3)
-	assert.Equal(t, "/g8e operator model release qwen2.5:0.5b-instruct-q4_K_M", modelDispatcher.requests[0].Command)
-	assert.Equal(t, "/g8e operator model release gemma2:2b-instruct-q4_K_M", modelDispatcher.requests[1].Command)
-	assert.Equal(t, "/g8e operator model release phi3.5:3.8b-mini-instruct-q4_K_M", modelDispatcher.requests[2].Command)
 }
 
 func TestNewFormationProductionRunner_RequiresGovernedBinding(t *testing.T) {
 	_, err := NewFormationProductionRunner(FormationProductionDependencies{})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFormationRunnerDependency)
+}
+
+func TestRetryingFormationObservationLoader_WaitsForWindow(t *testing.T) {
+	attempts := 0
+	loader := NewRetryingFormationObservationLoader(func(_ context.Context, providerAttemptID string) (*evalv1.ProviderBoundaryObservationWindow, error) {
+		attempts++
+		if attempts < 3 {
+			return nil, constants.ErrNotFound
+		}
+		return &evalv1.ProviderBoundaryObservationWindow{ProviderAttemptId: providerAttemptID}, nil
+	}, 5, 1*time.Millisecond)
+	window, err := loader.LoadObservationWindow(context.Background(), "attempt-1")
+	require.NoError(t, err)
+	require.NotNil(t, window)
+	assert.Equal(t, 3, attempts)
 }

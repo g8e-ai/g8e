@@ -36,6 +36,28 @@ type FormationRunContext struct {
 	DataSessionID       string
 }
 
+// FormationBindingFromCatalog materializes the canonical stack for one catalog
+// formation and prepares a binding request against frozen registry variants.
+func FormationBindingFromCatalog(formationID string, variants []*evalv1.ModelVariant) (FormationBindingRequest, error) {
+	topologies, err := NewExecutionTopologies()
+	if err != nil {
+		return FormationBindingRequest{}, err
+	}
+	formation, err := topologies.Formation(formationID)
+	if err != nil {
+		return FormationBindingRequest{}, err
+	}
+	stack, err := formation.ToStackDefinition()
+	if err != nil {
+		return FormationBindingRequest{}, err
+	}
+	return FormationBindingRequest{
+		FormationID: formationID,
+		Stack:       stack,
+		Variants:    variants,
+	}, nil
+}
+
 // BindFormation resolves catalog metadata and frozen-registry digests for one
 // governed formation run. It fails closed when the stack digest is invalid, a
 // sovereign role is missing from the registry, served tags diverge, or any
