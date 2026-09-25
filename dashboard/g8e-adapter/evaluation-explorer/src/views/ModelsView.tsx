@@ -26,6 +26,11 @@ import {
   formatNumber,
 } from '../components/shared';
 import type { ModelSummary, ModelRole } from '../contract/types';
+import {
+  availableQualityFilterOptions,
+  MODEL_QUALITY_FILTER_STATES,
+  normalizeQualityFilter,
+} from '../utils/feed-state';
 import { datasetLabel, roleLabel } from './derived';
 
 interface ModelFilters {
@@ -37,12 +42,12 @@ interface ModelFilters {
 
 const DEFAULT_FILTERS: ModelFilters = { search: '', role: 'all', evaluated: 'evaluated', quality: 'all' };
 
-function filtersActive(filters: ModelFilters): boolean {
+function filtersActive(filters: ModelFilters, quality: string): boolean {
   return (
     filters.search !== '' ||
     filters.role !== 'all' ||
     filters.evaluated !== 'all' ||
-    filters.quality !== 'all'
+    quality !== 'all'
   );
 }
 
@@ -81,6 +86,18 @@ export function ModelsView() {
   const comparisonDatasetMismatch =
     comparedModels.length >= 2 && new Set(comparedModels.map((m) => m.dataset_id)).size > 1;
 
+  const qualityOptions = useMemo(
+    () => availableQualityFilterOptions(models, MODEL_QUALITY_FILTER_STATES),
+    [models],
+  );
+  const effectiveQuality = normalizeQualityFilter(filters.quality, qualityOptions);
+
+  useEffect(() => {
+    if (effectiveQuality !== filters.quality) {
+      setFilters({ ...filters, quality: effectiveQuality });
+    }
+  }, [effectiveQuality, filters, setFilters]);
+
   const filtered = useMemo(() => {
     return models.filter((m) => {
       if (filters.search && !m.display_name.toLowerCase().includes(filters.search.toLowerCase()) && !m.variant_id.toLowerCase().includes(filters.search.toLowerCase())) {
@@ -89,7 +106,7 @@ export function ModelsView() {
       if (filters.role !== 'all' && m.role !== filters.role) return false;
       if (evaluatedFilter === 'evaluated' && (!m.pass_rate || m.evaluation_coverage < 1)) return false;
       if (evaluatedFilter === 'not_evaluated' && m.pass_rate) return false;
-      if (filters.quality !== 'all' && m.quality_state !== filters.quality) return false;
+      if (effectiveQuality !== 'all' && m.quality_state !== effectiveQuality) return false;
       return true;
     }).sort((a, b) => {
       const measured = Number(Boolean(b.pass_rate)) - Number(Boolean(a.pass_rate));
@@ -97,7 +114,7 @@ export function ModelsView() {
       const passRate = (b.pass_rate?.estimate ?? -1) - (a.pass_rate?.estimate ?? -1);
       return passRate || a.display_name.localeCompare(b.display_name);
     });
-  }, [models, filters, evaluatedFilter]);
+  }, [models, filters, evaluatedFilter, effectiveQuality]);
 
   const columns = useMemo<ColumnDef<ModelSummary, unknown>[]>(
     () => [
@@ -243,13 +260,11 @@ export function ModelsView() {
           <option value="evaluated">Evaluated</option>
           <option value="not_evaluated">Not evaluated</option>
         </select>
-        <select aria-label="Filter by quality state" value={filters.quality} onChange={(e) => updateFilter({ quality: e.target.value })}>
+        <select aria-label="Filter by quality state" value={effectiveQuality} onChange={(e) => updateFilter({ quality: e.target.value })}>
           <option value="all">All quality states</option>
-          <option value="verified_public">Current-standard verified</option>
-          <option value="exploratory_verified">Run-scoped verification passed</option>
-          <option value="exploratory_partial">Not fully verified</option>
-          <option value="legacy_unverified">Legacy · not current-standard verified</option>
-          <option value="not_evaluated">Not evaluated</option>
+          {qualityOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
         </select>
         <span className="result-count">{formatNumber(measuredCount)} measured · {formatNumber(models.length)} total</span>
         {comparison.length > 0 ? (
@@ -279,7 +294,7 @@ export function ModelsView() {
       ) : null}
 
       {filtered.length === 0 ? (
-        <EmptyState hasRecords={models.length > 0} hasFilters={filtersActive(filters)} connection={connection} />
+        <EmptyState hasRecords={models.length > 0} hasFilters={filtersActive(filters, effectiveQuality)} connection={connection} />
       ) : (
         <DataTable data={filtered} columns={columns} pageSize={25} caption="Model catalog" />
       )}

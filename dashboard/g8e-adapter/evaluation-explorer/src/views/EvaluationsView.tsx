@@ -4,7 +4,7 @@
 // Evaluations view — cross-dataset evaluation history. Each row shows dataset,
 // run/campaign identity, suite, progress, outcomes, verifier state, and metrics.
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useStoreState } from '../state/store';
@@ -21,6 +21,11 @@ import {
   formatPercent,
 } from '../components/shared';
 import type { EvaluationSummary } from '../contract/types';
+import {
+  availableQualityFilterOptions,
+  EVALUATION_QUALITY_FILTER_STATES,
+  normalizeQualityFilter,
+} from '../utils/feed-state';
 import { campaignTerminalProgress, datasetLabel } from './derived';
 
 export function EvaluationsView() {
@@ -39,14 +44,28 @@ export function EvaluationsView() {
   const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
   const connection = useStoreState((state) => state.connection);
 
+  const qualityOptions = useMemo(
+    () => availableQualityFilterOptions(evaluations, EVALUATION_QUALITY_FILTER_STATES),
+    [evaluations],
+  );
+  const effectiveQualityFilter = normalizeQualityFilter(qualityFilter, qualityOptions);
+
+  useEffect(() => {
+    if (effectiveQualityFilter === qualityFilter) return;
+    const next = new URLSearchParams(params);
+    if (effectiveQualityFilter === 'all') next.delete('quality');
+    else next.set('quality', effectiveQualityFilter);
+    setParams(next, { replace: true });
+  }, [effectiveQualityFilter, qualityFilter, params, setParams]);
+
   const filtered = useMemo(() => {
     return evaluations.filter((e) => {
       if (suiteFilter !== 'all' && e.suite_id !== suiteFilter) return false;
       if (statusFilter !== 'all' && e.lifecycle_state !== statusFilter) return false;
-      if (qualityFilter !== 'all' && e.quality_state !== qualityFilter) return false;
+      if (effectiveQualityFilter !== 'all' && e.quality_state !== effectiveQualityFilter) return false;
       return true;
     });
-  }, [evaluations, suiteFilter, statusFilter, qualityFilter]);
+  }, [evaluations, suiteFilter, statusFilter, effectiveQualityFilter]);
 
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -160,22 +179,18 @@ export function EvaluationsView() {
           <option value="failed">Failed</option>
           <option value="stopped">Stopped</option>
         </select>
-        <select aria-label="Filter by quality" value={qualityFilter} onChange={(e) => setFilter('quality', e.target.value)}>
+        <select aria-label="Filter by quality" value={effectiveQualityFilter} onChange={(e) => setFilter('quality', e.target.value)}>
           <option value="all">All quality states</option>
-          <option value="verified_public">Current-standard verified</option>
-          <option value="exploratory_verified">Run-scoped verification passed</option>
-          <option value="exploratory_partial">Not fully verified</option>
-          <option value="legacy_unverified">Legacy · not current-standard verified</option>
-          <option value="live_in_progress">In progress · unverified</option>
-          <option value="terminal_failed">Failed · unverified</option>
-          <option value="dead_evidence">Evidence invalid</option>
+          {qualityOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
         </select>
       </div>
 
       {filtered.length === 0 ? (
         <EmptyState
           hasRecords={evaluations.length > 0}
-          hasFilters={suiteFilter !== 'all' || statusFilter !== 'all' || qualityFilter !== 'all'}
+          hasFilters={suiteFilter !== 'all' || statusFilter !== 'all' || effectiveQualityFilter !== 'all'}
           connection={connection}
         />
       ) : (

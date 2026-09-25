@@ -47,6 +47,22 @@ describe('EvaluationsView', () => {
     );
   });
 
+  it('only lists quality filter options that exist in the current runs', () => {
+    render(
+      <MemoryRouter>
+        <EvaluationsView />
+      </MemoryRouter>,
+    );
+
+    const qualityFilter = screen.getByRole('combobox', { name: 'Filter by quality' });
+    const labels = Array.from(qualityFilter.querySelectorAll('option')).map((option) => option.textContent);
+    expect(labels).toEqual([
+      'All quality states',
+      'In progress · unverified',
+    ]);
+    expect(labels).not.toContain('Run-scoped verification passed');
+  });
+
   it('lists runs from every dataset without a dataset selector', () => {
     render(
       <MemoryRouter>

@@ -829,6 +829,13 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   display: flex;
   flex-direction: column;
 }
+/* Overview landing: span viewport width with page gutters, not app-main max-width */
+.overview > .stream-panel {
+  --page-gutter: 24px;
+  width: calc(100vw - (2 * var(--page-gutter)));
+  max-width: none;
+  margin-left: calc(50% - 50vw + var(--page-gutter));
+}
 .stream-panel .stream-scroll {
   flex: 0 1 auto;
   min-height: 320px;
@@ -1335,6 +1342,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 @media (max-width: 768px) {
   .app-header { padding: 10px 14px; }
   .app-main { padding: 14px; }
+  .overview > .stream-panel { --page-gutter: 14px; }
   .header-left { flex-wrap: wrap; }
   .header-campaign-label { display: none; }
   .about-panel { max-width: 100%; }
@@ -1363,6 +1371,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 
 @media (max-width: 320px) {
   .app-main { padding: 10px; }
+  .overview > .stream-panel { --page-gutter: 10px; }
   .stat-grid { grid-template-columns: 1fr; }
   .metric-grid { grid-template-columns: 1fr; }
   .agents-grid { grid-template-columns: 1fr; }

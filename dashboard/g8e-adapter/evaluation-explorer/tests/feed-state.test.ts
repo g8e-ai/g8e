@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  availableQualityFilterOptions,
   classifyFreshness,
   classifyStreamConnection,
   deriveFreshness,
@@ -10,6 +11,8 @@ import {
   isRunLevelQualityEvent,
   isTerminalFailure,
   mergeQualityState,
+  MODEL_QUALITY_FILTER_STATES,
+  normalizeQualityFilter,
   qualityStateLabel,
   qualityStateTone,
   emptyStateReason,
@@ -52,6 +55,26 @@ describe('isTerminalFailure', () => {
 
   it('returns false for running', () => {
     expect(isTerminalFailure('running')).toBe(false);
+  });
+});
+
+describe('availableQualityFilterOptions', () => {
+  it('returns only quality states present in the current records', () => {
+    const options = availableQualityFilterOptions(
+      [
+        { quality_state: 'exploratory_verified' },
+        { quality_state: 'exploratory_partial' },
+      ],
+      MODEL_QUALITY_FILTER_STATES,
+    );
+    expect(options.map((option) => option.value)).toEqual(['exploratory_verified', 'exploratory_partial']);
+    expect(options[0]?.label).toBe('Run-scoped verification passed');
+  });
+
+  it('normalizes stale quality selections back to all', () => {
+    const options = availableQualityFilterOptions([{ quality_state: 'exploratory_verified' }], MODEL_QUALITY_FILTER_STATES);
+    expect(normalizeQualityFilter('verified_public', options)).toBe('all');
+    expect(normalizeQualityFilter('exploratory_verified', options)).toBe('exploratory_verified');
   });
 });
 

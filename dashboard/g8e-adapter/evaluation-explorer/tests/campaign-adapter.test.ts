@@ -965,6 +965,9 @@ describe('EvalStore campaign ingest', () => {
         inventory_only: false,
         evaluation_coverage: 1,
         pass_rate: { estimate: 0.8, lower: 0.8, upper: 0.8, denominator: 5 },
+        agreement_pairwise: { value: 0.92 },
+        latency_p50_ms: { value: 640 },
+        output_throughput_p50: { value: 84.1 },
       };
 
       const verifiedModelSummary = {
