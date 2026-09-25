@@ -390,13 +390,22 @@ func formationRoleResultFromInference(req FormationRoleRequest, result *operator
 	if result == nil {
 		return FormationRoleResult{}, fmt.Errorf("formation: role result: %w", constants.ErrMissingRequiredField)
 	}
+	if result.GetPromptTokens() < 0 || result.GetCompletionTokens() < 0 {
+		return FormationRoleResult{}, fmt.Errorf("formation: role result: negative token usage: %w", constants.ErrInferenceProviderResponseInvalid)
+	}
 	outputText := formationCollectInferenceText(result)
 	outputState := formationAppendRoleState(req.InputState, req.Role, outputText)
+	usageAvailability := evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE
+	if result.GetUsageReported() {
+		usageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
+	}
 	roleResult := FormationRoleResult{
 		OutputState:       outputState,
 		MutationCandidate: append([]byte(nil), outputState...),
 		StateMutation:     req.Role == FormationRolePrimary,
 		ProviderAttemptID: result.GetProviderAttemptId(),
+		UsageAvailability: usageAvailability,
+		PromptTokens:      uint32(result.GetPromptTokens()),
 		GenerationTokens:  uint32(result.GetCompletionTokens()),
 	}
 	if result.TimeToFirstTokenNs != nil {

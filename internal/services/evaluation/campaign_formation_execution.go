@@ -338,9 +338,10 @@ func modelInferenceRecordsFromFormationRun(assignment *evalv1.EvaluationAssignme
 			CallSite:                "formation:" + string(role.Role),
 			ModelVariant:            formationModelToVariant(role.Model),
 			PrivacyAttested:         role.AttestationVerified || role.AttestationStatus == FormationAttestationNotNeeded,
+			UsageAvailability:       role.UsageAvailability,
+			PromptTokens:            role.PromptTokens,
 			CompletionTokens:        role.GenerationTokens,
 			GenerationDurationNanos: role.GenerationDurationNanos,
-			UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
 		}
 		if role.ObserverEvidence != nil && role.ObserverEvidence.Window != nil {
 			record.ProviderBoundaryObservationRef = providerBoundaryObservationRef(role.ObserverEvidence.Window)

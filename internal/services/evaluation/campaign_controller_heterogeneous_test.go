@@ -140,11 +140,11 @@ func TestCampaignController_ScheduleAndExecuteFormationCatalogAssignment(t *test
 	stackSet, err := controller.GenerateFormationCatalogStackSet(context.Background(), run.GetCampaignBinding().GetCampaignId(), 17)
 	require.NoError(t, err)
 	assert.Equal(t, FormationCatalogStackGenerationRule, stackSet.GenerationRule)
-	assert.Len(t, stackSet.Stacks, 5)
+	assert.Len(t, stackSet.Stacks, 4)
 
 	count, err := controller.ScheduleHeterogeneousRun(context.Background(), req.RunID)
 	require.NoError(t, err)
-	assert.Equal(t, 5*StandardScenarioCount, count)
+	assert.Equal(t, 4*StandardScenarioCount, count)
 
 	binding := CampaignExecutionBinding{
 		InferenceOperatorSessionID: req.InferenceOperatorSessionID,

@@ -534,8 +534,10 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx c
 
 // loadBoundRunVerification resolves the persisted run-level verification report
 // for summary construction. A missing or legacy unbound report yields nil. A
-// bound report that fails applicability against persisted run evidence fails
-// closed rather than producing a downgrade.
+// bound report that no longer applies on an in-progress run is ignored so
+// partial campaign verify does not block continued execute/publish. Once every
+// scheduled assignment is settled, a non-applicable bound report fails closed
+// rather than producing a downgrade.
 func (c *CampaignPublicationCoordinator) loadBoundRunVerification(ctx context.Context, runID string, run *evalv1.EvaluationRun, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) (*evalv1.EvaluationVerificationReport, error) {
 	report, err := c.store.LoadCampaignVerification(ctx, runID)
 	if err != nil {
@@ -562,10 +564,17 @@ func (c *CampaignPublicationCoordinator) loadBoundRunVerification(ctx context.Co
 	if err != nil {
 		return nil, err
 	}
-	if !applicability.Applicable {
-		return nil, fmt.Errorf("evaluation: load bound run verification: persisted report does not apply to run evidence: %w", constants.ErrEvidenceScopeMismatch)
+	if applicability.Applicable {
+		return report, nil
 	}
-	return report, nil
+	state, err := CollectRunAggregateState(assignments, results)
+	if err != nil {
+		return nil, err
+	}
+	if !RunAggregateComplete(assignments, results, state) {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("evaluation: load bound run verification: persisted report does not apply to run evidence: %w", constants.ErrEvidenceScopeMismatch)
 }
 
 func (c *CampaignPublicationCoordinator) validateRunVerificationApplicability(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) error {

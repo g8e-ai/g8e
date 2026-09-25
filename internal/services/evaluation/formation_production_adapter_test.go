@@ -63,8 +63,10 @@ func (d *recordingFormationInferenceDispatcher) DispatchInference(_ context.Cont
 			Parts: []*operatorv1.InferenceResponsePart{{
 				Part: &operatorv1.InferenceResponsePart_Text{Text: "role-output:" + attemptID},
 			}},
+			PromptTokens:         24,
 			CompletionTokens:     12,
-			TimeToFirstTokenNs:     ptrInt64(2_000_000),
+			UsageReported:        true,
+			TimeToFirstTokenNs:   ptrInt64(2_000_000),
 			GenerationDurationNs: ptrInt64(10_000_000),
 			CampaignId:           req.GetCampaignId(),
 			ModelRegistryDigest:  req.GetModelRegistryDigest(),
@@ -127,6 +129,11 @@ func TestRunFormationProduction_ExecutesUltraLightSpeedsterThroughGovernedPath(t
 		FormationRoleAssistant,
 		FormationRolePrimary,
 	}, []FormationRole{result.Roles[0].Role, result.Roles[1].Role, result.Roles[2].Role})
+	for _, role := range result.Roles {
+		assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED, role.UsageAvailability)
+		assert.Equal(t, uint32(24), role.PromptTokens)
+		assert.Equal(t, uint32(12), role.GenerationTokens)
+	}
 
 	assert.Len(t, dispatcher.requests, 6)
 	for _, dispatchReq := range dispatcher.requests {

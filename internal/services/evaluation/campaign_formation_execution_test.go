@@ -189,12 +189,50 @@ func TestImportAssignmentResultFromFormationRun_MaterializesRoleTelemetry(t *tes
 	require.NoError(t, err)
 	formationResult, err := harness.RunBoundFormation(context.Background(), formation, []byte("initial"))
 	require.NoError(t, err)
+	for index := range formationResult.Roles {
+		formationResult.Roles[index].UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
+		formationResult.Roles[index].PromptTokens = uint32(index + 10)
+	}
 
 	req := heterogeneousAssignmentExecutionRequest(t, stackSet.Stacks[0], variants)
 	result, err := ImportAssignmentResultFromFormationRun(req, formationResult, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
 	require.NoError(t, err)
 	assert.Len(t, result.GetModelInferences(), 3)
 	assert.NotNil(t, result.GetScoredInferenceSpanNanos())
+	for index, inference := range result.GetModelInferences() {
+		assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED, inference.GetUsageAvailability())
+		assert.Equal(t, uint32(index+10), inference.GetPromptTokens())
+	}
+	summary, err := BuildPublicResourceSummary(result)
+	require.NoError(t, err)
+	require.NotNil(t, summary.InputTokens.Value)
+	assert.Equal(t, float64(33), *summary.InputTokens.Value)
+}
+
+func TestImportAssignmentResultFromFormationRun_DoesNotPublishUnavailablePromptUsageAsZero(t *testing.T) {
+	variants := testHeterogeneousVariants()
+	stack := mustHeterogeneousStack(t)
+	req := heterogeneousAssignmentExecutionRequest(t, stack, variants)
+	formationResult := &FormationRunResult{
+		FormationID: stack.GetStackId(),
+		Roles: []FormationRoleTelemetry{{
+			Role:              FormationRoleLite,
+			Model:             formationModelFromVariant(variants[0]),
+			ProviderAttemptID: "provider-attempt-lite",
+			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE,
+			GenerationTokens:  12,
+		}},
+	}
+
+	result, err := ImportAssignmentResultFromFormationRun(req, formationResult, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	require.Len(t, result.GetModelInferences(), 1)
+	assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE, result.GetModelInferences()[0].GetUsageAvailability())
+
+	summary, err := BuildPublicResourceSummary(result)
+	require.NoError(t, err)
+	assert.Nil(t, summary.InputTokens.Value)
+	assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE, summary.InputTokens.UnavailableReason)
 }
 
 func TestBuildFormationInitialState_MaterializesScenarioFixture(t *testing.T) {

@@ -15,6 +15,7 @@ import {
 } from '../src/state/campaign-adapter';
 import { decodeViewRecord } from '../src/contract/validators';
 import { decodeCampaignProjectionEnvelope } from '../src/contract/campaign-wire';
+import type { LiveEvent } from '../src/contract/types';
 import { EvalStore } from '../src/state/store';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -331,7 +332,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
       context,
     );
 
-    const started = records.find((record) => record.kind === 'assignment_started');
+    const started = records.find((record): record is LiveEvent => record.kind === 'assignment_started');
     expect(started).toMatchObject({
       variant_id: 'phi35mini38b-speed',
       role: 'primary',
@@ -979,6 +980,8 @@ describe('EvalStore campaign ingest', () => {
       expect(enrFirst!.activity_summary?.model_activity.availability).toBe('observed');
       expect(enrFirst!.evidence_bindings).toHaveLength(1);
       expect(enrFirst!.resource_summary?.latency_ms?.value).toBe(120);
+      expect(enrFirst!.resource_summary?.input_tokens?.value).toBe(12);
+      expect(enrFirst!.resource_summary?.output_tokens?.value).toBe(4);
       expect(enrFirst!.resource_summary?.retries?.value).toBe(0);
     });
 

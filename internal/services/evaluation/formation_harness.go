@@ -89,6 +89,8 @@ func (e *FormationHarnessExecutor) ExecuteRole(_ context.Context, req FormationR
 		MutationCandidate:       []byte("mutation:" + string(req.Role)),
 		StateMutation:           req.Role == FormationRolePrimary,
 		ProviderAttemptID:       req.AttemptID,
+		UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+		PromptTokens:            10,
 		TTFTNanos:               2 * uint64(time.Millisecond),
 		GenerationTokens:        20,
 		GenerationDurationNanos: 10 * uint64(time.Millisecond),

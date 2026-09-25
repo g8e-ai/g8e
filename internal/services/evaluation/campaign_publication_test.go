@@ -599,6 +599,59 @@ func TestPublishRunCatchUpPreservesBoundVerificationState(t *testing.T) {
 	assert.Equal(t, report.GetVerifiedPopulationDigest(), latest.VerificationMetadata.PopulationDigest)
 }
 
+// Regression: partial campaign verify on an in-progress run must not block
+// later execute/publish when additional assignments settle and the bound
+// population no longer matches the persisted report.
+func TestPublishRunAggregatesIgnoresStalePartialVerificationOnInProgressRun(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+
+	req := testCampaignInitRequest(t)
+	catalog := req.Catalog
+	truncated := &evalv1.EvaluationScenarioCatalog{
+		SchemaVersion: catalog.GetSchemaVersion(),
+		CatalogRef:    catalog.GetCatalogRef(),
+		Scenarios:     catalog.GetScenarios()[:3],
+	}
+	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
+	require.NoError(t, err)
+	truncated.CatalogDigest = truncatedDigest
+	req.Catalog = truncated
+
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	scheduled, err := controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	require.Greater(t, scheduled, 1)
+
+	binding := CampaignExecutionBinding{
+		InferenceOperatorSessionID: req.InferenceOperatorSessionID,
+		DataOperatorID:             "data-op",
+		DataOperatorSessionID:      req.DataOperatorSessionID,
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+	}
+	_, ok, err := controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), binding, req.ScenarioArtifacts)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	bindPersistedVerificationReport(t, store, run, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS)
+
+	_, ok, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), binding, req.ScenarioArtifacts)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	_, err = coordinator.PublishRunAggregates(context.Background(), run.GetRunId(), time.Unix(1_700_000_300, 0).UTC())
+	require.NoError(t, err)
+
+	summaries := evaluationSummaries(t, exporter.records)
+	require.NotEmpty(t, summaries)
+	assert.Equal(t, "not_run", summaries[len(summaries)-1].VerifierState)
+}
+
 // Regression: a bound failed report remains visible as failed through
 // catch-up; a persisted report whose population binding no longer matches run
 // evidence fails closed instead of publishing a downgrade.

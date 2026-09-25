@@ -27,49 +27,51 @@ const formationRunEvidenceSchemaVersion = "formation-run-evidence.v1"
 // FormationRunEvidence is the canonical persisted envelope for one governed
 // heterogeneous assignment formation run.
 type FormationRunEvidence struct {
-	SchemaVersion        string                     `json:"schema_version"`
-	EvidenceDigest       string                     `json:"evidence_digest"`
-	RunID                string                     `json:"run_id"`
-	AssignmentID         string                     `json:"assignment_id"`
-	EvaluationAttemptID  string                     `json:"evaluation_attempt_id"`
-	CampaignID           string                     `json:"campaign_id"`
-	ScenarioID           string                     `json:"scenario_id"`
-	FormationID          string                     `json:"formation_id"`
-	ModelRegistryDigest  string                     `json:"model_registry_digest"`
-	InferenceSessionID   string                     `json:"inference_session_id"`
-	DataSessionID        string                     `json:"data_session_id"`
-	Result               persistedFormationRunResult `json:"result"`
+	SchemaVersion       string                      `json:"schema_version"`
+	EvidenceDigest      string                      `json:"evidence_digest"`
+	RunID               string                      `json:"run_id"`
+	AssignmentID        string                      `json:"assignment_id"`
+	EvaluationAttemptID string                      `json:"evaluation_attempt_id"`
+	CampaignID          string                      `json:"campaign_id"`
+	ScenarioID          string                      `json:"scenario_id"`
+	FormationID         string                      `json:"formation_id"`
+	ModelRegistryDigest string                      `json:"model_registry_digest"`
+	InferenceSessionID  string                      `json:"inference_session_id"`
+	DataSessionID       string                      `json:"data_session_id"`
+	Result              persistedFormationRunResult `json:"result"`
 }
 
 type persistedFormationRunResult struct {
-	SchemaVersion        string                           `json:"schema_version"`
-	FormationID          string                           `json:"formation_id"`
-	Passed               bool                             `json:"passed"`
-	PeakVRAMMiB          uint64                           `json:"peak_vram_mib,omitempty"`
+	SchemaVersion        string                            `json:"schema_version"`
+	FormationID          string                            `json:"formation_id"`
+	Passed               bool                              `json:"passed"`
+	PeakVRAMMiB          uint64                            `json:"peak_vram_mib,omitempty"`
 	Roles                []persistedFormationRoleTelemetry `json:"roles"`
-	MutationIntercepted  bool                             `json:"mutation_intercepted"`
-	AllPolicyLayersValid bool                             `json:"all_policy_layers_valid"`
+	MutationIntercepted  bool                              `json:"mutation_intercepted"`
+	AllPolicyLayersValid bool                              `json:"all_policy_layers_valid"`
 }
 
 type persistedFormationRoleTelemetry struct {
-	Role                         string  `json:"role"`
-	VariantID                    string  `json:"variant_id"`
-	ProviderClass                string  `json:"provider_class"`
-	ServedModelTag               string  `json:"served_model_tag"`
-	ModelDigest                  string  `json:"model_digest"`
-	Family                       string  `json:"family"`
-	AttemptID                    string  `json:"attempt_id"`
-	AttestationStatus            string  `json:"attestation_status"`
-	AttestationVerified          bool    `json:"attestation_verified"`
-	AttestationDigest            string  `json:"attestation_digest,omitempty"`
-	ProviderAttemptID            string  `json:"provider_attempt_id"`
-	ObserverObservationDigest    string  `json:"observer_observation_digest,omitempty"`
-	ProvenanceAttestationDigest  string  `json:"provenance_attestation_digest,omitempty"`
-	PeakVRAMMiB                  uint64  `json:"peak_vram_mib,omitempty"`
-	TTFTNanos                    uint64  `json:"ttft_nanos,omitempty"`
-	GenerationTokens             uint32  `json:"generation_tokens,omitempty"`
-	GenerationDurationNanos      uint64  `json:"generation_duration_nanos,omitempty"`
-	GenerationTokensPerSec       float64 `json:"generation_tokens_per_sec,omitempty"`
+	Role                        string  `json:"role"`
+	VariantID                   string  `json:"variant_id"`
+	ProviderClass               string  `json:"provider_class"`
+	ServedModelTag              string  `json:"served_model_tag"`
+	ModelDigest                 string  `json:"model_digest"`
+	Family                      string  `json:"family"`
+	AttemptID                   string  `json:"attempt_id"`
+	AttestationStatus           string  `json:"attestation_status"`
+	AttestationVerified         bool    `json:"attestation_verified"`
+	AttestationDigest           string  `json:"attestation_digest,omitempty"`
+	ProviderAttemptID           string  `json:"provider_attempt_id"`
+	ObserverObservationDigest   string  `json:"observer_observation_digest,omitempty"`
+	ProvenanceAttestationDigest string  `json:"provenance_attestation_digest,omitempty"`
+	UsageAvailability           string  `json:"usage_availability"`
+	PromptTokens                uint32  `json:"prompt_tokens,omitempty"`
+	PeakVRAMMiB                 uint64  `json:"peak_vram_mib,omitempty"`
+	TTFTNanos                   uint64  `json:"ttft_nanos,omitempty"`
+	GenerationTokens            uint32  `json:"generation_tokens,omitempty"`
+	GenerationDurationNanos     uint64  `json:"generation_duration_nanos,omitempty"`
+	GenerationTokensPerSec      float64 `json:"generation_tokens_per_sec,omitempty"`
 }
 
 // CampaignFormationRunStore persists canonical formation-run evidence for one
@@ -91,7 +93,7 @@ func BuildFormationRunEvidence(req AssignmentExecutionRequest, runContext Format
 		EvaluationAttemptID: runContext.EvaluationAttemptID,
 		CampaignID:          runContext.CampaignID,
 		ScenarioID:          runContext.ScenarioID,
-		FormationID:           formationResult.FormationID,
+		FormationID:         formationResult.FormationID,
 		ModelRegistryDigest: runContext.ModelRegistryDigest,
 		InferenceSessionID:  runContext.InferenceSessionID,
 		DataSessionID:       runContext.DataSessionID,
@@ -247,6 +249,9 @@ func VerifyFormationRunEvidenceMatchesResult(assignment *evalv1.EvaluationAssign
 		if expected.GetProviderAttemptId() != actual.GetProviderAttemptId() ||
 			expected.GetModelRole() != actual.GetModelRole() ||
 			expected.GetCallSite() != actual.GetCallSite() ||
+			expected.GetUsageAvailability() != actual.GetUsageAvailability() ||
+			expected.GetPromptTokens() != actual.GetPromptTokens() ||
+			expected.GetCompletionTokens() != actual.GetCompletionTokens() ||
 			expected.GetGenerationDurationNanos() != actual.GetGenerationDurationNanos() {
 			return fmt.Errorf("formation run evidence model inference %d mismatch", index)
 		}
@@ -286,6 +291,8 @@ func formationRunResultToPersisted(result *FormationRunResult) persistedFormatio
 			ProviderAttemptID:           role.ProviderAttemptID,
 			ObserverObservationDigest:   observerDigest,
 			ProvenanceAttestationDigest: provenanceDigest,
+			UsageAvailability:           role.UsageAvailability.String(),
+			PromptTokens:                role.PromptTokens,
 			PeakVRAMMiB:                 role.PeakVRAMMiB,
 			TTFTNanos:                   role.TTFTNanos,
 			GenerationTokens:            role.GenerationTokens,
@@ -315,6 +322,8 @@ func persistedFormationRunResultToDomain(result persistedFormationRunResult) *Fo
 			AttestationVerified:     role.AttestationVerified,
 			AttestationDigest:       role.AttestationDigest,
 			ProviderAttemptID:       role.ProviderAttemptID,
+			UsageAvailability:       persistedFormationUsageAvailability(role.UsageAvailability),
+			PromptTokens:            role.PromptTokens,
 			PeakVRAMMiB:             role.PeakVRAMMiB,
 			TTFTNanos:               role.TTFTNanos,
 			GenerationTokens:        role.GenerationTokens,
@@ -342,6 +351,14 @@ func persistedFormationRunResultToDomain(result persistedFormationRunResult) *Fo
 		out.Roles = append(out.Roles, telemetry)
 	}
 	return out
+}
+
+func persistedFormationUsageAvailability(value string) evalv1.EvaluationUsageAvailability {
+	number, ok := evalv1.EvaluationUsageAvailability_value[value]
+	if !ok {
+		return evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNSPECIFIED
+	}
+	return evalv1.EvaluationUsageAvailability(number)
 }
 
 func formationModelFromPersisted(role persistedFormationRoleTelemetry) FormationModel {

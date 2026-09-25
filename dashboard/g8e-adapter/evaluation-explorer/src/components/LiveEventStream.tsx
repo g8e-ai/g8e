@@ -179,7 +179,7 @@ export function LiveEventStream({
   connection,
   streamConnection,
   isReconciling = false,
-  title = 'Live event stream',
+  title = 'Events',
   id = 'live-stream',
   className,
 }: {
@@ -283,7 +283,7 @@ export function LiveEventStream({
           <StreamStatusIndicator
             streamConnection={streamConnection}
             feedConnection={connection}
-            detail="long"
+            showLabel={false}
           />
         </h2>
         <div className="stream-controls">

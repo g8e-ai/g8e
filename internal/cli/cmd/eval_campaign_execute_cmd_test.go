@@ -361,7 +361,7 @@ func TestCampaignEvalSchedule_FormationCatalogMaterializesAssignments(t *testing
 	store := evaluation.NewStore(fileSvc)
 	assignments, err := store.ListAssignments(context.Background(), runID)
 	require.NoError(t, err)
-	assert.Len(t, assignments, 5*evaluation.StandardScenarioCount)
+	assert.Len(t, assignments, 4*evaluation.StandardScenarioCount)
 }
 
 func TestCampaignEvalExecute_WithPublishFlag(t *testing.T) {

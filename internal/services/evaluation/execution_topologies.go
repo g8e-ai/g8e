@@ -230,7 +230,7 @@ type ExecutionTopologies struct {
 	formations []Formation
 }
 
-// NewExecutionTopologies returns the five preregistered benchmark formations.
+// NewExecutionTopologies returns the preregistered sovereign benchmark formations.
 func NewExecutionTopologies() (*ExecutionTopologies, error) {
 	formations := defaultExecutionTopologies()
 	for _, formation := range formations {
@@ -345,6 +345,8 @@ type FormationRoleResult struct {
 	MutationCandidate       []byte
 	StateMutation           bool
 	ProviderAttemptID       string
+	UsageAvailability       evalv1.EvaluationUsageAvailability
+	PromptTokens            uint32
 	TTFTNanos               uint64
 	GenerationTokens        uint32
 	GenerationDurationNanos uint64
@@ -385,6 +387,8 @@ type FormationRoleTelemetry struct {
 	AttestationVerified     bool
 	AttestationDigest       string
 	ProviderAttemptID       string
+	UsageAvailability       evalv1.EvaluationUsageAvailability
+	PromptTokens            uint32
 	PeakVRAMMiB             uint64
 	TTFTNanos               uint64
 	GenerationTokens        uint32
@@ -526,13 +530,17 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 		}
 		telemetry := FormationRoleTelemetry{
 			Role: role, Model: model, AttemptID: attemptID,
-			AttestationStatus:   formationAttestationStatus(model.Trust),
-			AttestationVerified: model.Trust == FormationTrustDelegated || attestations[formationAttestationIndex(role)].Verified,
-			AttestationDigest:   attestations[formationAttestationIndex(role)].Digest,
-			ProviderAttemptID:   roleResult.ProviderAttemptID, PeakVRAMMiB: roleResult.PeakVRAMMiB,
-			TTFTNanos: roleResult.TTFTNanos, GenerationTokens: roleResult.GenerationTokens,
+			AttestationStatus:       formationAttestationStatus(model.Trust),
+			AttestationVerified:     model.Trust == FormationTrustDelegated || attestations[formationAttestationIndex(role)].Verified,
+			AttestationDigest:       attestations[formationAttestationIndex(role)].Digest,
+			ProviderAttemptID:       roleResult.ProviderAttemptID,
+			UsageAvailability:       roleResult.UsageAvailability,
+			PromptTokens:            roleResult.PromptTokens,
+			PeakVRAMMiB:             roleResult.PeakVRAMMiB,
+			TTFTNanos:               roleResult.TTFTNanos,
+			GenerationTokens:        roleResult.GenerationTokens,
 			GenerationDurationNanos: roleResult.GenerationDurationNanos, StateMutation: roleResult.StateMutation,
-			ObserverEvidence: observation,
+			ObserverEvidence:   observation,
 			ProvenanceEvidence: bindFormationProvenanceEvidence(attestationForRole(attestations, role), roleResult.ProviderAttemptID),
 		}
 		if telemetry.GenerationDurationNanos > 0 {

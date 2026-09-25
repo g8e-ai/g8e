@@ -53,6 +53,10 @@ func TestBuildFormationRunEvidence_RoundTripsAndValidatesDigest(t *testing.T) {
 	require.NoError(t, err)
 	formationResult, err := harness.RunBoundFormation(context.Background(), formation, initialState)
 	require.NoError(t, err)
+	for index := range formationResult.Roles {
+		formationResult.Roles[index].UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
+		formationResult.Roles[index].PromptTokens = uint32(index + 21)
+	}
 
 	body, evidence, err := BuildFormationRunEvidence(req, runContext, formationResult)
 	require.NoError(t, err)
@@ -67,6 +71,18 @@ func TestBuildFormationRunEvidence_RoundTripsAndValidatesDigest(t *testing.T) {
 	assert.Equal(t, evidence.EvidenceDigest, loaded.EvidenceDigest)
 	assert.Equal(t, formationResult.FormationID, loaded.Result.FormationID)
 	assert.Len(t, loaded.Result.Roles, 3)
+	restored, err := FormationRunResultFromEvidence(loaded)
+	require.NoError(t, err)
+	require.Len(t, restored.Roles, 3)
+	for index, role := range restored.Roles {
+		assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED, role.UsageAvailability)
+		assert.Equal(t, uint32(index+21), role.PromptTokens)
+	}
+
+	assignmentResult, err := ImportAssignmentResultFromFormationRun(req, formationResult, time.Unix(1_700_000_001, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	assignmentResult.ModelInferences[0].PromptTokens++
+	assert.Error(t, VerifyFormationRunEvidenceMatchesResult(req.Assignment, loaded, assignmentResult))
 }
 
 func TestCampaignFormationExecutor_PersistsFormationRunEvidence(t *testing.T) {
@@ -125,4 +141,8 @@ func TestBuildFailureAssignmentResult_RecoversFromPersistedFormationRun(t *testi
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, recovered.GetLifecycleStatus())
 	assert.Len(t, recovered.GetModelInferences(), 3)
+	for _, inference := range recovered.GetModelInferences() {
+		assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED, inference.GetUsageAvailability())
+		assert.NotZero(t, inference.GetPromptTokens())
+	}
 }

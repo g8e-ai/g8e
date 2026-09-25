@@ -178,13 +178,13 @@ func TestFormationRunnerAttestsBeforeAllocationAndPassesStateThroughGovernance(t
 
 func TestFormationRunnerSkipsProvenanceForDelegatedPrimary(t *testing.T) {
 	formation := Formation{
-		ID: "delegated-smoke", MaxVRAMMiB: FormationMaxVRAMMiB,
+		ID: "delegated-smoke", DisplayName: "Delegated Smoke", Description: "Validates delegated-primary attestation behavior.", MaxVRAMMiB: FormationMaxVRAMMiB,
 		Primary: FormationModel{
-			VariantID: "delegated-primary", Provider: "Cloud", Family: "Delegated",
+			VariantID: "delegated-primary", DisplayName: "Delegated Primary", Provider: "Cloud", Family: "Delegated",
 			ProviderClass: "delegated", ServedModelTag: "delegated-primary", Trust: FormationTrustDelegated,
 		},
-		Assistant: formationModel("assistant-local", "Assistant", "Local", "Local", "assistant:local", 1_000_000_000, "Q4_K_M", 1024, 256),
-		Lite:      formationModel("lite-local", "Lite", "Local", "Local", "lite:local", 500_000_000, "Q4_K_M", 512, 256),
+		Assistant: formationModel("assistant-local", "Assistant", "LocalA", "LocalA", "assistant:local", 1_000_000_000, "Q4_K_M", 1024, 256),
+		Lite:      formationModel("lite-local", "Lite", "LocalB", "LocalB", "lite:local", 500_000_000, "Q4_K_M", 512, 256),
 	}
 	formation.Primary.ModelDigest = "primary-digest"
 	formation.Assistant.ModelDigest = "assistant-digest"

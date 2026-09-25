@@ -223,6 +223,7 @@ describe('LiveEventStream', () => {
       metric_values: { pass: { value: 1 } },
       stage_summary: [],
       resource_summary: {
+        input_tokens: { value: 42 },
         output_tokens: { value: 180 },
       },
       benchmark_observations: {
@@ -251,6 +252,7 @@ describe('LiveEventStream', () => {
     );
 
     expect(screen.getByRole('columnheader', { name: 'Tokens/s' })).toBeInTheDocument();
+    expect(screen.getByText('42 tok')).toBeInTheDocument();
     expect(screen.getByText('230.8 tok/s')).toBeInTheDocument();
   });
 

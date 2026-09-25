@@ -96,7 +96,7 @@ func TestCampaignEvalFormationsList_JSON(t *testing.T) {
 
 	var payload formationListJSON
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
-	require.Len(t, payload.Formations, 5)
+	require.Len(t, payload.Formations, 4)
 }
 
 func TestCampaignEvalFormationsRun_RequiresInferenceSession(t *testing.T) {

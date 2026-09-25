@@ -483,7 +483,7 @@ For the four-formation sovereign benchmark (eight unique served tags), stage eve
   --output .g8e/eval/inventories/eval-formations-benchmark.json
 ```
 
-Use `g8e eval campaign formations list` to inspect the ten required served tags. Sovereign tags must match the catalog exactly (including `-instruct-q4_K_M` suffixes where listed).
+Use `g8e eval campaign formations list` to inspect the four formations and their eight unique sovereign served tags. Tags must match the catalog exactly (including `-instruct-q4_K_M` suffixes where listed).
 
 Catalog formation variant IDs (`phi35-mini-38b-speed`, etc.) differ from freeze variant IDs; binding resolves frozen digests by **served model tag**.
 
