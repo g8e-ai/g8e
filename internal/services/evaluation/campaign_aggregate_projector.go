@@ -895,7 +895,32 @@ func BuildRunVerificationApplicability(run *evalv1.EvaluationRun, spec *evalv1.E
 		if ref := assignment.GetScenarioRef(); ref != nil {
 			entry.ScenarioVersion = ref.GetVersion()
 		}
-		if homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous); ok && homogeneous.Homogeneous != nil && homogeneous.Homogeneous.GetCandidateVariant() != nil {
+		if IsHeterogeneousAssignment(assignment) {
+			stack, err := HeterogeneousStackFromAssignment(assignment)
+			if err != nil {
+				return nil, err
+			}
+			entry.StackId = stack.GetStackId()
+			for _, slot := range []struct {
+				role evalv1.ModelCampaignRole
+				bind *evalv1.RoleAssignment
+			}{
+				{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, stack.GetPrimarySlot()},
+				{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT, stack.GetAssistantSlot()},
+				{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE, stack.GetLiteSlot()},
+			} {
+				if slot.bind == nil || slot.bind.GetVariantId() == "" {
+					continue
+				}
+				key := slot.bind.GetVariantId() + ":" + strings.ToLower(strings.TrimPrefix(slot.role.String(), "MODEL_CAMPAIGN_ROLE_"))
+				bucket := buckets[key]
+				if bucket == nil {
+					bucket = &VerifiedModelSummaryBucket{VariantID: slot.bind.GetVariantId(), Role: slot.role}
+					buckets[key] = bucket
+				}
+				bucket.AssignmentIDs = append(bucket.AssignmentIDs, entry.GetAssignmentId())
+			}
+		} else if homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous); ok && homogeneous.Homogeneous != nil && homogeneous.Homogeneous.GetCandidateVariant() != nil {
 			entry.VariantId = homogeneous.Homogeneous.GetCandidateVariant().GetVariantId()
 			entry.DesignatedRole = homogeneous.Homogeneous.GetDesignatedRole()
 			key := entry.GetVariantId() + ":" + strings.ToLower(strings.TrimPrefix(entry.GetDesignatedRole().String(), "MODEL_CAMPAIGN_ROLE_"))
@@ -1460,6 +1485,27 @@ func assignmentVariantRolePairs(assignment *evalv1.EvaluationAssignment) ([]assi
 		return nil, err
 	}
 	return []assignmentVariantRolePair{{variantID: variantID, role: role}}, nil
+}
+
+func variantIDForAssignmentModelRole(assignment *evalv1.EvaluationAssignment, role evalv1.ModelCampaignRole) (string, error) {
+	roleLabel, err := modelCampaignRoleLabel(role)
+	if err != nil {
+		return "", err
+	}
+	pairs, err := assignmentVariantRolePairs(assignment)
+	if err != nil {
+		return "", err
+	}
+	for _, pair := range pairs {
+		if pair.role == roleLabel {
+			return pair.variantID, nil
+		}
+	}
+	return "", fmt.Errorf("evaluation: assignment model role lookup: %w", constants.ErrMissingRequiredField)
+}
+
+func primaryVariantIDForAssignment(assignment *evalv1.EvaluationAssignment) (string, error) {
+	return variantIDForAssignmentModelRole(assignment, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY)
 }
 
 func variantRoleAggregateFor(state *runAggregateState, variantID, role string) *variantRoleAggregate {

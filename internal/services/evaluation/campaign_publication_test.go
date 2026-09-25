@@ -435,6 +435,7 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservat
 			ProviderAttemptId: "attempt-remote",
 			ModelRole:         evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
 			ModelVariant:      &evalv1.ModelVariant{VariantId: "qwen3-4b"},
+			AgentPersona:      "sage",
 			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
 		}},
 	}
@@ -694,4 +695,86 @@ func TestPublishRunCatchUpSkipsProofRebuildWhenHashesRecorded(t *testing.T) {
 	_, err = coordinator.PublishRunCatchUp(context.Background(), run.GetRunId())
 	require.NoError(t, err)
 	assert.Empty(t, proofPublisher.inputs)
+}
+
+func completedHeterogeneousFormationCampaign(t *testing.T, store *Store) *evalv1.EvaluationRun {
+	t.Helper()
+	harness, err := NewFormationHarness(
+		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
+		func(prefix string) string { return prefix + "-attempt" },
+	)
+	require.NoError(t, err)
+	variants := testHeterogeneousVariants()
+	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+
+	req := testCampaignInitRequest(t)
+	catalog := req.Catalog
+	truncated := &evalv1.EvaluationScenarioCatalog{
+		SchemaVersion: catalog.GetSchemaVersion(),
+		CatalogRef:    catalog.GetCatalogRef(),
+		Scenarios:     catalog.GetScenarios()[:1],
+	}
+	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
+	require.NoError(t, err)
+	truncated.CatalogDigest = truncatedDigest
+	req.Catalog = truncated
+	req.Lane = evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM
+	req.Inventory, err = MaterializeModelRegistry(req.CampaignID, variants)
+	require.NoError(t, err)
+
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	scenarioID := truncated.GetScenarios()[0].GetScenarioId()
+	stack := mustHeterogeneousStack(t)
+	execReq := heterogeneousAssignmentExecutionRequest(t, stack, variants)
+	execReq.Assignment.ScenarioId = scenarioID
+	execReq.ScenarioInput = ScenarioInputFixture{}
+	require.NoError(t, json.Unmarshal(req.ScenarioArtifacts[scenarioID].Input.Body, &execReq.ScenarioInput))
+	execReq.Assignment.SchemaVersion = CampaignSchemaVersion
+	execReq.Assignment.RunId = run.GetRunId()
+	execReq.Assignment.CampaignId = req.CampaignID
+	execReq.Assignment.LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	require.NoError(t, store.SaveAssignment(context.Background(), execReq.Assignment))
+
+	formation, err := BindHeterogeneousStack(FormationBindingRequest{Stack: stack, Variants: variants})
+	require.NoError(t, err)
+	initialState, err := BuildFormationInitialState(execReq.ScenarioInput)
+	require.NoError(t, err)
+	formationResult, err := harness.RunBoundFormation(context.Background(), formation, initialState)
+	require.NoError(t, err)
+	result, err := ImportAssignmentResultFromFormationRun(execReq, formationResult, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	body, _, err := BuildFormationRunEvidence(execReq, FormationRunContext{
+		CampaignID:          execReq.Assignment.GetCampaignId(),
+		RunID:               execReq.Assignment.GetRunId(),
+		AssignmentID:        execReq.Assignment.GetAssignmentId(),
+		EvaluationAttemptID: execReq.AttemptID,
+		ScenarioID:          execReq.Assignment.GetScenarioId(),
+		ModelRegistryDigest: execReq.Binding.ModelRegistryDigest,
+		InferenceSessionID:  execReq.Binding.InferenceOperatorSessionID,
+		DataSessionID:       execReq.Binding.DataOperatorSessionID,
+	}, formationResult)
+	require.NoError(t, err)
+	require.NoError(t, store.SaveAssignmentFormationRun(context.Background(), req.RunID, execReq.Assignment.GetAssignmentId(), body))
+	require.NoError(t, store.SaveAssignmentResult(context.Background(), result))
+	return run
+}
+
+func TestCampaignPublicationCoordinatorPublishRunCompletion_HeterogeneousFormationAssignments(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	run := completedHeterogeneousFormationCampaign(t, store)
+	bindPersistedVerificationReport(t, store, run, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS)
+
+	count, err := coordinator.PublishRunCompletion(context.Background(), run.GetRunId(), time.Unix(1_700_000_100, 0).UTC())
+	require.NoError(t, err)
+	assert.Greater(t, count, 0)
+
+	summaries := evaluationSummaries(t, exporter.records)
+	require.NotEmpty(t, summaries)
+	latest := summaries[len(summaries)-1]
+	assert.Equal(t, "completed", latest.LifecycleState)
+	assert.NotEmpty(t, latest.ModelRoleMapping)
 }

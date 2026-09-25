@@ -151,6 +151,32 @@ func TestBindFormation_RejectsServedTagMismatch(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrFormationStackMismatch)
 }
 
+func TestBindFormation_RejectsDelegatedProviderClassMismatch(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+	formation, err := topologies.Formation("hybrid-delegator")
+	require.NoError(t, err)
+	stack, err := formation.ToStackDefinition()
+	require.NoError(t, err)
+	variants := FormationCatalogFixtureVariants(func(string) string {
+		return repeatHex('d', 64)
+	})
+	for _, variant := range variants {
+		if variant.GetServedModelTag() == "gemini-1.5-pro" {
+			variant.ProviderClass = "ollama"
+			break
+		}
+	}
+
+	_, err = BindFormation(FormationBindingRequest{
+		FormationID: "hybrid-delegator",
+		Stack:       stack,
+		Variants:    variants,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFormationStackMismatch)
+}
+
 func TestBindFormation_RejectsInvalidStackDigest(t *testing.T) {
 	req := ultraLightSpeedsterBindingRequest(t)
 	req.Stack.StackDigest = "invalid"

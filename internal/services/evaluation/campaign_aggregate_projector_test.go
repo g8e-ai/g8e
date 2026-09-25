@@ -990,3 +990,70 @@ func homogeneousAssignment(assignmentID, variantID string, role evalv1.ModelCamp
 		QueuedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
 	}
 }
+
+func TestBuildPlannedModelRoleInvocationSignals_EmitsHeterogeneousRoles(t *testing.T) {
+	stack := mustHeterogeneousStack(t)
+	assignment := &evalv1.EvaluationAssignment{
+		AssignmentId: "assignment-hetero",
+		RunId:        "run-hetero",
+		ScenarioId:   "scenario-1",
+		Target: &evalv1.EvaluationAssignment_Heterogeneous{
+			Heterogeneous: &evalv1.HeterogeneousAssignmentTarget{Stack: stack},
+		},
+	}
+	signals := buildPlannedModelRoleInvocationSignals(assignment, "2026-09-25T00:00:00Z", 1, 5)
+	require.Len(t, signals, 3)
+	roles := make([]string, 0, len(signals))
+	for _, signal := range signals {
+		assert.NotEmpty(t, signal.VariantID)
+		roles = append(roles, string(signal.Role))
+	}
+	assert.ElementsMatch(t, []string{"primary", "assistant", "lite"}, roles)
+}
+
+func TestBuildRunVerificationApplicability_BindsHeterogeneousStackPopulation(t *testing.T) {
+	stack := mustHeterogeneousStack(t)
+	assignment := &evalv1.EvaluationAssignment{
+		AssignmentId:          "assignment-hetero",
+		DeterministicIdentity: "assignment-hetero",
+		RunId:                 "run-hetero",
+		ScenarioId:            "scenario-1",
+		LifecycleStatus:       evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		Target: &evalv1.EvaluationAssignment_Heterogeneous{
+			Heterogeneous: &evalv1.HeterogeneousAssignmentTarget{Stack: stack},
+		},
+	}
+	result := &evalv1.EvaluationAssignmentResult{
+		AssignmentId:    assignment.GetAssignmentId(),
+		ResultDigest:    "result-digest",
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	}
+	run := &evalv1.EvaluationRun{
+		RunId: "run-hetero",
+		Lane:  evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM,
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "eval-formations-smoke",
+		},
+	}
+	spec := &evalv1.EvaluationCampaignSpec{CampaignId: "eval-formations-smoke"}
+	catalog := &evalv1.EvaluationScenarioCatalog{CatalogDigest: "catalog-digest"}
+	report := &evalv1.EvaluationVerificationReport{
+		RunId:  run.GetRunId(),
+		Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+	}
+
+	applicability, err := BuildRunVerificationApplicability(
+		run,
+		spec,
+		catalog,
+		[]*evalv1.EvaluationAssignment{assignment},
+		map[string]*evalv1.EvaluationAssignmentResult{assignment.GetAssignmentId(): result},
+		report,
+	)
+	require.NoError(t, err)
+	require.Len(t, applicability.Population.GetEntries(), 1)
+	entry := applicability.Population.GetEntries()[0]
+	assert.Equal(t, stack.GetStackId(), entry.GetStackId())
+	assert.Empty(t, entry.GetVariantId())
+	require.Len(t, applicability.EligibleModelBuckets, 3)
+}

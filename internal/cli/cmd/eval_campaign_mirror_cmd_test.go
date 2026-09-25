@@ -164,6 +164,7 @@ func (evaluationStubCampaignExecutor) ExecuteAssignment(_ context.Context, req e
 		Lane:            req.Assignment.GetLane(),
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		CompletedAt:     timestamppb.Now(),
+		ModelInferences: evaluation.StubHomogeneousAssignmentModelInferences(req.Assignment),
 	}
 	digest, err := evaluation.ComputeAssignmentResultDigest(result)
 	if err != nil {

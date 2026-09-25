@@ -274,41 +274,43 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		deps.now,
 		func(prefix string) string { return prefix + "-" + deps.newID() },
 	)
-	formationRunner, err := buildCampaignFormationProductionRunner(
-		cmd,
-		deps,
-		cfg,
-		fileSvc,
-		authContext,
-		dataOperator,
-		operators,
-		spec.GetModelRegistry(),
-		spec.GetModelRegistryDigest(),
-		campaignFormationProductionOptions{
-			InferenceSessionID: selected.OperatorSessionID,
-			DataSessionID:      dataOperator.OperatorSessionID,
-			OllamaEndpoint:     opts.OllamaEndpoint,
-		},
-	)
-	if err != nil {
-		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
-	}
-	observationReader, err := newCampaignProviderObservationReader(fileSvc, cfg)
-	if err != nil {
-		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
-	}
-	provenanceReader, err := newCampaignModelProvenanceReader(fileSvc, cfg)
-	if err != nil {
-		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
-	}
-	formationExecutor := evaluation.NewCampaignFormationExecutorWithWitness(
-		spec.GetModelRegistry(),
-		formationRunner,
-		store,
-		evaluation.NewCampaignFormationWitnessReader(observationReader, provenanceReader),
-		deps.now,
-		func(prefix string) string { return prefix + "-" + deps.newID() },
-	)
+	formationExecutor := evaluation.NewLazyCampaignFormationExecutor(func() (evaluation.CampaignAssignmentExecutor, error) {
+		formationRunner, err := buildCampaignFormationProductionRunner(
+			cmd,
+			deps,
+			cfg,
+			fileSvc,
+			authContext,
+			dataOperator,
+			operators,
+			spec.GetModelRegistry(),
+			spec.GetModelRegistryDigest(),
+			campaignFormationProductionOptions{
+				InferenceSessionID: selected.OperatorSessionID,
+				DataSessionID:      dataOperator.OperatorSessionID,
+				OllamaEndpoint:     opts.OllamaEndpoint,
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+		}
+		observationReader, err := newCampaignProviderObservationReader(fileSvc, cfg)
+		if err != nil {
+			return nil, err
+		}
+		provenanceReader, err := newCampaignModelProvenanceReader(fileSvc, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return evaluation.NewCampaignFormationExecutorWithWitness(
+			spec.GetModelRegistry(),
+			formationRunner,
+			store,
+			evaluation.NewCampaignFormationWitnessReader(observationReader, provenanceReader),
+			deps.now,
+			func(prefix string) string { return prefix + "-" + deps.newID() },
+		), nil
+	})
 	executor := evaluation.NewCampaignAssignmentRouter(chatExecutor, formationExecutor)
 	controller := controllerFactory(executor)
 	var publication *evaluation.CampaignPublicationCoordinator

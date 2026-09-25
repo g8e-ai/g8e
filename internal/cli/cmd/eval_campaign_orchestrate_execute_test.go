@@ -131,6 +131,9 @@ func buildCompletedCampaignTrace(
 				"provider_attempt_id":     "attempt-1",
 				"normalized_request_hash": repeatTestHex('b', 64),
 				"output_hash":             repeatTestHex('c', 64),
+				"usage_reported":          true,
+				"input_tokens":            10,
+				"output_tokens":           5,
 			},
 		},
 	}

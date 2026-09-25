@@ -52,6 +52,20 @@ func campaignOrchestrateOperators() []models.OperatorDocumentGo {
 	}
 }
 
+func writeCampaignPublicationProofResponse(w http.ResponseWriter, r *http.Request) bool {
+	switch r.URL.Path {
+	case constants.APIPaths.PublicFeedProofs, constants.APIPaths.PublicFeedProofsBatch, constants.APIPaths.PublicFeedProofsPush:
+		if r.Method != http.MethodPost {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"accepted":true}`))
+		return true
+	default:
+		return false
+	}
+}
+
 func writeCampaignWitnessPreflightResponse(w http.ResponseWriter, r *http.Request) bool {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.InferenceProviderObservations+"_preflight":

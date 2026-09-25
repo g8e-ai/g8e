@@ -206,6 +206,33 @@ func importAssignmentResultFromFormationRunEvidence(req AssignmentExecutionReque
 	return ImportAssignmentResultFromFormationRun(req, formationResult, now, newID)
 }
 
+// LazyCampaignFormationExecutor defers construction of the heterogeneous
+// formation executor until the first system-lane assignment is executed.
+type LazyCampaignFormationExecutor struct {
+	build func() (CampaignAssignmentExecutor, error)
+	inner CampaignAssignmentExecutor
+}
+
+// NewLazyCampaignFormationExecutor constructs a deferred heterogeneous executor.
+func NewLazyCampaignFormationExecutor(build func() (CampaignAssignmentExecutor, error)) *LazyCampaignFormationExecutor {
+	return &LazyCampaignFormationExecutor{build: build}
+}
+
+// ExecuteAssignment builds the formation executor on first heterogeneous use.
+func (e *LazyCampaignFormationExecutor) ExecuteAssignment(ctx context.Context, req AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
+	if e == nil || e.build == nil {
+		return nil, fmt.Errorf("evaluation: execute assignment: heterogeneous executor is required")
+	}
+	if e.inner == nil {
+		inner, err := e.build()
+		if err != nil {
+			return nil, err
+		}
+		e.inner = inner
+	}
+	return e.inner.ExecuteAssignment(ctx, req)
+}
+
 // CampaignAssignmentRouter dispatches one assignment to the homogeneous chat
 // executor or the heterogeneous formation executor.
 type CampaignAssignmentRouter struct {

@@ -24,7 +24,7 @@ type harnessCampaignFormationRunner struct {
 }
 
 func (r *harnessCampaignFormationRunner) RunHeterogeneousFormation(ctx context.Context, binding FormationBindingRequest, _ FormationRunContext, initialState []byte) (*FormationRunResult, error) {
-	formation, err := BindHeterogeneousStack(binding)
+	formation, err := ResolveFormationBinding(binding)
 	if err != nil {
 		return nil, err
 	}

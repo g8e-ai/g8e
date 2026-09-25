@@ -20,6 +20,6 @@ type EvalCampaignPublicationState struct {
 	SchemaVersion           string                                         `json:"schema_version"`
 	RunID                   string                                         `json:"run_id"`
 	PublishedIdempotency    []string                                       `json:"published_idempotency_keys"`
-	PublishedProofArtifacts map[string]EvalCampaignPublishedProofArtifacts `json:"published_proof_artifacts,omitempty"`
+	PublishedProofArtifacts map[string]EvalCampaignPublishedProofArtifacts `json:"published_proof_artifacts"`
 	LastPublishedSequence   int64                                          `json:"last_published_sequence"`
 }

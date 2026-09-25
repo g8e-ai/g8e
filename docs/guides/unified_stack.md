@@ -444,6 +444,22 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval models freeze \
   --output .g8e/eval/inventories/eval-formations-smoke.json
 ```
 
+For the full five-formation benchmark (ten unique served tags), pull every catalog tag on the provider first, freeze, then materialize with `--formation-catalog`. The delegated Hybrid Delegator primary (`gemini-1.5-pro`) is injected with a placeholder digest when absent from the Ollama freeze; weight attestation is skipped at execution time.
+
+```bash
+G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval models freeze \
+  --campaign-id eval-formations-benchmark \
+  --output .g8e/eval/inventories/eval-formations-provider-freeze.json
+
+./g8e eval models materialize \
+  --from .g8e/eval/inventories/eval-formations-provider-freeze.json \
+  --formation-catalog \
+  --campaign-id eval-formations-benchmark \
+  --output .g8e/eval/inventories/eval-formations-benchmark.json
+```
+
+Use `g8e eval campaign formations list` to inspect the ten required served tags. Sovereign tags must match the catalog exactly (including `-instruct-q4_K_M` suffixes where listed).
+
 Catalog formation variant IDs (`phi35-mini-38b-speed`, etc.) differ from freeze variant IDs; binding resolves frozen digests by **served model tag**.
 
 ### Run formation smoke

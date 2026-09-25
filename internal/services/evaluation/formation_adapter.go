@@ -179,7 +179,7 @@ func BindFormation(req FormationBindingRequest) (Formation, error) {
 }
 
 type formationVariantRegistry struct {
-	byVariantID    map[string]*evalv1.ModelVariant
+	byVariantID      map[string]*evalv1.ModelVariant
 	byServedModelTag map[string]*evalv1.ModelVariant
 }
 
@@ -227,10 +227,10 @@ func bindFormationRole(formation Formation, role FormationRole, slot *evalv1.Rol
 	if variant.GetServedModelTag() != catalogModel.ServedModelTag {
 		return FormationModel{}, fmt.Errorf("formation %q role %s: served tag %q does not match catalog %q: %w", formation.ID, role, variant.GetServedModelTag(), catalogModel.ServedModelTag, constants.ErrFormationStackMismatch)
 	}
+	if variant.GetProviderClass() != catalogModel.ProviderClass {
+		return FormationModel{}, fmt.Errorf("formation %q role %s: provider class %q does not match catalog %q: %w", formation.ID, role, variant.GetProviderClass(), catalogModel.ProviderClass, constants.ErrFormationStackMismatch)
+	}
 	if catalogModel.Trust == FormationTrustSovereign {
-		if variant.GetProviderClass() != catalogModel.ProviderClass {
-			return FormationModel{}, fmt.Errorf("formation %q role %s: provider class %q does not match catalog %q: %w", formation.ID, role, variant.GetProviderClass(), catalogModel.ProviderClass, constants.ErrFormationStackMismatch)
-		}
 		if variant.GetModelDigest() == "" {
 			return FormationModel{}, fmt.Errorf("formation %q role %s: %w", formation.ID, role, constants.ErrFormationAttestationRequired)
 		}

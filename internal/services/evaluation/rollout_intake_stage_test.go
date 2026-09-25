@@ -113,6 +113,37 @@ func TestStageRolloutIntakeSkipsManualAndPendingEntries(t *testing.T) {
 	assert.Equal(t, "sharded GGUF", result.Skipped[1].Reason)
 }
 
+func TestStageFormationCatalogIntake_PullsMissingLibraryTag(t *testing.T) {
+	t.Parallel()
+
+	pulled := make([]string, 0)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/pull":
+			var payload struct {
+				Model string `json:"model"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			pulled = append(pulled, payload.Model)
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = w.Write([]byte(`{"status":"success"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	result, err := StageFormationCatalogIntake(RolloutIntakeStageRequest{
+		Context:        context.Background(),
+		OllamaEndpoint: server.URL,
+		VariantIDs:     []string{"gemma2-2b"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, []string{"gemma2:2b-instruct-q4_K_M"}, result.Pulled)
+	assert.Equal(t, []string{"gemma2:2b-instruct-q4_K_M"}, pulled)
+}
+
 func writeRolloutIntakeCatalog(t *testing.T, catalog RolloutIntakeCatalog) string {
 	t.Helper()
 	path := t.TempDir() + "/rollout-intake-hf.json"

@@ -223,21 +223,25 @@ func buildPlannedModelRoleInvocationSignals(
 	completed int,
 	total int,
 ) []PublicModelRoleInvocationSignal {
-	variantID, roleLabel, err := homogeneousVariantRole(assignment)
+	pairs, err := assignmentVariantRolePairs(assignment)
 	if err != nil {
 		return nil
 	}
-	return []PublicModelRoleInvocationSignal{{
-		RunID:        assignment.GetRunId(),
-		AssignmentID: assignment.GetAssignmentId(),
-		VariantID:    variantID,
-		Role:         models.ModelRole(roleLabel),
-		TaskID:       assignment.GetScenarioId(),
-		ObservedAt:   observedAt,
-		EventID:      ModelRoleInvocationIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), roleLabel) + ":event",
-		Completed:    completed,
-		Total:        total,
-	}}
+	signals := make([]PublicModelRoleInvocationSignal, 0, len(pairs))
+	for _, pair := range pairs {
+		signals = append(signals, PublicModelRoleInvocationSignal{
+			RunID:        assignment.GetRunId(),
+			AssignmentID: assignment.GetAssignmentId(),
+			VariantID:    pair.variantID,
+			Role:         models.ModelRole(pair.role),
+			TaskID:       assignment.GetScenarioId(),
+			ObservedAt:   observedAt,
+			EventID:      ModelRoleInvocationIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), pair.role) + ":event",
+			Completed:    completed,
+			Total:        total,
+		})
+	}
+	return signals
 }
 
 func buildScoredModelRoleInvocationSignals(
@@ -267,7 +271,7 @@ func buildScoredModelRoleInvocationSignals(
 			variantID = record.GetModelVariant().GetVariantId()
 		}
 		if variantID == "" {
-			variantID, _, err = homogeneousVariantRole(assignment)
+			variantID, err = variantIDForAssignmentModelRole(assignment, record.GetModelRole())
 			if err != nil {
 				continue
 			}
@@ -312,7 +316,7 @@ func buildAssignmentPassMetricSignal(
 	if status == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED {
 		return PublicMetricAvailabilitySignal{}, false
 	}
-	variantID, _, err := homogeneousVariantRole(assignment)
+	variantID, err := primaryVariantIDForAssignment(assignment)
 	if err != nil {
 		return PublicMetricAvailabilitySignal{}, false
 	}

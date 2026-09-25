@@ -82,17 +82,42 @@ func StageRolloutIntake(req RolloutIntakeStageRequest) (*RolloutIntakeStageResul
 	if req.Context == nil {
 		req.Context = context.Background()
 	}
+	selected := filterRolloutIntakeModels(catalog.Models, req.VariantIDs)
+	return stageRolloutIntakeModels(req, endpoint, pullTimeout, selected)
+}
 
+// StageFormationCatalogIntake pulls sovereign ExecutionTopologies served tags to
+// the approved remote Ollama provider through the official Ollama client.
+func StageFormationCatalogIntake(req RolloutIntakeStageRequest) (*RolloutIntakeStageResult, error) {
+	endpoint := strings.TrimSpace(req.OllamaEndpoint)
+	if endpoint == "" {
+		return nil, fmt.Errorf("evaluation: stage formation catalog intake: set ollama endpoint or G8E_OLLAMA_ENDPOINT")
+	}
+	pullTimeout := req.PullTimeout
+	if pullTimeout <= 0 {
+		pullTimeout = DefaultRolloutIntakePullTimeout()
+	}
+	if req.Context == nil {
+		req.Context = context.Background()
+	}
+	models, err := FormationCatalogIntakeModels()
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: stage formation catalog intake: %w", err)
+	}
+	selected := filterRolloutIntakeModels(models, req.VariantIDs)
+	return stageRolloutIntakeModels(req, endpoint, pullTimeout, selected)
+}
+
+func stageRolloutIntakeModels(req RolloutIntakeStageRequest, endpoint string, pullTimeout time.Duration, models []RolloutIntakeModel) (*RolloutIntakeStageResult, error) {
 	client, err := newRolloutIntakeOllamaClient(endpoint, pullTimeout)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &RolloutIntakeStageResult{}
-	selected := filterRolloutIntakeModels(catalog.Models, req.VariantIDs)
-	for _, model := range selected {
+	for _, model := range models {
 		switch model.Staging.Method {
-		case "ollama_hf_pull":
+		case "ollama_hf_pull", "ollama_library_pull":
 			if err := stageRolloutIntakePull(req, client, model, result); err != nil {
 				result.Failed = append(result.Failed, RolloutIntakeStageFailure{
 					VariantID:      model.VariantID,

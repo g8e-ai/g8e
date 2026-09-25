@@ -136,6 +136,33 @@ type CampaignAssignmentExecutor interface {
 	ExecuteAssignment(ctx context.Context, req AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error)
 }
 
+// StubHomogeneousAssignmentModelInferences returns minimal reported inference rows
+// for homogeneous assignment stubs used in publication and export tests.
+func StubHomogeneousAssignmentModelInferences(assignment *evalv1.EvaluationAssignment) []*evalv1.ModelInferenceRecord {
+	if assignment == nil {
+		return nil
+	}
+	homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous)
+	if !ok || homogeneous.Homogeneous == nil {
+		return nil
+	}
+	role := homogeneous.Homogeneous.GetDesignatedRole()
+	if role == evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_UNSPECIFIED {
+		role = evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY
+	}
+	variant := homogeneous.Homogeneous.GetCandidateVariant()
+	if variant == nil {
+		variant = &evalv1.ModelVariant{VariantId: "qwen3-4b"}
+	}
+	return []*evalv1.ModelInferenceRecord{{
+		InferenceRecordId: "stub-inference",
+		ModelRole:         role,
+		ModelVariant:      variant,
+		AgentPersona:      "sage",
+		UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+	}}
+}
+
 // InferenceVariantsFromEvalRegistry converts frozen eval model variants into the
 // governed inference registry shape used by production chat requests.
 func InferenceVariantsFromEvalRegistry(variants []*evalv1.ModelVariant) []*operatorv1.InferenceModelVariant {

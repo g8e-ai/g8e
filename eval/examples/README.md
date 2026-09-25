@@ -12,6 +12,8 @@ Checked-in evaluation program data and templates live here. **Runtime** campaign
 
 The base inventory is the canonical 45-model genesis program set. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code. The rollout queue places the current Granite 4.2 and Qwen 3.5 small-model intake ahead of the alphabetical backlog.
 
+The optional Hugging Face rollout intake (`eval/rollout-intake-hf.json`) also tracks the small text-generation trend candidate Qwen 2.5 1B RLCD. Larger trend entries are intentionally excluded from this 16 GiB-provider intake; classification, image, audio, and image-text-to-text repositories from the same trend snapshot are also not added to the text-generation queue.
+
 ### 45-model program set
 
 | Family | Models |

@@ -20,22 +20,29 @@ import (
 )
 
 func testFormationCatalogVariants() []*evalv1.ModelVariant {
-	return formationCatalogFixtureVariants(repeatHex)
+	return formationCatalogTestVariants()
 }
 
-func formationCatalogFixtureVariants(digest func(byte, int) string) []*evalv1.ModelVariant {
-	return []*evalv1.ModelVariant{
-		{VariantId: "freeze-qwen25-14b", ProviderClass: "ollama", ServedModelTag: "qwen2.5:14b-instruct-q4_K_M", ModelDigest: digest('1', 64), ModelFamily: "Qwen 2.5", ParameterCount: 14_000_000_000, Quantization: "Q4_K_M"},
-		{VariantId: "freeze-gemma2-2b", ProviderClass: "ollama", ServedModelTag: "gemma2:2b-instruct-q4_K_M", ModelDigest: digest('2', 64), ModelFamily: "Gemma 2", ParameterCount: 2_000_000_000, Quantization: "Q4_K_M"},
-		{VariantId: "freeze-llama32-1b", ProviderClass: "ollama", ServedModelTag: "llama3.2:1b-instruct-q4_K_M", ModelDigest: digest('3', 64), ModelFamily: "Llama 3.2", ParameterCount: 1_000_000_000, Quantization: "Q4_K_M"},
-		{VariantId: "freeze-llama31-8b", ProviderClass: "ollama", ServedModelTag: "llama3.1:8b-instruct-q4_K_M", ModelDigest: digest('4', 64), ModelFamily: "Llama 3.1", ParameterCount: 8_000_000_000, Quantization: "Q4_K_M"},
-		{VariantId: "freeze-phi35-mini", ProviderClass: "ollama", ServedModelTag: "phi3.5:3.8b-mini-instruct-q4_K_M", ModelDigest: digest('5', 64), ModelFamily: "Phi-3.5", ParameterCount: 3_800_000_000, Quantization: "Q4_K_M"},
-		{VariantId: "freeze-qwen25-05b", ProviderClass: "ollama", ServedModelTag: "qwen2.5:0.5b-instruct-q4_K_M", ModelDigest: digest('6', 64), ModelFamily: "Qwen 2.5", ParameterCount: 500_000_000, Quantization: "Q4_K_M"},
-		{VariantId: "freeze-gemma2-9b", ProviderClass: "ollama", ServedModelTag: "gemma2:9b-instruct-q4_K_M", ModelDigest: digest('7', 64), ModelFamily: "Gemma 2", ParameterCount: 9_000_000_000, Quantization: "Q4_K_M"},
-		{VariantId: "freeze-qwen25-coder-7b", ProviderClass: "ollama", ServedModelTag: "qwen2.5-coder:7b-instruct-q4_K_M", ModelDigest: digest('8', 64), ModelFamily: "Qwen 2.5 Coder", ParameterCount: 7_000_000_000, Quantization: "Q4_K_M"},
-		{VariantId: "freeze-gemini15-pro", ProviderClass: "gemini", ServedModelTag: "gemini-1.5-pro", ModelDigest: digest('0', 64), ModelFamily: "Gemini 1.5"},
-		{VariantId: "freeze-qwen25-15b", ProviderClass: "ollama", ServedModelTag: "qwen2.5:1.5b-instruct-q4_K_M", ModelDigest: digest('9', 64), ModelFamily: "Qwen 2.5 1.5", ParameterCount: 1_500_000_000, Quantization: "Q4_K_M"},
+func formationCatalogTestVariants() []*evalv1.ModelVariant {
+	digestByTag := map[string]byte{
+		"qwen2.5:14b-instruct-q4_K_M":     '1',
+		"gemma2:2b-instruct-q4_K_M":       '2',
+		"llama3.2:1b-instruct-q4_K_M":     '3',
+		"llama3.1:8b-instruct-q4_K_M":     '4',
+		"phi3.5:3.8b-mini-instruct-q4_K_M": '5',
+		"qwen2.5:0.5b-instruct-q4_K_M":    '6',
+		"gemma2:9b-instruct-q4_K_M":       '7',
+		"qwen2.5-coder:7b-instruct-q4_K_M": '8',
+		"gemini-1.5-pro":                  '0',
+		"qwen2.5:1.5b-instruct-q4_K_M":    '9',
 	}
+	return FormationCatalogFixtureVariants(func(tag string) string {
+		ch := digestByTag[tag]
+		if ch == 0 {
+			ch = 'a'
+		}
+		return repeatHex(ch, 64)
+	})
 }
 
 func TestGenerateFormationCatalogStackSet_ReturnsFiveCatalogFormations(t *testing.T) {
@@ -90,7 +97,12 @@ func TestGenerateFormationCatalogStackSet_RejectsMissingRegistryVariant(t *testi
 
 func TestGenerateFormationCatalogStackSet_RejectsEmptySovereignDigest(t *testing.T) {
 	variants := testFormationCatalogVariants()
-	variants[0].ModelDigest = ""
+	for _, variant := range variants {
+		if variant.GetProviderClass() == "ollama" {
+			variant.ModelDigest = ""
+			break
+		}
+	}
 	_, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
 		CampaignID: "eval-formations-benchmark",
 		Variants:   variants,
