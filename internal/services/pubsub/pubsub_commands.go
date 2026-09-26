@@ -325,9 +325,11 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	// Wire the platform enrollment handler from gateway-side dependencies.
 	// In gateway mode, platform enrollment dependencies are required and wired
 	// at construction so rs.platformEnrollment is always non-nil.
-	if c.GovDeps.PlatformEnrollmentDeps != nil {
-		rs.platformEnrollment = newPlatformEnrollmentHandler(*c.GovDeps.PlatformEnrollmentDeps, c.Logger)
+	if c.GovDeps.PlatformEnrollmentDeps == nil {
+		return nil, fmt.Errorf("gateway operator pubsub: %w", constants.ErrPlatformEnrollmentDepsRequired)
 	}
+	rs.platformEnrollment = newPlatformEnrollmentHandler(*c.GovDeps.PlatformEnrollmentDeps, c.Logger)
+	rs.registerPlatformEnrollmentHandlers()
 
 	return rs, nil
 }
@@ -419,13 +421,19 @@ func (rs *OperatorPubSubService) buildHandlers() {
 		constants.ActionTypeShutdown: func(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 			return rs.handleShutdownRequest(msg)
 		},
-		constants.ActionTypePlatformEnrollmentCreate:        rs.platformEnrollment.HandleCreate,
-		constants.ActionTypePlatformEnrollmentDecide:        rs.platformEnrollment.HandleDecide,
-		constants.ActionTypePlatformEnrollmentIssue:         rs.platformEnrollment.HandleIssue,
-		constants.ActionTypePlatformEnrollmentPersistPolicy: rs.platformEnrollment.HandlePersistPolicy,
-		constants.ActionTypePlatformEnrollmentCreateSession: rs.platformEnrollment.HandleCreateSession,
-		constants.ActionTypePlatformEnrollmentRevoke:        rs.platformEnrollment.HandleRevoke,
 	}
+}
+
+func (rs *OperatorPubSubService) registerPlatformEnrollmentHandlers() {
+	if rs.platformEnrollment == nil {
+		return
+	}
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentCreate] = rs.platformEnrollment.HandleCreate
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentDecide] = rs.platformEnrollment.HandleDecide
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentIssue] = rs.platformEnrollment.HandleIssue
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentPersistPolicy] = rs.platformEnrollment.HandlePersistPolicy
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentCreateSession] = rs.platformEnrollment.HandleCreateSession
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentRevoke] = rs.platformEnrollment.HandleRevoke
 }
 
 func (rs *OperatorPubSubService) buildGatewayHandlers() {

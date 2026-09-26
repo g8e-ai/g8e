@@ -979,7 +979,7 @@ func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action c
 		}
 
 		env := &commonv1.GovernanceEnvelope{
-			ProtocolVersion: "1.0",
+			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(5 * time.Minute)),
 			SourceComponent: commonv1.Component_COMPONENT_G8EO,

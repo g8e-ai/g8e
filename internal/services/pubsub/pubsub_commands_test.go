@@ -1902,21 +1902,14 @@ func TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite(t *testing.
 func newGatewayPubsubServiceForBindingTest(t *testing.T) *OperatorPubSubService {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
+	govDeps := validTestGatewayModeDeps(config.PostureDoctrine)
 	svc, err := NewGatewayOperatorPubSubService(GatewayCommandServiceConfig{
 		CommandServiceConfig: CommandServiceConfig{
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		},
-		GovDeps: &GatewayModeDeps{
-			GovernanceCoreDeps: GovernanceCoreDeps{
-				ReplayStore:       &testutil.MockReplayStore{},
-				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-				TransactionAudit:  &testutil.MockTransactionAudit{},
-				L3Notary:          &testutil.MockL3Notary{},
-				Doctrine:          governance.NewL1Doctrine(),
-			},
-		},
+		GovDeps: &govDeps,
 	})
 	require.NoError(t, err)
 	return svc

@@ -78,6 +78,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 				Doctrine:          governance.NewL1Doctrine(),
 			},
 			ConsensusPolicyStore: testConsensusStore(),
+			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
 	if err != nil {
@@ -218,6 +219,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 				Doctrine:          governance.NewL1Doctrine(),
 			},
 			ConsensusPolicyStore: testConsensusStore(),
+			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
 	if err != nil {
@@ -353,6 +355,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 				Doctrine:          governance.NewL1Doctrine(),
 			},
 			ConsensusPolicyStore: testConsensusStore(),
+			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
 	if err != nil {
