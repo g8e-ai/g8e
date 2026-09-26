@@ -75,7 +75,7 @@ class AgentActivityDataService:
             message = G8eMessage(
                 id=metadata.id,
                 source_component=G8EE_COMPONENT,
-                event_type=EventType.APP_AGENT_ACTIVITY_RECORDED,
+                event_type=EventType.APP_AGENT_ACTIVITY_RECORD_REQUESTED,
                 case_id=context.case_id,
                 investigation_id=context.investigation_id,
                 task_id=context.task_id,

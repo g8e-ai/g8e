@@ -377,6 +377,40 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, co
 	return nil
 }
 
+func (rs *OperatorPubSubService) registerDocumentMutationHandlers(handlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)) {
+	updateHandler := func(ctx context.Context, msg *PubSubCommandMessage) {
+		if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
+			rs.logger.Error("Document update handler failed", "error", err)
+		}
+	}
+	deleteHandler := func(ctx context.Context, msg *PubSubCommandMessage) {
+		if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
+			rs.logger.Error("Document delete handler failed", "error", err)
+		}
+	}
+
+	for _, eventType := range []constants.EventType{
+		constants.EventAppDocumentUpdateRequested,
+		constants.EventAppAgentActivityRecordRequested,
+		constants.EventAppCaseCreateRequested,
+		constants.EventAppCaseUpdateRequested,
+		constants.EventAppInvestigationCreateRequested,
+		constants.EventAppInvestigationUpdateRequested,
+		constants.EventAppMemoryCreateRequested,
+		constants.EventAppMemoryUpdateRequested,
+		constants.EventOperatorReputationStateUpdateRequested,
+	} {
+		handlers[eventType] = updateHandler
+	}
+	for _, eventType := range []constants.EventType{
+		constants.EventAppDocumentDeleteRequested,
+		constants.EventAppCaseDeleteRequested,
+		constants.EventAppInvestigationDeleteRequested,
+	} {
+		handlers[eventType] = deleteHandler
+	}
+}
+
 func (rs *OperatorPubSubService) buildHandlers() {
 	rs.handlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
 		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
@@ -416,23 +450,8 @@ func (rs *OperatorPubSubService) buildHandlers() {
 			}
 		},
 		constants.Event.Operator.FetchFileDiff.Requested: rs.history.HandleFetchFileDiffRequest,
-		// Governed document mutations dispatch through the canonical
-		// document-request events. MapActionTypeToEventType resolves both
-		// DOCUMENT_UPDATE and DOCUMENT_DELETE deterministically to these two
-		// events regardless of which app-level event (case/investigation/memory)
-		// originated the envelope, so a single handler per action type is
-		// sufficient and dispatch is stable across repeated calls.
-		constants.EventAppDocumentUpdateRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-				rs.logger.Error("Document update handler failed", "error", err)
-			}
-		},
-		constants.EventAppDocumentDeleteRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
-				rs.logger.Error("Document delete handler failed", "error", err)
-			}
-		},
 	}
+	rs.registerDocumentMutationHandlers(rs.handlers)
 
 	// Register the inference handler unconditionally: INFERENCE is a
 	// recognized platform action, so an unconfigured backend must fail

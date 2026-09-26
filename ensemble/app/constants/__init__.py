@@ -11,7 +11,7 @@ g8ee Constants
 Application constants, enums, and configuration values.
 
 Constant modules:
-- action_type_mappings.py: Mappings between action types and their properties
+- action_type_mappings.py: deleted — governed action classes resolve through g8e.registry
 - agents.py: Agent-related constants
 - api_paths.py: API path definitions and routing
 - api_paths.json: JSON configuration for API paths

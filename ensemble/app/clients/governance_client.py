@@ -32,7 +32,7 @@ import aiohttp
 from nacl.signing import VerifyKey
 from nacl.exceptions import BadSignatureError
 
-from app.constants.action_type_mappings import map_event_type_to_action_type
+from g8e.registry import action_for
 from app.models.pubsub_messages import G8eMessage
 from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
@@ -192,7 +192,7 @@ def build_governance_envelope(
     payload_bytes = proto_payload.SerializeToString()
     payload_dict = message.payload.model_dump(mode="json")
 
-    action_type = map_event_type_to_action_type(message.event_type)
+    action_type = action_for(message.event_type)
 
     now_utc = datetime.now(UTC)
     expires_at = now_utc + timedelta(minutes=5)

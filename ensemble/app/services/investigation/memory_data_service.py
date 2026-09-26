@@ -58,7 +58,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
         message = G8eMessage(
             id=investigation.id,
             source_component=G8EE_COMPONENT,
-            event_type=EventType.APP_MEMORY_CREATED,
+            event_type=EventType.APP_MEMORY_CREATE_REQUESTED,
             case_id=investigation.case_id,
             investigation_id=investigation.id,
             task_id=AITaskId.MEMORY,
@@ -104,7 +104,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
             message = G8eMessage(
                 id=memory.investigation_id,
                 source_component=G8EE_COMPONENT,
-                event_type=EventType.APP_MEMORY_CREATED,
+                event_type=EventType.APP_MEMORY_CREATE_REQUESTED,
                 case_id=memory.case_id,
                 investigation_id=memory.investigation_id,
                 task_id=AITaskId.MEMORY,
@@ -120,7 +120,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
                 collection=self.memories_collection,
                 document_id=memory.investigation_id,
                 updates=data,
-                event_type=EventType.APP_MEMORY_UPDATED,
+                event_type=EventType.APP_MEMORY_UPDATE_REQUESTED,
                 case_id=memory.case_id,
                 investigation_id=memory.investigation_id,
                 web_session_id=context.web_session_id,

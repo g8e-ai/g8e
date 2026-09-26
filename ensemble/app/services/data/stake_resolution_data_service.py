@@ -116,7 +116,7 @@ class StakeResolutionDataService:
                 collection=self.collection,
                 document_id=resolution.id,
                 updates=resolution.model_dump(mode="json"),
-                event_type=EventType.OPERATOR_REPUTATION_STAKE_RESOLUTION_CREATED,
+                event_type=EventType.APP_DOCUMENT_UPDATE_REQUESTED,
                 case_id=context.case_id,
                 investigation_id=context.investigation_id,
                 task_id=context.task_id,

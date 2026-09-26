@@ -608,8 +608,8 @@ func TestDispatchController_HandleDispatch_ValidationFails(t *testing.T) {
 		Logger:      logger,
 	})
 
-	// Missing target_operator_session_id.
-	body := `{"action_type":"FS_READ","payload":"dGVzdA=="}`
+	// Missing target_operator_session_id and event_type.
+	body := `{"payload":"dGVzdA=="}`
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsCommands, bytes.NewReader([]byte(body)))
 	rr := httptest.NewRecorder()
 	ctrl.HandleDispatch(rr, req)

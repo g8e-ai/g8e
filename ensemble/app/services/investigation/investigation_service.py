@@ -369,7 +369,7 @@ class InvestigationService:
             return investigation
 
         investigation.add_history_entry(
-            event_type=EventType.APP_INVESTIGATION_UPDATED,
+            event_type=EventType.APP_INVESTIGATION_UPDATE_REQUESTED,
             actor=actor,
             summary="Investigation updated",
             details=ConversationMessageMetadata(),
