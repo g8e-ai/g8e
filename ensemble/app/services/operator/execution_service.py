@@ -48,7 +48,6 @@ from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, Execution
 from app.models.tool_results import CommandInternalResult
 from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeAppSettings
-from app.security.operator_command_validator import OperatorCommandValidator
 from app.utils.validators import get_blacklist_validator, get_whitelist_validator
 from app.utils.gateway_dispatch_result import envelope_from_gateway_dispatch
 
@@ -79,7 +78,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         self._gateway_operator_client = gateway_operator_client
         self._background_tasks: set[asyncio.Task[None]] = set()
 
-        self.command_validator = OperatorCommandValidator(operator_data_service)
         self.whitelist_validator = get_whitelist_validator()
         self.blacklist_validator = get_blacklist_validator()
 

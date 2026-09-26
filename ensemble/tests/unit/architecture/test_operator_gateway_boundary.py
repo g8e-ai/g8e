@@ -78,6 +78,19 @@ class TestOperatorGatewayBoundary:
         )
         assert present == [], f"Deleted operator authority modules reappeared: {present}"
 
+    def test_local_operator_command_authority_validator_stays_absent(self):
+        validator = ENSEMBLE_APP / "security" / "operator_command_validator.py"
+        assert not validator.exists(), (
+            "g8ee must not regain a local Operator command authority validator; "
+            "Gateway dispatch owns authorization"
+        )
+        offenders = [
+            str(path.relative_to(REPO_ROOT))
+            for path in _python_files_under(ENSEMBLE_APP)
+            if "operator_command_validator" in _read(path)
+        ]
+        assert offenders == [], f"Local Operator authority validator references remain: {offenders}"
+
     def test_operator_data_service_has_no_local_write_methods(self):
         path = ENSEMBLE_APP / "services" / "operator" / "operator_data_service.py"
         tree = ast.parse(_read(path))
