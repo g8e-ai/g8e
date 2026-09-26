@@ -40,9 +40,9 @@ stateDiagram-v2
         Only the producer (human or
         intent producer) of the session
         can bind enrolled operators.
-        Intent signals that the operator
-        is in-scope — adding a layer of
-        session scoping.
+        Binding persists KV keys and
+        bound_web_session_id on the
+        operator document.
     end note
 
     note right of Stale
@@ -59,7 +59,7 @@ stateDiagram-v2
 
 ### 1. Enrollment (CSR-Based)
 
-Enrollment authenticates the Operator but does not make it usable. An enrolled Operator has an mTLS certificate and an operator session, but cannot receive work until it is bound to a specific session with a specific type.
+Enrollment authenticates the Operator but does not make it usable for remote dispatch until it has an active session and, for session-scoped work, a binding. An enrolled Operator has an mTLS certificate and an operator session.
 
 **Flow** (`internal/services/gateway/registration_service.go`):
 
@@ -68,7 +68,7 @@ Enrollment authenticates the Operator but does not make it usable. An enrolled O
 3. The Gateway signs the Operator CSR, issues an operator certificate with SPIFFE URI SAN identity, creates an operator session, and marks the slot as `active` (`OperatorStatusActive`).
 4. If a CLI CSR is provided, a CLI session is also created and linked to the operator session.
 
-**Key invariant**: Enrollment only authenticates identity. Nothing can happen with an enrolled Operator until it is bound to a session.
+**Key invariant**: Enrollment authenticates identity. CLI-directed dispatch (`g8e operator run`) requires `active` status and a valid operator session.
 
 ### 2. Connection
 
@@ -76,14 +76,14 @@ The Operator initiates an **outbound-only, asynchronous streaming pull-style mTL
 
 - **Transport**: WSS (WebSocket Secure) over TLS with mutual authentication.
 - **Direction**: Outbound only. No inbound ports are required on the managed host.
-- **Channel**: The Operator subscribes to its unique `cmd:*` pub/sub channel.
+- **Channel**: The Operator subscribes to its unique `cmd:<operator-id>:<operator-session-id>` pub/sub channel.
 - **URL construction**: `wss://{hostname}:{httpsPort}` (`internal/config/config.go`).
 
-Once connected, the Operator's status transitions to `available` or `bound` depending on session state.
+Once connected, the Operator publishes heartbeats and can receive dispatched work on its command channel.
 
 ### 3. Session Binding
 
-Only the **producer** (the human or intent producer who owns the session) can bind enrolled Operators to their session. This adds a layer of session scoping that is required before the Operator can receive work.
+Only the **producer** (the human or intent producer who owns the session) can bind enrolled Operators to their session. This adds a layer of session scoping required before the Operator can receive session-bound work.
 
 **Flow** (`internal/services/gateway/registration_service.go`):
 
@@ -92,11 +92,11 @@ Only the **producer** (the human or intent producer who owns the session) can bi
 3. The Gateway creates KV bindings:
    - `g8e:sessions:operator:{operatorSessionId}:bind` → `webSessionId`
    - `g8e:sessions:web:{webSessionId}:bind` → `[operatorSessionId, ...]`
-4. The operator status transitions to `bound` (`OperatorStatusBound`).
+4. The operator document's `bound_web_session_id` is updated for UI and discovery surfaces.
 
-**Unbinding**: `POST /api/v1/operators/unbind` removes the KV bindings. The operator returns to `available` status.
+**Unbinding**: `POST /api/v1/operators/unbind` removes the KV bindings and clears `bound_web_session_id`. The operator returns to an unbound state.
 
-**Key invariant**: Intent signals that the Operator is in-scope. Only the session producer can bind. An operator without a binding cannot receive dispatched work.
+**Key invariant**: Intent signals that the Operator is in-scope. Only the session producer can bind. Dispatch to a named operator session still requires a valid enrolled session regardless of binding state.
 
 ### 4. Heartbeats
 
@@ -106,7 +106,7 @@ Bound Operators emit heartbeat telemetry every **30 seconds** (default; configur
 - **Heartbeat scheduler**: `HeartbeatService.StartScheduler` runs a periodic ticker (`internal/services/pubsub/heartbeat_service.go`).
 - **Heartbeat payload**: System telemetry wrapped in a `GovernanceEnvelope` with `operator_id`.
 - **Gateway handling**: `handleHeartbeatPublish` is the sole heartbeat persistence path. It decodes the authoritative `GovernanceEnvelope.payload` (falling back to `intent_data` only when payload bytes are absent), stores canonical `HeartbeatResult` protojson with protobuf field names in `latest_heartbeat_snapshot`, denormalizes `system_identity.hostname` to `current_hostname`, and updates `updated_at` (`internal/services/gateway/gateway_service.go`).
-- **Ensemble handling**: g8ee is not on the heartbeat channel. Application consumers receive Gateway-owned operator events through the Gateway protocol.
+- **Ensemble handling**: g8ee is not on the heartbeat channel. Application consumers receive Gateway-owned operator events through the Gateway protocol and SSE bridge.
 - **Protocol events**:
   - `g8e.v1.operator.heartbeat.sent` — Operator sent heartbeat
   - `g8e.v1.operator.heartbeat.received` — Gateway received heartbeat
@@ -115,12 +115,14 @@ Bound Operators emit heartbeat telemetry every **30 seconds** (default; configur
 
 ### 5. Stale Detection
 
-If a heartbeat is not received after **60 seconds** (2 × 30s default interval), the Operator transitions to `stale` status.
+If a heartbeat is not received after **60 seconds** (2 × 30s default interval), the Operator is considered stale per protocol semantics.
 
 - **Status**: `OperatorStatusStale` (`internal/constants/status.go`).
 - **Protocol event**: `g8e.v1.operator.status.updated.stale`.
 - **Impact**: Stale Operators are **unusable** until they are bound again. However, `STALE` and `OFFLINE` statuses can still authenticate (to support bootstrap and recovery) — only `TERMINATED` is a hard-gate rejection (`internal/services/gateway/gateway_auth.go`).
 - **Recovery**: A stale operator that reconnects and is re-bound by its producer transitions back to `bound`.
+
+Consumers can also evaluate freshness from `latest_heartbeat_snapshot` timestamps on the operator document.
 
 ### 6. Remote Stop
 
@@ -130,6 +132,8 @@ Operators can be stopped remotely via stop event signals:
 - **Acknowledgment**: `g8e.v1.operator.shutdown.acknowledged` (`EventOperatorShutdownAcknowledged`).
 - **Status transition**: The Operator transitions to `stopped` (`OperatorStatusStopped`).
 - **Recovery**: A stopped Operator can be restarted (re-enroll or reconnect), transitioning back to `active`.
+
+`g8e operator stop` is a governed command sent only to the selected remote session. The Gateway marks a target stopped only after the exact session acknowledges shutdown. Revocation is different: it invalidates the workload identity, deactivates sessions, disconnects matching pub/sub channels, and is terminal for that enrollment.
 
 ### 7. Termination
 
@@ -147,8 +151,8 @@ Termination is a permanent, irreversible action:
 | Status | Description | Can Authenticate? | Can Receive Work? |
 |---|---|---|---|
 | `offline` | Slot created but not enrolled, or connection lost | Yes (for recovery) | No |
-| `active` | Enrolled, certificate issued | Yes | No (must be bound) |
-| `available` | Connected, not bound to a session | Yes | No |
+| `active` | Enrolled, certificate issued, session active | Yes | Yes (when session valid; binding required for session-scoped UI flows) |
+| `available` | Connected, not bound to a session | Yes | Dispatch to named session still possible |
 | `bound` | Connected and bound to a producer session | Yes | Yes |
 | `stale` | Heartbeat missed (>60s) | Yes (for recovery) | No |
 | `stopped` | Remote shutdown received | No | No |
