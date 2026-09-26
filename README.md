@@ -8,7 +8,7 @@ g8e is a zero-trust execution and evidence platform for AI agents, operators, an
 
 > **The short version:** the model can ask, but it cannot directly act. The machine that owns the data keeps final control.
 
-[Quick start](#quick-start) · [How it works](#how-g8e-works) · [Explore the suite](#the-suite) · [Architecture](docs/architecture/overview.md) · [Documentation](#find-your-next-step) · [Protocol](protocol/docs/spec.md)
+[Quick start](#quick-start) · [How it works](#how-g8e-works) · [Explore the suite](#the-suite) · [Architecture](docs/architecture/overview.md) · [Documentation](#find-your-next-step) · [Roadmap](ROADMAP.md) · [Protocol](protocol/docs/spec.md)
 
 ## Why g8e exists
 
