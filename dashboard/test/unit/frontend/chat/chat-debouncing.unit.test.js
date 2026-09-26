@@ -142,7 +142,7 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
             // Send chunks rapidly (every 10ms)
             chunks.forEach((content, index) => {
                 setTimeout(() => {
-                    eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
+                    eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
                         web_session_id: WEB_SESSION_ID,
                         investigation_id: INVESTIGATION_ID,
                         content
@@ -168,7 +168,7 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
 
             chunks.forEach((content, index) => {
                 setTimeout(() => {
-                    eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
+                    eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
                         web_session_id: WEB_SESSION_ID,
                         investigation_id: INVESTIGATION_ID,
                         content
@@ -191,7 +191,7 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
             const allChunks = [];
             
             // Track all emitted chunks
-            eventBus.on(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, (event) => {
+            eventBus.on(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, (event) => {
                 allChunks.push(event.content);
             });
 
@@ -199,7 +199,7 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
             const rapidChunks = Array.from({ length: 20 }, (_, i) => `Chunk ${i + 1}`);
             rapidChunks.forEach((content, index) => {
                 setTimeout(() => {
-                    eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
+                    eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
                         web_session_id: WEB_SESSION_ID,
                         investigation_id: INVESTIGATION_ID,
                         content
@@ -222,7 +222,7 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
     describe('connection failure scenarios with timing', () => {
         it('should handle connection drops during active streaming', async () => {
             // Start streaming
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: INVESTIGATION_ID,
                 content: 'Initial response'
@@ -231,7 +231,7 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
             await vi.advanceTimersByTimeAsync(50);
 
             // Simulate connection drop
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_FAILED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_FAILED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: INVESTIGATION_ID,
                 error: 'Connection reset by peer'
@@ -281,19 +281,19 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
             const startTime = Date.now();
 
             const events = [
-                { type: EventType.LLM_LIFECYCLE_STARTED, delay: 0 },
-                { type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Thinking', delay: 10 },
-                { type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Thinking...', delay: 20 },
+                { type: EventType.AI_LLM_LIFECYCLE_STARTED, delay: 0 },
+                { type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Thinking', delay: 10 },
+                { type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Thinking...', delay: 20 },
                 { type: 'LLM_TOOL_G8E_WEB_SEARCH_REQUESTED', query: 'test', delay: 30 },
                 { type: 'LLM_TOOL_G8E_WEB_SEARCH_COMPLETED', delay: 50 },
-                { type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Based on search', delay: 60 },
-                { type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED, delay: 200 },
-                { type: EventType.LLM_LIFECYCLE_COMPLETED, delay: 220 }
+                { type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Based on search', delay: 60 },
+                { type: EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED, delay: 200 },
+                { type: EventType.AI_LLM_LIFECYCLE_COMPLETED, delay: 220 }
             ];
 
             events.forEach(event => {
                 setTimeout(() => {
-                    if (event.type === EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED) {
+                    if (event.type === EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED) {
                         eventBus.emit(event.type, {
                             web_session_id: WEB_SESSION_ID,
                             investigation_id: INVESTIGATION_ID,

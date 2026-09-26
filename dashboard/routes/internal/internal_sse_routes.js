@@ -63,7 +63,7 @@ export function createInternalSSERouter({ sseService, authorizationMiddleware, o
             const targetWebSessionId = pushReq.web_session_id;
 
             let finalEvent;
-            const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
+            const normalizedEvent = pushReq.event.type === EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED
                 ? normalizeCitationNums(pushReq.event)
                 : pushReq.event;
             

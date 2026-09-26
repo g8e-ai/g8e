@@ -184,7 +184,7 @@ export class AnchoredOperatorTerminal {
                 ? this.attachmentsUI.manager.getFormattedForBackend()
                 : [];
 
-            this.eventBus.emit(EventType.LLM_CHAT_SUBMITTED, {
+            this.eventBus.emit(EventType.AI_LLM_CHAT_SUBMITTED, {
                 message,
                 attachments
             });

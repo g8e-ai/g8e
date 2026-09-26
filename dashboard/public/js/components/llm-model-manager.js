@@ -67,7 +67,7 @@ export class LlmModelManager {
             });
         }
 
-        this.eventBus.on(EventType.LLM_CONFIG_RECEIVED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CONFIG_RECEIVED, (data) => {
             this.handleConfigReceived(data);
         });
 

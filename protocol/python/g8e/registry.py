@@ -58,6 +58,25 @@ def meta(event_type: str) -> dict:
     return _entry(event_type)
 
 
+class SSEValidationError(ValueError):
+    """Raised when an SSE push event fails registry validation."""
+
+
+def validate_sse_push(event_type: str, producer: str) -> bool:
+    """Validate an SSE push against the registry.
+
+    Returns True when the Gateway should persist the event to gateway.sse_store.
+    """
+    entry = _entry(event_type)
+    transport = entry.get("transport") or []
+    if "sse" not in transport:
+        raise SSEValidationError(f"event is not on the sse transport: {event_type}")
+    producers = entry.get("producers") or []
+    if producer not in producers:
+        raise SSEValidationError(f"producer {producer!r} cannot produce {event_type!r}")
+    return entry.get("persistence") != "ephemeral"
+
+
 def validate_result_envelope(request_event: str, outcome_event: str, action_type: str) -> None:
     """Ensure a correlated result envelope matches the originating request."""
     expected_action = action_for(request_event)

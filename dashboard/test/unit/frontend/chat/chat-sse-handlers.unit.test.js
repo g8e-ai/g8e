@@ -383,7 +383,7 @@ describe('ChatComponent — handleAITextChunk edge cases [FRONTEND - jsdom]', ()
     it('event bus wiring: LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED triggers handleAITextChunk', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
+        eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
             web_session_id: WEB_SESSION_ID,
             investigation_id: INVESTIGATION_ID,
             content: 'streamed token',
@@ -514,7 +514,7 @@ describe('ChatComponent — handleChatStopped [FRONTEND - jsdom]', () => {
     it('event bus wiring: LLM_CHAT_ITERATION_STOPPED triggers handleChatStopped', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_CHAT_ITERATION_STOPPED, {
+        eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_STOPPED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             reason: 'User requested stop',
@@ -954,14 +954,14 @@ describe('ChatComponent — handleSearchWebIndicator / handleSearchWebCompleted 
     it('SEARCH_WEB event bus wiring: REQUESTED → COMPLETED completes the indicator', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
+        eventBus.emit(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
             query: 'test query',
         });
 
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, {
+        eventBus.emit(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
@@ -974,14 +974,14 @@ describe('ChatComponent — handleSearchWebIndicator / handleSearchWebCompleted 
     it('SEARCH_WEB event bus wiring: REQUESTED → FAILED completes the indicator', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
+        eventBus.emit(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
             query: 'test query',
         });
 
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, {
+        eventBus.emit(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
@@ -1555,7 +1555,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
         const spy = vi.spyOn(chat, 'submitChatMessage');
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_CHAT_SUBMITTED, {
+        eventBus.emit(EventType.AI_LLM_CHAT_SUBMITTED, {
             message: 'wired message',
             attachments: [],
         });

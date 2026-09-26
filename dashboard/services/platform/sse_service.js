@@ -291,7 +291,7 @@ class SSEService {
             const assistantModels = SSEService._getModelOptionsForProvider(provider, 'llm_assistant_model');
 
             await this.publishEvent(webSessionId, LLMConfigEvent.parse({
-                type: EventType.LLM_CONFIG_RECEIVED,
+                type: EventType.AI_LLM_CONFIG_RECEIVED,
                 data: LLMConfigData.parse({
                     provider,
                     default_primary_model: currentPrimary,

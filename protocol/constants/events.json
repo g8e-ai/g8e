@@ -7,7 +7,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiAgentConflictResolved": {
       "_go_const": "EventAiAgentConflictResolved",
@@ -44,7 +47,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionAuditorFailed": {
       "_go_const": "EventAiConsensusSessionAuditorFailed",
@@ -53,7 +59,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionCompleted": {
       "_go_const": "EventAiConsensusSessionCompleted",
@@ -62,7 +71,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionDisabled": {
       "_go_const": "EventAiConsensusSessionDisabled",
@@ -71,7 +83,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionGenerationFailed": {
       "_go_const": "EventAiConsensusSessionGenerationFailed",
@@ -80,7 +95,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionMarshalBlocked": {
       "_go_const": "EventAiConsensusSessionMarshalBlocked",
@@ -89,7 +107,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionModelNotConfigured": {
       "_go_const": "EventAiConsensusSessionModelNotConfigured",
@@ -98,7 +119,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionProviderUnavailable": {
       "_go_const": "EventAiConsensusSessionProviderUnavailable",
@@ -107,7 +131,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionStarted": {
       "_go_const": "EventAiConsensusSessionStarted",
@@ -116,7 +143,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusSessionSystemError": {
       "_go_const": "EventAiConsensusSessionSystemError",
@@ -125,7 +155,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingAuditCompleted": {
       "_go_const": "EventAiConsensusVotingAuditCompleted",
@@ -134,7 +167,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "operator.audit_log"
+      "persistence": "operator.audit_log",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingAuditStarted": {
       "_go_const": "EventAiConsensusVotingAuditStarted",
@@ -143,7 +179,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "operator.audit_log"
+      "persistence": "operator.audit_log",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingConsensusFailed": {
       "_go_const": "EventAiConsensusVotingConsensusFailed",
@@ -152,7 +191,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingConsensusNotReached": {
       "_go_const": "EventAiConsensusVotingConsensusNotReached",
@@ -161,7 +203,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingConsensusReached": {
       "_go_const": "EventAiConsensusVotingConsensusReached",
@@ -170,7 +215,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingDissentRecorded": {
       "_go_const": "EventAiConsensusVotingDissentRecorded",
@@ -179,7 +227,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingPassCompleted": {
       "_go_const": "EventAiConsensusVotingPassCompleted",
@@ -188,7 +239,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingRound2ConsensusFailed": {
       "_go_const": "EventAiConsensusVotingRound2ConsensusFailed",
@@ -198,7 +252,10 @@
         "ensemble"
       ],
       "persistence": "gateway.sse_store",
-      "reserved": true
+      "reserved": true,
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingRound2ConsensusReached": {
       "_go_const": "EventAiConsensusVotingRound2ConsensusReached",
@@ -208,7 +265,10 @@
         "ensemble"
       ],
       "persistence": "gateway.sse_store",
-      "reserved": true
+      "reserved": true,
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingRound2Started": {
       "_go_const": "EventAiConsensusVotingRound2Started",
@@ -218,7 +278,10 @@
         "ensemble"
       ],
       "persistence": "gateway.sse_store",
-      "reserved": true
+      "reserved": true,
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingRoundCompleted": {
       "_go_const": "EventAiConsensusVotingRoundCompleted",
@@ -227,7 +290,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiConsensusVotingRoundStarted": {
       "_go_const": "EventAiConsensusVotingRoundStarted",
@@ -236,7 +302,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiEvalAssignmentCompleted": {
       "_go_const": "EventAiEvalAssignmentCompleted",
@@ -386,7 +455,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMChatIterationCompleted": {
       "_go_const": "EventAiLLMChatIterationCompleted",
@@ -395,7 +467,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMChatIterationFailed": {
       "_go_const": "EventAiLLMChatIterationFailed",
@@ -404,7 +479,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMChatIterationRetry": {
       "_go_const": "EventAiLLMChatIterationRetry",
@@ -413,7 +491,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMChatIterationStarted": {
       "_go_const": "EventAiLLMChatIterationStarted",
@@ -423,7 +504,10 @@
         "dashboard",
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMChatIterationStopped": {
       "_go_const": "EventAiLLMChatIterationStopped",
@@ -432,7 +516,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMChatIterationStreamCompleted": {
       "_go_const": "EventAiLLMChatIterationStreamCompleted",
@@ -505,7 +592,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMChatIterationTextReceived": {
       "_go_const": "EventAiLLMChatIterationTextReceived",
@@ -709,7 +799,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMToolG8eCommandConstraintsFailed": {
       "_go_const": "EventAiLLMToolG8eCommandConstraintsFailed",
@@ -738,7 +831,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMToolG8eInvestigationQueryCompleted": {
       "_go_const": "EventAiLLMToolG8eInvestigationQueryCompleted",
@@ -747,7 +843,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMToolG8eInvestigationQueryFailed": {
       "_go_const": "EventAiLLMToolG8eInvestigationQueryFailed",
@@ -776,7 +875,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMToolG8eWebSearchCompleted": {
       "_go_const": "EventAiLLMToolG8eWebSearchCompleted",
@@ -785,7 +887,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLLMToolG8eWebSearchFailed": {
       "_go_const": "EventAiLLMToolG8eWebSearchFailed",
@@ -813,7 +918,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "transport": [
+        "sse"
+      ]
     },
     "AiLlmChatIterationThinkingStopped": {
       "_go_const": "EventAiLLMChatIterationThinkingStopped",
@@ -854,7 +962,10 @@
       "producers": [
         "ensemble"
       ],
-      "persistence": "gateway.sse_store"
+      "persistence": "gateway.sse_store",
+      "transport": [
+        "sse"
+      ]
     },
     "AiTriageClarificationSkipped": {
       "_go_const": "EventAiTriageClarificationSkipped",
@@ -973,7 +1084,10 @@
         "ensemble",
         "operator"
       ],
-      "persistence": "gateway.docstore"
+      "persistence": "gateway.docstore",
+      "transport": [
+        "sse"
+      ]
     },
     "AppCaseDeleteRequested": {
       "_go_const": "EventAppCaseDeleteRequested",
@@ -1819,7 +1933,8 @@
       "value": "g8e.v1.operator.command.approval.requested",
       "kind": "request",
       "transport": [
-        "pubsub"
+        "pubsub",
+        "sse"
       ],
       "producers": [
         "dashboard",
@@ -2236,7 +2351,8 @@
       "value": "g8e.v1.operator.file.edit.approval.requested",
       "kind": "request",
       "transport": [
-        "pubsub"
+        "pubsub",
+        "sse"
       ],
       "producers": [
         "cli",
@@ -2806,7 +2922,8 @@
       "value": "g8e.v1.operator.intent.approval.requested",
       "kind": "request",
       "transport": [
-        "pubsub"
+        "pubsub",
+        "sse"
       ],
       "producers": [
         "dashboard",
@@ -3285,7 +3402,10 @@
         "ensemble",
         "operator"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "transport": [
+        "sse"
+      ]
     },
     "OperatorReputationCommitmentFailed": {
       "_go_const": "EventOperatorReputationCommitmentFailed",
@@ -3295,7 +3415,10 @@
         "ensemble",
         "operator"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "transport": [
+        "sse"
+      ]
     },
     "OperatorReputationCommitmentVerified": {
       "_go_const": "EventOperatorReputationCommitmentVerified",
@@ -3312,30 +3435,42 @@
       "value": "g8e.v1.operator.reputation.slash.tier1",
       "kind": "outcome",
       "producers": [
+        "ensemble",
         "operator"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "transport": [
+        "sse"
+      ]
     },
     "OperatorReputationSlashTier2": {
       "_go_const": "EventOperatorReputationSlashTier2",
       "value": "g8e.v1.operator.reputation.slash.tier2",
       "kind": "outcome",
       "producers": [
+        "ensemble",
         "operator"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "transport": [
+        "sse"
+      ]
     },
     "OperatorReputationSlashTier3": {
       "_go_const": "EventOperatorReputationSlashTier3",
       "value": "g8e.v1.operator.reputation.slash.tier3",
       "kind": "outcome",
       "producers": [
+        "ensemble",
         "operator"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "transport": [
+        "sse"
+      ]
     },
     "OperatorReputationStakeResolutionCreated": {
       "_go_const": "EventOperatorReputationStakeResolutionCreated",
@@ -3377,7 +3512,10 @@
         "ensemble",
         "operator"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "transport": [
+        "sse"
+      ]
     },
     "OperatorShutdownAcknowledged": {
       "_go_const": "EventOperatorShutdownAcknowledged",
@@ -3429,7 +3567,10 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "gateway.operator_docs"
+      "persistence": "gateway.operator_docs",
+      "transport": [
+        "sse"
+      ]
     },
     "OperatorStatusUpdatedAvailable": {
       "_go_const": "EventOperatorStatusUpdatedAvailable",
@@ -3450,7 +3591,10 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "gateway.operator_docs"
+      "persistence": "gateway.operator_docs",
+      "transport": [
+        "sse"
+      ]
     },
     "OperatorStatusUpdatedOffline": {
       "_go_const": "EventOperatorStatusUpdatedOffline",
@@ -3531,7 +3675,8 @@
       "value": "g8e.v1.operator.stream.approval.requested",
       "kind": "request",
       "transport": [
-        "pubsub"
+        "pubsub",
+        "sse"
       ],
       "producers": [
         "ensemble",

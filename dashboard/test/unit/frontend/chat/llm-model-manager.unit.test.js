@@ -25,7 +25,7 @@ const ASSISTANT_MODELS = [
 ];
 
 function emitConfig(eventBus, overrides = {}) {
-    eventBus.emit(EventType.LLM_CONFIG_RECEIVED, {
+    eventBus.emit(EventType.AI_LLM_CONFIG_RECEIVED, {
         primary_models: PRIMARY_MODELS,
         assistant_models: ASSISTANT_MODELS,
         default_primary_model: 'gemini-3.1-pro-preview',
@@ -71,7 +71,7 @@ describe('LlmModelManager [UNIT]', () => {
             eventBus.clearLog();
             emitConfig(eventBus);
 
-            const reEmits = eventBus.getEventsOfType(EventType.LLM_CONFIG_RECEIVED);
+            const reEmits = eventBus.getEventsOfType(EventType.AI_LLM_CONFIG_RECEIVED);
             expect(reEmits.length).toBe(1);
         });
 

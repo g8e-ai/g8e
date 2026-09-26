@@ -20,44 +20,44 @@ export const ChatSSEHandlersMixin = {
             return;
         }
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, (data) => {
             this.handleAITextChunk(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_COMPLETED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_COMPLETED, (data) => {
             this.handleTurnComplete(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED, (data) => {
             this.handleCitationsReady(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED, (data) => {
             this.handleResponseComplete(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TEXT_TRUNCATED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_TEXT_TRUNCATED, (data) => {
             this.handleResponseComplete(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_FAILED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_FAILED, (data) => {
             this.handleChatError(data);
             this._handleLLMChatIterationFailed(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_STOPPED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_STOPPED, (data) => {
             this.handleChatStopped(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
             this.handleSearchWebIndicator(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
             this.handleSearchWebCompleted(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED, (data) => {
             this.handleSearchWebFailed(data);
         });
 
@@ -172,7 +172,7 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalFallback(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_SUBMITTED, (payload) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_SUBMITTED, (payload) => {
             this.submitChatMessage(payload.message, {
                 attachments: payload.attachments
             }).catch((error) => {
@@ -594,7 +594,7 @@ export const ChatSSEHandlersMixin = {
         this._debouncedRenderChunk.cancel();
 
         if (!data.event_type) {
-            data.event_type = EventType.LLM_CHAT_ITERATION_FAILED;
+            data.event_type = EventType.AI_LLM_CHAT_ITERATION_FAILED;
         }
 
         const errorText = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : 'The AI session encountered an error.';

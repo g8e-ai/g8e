@@ -349,6 +349,7 @@ export const EventType = Object.freeze({
 export const EventRegistry = Object.freeze({
     AI_AGENT_CONFLICT_DETECTED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
@@ -370,114 +371,136 @@ export const EventRegistry = Object.freeze({
     }),
     AI_AGENT_CONTINUE_APPROVAL_REQUESTED: Object.freeze({
         kind: 'request',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'ephemeral',
     }),
     AI_CONSENSUS_SESSION_AUDITOR_FAILED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_SESSION_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_SESSION_DISABLED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_SESSION_GENERATION_FAILED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_SESSION_MARSHAL_BLOCKED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_SESSION_MODEL_NOT_CONFIGURED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_SESSION_PROVIDER_UNAVAILABLE: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_SESSION_STARTED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_SESSION_SYSTEM_ERROR: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_VOTING_AUDIT_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'operator.audit_log',
     }),
     AI_CONSENSUS_VOTING_AUDIT_STARTED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'operator.audit_log',
     }),
     AI_CONSENSUS_VOTING_CONSENSUS_FAILED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_VOTING_CONSENSUS_NOT_REACHED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_VOTING_CONSENSUS_REACHED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_VOTING_DISSENT_RECORDED: Object.freeze({
         kind: 'fact',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'ephemeral',
     }),
     AI_CONSENSUS_VOTING_PASS_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_VOTING_ROUND2_CONSENSUS_FAILED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
         reserved: true,
     }),
     AI_CONSENSUS_VOTING_ROUND2_CONSENSUS_REACHED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
         reserved: true,
     }),
     AI_CONSENSUS_VOTING_ROUND2_STARTED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
         reserved: true,
     }),
     AI_CONSENSUS_VOTING_ROUND_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_CONSENSUS_VOTING_ROUND_STARTED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
@@ -555,31 +578,37 @@ export const EventRegistry = Object.freeze({
     }),
     AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_LLM_CHAT_ITERATION_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_LLM_CHAT_ITERATION_FAILED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_LLM_CHAT_ITERATION_RETRY: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_LLM_CHAT_ITERATION_STARTED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['dashboard', 'ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_LLM_CHAT_ITERATION_STOPPED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
@@ -619,6 +648,7 @@ export const EventRegistry = Object.freeze({
     }),
     AI_LLM_CHAT_ITERATION_TEXT_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
@@ -737,6 +767,7 @@ export const EventRegistry = Object.freeze({
     }),
     AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
@@ -754,11 +785,13 @@ export const EventRegistry = Object.freeze({
     }),
     AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED: Object.freeze({
         kind: 'request',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'ephemeral',
     }),
     AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
@@ -776,11 +809,13 @@ export const EventRegistry = Object.freeze({
     }),
     AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED: Object.freeze({
         kind: 'request',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'ephemeral',
     }),
     AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
@@ -797,6 +832,7 @@ export const EventRegistry = Object.freeze({
     }),
     AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED: Object.freeze({
         kind: 'request',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'ephemeral',
     }),
@@ -820,6 +856,7 @@ export const EventRegistry = Object.freeze({
     }),
     AI_TRIAGE_CLARIFICATION_QUESTIONS: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble'],
         persistence: 'gateway.sse_store',
     }),
@@ -881,6 +918,7 @@ export const EventRegistry = Object.freeze({
     }),
     APP_CASE_CREATED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['cli', 'dashboard', 'ensemble', 'operator'],
         persistence: 'gateway.docstore',
     }),
@@ -1307,7 +1345,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_COMMAND_APPROVAL_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['pubsub', 'sse'],
         producers: ['dashboard', 'ensemble', 'gateway'],
         persistence: 'ephemeral',
     }),
@@ -1496,7 +1534,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILE_EDIT_APPROVAL_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['pubsub', 'sse'],
         producers: ['cli', 'dashboard', 'ensemble', 'gateway'],
         persistence: 'ephemeral',
     }),
@@ -1764,7 +1802,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_INTENT_APPROVAL_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['pubsub', 'sse'],
         producers: ['dashboard', 'ensemble', 'gateway'],
         persistence: 'ephemeral',
     }),
@@ -1996,11 +2034,13 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_REPUTATION_COMMITMENT_CREATED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
     OPERATOR_REPUTATION_COMMITMENT_FAILED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
@@ -2012,19 +2052,22 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_REPUTATION_SLASH_TIER1: Object.freeze({
         kind: 'outcome',
-        producers: ['operator'],
+        transport: ['sse'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
         reserved: true,
     }),
     OPERATOR_REPUTATION_SLASH_TIER2: Object.freeze({
         kind: 'outcome',
-        producers: ['operator'],
+        transport: ['sse'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
         reserved: true,
     }),
     OPERATOR_REPUTATION_SLASH_TIER3: Object.freeze({
         kind: 'outcome',
-        producers: ['operator'],
+        transport: ['sse'],
+        producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
         reserved: true,
     }),
@@ -2044,6 +2087,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_REPUTATION_STATE_UPDATED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble', 'operator'],
         persistence: 'ephemeral',
     }),
@@ -2069,6 +2113,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_STATUS_UPDATED_ACTIVE: Object.freeze({
         kind: 'fact',
+        transport: ['sse'],
         producers: ['dashboard', 'ensemble', 'gateway'],
         persistence: 'gateway.operator_docs',
     }),
@@ -2079,6 +2124,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_STATUS_UPDATED_BOUND: Object.freeze({
         kind: 'fact',
+        transport: ['sse'],
         producers: ['dashboard', 'ensemble', 'gateway'],
         persistence: 'gateway.operator_docs',
     }),
@@ -2121,7 +2167,7 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_STREAM_APPROVAL_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['pubsub', 'sse'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
     }),
