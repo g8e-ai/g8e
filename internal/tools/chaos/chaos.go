@@ -172,13 +172,18 @@ func signedEnvelope(
 	keyID string,
 	sessionID string,
 ) (*govpkg.GovernanceEnvelope, error) {
+	eventType, err := constants.RequestEventForAction(constants.ActionType(actionType))
+	if err != nil {
+		return nil, fmt.Errorf("resolve request event for %s: %w", actionType, err)
+	}
 	env := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(30 * time.Minute)), // Increased to 30m for chaos runs
 		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 		OperatorId:        "chaos-operator",
 		OperatorSessionId: sessionID,
+		EventType:         string(eventType),
 		ActionType:        actionType,
 		TargetResource:    targetResource,
 		Payload:           payload,

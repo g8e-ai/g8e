@@ -59,6 +59,9 @@ func TestL4Warden_Notary_AllActionTypesFromSSOT(t *testing.T) {
 	for _, actionType := range allActionTypes {
 		t.Run(string(actionType), func(t *testing.T) {
 			t.Parallel()
+			if _, err := constants.RequestEventForAction(actionType); err != nil {
+				t.Skipf("no governed request event for %s", actionType)
+			}
 			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 			payload := typedPayload(t, actionType)
 			env := signedEnvelope(t, actionType, payload, privKey, "notary")

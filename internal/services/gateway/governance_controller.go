@@ -310,6 +310,8 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, constants.ErrTxL1ValidationFailed),
 		errors.Is(err, constants.ErrTxTransactionHashMissing),
 		errors.Is(err, constants.ErrTxTransactionHashMismatch),
+		errors.Is(err, constants.ErrTxProtocolVersionUnsupported),
+		errors.Is(err, constants.ErrTxEventTypeMissing),
 		errors.Is(err, constants.ErrTxTransactionExpired),
 		errors.Is(err, constants.ErrTxNonceMissing),
 		errors.Is(err, constants.ErrTxTransactionReplay),

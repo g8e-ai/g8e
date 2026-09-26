@@ -187,13 +187,19 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		nonceSuffix = "empty"
 	}
 
+	eventType, err := constants.RequestEventForAction(actionType)
+	if err != nil {
+		t.Fatalf("failed to resolve request event for %v: %v", actionType, err)
+	}
+
 	env := &govtypes.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "operator-session-1",
+		EventType:         string(eventType),
 		ActionType:        string(actionType),
 		TargetResource:    "localhost",
 		Payload:           payload,

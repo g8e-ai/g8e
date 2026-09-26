@@ -64,6 +64,7 @@ func TestL5ActuatorRecordRejectedTransactionSignsFailedStageEvidence(t *testing.
 		TransactionHash:   "test-rejected-hash",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 	}
 	failedStage := newDeterministicStageEvidence(
@@ -107,6 +108,7 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -194,6 +196,7 @@ func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -254,6 +257,7 @@ func TestL5ActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -288,6 +292,7 @@ func TestL5ActuatorExecuteReceiptPersistFail(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -323,6 +328,7 @@ func TestL5ActuatorExecuteFinalPersistenceAttestationWriteFailure(t *testing.T) 
 			TransactionHash:   "test-final-persistence-write-failure",
 			OperatorId:        "test-operator",
 			OperatorSessionId: "test-operator-session",
+			EventType:         string(constants.EventOperatorCommandRequested),
 			ActionType:        string(constants.ActionTypeExecuteBash),
 			TargetResource:    "localhost",
 		},
@@ -444,6 +450,7 @@ func TestL5ActuatorExecuteMissingSigningKey(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -470,6 +477,7 @@ func TestL5ActuatorExecuteMissingExecutionHandler(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -538,6 +546,7 @@ func TestL5ActuatorExecuteCallsReceiptPublisherOnSuccess(t *testing.T) {
 		TransactionHash:   "test-hash-receipt-pub",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 		RequestorUserId:   "user-001",
@@ -587,6 +596,7 @@ func TestL5ActuatorExecuteDoesNotCallReceiptPublisherWhenFinalReceiptFails(t *te
 		TransactionHash:   "test-hash-receipt-pub-fail",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -614,6 +624,7 @@ func TestL5ActuatorExecuteNilReceiptPublisherDoesNotPanic(t *testing.T) {
 		TransactionHash:   "test-hash-nil-pub",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -643,6 +654,7 @@ func TestL5ActuatorExecuteReceiptPublisherErrorDoesNotFailExecution(t *testing.T
 		TransactionHash:   "test-hash-pub-err",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}

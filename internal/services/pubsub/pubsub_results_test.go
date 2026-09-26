@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
@@ -619,7 +620,7 @@ func TestPubSubResultsService_PublishActionReceipt(t *testing.T) {
 
 		// Build the original command envelope (the one the operator received).
 		cmdEnv := &commonv1.GovernanceEnvelope{
-			ProtocolVersion:   "1.0",
+			ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 			OperatorId:        "op-001",
 			OperatorSessionId: "sess-001",
 			EventType:         string(constants.Event.Operator.FileEdit.Requested),

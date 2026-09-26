@@ -358,6 +358,11 @@ func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
 func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (proto.Message, string, error) {
+	if envelope.ProtocolVersion != govtypes.GovernanceProtocolVersionV2 {
+		tv.logger.Error("Transaction rejected: unsupported protocol version",
+			"protocol_version", envelope.ProtocolVersion)
+		return nil, "", constants.ErrTxProtocolVersionUnsupported
+	}
 	if tv.doctrine == nil {
 		tv.logger.Error("L1Doctrine not configured")
 		return nil, "", constants.ErrTxDoctrineMissing

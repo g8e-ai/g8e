@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -199,7 +200,7 @@ func TestBuildGovernanceEnvelope_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, env)
 
-	assert.Equal(t, "1.0", env.ProtocolVersion)
+	assert.Equal(t, govpkg.GovernanceProtocolVersionV2, env.ProtocolVersion)
 	assert.Equal(t, "op-001", env.OperatorId)
 	assert.Equal(t, "sess-001", env.OperatorSessionId)
 	assert.Equal(t, string(constants.ActionTypeFsRead), env.ActionType)

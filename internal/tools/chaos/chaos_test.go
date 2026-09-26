@@ -118,8 +118,8 @@ func TestSignedEnvelope(t *testing.T) {
 			isMutation: false,
 			wantErr:    false,
 			checkFields: func(t *testing.T, env *govpkg.GovernanceEnvelope) {
-				if env.ProtocolVersion != "1.0" {
-					t.Errorf("ProtocolVersion = %s, want 1.0", env.ProtocolVersion)
+				if env.ProtocolVersion != govpkg.GovernanceProtocolVersionV2 {
+					t.Errorf("ProtocolVersion = %s, want %s", env.ProtocolVersion, govpkg.GovernanceProtocolVersionV2)
 				}
 				if env.ActionType != "FS_LIST" {
 					t.Errorf("ActionType = %s, want FS_LIST", env.ActionType)
@@ -1647,7 +1647,7 @@ func TestSignedEnvelopeProtocolVersion(t *testing.T) {
 	}
 
 	if env.ProtocolVersion != "1.0" {
-		t.Errorf("ProtocolVersion = %s, want 1.0", env.ProtocolVersion)
+		t.Errorf("ProtocolVersion = %s, want %s", env.ProtocolVersion, govpkg.GovernanceProtocolVersionV2)
 	}
 }
 

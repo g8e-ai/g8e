@@ -145,7 +145,7 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 	}
 
 	env := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(EnvelopeExpiry)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,

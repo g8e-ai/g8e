@@ -96,7 +96,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	}
 
 	envelope := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
@@ -236,7 +236,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	}
 
 	envelope := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
@@ -371,7 +371,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	}
 
 	envelope := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,

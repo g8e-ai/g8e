@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	"github.com/stretchr/testify/assert"
@@ -275,7 +276,7 @@ func TestSubmitEnvelope(t *testing.T) {
 			envelope := &commonv1.GovernanceEnvelope{
 				Id:              "test-id",
 				TransactionHash: "test-hash",
-				ProtocolVersion: "1.0",
+				ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 				ActionType:      "TEST_ACTION",
 			}
 
@@ -317,7 +318,7 @@ func TestSubmitEnvelope_MarshalError(t *testing.T) {
 	envelope := &commonv1.GovernanceEnvelope{
 		Id:              "test-id",
 		TransactionHash: "test-hash",
-		ProtocolVersion: "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		ActionType:      "TEST_ACTION",
 	}
 
@@ -576,8 +577,8 @@ func TestActionConstants(t *testing.T) {
 	if ActionA2aCall != "A2A_CALL" {
 		t.Errorf("ActionA2aCall = %s, want A2A_CALL", ActionA2aCall)
 	}
-	if ProtocolVersion != "1.0" {
-		t.Errorf("ProtocolVersion = %s, want 1.0", ProtocolVersion)
+	if ProtocolVersion != "2" {
+		t.Errorf("ProtocolVersion = %s, want 2", ProtocolVersion)
 	}
 }
 

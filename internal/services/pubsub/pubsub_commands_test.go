@@ -101,7 +101,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 	payload, err := proto.Marshal(req)
 	require.NoError(t, err)
 	env := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
@@ -158,7 +158,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
 		env := &govpkg.GovernanceEnvelope{
-			ProtocolVersion: "1.0",
+			ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
 			EventType:         string(constants.Event.Operator.FsList.Requested),
@@ -197,7 +197,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 		payload, _ := proto.Marshal(req)
 		env := &govpkg.GovernanceEnvelope{
-			ProtocolVersion: "1.0",
+			ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
 			EventType:         string(constants.Event.Operator.FsList.Requested),
@@ -300,7 +300,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope_AcceptsPDPBoundRootDespi
 func buildGatewayDispatchedDoctrineEnvelope(t *testing.T, stateRoot, nonce string) *govpkg.GovernanceEnvelope {
 	t.Helper()
 	env := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		OperatorId:        "operator-1",
@@ -407,7 +407,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 				env := &govpkg.GovernanceEnvelope{
 					Id:              "tx-" + tc.name,
 					TransactionHash: "hash-" + tc.name,
-					ProtocolVersion: "1.0",
+					ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 					Timestamp:       timestamppb.Now(),
 					ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
 					EventType:       string(tc.eventType),
@@ -471,7 +471,7 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 		env := &govpkg.GovernanceEnvelope{
 			Id:              "tx-cancel",
 			TransactionHash: "hash-cancel",
-			ProtocolVersion: "1.0",
+			ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
 			EventType:         string(constants.Event.Operator.Command.CancelRequested),
@@ -979,7 +979,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		env := &commonv1.GovernanceEnvelope{
 			Id:              "tx-sync",
 			TransactionHash: "hash-sync",
-			ProtocolVersion: "1.0",
+			ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
 			EventType:         string(constants.Event.Operator.FsList.Requested),
@@ -1049,7 +1049,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-mismatch"}
 		payload, _ := proto.Marshal(req)
 		env := &govpkg.GovernanceEnvelope{
-			ProtocolVersion: "1.0",
+			ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
 			EventType:       string(constants.Event.Operator.FsList.Requested),
@@ -1089,7 +1089,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 		payload, _ := proto.Marshal(req)
 		env := &govpkg.GovernanceEnvelope{
-			ProtocolVersion: "1.0",
+			ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
 			EventType:         string(constants.Event.Operator.FsList.Requested),
@@ -1176,7 +1176,7 @@ func TestOperatorPubSubService_ProcessEnvelope_DocumentDispatchDeterminism(t *te
 				env := &commonv1.GovernanceEnvelope{
 					Id:              fmt.Sprintf("tx-det-%s-%d", tc.actionType, i),
 					TransactionHash: fmt.Sprintf("hash-det-%s-%d", tc.actionType, i),
-					ProtocolVersion: "1.0",
+					ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 					Timestamp:       timestamppb.Now(),
 					ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
 					EventType:       string(tc.wantEvent),

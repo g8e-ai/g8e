@@ -121,13 +121,18 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		nonceSuffix = nonceSuffix[:8]
 	}
 
+	eventType, err := constants.RequestEventForAction(constants.ActionTypeFsList)
+	if err != nil {
+		t.Fatalf("failed to resolve request event: %v", err)
+	}
 	env := &govtypes.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "operator-session-1",
+		EventType:         string(eventType),
 		ActionType:        string(constants.ActionTypeFsList),
 		TargetResource:    "localhost",
 		Payload:           payload,
@@ -204,13 +209,18 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 		if len(nonceSuffix) > 8 {
 			nonceSuffix = nonceSuffix[:8]
 		}
+		eventType, err := constants.RequestEventForAction(constants.ActionTypeFsList)
+		if err != nil {
+			t.Fatalf("failed to resolve request event: %v", err)
+		}
 		env := &govtypes.GovernanceEnvelope{
-			ProtocolVersion:   "1.0",
+			ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 			SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 			OperatorId:        "operator-1",
 			OperatorSessionId: "operator-session-1",
+			EventType:         string(eventType),
 			ActionType:        string(constants.ActionTypeFsList),
 			TargetResource:    "localhost",
 			Payload:           payload,
@@ -332,13 +342,18 @@ func TestL4Warden_SingleKeyCannotSatisfyQuorum(t *testing.T) {
 		if len(nonceSuffix) > 8 {
 			nonceSuffix = nonceSuffix[:8]
 		}
+		eventType, err := constants.RequestEventForAction(constants.ActionTypeFsList)
+		if err != nil {
+			t.Fatalf("failed to resolve request event: %v", err)
+		}
 		env := &govtypes.GovernanceEnvelope{
-			ProtocolVersion:   "1.0",
+			ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 			SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 			OperatorId:        "operator-1",
 			OperatorSessionId: "operator-session-1",
+			EventType:         string(eventType),
 			ActionType:        string(constants.ActionTypeFsList),
 			TargetResource:    "localhost",
 			Payload:           payload,

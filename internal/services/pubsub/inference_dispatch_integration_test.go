@@ -199,7 +199,7 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 	require.NoError(t, err)
 
 	envelope := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,

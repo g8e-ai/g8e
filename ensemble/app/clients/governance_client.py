@@ -214,6 +214,8 @@ def build_governance_envelope(
     payload_b64 = base64.b64encode(payload_bytes).decode("ascii") if payload_bytes else ""
     transaction_hash = compute_transaction_hash(
         action_type=action_type,
+        event_type=message.event_type,
+        protocol_version="2",
         target_resource="localhost",
         payload=payload_b64,
         state_merkle_root=state_merkle_root,
@@ -242,7 +244,7 @@ def build_governance_envelope(
         l3.proof = GovernanceL3Proof(mtls_cert_fingerprint=cert_fingerprint)
 
     return GovernanceEnvelope(
-        protocol_version="1.0",
+        protocol_version="2",
         id=transaction_hash,
         timestamp=message.timestamp or now_utc,
         expires_at=expires_at,

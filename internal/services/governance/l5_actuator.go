@@ -309,6 +309,8 @@ func (w *L5Actuator) buildInitialReceipt(vt *VerifiedTransaction) *operatorv1.Ac
 	return &operatorv1.ActionReceipt{
 		TransactionId:              vt.Envelope.Id,
 		TransactionHash:            vt.Envelope.TransactionHash,
+		EventType:                  vt.Envelope.EventType,
+		ActionType:                 vt.Envelope.ActionType,
 		Status:                     operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		ResultSummary:              "executing",
 		StateRootBefore:            stateBefore,
@@ -686,6 +688,8 @@ func VerifyReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt, publ
 type canonicalReceipt struct {
 	TransactionID                  string `json:"transaction_id"`
 	TransactionHash                string `json:"transaction_hash"`
+	EventType                      string `json:"event_type,omitempty"`
+	ActionType                     string `json:"action_type,omitempty"`
 	Status                         int32  `json:"status"`
 	ResultSummary                  string `json:"result_summary"`
 	StateRootBefore                string `json:"state_root_before"`
@@ -719,9 +723,9 @@ func deterministicStageEvidenceHash(stages []*operatorv1.DeterministicStageEvide
 
 // CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
 // This function must be used by both signing and verification to ensure consistency.
-// Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
-// state_root_after, executed_at_unix_ms, signer_key_id, l2_status, l3_status, and the
-// deterministic stage evidence hash when stage evidence is present.
+// Field order: transaction_id, transaction_hash, event_type, action_type (v2 receipts),
+// status, result_summary, state_root_before, state_root_after, executed_at_unix_ms,
+// signer_key_id, l2_status, l3_status, and the deterministic stage evidence hash when present.
 func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	stageEvidenceHash, err := deterministicStageEvidenceHash(r.DeterministicStageEvidence)
 	if err != nil {
@@ -730,6 +734,8 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	canonical := canonicalReceipt{
 		TransactionID:                  r.TransactionId,
 		TransactionHash:                r.TransactionHash,
+		EventType:                      r.EventType,
+		ActionType:                     r.ActionType,
 		Status:                         int32(r.Status),
 		ResultSummary:                  r.ResultSummary,
 		StateRootBefore:                r.StateRootBefore,

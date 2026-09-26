@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -372,7 +373,7 @@ func (rr *PubSubResultsService) PublishActionReceipt(ctx context.Context, env *c
 	}
 
 	receiptEnv := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         env.Timestamp,
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        env.OperatorId,

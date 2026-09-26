@@ -1048,6 +1048,8 @@ var (
 	ErrTxInFlight                     = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
 	ErrTxProviderMisconfigured        = errors.New("PROVIDER_MISCONFIGURED: state root is empty")
 	ErrTxCanonicalizeFailed           = errors.New("TX_CANONICALIZE_FAILED: unsupported type in intent_data canonicalization")
+	ErrTxProtocolVersionUnsupported   = errors.New("TX_PROTOCOL_VERSION_UNSUPPORTED: protocol_version must be 2 for ingress")
+	ErrTxEventTypeMissing             = errors.New("TX_EVENT_TYPE_MISSING: event_type required for protocol version 2")
 
 	// MCP container status errors
 	ErrMCPContainerNameRequired = errors.New("container_name required")

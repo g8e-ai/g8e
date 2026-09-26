@@ -40,7 +40,7 @@ func newTestResponder() *response.Writer {
 func makeEnvelope(t *testing.T, actionType string, payload []byte) *governance.GovernanceEnvelope {
 	t.Helper()
 	env := &governance.GovernanceEnvelope{
-		ProtocolVersion: "1.0",
+		ProtocolVersion:   governance.GovernanceProtocolVersionV2,
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
 		ActionType:      actionType,
@@ -186,7 +186,7 @@ func TestConsensusService_Deliberate_WithIntentData(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &governance.GovernanceEnvelope{
-		ProtocolVersion: "1.0",
+		ProtocolVersion:   governance.GovernanceProtocolVersionV2,
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
 		ActionType:      string(constants.ActionTypeExecuteBash),

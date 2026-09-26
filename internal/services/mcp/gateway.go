@@ -841,7 +841,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		ActionType:      string(actionType),
 		TargetResource:  opts.targetResource,
 		Payload:         opts.payloadBytes,
-		ProtocolVersion: "1.0",
+		ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 		Nonce:           uuid.NewString(),
 		StateMerkleRoot: stateRoot,
 		Posture:         g.posture,
