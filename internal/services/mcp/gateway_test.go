@@ -524,6 +524,11 @@ func TestGatewayService_HandleResourcesRead(t *testing.T) {
 
 	expectedJSON := `{"jsonrpc":"2.0","id":1,"result":{"contents":[{"type":"text","text":"resource content"}]}}`
 	require.JSONEq(t, expectedJSON, w.Body.String())
+
+	var env commonv1.GovernanceEnvelope
+	require.NoError(t, protojson.Unmarshal(proc.gotPayload, &env))
+	assert.Equal(t, string(constants.EventOperatorMcpResourceReadRequested), env.EventType)
+	assert.Equal(t, string(constants.ActionTypeMcpResourceRead), env.ActionType)
 }
 
 func TestGatewayService_HandlePromptsGet(t *testing.T) {
@@ -546,6 +551,11 @@ func TestGatewayService_HandlePromptsGet(t *testing.T) {
 
 	expectedJSON := `{"jsonrpc":"2.0","id":1,"result":{"description":"prompt template","messages":[{"role":"user","content":{"type":"text","text":"prompt template"}}]}}`
 	require.JSONEq(t, expectedJSON, w.Body.String())
+
+	var env commonv1.GovernanceEnvelope
+	require.NoError(t, protojson.Unmarshal(proc.gotPayload, &env))
+	assert.Equal(t, string(constants.EventOperatorMcpPromptGetRequested), env.EventType)
+	assert.Equal(t, string(constants.ActionTypeMcpPromptGet), env.ActionType)
 }
 
 func TestGatewayService_CircuitBreaker(t *testing.T) {

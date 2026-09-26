@@ -1,11 +1,11 @@
 # Constants System
 
-Last Updated: 2026-09-23
-Version: v2.1.13
+Last Updated: 2026-09-26
+Version: v2.2.0
 
 ## Overview
 
-The g8e constants system maintains canonical constant definitions across the platform. Go source files in `internal/constants/` are the single source of truth (SSOT) for the platform. JSON schemas in `protocol/constants/` provide protocol-level reference documentation and external protocol definitions for SDKs and other consumers.
+The g8e constants system maintains canonical constant definitions across the platform. JSON files in `protocol/constants/` are the single source of truth (SSOT). Go (`internal/constants/*_gen.go`), dashboard (`dashboard/public/js/constants/events.js`), and Python (`protocol/python/g8e/_data/`) are generated or bundled views of the same JSON.
 
 ## Constant Categories
 
@@ -23,11 +23,11 @@ Canonical collection names for the operator embedded SQLite database, typed as `
 - `CollectionRevokedCertificates`, `CollectionTrustedSigners`, `CollectionAppPolicies`
 - `CollectionConsensus`, `CollectionEnrollmentTokens`, `CollectionCLIRecoveryRequests`, `CollectionPlatformEnrollments` (`platform_enrollments`)
 
-### Event Types (`events.go`)
+### Event Types (`protocol/constants/events.json` → `events_gen.go`)
 
-Typed event identifiers for the pub/sub system, typed as `EventType`. The file defines approximately 300 individual event constants organized across the following categories:
+Typed event identifiers for the pub/sub system, typed as `EventType`. `make constants` generates `internal/constants/events_gen.go` from the registry JSON. Each entry carries `kind`, `transport`, `producers`, `persistence`, and optional `governance` / `outcomes` metadata. Governed request events resolve their action class through `constants.Registry.ActionFor(event)` — there is no hand-maintained event→action map. The registry currently defines 339 events organized across the following categories:
 
-- App Case: `EventAppCaseCreated`, `EventAppCaseUpdated`, `EventAppCaseAssigned`, `EventAppCaseEscalated`, `EventAppCaseResolved`, `EventAppCaseClosed`, `EventAppCaseSelected`, `EventAppCaseCleared`, `EventAppCaseSwitched`, `EventAppCaseCreationRequested`, `EventAppCaseUpdateRequested`
+- App Case: `EventAppCaseCreated`, `EventAppCaseUpdated`, `EventAppCaseAssigned`, `EventAppCaseEscalated`, `EventAppCaseResolved`, `EventAppCaseClosed`, `EventAppCaseSelected`, `EventAppCaseCleared`, `EventAppCaseSwitched`, `EventAppCaseCreateRequested`, `EventAppCaseUpdateRequested`
 - App Task: `EventAppTaskCreated`, `EventAppTaskUpdated`, `EventAppTaskAssigned`, `EventAppTaskStarted`, `EventAppTaskCompleted`, `EventAppTaskFailed`
 - App Investigation: `EventAppInvestigationCreated`, `EventAppInvestigationUpdated`, `EventAppInvestigationLoaded`, `EventAppInvestigationRequested`, `EventAppInvestigationStarted`, `EventAppInvestigationClosed`, `EventAppInvestigationEscalated`, plus list request/response and status update variants, and chat message events (`user`, `ai`, `system`)
 - Operator Heartbeat: `EventOperatorHeartbeatSent`, `EventOperatorHeartbeatRequested`, `EventOperatorHeartbeatReceived`, `EventOperatorHeartbeatMissed`
@@ -42,7 +42,7 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Operator File History/Diff/Restore: fetch and restore event lifecycles with started, requested, received, completed, and failed variants
 - Operator Logs/History Fetch: requested, received, completed, failed
 - Operator MCP/A2A: `EventOperatorMcpCallRequested`, `EventOperatorA2aCallRequested`
-- Operator Network: ping and port check event lifecycles, plus `EventOperatorPortCheckRequested`
+- Operator Network: ping and port check event lifecycles (`EventOperatorNetworkPortCheckRequested`, etc.)
 - Operator Status: `EventOperatorStatusUpdatedActive`, `EventOperatorStatusUpdatedAvailable`, `EventOperatorStatusUpdatedUnavailable`, `EventOperatorStatusUpdatedBound`, `EventOperatorStatusUpdatedOffline`, `EventOperatorStatusUpdatedStale`, `EventOperatorStatusUpdatedStopped`, `EventOperatorStatusUpdatedTerminated`
 - Operator Bootstrap: requested, received, completed, failed, config.received
 - Operator Audit: `EventOperatorAuditUserRecorded`, `EventOperatorAuditAiRecorded`, `EventOperatorAuditCommandRecorded`, `EventOperatorAuditDirectCommandRecorded`, `EventOperatorAuditDirectCommandResultRecorded`, `EventOperatorAuditMcpCallRecorded`
@@ -59,11 +59,11 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - AI LLM Config: requested, received, failed
 - AI LLM Lifecycle: requested, started, completed, failed, stopped, error occurred
 - AI LLM Tools: web search, investigation query, and command constraints event lifecycles
-- AI LLM Chat: submitted, stop show/hide, filter event, message sent/replayed/processing failed/dead lettered, iteration lifecycle events (started, completed, failed, stopped, retry), thinking lifecycle events, citations received, text received/chunk received/completed/truncated, stream lifecycle events
-- Platform: usage updated, notification
-- Platform Auth: login requested/succeeded/failed, logout requested/succeeded/failed, session validation requested/succeeded/failed, session expired, user authenticated/unauthenticated, component initialized (authstate, chat, operator), auth info
+- AI LLM Chat: submitted, filter updated, message sent/replayed/processing failed/dead lettered, iteration lifecycle events (started, completed, failed, stopped, retry), thinking lifecycle events (`thinking_phase` in payloads), citations received, text received/chunk received/completed/truncated, stream lifecycle events. Dashboard-local stop signals live in `dashboard/public/js/constants/ui-events.js`, not the protocol registry.
+- Platform: usage updated, notification sent
+- Platform Auth: login requested/succeeded/failed, logout requested/succeeded/failed, session validation requested/succeeded/failed, session expired, user authenticated/unauthenticated, component initialized (authstate, chat, operator), auth info updated
 - Platform SSE: keepalive sent, connection established/opened/closed/failed/error
-- Platform Terminal: opened, minimized, maximized, closed
+- Platform Terminal: dashboard UI signals (`ui-events.js`); no `platform.terminal.*` wire events in the registry
 - Platform Vault: `EventPlatformVaultModeChanged` (`g8e.v1.platform.sentinel.mode.changed`)
 - Platform External Service: configured
 - Platform Telemetry: health reported, performance recorded, error logged, audit logged
@@ -73,9 +73,9 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - App Memory: `EventAppMemoryCreated`, `EventAppMemoryUpdated`
 - App Case/Investigation Deletion: `EventAppCaseDeleted`, `EventAppInvestigationDeleted`
 - AI LLM Chat Thinking Stopped: `EventAiLLMChatIterationThinkingStopped`
-- AI Reputation: `EventAiReputationStateUpdated`, `EventReputationStateUpdated`
-- Source: `EventSourceUserChat`, `EventSourceUserTerminal`, `EventSourceAiPrimary`, `EventSourceAiAssistant`, `EventSourceAiTriage`, `EventSourceSystem`
-- Platform Enrollment: `EventPlatformEnrollmentCreateRequested` (`g8e.v1.platform.enrollment.create.requested`), `EventPlatformEnrollmentDecideRequested` (`g8e.v1.platform.enrollment.decide.requested`), `EventPlatformEnrollmentIssueRequested` (`g8e.v1.platform.enrollment.issue.requested`), `EventPlatformEnrollmentPersistPolicyRequested` (`g8e.v1.platform.enrollment.persist_policy.requested`), `EventPlatformEnrollmentCreateSessionRequested` (`g8e.v1.platform.enrollment.create_session.requested`). These map to `ActionTypePlatformEnrollment*` action types via `eventToAction` in `mappings.go`.
+- AI Reputation: `EventAiReputationStateUpdated`
+- Message senders: `g8e.v1.source.*` values live in `protocol/constants/senders.json` (`senders.go` / `MessageSender` in Python), not in `events.json`
+- Platform Enrollment: `EventPlatformEnrollmentCreateRequested`, `EventPlatformEnrollmentDecideRequested`, `EventPlatformEnrollmentIssueRequested`, `EventPlatformEnrollmentPersistPolicyRequested`, `EventPlatformEnrollmentCreateSessionRequested`. Each carries `governance.action_type` linking to `ActionTypePlatformEnrollment*` in the registry.
 
 The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*`) that groups operator event constants into nested sub-structs by domain (e.g., `Event.Operator.Command.ApprovalRequested`, `Event.Operator.FileEdit.Completed`, `Event.Operator.NetworkPing.Received`). Top-level operator fields include `Bound`, `Unbound`, `ContextChanged`, `DeviceRegistered`, `Heartbeat`, `HeartbeatMissed`, `HeartbeatReceived`, `HeartbeatRequested`, `PanelListUpdated`, `ShutdownAcknowledged`, `ShutdownRequested`, `SlotInitializationFailed`, `TerminalApprovalDenied`, `TerminalAuthStateChanged`, `TerminalThinkingAppend`, `TerminalThinkingComplete`, and `BootstrapConfigReceived`. Sub-struct domains include `A2a`, `Audit`, `Bootstrap`, `Command` (with nested `StatusUpdated`), `Eval`, `FetchFileDiff`, `FetchFileHistory`, `FetchHistory`, `FetchLogs`, `FileEdit`, `FsGrep`, `FsList`, `FsRead`, `Intent`, `Mcp`, `NetworkPing`, `Notary`, `PortCheck`, `RestoreFile`, `StatusUpdated`, and `StreamApproval`.
 
@@ -144,7 +144,6 @@ Cloud provider intent classification values for governance posture, typed as `Cl
 
 Internal enumeration constants, each defined as a typed string:
 
-- `ActionStatus`: `ActionStatusCancelled`, `ActionStatusCompleted`, `ActionStatusFailed`, `ActionStatusTimeout`, `ActionStatusUserCancelled`
 - `ExecutionStatus`: `ExecutionStatusCancelRequested`, `ExecutionStatusCancelled`, `ExecutionStatusCompleted`, `ExecutionStatusDenied`, `ExecutionStatusExecuting`, `ExecutionStatusFailed`, `ExecutionStatusFeedback`, `ExecutionStatusPending`, `ExecutionStatusTimeout`
 - `FileOperation`: `FileOperationCreate`, `FileOperationDelete`, `FileOperationInsert`, `FileOperationPatch`, `FileOperationRead`, `FileOperationReplace`, `FileOperationUpdate`, `FileOperationWrite`
 - `ConnectionState`: `ConnectionStateClosed`, `ConnectionStateConnected`, `ConnectionStateConnecting`, `ConnectionStateDisconnected`, `ConnectionStateError`, `ConnectionStateReconnecting`
@@ -168,7 +167,7 @@ Internal enumeration constants, each defined as a typed string:
 - `CAType`: `CATypeRoot`, `CATypeHub`, `CATypeOperator`, `CATypeGatewayPeer`
 - `ServiceName`: `ServiceNameOperatorGateway`
 - `GatewayMode`: `GatewayModeGateway`, `GatewayModeStatusOK`
-- `ThinkingActionType`: `ThinkingActionTypeEnd`, `ThinkingActionTypeStart`, `ThinkingActionTypeUpdate`
+- `ThinkingPhase`: `ThinkingPhaseEnd`, `ThinkingPhaseStart`, `ThinkingPhaseUpdate`
 - `HistoryEventType`: `HistoryEventTypeAPIKeyRefreshed`, `HistoryEventTypeAuthenticated`, `HistoryEventTypeBound`, `HistoryEventTypeClaimed`, `HistoryEventTypeCreated`, `HistoryEventTypeCreatedFromRefresh`, `HistoryEventTypeDeactivated`, `HistoryEventTypeHeartbeatReceived`, `HistoryEventTypeReconnected`, `HistoryEventTypeRegistered`, `HistoryEventTypeReset`, `HistoryEventTypeShutdownRequested`, `HistoryEventTypeSlotConsumed`, `HistoryEventTypeSlotCreated`, `HistoryEventTypeSlotReleased`, `HistoryEventTypeStatusChanged`, `HistoryEventTypeStopped`, `HistoryEventTypeTerminated`, `HistoryEventTypeTerminatedForRefresh`, `HistoryEventTypeUnbound`
 - `HeartbeatType`: `HeartbeatTypeAutomatic`, `HeartbeatTypeBootstrap`, `HeartbeatTypeRequested`
 - `AuthAuditResult`: `AuthAuditResultFailure`, `AuthAuditResultInvalidAPIKey`, `AuthAuditResultSuccess`
@@ -225,9 +224,9 @@ Additional constants in `auth.go`:
 - Auth scheme and defaults: `BearerScheme` (`Bearer `), `DefaultTenantID` (`default`), `DefaultBindingPersona` (`default`)
 - L3 notary: `L3ApprovalWindow` (30 minutes)
 
-### Action Types (`action_types.go`)
+### Action Types (`protocol/constants/status.json` → `action_types_gen.go`)
 
-GovernanceEnvelope action types, typed as `ActionType`. The file also defines `AllActionTypes` (a canonical slice of all valid action types), an `IsMutation()` method that returns true for action types that modify system state, and an `IsBootstrapAction()` method that returns true for platform enrollment actions exempt from L2/L3 enforcement gates because they bring the consensus tribunal and notary into existence:
+GovernanceEnvelope action types, typed as `ActionType`. `make constants` generates `internal/constants/action_types_gen.go` from `status.json`. The generated file defines `AllActionTypes`, `IsMutation()` (driven by `_mutation` flags in JSON), and `IsBootstrapAction()` (driven by `_bootstrap` flags) for platform enrollment actions exempt from L2/L3 enforcement gates:
 
 - `ActionTypeA2aCall`, `ActionTypeCancel`, `ActionTypeDocumentDelete`, `ActionTypeDocumentUpdate`, `ActionTypeEvalAnswer`, `ActionTypeExecuteBash`, `ActionTypeFetchFileDiff`, `ActionTypeFetchFileHistory`, `ActionTypeFetchHistory`, `ActionTypeFetchLogs`, `ActionTypeFileEdit`, `ActionTypeFsGrep`, `ActionTypeFsList`, `ActionTypeFsRead`, `ActionTypeHeartbeat`, `ActionTypeMcpCall`, `ActionTypeMcpPromptGet`, `ActionTypeMcpPromptList`, `ActionTypeMcpResourceList`, `ActionTypeMcpResourceRead`, `ActionTypePortCheck`, `ActionTypeRestoreFile`, `ActionTypeShutdown`, `ActionTypePlatformEnrollmentCreate`, `ActionTypePlatformEnrollmentDecide`, `ActionTypePlatformEnrollmentIssue`, `ActionTypePlatformEnrollmentPersistPolicy`, `ActionTypePlatformEnrollmentCreateSession`
 
@@ -387,7 +386,7 @@ Output formatting constants:
 
 Platform event identifiers and binary/architecture constants:
 
-- Platform event string constants mirroring `events.go` platform events (usage, notification, auth, SSE, terminal, vault mode, external service, telemetry, console log)
+- Platform event string constants mirroring generated platform events in `events_gen.go` (usage, notification, auth, SSE, vault mode, external service, telemetry, console log)
 - Binary names: `BinaryNameWindows` (`g8e-windows-amd64.exe`), `BinaryNameLinux` (`g8e-linux-amd64`), `BinaryNameDarwin` (`g8e-darwin-amd64`)
 - Architectures: `ArchAMD64`, `ArchARM64`, `Arch386`
 - Operating systems: `OSLinux`, `OSDarwin`, `OSWindows`
@@ -444,13 +443,16 @@ Timestamp format constants:
 - `FormatRFC3339`: canonical RFC3339 format string with timezone offset (re-exported from `internal/timesvc`)
 - `TimestampFormat`: RFC3339 with fixed microsecond precision (`2006-01-02T15:04:05.000000Z07:00`) for lexicographic ordering (re-exported from `internal/timesvc` as `timesvc.Format`)
 
-### Mappings (`mappings.go`)
+### Event Registry (`registry_governed.go` + `events_gen.go`)
 
-Functions mapping between event types and action types:
+Governed ingress resolves action classes from registry metadata:
 
-- `MapActionTypeToEventType`: Maps `ActionType` back to `EventType` using a reverse map derived from `eventToAction` at init time. Unmapped action types pass through as-is.
-- `MapEventTypeToResultActionType`: Maps completion/failure events to result action types (e.g., `EXECUTE_BASH_RESULT`, `EXECUTE_BASH_CANCELLED`) via `eventToResultAction`.
-- The `eventToAction` map is the single source of truth for the `EventType` to `ActionType` relationship, covering operator command, file edit, filesystem, fetch, MCP, A2A, port check, heartbeat, shutdown, eval, and investigation events.
+- `constants.Registry.Lookup(event)` returns typed metadata (`kind`, `transport`, `producers`, `persistence`, `governance`)
+- `constants.Registry.ActionFor(event)` returns the governed `ActionType` for a request event (fail-closed on unknown or non-governed input)
+- `constants.ValidateGovernedRequest(event)` enforces `kind: request` and `transport: governed`
+- `constants.ValidateGovernedEnvelopeFields(event, action)` ensures envelope `event_type` and `action_type` agree
+
+Hand-maintained `mappings.go`, `MapActionTypeToEventType`, and fabricated `*_RESULT` action classifiers were deleted in Part II W5.
 
 ## JSON Reference Files
 
@@ -470,25 +472,35 @@ Generates Go, Python, and Node TypeScript Protobuf code from `.proto` files and 
 
 Language-specific targets are available as `make proto-go`, `make proto-python`, and `make proto-node`.
 
-## CI Integration
+## Constants Generation and CI
 
-Constants are validated in CI via `G8E_STRICT_CONSTANTS_LINT`. The pipeline includes:
+```bash
+make constants        # regenerate events_gen.go, action_types_gen.go, dashboard events.js
+make constants-check  # validate registry and fail on generated-file drift (runs in make test-unit)
+```
 
-- Proto verification (`make _ci-verify-proto`)
-- Doctrine validation (`make validate-doctrines`)
-- Linting (`make lint`)
-- Testing (`make _ci-test`)
+`internal/tools/constgen` validates the registry before generation:
+
+- duplicate wire values and `_go_const` names
+- `kind`, `transport`, `producers`, `persistence` on every entry
+- governed requests require `governance.action_type` present in `status.json`
+- every action type has a governed request event (pending MCP types are allowlisted until W5)
+- `outcomes` entries reference existing `kind: outcome` or `kind: fact` events
+- stream events use `ephemeral` persistence only
+
+CI also runs proto verification (`make _ci-verify-proto`), doctrine validation (`make validate-doctrines`), linting, and tests.
 
 ## Adding New Constants
 
-1. **Add to Go file** in `internal/constants/`.
-2. **Update JSON file** in `protocol/constants/` for public protocol constants.
-3. **Run tests** to verify integration.
-4. **Commit both** Go source and JSON reference files.
+1. **Edit JSON** in `protocol/constants/` (events, status, or other SSOT files).
+2. **Run** `make constants` to regenerate Go and dashboard outputs.
+3. **Run** `make constants-check` and language tests.
+4. **Commit** JSON source and generated files together.
+
+For new governed capabilities: add a `kind: request` event with `governance.action_type` and `governance.payload` in `events.json`, ensure the action type exists in `status.json`, then regenerate.
 
 Follow these guidelines:
-- Use typed constants.
-- Group related constants.
-- Add documentation comments.
-- Follow Go naming conventions.
-- Update protocol JSON for public constants.
+- JSON is the single source of truth for events and action types.
+- Use typed generated constants (`constants.Event.*`, `constants.ActionType*`).
+- Add documentation comments on hand-written Go helpers only.
+- Follow Go naming conventions for `_go_const` values in JSON.

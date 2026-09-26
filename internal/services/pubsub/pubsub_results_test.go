@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
@@ -263,7 +264,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
 
 		assert.Equal(t, string(constants.Event.Operator.Command.Completed), env.EventType)
-		assert.Equal(t, "EXECUTE_BASH_RESULT", env.ActionType)
+		assert.Equal(t, string(constants.ActionTypeExecuteBash), env.ActionType)
 		assert.Equal(t, "case-456", env.CaseId)
 		assert.Equal(t, "msg-123", env.Id)
 
@@ -619,19 +620,21 @@ func TestPubSubResultsService_PublishActionReceipt(t *testing.T) {
 
 		// Build the original command envelope (the one the operator received).
 		cmdEnv := &commonv1.GovernanceEnvelope{
-			ProtocolVersion:   "1.0",
+			ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 			OperatorId:        "op-001",
 			OperatorSessionId: "sess-001",
-			ActionType:        string(constants.ActionTypeFileEdit),
-			TargetResource:    "/tmp/test.txt",
-			RequestorUserId:   "user-001",
-			ActingAppId:       "spiffe://g8e.local/app/g8ee",
-			CaseId:            "case-1",
-			InvestigationId:   "inv-1",
-			TaskId:            "task-1",
-			WebSessionId:      "web-1",
-			CliSessionId:      "cli-1",
-			Posture:           "doctrine",
+			EventType:         string(constants.Event.Operator.FileEdit.Requested),
+
+			ActionType:      string(constants.ActionTypeFileEdit),
+			TargetResource:  "/tmp/test.txt",
+			RequestorUserId: "user-001",
+			ActingAppId:     "spiffe://g8e.local/app/g8ee",
+			CaseId:          "case-1",
+			InvestigationId: "inv-1",
+			TaskId:          "task-1",
+			WebSessionId:    "web-1",
+			CliSessionId:    "cli-1",
+			Posture:         "doctrine",
 		}
 
 		receipt := &pb.ActionReceipt{

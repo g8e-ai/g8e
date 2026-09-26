@@ -117,11 +117,11 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
         authState.getWebSessionId = () => WEB_SESSION_ID;
 
         serviceClient = new MockServiceClient();
-        serviceClient.setResponse('g8ed', '/js/components/templates/chat-container.html', {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
-            text: async () => '<div id="messages-container"></div><button id="ai-stop-btn"></button><div id="anchored-terminal-body"></div><div id="anchored-terminal-attachments"></div><button id="anchored-terminal-attach"></button>'
-        });
+            text: async () => '<div id="messages-container"></div><button id="ai-stop-btn"></button><div id="anchored-terminal-body"></div><div id="anchored-terminal-attachments"></div><button id="anchored-terminal-attach"></button>',
+        }));
 
         installGlobals(authState, serviceClient);
 
@@ -272,7 +272,7 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
             chat.executionActive = true;
             chat.approvalPending = true;
 
-            serviceClient.setResponse('g8ed', '/api/chat/stop', {
+            serviceClient.setResponse('gateway', '/api/v1/chat/stop', {
                 ok: true,
                 status: 200,
                 json: async () => ({ success: true })
@@ -298,7 +298,7 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
             await chat.stopAIProcessing({ reason: 'Test stop' });
             const requestLog = serviceClient.getRequestLog();
             expect(requestLog.length).toBeGreaterThan(0);
-            const stopRequest = requestLog.find(req => req.path.includes('/api/chat/stop'));
+            const stopRequest = requestLog.find(req => req.path.includes('/api/v1/chat/stop'));
             expect(stopRequest).toBeDefined();
             expect(stopRequest.body.investigation_id).toBe(INVESTIGATION_ID);
             expect(stopRequest.body.reason).toBe('Test stop');
@@ -307,7 +307,7 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
         it('uses default reason when not provided', async () => {
             await chat.stopAIProcessing();
             const requestLog = serviceClient.getRequestLog();
-            const stopRequest = requestLog.find(req => req.path.includes('/api/chat/stop'));
+            const stopRequest = requestLog.find(req => req.path.includes('/api/v1/chat/stop'));
             expect(stopRequest.body.reason).toBe('User requested stop');
         });
 
@@ -378,7 +378,7 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
         });
 
         it('handles HTTP error response', async () => {
-            serviceClient.setResponse('g8ed', '/api/chat/stop', {
+            serviceClient.setResponse('gateway', '/api/v1/chat/stop', {
                 ok: false,
                 status: 500,
                 statusText: 'Internal Server Error'
@@ -388,7 +388,7 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
         });
 
         it('shows error notification on failure', async () => {
-            serviceClient.setResponse('g8ed', '/api/chat/stop', {
+            serviceClient.setResponse('gateway', '/api/v1/chat/stop', {
                 ok: false,
                 status: 500,
                 statusText: 'Internal Server Error'
@@ -406,7 +406,7 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
         });
 
         it('handles silent mode without error notifications', async () => {
-            serviceClient.setResponse('g8ed', '/api/chat/stop', {
+            serviceClient.setResponse('gateway', '/api/v1/chat/stop', {
                 ok: false,
                 status: 500,
                 statusText: 'Internal Server Error'

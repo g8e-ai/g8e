@@ -11,7 +11,7 @@ import asyncio
 import logging
 
 from app.constants import EventType, G8EE_COMPONENT
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 from app.models.events import AiProcessingStoppedPayload, SessionEvent
 from app.services.infra.event_service import EventService
 

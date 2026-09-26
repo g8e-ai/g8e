@@ -15,6 +15,7 @@ import {
 } from '../src/state/campaign-adapter';
 import { decodeViewRecord } from '../src/contract/validators';
 import { decodeCampaignProjectionEnvelope } from '../src/contract/campaign-wire';
+import type { LiveEvent } from '../src/contract/types';
 import { EvalStore } from '../src/state/store';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -306,6 +307,38 @@ describe('adaptCampaignProjectionEnvelope', () => {
       completed: 1,
       total: 1,
     });
+  });
+
+  it('uses primary variant_id for heterogeneous system-lane lifecycle events', () => {
+    const context = createCampaignAdaptContext();
+    const runId = 'formation-benchmark-live';
+    const records = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: `${runId}:assign-1:lifecycle:running`,
+        record: {
+          assignment_id: 'assign-1',
+          run_id: runId,
+          scenario_id: 'security-policy-deny-delete',
+          lane: 'EVALUATION_LANE_SYSTEM',
+          stack_id: 'heavy-reasoner',
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'phi35mini38b-speed',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          observed_at: '2026-09-25T18:00:00Z',
+        },
+      },
+      context,
+    );
+
+    const started = records.find((record): record is LiveEvent => record.kind === 'assignment_started');
+    expect(started).toMatchObject({
+      variant_id: 'phi35mini38b-speed',
+      role: 'primary',
+    });
+    expect(started?.variant_id).not.toBe('unknown');
+    expect(started?.variant_id).not.toBe('assignment');
   });
 
   it('tracks terminal progress separately from passing verdicts', () => {
@@ -947,6 +980,8 @@ describe('EvalStore campaign ingest', () => {
       expect(enrFirst!.activity_summary?.model_activity.availability).toBe('observed');
       expect(enrFirst!.evidence_bindings).toHaveLength(1);
       expect(enrFirst!.resource_summary?.latency_ms?.value).toBe(120);
+      expect(enrFirst!.resource_summary?.input_tokens?.value).toBe(12);
+      expect(enrFirst!.resource_summary?.output_tokens?.value).toBe(4);
       expect(enrFirst!.resource_summary?.retries?.value).toBe(0);
     });
 
@@ -965,6 +1000,9 @@ describe('EvalStore campaign ingest', () => {
         inventory_only: false,
         evaluation_coverage: 1,
         pass_rate: { estimate: 0.8, lower: 0.8, upper: 0.8, denominator: 5 },
+        agreement_pairwise: { value: 0.92 },
+        latency_p50_ms: { value: 640 },
+        output_throughput_p50: { value: 84.1 },
       };
 
       const verifiedModelSummary = {

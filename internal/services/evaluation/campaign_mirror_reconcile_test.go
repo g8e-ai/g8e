@@ -58,7 +58,7 @@ func TestCampaignMirrorReconciler_ReconcileVerifiedQueuePresenceOnlyReportsMissi
 
 	reconciler := NewCampaignMirrorReconciler(coordinator, store, probe)
 	queue := &CampaignQueue{Models: []CampaignQueueModel{{Status: "verified", VerifiedRunID: run.GetRunId()}}}
-	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Minute, false, nil)
+	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Minute, false, false, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{run.GetRunId()}, result.MissingRunIDs)
 	assert.Empty(t, result.RestoredRunIDs)

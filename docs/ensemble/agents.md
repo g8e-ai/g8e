@@ -2,7 +2,7 @@
 
 ## Scope and boundary
 
-g8ee is an optional application-layer client. Its personas, model reasoning, Tribunal agreement, Marshal analysis, memories, reputation, and application approvals express intent or telemetry; they do not authorize a host or platform mutation. Host-command requests are relayed as typed `CommandIntent` messages to the selected Operator, while designated application-record writes use the Gateway governance endpoint. The Gateway and executing Operator enforce the active five-layer protocol posture. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) and [Ensemble Architecture](../architecture/ensemble.md).
+g8ee is an optional application-layer client. Its personas, model reasoning, Tribunal agreement, Marshal analysis, memories, reputation, and application approvals express intent or telemetry; they do not authorize a host or platform mutation. Host-command requests dispatch through `GatewayOperatorClient` to `POST /api/v1/operators/commands` with a registered request `event_type`, while designated application-record writes use the Gateway governance endpoint. The Gateway and executing Operator enforce the active five-layer protocol posture. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) and [Ensemble Architecture](../architecture/ensemble.md).
 
 This page documents the registered persona models and the application pipeline that uses them. A registered persona is not necessarily invoked on every chat turn.
 
@@ -20,7 +20,7 @@ The base model contains these fields:
 - **`capabilities`** — Declared persona capabilities. The five Tribunal members declare `local_syntax_check`; a declaration is an upper bound that the pipeline intersects with settings and resolved-model support before enabling behavior.
 - **`identity`**, **`purpose`**, **`autonomy`**, and optional **`output_contract`** — Prompt content and output constraints. `get_system_prompt()` emits the canonical sequence `<role>`, optional `<output_contract>`, `<identity>`, `<purpose>`, and `<autonomy>`.
 
-The current registry contains these IDs: `triage`, `sage`, `dash`, `tribunal`, `axiom`, `concord`, `variance`, `pragma`, `nemesis`, `auditor`, `marshal`, `marshal_command`, `marshal_error`, `marshal_file`, `scribe`, `codex`, and `judge`. The registry is the implementation source for this roster; prompt scaffolding and structured response schemas are assembled by the owning services rather than stored entirely in persona models.
+The registry contains these IDs: `triage`, `sage`, `dash`, `tribunal`, `axiom`, `concord`, `variance`, `pragma`, `nemesis`, `auditor`, `marshal`, `marshal_command`, `marshal_error`, `marshal_file`, `scribe`, `codex`, and `judge`. The registry is the implementation source for this roster; prompt scaffolding and structured response schemas are assembled by the owning services rather than stored entirely in persona models.
 
 ## Chat routing personas
 
@@ -28,7 +28,7 @@ The current registry contains these IDs: `triage`, `sage`, `dash`, `tribunal`, `
 - **Sage (`sage`)** — The `primary` reasoning persona for complex turns. It plans investigations, interprets tool results, synthesizes evidence, and composes the user-facing response. Its `SageOperatorRequest` describes the intended result and command-shape constraints in natural language; it has no `command` field. The Tribunal creates the command later. Sage owns the interrogation protocol for complex turns and must emit an `<interrogation>` block containing exactly three binary YES/NO questions when required context is missing.
 - **Dash (`dash`)** — The `assistant` fast-path persona for non-complex turns. It answers from available context or makes a targeted tool call and escalates conceptually to Sage when the request needs deeper, multi-step reasoning. Dash also owns interrogation for turns routed to the fast path and uses the same exactly-three binary-question block; the tool loop suppresses execution while the application waits for answers.
 
-Sage and Dash currently declare the same tool surface, including `run_commands_with_operator`, file operations, detailed file listing, port checks, intent permission changes, file history and diff, web search, and investigation-context queries. Their distinction is routing, model tier, and prompt behavior, not an empty-versus-full tool list.
+Sage and Dash declare the same tool surface, including `run_commands_with_operator`, file operations, detailed file listing, port checks, intent permission changes, file history and diff, web search, and investigation-context queries. Their distinction is routing, model tier, and prompt behavior, not an empty-versus-full tool list.
 
 ## Tribunal command generation
 
@@ -69,15 +69,15 @@ These support personas operate on application records, memory, evaluation, and t
 
 ## End-to-end command flow
 
-For a host-command tool call, the current pipeline is:
+For a host-command tool call, the pipeline is:
 
 1. Triage classifies the user turn. The chat pipeline selects Dash or Sage and builds the reasoning prompt with investigation context and memories.
 2. The selected reasoning persona may request `run_commands_with_operator` using `SageOperatorRequest`, which contains intent and constraints but no shell command.
 3. `TribunalInvoker` resolves the selected Operator context and command-validation settings, then runs Tribunal generation, voting, and any second round.
 4. Marshal analyzes the voting winner. A high-risk block stops this attempt before Auditor review.
 5. Auditor review is performed when enabled. The final command is normalized and revalidated before it is placed in `ExecutorCommandArgs`.
-6. The operator tool executor sends the typed internal request through the g8ee command path. At the pub/sub boundary, g8ee serializes `CommandIntent` for the exact Operator and session; the Gateway constructs the canonical envelope and the target Operator independently performs L1-L4 and L5 execution.
-7. The result returns to the sequential ReAct loop. The model can request another tool turn until it stops or reaches `AGENT_MAX_TOOL_TURNS` (currently `25`); continuing after the limit requires a separate g8ee application approval. That approval is not protocol L3.
+6. The operator tool executor sends the typed internal request through `OperatorExecutionService`, which calls `GatewayOperatorClient.dispatch()` with the registered request `event_type` and serialized protobuf payload. The Gateway validates the event, derives `action_type` from the registry, constructs the canonical envelope, and the target Operator independently performs L1-L4 and L5 execution. The HTTP response carries the correlated result envelope.
+7. The result returns to the sequential ReAct loop. The model can request another tool turn until it stops or reaches `AGENT_MAX_TOOL_TURNS` (`25`); continuing after the limit requires a separate g8ee application approval. That approval is not protocol L3.
 
 Application SSE events expose progress, candidate, risk, approval, and result telemetry. They do not authorize execution or replace the Operator's authoritative receipt and audit evidence. Application approvals and reputation outcomes have the same limitation.
 

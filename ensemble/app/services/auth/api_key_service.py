@@ -19,7 +19,7 @@ from app.utils.security import (
     DEFAULT_KEY_DERIVATION_SALT,
     derive_key_identifier,
 )
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 if TYPE_CHECKING:
     from app.services.infra.settings_service import SettingsServiceProtocol

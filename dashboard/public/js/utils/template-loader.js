@@ -2,7 +2,6 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { devLogger } from './dev-logger.js';
-import { ServiceName } from '../constants/service-client-constants.js';
 
 const TEMPLATES_BASE_PATH = '/js/components/templates/';
 
@@ -64,8 +63,14 @@ export class TemplateLoader {
         const path = `${this.basePath}${templateName}.html`;
 
         try {
-            const client = this._transport ?? window.serviceClient;
-            const response = await client.get(ServiceName.g8ed, path);
+            if (this._transport?.get) {
+                const response = await this._transport.get(null, path);
+                return await response.text();
+            }
+            const response = await fetch(new URL(path, window.location.origin).toString());
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             return await response.text();
         } catch (error) {
             devLogger.error(`[TemplateLoader] Error loading template '${templateName}':`, error);

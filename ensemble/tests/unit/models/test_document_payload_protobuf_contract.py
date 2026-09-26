@@ -17,13 +17,13 @@ handleDocumentUpdateSync/handleDocumentDeleteSync pubsub handlers:
    returns the correct protobuf message type.
 2. PAYLOAD_TYPE_MAPPING in governance_client.py maps every payload_type
    discriminator to the correct canonical protobuf message name.
-3. map_event_type_to_action_type maps all app-level document events to
-   DOCUMENT_UPDATE or DOCUMENT_DELETE, matching the Go eventToAction map.
+3. action_for maps all governed document request events to DOCUMENT_UPDATE or
+   DOCUMENT_DELETE through the canonical event registry.
 """
 
 import pytest
 
-from app.constants.action_type_mappings import map_event_type_to_action_type
+from g8e.registry import action_for
 from app.constants import EventType
 from app.models.command_request_payloads import (
     DocumentDeleteRequestPayload,
@@ -192,32 +192,27 @@ class TestPayloadTypeMappingContract:
 
 
 class TestEventTypeToActionTypeContract:
-    """map_event_type_to_action_type must map all app-level document events to
-    DOCUMENT_UPDATE or DOCUMENT_DELETE, matching the Go eventToAction map in
-    internal/constants/mappings.go.
-    """
+    """action_for must map governed document request events through the registry."""
 
     @pytest.mark.parametrize(
         ("event_type", "expected"),
         [
-            (EventType.APP_AGENT_ACTIVITY_RECORDED, "DOCUMENT_UPDATE"),
-            (EventType.APP_CASE_CREATED, "DOCUMENT_UPDATE"),
-            (EventType.APP_CASE_UPDATED, "DOCUMENT_UPDATE"),
-            (EventType.APP_CASE_DELETED, "DOCUMENT_DELETE"),
-            (EventType.APP_MEMORY_CREATED, "DOCUMENT_UPDATE"),
-            (EventType.APP_MEMORY_UPDATED, "DOCUMENT_UPDATE"),
-            (EventType.APP_INVESTIGATION_CREATED, "DOCUMENT_UPDATE"),
-            (EventType.APP_INVESTIGATION_UPDATED, "DOCUMENT_UPDATE"),
-            (EventType.APP_INVESTIGATION_DELETED, "DOCUMENT_DELETE"),
-            (EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED, "DOCUMENT_UPDATE"),
-            (EventType.OPERATOR_REPUTATION_STAKE_RESOLUTION_CREATED, "DOCUMENT_UPDATE"),
-            (EventType.OPERATOR_REPUTATION_STATE_UPDATED, "DOCUMENT_UPDATE"),
+            (EventType.APP_AGENT_ACTIVITY_RECORD_REQUESTED, "DOCUMENT_UPDATE"),
+            (EventType.APP_CASE_CREATE_REQUESTED, "DOCUMENT_UPDATE"),
+            (EventType.APP_CASE_UPDATE_REQUESTED, "DOCUMENT_UPDATE"),
+            (EventType.APP_CASE_DELETE_REQUESTED, "DOCUMENT_DELETE"),
+            (EventType.APP_MEMORY_CREATE_REQUESTED, "DOCUMENT_UPDATE"),
+            (EventType.APP_MEMORY_UPDATE_REQUESTED, "DOCUMENT_UPDATE"),
+            (EventType.APP_INVESTIGATION_CREATE_REQUESTED, "DOCUMENT_UPDATE"),
+            (EventType.APP_INVESTIGATION_UPDATE_REQUESTED, "DOCUMENT_UPDATE"),
+            (EventType.APP_INVESTIGATION_DELETE_REQUESTED, "DOCUMENT_DELETE"),
+            (EventType.APP_DOCUMENT_UPDATE_REQUESTED, "DOCUMENT_UPDATE"),
+            (EventType.OPERATOR_REPUTATION_STATE_UPDATE_REQUESTED, "DOCUMENT_UPDATE"),
         ],
     )
     def test_app_document_events_map_to_document_actions(self, event_type, expected):
-        actual = map_event_type_to_action_type(event_type)
+        actual = action_for(event_type)
         assert actual == expected, (
-            f"map_event_type_to_action_type({event_type}) = {actual!r}, "
-            f"expected {expected!r}. App-level document events must route through "
-            "DOCUMENT_UPDATE/DOCUMENT_DELETE to match the Go eventToAction map."
+            f"action_for({event_type}) = {actual!r}, expected {expected!r}. "
+            "Governed document request events must resolve through the registry."
         )

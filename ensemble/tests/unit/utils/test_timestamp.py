@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from app.utils.timestamp import (
+from app.utils.time_ids.timestamp import (
     add_days,
     add_hours,
     add_minutes,

@@ -1,3 +1,4 @@
+from app.constants.message_sender import MessageSender
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -26,7 +27,6 @@ import pytest_asyncio
 
 from app.constants import (
     AgentMode,
-    EventType,
     InvestigationStatus,
     TriageComplexityClassification,
     TriageConfidence,
@@ -112,7 +112,7 @@ class TestMemoryGenerationServiceIntegration:
         conversation_history = [
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.SOURCE_USER_CHAT,
+                sender=MessageSender.USER_CHAT,
                 content="I'm having trouble with my high-performance compute cluster in the Zurich data center. The nodes are named 'Alpine-Alpha' through 'Alpine-Zeta'. One specific node, 'Alpine-Delta', has a bright Magenta status LED blinking.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -120,7 +120,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.SOURCE_AI_ASSISTANT,
+                sender=MessageSender.AI_ASSISTANT,
                 content="I see. A Magenta status LED on the Alpine series usually indicates a thermal throttle on the secondary NVMe drive. I'll check the temperature sensors for Alpine-Delta.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -128,7 +128,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.SOURCE_USER_CHAT,
+                sender=MessageSender.USER_CHAT,
                 content="The data center technician mentioned that the ambient temperature in Zurich is quite high today. We might need to increase the fan speed to 80% for all Alpine nodes.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -136,7 +136,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.SOURCE_AI_ASSISTANT,
+                sender=MessageSender.AI_ASSISTANT,
                 content="Understood. I'll prepare a script to adjust fan speeds across the Zurich cluster. We'll monitor Alpine-Delta specifically for the Magenta LED to clear.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -236,7 +236,7 @@ class TestMemoryGenerationServiceIntegration:
         conversation_history = [
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.SOURCE_USER_CHAT,
+                sender=MessageSender.USER_CHAT,
                 content="The Turquoise sensor in Tokyo is fixed, but now the 'Midnight-Blue' fan controller in our Reykjavik facility is reporting an 'Amber-Alert' status code. Can you pull the RPM logs for the Midnight-Blue unit?",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -244,7 +244,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.SOURCE_AI_ASSISTANT,
+                sender=MessageSender.AI_ASSISTANT,
                 content="I'll pull the RPM logs for the Midnight-Blue controller in Reykjavik. We'll check if the Amber-Alert corresponds to a bearing failure or just a sensor glitch.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -767,7 +767,7 @@ class TestCommandGenerationIntegration:
         """
         from app.constants.generated_status import Platform
         from app.models.agent import OperatorContext
-        from app.utils.safety import map_os_string_to_platform, validate_command_safety
+        from app.utils.validation.safety import map_os_string_to_platform, validate_command_safety
 
         # Create a mock operator context
         operator_context = OperatorContext(

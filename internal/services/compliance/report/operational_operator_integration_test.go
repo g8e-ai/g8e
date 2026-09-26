@@ -89,6 +89,7 @@ func TestOperationalOperatorEvidence_GeneratesNativeAssuranceAndVerifiesOffline(
 		OperatorId:        "operator-1",
 		OperatorSessionId: "operator-session-1",
 		RequestorUserId:   "test-user",
+		EventType:         string(constants.Event.Operator.Command.Requested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "operator-fixture-target",
 		CaseId:            "operator-run-1",

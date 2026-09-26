@@ -7,13 +7,14 @@ import { OperatorStatus } from '../constants/operator-constants.js';
 import { templateLoader } from '../utils/template-loader.js';
 import { notificationService } from '../utils/notification-service.js';
 import { operatorSessionService } from '../utils/operator-session-service.js';
+import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { OperatorDownloadMixin } from './operator-download-mixin.js';
-import { OperatorDeviceLinkMixin } from './operator-device-link-mixin.js';
 import { BindOperatorsMixin } from './operator-bind-mixin.js';
 import { OperatorDeviceAuthMixin } from './operator-device-auth-mixin.js';
 import { OperatorLayoutMixin } from './operator-layout-mixin.js';
 import { OperatorListMixin } from './operator-list-mixin.js';
 import { OperatorMetricsDisplayMixin } from './operator-metrics-display-mixin.js';
+import { UIEventType } from '../constants/ui-events.js';
 
 const _STATUS_UPDATED_VALUES = [
     EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
@@ -86,11 +87,12 @@ export class OperatorPanel {
         this.bindEvents();
         this.setupThemeListener();
         this._setupAuthStateListener();
+        await this._refreshOperatorList();
         if (this._pendingRender) {
             this._applyOperatorState(this._pendingRender);
             this._pendingRender = null;
         }
-        this.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_OPERATOR, {
+        this.eventBus.emit(UIEventType.AUTH_COMPONENT_INITIALIZED_OPERATOR, {
             isAuthenticated: true
         });
     }
@@ -107,6 +109,15 @@ export class OperatorPanel {
 
         for (const eventType of _STATUS_UPDATED_VALUES) {
             this.eventBus.on(eventType, this._wireHandlers.onStatusUpdated);
+        }
+    }
+
+    async _refreshOperatorList() {
+        try {
+            const data = await operatorPanelService.listOperators();
+            this.eventBus.emit(EventType.OPERATOR_PANEL_LIST_UPDATED, data);
+        } catch (error) {
+            devLogger.warn('[OPERATOR-PANEL] Failed to load operators from gateway:', error);
         }
     }
 
@@ -391,12 +402,12 @@ export class OperatorPanel {
     _setupAuthStateListener() {
         this.authStateUnsubscribe = window.authState.subscribe((event, data) => {
             switch (event) {
-                case EventType.AUTH_USER_AUTHENTICATED:
+                case EventType.PLATFORM_AUTH_USER_AUTHENTICATED:
                     this.webSessionModel = data.webSessionModel || window.authState.getWebSessionModel();
                     this.populateApiKey();
                     this.displayInitialOperatorStatus();
                     break;
-                case EventType.AUTH_USER_UNAUTHENTICATED:
+                case EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED:
                     this.webSessionModel = null;
                     this.clearOperatorData();
                     break;
@@ -473,7 +484,6 @@ export class OperatorPanel {
 }
 
 Object.assign(OperatorPanel.prototype, OperatorDownloadMixin);
-Object.assign(OperatorPanel.prototype, OperatorDeviceLinkMixin);
 Object.assign(OperatorPanel.prototype, BindOperatorsMixin);
 Object.assign(OperatorPanel.prototype, OperatorDeviceAuthMixin);
 Object.assign(OperatorPanel.prototype, OperatorLayoutMixin);

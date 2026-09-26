@@ -64,7 +64,7 @@ GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}
 
 The response is `{ "trace": <typed trace> }`. Missing traces return a not-found response, and unsafe path parameters are rejected. The Go campaign client polls this endpoint after submitting the chat request and imports the trace into the campaign's run-scoped evidence; g8ee does not write the Go campaign run store.
 
-A trace has schema version `1` and can contain:
+A trace has schema version `2` and can contain:
 
 - evaluation context and the g8ee chat execution ID;
 - triage and model-call telemetry;

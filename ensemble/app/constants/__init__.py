@@ -11,7 +11,7 @@ g8ee Constants
 Application constants, enums, and configuration values.
 
 Constant modules:
-- action_type_mappings.py: Mappings between action types and their properties
+- action_type_mappings.py: deleted — governed action classes resolve through g8e.registry
 - agents.py: Agent-related constants
 - api_paths.py: API path definitions and routing
 - api_paths.json: JSON configuration for API paths
@@ -164,6 +164,9 @@ from app.constants.config import (
     INTENT_EXECUTION_ID_PREFIX,
     INVESTIGATION_LOOKUP_MAX_RETRIES,
     INVESTIGATION_LOOKUP_RETRY_DELAYS_MS,
+    JEV_DEFAULT_ENDPOINT,
+    JEV_DEFAULT_MODEL,
+    JEV_LATEST,
     LLMProvider,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     LLM_OLLAMA_DEFAULT_NUM_CTX,
@@ -212,7 +215,6 @@ from app.constants.config import (
     TRIAGE_EMPTY_CONVERSATION,
     TRIAGE_LOG_TRUNCATION_LENGTH,
     TRIBUNAL_CORRELATION_ID_PREFIX,
-    ThinkingActionType,
     ThinkingDialect,
     ThinkingLevel,
     THINKING_LEVEL_PRIORITY_ASC,
@@ -301,7 +303,6 @@ from app.constants.generated_status import (
     Environment,
     HistoryActor,
     ActionType,
-    ActionStatus,
     AISource,
     AuditEventSource,
     AuditEventType,
@@ -311,7 +312,6 @@ from app.constants.generated_status import (
     AuthProvider,
     CitationLayout,
     DownloadAuditEventType,
-    G8eActionType,
     G8eAvailability,
     GatewayMode,
     LoginAuditEventType,
@@ -320,6 +320,7 @@ from app.constants.generated_status import (
     UserStatus,
     HeartbeatType,
     LLMs,
+    ThinkingPhase,
 )
 from app.constants.generated_paths import PathConstants, PortConstants
 
@@ -365,6 +366,8 @@ from g8e.constants import (
 X_PROXY_USER_EMAIL = "X-Proxy-User-Email"
 X_PROXY_CLI_SESSION_ID = "X-Proxy-CLI-Session-Id"
 X_PROXY_WEB_SESSION_ID = "X-Proxy-Web-Session-Id"
+GATEWAY_BROWSER_PROXY_HEADER = "X-G8E-Gateway-Browser-Proxy"
+GATEWAY_BROWSER_PROXY_VALUE = "1"
 
 __all__ = [
     "ACCEPT",
@@ -490,6 +493,9 @@ __all__ = [
     "INVESTIGATION_ID",
     "INVESTIGATION_LOOKUP_MAX_RETRIES",
     "INVESTIGATION_LOOKUP_RETRY_DELAYS_MS",
+    "JEV_DEFAULT_ENDPOINT",
+    "JEV_DEFAULT_MODEL",
+    "JEV_LATEST",
     "LAST_EVENT_ID",
     "LLAMACPP_DEFAULT_ENDPOINT",
     "LLAMACPP_DEFAULT_MODEL",
@@ -560,7 +566,6 @@ __all__ = [
     "AISource",
     "AITaskId",
     "APIKeyStatus",
-    "ActionStatus",
     "ActionType",
     "AgentMode",
     "AnthropicRole",
@@ -602,7 +607,6 @@ __all__ = [
     "EventType",
     "ExecutionStatus",
     "FileOperation",
-    "G8eActionType",
     "G8eAvailability",
     "GatewayAPIPaths",
     "GatewayMode",
@@ -659,9 +663,9 @@ __all__ = [
     "SuspiciousPatternType",
     "SystemHealth",
     "TaskStatus",
-    "ThinkingActionType",
     "ThinkingDialect",
     "ThinkingLevel",
+    "ThinkingPhase",
     "TieBreakReason",
     "TimestampErrorCode",
     "ToolCallDefaults",

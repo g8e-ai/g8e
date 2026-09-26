@@ -1,29 +1,39 @@
 # Flowchart: System Overview (Left-to-Right)
 
-First appeared in commit `8feca744`. High-level left-to-right flowchart tracing a request from an AI client through the Governance Gateway, the Operator verification pipeline (L4 Warden), the L5 Actuator execution boundary, and into the local audit vault and target system.
+High-level left-to-right flowchart tracing governed intent from a client through Gateway admission (L1-L3 coordination), Operator verification (L4 Warden), L5 Actuator execution, local audit evidence, and the target runtime. See [Platform Architecture Overview](../architecture/overview.md) and [Governance](../architecture/governance.md).
 
 ```mermaid
 flowchart LR
-    Client["AI client / BYO agent / native app"]
-    Gateway["Governance Gateway (g8eg)<br/>envelope reception + mTLS identity binding"]
-    Operator["Governed Operator (g8eo)<br/>ProcessEnvelope"]
-    L4Warden["L4 Warden<br/>L1 Doctrine / L2 Consensus / L3 Notary / state root / replay"]
-    L5Actuator["L5 Actuator<br/>execution boundary + signed receipt"]
-    Vault["Local audit vault and ledger"]
-    Target["Host OS / file system / downstream MCP or A2A server"]
+    Client["Human · AI client · g8ee · enrolled app"]
+    Gateway["Governance Gateway (g8eg)<br/>identity binding · envelope construction/admission<br/>L1 Doctrine · L2 Consensus · L3 Notary"]
+    Operator["Executing Operator (g8eo)<br/>embedded or outbound"]
+    L4Warden["L4 Warden<br/>hash · nonce · expiry · state root<br/>re-validates L1 · posture-required L2/L3"]
+    L5Actuator["L5 Actuator<br/>EXECUTING receipt · commitment<br/>JIT capability · dispatch · final receipt"]
+    Vault["Local audit vault · commitment chain · LFAA ledger"]
+    Target["Operator-visible runtime<br/>(host OS · downstream MCP/A2A)"]
 
     Client --> Gateway
-    Gateway --> Operator
+    Gateway -->|"cmd:* channel or ProcessEnvelope"| Operator
     Operator --> L4Warden
     L4Warden --> L5Actuator
     L5Actuator --> Vault
     L5Actuator --> Target
     Target --> L5Actuator
     L5Actuator --> Vault
+    Vault -.->|"verified best-effort mirror"| Gateway
+    Gateway -.-> Client
 ```
 
-The Gateway receives signed `GovernanceEnvelope` messages via two paths: MCP and A2A tool calls are translated into envelopes by the MCP gateway layer (`internal/services/mcp/gateway.go`), while BYO clients POST protojson envelopes directly to `/api/v1/governance/envelopes` (`internal/services/gateway/governance_controller.go`). Both paths perform mTLS identity binding before forwarding to the Operator.
+## Ingress Surfaces
 
-The L4 Warden (`internal/services/governance/l4_warden.go`) performs pre-dispatch verification: nonce reservation and replay prevention, expiry validation, stateless validation (transaction hash and L1 Doctrine pattern matching), stateful validation (state Merkle root), and posture-aware L2 Consensus and L3 Notary checks.
+The Gateway receives governed work through distinct authenticated surfaces:
 
-The L5 Actuator (`internal/services/governance/l5_actuator.go`) is the single execution boundary. It signs and logs an initial receipt to the audit vault, mints a just-in-time capability, dispatches to the registered execution handler, dissolves the capability, then signs and logs the final receipt.
+- **MCP and A2A**: `tools/call`, `resources/read`, `prompts/get`, and `a2a/call` are translated into canonical `GovernanceEnvelope` messages by the MCP gateway layer (`internal/services/mcp/gateway.go`). Under `consensus`, `ratify`, or `notary`, the Gateway may coordinate L2 deliberation or suspend supported L3 flows before dispatch.
+- **Governed HTTP dispatch**: Enrolled apps (including g8ee) post a registered request `event_type` and serialized protobuf payload to `POST /api/v1/operators/commands` (`internal/services/gateway/dispatch_service.go`). The Gateway constructs the envelope and publishes to the bound Operator session. This path does not manufacture missing L2 votes or suspend for L3.
+- **Direct envelope**: Authorized CLI or Operator identities POST complete protojson envelopes to `POST /api/v1/governance/envelopes` (`internal/services/gateway/governance_controller.go`). In gateway mode this calls `ProcessEnvelope` synchronously on the embedded Operator substrate.
+
+## Verification and Execution
+
+The L4 Warden (`internal/services/governance/l4_warden.go`) performs pre-dispatch verification in a fixed order: nonce reservation and replay prevention, expiry validation, action-type and payload decoding, local L1 Doctrine validation, transaction hash integrity, state Merkle root comparison, and posture-gated L2 Consensus and L3 Notary checks.
+
+The L5 Actuator (`internal/services/governance/l5_actuator.go`) is the single execution boundary. It signs and persists an `EXECUTING` receipt, appends a signed `CommitmentAttestation` when the SQL commitment ledger is configured, rehydrates scrubbed payload values, mints a transaction-bound just-in-time capability, dispatches to the registered execution handler, dissolves the capability, and signs and persists the final `COMPLETED` or `FAILED` receipt with persistence attestation. Remote Operators publish the final receipt to `receipts:<operator-id>:<operator-session-id>` on a best-effort basis; the local vault remains authoritative.

@@ -21,7 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -344,49 +343,49 @@ func TestAuditVaultPrune(t *testing.T) {
 	require.NoError(t, err)
 	defer avs.Close()
 
-	// 1. Insert sessions first to satisfy FK constraints
-	_, err = avs.db.Exec("INSERT INTO sessions (id, title) VALUES (?, ?)", "old-session", "op-1")
-	require.NoError(t, err)
-	_, err = avs.db.Exec("INSERT INTO sessions (id, title) VALUES (?, ?)", "recent-session", "op-1")
+	require.NoError(t, avs.CreateSession("old-session", constants.SessionTypeOperator, "Old Session", "user-old"))
+	require.NoError(t, avs.CreateSession("recent-session", constants.SessionTypeOperator, "Recent Session", "user-recent"))
+
+	oldEventID, err := avs.RecordEvent(&storage.Event{
+		OperatorSessionID: "old-session",
+		Timestamp:         time.Now().AddDate(0, 0, -10).UTC(),
+		Type:              constants.Event.Operator.Audit.Command,
+		ContentText:       "old event",
+		CommandExitCode:   constants.ExitCodeNone,
+	})
 	require.NoError(t, err)
 
-	// 2. Insert events
-	oldTime := time.Now().AddDate(0, 0, -10)
-	oldTimestamp := timesvc.FormatTimestamp(oldTime)
-	_, err = avs.db.Exec("INSERT INTO events (id, timestamp, type, operator_session_id) VALUES (?, ?, ?, ?)",
-		1, oldTimestamp, "test.event", "old-session")
+	recentEventID, err := avs.RecordEvent(&storage.Event{
+		OperatorSessionID: "recent-session",
+		Timestamp:         time.Now().AddDate(0, 0, -2).UTC(),
+		Type:              constants.Event.Operator.Audit.Command,
+		ContentText:       "recent event",
+		CommandExitCode:   constants.ExitCodeNone,
+	})
 	require.NoError(t, err)
 
-	// Insert a recent event
-	recentTime := time.Now().AddDate(0, 0, -2)
-	recentTimestamp := timesvc.FormatTimestamp(recentTime)
-	_, err = avs.db.Exec("INSERT INTO events (id, timestamp, type, operator_session_id) VALUES (?, ?, ?, ?)",
-		2, recentTimestamp, "test.event", "recent-session")
-	require.NoError(t, err)
-
-	// 3. Insert file mutations
 	tmpDir := testutil.TempDir(t)
-	_, err = avs.db.Exec("INSERT INTO file_mutation_log (event_id, filepath, operation) VALUES (?, ?, ?)",
-		1, filepath.Join(tmpDir, "old"), "create")
-	require.NoError(t, err)
-	_, err = avs.db.Exec("INSERT INTO file_mutation_log (event_id, filepath, operation) VALUES (?, ?, ?)",
-		2, filepath.Join(tmpDir, "recent"), "create")
-	require.NoError(t, err)
+	require.NoError(t, avs.RecordFileMutation(&storage.FileMutationLog{
+		EventID:   oldEventID,
+		Filepath:  filepath.Join(tmpDir, "old"),
+		Operation: storage.FileMutationWrite,
+	}))
+	require.NoError(t, avs.RecordFileMutation(&storage.FileMutationLog{
+		EventID:   recentEventID,
+		Filepath:  filepath.Join(tmpDir, "recent"),
+		Operation: storage.FileMutationWrite,
+	}))
 
-	// 4. Run pruning
 	pruneFunc := auditVaultPrune(config)
 	err = pruneFunc(context.Background(), avs.db, logger)
 	require.NoError(t, err)
 
-	// 3. Verify results
 	var count int
-	// Old event should be gone
-	err = avs.db.QueryRow("SELECT COUNT(*) FROM events WHERE id = 1").Scan(&count)
+	err = avs.db.QueryRow("SELECT COUNT(*) FROM events WHERE id = ?", oldEventID).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 
-	// Recent event should remain
-	err = avs.db.QueryRow("SELECT COUNT(*) FROM events WHERE id = 2").Scan(&count)
+	err = avs.db.QueryRow("SELECT COUNT(*) FROM events WHERE id = ?", recentEventID).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
@@ -400,13 +399,11 @@ func TestAuditVaultPrune(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
-	// Old file mutation should be gone
-	err = avs.db.QueryRow("SELECT COUNT(*) FROM file_mutation_log WHERE event_id = 1").Scan(&count)
+	err = avs.db.QueryRow("SELECT COUNT(*) FROM file_mutation_log WHERE event_id = ?", oldEventID).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 
-	// Recent file mutation should remain
-	err = avs.db.QueryRow("SELECT COUNT(*) FROM file_mutation_log WHERE event_id = 2").Scan(&count)
+	err = avs.db.QueryRow("SELECT COUNT(*) FROM file_mutation_log WHERE event_id = ?", recentEventID).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 }

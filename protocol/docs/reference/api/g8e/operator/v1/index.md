@@ -93,6 +93,11 @@
     - [NetworkInfo](#g8e-operator-v1-NetworkInfo)
     - [NetworkInterface](#g8e-operator-v1-NetworkInterface)
     - [OSDetails](#g8e-operator-v1-OSDetails)
+    - [OllamaModelInventoryRequested](#g8e-operator-v1-OllamaModelInventoryRequested)
+    - [OllamaModelInventoryResult](#g8e-operator-v1-OllamaModelInventoryResult)
+    - [OllamaModelResidencyModel](#g8e-operator-v1-OllamaModelResidencyModel)
+    - [OllamaModelResidencyRequested](#g8e-operator-v1-OllamaModelResidencyRequested)
+    - [OllamaModelResidencyResult](#g8e-operator-v1-OllamaModelResidencyResult)
     - [OperatorDocument](#g8e-operator-v1-OperatorDocument)
     - [PasskeyAuthChallengeRequested](#g8e-operator-v1-PasskeyAuthChallengeRequested)
     - [PasskeyAuthChallengeResult](#g8e-operator-v1-PasskeyAuthChallengeResult)
@@ -110,6 +115,7 @@
     - [PerformanceMetrics](#g8e-operator-v1-PerformanceMetrics)
     - [PortCheckEntry](#g8e-operator-v1-PortCheckEntry)
     - [PortCheckResult](#g8e-operator-v1-PortCheckResult)
+    - [ProviderModelInventoryEntry](#g8e-operator-v1-ProviderModelInventoryEntry)
     - [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation)
     - [RestoreFileRequested](#g8e-operator-v1-RestoreFileRequested)
     - [RestoreFileResult](#g8e-operator-v1-RestoreFileResult)
@@ -199,6 +205,8 @@ ActionReceipt is the signed proof of an executing, completed, or failed mutation
 | deterministic_stage_evidence | [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence) | repeated |  |
 | final_persistence_attestation | [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation) |  |  |
 | failure_code | [ReceiptFailureCode](#g8e-operator-v1-ReceiptFailureCode) |  | Typed classification of a FAILED receipt. UNSPECIFIED on non-failed receipts. Bound into the signature via canonicalization. |
+| event_type | [string](#string) |  | The semantic request event that produced this receipt. |
+| action_type | [string](#string) |  | The registry-derived governance class for the request event. |
 
 
 
@@ -1984,6 +1992,89 @@ Reads a specific resource from the downstream MCP server.
 
 
 
+<a name="g8e-operator-v1-OllamaModelInventoryRequested"></a>
+
+### OllamaModelInventoryRequested
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| execution_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-OllamaModelInventoryResult"></a>
+
+### OllamaModelInventoryResult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| execution_id | [string](#string) |  |  |
+| status | [ExecutionStatus](#g8e-operator-v1-ExecutionStatus) |  |  |
+| entries | [ProviderModelInventoryEntry](#g8e-operator-v1-ProviderModelInventoryEntry) | repeated |  |
+| error_message | [string](#string) |  |  |
+| error_type | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-OllamaModelResidencyModel"></a>
+
+### OllamaModelResidencyModel
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| name | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-OllamaModelResidencyRequested"></a>
+
+### OllamaModelResidencyRequested
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| execution_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-OllamaModelResidencyResult"></a>
+
+### OllamaModelResidencyResult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| execution_id | [string](#string) |  |  |
+| status | [ExecutionStatus](#g8e-operator-v1-ExecutionStatus) |  |  |
+| models | [OllamaModelResidencyModel](#g8e-operator-v1-OllamaModelResidencyModel) | repeated |  |
+| error_message | [string](#string) |  |  |
+| error_type | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-operator-v1-OperatorDocument"></a>
 
 ### OperatorDocument
@@ -2299,6 +2390,30 @@ A stored passkey credential for a user
 | results | [PortCheckEntry](#g8e-operator-v1-PortCheckEntry) | repeated |  |
 | error_message | [string](#string) |  |  |
 | error_type | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-ProviderModelInventoryEntry"></a>
+
+### ProviderModelInventoryEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provider_class | [string](#string) |  |  |
+| served_model_tag | [string](#string) |  |  |
+| model_digest | [string](#string) |  |  |
+| model_family | [string](#string) |  |  |
+| parameter_size | [string](#string) |  |  |
+| parameter_count | [uint64](#uint64) |  |  |
+| quantization | [string](#string) |  |  |
+| format | [string](#string) |  |  |
+| context_limit | [uint32](#uint32) |  |  |
+| advertised_capabilities | [string](#string) | repeated |  |
 
 
 

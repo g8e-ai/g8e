@@ -59,6 +59,12 @@ def canonicalize_action_receipt(receipt: ActionReceipt) -> bytes:
     data = {
         "transaction_id": receipt.transaction_id,
         "transaction_hash": receipt.transaction_hash,
+    }
+    if receipt.event_type:
+        data["event_type"] = receipt.event_type
+    if receipt.action_type:
+        data["action_type"] = receipt.action_type
+    data.update({
         "status": receipt.status,
         "result_summary": receipt.result_summary,
         "state_root_before": receipt.state_root_before,
@@ -67,7 +73,7 @@ def canonicalize_action_receipt(receipt: ActionReceipt) -> bytes:
         "signer_key_id": receipt.signer_key_id,
         "l2_status": receipt.l2_status,
         "l3_status": receipt.l3_status,
-    }
+    })
     stage_evidence_hash = _deterministic_stage_evidence_hash(receipt)
     if stage_evidence_hash:
         data["deterministic_stage_evidence_hash"] = stage_evidence_hash

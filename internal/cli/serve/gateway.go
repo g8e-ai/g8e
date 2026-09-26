@@ -56,6 +56,7 @@ type GatewayConfig struct {
 	ConsensusBootstrap  string                `json:"consensus_bootstrap,omitempty"`
 	MCPDownstreamURL    string                `json:"mcp_downstream_url,omitempty"`
 	A2ADownstreamURL    string                `json:"a2a_downstream_url,omitempty"`
+	EnsembleUpstreamURL string                `json:"ensemble_upstream_url,omitempty"`
 	PublicBaseURL       string                `json:"public_base_url,omitempty"`
 	AllowedOrigins      []string              `json:"allowed_origins,omitempty"`
 	DoctrineDir         string                `json:"doctrine_dir,omitempty"`
@@ -135,6 +136,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		NetworkIdentityFile: cfg.NetworkIdentityFile,
 		MCPDownstreamURL:    cfg.MCPDownstreamURL, // empty by default — no downstream proxy
 		A2ADownstreamURL:    cfg.A2ADownstreamURL, // empty by default — no downstream proxy
+		EnsembleUpstreamURL: cfg.EnsembleUpstreamURL,
 		PublicBaseURL:       cfg.PublicBaseURL,
 		AllowedOrigins:      cfg.AllowedOrigins,
 		ConsensusID:         cfg.ConsensusID,

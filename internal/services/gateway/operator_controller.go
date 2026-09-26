@@ -125,6 +125,13 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 		return
 	}
 	userID := r.URL.Query().Get("user_id")
+	if ctxUser, ok := r.Context().Value(constants.ContextKeyUserID).(string); ok && strings.TrimSpace(ctxUser) != "" {
+		if userID != "" && userID != ctxUser {
+			c.responder.Error(w, http.StatusForbidden, "user_id mismatch")
+			return
+		}
+		userID = ctxUser
+	}
 	if userID == "" {
 		c.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
@@ -181,7 +188,7 @@ func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.R
 	}
 	result, err := c.dispatch.Dispatch(r.Context(), DispatchRequest{
 		TargetOperatorSessionID: req.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeShutdown),
+		EventType:               string(constants.Event.Operator.ShutdownRequested),
 		Payload:                 payload,
 		TargetResource:          op.ID,
 		RequestorUserID:         userID,
@@ -247,9 +254,24 @@ func (c *OperatorController) handleBindOperators(w http.ResponseWriter, r *http.
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	if len(req.OperatorIDs) == 0 {
+		var single struct {
+			OperatorID string `json:"operator_id"`
+		}
+		if err := json.Unmarshal(body, &single); err == nil && strings.TrimSpace(single.OperatorID) != "" {
+			req.OperatorIDs = []string{single.OperatorID}
+		}
+	}
 
 	userID := r.URL.Query().Get("user_id")
-	if userID != "" && req.UserID != userID {
+	if ctxUser, ctxSession, ok := browserSessionIDs(r); ok {
+		if userID != "" && userID != ctxUser {
+			c.responder.Error(w, http.StatusForbidden, "user_id mismatch")
+			return
+		}
+		req.UserID = ctxUser
+		req.WebSessionID = ctxSession
+	} else if userID != "" && req.UserID != userID {
 		c.responder.Error(w, http.StatusForbidden, "user_id mismatch")
 		return
 	}
@@ -278,9 +300,24 @@ func (c *OperatorController) handleUnbindOperators(w http.ResponseWriter, r *htt
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	if len(req.OperatorIDs) == 0 {
+		var single struct {
+			OperatorID string `json:"operator_id"`
+		}
+		if err := json.Unmarshal(body, &single); err == nil && strings.TrimSpace(single.OperatorID) != "" {
+			req.OperatorIDs = []string{single.OperatorID}
+		}
+	}
 
 	userID := r.URL.Query().Get("user_id")
-	if userID != "" && req.UserID != userID {
+	if ctxUser, ctxSession, ok := browserSessionIDs(r); ok {
+		if userID != "" && userID != ctxUser {
+			c.responder.Error(w, http.StatusForbidden, "user_id mismatch")
+			return
+		}
+		req.UserID = ctxUser
+		req.WebSessionID = ctxSession
+	} else if userID != "" && req.UserID != userID {
 		c.responder.Error(w, http.StatusForbidden, "user_id mismatch")
 		return
 	}

@@ -76,6 +76,56 @@ func TestDerivePublicSummaryStatus(t *testing.T) {
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, DerivePublicSummaryStatus(fail))
 }
 
+func TestBuildAssignmentLifecycleProjection_HeterogeneousSetsPrimaryVariant(t *testing.T) {
+	stack := mustHeterogeneousStack(t)
+	assignment := &evalv1.EvaluationAssignment{
+		AssignmentId:    "assign-heterogeneous-1",
+		RunId:           "run-heterogeneous-1",
+		ScenarioId:      "instruction-exact-format",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING,
+		Repetition:      1,
+		Target: &evalv1.EvaluationAssignment_Heterogeneous{
+			Heterogeneous: &evalv1.HeterogeneousAssignmentTarget{Stack: stack},
+		},
+	}
+	projection, err := BuildAssignmentLifecycleProjection(assignment, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE, time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, stack.GetStackId(), projection.GetStackId())
+	assert.Equal(t, stack.GetPrimarySlot().GetVariantId(), projection.GetVariantId())
+	assert.Equal(t, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, projection.GetDesignatedRole())
+}
+
+func TestBuildAssignmentResultProjection_HeterogeneousSetsPrimaryVariant(t *testing.T) {
+	stack := mustHeterogeneousStack(t)
+	assignment := &evalv1.EvaluationAssignment{
+		AssignmentId: "assign-heterogeneous-1",
+		RunId:        "run-heterogeneous-1",
+		ScenarioId:   "instruction-exact-format",
+		Target: &evalv1.EvaluationAssignment_Heterogeneous{
+			Heterogeneous: &evalv1.HeterogeneousAssignmentTarget{Stack: stack},
+		},
+	}
+	result := &evalv1.EvaluationAssignmentResult{
+		AssignmentId:    "assign-heterogeneous-1",
+		RunId:           "run-heterogeneous-1",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		ResultDigest:    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		CompletedAt:     timestamppb.New(time.Unix(1_700_000_100, 0).UTC()),
+	}
+	projection, err := BuildAssignmentResultProjection(
+		assignment,
+		result,
+		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
+		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		"unverified",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, stack.GetPrimarySlot().GetVariantId(), projection.GetVariantId())
+	assert.Equal(t, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, projection.GetDesignatedRole())
+}
+
 func TestBuildAssignmentResultProjection(t *testing.T) {
 	assignment := &evalv1.EvaluationAssignment{
 		AssignmentId: "assign-1",

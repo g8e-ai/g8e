@@ -19,8 +19,8 @@ from app.constants import (
     G8EE_COMPONENT,
     OperatorStatus,
 )
-from app.utils.ids import generate_execution_id
-from app.utils.timestamp import now
+from app.utils.time_ids.ids import generate_execution_id
+from app.utils.time_ids.timestamp import now
 
 from .base import Field, G8eBaseModel, UTCDatetime, field_validator, model_validator
 

@@ -249,6 +249,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 			PKI:                infra.PKI,
 			CLISessionSvc:      infra.CLISessionSvc,
 			OperatorSessionSvc: infra.OperatorSessionSvc,
+			EmbeddedOperator:   infra.Embedded,
 			Responder:          infra.Responder,
 		},
 		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
@@ -358,6 +359,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 		userSvc:            infra.UserSvc,
 		cliSessionSvc:      infra.CLISessionSvc,
 		operatorSessionSvc: infra.OperatorSessionSvc,
+		embeddedOperator:   infra.Embedded,
 		webSessionSvc:      infra.WebSessionSvc,
 		mcpGateway:         mcpGateway,
 		responder:          infra.Responder,

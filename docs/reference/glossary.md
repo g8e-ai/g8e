@@ -73,7 +73,7 @@ The persisted pair of `operator_session_id` and `operator_id` stamped on an auth
 
 ## Command Intent
 
-The pre-governance protobuf `g8e.common.v1.CommandIntent` published by an app workload to a bound Operator's command channel. It carries routing identity, action classification, typed Operator payload bytes, and application context. The Gateway validates the Operator-session binding, obtains the current state root, and converts the intent into a **Governance Envelope**; a command intent is not itself authorization to execute.
+The historical pre-governance protobuf `g8e.common.v1.CommandIntent`. Before v2.1.14, enrolled apps could publish this shape to a bound Operator's `cmd:` channel; the Gateway validated the Operator-session binding, obtained the current state root, and converted the intent into a **Governance Envelope**. That WebSocket publish path was removed in v2.1.14. Enrolled applications now dispatch host operations through `POST /api/v1/operators/commands` with a registered request `event_type` and serialized protobuf payload bytes. A command intent — or its HTTP successor request — is not itself authorization to execute.
 
 ---
 
@@ -399,7 +399,7 @@ The Operator-local scrubbing and rehydration boundary implemented by the `Scrubb
 
 ## SSE (Server-Sent Events)
 
-The Gateway event surface for real-time delivery from app workloads and internal Gateway producers to browser and CLI sessions. Apps push authenticated, session-scoped events with `POST /api/v1/sse/push`; consumers poll `/api/v1/sse/events` or stream `/api/v1/sse/stream` using mTLS or a web-session cookie. Approval and passkey completion events use this path. Governed Operator command transport uses pub/sub rather than SSE.
+The Gateway event surface for real-time delivery from app workloads and internal Gateway producers to browser and CLI sessions. Apps push authenticated, session-scoped events with `POST /api/v1/sse/push`; consumers poll `/api/v1/sse/events` or stream `/api/v1/sse/stream` using mTLS or a web-session cookie. Approval and passkey completion events use this path. Governed Operator command transport uses `POST /api/v1/operators/commands` (or Gateway-internal pub/sub delivery to subscribed Operators) rather than SSE.
 
 ---
 

@@ -478,6 +478,18 @@ func TestMCPPromptsList(t *testing.T) {
 	}
 }
 
+type promptArgFixture struct {
+	Arg string `json:"arg"`
+}
+
+func (promptArgFixture) isPromptArgs() {}
+
+type skillPayloadFixture struct {
+	Input string `json:"input,omitempty"`
+}
+
+func (skillPayloadFixture) isSkillPayload() {}
+
 func TestMCPPromptsGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -525,7 +537,7 @@ func TestMCPPromptsGet(t *testing.T) {
 	ctx := context.Background()
 	p := Persona{ID: "test-client"}
 
-	resp, err := client.MCPPromptsGet(ctx, p, "test-prompt", map[string]any{"arg": "value"})
+	resp, err := client.MCPPromptsGet(ctx, p, "test-prompt", promptArgFixture{Arg: "value"})
 
 	if err != nil {
 		t.Errorf("MCPPromptsGet() error = %v", err)
@@ -540,21 +552,21 @@ func TestA2ACall(t *testing.T) {
 	tests := []struct {
 		name    string
 		skill   string
-		payload map[string]any
+		payload SkillPayload
 		execID  string
 		wantErr bool
 	}{
 		{
 			name:    "successful call",
 			skill:   "test-skill",
-			payload: map[string]any{"input": "data"},
+			payload: skillPayloadFixture{Input: "data"},
 			execID:  "exec-123",
 			wantErr: false,
 		},
 		{
 			name:    "call with empty payload",
 			skill:   "test-skill",
-			payload: map[string]any{},
+			payload: skillPayloadFixture{},
 			execID:  "exec-456",
 			wantErr: false,
 		},

@@ -324,6 +324,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	for _, cidr := range opts.PublicSpectatorTrustedProxyCIDRs {
 		args = append(args, "--public-spectator-trusted-proxy-cidr", cidr)
 	}
+	if opts.EnsembleUpstreamURL != "" {
+		args = append(args, "--ensemble-upstream-url", opts.EnsembleUpstreamURL)
+	}
 
 	return args, nil
 }

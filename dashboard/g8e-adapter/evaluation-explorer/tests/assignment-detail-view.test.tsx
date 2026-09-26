@@ -69,13 +69,43 @@ describe('AssignmentDetailView', () => {
   });
 
   it('shows only observed scoring data for a thin record', () => {
-    renderAssignment([assignmentResult()]);
+    renderAssignment([
+      assignmentResult({
+        verification_disposition: 'not_run',
+        benchmark_observations: {
+          grade_summaries: [
+            { criterion_id: 'role-invoked', status: 'pass' },
+            { criterion_id: 'scenario-content', status: 'fail' },
+          ],
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
 
-    expect(screen.getByText('Pass · Fail')).toBeInTheDocument();
+    expect(screen.getByLabelText('Assignment verdict')).toHaveTextContent('Completed · not verified');
+    expect(screen.getByText('scenario content · Fail')).toBeInTheDocument();
+    expect(screen.getByText('role invoked · Pass')).toBeInTheDocument();
     expect(screen.queryByText('Stage timeline not published for this assignment.')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Resource observations' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Assignment context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'What happened' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Lifecycle timeline' })).not.toBeInTheDocument();
+  });
+
+  it('shows tokens per second from output tokens and generation time', () => {
+    renderAssignment([
+      assignmentResult({
+        resource_summary: {
+          output_tokens: { value: 180 },
+        },
+        benchmark_observations: {
+          timing: { generation_ms: { value: 780 } },
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Tokens/s 230.8 tok/s');
   });
 
   it('preserves explicit zero resource observations', () => {
@@ -148,22 +178,22 @@ describe('AssignmentDetailView', () => {
         activity_summary: {
           model_activity: { availability: 'observed', records: [{ model_role: 'primary', variant_id: 'model-1', usage_availability: 'reported', input_tokens: { value: 0 }, output_tokens: { value: 2 }, retry_count: { value: 0 }, finish_state: 'stop', load_state: 'warm' }] },
           tool_decisions: { availability: 'observed', records: [] },
-          tool_calls: { availability: 'not_applicable', records: [] },
-          policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured', records: [] },
-          governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured', records: [] },
+          tool_calls: { availability: 'not_applicable' },
+          policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured' },
+          governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured' },
         },
         evidence_bindings: [{ sha256: 'a'.repeat(64), schema_ref: 'eval/v1', kind: 'evaluation_projection' }],
         verification_metadata: { provenance: 'bound', verifier_state: 'passed', verifier_contract_version: '2.0.0' },
       }),
     ]);
 
-    expect(screen.getByRole('heading', { name: 'Assignment context' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Assignment context' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Public criteria')).toHaveTextContent('Tool choice · required');
     expect(screen.getByText('<b>Choose</b> the approved tool.')).toBeInTheDocument();
     expect(screen.queryByText('Choose', { selector: 'b' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What happened' })).toBeInTheDocument();
     expect(screen.getByText('1 observed')).toBeInTheDocument();
-    expect(screen.getByText('Deterministic')).toBeInTheDocument();
-    expect(screen.getByText(/Criterion passed/)).toBeInTheDocument();
+    expect(screen.getByText(/selection · Pass · Criterion passed/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Evidence and methodology' })).toBeInTheDocument();
     expect(screen.getByText('Evaluation projection')).toBeInTheDocument();
     expect(screen.queryByText('private')).not.toBeInTheDocument();

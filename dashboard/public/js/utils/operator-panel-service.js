@@ -4,16 +4,15 @@
 import { ServiceName } from '../constants/service-client-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
 
-/**
- * OperatorPanelService - HTTP API layer for the OperatorPanel component.
- *
- * Centralises every window.serviceClient call made by OperatorPanel and its
- * mixin modules.  All methods return the raw Response so callers can inspect
- * ok / status and parse the body themselves — matching the existing call-site
- * contract without changing error-handling behaviour.
- *
- * Supports dependency injection of a serviceClient for testing.
- */
+function normalizeOperator(op) {
+    if (!op) return op;
+    return {
+        ...op,
+        operator_id: op.operator_id || op.id,
+        web_session_id: op.web_session_id || op.bound_web_session_id,
+    };
+}
+
 class OperatorPanelService {
     constructor() {
         this._client = null;
@@ -27,92 +26,84 @@ class OperatorPanelService {
         this._client = client;
     }
 
-    // -------------------------------------------------------------------------
-    // Operator lifecycle
-    // -------------------------------------------------------------------------
-
     bindOperator(operatorId) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.operator.bind(), {
-            operator_id: operatorId
+        return this._getClient().post(ServiceName.GATEWAY, ApiPaths.operator.bind(), {
+            operator_id: operatorId,
         });
     }
 
     unbindOperator(body = {}) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.operator.unbind(), body);
+        return this._getClient().post(ServiceName.GATEWAY, ApiPaths.operator.unbind(), body);
     }
 
     bindAllOperators(operatorIds) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.operator.bindAll(), {
-            operator_ids: operatorIds
+        return this._getClient().post(ServiceName.GATEWAY, ApiPaths.operator.bind(), {
+            operator_ids: operatorIds,
         });
     }
 
     unbindAllOperators(operatorIds) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.operator.unbindAll(), {
-            operator_ids: operatorIds
+        return this._getClient().post(ServiceName.GATEWAY, ApiPaths.operator.unbind(), {
+            operator_ids: operatorIds,
         });
     }
 
     stopOperator(operatorId) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.operator.stop(operatorId), {});
+        return this._getClient().post(ServiceName.GATEWAY, ApiPaths.operator.stop(operatorId), {});
     }
-
-    // -------------------------------------------------------------------------
-    // Operator details & API keys
-    // -------------------------------------------------------------------------
 
     getOperatorDetails(operatorId) {
-        return this._getClient().get(ServiceName.g8ed, ApiPaths.operator.details(operatorId));
+        return this._getClient().get(ServiceName.GATEWAY, ApiPaths.operator.get(operatorId));
     }
 
-    getOperatorApiKey(operatorId) {
-        return this._getClient().get(ServiceName.g8ed, ApiPaths.operator.apiKey(operatorId));
+    getOperatorApiKey() {
+        return Promise.reject(new Error('Operator API keys are not available from the browser'));
     }
 
-    refreshOperatorApiKey(operatorId) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.operator.refreshApiKey(operatorId), {});
+    refreshOperatorApiKey() {
+        return Promise.reject(new Error('Operator API keys are not available from the browser'));
     }
 
-    // -------------------------------------------------------------------------
-    // Device links
-    // -------------------------------------------------------------------------
-
-    generateDeviceLink(operatorId) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.auth.linkGenerate(), {
-            operator_id: operatorId
-        });
+    generateDeviceLink() {
+        return Promise.reject(new Error('Device links are not available from the browser'));
     }
 
-    createDeviceLink({ maxUses, expiresInHours, name }) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.deviceLink.create(), {
-            max_uses: maxUses,
-            expires_in_hours: expiresInHours,
-            name: name || undefined
-        });
+    createDeviceLink() {
+        return Promise.reject(new Error('Device links are not available from the browser'));
     }
 
     listDeviceLinks() {
-        return this._getClient().get(ServiceName.g8ed, ApiPaths.deviceLink.list());
+        return Promise.reject(new Error('Device links are not available from the browser'));
     }
 
-    revokeDeviceLink(tokenId) {
-        return this._getClient().delete(ServiceName.g8ed, ApiPaths.deviceLink.revoke(tokenId));
+    revokeDeviceLink() {
+        return Promise.reject(new Error('Device links are not available from the browser'));
     }
 
-    deleteDeviceLink(tokenId) {
-        return this._getClient().delete(ServiceName.g8ed, ApiPaths.deviceLink.delete(tokenId));
+    deleteDeviceLink() {
+        return Promise.reject(new Error('Device links are not available from the browser'));
     }
 
-    // -------------------------------------------------------------------------
-    // Device authorization
-    // -------------------------------------------------------------------------
-
-    authorizeDevice(token) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.auth.linkAuthorize(token), {});
+    authorizeDevice() {
+        return Promise.reject(new Error('Device links are not available from the browser'));
     }
 
-    rejectDevice(token) {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.auth.linkReject(token), {});
+    rejectDevice() {
+        return Promise.reject(new Error('Device links are not available from the browser'));
+    }
+
+    async listOperators() {
+        const response = await this._getClient().get(ServiceName.GATEWAY, ApiPaths.operator.list());
+        const data = await response.json();
+        const operators = (data.operators || []).map(normalizeOperator);
+        const activeCount = operators.filter(op => ['active', 'bound'].includes(op.status)).length;
+        return {
+            operators,
+            total_count: operators.length,
+            active_count: activeCount,
+            used_slots: operators.filter(op => op.is_slot).length,
+            max_slots: operators.length,
+        };
     }
 }
 

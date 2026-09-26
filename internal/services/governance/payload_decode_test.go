@@ -62,6 +62,14 @@ func TestDecodePayloadForAction_Inference_MalformedFails(t *testing.T) {
 // TestDecodePayloadForAction_KnownActionsDecode verifies that the shared decoder
 // still decodes every previously-supported action type, proving the promotion
 // from the warden method to the package-level function preserved behavior.
+func TestDecodePayloadForAction_MissingDecoderFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	_, err := DecodePayloadForAction(constants.ActionType("UNKNOWN_DECODER"), []byte{0x01})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrTxPayloadDecoderMissing)
+}
+
 func TestDecodePayloadForAction_KnownActionsDecode(t *testing.T) {
 	t.Parallel()
 

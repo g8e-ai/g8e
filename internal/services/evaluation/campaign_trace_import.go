@@ -110,6 +110,66 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace Evalu
 	return result, nil
 }
 
+// PartialAssignmentResultFromScoredTrace materializes only the scored model
+// inference rows present in a non-terminal trace. It returns false when the
+// trace has not yet reported usage for any governed model call.
+func PartialAssignmentResultFromScoredTrace(req AssignmentExecutionRequest, trace EvaluationTrace, newID func(string) string) (*evalv1.EvaluationAssignmentResult, bool, error) {
+	if req.Assignment == nil || len(trace) == 0 {
+		return nil, false, nil
+	}
+	if !TraceHasReportedModelInference(trace) {
+		return nil, false, nil
+	}
+	if newID == nil {
+		newID = func(prefix string) string { return prefix }
+	}
+	candidate := homogeneousCandidateVariant(req.Assignment)
+	modelInferences, _, err := modelInferenceRecordsFromTrace(req.Assignment, req.AttemptID, candidate, trace, newID)
+	if err != nil {
+		return nil, false, err
+	}
+	partial := &evalv1.EvaluationAssignmentResult{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    req.Assignment.GetAssignmentId(),
+		RunId:           req.Assignment.GetRunId(),
+		CampaignId:      req.Assignment.GetCampaignId(),
+		Lane:            req.Assignment.GetLane(),
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING,
+		ModelInferences: modelInferences,
+	}
+	if len(reportedModelInferences(partial)) == 0 {
+		return nil, false, nil
+	}
+	return partial, true, nil
+}
+
+// TraceHasReportedModelInference reports whether a trace already carries at
+// least one governed model call with reported usage telemetry.
+func TraceHasReportedModelInference(trace EvaluationTrace) bool {
+	modelCalls, ok := trace["model_calls"].([]any)
+	if !ok {
+		return false
+	}
+	for _, rawCall := range modelCalls {
+		call, ok := evaluationTrace(rawCall)
+		if !ok {
+			continue
+		}
+		provider, _ := call["provider"].(string)
+		if !strings.EqualFold(provider, "G8EProvider") {
+			continue
+		}
+		if succeeded, ok := call["succeeded"].(bool); ok && !succeeded {
+			continue
+		}
+		reported, ok := call["usage_reported"].(bool)
+		if ok && reported {
+			return true
+		}
+	}
+	return false
+}
+
 func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (evalv1.EvaluationAssignmentLifecycleStatus, *evalv1.DeterministicGrade) {
 	status, _ := trace["status"].(string)
 	roleOutcome, _ := trace["role_outcome"].(string)
@@ -318,7 +378,43 @@ func boolValue(raw any) bool {
 	return ok && value
 }
 
+func traceSchemaVersion(trace EvaluationTrace) string {
+	version, _ := trace["schema_version"].(string)
+	if version == "" {
+		return "1"
+	}
+	return version
+}
+
+func optionalUint32FromTraceCall(call EvaluationTrace, name, schemaVersion string) (*uint32, error) {
+	if schemaVersion == "1" {
+		return nil, nil
+	}
+	raw, present := call[name]
+	if !present || raw == nil {
+		return nil, nil
+	}
+	converted, err := uint32Value(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return &converted, nil
+}
+
+func requiredUint32FromTraceCall(call EvaluationTrace, name string) (uint32, error) {
+	raw, present := call[name]
+	if !present {
+		return 0, fmt.Errorf("usage_reported call missing %s", name)
+	}
+	converted, err := uint32Value(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", name, err)
+	}
+	return converted, nil
+}
+
 func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, attemptID string, candidate *evalv1.ModelVariant, trace EvaluationTrace, newID func(string) string) ([]*evalv1.ModelInferenceRecord, *uint64, error) {
+	schemaVersion := traceSchemaVersion(trace)
 	modelCalls, ok := trace["model_calls"].([]any)
 	if !ok {
 		return nil, nil, fmt.Errorf("model_calls must be an array")
@@ -365,24 +461,26 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			}
 			if value {
 				record.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
-				counters := []struct {
-					name string
-					dest *uint32
-				}{
-					{"input_tokens", &record.PromptTokens}, {"output_tokens", &record.CompletionTokens},
-					{"thinking_tokens", &record.ThinkingTokens}, {"cache_tokens", &record.CacheTokens},
+				promptTokens, err := requiredUint32FromTraceCall(call, "input_tokens")
+				if err != nil {
+					return nil, nil, err
 				}
-				for _, counter := range counters {
-					value, present := call[counter.name]
-					if !present {
-						return nil, nil, fmt.Errorf("usage_reported call missing %s", counter.name)
-					}
-					converted, err := uint32Value(value)
-					if err != nil {
-						return nil, nil, fmt.Errorf("%s: %w", counter.name, err)
-					}
-					*counter.dest = converted
+				completionTokens, err := requiredUint32FromTraceCall(call, "output_tokens")
+				if err != nil {
+					return nil, nil, err
 				}
+				record.PromptTokens = promptTokens
+				record.CompletionTokens = completionTokens
+				thinkingTokens, err := optionalUint32FromTraceCall(call, "thinking_tokens", schemaVersion)
+				if err != nil {
+					return nil, nil, err
+				}
+				cacheTokens, err := optionalUint32FromTraceCall(call, "cache_tokens", schemaVersion)
+				if err != nil {
+					return nil, nil, err
+				}
+				record.ThinkingTokens = thinkingTokens
+				record.CacheTokens = cacheTokens
 			} else {
 				record.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE
 			}

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestStoreHeterogeneousStackSet_RoundTrip(t *testing.T) {
@@ -53,7 +54,7 @@ func TestIsCampaignFeedSequenceOutOfOrder(t *testing.T) {
 
 func TestBuildCampaignPublicFeedRecord(t *testing.T) {
 	t.Parallel()
-	record := buildCampaignPublicFeedRecord(7, []byte(`{"sequence":7}`))
+	record := buildCampaignPublicFeedRecord(7, models.PublicFeedRecordTypeProjection, []byte(`{"sequence":7}`))
 	assert.Equal(t, int64(7), record.Sequence)
 	assert.NotEmpty(t, record.RecordHash)
 	assert.Equal(t, `{"sequence":7}`, record.RecordBytes)

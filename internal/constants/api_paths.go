@@ -73,13 +73,19 @@ var APIPaths = struct {
 	// Audit routes
 	AuditReceipts       string `json:"audit_receipts"`
 	AuditReceiptsExport string `json:"audit_receipts_export"`
+	AuditRecords        string `json:"audit_records"`
 	AuditEvents         string `json:"audit_events"`
 	AuditSummary        string `json:"audit_summary"`
 	AuditReport         string `json:"audit_report"`
+	AuditVerify         string `json:"audit_verify"`
 	AuditStream         string `json:"audit_stream"`
 	// Public feed routes
-	PublicFeedBatches  string `json:"public_feed_batches"`
-	PublicFeedSnapshot string `json:"public_feed_snapshot"`
+	PublicFeedBatches     string `json:"public_feed_batches"`
+	PublicFeedSnapshot    string `json:"public_feed_snapshot"`
+	PublicFeedProofs      string `json:"public_feed_proofs"`
+	PublicFeedProofsBatch string `json:"public_feed_proofs_batch"`
+	PublicFeedProofsPush  string `json:"public_feed_proofs_push"`
+	PublicFeedProofsPrune string `json:"public_feed_proofs_prune"`
 	// Native eval campaign publication state (gateway-owned idempotency)
 	EvalCampaignPublicationStateByRun string `json:"eval_campaign_publication_state_by_run"`
 	// User routes
@@ -181,6 +187,14 @@ var APIPaths = struct {
 	State string `json:"state"`
 	// Landing
 	Landing string `json:"landing"`
+	// Ensemble browser proxy routes (Gateway → g8ee)
+	EnsembleChatPrefix             string `json:"ensemble_chat_prefix"`
+	EnsembleSettingsPrefix         string `json:"ensemble_settings_prefix"`
+	EnsembleCasesPrefix            string `json:"ensemble_cases_prefix"`
+	EnsembleInvestigations         string `json:"ensemble_investigations"`
+	EnsembleInvestigationsQuery    string `json:"ensemble_investigations_query"`
+	EnsembleOperatorApprovalPrefix string `json:"ensemble_operator_approval_prefix"`
+	EnsembleOperatorPrefix         string `json:"ensemble_operator_prefix"`
 }{
 	InternalPrefix: "/api/v1",
 	OperatorPrefix: "/api",
@@ -246,13 +260,19 @@ var APIPaths = struct {
 	// Audit routes
 	AuditReceipts:       "/api/v1/audit/receipts",
 	AuditReceiptsExport: "/api/v1/audit/receipts/export",
+	AuditRecords:        "/api/v1/audit/records",
 	AuditEvents:         "/api/v1/audit/events",
 	AuditSummary:        "/api/v1/audit/summary",
 	AuditReport:         "/api/v1/audit/report",
+	AuditVerify:         "/api/v1/audit/verify",
 	AuditStream:         "/api/v1/audit/stream",
 	// Public feed routes
-	PublicFeedBatches:  "/api/v1/public-feed/batches",
-	PublicFeedSnapshot: "/api/v1/public-feed/snapshot",
+	PublicFeedBatches:     "/api/v1/public-feed/batches",
+	PublicFeedSnapshot:    "/api/v1/public-feed/snapshot",
+	PublicFeedProofs:      "/api/v1/public-feed/proofs",
+	PublicFeedProofsBatch: "/api/v1/public-feed/proofs/batch",
+	PublicFeedProofsPush:  "/api/v1/public-feed/proofs/push",
+	PublicFeedProofsPrune: "/api/v1/public-feed/proofs/prune",
 	// Native eval campaign publication state
 	EvalCampaignPublicationStateByRun: "/api/v1/eval/campaign/runs/",
 	// User routes
@@ -350,4 +370,12 @@ var APIPaths = struct {
 	State: "/api/v1/state",
 	// Landing
 	Landing: "/",
+	// Ensemble browser proxy routes (Gateway → g8ee)
+	EnsembleChatPrefix:             "/api/v1/chat",
+	EnsembleSettingsPrefix:         "/api/v1/settings",
+	EnsembleCasesPrefix:            "/api/v1/cases",
+	EnsembleInvestigations:         "/api/v1/investigations",
+	EnsembleInvestigationsQuery:    "/api/v1/investigations/query",
+	EnsembleOperatorApprovalPrefix: "/api/v1/operator/approval/",
+	EnsembleOperatorPrefix:         "/api/v1/operator/",
 }

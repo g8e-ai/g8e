@@ -18,7 +18,9 @@ import pytest
 
 from app.constants import EventType
 from app.models.base import Field, G8eBaseModel
+from app.models.cases import CaseCreatedPayload
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
+from g8e.models.events import ChatProcessingStartedPayload
 
 pytestmark = pytest.mark.unit
 
@@ -45,8 +47,8 @@ class TestSessionEventWireStructure:
 
     def test_wire_structure_top_level_keys(self):
         se = SessionEvent(
-            event_type=EventType.AI_LLM_CHAT_MESSAGE_SENT,
-            payload=_SimplePayload(message="test"),
+            event_type=EventType.AI_LLM_CHAT_ITERATION_STARTED,
+            payload=ChatProcessingStartedPayload(agent_mode="standard"),
             web_session_id="web-session-123",
             user_id="user-456",
         )
@@ -62,7 +64,7 @@ class TestSessionEventWireStructure:
     def test_wire_structure_with_optional_ids(self):
         se = SessionEvent(
             event_type=EventType.APP_CASE_CREATED,
-            payload=_PayloadWithId(id="case-123", name="Test Case"),
+            payload=CaseCreatedPayload(title="Test Case"),
             web_session_id="web-session-123",
             user_id="user-456",
             case_id="case-789",
@@ -82,8 +84,8 @@ class TestBackgroundEventWireStructure:
 
     def test_wire_structure_top_level_keys(self):
         be = BackgroundEvent(
-            event_type=EventType.OPERATOR_HEARTBEAT_SENT,
-            payload=_SimplePayload(status="heartbeat"),
+            event_type=EventType.AI_LLM_CHAT_ITERATION_STARTED,
+            payload=ChatProcessingStartedPayload(agent_mode="standard"),
             user_id="user-456",
         )
 
@@ -95,8 +97,8 @@ class TestBackgroundEventWireStructure:
 
     def test_wire_structure_with_optional_ids(self):
         be = BackgroundEvent(
-            event_type=EventType.APP_CASE_ESCALATED,
-            payload=_PayloadWithId(id="case-123", name="Escalated"),
+            event_type=EventType.APP_CASE_CREATED,
+            payload=CaseCreatedPayload(title="Escalated"),
             user_id="user-456",
             investigation_id="inv-101",
             case_id="case-789",

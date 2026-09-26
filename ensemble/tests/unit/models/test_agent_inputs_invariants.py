@@ -144,7 +144,7 @@ class TestAgentInputsImmutability:
         request_settings = G8eeUserSettings(llm=LLMSettings())
 
         from app.models.investigations import ConversationHistoryMessage
-        from app.utils.ledger_hash import genesis_hash
+        from app.utils.hashing.ledger_hash import genesis_hash
 
         genesis = genesis_hash("inv-immutable-test", inv.created_at.isoformat())
         test_hash = "0" * 64

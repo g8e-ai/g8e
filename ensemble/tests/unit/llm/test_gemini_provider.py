@@ -137,7 +137,7 @@ class TestUsageFromSdk:
         assert usage.prompt_token_count == 0
         assert usage.candidates_token_count == 0
         assert usage.total_token_count == 0
-        assert usage.thinking_token_count == 0
+        assert usage.thinking_token_count is None
 
 
 class TestFinishReasonFromCandidate:

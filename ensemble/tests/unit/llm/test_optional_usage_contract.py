@@ -5,12 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Contract packet for preserving absent versus explicitly-zero usage metrics.
-
-These tests are intentionally strict expected failures until the cross-language
-telemetry contract is versioned.  They make the required semantics executable
-without contacting Ollama or changing generated protocol files.
-"""
+"""Contract tests for preserving absent versus explicitly-zero usage metrics."""
 
 import pytest
 
@@ -21,14 +16,7 @@ from g8e.models.events import ModelCallTelemetry
 from g8e.operator.v1.operator_pb2 import InferenceResult
 
 
-_OPTIONALITY_REASON = (
-    "Worker 6 packet: Python telemetry still defaults absent "
-    "thinking/cache counts to zero"
-)
-
-
 @pytest.mark.unit
-@pytest.mark.xfail(strict=True, reason=_OPTIONALITY_REASON)
 def test_usage_metadata_keeps_absent_thinking_and_cache_counts_distinct():
     usage = UsageMetadata()
 
@@ -37,7 +25,14 @@ def test_usage_metadata_keeps_absent_thinking_and_cache_counts_distinct():
 
 
 @pytest.mark.unit
-@pytest.mark.xfail(strict=True, reason=_OPTIONALITY_REASON)
+def test_usage_metadata_preserves_explicit_zero():
+    usage = UsageMetadata(thinking_token_count=0, cache_token_count=0)
+
+    assert usage.thinking_token_count == 0
+    assert usage.cache_token_count == 0
+
+
+@pytest.mark.unit
 def test_turn_result_keeps_absent_thinking_and_cache_counts_distinct():
     result = TurnResult(
         model_response_parts=[],
@@ -53,7 +48,6 @@ def test_turn_result_keeps_absent_thinking_and_cache_counts_distinct():
 
 
 @pytest.mark.unit
-@pytest.mark.xfail(strict=True, reason=_OPTIONALITY_REASON)
 def test_token_usage_keeps_absent_thinking_and_cache_counts_distinct():
     usage = TokenUsage(input_tokens=1, output_tokens=2, total_tokens=3)
 
@@ -62,7 +56,6 @@ def test_token_usage_keeps_absent_thinking_and_cache_counts_distinct():
 
 
 @pytest.mark.unit
-@pytest.mark.xfail(strict=True, reason=_OPTIONALITY_REASON)
 def test_model_call_telemetry_keeps_absent_thinking_and_cache_counts_distinct():
     telemetry = ModelCallTelemetry(
         agent_role="primary",
@@ -74,6 +67,33 @@ def test_model_call_telemetry_keeps_absent_thinking_and_cache_counts_distinct():
 
     assert telemetry.thinking_tokens is None
     assert telemetry.cache_tokens is None
+
+
+@pytest.mark.unit
+def test_model_call_telemetry_omits_absent_counts_from_json():
+    telemetry = ModelCallTelemetry(
+        agent_role="primary",
+        provider="fake",
+        model="test-model",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+        thinking_tokens=0,
+        cache_tokens=3,
+    )
+
+    payload = telemetry.model_dump(mode="json")
+    assert payload["thinking_tokens"] == 0
+    assert payload["cache_tokens"] == 3
+
+    absent = ModelCallTelemetry(
+        agent_role="primary",
+        provider="fake",
+        model="test-model",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+    )
+    assert "thinking_tokens" not in absent.model_dump(mode="json")
+    assert "cache_tokens" not in absent.model_dump(mode="json")
 
 
 @pytest.mark.unit

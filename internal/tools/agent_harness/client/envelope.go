@@ -37,7 +37,7 @@ import (
 const (
 	ActionMcpCall   = "MCP_CALL"
 	ActionA2aCall   = "A2A_CALL"
-	ProtocolVersion = "1.0"
+	ProtocolVersion = "2"
 )
 
 // Ensemble is Agent Harness's L2 consensus voter pool: N agents that each

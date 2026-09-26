@@ -114,16 +114,6 @@ class TestInternalRouterPathRegistration:
         route_paths = {route.path for route in internal_router.routes}
         assert InternalAPIPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER in route_paths
 
-    def test_operators_register_session_path_absolute(self):
-        """Operators register session endpoint should be registered at absolute path."""
-        route_paths = {route.path for route in internal_router.routes}
-        assert InternalAPIPaths.G8EE_OPERATORS_REGISTER_SESSION in route_paths
-
-    def test_operators_deregister_session_path_absolute(self):
-        """Operators deregister session endpoint should be registered at absolute path."""
-        route_paths = {route.path for route in internal_router.routes}
-        assert InternalAPIPaths.G8EE_OPERATORS_DEREGISTER_SESSION in route_paths
-
     def test_operators_stop_path_absolute(self):
         """Operators stop endpoint should be registered at absolute path."""
         route_paths = {route.path for route in internal_router.routes}

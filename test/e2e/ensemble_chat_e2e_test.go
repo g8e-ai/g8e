@@ -22,6 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -43,17 +44,11 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	require.True(t, operators.Success, "operator list response must report success")
 	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
 
-	var targetOperatorID string
-	var targetSessionID string
-	for _, op := range operators.Operators {
-		if op.Status == constants.OperatorStatusActive && op.OperatorType == constants.OperatorTypeRemote {
-			targetOperatorID = op.ID
-			targetSessionID = op.OperatorSessionID
-			break
-		}
-	}
-	require.NotEmpty(t, targetOperatorID, "active operator must exist")
-	require.NotEmpty(t, targetSessionID, "active operator session must exist")
+	target := findLiveActiveRemoteOperator(operators.Operators)
+	require.NotNil(t, target, "a live active remote operator must exist")
+	targetOperatorID := target.ID
+	targetSessionID := target.OperatorSessionID
+	require.NotEmpty(t, targetSessionID, "live active operator session must exist")
 
 	runID := fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
 	filePath := fmt.Sprintf("/tmp/g8e-e2e-smoke-%s.txt", runID)
@@ -106,11 +101,13 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 
 	var foundReceipt *struct {
 		TransactionID   string
+		EventType       string
 		ActionType      string
 		TargetResource  string
 		Signature       string
 		RequestorUserID string
 		ActingAppID     string
+		ActionReceipt   *operatorv1.ActionReceipt
 	}
 
 	require.Eventually(t, func() bool {
@@ -137,18 +134,22 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 			}
 			foundReceipt = &struct {
 				TransactionID   string
+				EventType       string
 				ActionType      string
 				TargetResource  string
 				Signature       string
 				RequestorUserID string
 				ActingAppID     string
+				ActionReceipt   *operatorv1.ActionReceipt
 			}{
 				TransactionID:   r.TransactionID,
+				EventType:       string(r.EventType),
 				ActionType:      string(r.ActionType),
 				TargetResource:  r.TargetResource,
 				Signature:       r.Signature,
 				RequestorUserID: r.RequestorUserID,
 				ActingAppID:     r.ActingAppID,
+				ActionReceipt:   r.ActionReceipt,
 			}
 			return true
 		}
@@ -156,12 +157,42 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	}, 60*time.Second, 2*time.Second, "FILE_EDIT receipt for %s must be recorded within 60s", filePath)
 
 	require.NotNil(t, foundReceipt, "correlated FILE_EDIT receipt must be found")
+	assert.Equal(t, string(constants.EventOperatorFileEditRequested), foundReceipt.EventType,
+		"receipt must carry the originating governed request event_type")
+	assert.Equal(t, string(constants.ActionTypeFileEdit), foundReceipt.ActionType,
+		"receipt must carry the registry-derived action_type")
 	assert.NotEmpty(t, foundReceipt.TransactionID, "receipt must carry transaction_id")
 	assert.GreaterOrEqual(t, len(foundReceipt.Signature), 64, "receipt signature must be valid hex Ed25519 signature")
 	assert.Equal(t, e2eClient.userID, foundReceipt.RequestorUserID, "receipt requestor_user_id must match authenticated user")
 	assert.NotEmpty(t, foundReceipt.ActingAppID, "receipt acting_app_id must not be empty")
+	if foundReceipt.ActionReceipt != nil {
+		canonical, err := governance.CanonicalizeActionReceipt(foundReceipt.ActionReceipt)
+		require.NoError(t, err, "receipt v2 canonicalization must succeed")
+		assert.Contains(t, string(canonical), `"event_type":"`+string(constants.EventOperatorFileEditRequested)+`"`)
+		assert.Contains(t, string(canonical), `"action_type":"`+string(constants.ActionTypeFileEdit)+`"`)
+	}
 	t.Logf("correlated receipt: tx=%s signature_len=%d requestor=%s app=%s",
 		foundReceipt.TransactionID, len(foundReceipt.Signature), foundReceipt.RequestorUserID, foundReceipt.ActingAppID)
+
+	require.Eventually(t, func() bool {
+		receiptsResp, err := e2eClient.GetAuditReceipts(ctx, "")
+		if err != nil {
+			return false
+		}
+		for _, r := range receiptsResp.Receipts {
+			if r.EventType != constants.EventAppCaseCreateRequested {
+				continue
+			}
+			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBefore) {
+				continue
+			}
+			if r.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+				continue
+			}
+			return true
+		}
+		return false
+	}, 60*time.Second, 2*time.Second, "chat case creation receipt event_type must be %s", constants.EventAppCaseCreateRequested)
 
 	fsReadReq := &operatorv1.FsReadRequested{Path: filePath}
 	payload, err := proto.Marshal(fsReadReq)
@@ -169,7 +200,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 
 	readReqBody := dispatchRequestJSON{
 		TargetOperatorSessionID: targetSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType:               string(constants.EventOperatorFilesystemReadRequested),
 		Payload:                 payload,
 		TargetResource:          filePath,
 	}

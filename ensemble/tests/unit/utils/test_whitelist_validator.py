@@ -26,7 +26,7 @@ import pytest
 from app.constants import CommandCategory, Platform
 from app.errors import ConfigurationError
 from app.utils.csv_commands import parse_command_csv
-from app.utils.whitelist_validator import (
+from app.utils.validation.whitelist_validator import (
     _COMMON_SAFE_PATTERNS,
     CommandWhitelistValidator,
     get_whitelist_validator,
@@ -385,7 +385,7 @@ class TestLoadWhitelistErrors:
 
     def test_default_path_missing_raises_configuration_error(self, monkeypatch):
         with (
-            patch("app.utils.whitelist_validator.Path.exists", return_value=False),
+            patch("app.utils.validation.whitelist_validator.Path.exists", return_value=False),
             pytest.raises(ConfigurationError, match="Required whitelist configuration not found"),
         ):
             CommandWhitelistValidator(whitelist_path=None)
@@ -453,7 +453,7 @@ class TestSingletonGetter:
 
 class TestConvenienceFunctions:
     def test_validate_command_against_whitelist_delegates(self, monkeypatch, whitelist_path):
-        import app.utils.whitelist_validator as wv_module
+        import app.utils.validation.whitelist_validator as wv_module
 
         fresh = CommandWhitelistValidator(whitelist_path=whitelist_path)
         monkeypatch.setattr(wv_module, "_validator_instance", fresh)

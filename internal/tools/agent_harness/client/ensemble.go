@@ -187,12 +187,14 @@ const EnsembleChatPath = "/api/v1/chat"
 const EnsembleEvaluationTracePath = "/api/v1/evaluation/trace/%s/%s"
 
 // EnsembleEvaluationTraceResponse mirrors the Python EvaluationTraceResponse.
+// Trace stays raw JSON: the evaluation service owns the schema-flexible
+// EvaluationTrace boundary and its canonical digest.
 type EnsembleEvaluationTraceResponse struct {
-	Trace map[string]any `json:"trace"`
+	Trace json.RawMessage `json:"trace"`
 }
 
 // GetEvaluationTrace loads one persisted evaluation assignment trace from g8ee.
-func (c *Client) GetEvaluationTrace(ctx context.Context, p Persona, assignmentID, evaluationAttemptID string) (map[string]any, error) {
+func (c *Client) GetEvaluationTrace(ctx context.Context, p Persona, assignmentID, evaluationAttemptID string) (json.RawMessage, error) {
 	if c.cfg.EnsembleBaseURL == "" {
 		return nil, fmt.Errorf("ensemble evaluation trace: %w", constants.ErrEnsembleURLNotConfigured)
 	}
@@ -229,7 +231,7 @@ func (c *Client) GetEvaluationTrace(ctx context.Context, p Persona, assignmentID
 	if err := json.Unmarshal(out, &traceResp); err != nil {
 		return nil, fmt.Errorf("ensemble evaluation trace: decode response: %w", err)
 	}
-	if len(traceResp.Trace) == 0 {
+	if len(traceResp.Trace) == 0 || string(traceResp.Trace) == "null" {
 		return nil, fmt.Errorf("ensemble evaluation trace: %w", constants.ErrMissingRequiredField)
 	}
 	return traceResp.Trace, nil

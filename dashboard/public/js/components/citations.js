@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-import { CitationLayout } from '../constants/events.js';
+import { CitationLayout } from '../constants/display-constants.js';
 import { CitationSource, CitationItem } from '../models/ai-event-models.js';
 
 export class CitationsHandler {

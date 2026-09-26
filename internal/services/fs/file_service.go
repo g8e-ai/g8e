@@ -171,8 +171,10 @@ func (fs *localFS) resolveValidated(relPath string) (string, error) {
 
 // MkdirAll creates a directory and all parents with the given mode.
 func (fs *localFS) MkdirAll(ctx context.Context, relPath string, mode os.FileMode) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	if err := os.MkdirAll(absPath, mode); err != nil {
@@ -184,8 +186,10 @@ func (fs *localFS) MkdirAll(ctx context.Context, relPath string, mode os.FileMod
 // ReadFile reads a file within the runtime directory.
 // Returns wrapped constants.ErrNotFound if file does not exist.
 func (fs *localFS) ReadFile(ctx context.Context, relPath string) ([]byte, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	absPath, err := fs.resolveValidated(relPath)
 	if err != nil {
@@ -208,8 +212,10 @@ func (fs *localFS) ReadFile(ctx context.Context, relPath string) ([]byte, error)
 
 // FileExists checks if a file exists. Returns false, nil for non-existent.
 func (fs *localFS) FileExists(ctx context.Context, relPath string) (bool, error) {
-	if err := ctx.Err(); err != nil {
-		return false, err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	_, err := os.Stat(absPath)
@@ -224,8 +230,10 @@ func (fs *localFS) FileExists(ctx context.Context, relPath string) (bool, error)
 
 // Stat returns FileInfo for a path within the runtime directory.
 func (fs *localFS) Stat(ctx context.Context, relPath string) (os.FileInfo, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	info, err := os.Stat(absPath)
@@ -239,8 +247,10 @@ func (fs *localFS) Stat(ctx context.Context, relPath string) (os.FileInfo, error
 }
 
 func (fs *localFS) Lstat(ctx context.Context, relPath string) (os.FileInfo, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	absPath, err := fs.resolveValidated(relPath)
 	if err != nil {
@@ -258,8 +268,10 @@ func (fs *localFS) Lstat(ctx context.Context, relPath string) (os.FileInfo, erro
 
 // Remove deletes a file. No-op if file doesn't exist.
 func (fs *localFS) Remove(ctx context.Context, relPath string) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	if err := os.Remove(absPath); err != nil && !os.IsNotExist(err) {
@@ -270,8 +282,10 @@ func (fs *localFS) Remove(ctx context.Context, relPath string) error {
 
 // RemoveAll deletes a directory tree. No-op if path doesn't exist.
 func (fs *localFS) RemoveAll(ctx context.Context, relPath string) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	if err := os.RemoveAll(absPath); err != nil && !os.IsNotExist(err) {
@@ -282,8 +296,10 @@ func (fs *localFS) RemoveAll(ctx context.Context, relPath string) error {
 
 // ReadDir lists directory entries.
 func (fs *localFS) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	entries, err := os.ReadDir(absPath)
@@ -298,8 +314,10 @@ func (fs *localFS) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, 
 
 // Rename atomically renames a file or directory.
 func (fs *localFS) Rename(ctx context.Context, oldPath, newPath string) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 	oldAbs := fs.Resolve(oldPath)
 	newAbs := fs.Resolve(newPath)

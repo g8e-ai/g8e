@@ -62,8 +62,7 @@ def _to_pascal(snake: str) -> str:
 def _pascal_to_screaming_snake(name: str) -> str:
     """Convert PascalCase to SCREAMING_SNAKE_CASE.
 
-    Handles consecutive capitals: ``AiLLMChat`` -> ``AI_LLM_CHAT``,
-    ``G8eActionType`` -> ``G8E_ACTION_TYPE``.
+    Handles consecutive capitals: ``AiLLMChat`` -> ``AI_LLM_CHAT``.
     """
     s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name)
     s = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", s)
@@ -153,8 +152,7 @@ def _build_event_type_enum() -> type:
 def _to_snake(pascal: str) -> str:
     """Convert PascalCase to snake_case, handling consecutive capitals.
 
-    e.g. AISource -> ai_source, G8eActionType -> g8e_action_type,
-         ApprovalErrorType -> approval_error_type
+    e.g. AISource -> ai_source, ApprovalErrorType -> approval_error_type
     """
     # Insert _ before each uppercase that follows a lowercase or digit,
     # and before each uppercase that precedes a lowercase

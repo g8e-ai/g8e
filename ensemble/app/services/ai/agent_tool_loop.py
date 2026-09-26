@@ -63,8 +63,8 @@ from app.services.investigation.investigation_service import (
 )
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.event_service import EventService
-from app.utils.ids import generate_command_execution_id
-from app.utils.safety import map_os_string_to_platform
+from app.utils.time_ids.ids import generate_command_execution_id
+from app.utils.validation.safety import map_os_string_to_platform
 from app.utils.csv_commands import parse_command_csv
 from app.models.whitelist import WhitelistedCommand
 

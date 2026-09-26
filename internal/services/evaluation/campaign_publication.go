@@ -19,15 +19,17 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	"google.golang.org/protobuf/proto"
 )
 
-// CampaignPublicFeedRecord is one append-only public projection payload ready
-// for signing by the host publisher.
+// CampaignPublicFeedRecord is one append-only public feed payload ready for
+// signing by the host publisher.
 type CampaignPublicFeedRecord struct {
 	Sequence    int64
+	RecordType  models.PublicFeedRecordType
 	RecordHash  string
 	RecordBytes string
 }
@@ -41,18 +43,24 @@ type CampaignFeedExporter interface {
 
 type campaignFeedPublishRequest struct {
 	IdempotencyKey string
+	RecordType     models.PublicFeedRecordType
 	Body           []byte
 }
 
 // CampaignPublicationCoordinator projects canonical campaign state into typed
 // public records and coordinates idempotent publisher export.
 type CampaignPublicationCoordinator struct {
-	store             CampaignStore
-	files             fs.RuntimeFileService
-	publicationState  CampaignPublicationStateStore
-	exporter          CampaignFeedExporter
-	observationRemote ProviderObservationRemote
-	mirrorProbe       CampaignMirrorProbe
+	store                  CampaignStore
+	files                  fs.RuntimeFileService
+	publicationState       CampaignPublicationStateStore
+	exporter               CampaignFeedExporter
+	proofPublisher         CampaignProofPublisher
+	observationRemote      ProviderObservationRemote
+	mirrorProbe            CampaignMirrorProbe
+	deferProofMirrorPush   bool
+	pendingProofMirrorPush bool
+	pendingProofInputs     []AssignmentAuditProofInput
+	publicationStateCache  *CampaignPublicationState
 }
 
 func NewCampaignPublicationCoordinator(store CampaignStore, files fs.RuntimeFileService, publicationState CampaignPublicationStateStore, exporter CampaignFeedExporter, observationRemote ProviderObservationRemote) *CampaignPublicationCoordinator {
@@ -72,6 +80,29 @@ func (c *CampaignPublicationCoordinator) WithMirrorProbe(probe CampaignMirrorPro
 		c.mirrorProbe = probe
 	}
 	return c
+}
+
+// WithProofPublisher attaches an optional proof-catalog publisher used to ingest
+// per-assignment audit slice artifacts at terminal publication time.
+func (c *CampaignPublicationCoordinator) WithProofPublisher(publisher CampaignProofPublisher) *CampaignPublicationCoordinator {
+	if c != nil {
+		c.proofPublisher = publisher
+	}
+	return c
+}
+
+// PublishAssignmentLiveEvents emits disclosure-safe stage_updated and
+// metric_updated records for one terminal assignment result.
+func (c *CampaignPublicationCoordinator) PublishAssignmentLiveEvents(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) error {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil || result == nil {
+		return fmt.Errorf("evaluation: publish assignment live events: %w", constants.ErrMissingRequiredField)
+	}
+	requests, err := c.buildAssignmentLiveEventPublishRequests(ctx, assignment, result)
+	if err != nil {
+		return err
+	}
+	_, err = c.exportFeedRecords(ctx, assignment.GetRunId(), requests)
+	return err
 }
 
 // PublishAssignmentLifecycle emits one lifecycle projection when it has not yet
@@ -95,7 +126,15 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentResult(ctx context.Con
 		return fmt.Errorf("evaluation: publish assignment result: %w", constants.ErrMissingRequiredField)
 	}
 	idempotencyKey := AssignmentResultIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId())
-	return c.publishAssignmentResultWithKey(ctx, assignment, result, scenarioCategory, verificationStatus, idempotencyKey)
+	liveRequests, err := c.buildAssignmentLiveEventPublishRequests(ctx, assignment, result)
+	if err != nil {
+		return err
+	}
+	auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests, true)
+	if err != nil {
+		return err
+	}
+	return c.publishAssignmentResultWithKey(ctx, assignment, result, scenarioCategory, verificationStatus, idempotencyKey, auditBindings)
 }
 
 func (c *CampaignPublicationCoordinator) publishAssignmentResultWithKey(
@@ -105,6 +144,7 @@ func (c *CampaignPublicationCoordinator) publishAssignmentResultWithKey(
 	scenarioCategory evalv1.EvaluationScenarioCategory,
 	verificationStatus string,
 	idempotencyKey string,
+	auditBindings []*evalv1.PublicEvidenceBinding,
 ) error {
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil || result == nil || idempotencyKey == "" {
 		return fmt.Errorf("evaluation: publish assignment result: %w", constants.ErrMissingRequiredField)
@@ -121,7 +161,7 @@ func (c *CampaignPublicationCoordinator) publishAssignmentResultWithKey(
 	if err != nil {
 		return fmt.Errorf("evaluation: publish assignment result: load scenario artifacts: %w", err)
 	}
-	request, err := c.buildAssignmentResultPublishRequest(ctx, run, catalog, artifacts, assignment, result, scenarioCategory, verificationStatus, idempotencyKey)
+	request, err := c.buildAssignmentResultPublishRequest(ctx, run, catalog, artifacts, assignment, result, scenarioCategory, verificationStatus, idempotencyKey, auditBindings)
 	if err != nil {
 		return err
 	}
@@ -139,6 +179,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 	scenarioCategory evalv1.EvaluationScenarioCategory,
 	verificationStatus string,
 	idempotencyKey string,
+	auditBindings []*evalv1.PublicEvidenceBinding,
 ) (campaignFeedPublishRequest, error) {
 	if c == nil || c.files == nil || run == nil || catalog == nil || assignment == nil || result == nil || idempotencyKey == "" {
 		return campaignFeedPublishRequest{}, fmt.Errorf("evaluation: publish assignment result: %w", constants.ErrMissingRequiredField)
@@ -165,6 +206,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 			Assignment:         assignment,
 			Result:             result,
 			ScenarioContext:    scenario,
+			EvidenceBindings:   auditBindings,
 			VerificationStatus: verificationStatus,
 			Extensions:         PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources},
 		})
@@ -174,6 +216,15 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 			return campaignFeedPublishRequest{}, projectionErr
 		}
 		projection.VerificationMetadata = nil
+		activity, bindings, evidenceErr := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{
+			Result:       result,
+			PublicProofs: auditBindings,
+		})
+		if evidenceErr != nil {
+			return campaignFeedPublishRequest{}, evidenceErr
+		}
+		projection.ActivitySummary = activity.Summary
+		projection.EvidenceBindings = bindings
 		record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
 	}
 	if err != nil {
@@ -183,7 +234,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 	if err != nil {
 		return campaignFeedPublishRequest{}, err
 	}
-	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, Body: body}, nil
+	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, RecordType: models.PublicFeedRecordTypeProjection, Body: body}, nil
 }
 
 func buildAssignmentLifecyclePublishRequest(assignment *evalv1.EvaluationAssignment, scenarioCategory evalv1.EvaluationScenarioCategory, observedAt time.Time) (campaignFeedPublishRequest, error) {
@@ -199,7 +250,7 @@ func buildAssignmentLifecyclePublishRequest(assignment *evalv1.EvaluationAssignm
 	if err != nil {
 		return campaignFeedPublishRequest{}, err
 	}
-	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, Body: body}, nil
+	return campaignFeedPublishRequest{IdempotencyKey: idempotencyKey, RecordType: models.PublicFeedRecordTypeProjection, Body: body}, nil
 }
 
 func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ctx context.Context, result *evalv1.EvaluationAssignmentResult) (*PublicBenchmarkObservations, error) {
@@ -236,10 +287,7 @@ func (c *CampaignPublicationCoordinator) PublishRunAggregates(ctx context.Contex
 	if err != nil {
 		return 0, err
 	}
-	requests := make([]campaignFeedPublishRequest, 0, len(records))
-	for _, record := range records {
-		requests = append(requests, campaignFeedPublishRequest(record))
-	}
+	requests := viewRecordsToPublishRequests(records)
 	return c.exportFeedRecords(ctx, runID, requests)
 }
 
@@ -249,6 +297,12 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" || report == nil || report.GetRunId() != runID {
 		return 0, fmt.Errorf("evaluation: publish run verification: %w", constants.ErrMissingRequiredField)
 	}
+	c.deferProofMirrorPush = true
+	defer func() {
+		c.deferProofMirrorPush = false
+		c.pendingProofInputs = nil
+		c.clearPublicationStateCache()
+	}()
 	run, assignments, results, state, err := c.loadRunAggregateState(ctx, runID)
 	if err != nil {
 		return 0, err
@@ -300,6 +354,14 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 			if err != nil {
 				return 0, err
 			}
+			liveRequests, err := c.buildAssignmentLiveEventPublishRequests(ctx, assignment, result)
+			if err != nil {
+				return 0, err
+			}
+			auditBindings, err := c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests, false)
+			if err != nil {
+				return 0, err
+			}
 			key := AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId())
 			var record *PublicAssignmentRecord
 			if scenarioErr == nil {
@@ -307,6 +369,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 					Assignment:           assignment,
 					Result:               result,
 					ScenarioContext:      scenario,
+					EvidenceBindings:     auditBindings,
 					VerificationMetadata: exportVerificationMetadata(report, true),
 					VerificationStatus:   "verified",
 					Extensions:           PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources},
@@ -321,6 +384,15 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 					return 0, projectionErr
 				}
 				projection.VerificationMetadata = exportVerificationMetadata(report, true)
+				activity, bindings, evidenceErr := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{
+					Result:       result,
+					PublicProofs: auditBindings,
+				})
+				if evidenceErr != nil {
+					return 0, evidenceErr
+				}
+				projection.ActivitySummary = activity.Summary
+				projection.EvidenceBindings = bindings
 				record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
 			}
 			if err != nil {
@@ -330,21 +402,21 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 			if err != nil {
 				return 0, err
 			}
-			verifiedRequests = append(verifiedRequests, campaignFeedPublishRequest{IdempotencyKey: key, Body: body})
+			verifiedRequests = append(verifiedRequests, campaignFeedPublishRequest{IdempotencyKey: key, RecordType: models.PublicFeedRecordTypeProjection, Body: body})
 		}
 	}
 	published, err := c.exportFeedRecords(ctx, runID, verifiedRequests)
 	if err != nil {
 		return published, err
 	}
+	if err := c.flushProofCatalog(ctx); err != nil {
+		return published, err
+	}
 	records, err := BuildRunVerificationViewRecords(run, state, report, observedAt)
 	if err != nil {
 		return published, err
 	}
-	summaryRequests := make([]campaignFeedPublishRequest, 0, len(records))
-	for _, record := range records {
-		summaryRequests = append(summaryRequests, campaignFeedPublishRequest(record))
-	}
+	summaryRequests := viewRecordsToPublishRequests(records)
 	summaryCount, err := c.exportFeedRecords(ctx, runID, summaryRequests)
 	if err != nil {
 		return published, err
@@ -375,10 +447,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCompletion(ctx context.Contex
 	if err != nil {
 		return 0, err
 	}
-	requests := make([]campaignFeedPublishRequest, 0, len(records))
-	for _, record := range records {
-		requests = append(requests, campaignFeedPublishRequest(record))
-	}
+	requests := viewRecordsToPublishRequests(records)
 	return c.exportFeedRecords(ctx, runID, requests)
 }
 
@@ -393,8 +462,39 @@ func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context
 		return err
 	}
 	state.PublishedIdempotency = []string{}
+	state.PublishedProofArtifacts = map[string]CampaignPublishedProofArtifacts{}
 	state.LastPublishedSequence = 0
-	return c.publicationState.Save(ctx, state)
+	if err := c.savePublicationState(ctx, state); err != nil {
+		return err
+	}
+	c.clearPublicationStateCache()
+	return nil
+}
+
+// ResetFeedPublicationIdempotency clears feed export idempotency while
+// preserving published proof artifact hashes so force restore can republish
+// projections without rebuilding unchanged audit exports.
+func (c *CampaignPublicationCoordinator) ResetFeedPublicationIdempotency(ctx context.Context, runID string) error {
+	if c == nil || c.publicationState == nil || runID == "" {
+		return fmt.Errorf("evaluation: reset feed publication idempotency: %w", constants.ErrMissingRequiredField)
+	}
+	state, err := c.publicationState.Load(ctx, runID)
+	if err != nil {
+		return err
+	}
+	preserved := make([]string, 0)
+	for _, key := range state.PublishedIdempotency {
+		if strings.HasSuffix(key, ":audit-proof") {
+			preserved = append(preserved, key)
+		}
+	}
+	state.PublishedIdempotency = preserved
+	state.LastPublishedSequence = 0
+	if err := c.savePublicationState(ctx, state); err != nil {
+		return err
+	}
+	c.clearPublicationStateCache()
+	return nil
 }
 
 // PublishRunCatchUpWithVerification republishes one run and, when the persisted
@@ -432,8 +532,10 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx c
 
 // loadBoundRunVerification resolves the persisted run-level verification report
 // for summary construction. A missing or legacy unbound report yields nil. A
-// bound report that fails applicability against persisted run evidence fails
-// closed rather than producing a downgrade.
+// bound report that no longer applies on an in-progress run is ignored so
+// partial campaign verify does not block continued execute/publish. Once every
+// scheduled assignment is settled, a non-applicable bound report fails closed
+// rather than producing a downgrade.
 func (c *CampaignPublicationCoordinator) loadBoundRunVerification(ctx context.Context, runID string, run *evalv1.EvaluationRun, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) (*evalv1.EvaluationVerificationReport, error) {
 	report, err := c.store.LoadCampaignVerification(ctx, runID)
 	if err != nil {
@@ -460,10 +562,17 @@ func (c *CampaignPublicationCoordinator) loadBoundRunVerification(ctx context.Co
 	if err != nil {
 		return nil, err
 	}
-	if !applicability.Applicable {
-		return nil, fmt.Errorf("evaluation: load bound run verification: persisted report does not apply to run evidence: %w", constants.ErrEvidenceScopeMismatch)
+	if applicability.Applicable {
+		return report, nil
 	}
-	return report, nil
+	state, err := CollectRunAggregateState(assignments, results)
+	if err != nil {
+		return nil, err
+	}
+	if !RunAggregateComplete(assignments, results, state) {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("evaluation: load bound run verification: persisted report does not apply to run evidence: %w", constants.ErrEvidenceScopeMismatch)
 }
 
 func (c *CampaignPublicationCoordinator) validateRunVerificationApplicability(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) error {
@@ -489,12 +598,112 @@ func (c *CampaignPublicationCoordinator) validateRunVerificationApplicability(ct
 	return nil
 }
 
+func (c *CampaignPublicationCoordinator) PruneRunProofCatalog(ctx context.Context, runID string) error {
+	if c == nil || c.proofPublisher == nil || runID == "" {
+		return nil
+	}
+	if err := c.proofPublisher.PruneRunProofCatalog(ctx, runID); err != nil {
+		return fmt.Errorf("evaluation: prune run proof catalog: %w", err)
+	}
+	return nil
+}
+
+func (c *CampaignPublicationCoordinator) flushProofCatalog(ctx context.Context) error {
+	if c == nil || c.proofPublisher == nil {
+		return nil
+	}
+	if len(c.pendingProofInputs) > 0 {
+		pending := c.pendingProofInputs
+		if err := c.proofPublisher.IngestAssignmentAuditSlices(ctx, pending, true); err != nil {
+			return fmt.Errorf("evaluation: flush proof catalog: ingest assignment audit slices: %w", err)
+		}
+		for _, input := range pending {
+			if err := c.recordPublishedProofArtifacts(ctx, input); err != nil {
+				return fmt.Errorf("evaluation: flush proof catalog: record proof artifacts: %w", err)
+			}
+		}
+		c.pendingProofInputs = nil
+	}
+	if !c.pendingProofMirrorPush {
+		return nil
+	}
+	if err := c.proofPublisher.FlushProofCatalog(ctx); err != nil {
+		return fmt.Errorf("evaluation: flush proof catalog: %w", err)
+	}
+	c.pendingProofMirrorPush = false
+	return nil
+}
+
+func (c *CampaignPublicationCoordinator) clearPublicationStateCache() {
+	if c != nil {
+		c.publicationStateCache = nil
+	}
+}
+
+func (c *CampaignPublicationCoordinator) recordPublishedProofArtifacts(ctx context.Context, input AssignmentAuditProofInput) error {
+	if c == nil || c.publicationState == nil || input.RunID == "" || input.AssignmentID == "" {
+		return nil
+	}
+	if input.Artifacts.DatabaseSHA256 == "" || input.Artifacts.VaultKeySHA256 == "" {
+		return nil
+	}
+	state, err := c.loadPublicationState(ctx, input.RunID)
+	if err != nil {
+		return err
+	}
+	proofKey := AssignmentAuditProofIdempotencyKey(input.RunID, input.AssignmentID)
+	if !containsString(state.PublishedIdempotency, proofKey) {
+		state.PublishedIdempotency = append(state.PublishedIdempotency, proofKey)
+		sort.Strings(state.PublishedIdempotency)
+	}
+	if state.PublishedProofArtifacts == nil {
+		state.PublishedProofArtifacts = map[string]CampaignPublishedProofArtifacts{}
+	}
+	state.PublishedProofArtifacts[input.AssignmentID] = CampaignPublishedProofArtifacts{
+		DatabaseSHA256: input.Artifacts.DatabaseSHA256,
+		VaultKeySHA256: input.Artifacts.VaultKeySHA256,
+	}
+	return c.savePublicationState(ctx, state)
+}
+
+func (c *CampaignPublicationCoordinator) loadPublicationState(ctx context.Context, runID string) (*CampaignPublicationState, error) {
+	if c == nil || c.publicationState == nil || runID == "" {
+		return nil, fmt.Errorf("evaluation: load publication state: %w", constants.ErrMissingRequiredField)
+	}
+	if c.publicationStateCache != nil && c.publicationStateCache.RunID == runID {
+		return cloneCampaignPublicationState(c.publicationStateCache), nil
+	}
+	state, err := c.publicationState.Load(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	c.publicationStateCache = cloneCampaignPublicationState(state)
+	return state, nil
+}
+
+func (c *CampaignPublicationCoordinator) savePublicationState(ctx context.Context, state *CampaignPublicationState) error {
+	if c == nil || c.publicationState == nil || state == nil || state.RunID == "" {
+		return fmt.Errorf("evaluation: save publication state: %w", constants.ErrMissingRequiredField)
+	}
+	if err := c.publicationState.Save(ctx, state); err != nil {
+		return err
+	}
+	c.publicationStateCache = cloneCampaignPublicationState(state)
+	return nil
+}
+
 // PublishRunCatchUp scans one run and publishes any missing lifecycle and
 // terminal result projections derived from canonical records.
 func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, runID string) (int, error) {
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: publish run catch-up: %w", constants.ErrMissingRequiredField)
 	}
+	c.deferProofMirrorPush = true
+	defer func() {
+		c.deferProofMirrorPush = false
+		c.pendingProofInputs = nil
+		c.clearPublicationStateCache()
+	}()
 	resetRequired, err := c.mirrorCatchUpResetRequired(ctx, runID)
 	if err != nil {
 		return 0, err
@@ -516,6 +725,10 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: publish run catch-up: load scenario artifacts: %w", err)
 	}
+	publicationState, err := c.loadPublicationState(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
 	requests := make([]campaignFeedPublishRequest, 0, len(assignments)*2)
 	for _, assignment := range assignments {
 		category, err := ScenarioCategoryForAssignment(catalog, assignment)
@@ -531,6 +744,27 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 		if result == nil {
 			continue
 		}
+		resultKey := AssignmentResultIdempotencyKey(runID, assignment.GetAssignmentId())
+		if publicationState != nil && containsString(publicationState.PublishedIdempotency, resultKey) {
+			continue
+		}
+		proofKey := AssignmentAuditProofIdempotencyKey(runID, assignment.GetAssignmentId())
+		var auditBindings []*evalv1.PublicEvidenceBinding
+		if publicationState != nil && containsString(publicationState.PublishedIdempotency, proofKey) {
+			if stored, ok := publicationState.PublishedProofArtifacts[assignment.GetAssignmentId()]; ok {
+				auditBindings = AssignmentAuditEvidenceBindingsFromHashes(stored.DatabaseSHA256, stored.VaultKeySHA256)
+			}
+		}
+		if auditBindings == nil {
+			liveRequests, err := c.buildAssignmentLiveEventPublishRequests(ctx, assignment, result)
+			if err != nil {
+				return 0, err
+			}
+			auditBindings, err = c.BuildAssignmentAuditBindings(ctx, assignment, result, liveRequests, true)
+			if err != nil {
+				return 0, err
+			}
+		}
 		resultRequest, err := c.buildAssignmentResultPublishRequest(
 			ctx,
 			run,
@@ -541,6 +775,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 			category,
 			"unverified",
 			AssignmentResultIdempotencyKey(runID, assignment.GetAssignmentId()),
+			auditBindings,
 		)
 		if err != nil {
 			return 0, err
@@ -560,7 +795,11 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	if err != nil {
 		return published, err
 	}
-	return published + completionCount, nil
+	published += completionCount
+	if err := c.flushProofCatalog(ctx); err != nil {
+		return published, err
+	}
+	return published, nil
 }
 
 func (c *CampaignPublicationCoordinator) mirrorCatchUpResetRequired(ctx context.Context, runID string) (bool, error) {
@@ -593,20 +832,9 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 	if len(assignments) == 0 {
 		return run, assignments, map[string]*evalv1.EvaluationAssignmentResult{}, &runAggregateState{VariantRoles: map[string]*variantRoleAggregate{}}, nil
 	}
-	results := make(map[string]*evalv1.EvaluationAssignmentResult, len(assignments))
-	for _, assignment := range assignments {
-		exists, err := c.store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		if !exists {
-			continue
-		}
-		result, err := c.store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		results[assignment.GetAssignmentId()] = result
+	results, err := c.store.LoadAssignmentResults(ctx, runID, assignments)
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
 	state, err := CollectRunAggregateState(assignments, results)
 	if err != nil {
@@ -622,6 +850,7 @@ func (c *CampaignPublicationCoordinator) publishEnvelope(ctx context.Context, ru
 	}
 	_, err = c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{{
 		IdempotencyKey: idempotencyKey,
+		RecordType:     models.PublicFeedRecordTypeProjection,
 		Body:           body,
 	}})
 	return err
@@ -637,7 +866,7 @@ func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, 
 	if c.publicationState == nil {
 		return 0, fmt.Errorf("evaluation: export feed records: %w", constants.ErrMissingRequiredField)
 	}
-	state, err := c.publicationState.Load(ctx, runID)
+	state, err := c.loadPublicationState(ctx, runID)
 	if err != nil {
 		return 0, err
 	}
@@ -661,7 +890,7 @@ func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, 
 		}
 		records := make([]CampaignPublicFeedRecord, len(pending))
 		for index, request := range pending {
-			records[index] = buildCampaignPublicFeedRecord(nextSequence+1+int64(index), request.Body)
+			records[index] = buildCampaignPublicFeedRecord(nextSequence+1+int64(index), request.RecordType, request.Body)
 		}
 		if err := c.exportFeedRecordsInBatches(ctx, records); err != nil {
 			if attempt == 0 && isCampaignFeedSequenceOutOfOrder(err) {
@@ -674,7 +903,7 @@ func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, 
 		}
 		sort.Strings(state.PublishedIdempotency)
 		state.LastPublishedSequence = records[len(records)-1].Sequence
-		if err := c.publicationState.Save(ctx, state); err != nil {
+		if err := c.savePublicationState(ctx, state); err != nil {
 			return 0, err
 		}
 		return len(pending), nil
@@ -699,10 +928,26 @@ func isCampaignFeedSequenceOutOfOrder(err error) bool {
 	return err != nil && strings.Contains(err.Error(), constants.ErrPublicFeedSequenceOutOfOrder.Error())
 }
 
-func buildCampaignPublicFeedRecord(sequence int64, body []byte) CampaignPublicFeedRecord {
+func viewRecordsToPublishRequests(records []CampaignViewRecord) []campaignFeedPublishRequest {
+	requests := make([]campaignFeedPublishRequest, 0, len(records))
+	for _, record := range records {
+		requests = append(requests, campaignFeedPublishRequest{
+			IdempotencyKey: record.IdempotencyKey,
+			RecordType:     models.PublicFeedRecordTypeProjection,
+			Body:           record.Body,
+		})
+	}
+	return requests
+}
+
+func buildCampaignPublicFeedRecord(sequence int64, recordType models.PublicFeedRecordType, body []byte) CampaignPublicFeedRecord {
+	if recordType == "" {
+		recordType = models.PublicFeedRecordTypeProjection
+	}
 	digest := sha256.Sum256(body)
 	return CampaignPublicFeedRecord{
 		Sequence:    sequence,
+		RecordType:  recordType,
 		RecordHash:  hex.EncodeToString(digest[:]),
 		RecordBytes: string(body),
 	}

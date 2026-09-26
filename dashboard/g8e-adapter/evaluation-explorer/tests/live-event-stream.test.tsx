@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { EvaluationSummary, LiveEvent } from '../src/contract/types';
+import type { AssignmentResult, EvaluationSummary, LiveEvent } from '../src/contract/types';
 import { LiveEventStream } from '../src/components/LiveEventStream';
 import { evalStore, recordKey } from '../src/state/store';
 import { EvaluationDetailView } from '../src/views/EvaluationDetailView';
@@ -206,6 +206,56 @@ describe('LiveEventStream', () => {
     expect(metricCells).not.toContain('Unavailable');
   });
 
+  it('renders tokens per second from output tokens and generation time', () => {
+    const assignment: AssignmentResult = {
+      schema_version: '1.3.0',
+      kind: 'assignment_result',
+      dataset_id: 'ds-live-a',
+      quality_state: 'live_in_progress',
+      observed_at: '2026-09-17T08:00:00Z',
+      assignment_id: 'assignment-1',
+      run_id: 'run-a',
+      task_id: 'task-throughput',
+      variant_id: 'model-throughput',
+      role: 'primary',
+      repetition: 1,
+      terminal_status: 'completed',
+      metric_values: { pass: { value: 1 } },
+      stage_summary: [],
+      resource_summary: {
+        input_tokens: { value: 42 },
+        output_tokens: { value: 180 },
+      },
+      benchmark_observations: {
+        timing: { generation_ms: { value: 780 } },
+        unavailable_reasons: [],
+      },
+    };
+    evalStore.loadFixtures([assignment], []);
+
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-throughput',
+              kind: 'assignment_completed',
+              assignment_id: 'assignment-1',
+              task_id: 'task-throughput',
+              lifecycle_status: 'completed',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Tokens/s' })).toBeInTheDocument();
+    expect(screen.getByText('42 tok')).toBeInTheDocument();
+    expect(screen.getByText('230.8 tok/s')).toBeInTheDocument();
+  });
+
   it('hides thinking and cache token columns from the live stream', () => {
     render(
       <MemoryRouter>
@@ -291,6 +341,7 @@ describe('LiveEventStream', () => {
       'Latency',
       'Input tokens',
       'Output tokens',
+      'Tokens/s',
       'Retries',
       'Model',
       'Progress',
@@ -352,6 +403,192 @@ describe('LiveEventStream', () => {
     expect(roleCell).toHaveTextContent('Lite');
     expect(roleCell).not.toHaveTextContent('gemma2-9b');
     expect(roleCell?.querySelector('.status-dot')).not.toBeInTheDocument();
+  });
+
+  it('maps pass_rate metric_delta onto pass and pass rate columns', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-pass-rate',
+              kind: 'metric_updated',
+              assignment_id: 'assignment-1',
+              metric_delta: {
+                pass_rate: { value: 1 },
+              },
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Pass', { selector: '.stream-metric-value' })).toBeInTheDocument();
+    expect(screen.getByText('100.0%')).toBeInTheDocument();
+  });
+
+  it('shows per-role metrics on stage_updated rows instead of assignment aggregates', () => {
+    const assignment: AssignmentResult = {
+      schema_version: '1.3.0',
+      kind: 'assignment_result',
+      dataset_id: 'ds-live-a',
+      quality_state: 'live_in_progress',
+      observed_at: '2026-09-17T08:00:00Z',
+      assignment_id: 'assignment-formation',
+      run_id: 'run-a',
+      task_id: 'security-policy-deny-delete',
+      variant_id: 'qwen25-14b',
+      role: 'primary',
+      repetition: 1,
+      terminal_status: 'completed',
+      metric_values: {
+        pass: { value: 1 },
+        deterministic_pass_rate: { value: 1 },
+      },
+      stage_summary: [],
+      resource_summary: {
+        latency_ms: { value: 3540 },
+        input_tokens: { value: 628 },
+        output_tokens: { value: 364 },
+        retries: { value: 2 },
+      },
+      benchmark_observations: {
+        timing: { generation_ms: { value: 2890 } },
+        unavailable_reasons: [],
+      },
+      activity_summary: {
+        model_activity: {
+          availability: 'observed',
+          records: [
+            {
+              model_role: 'lite',
+              variant_id: 'qwen25-05b',
+              usage_availability: 'reported',
+              input_tokens: { value: 116 },
+              output_tokens: { value: 4 },
+              retry_count: { value: 0 },
+              total_duration_nanos: { value: 12_000_000 },
+              generation_duration_nanos: { value: 8_000_000 },
+              finish_state: 'stop',
+              load_state: 'warm',
+            },
+            {
+              model_role: 'assistant',
+              variant_id: 'gemma22b',
+              usage_availability: 'reported',
+              input_tokens: { value: 122 },
+              output_tokens: { value: 6 },
+              retry_count: { value: 1 },
+              total_duration_nanos: { value: 18_000_000 },
+              generation_duration_nanos: { value: 14_000_000 },
+              finish_state: 'stop',
+              load_state: 'warm',
+            },
+            {
+              model_role: 'primary',
+              variant_id: 'qwen25-14b',
+              usage_availability: 'reported',
+              input_tokens: { value: 137 },
+              output_tokens: { value: 6 },
+              retry_count: { value: 1 },
+              total_duration_nanos: { value: 27_000_000 },
+              generation_duration_nanos: { value: 21_000_000 },
+              finish_state: 'stop',
+              load_state: 'warm',
+            },
+          ],
+        },
+        tool_decisions: { availability: 'not_applicable' },
+        tool_calls: { availability: 'not_applicable' },
+        policy_decisions: { availability: 'not_applicable' },
+        governed_actions: { availability: 'not_applicable' },
+      },
+    };
+    evalStore.loadFixtures([assignment], []);
+
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-lite',
+              kind: 'stage_updated',
+              assignment_id: 'assignment-formation',
+              variant_id: 'qwen25-05b',
+              role: 'lite',
+            }),
+            liveEvent({
+              event_id: 'evt-assistant',
+              kind: 'stage_updated',
+              assignment_id: 'assignment-formation',
+              variant_id: 'gemma22b',
+              role: 'assistant',
+            }),
+            liveEvent({
+              event_id: 'evt-primary',
+              kind: 'stage_updated',
+              assignment_id: 'assignment-formation',
+              variant_id: 'qwen25-14b',
+              role: 'primary',
+            }),
+            liveEvent({
+              event_id: 'evt-complete',
+              kind: 'assignment_completed',
+              assignment_id: 'assignment-formation',
+              variant_id: 'qwen25-14b',
+              role: 'primary',
+              lifecycle_status: 'completed',
+              metric_delta: {
+                pass: { value: 1 },
+                deterministic_pass_rate: { value: 1 },
+              },
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const rowByRoleAndEvent = (role: string, eventLabel: string) =>
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .find(
+          (row) =>
+            row.querySelector('.stream-role')?.textContent === role &&
+            row.querySelector('.stream-event-link')?.textContent === eventLabel,
+        );
+
+    const liteRow = rowByRoleAndEvent('Lite', 'Stage Updated');
+    const assistantRow = rowByRoleAndEvent('Assistant', 'Stage Updated');
+    const primaryRow = rowByRoleAndEvent('Primary', 'Stage Updated');
+    const completedRow = screen.getByRole('link', { name: 'Assignment Completed' }).closest('tr');
+
+    expect(liteRow).not.toBeUndefined();
+    expect(assistantRow).not.toBeUndefined();
+    expect(primaryRow).not.toBeUndefined();
+    expect(completedRow).not.toBeNull();
+
+    expect(liteRow).toHaveTextContent('116 tok');
+    expect(liteRow).toHaveTextContent('4 tok');
+    expect(liteRow).toHaveTextContent('12 ms');
+    expect(liteRow).not.toHaveTextContent('628 tok');
+
+    expect(assistantRow).toHaveTextContent('122 tok');
+    expect(assistantRow).toHaveTextContent('6 tok');
+    expect(assistantRow).toHaveTextContent('18 ms');
+
+    expect(primaryRow).toHaveTextContent('137 tok');
+    expect(primaryRow).toHaveTextContent('27 ms');
+    expect(primaryRow).not.toHaveTextContent('628 tok');
+
+    expect(completedRow).toHaveTextContent('628 tok');
+    expect(completedRow).toHaveTextContent('364 tok');
+    expect(completedRow).toHaveTextContent('3.54 s');
+    expect(completedRow).toHaveTextContent('Pass');
   });
 
   it('links active evaluation details to the live page without duplicating the event stream', () => {

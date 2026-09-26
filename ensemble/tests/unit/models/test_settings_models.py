@@ -117,6 +117,29 @@ class TestLLMSettingsResolvedLiteModel:
         assert llm.resolved_lite_model == "llama3:8b"
 
 
+class TestLLMSettingsResolvedGenerativeLiteModel:
+    def test_returns_resolved_lite_model_for_generative_providers(self):
+        llm = LLMSettings(lite_provider=LLMProvider.OLLAMA, lite_model="gemma3:1b")
+        assert llm.resolved_generative_lite_model == "gemma3:1b"
+
+    def test_uses_assistant_model_when_lite_provider_is_jev(self):
+        llm = LLMSettings(
+            lite_provider=LLMProvider.JEV,
+            lite_model="jev-latest",
+            assistant_model="gemma3:4b",
+            primary_model="gemma3:12b",
+        )
+        assert llm.resolved_generative_lite_model == "gemma3:4b"
+
+    def test_falls_back_to_primary_when_jev_lite_and_assistant_unset(self):
+        llm = LLMSettings(
+            lite_provider=LLMProvider.JEV,
+            lite_model="jev-latest",
+            primary_model="gemma3:12b",
+        )
+        assert llm.resolved_generative_lite_model == "gemma3:12b"
+
+
 class TestLLMSettingsResolveLiteFallback:
     def test_resolve_lite_falls_back_to_primary_provider(self):
         llm = LLMSettings(primary_provider=LLMProvider.FAKE, primary_model="fake")

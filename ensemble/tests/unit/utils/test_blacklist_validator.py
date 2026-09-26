@@ -17,7 +17,7 @@ import tempfile
 import pytest
 
 from app.errors import ConfigurationError
-from app.utils.blacklist_validator import (
+from app.utils.validation.blacklist_validator import (
     CommandBlacklistValidator,
 )
 

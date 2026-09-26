@@ -61,6 +61,7 @@ vi.mock('@g8ed/public/js/models/investigation-models.js', () => {
 import { notificationService } from '@g8ed/public/js/utils/notification-service.js';
 import { InvestigationFactory } from '@g8ed/public/js/models/investigation-models.js';
 import { ChatHistoryMixin } from '@g8ed/public/js/components/chat-history.js';
+import { MessageSender } from '@g8ed/public/js/constants/message-senders.js';
 
 const INVESTIGATION_ID = 'inv-test-history123';
 const EXECUTION_ID = 'cmd-test-execution123';
@@ -91,18 +92,18 @@ function createTestComponent() {
 function makeConversationMessage(overrides = {}) {
     return {
         timestamp: new Date('2026-01-15T10:30:00Z').toISOString(),
-        actor: EventType.EVENT_SOURCE_USER_CHAT,
-        event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
+        actor: MessageSender.USER_CHAT,
+        event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
         content: 'Test message',
         summary: 'Test message',
         metadata: {
-            sender: EventType.EVENT_SOURCE_USER_CHAT,
-            event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
+            sender: MessageSender.USER_CHAT,
+            event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
         },
         context: {
             investigation_id: INVESTIGATION_ID,
             case_id: 'case-test123',
-            event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
+            event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
         },
         ...overrides,
     };
@@ -111,12 +112,12 @@ function makeConversationMessage(overrides = {}) {
 function makeOperatorMessage(overrides = {}) {
     return {
         timestamp: new Date('2026-01-15T10:31:00Z').toISOString(),
-        actor: EventType.EVENT_SOURCE_USER_TERMINAL,
+        actor: MessageSender.USER_TERMINAL,
         event_type: EventType.OPERATOR_COMMAND_EXECUTION,
         content: 'ls -la',
         summary: 'Command execution',
         metadata: {
-            sender: EventType.EVENT_SOURCE_USER_TERMINAL,
+            sender: MessageSender.USER_TERMINAL,
             event_type: EventType.OPERATOR_COMMAND_EXECUTION,
             execution_id: EXECUTION_ID,
             command: 'ls -la',
@@ -135,12 +136,12 @@ function makeOperatorMessage(overrides = {}) {
 function makeApprovalRequestMessage(overrides = {}) {
     return {
         timestamp: new Date('2026-01-15T10:32:00Z').toISOString(),
-        actor: EventType.EVENT_SOURCE_USER_TERMINAL,
+        actor: MessageSender.USER_TERMINAL,
         event_type: EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
         content: 'Approval required for command',
         summary: 'Approval requested',
         metadata: {
-            sender: EventType.EVENT_SOURCE_USER_TERMINAL,
+            sender: MessageSender.USER_TERMINAL,
             event_type: EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             execution_id: EXECUTION_ID,
             approval_id: APPROVAL_ID,
@@ -158,12 +159,12 @@ function makeApprovalRequestMessage(overrides = {}) {
 function makeApprovalGrantedMessage(overrides = {}) {
     return {
         timestamp: new Date('2026-01-15T10:33:00Z').toISOString(),
-        actor: EventType.EVENT_SOURCE_USER_TERMINAL,
+        actor: MessageSender.USER_TERMINAL,
         event_type: EventType.OPERATOR_COMMAND_APPROVAL_GRANTED,
         content: 'Command approved',
         summary: 'Approval granted',
         metadata: {
-            sender: EventType.EVENT_SOURCE_USER_TERMINAL,
+            sender: MessageSender.USER_TERMINAL,
             event_type: EventType.OPERATOR_COMMAND_APPROVAL_GRANTED,
             execution_id: EXECUTION_ID,
             approval_id: APPROVAL_ID,
@@ -179,12 +180,12 @@ function makeApprovalGrantedMessage(overrides = {}) {
 function makeApprovalRejectedMessage(overrides = {}) {
     return {
         timestamp: new Date('2026-01-15T10:33:00Z').toISOString(),
-        actor: EventType.EVENT_SOURCE_USER_TERMINAL,
+        actor: MessageSender.USER_TERMINAL,
         event_type: EventType.OPERATOR_COMMAND_APPROVAL_REJECTED,
         content: 'Command rejected',
         summary: 'Approval rejected',
         metadata: {
-            sender: EventType.EVENT_SOURCE_USER_TERMINAL,
+            sender: MessageSender.USER_TERMINAL,
             event_type: EventType.OPERATOR_COMMAND_APPROVAL_REJECTED,
             execution_id: EXECUTION_ID,
             approval_id: APPROVAL_ID,
@@ -201,12 +202,12 @@ function makeApprovalRejectedMessage(overrides = {}) {
 function makeCommandResultMessage(overrides = {}) {
     return {
         timestamp: new Date('2026-01-15T10:34:00Z').toISOString(),
-        actor: EventType.EVENT_SOURCE_USER_TERMINAL,
+        actor: MessageSender.USER_TERMINAL,
         event_type: EventType.OPERATOR_COMMAND_RESULT,
         content: 'Command output',
         summary: 'Command result',
         metadata: {
-            sender: EventType.EVENT_SOURCE_USER_TERMINAL,
+            sender: MessageSender.USER_TERMINAL,
             event_type: EventType.OPERATOR_COMMAND_RESULT,
             execution_id: EXECUTION_ID,
             command: 'ls -la',
@@ -377,8 +378,8 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             const thinkingMessage = makeConversationMessage({
                 metadata: {
-                    sender: EventType.EVENT_SOURCE_USER_CHAT,
-                    event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
+                    sender: MessageSender.USER_CHAT,
+                    event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
                     is_thinking: true,
                 },
             });
@@ -394,8 +395,8 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             const thinkingMessage = makeConversationMessage({
                 metadata: {
-                    sender: EventType.EVENT_SOURCE_USER_CHAT,
-                    event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
+                    sender: MessageSender.USER_CHAT,
+                    event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
                     source: 'thinking_process',
                 },
             });
@@ -411,8 +412,8 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             const userMessage = makeConversationMessage({
                 metadata: {
-                    sender: EventType.EVENT_SOURCE_USER_CHAT,
-                    event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
+                    sender: MessageSender.USER_CHAT,
+                    event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
                 },
             });
             
@@ -428,8 +429,8 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             const aiMessage = makeConversationMessage({
                 metadata: {
-                    sender: EventType.EVENT_SOURCE_AI_PRIMARY,
-                    event_type: EventType.INVESTIGATION_CHAT_MESSAGE_AI,
+                    sender: MessageSender.AI_PRIMARY,
+                    event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI,
                 },
                 grounding_metadata: { citations: ['cite1'] },
             });
@@ -448,8 +449,8 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             const systemMessage = makeConversationMessage({
                 metadata: {
-                    sender: EventType.EVENT_SOURCE_SYSTEM,
-                    event_type: EventType.INVESTIGATION_CHAT_MESSAGE_SYSTEM,
+                    sender: MessageSender.SYSTEM,
+                    event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_SYSTEM,
                 },
             });
             
@@ -861,7 +862,7 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             component.anchoredTerminal = null;
             
-            component.addRestoredMessage('test', EventType.EVENT_SOURCE_USER_CHAT, new Date());
+            component.addRestoredMessage('test', MessageSender.USER_CHAT, new Date());
             
             expect(component.anchoredTerminal).toBeNull();
         });
@@ -870,7 +871,7 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             const timestamp = new Date('2026-01-15T10:30:45Z');
             
-            component.addRestoredMessage('test', EventType.EVENT_SOURCE_USER_CHAT, timestamp);
+            component.addRestoredMessage('test', MessageSender.USER_CHAT, timestamp);
             
             expect(component.anchoredTerminal.appendUserMessage).toHaveBeenCalledWith(
                 'test',
@@ -881,7 +882,7 @@ describe('ChatHistoryMixin', () => {
         it('passes null display time when timestamp is not provided', () => {
             const component = createTestComponent();
             
-            component.addRestoredMessage('test', EventType.EVENT_SOURCE_USER_CHAT, null);
+            component.addRestoredMessage('test', MessageSender.USER_CHAT, null);
             
             expect(component.anchoredTerminal.appendUserMessage).toHaveBeenCalledWith(
                 'test',
@@ -893,7 +894,7 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             const timestamp = new Date();
             
-            component.addRestoredMessage('test message', EventType.EVENT_SOURCE_USER_CHAT, timestamp);
+            component.addRestoredMessage('test message', MessageSender.USER_CHAT, timestamp);
             
             expect(component.anchoredTerminal.appendUserMessage).toHaveBeenCalledWith(
                 'test message',
@@ -906,7 +907,7 @@ describe('ChatHistoryMixin', () => {
             const timestamp = new Date();
             const groundingMetadata = { citations: ['cite1'] };
             
-            component.addRestoredMessage('AI response', EventType.EVENT_SOURCE_AI_PRIMARY, timestamp, null, groundingMetadata);
+            component.addRestoredMessage('AI response', MessageSender.AI_PRIMARY, timestamp, null, groundingMetadata);
             
             expect(component.messageRenderer.renderContent).toHaveBeenCalledWith('AI response');
             expect(component.anchoredTerminal.appendAIResponse).toHaveBeenCalledWith(
@@ -920,7 +921,7 @@ describe('ChatHistoryMixin', () => {
             const component = createTestComponent();
             const timestamp = new Date();
             
-            component.addRestoredMessage('System message', EventType.EVENT_SOURCE_SYSTEM, timestamp);
+            component.addRestoredMessage('System message', MessageSender.SYSTEM, timestamp);
             
             expect(component.anchoredTerminal.appendSystemMessage).toHaveBeenCalledWith('System message');
         });
@@ -930,10 +931,10 @@ describe('ChatHistoryMixin', () => {
             const contextInfo = {
                 investigation_id: INVESTIGATION_ID,
                 case_id: 'case123',
-                event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
+                event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
             };
             
-            component.addRestoredMessage('test', EventType.EVENT_SOURCE_USER_CHAT, new Date(), contextInfo);
+            component.addRestoredMessage('test', MessageSender.USER_CHAT, new Date(), contextInfo);
             
             expect(component.anchoredTerminal.appendUserMessage).toHaveBeenCalled();
         });

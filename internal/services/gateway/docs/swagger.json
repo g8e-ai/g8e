@@ -1513,6 +1513,145 @@
                 }
             }
         },
+        "/api/v1/public-feed/proofs": {
+            "post": {
+                "description": "Ingests one assignment audit export package into the gateway-owned public proof catalog (mTLS owner CLI only).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public-feed"
+                ],
+                "summary": "Publish assignment audit proof",
+                "parameters": [
+                    {
+                        "description": "Assignment audit proof package",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PublicAssignmentAuditProofPublishRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PublicAssignmentAuditProofPublishResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Public spectator unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public-feed/proofs/batch": {
+            "post": {
+                "description": "Ingests many assignment audit export packages in one request (mTLS owner CLI only).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public-feed"
+                ],
+                "summary": "Publish assignment audit proof batch",
+                "parameters": [
+                    {
+                        "description": "Assignment audit proof batch",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PublicAssignmentAuditProofBatchPublishRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PublicAssignmentAuditProofBatchPublishResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Public spectator unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public-feed/proofs/push": {
+            "post": {
+                "description": "Flushes the gateway-owned proof catalog and manifest to the public mirror (mTLS owner CLI only).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public-feed"
+                ],
+                "summary": "Push proof catalog to mirror",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PublicProofCatalogPushResponse"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Public spectator unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/public-feed/snapshot": {
             "get": {
                 "description": "Accepts campaign projection records and signs/publishes them through the gateway-owned public spectator stack (mTLS owner CLI only).\nReturns the gateway publisher high-water sequence and feed-chain hash (mTLS owner CLI only).",
@@ -2022,15 +2161,17 @@
                 "MCP_PROMPT_LIST",
                 "MCP_RESOURCE_LIST",
                 "MCP_RESOURCE_READ",
+                "MODEL_PROVENANCE_OBSERVATION",
+                "OLLAMA_MODEL_INVENTORY",
+                "OLLAMA_MODEL_RESIDENCY",
                 "PLATFORM_ENROLLMENT_CREATE",
+                "PLATFORM_ENROLLMENT_CREATE_SESSION",
                 "PLATFORM_ENROLLMENT_DECIDE",
                 "PLATFORM_ENROLLMENT_ISSUE",
                 "PLATFORM_ENROLLMENT_PERSIST_POLICY",
-                "PLATFORM_ENROLLMENT_CREATE_SESSION",
                 "PLATFORM_ENROLLMENT_REVOKE",
                 "PORT_CHECK",
                 "PROVIDER_BOUNDARY_OBSERVATION",
-                "MODEL_PROVENANCE_OBSERVATION",
                 "RESTORE_FILE",
                 "SHUTDOWN"
             ],
@@ -2056,17 +2197,716 @@
                 "ActionTypeMcpPromptList",
                 "ActionTypeMcpResourceList",
                 "ActionTypeMcpResourceRead",
+                "ActionTypeModelProvenanceObservation",
+                "ActionTypeOllamaModelInventory",
+                "ActionTypeOllamaModelResidency",
                 "ActionTypePlatformEnrollmentCreate",
+                "ActionTypePlatformEnrollmentCreateSession",
                 "ActionTypePlatformEnrollmentDecide",
                 "ActionTypePlatformEnrollmentIssue",
                 "ActionTypePlatformEnrollmentPersistPolicy",
-                "ActionTypePlatformEnrollmentCreateSession",
                 "ActionTypePlatformEnrollmentRevoke",
                 "ActionTypePortCheck",
                 "ActionTypeProviderBoundaryObservation",
-                "ActionTypeModelProvenanceObservation",
                 "ActionTypeRestoreFile",
                 "ActionTypeShutdown"
+            ]
+        },
+        "constants.EventType": {
+            "type": "string",
+            "enum": [
+                "g8e.v1.ai.agent.conflict.detected",
+                "g8e.v1.ai.agent.conflict.resolved",
+                "g8e.v1.ai.agent.continue.approval.granted",
+                "g8e.v1.ai.agent.continue.approval.rejected",
+                "g8e.v1.ai.agent.continue.approval.requested",
+                "g8e.v1.ai.consensus.session.auditor.failed",
+                "g8e.v1.ai.consensus.session.completed",
+                "g8e.v1.ai.consensus.session.disabled",
+                "g8e.v1.ai.consensus.session.generation.failed",
+                "g8e.v1.ai.consensus.session.marshal.blocked",
+                "g8e.v1.ai.consensus.session.model.not.configured",
+                "g8e.v1.ai.consensus.session.provider.unavailable",
+                "g8e.v1.ai.consensus.session.started",
+                "g8e.v1.ai.consensus.session.system.error",
+                "g8e.v1.ai.consensus.voting.audit.completed",
+                "g8e.v1.ai.consensus.voting.audit.started",
+                "g8e.v1.ai.consensus.voting.consensus.failed",
+                "g8e.v1.ai.consensus.voting.consensus.not.reached",
+                "g8e.v1.ai.consensus.voting.consensus.reached",
+                "g8e.v1.ai.consensus.voting.dissent.recorded",
+                "g8e.v1.ai.consensus.voting.pass.completed",
+                "g8e.v1.ai.consensus.voting.round.2.consensus.failed",
+                "g8e.v1.ai.consensus.voting.round.2.consensus.reached",
+                "g8e.v1.ai.consensus.voting.round.2.started",
+                "g8e.v1.ai.consensus.voting.round.completed",
+                "g8e.v1.ai.consensus.voting.round.started",
+                "g8e.v1.ai.eval.assignment.completed",
+                "g8e.v1.ai.eval.assignment.started",
+                "g8e.v1.ai.eval.cycle.completed",
+                "g8e.v1.ai.eval.cycle.started",
+                "g8e.v1.ai.eval.heartbeat",
+                "g8e.v1.ai.eval.metric.available",
+                "g8e.v1.ai.eval.metric.recorded",
+                "g8e.v1.ai.eval.model_role.invoked",
+                "g8e.v1.ai.eval.proof.available",
+                "g8e.v1.ai.eval.publication.completed",
+                "g8e.v1.ai.eval.run.completed",
+                "g8e.v1.ai.eval.stop.requested",
+                "g8e.v1.ai.eval.verifier.completed",
+                "g8e.v1.ai.llm.chat.filter.updated",
+                "g8e.v1.ai.llm.chat.iteration.citations.received",
+                "g8e.v1.ai.llm.chat.iteration.completed",
+                "g8e.v1.ai.llm.chat.iteration.failed",
+                "g8e.v1.ai.llm.chat.iteration.retry",
+                "g8e.v1.ai.llm.chat.iteration.started",
+                "g8e.v1.ai.llm.chat.iteration.stopped",
+                "g8e.v1.ai.llm.chat.iteration.stream.completed",
+                "g8e.v1.ai.llm.chat.iteration.stream.delta.received",
+                "g8e.v1.ai.llm.chat.iteration.stream.failed",
+                "g8e.v1.ai.llm.chat.iteration.stream.started",
+                "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+                "g8e.v1.ai.llm.chat.iteration.text.completed",
+                "g8e.v1.ai.llm.chat.iteration.text.received",
+                "g8e.v1.ai.llm.chat.iteration.text.truncated",
+                "g8e.v1.ai.llm.chat.iteration.thinking.end",
+                "g8e.v1.ai.llm.chat.iteration.thinking.started",
+                "g8e.v1.ai.llm.chat.iteration.thinking.update",
+                "g8e.v1.ai.llm.chat.message.dead.lettered",
+                "g8e.v1.ai.llm.chat.message.processing.failed",
+                "g8e.v1.ai.llm.chat.message.replayed",
+                "g8e.v1.ai.llm.chat.message.sent",
+                "g8e.v1.ai.llm.chat.submitted",
+                "g8e.v1.ai.llm.config.failed",
+                "g8e.v1.ai.llm.config.received",
+                "g8e.v1.ai.llm.config.requested",
+                "g8e.v1.ai.llm.lifecycle.completed",
+                "g8e.v1.ai.llm.lifecycle.error.occurred",
+                "g8e.v1.ai.llm.lifecycle.failed",
+                "g8e.v1.ai.llm.lifecycle.requested",
+                "g8e.v1.ai.llm.lifecycle.started",
+                "g8e.v1.ai.llm.lifecycle.stopped",
+                "g8e.v1.ai.llm.tool.g8e.command.constraints.completed",
+                "g8e.v1.ai.llm.tool.g8e.command.constraints.failed",
+                "g8e.v1.ai.llm.tool.g8e.command.constraints.received",
+                "g8e.v1.ai.llm.tool.g8e.command.constraints.requested",
+                "g8e.v1.ai.llm.tool.g8e.investigation.query.completed",
+                "g8e.v1.ai.llm.tool.g8e.investigation.query.failed",
+                "g8e.v1.ai.llm.tool.g8e.investigation.query.received",
+                "g8e.v1.ai.llm.tool.g8e.investigation.query.requested",
+                "g8e.v1.ai.llm.tool.g8e.web.search.completed",
+                "g8e.v1.ai.llm.tool.g8e.web.search.failed",
+                "g8e.v1.ai.llm.tool.g8e.web.search.received",
+                "g8e.v1.ai.llm.tool.g8e.web.search.requested",
+                "g8e.v1.ai.llm.chat.iteration.thinking.stopped",
+                "g8e.v1.ai.reputation.state.updated",
+                "g8e.v1.ai.triage.clarification.answered",
+                "g8e.v1.ai.triage.clarification.questions",
+                "g8e.v1.ai.triage.clarification.skipped",
+                "g8e.v1.ai.triage.clarification.timeout",
+                "g8e.v1.app.agent.activity.record.requested",
+                "g8e.v1.app.agent.activity.recorded",
+                "g8e.v1.app.agent.status.updated",
+                "g8e.v1.app.case.assigned",
+                "g8e.v1.app.case.cleared",
+                "g8e.v1.app.case.closed",
+                "g8e.v1.app.case.create.requested",
+                "g8e.v1.app.case.created",
+                "g8e.v1.app.case.delete.requested",
+                "g8e.v1.app.case.deleted",
+                "g8e.v1.app.case.escalated",
+                "g8e.v1.app.case.resolved",
+                "g8e.v1.app.case.selected",
+                "g8e.v1.app.case.switched",
+                "g8e.v1.app.case.update.requested",
+                "g8e.v1.app.case.updated",
+                "g8e.v1.app.document.delete.requested",
+                "g8e.v1.app.document.update.requested",
+                "g8e.v1.app.investigation.chat.message.ai",
+                "g8e.v1.app.investigation.chat.message.system",
+                "g8e.v1.app.investigation.chat.message.user",
+                "g8e.v1.app.investigation.closed",
+                "g8e.v1.app.investigation.create.requested",
+                "g8e.v1.app.investigation.created",
+                "g8e.v1.app.investigation.delete.requested",
+                "g8e.v1.app.investigation.deleted",
+                "g8e.v1.app.investigation.escalated",
+                "g8e.v1.app.investigation.list.completed",
+                "g8e.v1.app.investigation.list.failed",
+                "g8e.v1.app.investigation.list.received",
+                "g8e.v1.app.investigation.list.requested",
+                "g8e.v1.app.investigation.loaded",
+                "g8e.v1.app.investigation.requested",
+                "g8e.v1.app.investigation.started",
+                "g8e.v1.app.investigation.status.updated.closed",
+                "g8e.v1.app.investigation.status.updated.escalated",
+                "g8e.v1.app.investigation.status.updated.open",
+                "g8e.v1.app.investigation.status.updated.resolved",
+                "g8e.v1.app.investigation.update.requested",
+                "g8e.v1.app.investigation.updated",
+                "g8e.v1.app.memory.create.requested",
+                "g8e.v1.app.memory.created",
+                "g8e.v1.app.memory.update.requested",
+                "g8e.v1.app.memory.updated",
+                "g8e.v1.app.reputation.commitment.create.requested",
+                "g8e.v1.app.reputation.stake.resolution.create.requested",
+                "g8e.v1.app.run.status.updated",
+                "g8e.v1.app.task.assigned",
+                "g8e.v1.app.task.completed",
+                "g8e.v1.app.task.created",
+                "g8e.v1.app.task.failed",
+                "g8e.v1.app.task.started",
+                "g8e.v1.app.task.updated",
+                "g8e.v1.operator.a2a.call.requested",
+                "g8e.v1.operator.audit.ai.record.requested",
+                "g8e.v1.operator.audit.ai.recorded",
+                "g8e.v1.operator.audit.command.record.requested",
+                "g8e.v1.operator.audit.command.recorded",
+                "g8e.v1.operator.audit.direct.command.record.requested",
+                "g8e.v1.operator.audit.direct.command.recorded",
+                "g8e.v1.operator.audit.direct.command.result.record.requested",
+                "g8e.v1.operator.audit.direct.command.result.recorded",
+                "g8e.v1.operator.audit.mcp.call.record.requested",
+                "g8e.v1.operator.audit.mcp.call.recorded",
+                "g8e.v1.operator.audit.user.record.requested",
+                "g8e.v1.operator.audit.user.recorded",
+                "g8e.v1.operator.bootstrap.completed",
+                "g8e.v1.operator.bootstrap.config.received",
+                "g8e.v1.operator.bootstrap.failed",
+                "g8e.v1.operator.bootstrap.received",
+                "g8e.v1.operator.bootstrap.requested",
+                "g8e.v1.operator.bound",
+                "g8e.v1.operator.command.approval.granted",
+                "g8e.v1.operator.command.approval.preparing",
+                "g8e.v1.operator.command.approval.rejected",
+                "g8e.v1.operator.command.approval.requested",
+                "g8e.v1.operator.command.cancel.acknowledged",
+                "g8e.v1.operator.command.cancel.failed",
+                "g8e.v1.operator.command.cancel.requested",
+                "g8e.v1.operator.command.cancelled",
+                "g8e.v1.operator.command.completed",
+                "g8e.v1.operator.command.execution.started",
+                "g8e.v1.operator.command.failed",
+                "g8e.v1.operator.command.output.received",
+                "g8e.v1.operator.command.requested",
+                "g8e.v1.operator.command.result.completed",
+                "g8e.v1.operator.command.started",
+                "g8e.v1.operator.command.status.updated.cancelled",
+                "g8e.v1.operator.command.status.updated.completed",
+                "g8e.v1.operator.command.status.updated.failed",
+                "g8e.v1.operator.command.status.updated.queued",
+                "g8e.v1.operator.command.status.updated.running",
+                "g8e.v1.operator.context.changed",
+                "g8e.v1.operator.device.registered",
+                "g8e.v1.operator.eval.answer.requested",
+                "g8e.v1.operator.field.read.access.denied",
+                "g8e.v1.operator.field.read.access.granted",
+                "g8e.v1.operator.field.read.requested",
+                "g8e.v1.operator.file.diff.fetch.completed",
+                "g8e.v1.operator.file.diff.fetch.failed",
+                "g8e.v1.operator.file.diff.fetch.received",
+                "g8e.v1.operator.file.diff.fetch.requested",
+                "g8e.v1.operator.file.diff.fetch.started",
+                "g8e.v1.operator.file.edit.approval.feedback",
+                "g8e.v1.operator.file.edit.approval.granted",
+                "g8e.v1.operator.file.edit.approval.rejected",
+                "g8e.v1.operator.file.edit.approval.requested",
+                "g8e.v1.operator.file.edit.completed",
+                "g8e.v1.operator.file.edit.failed",
+                "g8e.v1.operator.file.edit.requested",
+                "g8e.v1.operator.file.edit.started",
+                "g8e.v1.operator.file.edit.timeout",
+                "g8e.v1.operator.file.history.fetch.completed",
+                "g8e.v1.operator.file.history.fetch.failed",
+                "g8e.v1.operator.file.history.fetch.received",
+                "g8e.v1.operator.file.history.fetch.requested",
+                "g8e.v1.operator.file.history.fetch.started",
+                "g8e.v1.operator.file.restore.completed",
+                "g8e.v1.operator.file.restore.failed",
+                "g8e.v1.operator.file.restore.received",
+                "g8e.v1.operator.file.restore.requested",
+                "g8e.v1.operator.filesystem.grep.completed",
+                "g8e.v1.operator.filesystem.grep.failed",
+                "g8e.v1.operator.filesystem.grep.received",
+                "g8e.v1.operator.filesystem.grep.requested",
+                "g8e.v1.operator.filesystem.grep.started",
+                "g8e.v1.operator.filesystem.list.completed",
+                "g8e.v1.operator.filesystem.list.failed",
+                "g8e.v1.operator.filesystem.list.received",
+                "g8e.v1.operator.filesystem.list.requested",
+                "g8e.v1.operator.filesystem.list.started",
+                "g8e.v1.operator.filesystem.read.completed",
+                "g8e.v1.operator.filesystem.read.failed",
+                "g8e.v1.operator.filesystem.read.received",
+                "g8e.v1.operator.filesystem.read.requested",
+                "g8e.v1.operator.filesystem.read.started",
+                "g8e.v1.operator.heartbeat.missed",
+                "g8e.v1.operator.heartbeat.received",
+                "g8e.v1.operator.heartbeat.requested",
+                "g8e.v1.operator.heartbeat.sent",
+                "g8e.v1.operator.history.fetch.completed",
+                "g8e.v1.operator.history.fetch.failed",
+                "g8e.v1.operator.history.fetch.received",
+                "g8e.v1.operator.history.fetch.requested",
+                "g8e.v1.operator.inference.completed",
+                "g8e.v1.operator.inference.failed",
+                "g8e.v1.operator.inference.progress.updated",
+                "g8e.v1.operator.inference.requested",
+                "g8e.v1.operator.intent.approval.granted",
+                "g8e.v1.operator.intent.approval.rejected",
+                "g8e.v1.operator.intent.approval.requested",
+                "g8e.v1.operator.intent.denied",
+                "g8e.v1.operator.intent.granted",
+                "g8e.v1.operator.intent.requested",
+                "g8e.v1.operator.intent.revoke.requested",
+                "g8e.v1.operator.intent.revoked",
+                "g8e.v1.operator.logs.fetch.completed",
+                "g8e.v1.operator.logs.fetch.failed",
+                "g8e.v1.operator.logs.fetch.received",
+                "g8e.v1.operator.logs.fetch.requested",
+                "g8e.v1.operator.mcp.call.requested",
+                "g8e.v1.operator.mcp.prompt.get.requested",
+                "g8e.v1.operator.mcp.prompt.list.requested",
+                "g8e.v1.operator.mcp.resource.list.requested",
+                "g8e.v1.operator.mcp.resource.read.requested",
+                "g8e.v1.operator.model.provenance.observation.completed",
+                "g8e.v1.operator.model.provenance.observation.requested",
+                "g8e.v1.operator.network.ping.completed",
+                "g8e.v1.operator.network.ping.failed",
+                "g8e.v1.operator.network.ping.received",
+                "g8e.v1.operator.network.ping.requested",
+                "g8e.v1.operator.network.port.check.completed",
+                "g8e.v1.operator.network.port.check.failed",
+                "g8e.v1.operator.network.port.check.received",
+                "g8e.v1.operator.network.port.check.requested",
+                "g8e.v1.operator.network.port.check.started",
+                "g8e.v1.operator.notary.approval.requested",
+                "g8e.v1.operator.notary.transaction.expired",
+                "g8e.v1.operator.ollama.model.inventory.completed",
+                "g8e.v1.operator.ollama.model.inventory.failed",
+                "g8e.v1.operator.ollama.model.inventory.requested",
+                "g8e.v1.operator.ollama.model.residency.completed",
+                "g8e.v1.operator.ollama.model.residency.failed",
+                "g8e.v1.operator.ollama.model.residency.requested",
+                "g8e.v1.operator.panel.list.updated",
+                "g8e.v1.operator.provider.boundary.observation.completed",
+                "g8e.v1.operator.provider.boundary.observation.requested",
+                "g8e.v1.operator.receipt.recorded",
+                "g8e.v1.operator.reputation.commitment.created",
+                "g8e.v1.operator.reputation.commitment.failed",
+                "g8e.v1.operator.reputation.commitment.verified",
+                "g8e.v1.operator.reputation.slash.tier1",
+                "g8e.v1.operator.reputation.slash.tier2",
+                "g8e.v1.operator.reputation.slash.tier3",
+                "g8e.v1.operator.reputation.stake.resolution.created",
+                "g8e.v1.operator.reputation.state.update.requested",
+                "g8e.v1.operator.reputation.state.updated",
+                "g8e.v1.operator.shutdown.acknowledged",
+                "g8e.v1.operator.shutdown.requested",
+                "g8e.v1.operator.slot.initialization.failed",
+                "g8e.v1.operator.status.updated.active",
+                "g8e.v1.operator.status.updated.available",
+                "g8e.v1.operator.status.updated.bound",
+                "g8e.v1.operator.status.updated.offline",
+                "g8e.v1.operator.status.updated.stale",
+                "g8e.v1.operator.status.updated.stopped",
+                "g8e.v1.operator.status.updated.terminated",
+                "g8e.v1.operator.status.updated.unavailable",
+                "g8e.v1.operator.stream.approval.granted",
+                "g8e.v1.operator.stream.approval.rejected",
+                "g8e.v1.operator.stream.approval.requested",
+                "g8e.v1.operator.terminal.approval.denied",
+                "g8e.v1.operator.terminal.auth.state.changed",
+                "g8e.v1.operator.terminal.thinking.append",
+                "g8e.v1.operator.terminal.thinking.complete",
+                "g8e.v1.operator.unbound",
+                "g8e.v1.platform.audit.chain.checkpointed",
+                "g8e.v1.platform.auth.info.updated",
+                "g8e.v1.platform.auth.login.failed",
+                "g8e.v1.platform.auth.login.requested",
+                "g8e.v1.platform.auth.login.succeeded",
+                "g8e.v1.platform.auth.logout.failed",
+                "g8e.v1.platform.auth.logout.requested",
+                "g8e.v1.platform.auth.logout.succeeded",
+                "g8e.v1.platform.auth.session.expired",
+                "g8e.v1.platform.auth.session.validation.failed",
+                "g8e.v1.platform.auth.session.validation.requested",
+                "g8e.v1.platform.auth.session.validation.succeeded",
+                "g8e.v1.platform.auth.user.authenticated",
+                "g8e.v1.platform.auth.user.unauthenticated",
+                "g8e.v1.platform.console.log.connected.confirmed",
+                "g8e.v1.platform.console.log.entry.received",
+                "g8e.v1.platform.enrollment.create.requested",
+                "g8e.v1.platform.enrollment.create_session.requested",
+                "g8e.v1.platform.enrollment.decide.requested",
+                "g8e.v1.platform.enrollment.issue.requested",
+                "g8e.v1.platform.enrollment.persist_policy.requested",
+                "g8e.v1.platform.enrollment.revoke.requested",
+                "g8e.v1.platform.external.service.configured",
+                "g8e.v1.platform.notification.sent",
+                "g8e.v1.platform.sse.connection.closed",
+                "g8e.v1.platform.sse.connection.error",
+                "g8e.v1.platform.sse.connection.established",
+                "g8e.v1.platform.sse.connection.failed",
+                "g8e.v1.platform.sse.connection.opened",
+                "g8e.v1.platform.sse.keepalive.sent",
+                "g8e.v1.platform.telemetry.audit.logged",
+                "g8e.v1.platform.telemetry.error.logged",
+                "g8e.v1.platform.telemetry.health.reported",
+                "g8e.v1.platform.telemetry.performance.recorded",
+                "g8e.v1.platform.usage.updated",
+                "g8e.v1.platform.sentinel.mode.changed",
+                "g8e.v1.public.feed.batch.acknowledged",
+                "g8e.v1.public.feed.batch.exported",
+                "g8e.v1.public.feed.key.rotated",
+                "g8e.v1.public.feed.proof.published"
+            ],
+            "x-enum-varnames": [
+                "EventAiAgentConflictDetected",
+                "EventAiAgentConflictResolved",
+                "EventAiAgentContinueApprovalGranted",
+                "EventAiAgentContinueApprovalRejected",
+                "EventAiAgentContinueApprovalRequested",
+                "EventAiConsensusSessionAuditorFailed",
+                "EventAiConsensusSessionCompleted",
+                "EventAiConsensusSessionDisabled",
+                "EventAiConsensusSessionGenerationFailed",
+                "EventAiConsensusSessionMarshalBlocked",
+                "EventAiConsensusSessionModelNotConfigured",
+                "EventAiConsensusSessionProviderUnavailable",
+                "EventAiConsensusSessionStarted",
+                "EventAiConsensusSessionSystemError",
+                "EventAiConsensusVotingAuditCompleted",
+                "EventAiConsensusVotingAuditStarted",
+                "EventAiConsensusVotingConsensusFailed",
+                "EventAiConsensusVotingConsensusNotReached",
+                "EventAiConsensusVotingConsensusReached",
+                "EventAiConsensusVotingDissentRecorded",
+                "EventAiConsensusVotingPassCompleted",
+                "EventAiConsensusVotingRound2ConsensusFailed",
+                "EventAiConsensusVotingRound2ConsensusReached",
+                "EventAiConsensusVotingRound2Started",
+                "EventAiConsensusVotingRoundCompleted",
+                "EventAiConsensusVotingRoundStarted",
+                "EventAiEvalAssignmentCompleted",
+                "EventAiEvalAssignmentStarted",
+                "EventAiEvalCycleCompleted",
+                "EventAiEvalCycleStarted",
+                "EventAiEvalHeartbeat",
+                "EventAiEvalMetricAvailable",
+                "EventAiEvalMetricRecorded",
+                "EventAiEvalModelRoleInvoked",
+                "EventAiEvalProofAvailable",
+                "EventAiEvalPublicationCompleted",
+                "EventAiEvalRunCompleted",
+                "EventAiEvalStopRequested",
+                "EventAiEvalVerifierCompleted",
+                "EventAiLLMChatFilterEvent",
+                "EventAiLLMChatIterationCitationsReceived",
+                "EventAiLLMChatIterationCompleted",
+                "EventAiLLMChatIterationFailed",
+                "EventAiLLMChatIterationRetry",
+                "EventAiLLMChatIterationStarted",
+                "EventAiLLMChatIterationStopped",
+                "EventAiLLMChatIterationStreamCompleted",
+                "EventAiLLMChatIterationStreamDeltaReceived",
+                "EventAiLLMChatIterationStreamFailed",
+                "EventAiLLMChatIterationStreamStarted",
+                "EventAiLLMChatIterationTextChunkReceived",
+                "EventAiLLMChatIterationTextCompleted",
+                "EventAiLLMChatIterationTextReceived",
+                "EventAiLLMChatIterationTextTruncated",
+                "EventAiLLMChatIterationThinkingEnd",
+                "EventAiLLMChatIterationThinkingStarted",
+                "EventAiLLMChatIterationThinkingUpdate",
+                "EventAiLLMChatMessageDeadLettered",
+                "EventAiLLMChatMessageProcessingFailed",
+                "EventAiLLMChatMessageReplayed",
+                "EventAiLLMChatMessageSent",
+                "EventAiLLMChatSubmitted",
+                "EventAiLLMConfigFailed",
+                "EventAiLLMConfigReceived",
+                "EventAiLLMConfigRequested",
+                "EventAiLLMLifecycleCompleted",
+                "EventAiLLMLifecycleErrorOccurred",
+                "EventAiLLMLifecycleFailed",
+                "EventAiLLMLifecycleRequested",
+                "EventAiLLMLifecycleStarted",
+                "EventAiLLMLifecycleStopped",
+                "EventAiLLMToolG8eCommandConstraintsCompleted",
+                "EventAiLLMToolG8eCommandConstraintsFailed",
+                "EventAiLLMToolG8eCommandConstraintsReceived",
+                "EventAiLLMToolG8eCommandConstraintsRequested",
+                "EventAiLLMToolG8eInvestigationQueryCompleted",
+                "EventAiLLMToolG8eInvestigationQueryFailed",
+                "EventAiLLMToolG8eInvestigationQueryReceived",
+                "EventAiLLMToolG8eInvestigationQueryRequested",
+                "EventAiLLMToolG8eWebSearchCompleted",
+                "EventAiLLMToolG8eWebSearchFailed",
+                "EventAiLLMToolG8eWebSearchReceived",
+                "EventAiLLMToolG8eWebSearchRequested",
+                "EventAiLLMChatIterationThinkingStopped",
+                "EventAiReputationStateUpdated",
+                "EventAiTriageClarificationAnswered",
+                "EventAiTriageClarificationQuestions",
+                "EventAiTriageClarificationSkipped",
+                "EventAiTriageClarificationTimeout",
+                "EventAppAgentActivityRecordRequested",
+                "EventAppAgentActivityRecorded",
+                "EventAppAgentStatusUpdated",
+                "EventAppCaseAssigned",
+                "EventAppCaseCleared",
+                "EventAppCaseClosed",
+                "EventAppCaseCreateRequested",
+                "EventAppCaseCreated",
+                "EventAppCaseDeleteRequested",
+                "EventAppCaseDeleted",
+                "EventAppCaseEscalated",
+                "EventAppCaseResolved",
+                "EventAppCaseSelected",
+                "EventAppCaseSwitched",
+                "EventAppCaseUpdateRequested",
+                "EventAppCaseUpdated",
+                "EventAppDocumentDeleteRequested",
+                "EventAppDocumentUpdateRequested",
+                "EventAppInvestigationChatMessageAi",
+                "EventAppInvestigationChatMessageSystem",
+                "EventAppInvestigationChatMessageUser",
+                "EventAppInvestigationClosed",
+                "EventAppInvestigationCreateRequested",
+                "EventAppInvestigationCreated",
+                "EventAppInvestigationDeleteRequested",
+                "EventAppInvestigationDeleted",
+                "EventAppInvestigationEscalated",
+                "EventAppInvestigationListCompleted",
+                "EventAppInvestigationListFailed",
+                "EventAppInvestigationListReceived",
+                "EventAppInvestigationListRequested",
+                "EventAppInvestigationLoaded",
+                "EventAppInvestigationRequested",
+                "EventAppInvestigationStarted",
+                "EventAppInvestigationStatusUpdatedClosed",
+                "EventAppInvestigationStatusUpdatedEscalated",
+                "EventAppInvestigationStatusUpdatedOpen",
+                "EventAppInvestigationStatusUpdatedResolved",
+                "EventAppInvestigationUpdateRequested",
+                "EventAppInvestigationUpdated",
+                "EventAppMemoryCreateRequested",
+                "EventAppMemoryCreated",
+                "EventAppMemoryUpdateRequested",
+                "EventAppMemoryUpdated",
+                "EventAppReputationCommitmentCreateRequested",
+                "EventAppReputationStakeResolutionCreateRequested",
+                "EventAppRunStatusUpdated",
+                "EventAppTaskAssigned",
+                "EventAppTaskCompleted",
+                "EventAppTaskCreated",
+                "EventAppTaskFailed",
+                "EventAppTaskStarted",
+                "EventAppTaskUpdated",
+                "EventOperatorA2aCallRequested",
+                "EventOperatorAuditAiRecordRequested",
+                "EventOperatorAuditAiRecorded",
+                "EventOperatorAuditCommandRecordRequested",
+                "EventOperatorAuditCommandRecorded",
+                "EventOperatorAuditDirectCommandRecordRequested",
+                "EventOperatorAuditDirectCommandRecorded",
+                "EventOperatorAuditDirectCommandResultRecordRequested",
+                "EventOperatorAuditDirectCommandResultRecorded",
+                "EventOperatorAuditMcpCallRecordRequested",
+                "EventOperatorAuditMcpCallRecorded",
+                "EventOperatorAuditUserRecordRequested",
+                "EventOperatorAuditUserRecorded",
+                "EventOperatorBootstrapCompleted",
+                "EventOperatorBootstrapConfigReceived",
+                "EventOperatorBootstrapFailed",
+                "EventOperatorBootstrapReceived",
+                "EventOperatorBootstrapRequested",
+                "EventOperatorBound",
+                "EventOperatorCommandApprovalGranted",
+                "EventOperatorCommandApprovalPreparing",
+                "EventOperatorCommandApprovalRejected",
+                "EventOperatorCommandApprovalRequested",
+                "EventOperatorCommandCancelAcknowledged",
+                "EventOperatorCommandCancelFailed",
+                "EventOperatorCommandCancelRequested",
+                "EventOperatorCommandCancelled",
+                "EventOperatorCommandCompleted",
+                "EventOperatorCommandExecution",
+                "EventOperatorCommandFailed",
+                "EventOperatorCommandOutputReceived",
+                "EventOperatorCommandRequested",
+                "EventOperatorCommandResult",
+                "EventOperatorCommandStarted",
+                "EventOperatorCommandStatusUpdatedCancelled",
+                "EventOperatorCommandStatusUpdatedCompleted",
+                "EventOperatorCommandStatusUpdatedFailed",
+                "EventOperatorCommandStatusUpdatedQueued",
+                "EventOperatorCommandStatusUpdatedRunning",
+                "EventOperatorContextChanged",
+                "EventOperatorDeviceRegistered",
+                "EventOperatorEvalAnswerRequested",
+                "EventOperatorFieldReadAccessDenied",
+                "EventOperatorFieldReadAccessGranted",
+                "EventOperatorFieldReadRequested",
+                "EventOperatorFileDiffFetchCompleted",
+                "EventOperatorFileDiffFetchFailed",
+                "EventOperatorFileDiffFetchReceived",
+                "EventOperatorFileDiffFetchRequested",
+                "EventOperatorFileDiffFetchStarted",
+                "EventOperatorFileEditApprovalFeedback",
+                "EventOperatorFileEditApprovalGranted",
+                "EventOperatorFileEditApprovalRejected",
+                "EventOperatorFileEditApprovalRequested",
+                "EventOperatorFileEditCompleted",
+                "EventOperatorFileEditFailed",
+                "EventOperatorFileEditRequested",
+                "EventOperatorFileEditStarted",
+                "EventOperatorFileEditTimeout",
+                "EventOperatorFileHistoryFetchCompleted",
+                "EventOperatorFileHistoryFetchFailed",
+                "EventOperatorFileHistoryFetchReceived",
+                "EventOperatorFileHistoryFetchRequested",
+                "EventOperatorFileHistoryFetchStarted",
+                "EventOperatorFileRestoreCompleted",
+                "EventOperatorFileRestoreFailed",
+                "EventOperatorFileRestoreReceived",
+                "EventOperatorFileRestoreRequested",
+                "EventOperatorFilesystemGrepCompleted",
+                "EventOperatorFilesystemGrepFailed",
+                "EventOperatorFilesystemGrepReceived",
+                "EventOperatorFilesystemGrepRequested",
+                "EventOperatorFilesystemGrepStarted",
+                "EventOperatorFilesystemListCompleted",
+                "EventOperatorFilesystemListFailed",
+                "EventOperatorFilesystemListReceived",
+                "EventOperatorFilesystemListRequested",
+                "EventOperatorFilesystemListStarted",
+                "EventOperatorFilesystemReadCompleted",
+                "EventOperatorFilesystemReadFailed",
+                "EventOperatorFilesystemReadReceived",
+                "EventOperatorFilesystemReadRequested",
+                "EventOperatorFilesystemReadStarted",
+                "EventOperatorHeartbeatMissed",
+                "EventOperatorHeartbeatReceived",
+                "EventOperatorHeartbeatRequested",
+                "EventOperatorHeartbeatSent",
+                "EventOperatorHistoryFetchCompleted",
+                "EventOperatorHistoryFetchFailed",
+                "EventOperatorHistoryFetchReceived",
+                "EventOperatorHistoryFetchRequested",
+                "EventOperatorInferenceCompleted",
+                "EventOperatorInferenceFailed",
+                "EventOperatorInferenceProgressUpdated",
+                "EventOperatorInferenceRequested",
+                "EventOperatorIntentApprovalGranted",
+                "EventOperatorIntentApprovalRejected",
+                "EventOperatorIntentApprovalRequested",
+                "EventOperatorIntentDenied",
+                "EventOperatorIntentGranted",
+                "EventOperatorIntentRequested",
+                "EventOperatorIntentRevokeRequested",
+                "EventOperatorIntentRevoked",
+                "EventOperatorLogsFetchCompleted",
+                "EventOperatorLogsFetchFailed",
+                "EventOperatorLogsFetchReceived",
+                "EventOperatorLogsFetchRequested",
+                "EventOperatorMcpCallRequested",
+                "EventOperatorMcpPromptGetRequested",
+                "EventOperatorMcpPromptListRequested",
+                "EventOperatorMcpResourceListRequested",
+                "EventOperatorMcpResourceReadRequested",
+                "EventOperatorModelProvenanceObservationCompleted",
+                "EventOperatorModelProvenanceObservationRequested",
+                "EventOperatorNetworkPingCompleted",
+                "EventOperatorNetworkPingFailed",
+                "EventOperatorNetworkPingReceived",
+                "EventOperatorNetworkPingRequested",
+                "EventOperatorNetworkPortCheckCompleted",
+                "EventOperatorNetworkPortCheckFailed",
+                "EventOperatorNetworkPortCheckReceived",
+                "EventOperatorNetworkPortCheckRequested",
+                "EventOperatorNetworkPortCheckStarted",
+                "EventOperatorNotaryApprovalRequested",
+                "EventOperatorNotaryTransactionExpired",
+                "EventOperatorOllamaModelInventoryCompleted",
+                "EventOperatorOllamaModelInventoryFailed",
+                "EventOperatorOllamaModelInventoryRequested",
+                "EventOperatorOllamaModelResidencyCompleted",
+                "EventOperatorOllamaModelResidencyFailed",
+                "EventOperatorOllamaModelResidencyRequested",
+                "EventOperatorPanelListUpdated",
+                "EventOperatorProviderBoundaryObservationCompleted",
+                "EventOperatorProviderBoundaryObservationRequested",
+                "EventOperatorReceiptRecorded",
+                "EventOperatorReputationCommitmentCreated",
+                "EventOperatorReputationCommitmentFailed",
+                "EventOperatorReputationCommitmentVerified",
+                "EventOperatorReputationSlashTier1",
+                "EventOperatorReputationSlashTier2",
+                "EventOperatorReputationSlashTier3",
+                "EventOperatorReputationStakeResolutionCreated",
+                "EventOperatorReputationStateUpdateRequested",
+                "EventOperatorReputationStateUpdated",
+                "EventOperatorShutdownAcknowledged",
+                "EventOperatorShutdownRequested",
+                "EventOperatorSlotInitializationFailed",
+                "EventOperatorStatusUpdatedActive",
+                "EventOperatorStatusUpdatedAvailable",
+                "EventOperatorStatusUpdatedBound",
+                "EventOperatorStatusUpdatedOffline",
+                "EventOperatorStatusUpdatedStale",
+                "EventOperatorStatusUpdatedStopped",
+                "EventOperatorStatusUpdatedTerminated",
+                "EventOperatorStatusUpdatedUnavailable",
+                "EventOperatorStreamApprovalGranted",
+                "EventOperatorStreamApprovalRejected",
+                "EventOperatorStreamApprovalRequested",
+                "EventOperatorTerminalApprovalDenied",
+                "EventOperatorTerminalAuthStateChanged",
+                "EventOperatorTerminalThinkingAppend",
+                "EventOperatorTerminalThinkingComplete",
+                "EventOperatorUnbound",
+                "EventPlatformAuditChainCheckpointed",
+                "EventPlatformAuthInfo",
+                "EventPlatformAuthLoginFailed",
+                "EventPlatformAuthLoginRequested",
+                "EventPlatformAuthLoginSucceeded",
+                "EventPlatformAuthLogoutFailed",
+                "EventPlatformAuthLogoutRequested",
+                "EventPlatformAuthLogoutSucceeded",
+                "EventPlatformAuthSessionExpired",
+                "EventPlatformAuthSessionValidationFailed",
+                "EventPlatformAuthSessionValidationRequested",
+                "EventPlatformAuthSessionValidationSucceeded",
+                "EventPlatformAuthUserAuthenticated",
+                "EventPlatformAuthUserUnauthenticated",
+                "EventPlatformConsoleLogConnectedConfirmed",
+                "EventPlatformConsoleLogEntryReceived",
+                "EventPlatformEnrollmentCreateRequested",
+                "EventPlatformEnrollmentCreateSessionRequested",
+                "EventPlatformEnrollmentDecideRequested",
+                "EventPlatformEnrollmentIssueRequested",
+                "EventPlatformEnrollmentPersistPolicyRequested",
+                "EventPlatformEnrollmentRevokeRequested",
+                "EventPlatformExternalServiceConfigured",
+                "EventPlatformNotification",
+                "EventPlatformSseConnectionClosed",
+                "EventPlatformSseConnectionError",
+                "EventPlatformSseConnectionEstablished",
+                "EventPlatformSseConnectionFailed",
+                "EventPlatformSseConnectionOpened",
+                "EventPlatformSseKeepaliveSent",
+                "EventPlatformTelemetryAuditLogged",
+                "EventPlatformTelemetryErrorLogged",
+                "EventPlatformTelemetryHealthReported",
+                "EventPlatformTelemetryPerformanceRecorded",
+                "EventPlatformUsageUpdated",
+                "EventPlatformVaultModeChanged",
+                "EventPublicFeedBatchAcknowledged",
+                "EventPublicFeedBatchExported",
+                "EventPublicFeedKeyRotated",
+                "EventPublicFeedProofPublished"
             ]
         },
         "constants.GatewayMode": {
@@ -2128,6 +2968,9 @@
                 },
                 "action_type": {
                     "$ref": "#/definitions/constants.ActionType"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/constants.EventType"
                 },
                 "executed_at": {
                     "type": "string"
@@ -3076,6 +3919,86 @@
                 }
             }
         },
+        "models.PublicAssignmentAuditProofBatchPublishRequest": {
+            "type": "object",
+            "properties": {
+                "defer_mirror_push": {
+                    "type": "boolean"
+                },
+                "proofs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.PublicAssignmentAuditProofPublishRequest"
+                    }
+                }
+            }
+        },
+        "models.PublicAssignmentAuditProofBatchPublishResponse": {
+            "type": "object",
+            "properties": {
+                "accepted": {
+                    "type": "boolean"
+                },
+                "ingested_proofs": {
+                    "type": "integer"
+                },
+                "proof_root_sha256": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PublicAssignmentAuditProofPublishRequest": {
+            "type": "object",
+            "properties": {
+                "assignment_id": {
+                    "type": "string"
+                },
+                "campaign_id": {
+                    "type": "string"
+                },
+                "campaign_revision": {
+                    "type": "string"
+                },
+                "database": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "defer_mirror_push": {
+                    "type": "boolean"
+                },
+                "index_digest": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "vault_key": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "models.PublicAssignmentAuditProofPublishResponse": {
+            "type": "object",
+            "properties": {
+                "accepted": {
+                    "type": "boolean"
+                },
+                "database_sha256": {
+                    "type": "string"
+                },
+                "proof_root_sha256": {
+                    "type": "string"
+                },
+                "vault_key_sha256": {
+                    "type": "string"
+                }
+            }
+        },
         "models.PublicFeedExportBatchResponse": {
             "type": "object",
             "properties": {
@@ -3141,6 +4064,20 @@
                     "type": "string"
                 },
                 "source_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PublicProofCatalogPushResponse": {
+            "type": "object",
+            "properties": {
+                "accepted": {
+                    "type": "boolean"
+                },
+                "artifact_count": {
+                    "type": "integer"
+                },
+                "proof_root_sha256": {
                     "type": "string"
                 }
             }
@@ -3568,11 +4505,19 @@
         "operatorv1.ActionReceipt": {
             "type": "object",
             "properties": {
+                "action_type": {
+                    "description": "The registry-derived governance class for the request event.",
+                    "type": "string"
+                },
                 "deterministic_stage_evidence": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/operatorv1.DeterministicStageEvidence"
                     }
+                },
+                "event_type": {
+                    "description": "The semantic request event that produced this receipt.",
+                    "type": "string"
                 },
                 "executed_at_unix_ms": {
                     "description": "Timestamp when execution finished",

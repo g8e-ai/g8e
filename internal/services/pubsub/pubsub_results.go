@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -124,9 +125,15 @@ func (rr *PubSubResultsService) PublishInferenceProgress(ctx context.Context, or
 		return fmt.Errorf("pubsub: publish inference progress: %w", constants.ErrMissingRequiredField)
 	}
 
+	originatingAction, err := constants.Registry.ActionFor(originalMsg.EventType)
+	if err != nil {
+		return fmt.Errorf("pubsub: publish inference progress: %w", err)
+	}
 	resultEnv, err := BuildUniversalResultEnvelope(
 		rr.config,
+		originalMsg.EventType,
 		constants.Event.Operator.Inference.ProgressUpdated,
+		originatingAction,
 		progress,
 		originalMsg.ID,
 		rr.config.OperatorID,
@@ -169,7 +176,7 @@ func (rr *PubSubResultsService) PublishInferenceCompletion(ctx context.Context, 
 		eventType = constants.Event.Operator.Inference.Failed
 	}
 
-	resultEnv, err := BuildUniversalResultEnvelope(rr.config, eventType, completion, env.Id, env.OperatorId, env.CaseId, env.InvestigationId, &env.TaskId, env.WebSessionId, env.CliSessionId)
+	resultEnv, err := BuildUniversalResultEnvelope(rr.config, constants.EventType(env.EventType), eventType, constants.ActionType(env.ActionType), completion, env.Id, env.OperatorId, env.CaseId, env.InvestigationId, &env.TaskId, env.WebSessionId, env.CliSessionId)
 	if err != nil {
 		return fmt.Errorf("pubsub: build inference completion envelope: %w", err)
 	}
@@ -198,9 +205,15 @@ func (rr *PubSubResultsService) PublishProviderBoundaryObservationCompleted(ctx 
 		return fmt.Errorf("pubsub: publish provider boundary observation completion: %w", constants.ErrMissingRequiredField)
 	}
 
+	originatingAction, err := constants.Registry.ActionFor(constants.Event.Operator.ProviderBoundaryObservation.Requested)
+	if err != nil {
+		return fmt.Errorf("pubsub: publish provider boundary observation completion: %w", err)
+	}
 	resultEnv, err := BuildUniversalResultEnvelope(
 		rr.config,
+		constants.Event.Operator.ProviderBoundaryObservation.Requested,
 		constants.Event.Operator.ProviderBoundaryObservation.Completed,
+		originatingAction,
 		completion,
 		originalMsgID,
 		rr.config.OperatorID,
@@ -232,9 +245,15 @@ func (rr *PubSubResultsService) PublishModelProvenanceObservationCompleted(ctx c
 		return fmt.Errorf("pubsub: publish model provenance observation completion: %w", constants.ErrMissingRequiredField)
 	}
 
+	originatingAction, err := constants.Registry.ActionFor(constants.Event.Operator.ModelProvenanceObservation.Requested)
+	if err != nil {
+		return fmt.Errorf("pubsub: publish model provenance observation completion: %w", err)
+	}
 	resultEnv, err := BuildUniversalResultEnvelope(
 		rr.config,
+		constants.Event.Operator.ModelProvenanceObservation.Requested,
 		constants.Event.Operator.ModelProvenanceObservation.Completed,
+		originatingAction,
 		completion,
 		originalMsgID,
 		rr.config.OperatorID,
@@ -291,7 +310,11 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	if originalMsg.OperatorID != nil && *originalMsg.OperatorID != "" {
 		operatorID = *originalMsg.OperatorID
 	}
-	env, err := BuildUniversalResultEnvelope(rr.config, eventType, status, originalMsg.ID, operatorID, originalMsg.CaseID, originalMsg.InvestigationID, originalMsg.TaskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
+	originatingAction, err := constants.Registry.ActionFor(originalMsg.EventType)
+	if err != nil {
+		return fmt.Errorf("pubsub: publish status update: %w", err)
+	}
+	env, err := BuildUniversalResultEnvelope(rr.config, originalMsg.EventType, eventType, originatingAction, status, originalMsg.ID, operatorID, originalMsg.CaseID, originalMsg.InvestigationID, originalMsg.TaskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("pubsub: build status envelope: %w", err)
 	}
@@ -312,7 +335,7 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	// Build the GovernanceEnvelope
 	operatorSessionID := rr.config.OperatorSessionId
 
-	env, err := BuildUniversalResultEnvelope(rr.config, constants.Event.Operator.Heartbeat, heartbeat, "", rr.config.OperatorID, "", "", nil, "", "")
+	env, err := BuildUniversalResultEnvelope(rr.config, "", constants.Event.Operator.Heartbeat, constants.ActionTypeHeartbeat, heartbeat, "", rr.config.OperatorID, "", "", nil, "", "")
 	if err != nil {
 		return fmt.Errorf("pubsub: build heartbeat envelope: %w", err)
 	}
@@ -350,7 +373,7 @@ func (rr *PubSubResultsService) PublishActionReceipt(ctx context.Context, env *c
 	}
 
 	receiptEnv := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         env.Timestamp,
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        env.OperatorId,
@@ -434,7 +457,11 @@ func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 		senderID = *originalMsg.OperatorID
 	}
 
-	env, err := BuildUniversalResultEnvelope(rr.config, eventType, payload, originalMessageID, senderID, caseID, investigationID, taskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
+	originatingAction, err := constants.Registry.ActionFor(originalMsg.EventType)
+	if err != nil {
+		return fmt.Errorf("pubsub: build result envelope: %w", err)
+	}
+	env, err := BuildUniversalResultEnvelope(rr.config, originalMsg.EventType, eventType, originatingAction, payload, originalMessageID, senderID, caseID, investigationID, taskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("pubsub: build result envelope: %w", err)
 	}

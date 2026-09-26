@@ -12,7 +12,7 @@ callback into ``g8e_agent.run_with_sse`` such that:
 
   - every tool iteration's pre-tool commentary lands in ``conversation_history``
     as a ``MessageSender.AI_PRIMARY`` row tagged with
-    ``EventType.SOURCE_AI_PRIMARY``;
+    ``MessageSender.AI_PRIMARY``;
   - the final post-stream ``_persist_ai_response`` is still invoked, and
     skips the write only when ``ctx.response_text`` is whitespace-only;
   - intermediate rows carry no grounding/token-usage (those are aggregate
@@ -28,7 +28,6 @@ import pytest
 from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     AgentMode,
-    EventType,
     ThinkingLevel,
     TriageComplexityClassification,
     TriageConfidence,
@@ -95,7 +94,7 @@ def _make_pipeline() -> ChatPipelineService:
             sender=sender,
             content=text,
             metadata=AIResponseMetadata(
-                source=EventType.SOURCE_AI_PRIMARY,
+                source=MessageSender.AI_PRIMARY,
                 grounding_metadata=grounding_metadata,
                 token_usage=token_usage,
             ),
@@ -230,7 +229,7 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
     for intermediate in primary_calls[:-1]:
         meta = intermediate["metadata"]
         assert isinstance(meta, AIResponseMetadata)
-        assert meta.source == EventType.SOURCE_AI_PRIMARY
+        assert meta.source == MessageSender.AI_PRIMARY
         assert meta.grounding_metadata is None
         assert meta.token_usage is None
         assert intermediate["investigation_id"] == "inv-iter"
@@ -240,7 +239,7 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
     final = primary_calls[-1]
     assert final["sender"] == MessageSender.AI_PRIMARY
     assert isinstance(final["metadata"], AIResponseMetadata)
-    assert final["metadata"].source == EventType.SOURCE_AI_PRIMARY
+    assert final["metadata"].source == MessageSender.AI_PRIMARY
 
     for call in primary_calls:
         context = call["context"]
@@ -368,7 +367,7 @@ async def test_iteration_callback_passed_to_run_with_sse():
     It is not enough that *some* callable is passed - the callable must actually
     produce an ``investigation_service.investigation_data_service.add_chat_message`` call with
     ``sender == MessageSender.AI_PRIMARY`` and
-    ``metadata.source == EventType.SOURCE_AI_PRIMARY`` when invoked with
+    ``metadata.source == MessageSender.AI_PRIMARY`` when invoked with
     non-empty text. Otherwise the iteration-persistence contract can silently
     regress to a no-op.
     """
@@ -420,7 +419,7 @@ async def test_iteration_callback_passed_to_run_with_sse():
     assert intermediate["sender"] == MessageSender.AI_PRIMARY
     assert intermediate["investigation_id"] == "inv-iter"
     assert isinstance(intermediate["metadata"], AIResponseMetadata)
-    assert intermediate["metadata"].source == EventType.SOURCE_AI_PRIMARY
+    assert intermediate["metadata"].source == MessageSender.AI_PRIMARY
     # Intermediate rows never carry aggregate grounding/token-usage.
     assert intermediate["metadata"].grounding_metadata is None
     assert intermediate["metadata"].token_usage is None

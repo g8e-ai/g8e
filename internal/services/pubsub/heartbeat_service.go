@@ -384,6 +384,7 @@ func (hs *HeartbeatService) SendAutomatic() error {
 		OperatorId:        hs.config.OperatorID,
 		OperatorSessionId: hs.config.OperatorSessionId,
 		TransactionHash:   hashStr,
+		EventType:         string(constants.Event.Operator.HeartbeatRequested),
 		ActionType:        string(constants.ActionTypeHeartbeat),
 		Payload:           data,
 	}
@@ -396,7 +397,7 @@ func (hs *HeartbeatService) SendAutomatic() error {
 	cmdMsg := &PubSubCommandMessage{
 		ID:        env.Id,
 		Payload:   data,
-		EventType: constants.Event.Operator.Heartbeat,
+		EventType: constants.Event.Operator.HeartbeatRequested,
 	}
 
 	if hs.actuator != nil {

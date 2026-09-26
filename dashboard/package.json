@@ -16,16 +16,8 @@
   },
   "dependencies": {
     "@peculiar/x509": "^1.12.3",
-    "@simplewebauthn/server": "^13.3.3",
-    "compression": "^1.7.4",
-    "cookie-parser": "^1.4.7",
-    "cors": "^2.8.5",
-    "ejs": "^6.0.1",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.0",
-    "helmet": "^8.3.0",
-    "uuid": "^13.0.0",
-    "winston": "^3.18.3"
+    "express-rate-limit": "^8.6.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

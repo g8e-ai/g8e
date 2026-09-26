@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://g8e.ai/schema/event-registry-entry.json",
+  "title": "g8e event registry entry",
+  "type": "object",
+  "required": ["_go_const", "value"],
+  "properties": {
+    "_go_const": {
+      "type": "string",
+      "pattern": "^Event[A-Z][A-Za-z0-9]*$"
+    },
+    "value": {
+      "type": "string",
+      "pattern": "^g8e\\.v1\\.[a-z]+\\.[a-z0-9]+(?:\\.[a-z0-9]+)*$"
+    },
+    "kind": {
+      "enum": ["request", "outcome", "fact", "stream"]
+    },
+    "transport": {
+      "type": "array",
+      "items": {
+        "enum": ["governed", "pubsub", "sse"]
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "producers": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "gateway",
+          "operator",
+          "ensemble",
+          "dashboard",
+          "cli",
+          "mcp"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "governance": {
+      "type": "object",
+      "required": ["action_type", "payload"],
+      "properties": {
+        "action_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "persistence": {
+      "enum": [
+        "operator.audit_log",
+        "gateway.audit_log",
+        "gateway.sse_store",
+        "gateway.operator_docs",
+        "gateway.docstore",
+        "ephemeral"
+      ]
+    },
+    "reserved": {
+      "type": "boolean"
+    },
+    "grammar_allowlist_owner": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

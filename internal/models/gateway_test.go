@@ -135,6 +135,38 @@ func TestDocumentForWire_DataFieldsPreserved(t *testing.T) {
 	}
 }
 
+func TestUserSettingsDocument_UnmarshalsProtocolShape(t *testing.T) {
+	t.Parallel()
+
+	raw := []byte(`{
+		"user_id": "user-1",
+		"settings": {
+			"llm": {"llm_primary_provider": "ollama", "llm_model": "qwen3"},
+			"search": {"enabled": true, "location": "global"},
+			"eval_judge": {"eval_judge_model": "judge", "eval_judge_max_tokens": 1024},
+			"command_validation": {"enable_whitelisting": false, "enable_blacklisting": true},
+			"batch_execution": {"max_concurrency": 4, "fail_fast": true}
+		},
+		"created_at": "2026-01-01T00:00:00Z",
+		"updated_at": "2026-01-02T00:00:00Z"
+	}`)
+
+	var doc UserSettingsDocument
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	require.NotNil(t, doc.Settings)
+	assert.Equal(t, "user-1", doc.UserID)
+	assert.Equal(t, "ollama", doc.Settings.LLM.PrimaryProvider)
+	assert.Equal(t, "qwen3", doc.Settings.LLM.Model)
+	assert.True(t, doc.Settings.Search.Enabled)
+	assert.Equal(t, "global", doc.Settings.Search.Location)
+	assert.Equal(t, "judge", doc.Settings.EvalJudge.Model)
+	assert.Equal(t, 1024, doc.Settings.EvalJudge.MaxTokens)
+	assert.False(t, doc.Settings.CommandValidation.EnableWhitelisting)
+	assert.True(t, doc.Settings.CommandValidation.EnableBlacklisting)
+	assert.Equal(t, 4, doc.Settings.BatchExecution.MaxConcurrency)
+	assert.True(t, doc.Settings.BatchExecution.FailFast)
+}
+
 func TestDocumentForWire_SystemFieldsOverrideDataFieldsWithSameKey(t *testing.T) {
 	t.Parallel()
 

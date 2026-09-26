@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants import DB_COLLECTION_STAKE_RESOLUTIONS, G8EE_COMPONENT
+from app.constants import DB_COLLECTION_STAKE_RESOLUTIONS, EventType, G8EE_COMPONENT
 from app.errors import DatabaseError, ValidationError
 from app.models.http_context import RequestContext
 from app.models.reputation import SlashTier, StakeResolution
@@ -113,7 +113,7 @@ class TestCreate:
         kwargs = governance_client.update_governed_doc.await_args.kwargs
         assert kwargs["collection"] == DB_COLLECTION_STAKE_RESOLUTIONS
         assert kwargs["document_id"] == "tc-1:axiom"
-        assert kwargs["event_type"] == "g8e.v1.operator.reputation.stake.resolution.created"
+        assert kwargs["event_type"] == EventType.APP_REPUTATION_STAKE_RESOLUTION_CREATE_REQUESTED
         assert kwargs["merge"] is False
         assert kwargs["case_id"] == "case-1"
         assert kwargs["investigation_id"] == "inv-1"

@@ -61,14 +61,14 @@ describe('TemplateLoader [UNIT - jsdom]', () => {
             expect(result).toBe(html);
         });
 
-        it('passes ServiceName.g8ed and the constructed path to the transport', async () => {
+        it('passes the constructed path to the transport', async () => {
             const transportGet = vi.fn().mockResolvedValue({ text: async () => '<div/>' });
             const loader = new TemplateLoader('/js/components/templates/', { get: transportGet });
 
             await loader.load('approval-status');
 
-            const [serviceName, path] = transportGet.mock.calls[0];
-            expect(serviceName).toBe('g8ed');
+            const [, path] = transportGet.mock.calls[0];
+            expect(path).toContain('templates');
             expect(path).toBe('/js/components/templates/approval-status.html');
         });
 
@@ -82,15 +82,14 @@ describe('TemplateLoader [UNIT - jsdom]', () => {
             expect(transportGet).toHaveBeenCalledOnce();
         });
 
-        it('constructor with no transport falls back to window.serviceClient', async () => {
-            const clientGet = vi.fn().mockResolvedValue({ text: async () => '<div/>' });
-            window.serviceClient = { get: clientGet };
+        it('constructor with no transport falls back to fetch', async () => {
+            const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => '<div/>' });
+            vi.stubGlobal('fetch', fetchMock);
 
             const loader = new TemplateLoader();
             await loader.load('some-template');
 
-            expect(clientGet).toHaveBeenCalledOnce();
-            delete window.serviceClient;
+            expect(fetchMock).toHaveBeenCalledOnce();
         });
     });
 

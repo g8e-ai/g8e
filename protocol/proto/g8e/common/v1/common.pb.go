@@ -1147,12 +1147,12 @@ func (x *PlatformEnrollmentCompletionTranscript) GetFingerprints() *PlatformEnro
 	return nil
 }
 
-// CommandIntent is the pre-governance command intent published by an app
-// workload (e.g. the ensemble) to a cmd:<operator_id>:<operator_session_id>
-// channel. The gateway decodes it via protojson, validates the target
-// operator session, fetches the current state Merkle root, and constructs
-// the governed GovernanceEnvelope. Co-located with GovernanceEnvelope in
-// commonv1 so all core transaction lifecycle models share one package.
+// CommandIntent is deprecated. New callers must use the Gateway HTTP protocol
+// and submit a semantic request event; the Gateway derives the governed action
+// from the event registry. This message remains only while the W10 audit
+// ingest migration removes the legacy cmd: transport.
+//
+// Deprecated: Marked as deprecated in g8e/common/v1/common.proto.
 type CommandIntent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Identity & routing
@@ -1414,7 +1414,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x0ecomponent_kind\x18\x04 \x01(\x0e2$.g8e.common.v1.PlatformComponentKindR\rcomponentKind\x12\x1f\n" +
 	"\vinstance_id\x18\x05 \x01(\tR\n" +
 	"instanceId\x12Q\n" +
-	"\ffingerprints\x18\x06 \x01(\v2-.g8e.common.v1.PlatformEnrollmentFingerprintsR\ffingerprints\"\xb8\x03\n" +
+	"\ffingerprints\x18\x06 \x01(\v2-.g8e.common.v1.PlatformEnrollmentFingerprintsR\ffingerprints\"\xbc\x03\n" +
 	"\rCommandIntent\x12\x1f\n" +
 	"\voperator_id\x18\x01 \x01(\tR\n" +
 	"operatorId\x12.\n" +
@@ -1431,7 +1431,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\atask_id\x18\n" +
 	" \x01(\tR\x06taskId\x12$\n" +
 	"\x0eweb_session_id\x18\v \x01(\tR\fwebSessionId\x12$\n" +
-	"\x0ecli_session_id\x18\f \x01(\tR\fcliSessionId*e\n" +
+	"\x0ecli_session_id\x18\f \x01(\tR\fcliSessionId:\x02\x18\x01*e\n" +
 	"\tComponent\x12\x19\n" +
 	"\x15COMPONENT_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fCOMPONENT_AGENT\x10\x01\x12\x12\n" +

@@ -41,6 +41,8 @@ type options struct {
 	requestTimeout     time.Duration
 	allowPublic        bool
 	syntheticClientIPs bool
+	shardIndex         int
+	shardCount         int
 	dockerContainer    string
 	sampleInterval     time.Duration
 }
@@ -105,6 +107,8 @@ type summary struct {
 	Target             string           `json:"target"`
 	Mode               string           `json:"mode"`
 	Clients            int              `json:"clients"`
+	ShardIndex         int              `json:"shard_index"`
+	ShardCount         int              `json:"shard_count"`
 	ElapsedSeconds     float64          `json:"elapsed_seconds"`
 	Outcomes           map[string]int   `json:"outcomes"`
 	Statuses           map[string]int   `json:"statuses"`
@@ -145,6 +149,8 @@ func parseFlags() options {
 	flag.DurationVar(&opts.requestTimeout, "request-timeout", 30*time.Second, "bounded request timeout")
 	flag.BoolVar(&opts.allowPublic, "allow-public", false, "allow a non-loopback target")
 	flag.BoolVar(&opts.syntheticClientIPs, "synthetic-client-ips", false, "send distinct test client addresses to a loopback trusted proxy")
+	flag.IntVar(&opts.shardIndex, "shard-index", 0, "zero-based shard index for distributed external cold acceptance")
+	flag.IntVar(&opts.shardCount, "shard-count", 1, "total shard count for distributed external cold acceptance")
 	flag.StringVar(&opts.dockerContainer, "docker-container", "", "optional container sampled with docker stats")
 	flag.DurationVar(&opts.sampleInterval, "sample-interval", 30*time.Second, "resource sample interval")
 	flag.Parse()
@@ -178,6 +184,12 @@ func validateOptions(opts options) error {
 	if opts.clients <= 0 || opts.hold <= 0 || opts.requestTimeout <= 0 || opts.sampleInterval <= 0 {
 		return fmt.Errorf("capacity: clients and durations must be positive")
 	}
+	if opts.shardCount <= 0 {
+		return fmt.Errorf("capacity: shard-count must be positive")
+	}
+	if opts.shardIndex < 0 || opts.shardIndex >= opts.shardCount {
+		return fmt.Errorf("capacity: shard-index must satisfy 0 <= shard-index < shard-count")
+	}
 	return nil
 }
 
@@ -189,8 +201,12 @@ func loopbackHost(host string) bool {
 	return address != nil && address.IsLoopback()
 }
 
-func syntheticClientAddress(index int) string {
-	return net.IPv4(198, 18, byte(index/254), byte(index%254+1)).String()
+func syntheticClientAddress(shardIndex, shardCount, clientIndex int) string {
+	globalIndex := shardIndex*10_000 + clientIndex
+	if shardCount > 1 {
+		globalIndex = shardIndex*10_000 + clientIndex
+	}
+	return net.IPv4(198, 18, byte(globalIndex/254), byte(globalIndex%254+1)).String()
 }
 
 func run(ctx context.Context, opts options) (summary, error) {
@@ -227,7 +243,7 @@ func run(ctx context.Context, opts options) (summary, error) {
 	for index := range opts.clients {
 		clientIP := ""
 		if opts.syntheticClientIPs {
-			clientIP = syntheticClientAddress(index)
+			clientIP = syntheticClientAddress(opts.shardIndex, opts.shardCount, index)
 		}
 		go func() {
 			defer wg.Done()
@@ -479,6 +495,8 @@ func summarize(opts options, elapsed time.Duration, results []clientResult, reso
 		Target:             opts.target,
 		Mode:               opts.mode,
 		Clients:            opts.clients,
+		ShardIndex:         opts.shardIndex,
+		ShardCount:         opts.shardCount,
 		ElapsedSeconds:     elapsed.Seconds(),
 		Outcomes:           outcomes,
 		Statuses:           statuses,

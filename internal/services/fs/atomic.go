@@ -27,8 +27,10 @@ import (
 // CreateRuntimeTree should be called at startup to create the full directory
 // tree with correct permissions.
 func (fs *localFS) WriteFile(ctx context.Context, relPath string, data []byte, mode os.FileMode) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 
 	absPath := fs.Resolve(relPath)

@@ -56,7 +56,7 @@
         },
         "event_type": {
           "type": "string",
-          "description": "Specific event type within the sender category. E.g. g8e.v1.operator.command.approval.requested, g8e.v1.operator.command.execution, g8e.v1.operator.command.result."
+          "description": "Specific event type within the sender category. E.g. g8e.v1.operator.command.approval.requested, g8e.v1.operator.command.execution.started, g8e.v1.operator.command.result.completed."
         }
       },
 

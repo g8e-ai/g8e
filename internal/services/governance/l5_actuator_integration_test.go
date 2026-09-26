@@ -74,6 +74,7 @@ func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-operator-session",
+		EventType:         string(constants.Event.Operator.Command.Requested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -147,6 +148,7 @@ func TestL5ActuatorExecuteCommitmentFailureStopsBeforeHandler(t *testing.T) {
 			TransactionHash:   "test-hash-commitment-failure",
 			OperatorId:        "test-operator",
 			OperatorSessionId: "test-operator-session",
+			EventType:         string(constants.Event.Operator.Command.Requested),
 			ActionType:        string(constants.ActionTypeExecuteBash),
 			TargetResource:    "localhost",
 		},

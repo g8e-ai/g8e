@@ -111,8 +111,8 @@ class UsageMetadata:
     prompt_token_count: int = 0
     candidates_token_count: int = 0
     total_token_count: int = 0
-    thinking_token_count: int = 0
-    cache_token_count: int = 0
+    thinking_token_count: int | None = None
+    cache_token_count: int | None = None
     usage_reported: bool = False
     # Timing fields (seconds). None means the boundary could not measure
     # or the provider did not report the value; zero is a measured zero.

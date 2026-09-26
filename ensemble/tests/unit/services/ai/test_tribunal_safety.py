@@ -15,7 +15,7 @@ from app.models.agents.tribunal import TribunalGenerationFailedError
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.services.ai.generator import TribunalEmitter, generate_command
 from app.utils.command import normalise_command
-from app.utils.safety import validate_command_safety
+from app.utils.validation.safety import validate_command_safety
 from tests.unit.services.ai.tribunal.conftest import make_tribunal_generation_request
 
 
@@ -81,7 +81,7 @@ class TestValidateCommandSafety:
         assert "forbidden pattern" in result.error_message.lower()
 
     def test_blacklist_enforcement(self):
-        from app.utils.blacklist_validator import CommandBlacklistResult
+        from app.utils.validation.blacklist_validator import CommandBlacklistResult
 
         mock_blacklist = MagicMock()
         mock_blacklist.validate_command.return_value = CommandBlacklistResult(
@@ -100,7 +100,7 @@ class TestValidateCommandSafety:
         mock_blacklist.validate_command.assert_called_once_with("echo test")
 
     def test_whitelist_enforcement(self):
-        from app.utils.whitelist_validator import CommandValidationResult
+        from app.utils.validation.whitelist_validator import CommandValidationResult
 
         mock_whitelist = MagicMock()
         mock_whitelist.validate_command.return_value = CommandValidationResult(
@@ -121,7 +121,7 @@ class TestValidateCommandSafety:
         )
 
     def test_whitelist_override_forwarded_to_validator(self):
-        from app.utils.whitelist_validator import CommandValidationResult
+        from app.utils.validation.whitelist_validator import CommandValidationResult
 
         mock_whitelist = MagicMock()
         mock_whitelist.validate_command.return_value = CommandValidationResult(

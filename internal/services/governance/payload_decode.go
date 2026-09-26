@@ -8,6 +8,8 @@
 package governance
 
 import (
+	"fmt"
+
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -19,9 +21,8 @@ import (
 // DecodePayloadForAction decodes a governed envelope's raw payload bytes into
 // the typed protobuf message for the given action type. It is the single decode
 // authority shared by the L4 Warden (operator-side verification) and the
-// gateway envelope builder (gateway-side L1 screening). Returning nil for an
-// action type without a typed proto case means the payload is treated as raw
-// bytes and L1 doctrine validation is skipped; unknown action types must be
+// gateway envelope builder (gateway-side L1 screening). Missing decoders fail
+// closed with ErrTxPayloadDecoderMissing; unknown action types must be
 // rejected by the caller before reaching this function.
 func DecodePayloadForAction(actionType constants.ActionType, payload []byte) (proto.Message, error) {
 	var msg proto.Message
@@ -42,6 +43,10 @@ func DecodePayloadForAction(actionType constants.ActionType, payload []byte) (pr
 		msg = &operatorv1.FsGrepRequested{}
 	case constants.ActionTypePortCheck:
 		msg = &operatorv1.CheckPortRequested{}
+	case constants.ActionTypeOllamaModelInventory:
+		msg = &operatorv1.OllamaModelInventoryRequested{}
+	case constants.ActionTypeOllamaModelResidency:
+		msg = &operatorv1.OllamaModelResidencyRequested{}
 	case constants.ActionTypeFetchLogs:
 		msg = &operatorv1.FetchLogsRequested{}
 	case constants.ActionTypeFetchHistory:
@@ -93,11 +98,7 @@ func DecodePayloadForAction(actionType constants.ActionType, payload []byte) (pr
 		msg = &commonv1.PlatformEnrollmentGovernancePayload{}
 
 	default:
-		// Known action type without a typed proto decode case (e.g.
-		// adapter-specific action types). Treat payload as raw bytes.
-		// Unknown action types are rejected before reaching this
-		// function (knownActionTypes check).
-		return nil, nil
+		return nil, fmt.Errorf("%w: %q", constants.ErrTxPayloadDecoderMissing, actionType)
 	}
 	if err := proto.Unmarshal(payload, msg); err != nil {
 		return nil, err

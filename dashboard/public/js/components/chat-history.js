@@ -4,6 +4,7 @@
 import { InvestigationFactory, InvestigationHistoryEntry } from '../models/investigation-models.js';
 import { notificationService } from '../utils/notification-service.js';
 import { EventType } from '../constants/events.js';
+import { MessageSender } from '../constants/message-senders.js';
 
 export const ChatHistoryMixin = {
     handleCaseSelected(data) {
@@ -44,7 +45,7 @@ export const ChatHistoryMixin = {
             const msgInstance = message instanceof InvestigationHistoryEntry ? message : InvestigationHistoryEntry.parse(message);
             const metadata = msgInstance.metadata || {};
 
-            if (metadata.sender === EventType.EVENT_SOURCE_USER_TERMINAL) {
+            if (metadata.sender === MessageSender.USER_TERMINAL) {
                 const executionId = metadata.execution_id;
 
                 if (executionId) {
@@ -70,7 +71,7 @@ export const ChatHistoryMixin = {
                 continue;
             }
 
-            if (metadata.sender === EventType.EVENT_SOURCE_USER_TERMINAL) {
+            if (metadata.sender === MessageSender.USER_TERMINAL) {
                 const executionId = metadata.execution_id;
                 const eventType = metadata.event_type;
 
@@ -109,11 +110,11 @@ export const ChatHistoryMixin = {
 
             let senderType;
             if (msgInstance.isUserMessage()) {
-                senderType = EventType.EVENT_SOURCE_USER_CHAT;
+                senderType = MessageSender.USER_CHAT;
             } else if (msgInstance.isAIResponse()) {
-                senderType = EventType.EVENT_SOURCE_AI_PRIMARY;
+                senderType = MessageSender.AI_PRIMARY;
             } else {
-                senderType = EventType.EVENT_SOURCE_SYSTEM;
+                senderType = MessageSender.SYSTEM;
             }
 
             this.addRestoredMessage(
@@ -206,12 +207,12 @@ export const ChatHistoryMixin = {
             ? new Date(originalTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
             : null;
 
-        if (sender === EventType.EVENT_SOURCE_USER_CHAT) {
+        if (sender === MessageSender.USER_CHAT) {
             this.anchoredTerminal.appendUserMessage(content, displayTime);
-        } else if (sender === EventType.EVENT_SOURCE_AI_PRIMARY) {
+        } else if (sender === MessageSender.AI_PRIMARY) {
             const formattedContent = this.messageRenderer.renderContent(content);
             this.anchoredTerminal.appendAIResponse(formattedContent, displayTime, groundingMetadata);
-        } else if (sender === EventType.EVENT_SOURCE_SYSTEM) {
+        } else if (sender === MessageSender.SYSTEM) {
             this.anchoredTerminal.appendSystemMessage(content);
         }
     },

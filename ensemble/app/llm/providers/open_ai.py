@@ -83,15 +83,22 @@ def _token_count(value) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
+def _optional_token_count(value) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def _usage_from_sdk(response_usage) -> UsageMetadata:
     if not response_usage:
         return UsageMetadata()
     details = getattr(response_usage, "prompt_tokens_details", None)
+    cache_token_count = None
+    if details is not None and hasattr(details, "cached_tokens"):
+        cache_token_count = _optional_token_count(getattr(details, "cached_tokens", None))
     return UsageMetadata(
         prompt_token_count=_token_count(getattr(response_usage, "prompt_tokens", 0)),
         candidates_token_count=_token_count(getattr(response_usage, "completion_tokens", 0)),
         total_token_count=_token_count(getattr(response_usage, "total_tokens", 0)),
-        cache_token_count=_token_count(getattr(details, "cached_tokens", 0)),
+        cache_token_count=cache_token_count,
         usage_reported=True,
     )
 

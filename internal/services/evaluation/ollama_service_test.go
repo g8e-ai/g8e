@@ -27,7 +27,10 @@ func (d *recordingOllamaModelCommandDispatcher) DispatchOllamaModelCommand(_ con
 	return &OllamaModelCommandDispatchResult{
 		Status:  200,
 		Success: true,
-		Result:  &operatorv1.CommandResult{Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
+		CommandResult: &operatorv1.CommandResult{
+			Status:     operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ReturnCode: 0,
+		},
 	}, nil
 }
 
@@ -67,7 +70,7 @@ func TestValidateOllamaModelCommandResult_RejectsNonzeroExit(t *testing.T) {
 	err := ValidateOllamaModelCommandResult("ollama stop qwen3:0.6b", &OllamaModelCommandDispatchResult{
 		Status:  200,
 		Success: true,
-		Result: &operatorv1.CommandResult{
+		CommandResult: &operatorv1.CommandResult{
 			Status:     operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ReturnCode: 1,
 		},

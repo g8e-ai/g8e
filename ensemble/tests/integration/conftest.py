@@ -91,7 +91,7 @@ async def auto_approve_pending(approval_service) -> None:
     hitting ``AGENT_MAX_TOOL_TURNS`` and requesting an ``AGENT_CONTINUE``
     approval), use ``auto_approve_inline_callback`` instead.
     """
-    from app.utils.timestamp import now
+    from app.utils.time_ids.timestamp import now
 
     pending = approval_service.get_pending_approvals()
     for approval_id, pending_approval in pending.items():
@@ -151,7 +151,7 @@ def auto_approve_inline_callback(
     previous = getattr(approval_service, "_on_approval_requested", None)
 
     def _callback(approval_id: str, pending) -> None:
-        from app.utils.timestamp import now
+        from app.utils.time_ids.timestamp import now
 
         tracker.record(pending.approval_type)
         pending.resolve(

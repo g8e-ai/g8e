@@ -27,7 +27,6 @@ from app.dependencies import (
     get_g8ee_operator_cache,
     get_g8ee_operator_command_service,
     get_g8ee_app_settings,
-    get_g8ee_pubsub_client,
     health_check_dependencies,
     require_authenticated_context,
     require_authenticated_user,
@@ -75,19 +74,6 @@ class TestGetG8eeAppSettings:
 
         with pytest.raises(ConfigurationError, match="Settings not available"):
             await get_g8ee_app_settings(mock_request)
-
-
-class TestGetG8eePubSubClient:
-    async def test_returns_client_from_app_state(self, mock_request):
-        mock_client = MagicMock()
-        mock_request.app.state.pubsub_client = mock_client
-        result = await get_g8ee_pubsub_client(mock_request)
-        assert result == mock_client
-
-    async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.pubsub_client = None
-        with pytest.raises(ServiceUnavailableError, match="PubSubClient not available"):
-            await get_g8ee_pubsub_client(mock_request)
 
 
 class TestGetG8eeKVClient:
@@ -344,7 +330,7 @@ class TestHealthCheckDependencies:
         request = MagicMock(spec=Request)
         request.app = MagicMock()
         request.app.state.settings = mock_settings
-        request.app.state.pubsub_client = MagicMock()
+        request.app.state.kv_cache_client = MagicMock()
         request.app.state.services.cache_aside_service = MagicMock()
         request.app.state.services.case_data_service = MagicMock()
         request.app.state.services.investigation_service = MagicMock()

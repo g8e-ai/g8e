@@ -73,6 +73,9 @@ func TestL4Warden_Consensus_AllActionTypesFromSSOT(t *testing.T) {
 	for _, actionType := range allActionTypes {
 		t.Run(string(actionType), func(t *testing.T) {
 			t.Parallel()
+			if _, err := constants.RequestEventForAction(actionType); err != nil {
+				t.Skipf("no governed request event for %s", actionType)
+			}
 			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 			payload := typedPayload(t, actionType)
 			env := signedEnvelope(t, actionType, payload, privKey, "consensus")
@@ -298,13 +301,18 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		if len(nonceSuffix) > 8 {
 			nonceSuffix = nonceSuffix[:8]
 		}
+		eventType, err := constants.RequestEventForAction(constants.ActionTypeFsList)
+		if err != nil {
+			t.Fatalf("failed to resolve request event: %v", err)
+		}
 		env := &govtypes.GovernanceEnvelope{
-			ProtocolVersion:   "1.0",
+			ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 			SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 			OperatorId:        "operator-1",
 			OperatorSessionId: "operator-session-1",
+			EventType:         string(eventType),
 			ActionType:        string(constants.ActionTypeFsList),
 			TargetResource:    "localhost",
 			Payload:           payload,

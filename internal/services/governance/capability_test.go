@@ -236,6 +236,7 @@ func TestL5Actuator_MintsAndDissolvesCapability(t *testing.T) {
 		TransactionHash:   "test-hash-cap-123",
 		OperatorId:        "op-1",
 		OperatorSessionId: "sess-1",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -276,6 +277,7 @@ func TestL5Actuator_CapabilityDissolvedOnHandlerError(t *testing.T) {
 		TransactionHash:   "test-hash-cap-err",
 		OperatorId:        "op-1",
 		OperatorSessionId: "sess-1",
+		EventType:         string(constants.EventOperatorCommandRequested),
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}

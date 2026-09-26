@@ -48,7 +48,7 @@ type ModelProvenanceController struct {
 
 type modelProvenancePreflight interface {
 	PreflightCommandDelivery(ctx context.Context) error
-	PreflightStorageAttestation(ctx context.Context, servedModelTag, expectedModelDigest string) error
+	PreflightStorageAttestation(ctx context.Context, servedModelTag, expectedModelDigest string) (*evalv1.ModelProvenanceAttestationWindow, error)
 }
 
 // ModelProvenanceControllerDeps groups dependencies for ModelProvenanceController.
@@ -158,7 +158,8 @@ func (c *ModelProvenanceController) handleModelProvenanceAttestPreflight(w http.
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
 		return
 	}
-	if err := c.preflight.PreflightStorageAttestation(r.Context(), servedModelTag, expectedModelDigest); err != nil {
+	window, err := c.preflight.PreflightStorageAttestation(r.Context(), servedModelTag, expectedModelDigest)
+	if err != nil {
 		if errors.Is(err, constants.ErrEvaluationObservationUnavailable) ||
 			errors.Is(err, constants.ErrProvenanceOperatorNotFound) ||
 			errors.Is(err, constants.ErrProvenanceOperatorAmbiguous) ||
@@ -169,9 +170,15 @@ func (c *ModelProvenanceController) handleModelProvenanceAttestPreflight(w http.
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.responder.JSON(w, http.StatusOK, map[string]string{
-		"status":                "ready",
-		"served_model_tag":      servedModelTag,
-		"expected_model_digest": expectedModelDigest,
+	windowBody, err := evalv1.MarshalCanonical(window)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("model provenance attestation preflight: marshal window: %w", err).Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, models.ModelProvenanceAttestResponse{
+		Status:              "ready",
+		ServedModelTag:      servedModelTag,
+		ExpectedModelDigest: expectedModelDigest,
+		Window:              windowBody,
 	})
 }

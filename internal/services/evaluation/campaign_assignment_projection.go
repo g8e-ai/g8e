@@ -102,6 +102,13 @@ func MarshalPublicAssignmentRecord(record *PublicAssignmentRecord) ([]byte, erro
 		}
 		fields[key] = value
 	}
+	if record.Projection.ActivitySummary != nil {
+		summaryWire, err := marshalPublicActivitySummaryWire(record.Projection.ActivitySummary)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: marshal public assignment record activity summary: %w", err)
+		}
+		fields["activity_summary"] = summaryWire
+	}
 	body, err := json.Marshal(fields)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: marshal public assignment record: %w", err)

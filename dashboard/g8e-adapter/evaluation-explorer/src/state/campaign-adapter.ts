@@ -15,12 +15,20 @@ import {
   type LiveEventKind,
   type MetricValue,
   type ModelRole,
+  type PublicActivityFamily,
+  type PublicGovernedActionActivityRecord,
+  type PublicModelActivityRecord,
+  type PublicPolicyDecisionActivityRecord,
+  type PublicToolCallActivityRecord,
+  type PublicToolDecisionActivityRecord,
+  type PublicUnavailableReason,
   type QualityState,
   type ScenarioCategory,
   type SnapshotRecord,
   type TerminalStatus,
   type VerifierState,
 } from '../contract/types';
+import { normalizeActivityFamily, parseWireActivityFamily } from '../contract/activity-family';
 import { decodeCampaignProjectionEnvelope } from '../contract/campaign-wire';
 
 export const CAMPAIGN_SOURCE_REVISION = 'g8e-eval-campaign';
@@ -331,10 +339,17 @@ function adaptResultProjection(
     completed,
     total,
     stage_label: buildStageLabel(lifecycle, assignment.scenario_category, assignment.task_id),
-    metric_delta: assignment.metric_values.pass ? { pass_rate: assignment.metric_values.pass } : undefined,
+    metric_delta: buildTerminalMetricDelta(assignment.metric_values),
   });
 
   return records;
+}
+
+function buildTerminalMetricDelta(metricValues: Record<string, MetricValue>): LiveEvent['metric_delta'] {
+  const delta: Record<string, MetricValue> = {};
+  if (metricValues.pass) delta.pass = metricValues.pass;
+  if (metricValues.deterministic_pass_rate) delta.deterministic_pass_rate = metricValues.deterministic_pass_rate;
+  return Object.keys(delta).length > 0 ? delta : undefined;
 }
 
 function lifecycleEventKind(lifecycle: LifecycleStatus): LiveEventKind | undefined {
@@ -416,26 +431,22 @@ function mapSemanticGradeSummaries(value: unknown): AssignmentResult['semantic_g
 
 function mapActivitySummary(value: unknown): AssignmentResult['activity_summary'] {
   if (!isRecord(value)) return undefined;
+  const path = 'assignment_result.activity_summary';
   return {
-    model_activity: mapActivityFamily(value.model_activity, mapModelActivityRecord),
-    tool_decisions: mapActivityFamily(value.tool_decisions, mapToolDecisionRecord),
-    tool_calls: mapActivityFamily(value.tool_calls, mapToolCallRecord),
-    policy_decisions: mapActivityFamily(value.policy_decisions, mapPolicyDecisionRecord),
-    governed_actions: mapActivityFamily(value.governed_actions, mapGovernedActionRecord),
+    model_activity: mapActivityFamily(value.model_activity, mapModelActivityRecord, `${path}.model_activity`),
+    tool_decisions: mapActivityFamily(value.tool_decisions, mapToolDecisionRecord, `${path}.tool_decisions`),
+    tool_calls: mapActivityFamily(value.tool_calls, mapToolCallRecord, `${path}.tool_calls`),
+    policy_decisions: mapActivityFamily(value.policy_decisions, mapPolicyDecisionRecord, `${path}.policy_decisions`),
+    governed_actions: mapActivityFamily(value.governed_actions, mapGovernedActionRecord, `${path}.governed_actions`),
   };
 }
 
-function mapActivityFamily<T>(value: unknown, mapper: (value: unknown) => T): { availability: 'observed' | 'unavailable' | 'not_applicable'; unavailable_reason?: NonNullable<AssignmentResult['activity_summary']>['model_activity']['unavailable_reason']; records: T[] } {
-  const family = asRecord(value);
-  const availability = mapAvailability(requiredString(family, 'availability'));
-  return {
-    availability,
-    unavailable_reason: availability === 'observed' ? undefined : mapUnavailableReason(requiredString(family, 'unavailable_reason')),
-    records: Array.isArray(family.records) ? family.records.map(mapper) : [],
-  };
+function mapActivityFamily<T>(value: unknown, mapper: (value: unknown, path: string) => T, path: string): PublicActivityFamily<T> {
+  const wire = parseWireActivityFamily(value, path, mapper);
+  return normalizeActivityFamily({ ...wire, records: wire.records });
 }
 
-function mapModelActivityRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['model_activity']['records']>[number] {
+function mapModelActivityRecord(value: unknown, _path: string): PublicModelActivityRecord {
   const record = asRecord(value);
   return {
     model_role: mapModelRole(requiredString(record, 'model_role')) ?? 'primary',
@@ -454,22 +465,22 @@ function mapModelActivityRecord(value: unknown): NonNullable<NonNullable<Assignm
   };
 }
 
-function mapToolDecisionRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['tool_decisions']['records']>[number] {
+function mapToolDecisionRecord(value: unknown, _path: string): PublicToolDecisionActivityRecord {
   const record = asRecord(value);
   return { tool_label: requiredString(record, 'tool_label'), recognized: record.recognized === true, selected: record.selected === true, permission_compliant: record.permission_compliant === true, unnecessary: record.unnecessary === true, outcome: mapSemanticOutcome(requiredString(record, 'outcome')), evidence_source: 'application_reported' };
 }
 
-function mapToolCallRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['tool_calls']['records']>[number] {
+function mapToolCallRecord(value: unknown, _path: string): PublicToolCallActivityRecord {
   const record = asRecord(value);
   return { tool_label: requiredString(record, 'tool_label'), execution_outcome: mapExecutionOutcome(requiredString(record, 'execution_outcome')), semantic_outcome: mapSemanticOutcome(requiredString(record, 'semantic_outcome')), evidence_source: 'application_reported' };
 }
 
-function mapPolicyDecisionRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['policy_decisions']['records']>[number] {
+function mapPolicyDecisionRecord(value: unknown, _path: string): PublicPolicyDecisionActivityRecord {
   const record = asRecord(value);
   return { tool_label: requiredString(record, 'tool_label'), outcome: mapToolOutcome(requiredString(record, 'outcome')), evidence_source: 'application_reported' };
 }
 
-function mapGovernedActionRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['governed_actions']['records']>[number] {
+function mapGovernedActionRecord(value: unknown, _path: string): PublicGovernedActionActivityRecord {
   const record = asRecord(value);
   return { action_label: 'governed action', reported_policy_outcome: mapReportedPolicyOutcome(requiredString(record, 'reported_policy_outcome')), receipt_status: mapReceiptStatus(requiredString(record, 'receipt_status')), evidence_source: mapEvidenceSource(requiredString(record, 'evidence_source')) };
 }
@@ -518,13 +529,14 @@ function mapGradingMethod(value: string): 'deterministic' | 'semantic_judge' { r
 function mapNativeResultStatus(value: string): 'pass' | 'fail' | 'unavailable' | 'unsupported' | 'invalid_evidence' { return normalizeEnumToken(value).replace('VERDICT_STATUS_', '').toLowerCase() as ReturnType<typeof mapNativeResultStatus>; }
 function mapExplanationCode(value: string): NonNullable<AssignmentResult['semantic_grade_summaries']>[number]['explanation_code'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^GRADE_EXPLANATION_CODE_/, '').toLowerCase() as NonNullable<AssignmentResult['semantic_grade_summaries']>[number]['explanation_code']; }
 function mapToolScoreDimensionName(value: string): NonNullable<AssignmentResult['scenario_summary']>['tool_score_dimensions'][number]['dimension'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^TOOL_SCORE_DIMENSION_/, '').toLowerCase() as NonNullable<AssignmentResult['scenario_summary']>['tool_score_dimensions'][number]['dimension']; }
-function mapAvailability(value: string): 'observed' | 'unavailable' | 'not_applicable' { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^ACTIVITY_AVAILABILITY_/, '').toLowerCase() as ReturnType<typeof mapAvailability>; }
-function mapUnavailableReason(value: string): NonNullable<AssignmentResult['activity_summary']>['model_activity']['unavailable_reason'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^UNAVAILABLE_REASON_/, '').toLowerCase() as NonNullable<AssignmentResult['activity_summary']>['model_activity']['unavailable_reason']; }
+function mapUnavailableReason(value: string): PublicUnavailableReason {
+  return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^UNAVAILABLE_REASON_/, '').toLowerCase() as PublicUnavailableReason;
+}
 function mapUsageAvailability(value: string): 'reported' | 'unavailable' { return normalizeEnumToken(value).replace(/^EVALUATION_/, '').replace(/^USAGE_AVAILABILITY_/, '').toLowerCase() as ReturnType<typeof mapUsageAvailability>; }
-function mapFinishState(value: string): NonNullable<NonNullable<AssignmentResult['activity_summary']>['model_activity']['records']>[number]['finish_state'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^FINISH_STATE_/, '').toLowerCase() as ReturnType<typeof mapFinishState>; }
-function mapLoadState(value: string): NonNullable<NonNullable<AssignmentResult['activity_summary']>['model_activity']['records']>[number]['load_state'] { return normalizeEnumToken(value).replace(/^EVALUATION_/, '').replace(/^LOAD_STATE_/, '').toLowerCase() as ReturnType<typeof mapLoadState>; }
-function mapSemanticOutcome(value: string): NonNullable<NonNullable<AssignmentResult['activity_summary']>['tool_decisions']['records']>[number]['outcome'] { return mapNativeResultStatus(value); }
-function mapExecutionOutcome(value: string): NonNullable<NonNullable<AssignmentResult['activity_summary']>['tool_calls']['records']>[number]['execution_outcome'] { return mapNativeResultStatus(value); }
+function mapFinishState(value: string): PublicModelActivityRecord['finish_state'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^FINISH_STATE_/, '').toLowerCase() as PublicModelActivityRecord['finish_state']; }
+function mapLoadState(value: string): PublicModelActivityRecord['load_state'] { return normalizeEnumToken(value).replace(/^EVALUATION_/, '').replace(/^LOAD_STATE_/, '').toLowerCase() as PublicModelActivityRecord['load_state']; }
+function mapSemanticOutcome(value: string): PublicToolDecisionActivityRecord['outcome'] { return mapNativeResultStatus(value); }
+function mapExecutionOutcome(value: string): PublicToolCallActivityRecord['execution_outcome'] { return mapNativeResultStatus(value); }
 function mapToolOutcome(value: string): 'allow' | 'deny' | 'refused' { return normalizeEnumToken(value).replace(/^EVALUATION_/, '').replace(/^POLICY_DECISION_OUTCOME_/, '').toLowerCase() as ReturnType<typeof mapToolOutcome>; }
 function mapReportedPolicyOutcome(value: string): 'allow' | 'deny' | 'refused' { return mapToolOutcome(value); }
 function mapReceiptStatus(value: string): 'unavailable' | 'reported' { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^RECEIPT_STATUS_/, '').toLowerCase() as ReturnType<typeof mapReceiptStatus>; }

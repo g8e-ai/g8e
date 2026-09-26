@@ -207,7 +207,7 @@ function ArchitectureDiagram() {
               <text x="78" y="30" textAnchor="middle" fill="var(--fg)" fontSize="14" fontWeight="700">
                 {node.label}
               </text>
-              <text x="78" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
+              <text x="78" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="12">
                 {node.sub}
               </text>
             </g>
@@ -245,7 +245,7 @@ function ArchitectureDiagram() {
           <text x="250" y="48" textAnchor="middle" fill="var(--fg)" fontSize="12">
             Gateway · Operator · Ensemble · native eval
           </text>
-          <text x="250" y="64" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
+          <text x="250" y="64" textAnchor="middle" fill="var(--fg-dim)" fontSize="12">
             governed execution, campaigns, and publication
           </text>
         </g>
@@ -258,7 +258,7 @@ function ArchitectureDiagram() {
 
         <g transform="translate(40, 258)">
           <rect width="820" height="64" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
-          <text x="12" y="15" fill="var(--fg-dim)" fontSize="10" fontWeight="700" letterSpacing="0.4">EVALUATION HOST</text>
+          <text x="12" y="15" fill="var(--fg-dim)" fontSize="11" fontWeight="700" letterSpacing="0.4">EVALUATION HOST</text>
           <line x1="0" y1="22" x2="820" y2="22" stroke="var(--border)" />
           <line x1="410" y1="22" x2="410" y2="64" stroke="var(--border)" />
           <line x1="0" y1="43" x2="820" y2="43" stroke="var(--border)" />
@@ -267,8 +267,8 @@ function ArchitectureDiagram() {
             const y = i < 2 ? 37 : 58;
             return (
               <g key={spec.label}>
-                <text x={x + 12} y={y} fill="var(--fg-dim)" fontSize="9" fontWeight="700">{spec.label}</text>
-                <text x={x + 68} y={y} fill="var(--fg)" fontSize="10">{spec.value}</text>
+                <text x={x + 12} y={y} fill="var(--fg-dim)" fontSize="10" fontWeight="700">{spec.label}</text>
+                <text x={x + 68} y={y} fill="var(--fg)" fontSize="11">{spec.value}</text>
               </g>
             );
           })}
@@ -292,10 +292,10 @@ function ArchitectureDiagram() {
                 <text x="102" y="28" textAnchor="middle" fill="var(--fg)" fontSize="14" fontWeight="700">
                   {operator.role}
                 </text>
-                <text x="102" y="48" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
+                <text x="102" y="48" textAnchor="middle" fill="var(--fg-dim)" fontSize="12">
                   {operator.wire} · remote session
                 </text>
-                <text x="102" y="70" textAnchor="middle" fill="var(--fg-dim)" fontSize="10">
+                <text x="102" y="70" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
                   {operatorDiagramDetail(operator.role)}
                 </text>
               </g>

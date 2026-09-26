@@ -8,15 +8,22 @@ import { ScenarioContextCard } from '../src/components/ScenarioContextCard';
 const scenario = {
   scenario_id: 'scenario-1', scenario_version: '1.0.0', category: 'tool_selection' as const,
   public_description: 'Select an approved tool.', grading_method: 'deterministic' as const,
-  allowed_tools: ['search'], expected_tools: [], forbidden_tools: [], criteria: [], tool_score_dimensions: [],
+  allowed_tools: ['search'], expected_tools: [], forbidden_tools: [],
+  criteria: [{ criterion_id: 'selection', public_label: 'Tool choice', public_description: 'Pick one.', grading_method: 'deterministic' as const, required: true }],
+  tool_score_dimensions: [],
 };
 
 describe('ScenarioContextCard', () => {
-  it('shows bounded public context and an unavailable legacy state', () => {
-    const { rerender } = render(<ScenarioContextCard scenario={scenario} />);
+  it('renders scenario prose and criterion chips without a section heading', () => {
+    render(<ScenarioContextCard scenario={scenario} />);
     expect(screen.getByText('Select an approved tool.')).toBeInTheDocument();
-    expect(screen.getByText('search')).toBeInTheDocument();
-    rerender(<ScenarioContextCard scenario={undefined} />);
-    expect(screen.getByText('Scenario context is unavailable for this historical assignment.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Public criteria')).toHaveTextContent('Tool choice · required');
+    expect(screen.getByText('Allowed: search')).toBeInTheDocument();
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when scenario context is absent', () => {
+    const { container } = render(<ScenarioContextCard scenario={undefined} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -303,7 +303,7 @@ func (s *Store) CountAssignments(ctx context.Context, runID string) (int, error)
 	}
 	count := 0
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-result"+constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-trace"+constants.FileExtJSON) {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-result"+constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-trace"+constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-formation-run"+constants.FileExtJSON) {
 			continue
 		}
 		count++
@@ -326,7 +326,7 @@ func (s *Store) ListAssignments(ctx context.Context, runID string) ([]*evalv1.Ev
 	}
 	assignments := make([]*evalv1.EvaluationAssignment, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-result"+constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-trace"+constants.FileExtJSON) {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-result"+constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-trace"+constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-formation-run"+constants.FileExtJSON) {
 			continue
 		}
 		assignmentID := strings.TrimSuffix(entry.Name(), constants.FileExtJSON)
@@ -338,6 +338,37 @@ func (s *Store) ListAssignments(ctx context.Context, runID string) ([]*evalv1.Ev
 	}
 	sortAssignmentsDeterministic(assignments)
 	return assignments, nil
+}
+
+// LoadAssignmentResults reads persisted terminal assignment results for the
+// provided assignments in one pass.
+func (s *Store) LoadAssignmentResults(ctx context.Context, runID string, assignments []*evalv1.EvaluationAssignment) (map[string]*evalv1.EvaluationAssignmentResult, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
+		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	results := make(map[string]*evalv1.EvaluationAssignmentResult, len(assignments))
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		assignmentID := assignment.GetAssignmentId()
+		if !complianceevidence.ValidPathElement(assignmentID) {
+			return nil, fmt.Errorf("%w: assignment ID is required", constants.ErrEvidenceArtifactMalformed)
+		}
+		exists, err := s.files.FileExists(ctx, assignmentResultPath(runID, assignmentID))
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: load assignment results: %w", err)
+		}
+		if !exists {
+			continue
+		}
+		result, err := s.LoadAssignmentResult(ctx, runID, assignmentID)
+		if err != nil {
+			return nil, err
+		}
+		results[assignmentID] = result
+	}
+	return results, nil
 }
 
 // AssignmentResultExists reports whether a terminal assignment result is persisted.
@@ -430,6 +461,33 @@ func (s *Store) SaveAssignmentTrace(ctx context.Context, runID, assignmentID str
 		return fmt.Errorf("%w: write assignment trace: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
 	return nil
+}
+
+// SaveAssignmentFormationRun persists one governed heterogeneous formation-run
+// evidence envelope for one assignment.
+func (s *Store) SaveAssignmentFormationRun(ctx context.Context, runID, assignmentID string, body []byte) error {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) || len(body) == 0 {
+		return fmt.Errorf("%w: assignment formation run, run ID, assignment ID, and body are required", constants.ErrEvaluationReportPersistFailed)
+	}
+	if err := complianceevidence.ValidateCanonicalJSON(body); err != nil {
+		return fmt.Errorf("%w: assignment formation run is not canonical JSON: %v", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	path := assignmentFormationRunPath(runID, assignmentID)
+	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
+		return fmt.Errorf("%w: create assignment formation run directory: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	if err := s.files.WriteFile(ctx, path, body, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("%w: write assignment formation run: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	return nil
+}
+
+// LoadAssignmentFormationRun reads one persisted formation-run evidence envelope.
+func (s *Store) LoadAssignmentFormationRun(ctx context.Context, runID, assignmentID string) (*FormationRunEvidence, error) {
+	if s == nil || s.files == nil {
+		return nil, fmt.Errorf("evaluation: load assignment formation run: %w", constants.ErrMissingRequiredField)
+	}
+	return LoadAssignmentFormationRunEvidence(ctx, s.files, runID, assignmentID)
 }
 
 // SaveAssignmentResult persists one terminal assignment result.
@@ -821,6 +879,10 @@ func assignmentResultPath(runID, assignmentID string) string {
 
 func assignmentTracePath(runID, assignmentID string) string {
 	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+"-trace"+constants.FileExtJSON)
+}
+
+func assignmentFormationRunPath(runID, assignmentID string) string {
+	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+"-formation-run"+constants.FileExtJSON)
 }
 
 func runStatePath(runID string) string {

@@ -14,7 +14,6 @@ import logging
 
 from app.services.protocols import (
     ApprovalServiceProtocol,
-    EventServiceProtocol,
     ExecutionServiceProtocol,
     InvestigationServiceProtocol,
     G8eClientProtocol,
@@ -37,18 +36,16 @@ from app.models.tool_results import FailedIntentResult, IamIntentResult, IntentP
 from app.models.command_request_payloads import CommandRequestPayload
 from app.models.operators import (
     IntentApprovalRequest,
-    CommandExecutingBroadcastEvent,
-    CommandResultBroadcastEvent,
 )
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.iam_command_builder import IamCommandBuilder
-from app.utils.ids import (
+from app.utils.time_ids.ids import (
     generate_iam_execution_id,
     generate_iam_revoke_intent_execution_id,
     generate_iam_verify_execution_id,
     generate_intent_execution_id,
 )
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +57,11 @@ class OperatorIntentService:
         self,
         approval_service: ApprovalServiceProtocol,
         execution_service: ExecutionServiceProtocol,
-        event_service: EventServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
         internal_http_client: G8eClientProtocol,
     ) -> None:
         self._approval_service = approval_service
         self._execution_service = execution_service
-        self._event_service = event_service
         self._investigation_service = investigation_service
         self._client_client = internal_http_client
         self._iam_builder = IamCommandBuilder()
@@ -78,10 +73,6 @@ class OperatorIntentService:
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
         return self._execution_service
-
-    @property
-    def event_service(self) -> EventServiceProtocol:
-        return self._event_service
 
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
@@ -186,36 +177,7 @@ class OperatorIntentService:
             )
         )
 
-        # Notify start
-        await self.event_service.publish_command_event(
-            EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
-            CommandExecutingBroadcastEvent(
-                command=f"intent_grant {', '.join(requested_intents)}",
-                execution_id=execution_id,
-                operator_session_id=operator_session_id,
-                approval_id=None,  # Approval ID not generated yet or managed by service
-            ),
-            g8e_context,
-            task_id=AITaskId.INTENT_GRANT,
-        )
-
         if not approval_result.approved:
-            # Notify failure
-            await self.event_service.publish_command_event(
-                EventType.OPERATOR_INTENT_DENIED,
-                CommandResultBroadcastEvent(
-                    execution_id=execution_id,
-                    command=f"intent_grant {', '.join(requested_intents)}",
-                    status=ExecutionStatus.DENIED,
-                    error=approval_result.reason or "User denied",
-                    operator_id=operator_id,
-                    operator_session_id=operator_session_id,
-                    approval_id=approval_result.approval_id,
-                ),
-                g8e_context,
-                task_id=AITaskId.INTENT_GRANT,
-            )
-
             return IntentPermissionResult(
                 success=False,
                 approved=False,
@@ -227,25 +189,6 @@ class OperatorIntentService:
                 intent_name=all_intents[0],
                 all_intents=all_intents,
             )
-
-        final_session_id = approval_result.operator_session_id or operator_session_id
-        final_op_id = approval_result.operator_id or operator_id
-
-        # Notify completion
-        await self.event_service.publish_command_event(
-            EventType.OPERATOR_INTENT_GRANTED,
-            CommandResultBroadcastEvent(
-                execution_id=execution_id,
-                command=f"intent_grant {', '.join(requested_intents)}",
-                status=ExecutionStatus.COMPLETED,
-                output=f"Intent permission granted: {', '.join(all_intents)}",
-                operator_id=final_op_id,
-                operator_session_id=final_session_id,
-                approval_id=approval_result.approval_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.INTENT_GRANT,
-        )
 
         iam_results: list[IamIntentResult] = []
         failed_intents: list[FailedIntentResult] = []
@@ -365,20 +308,6 @@ class OperatorIntentService:
                 error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
             )
 
-        execution_id = generate_intent_execution_id()
-
-        # Notify start
-        await self.event_service.publish_command_event(
-            EventType.OPERATOR_COMMAND_STARTED,
-            CommandExecutingBroadcastEvent(
-                command=f"intent_revoke {', '.join(requested_intents)}",
-                execution_id=execution_id,
-                operator_session_id=op_doc.operator_session_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.INTENT_REVOKE,
-        )
-
         iam_results: list[IamIntentResult] = []
         for intent in requested_intents:
             detach_cmd = self._build_iam_detach_command(intent)
@@ -403,21 +332,6 @@ class OperatorIntentService:
             )
             res, _envelope = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=res))
-
-        # Notify completion
-        await self.event_service.publish_command_event(
-            EventType.OPERATOR_INTENT_REVOKED,
-            CommandResultBroadcastEvent(
-                execution_id=execution_id,
-                command=f"intent_revoke {', '.join(requested_intents)}",
-                status=ExecutionStatus.COMPLETED,
-                output=f"Intent permission revoked: {', '.join(requested_intents)}",
-                operator_id=op_doc.id,
-                operator_session_id=op_doc.operator_session_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.INTENT_REVOKE,
-        )
 
         return IntentPermissionResult(
             success=True,

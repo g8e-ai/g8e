@@ -108,6 +108,7 @@ markers = [
     "aws: Tests requiring LocalStack AWS emulation",
     "intent_workflow: Tests for intent-based permission workflow with g8eEnsemble",
     "requires_api: Tier 4 (External) — tests requiring a live external API (e.g. Google Search API)",
+    "requires_typesafe: Tier 4 (External) — tests requiring TYPESAFE_API_KEY or G8E_LLM_JEV_API_KEY",
     "thinking: Tests requiring LLM thinking/reasoning capability",
     "tools: Tests requiring LLM tool calling/function calling capability",
     "operator_wire: Integration tests that publish tool-call events directly to a live Operator via PubSub (no AI, no approval gate)",

@@ -838,7 +838,7 @@ func TestPasskeyHandler_BindEmbeddedOperatorToWebSession(t *testing.T) {
 
 	// Claim the embedded operator for the first user — the same state the
 	// first user's bootstrap produces.
-	operatorID, operatorSessionID, err := newEmbeddedOperatorService(infra.DocStore, infra.OperatorSessionSvc).ClaimEmbeddedOperator(user.ID)
+	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(user.ID)
 	require.NoError(t, err)
 
 	t.Run("claimed operator binds to web session", func(t *testing.T) {

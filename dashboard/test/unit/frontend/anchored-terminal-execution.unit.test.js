@@ -602,7 +602,7 @@ describe('TerminalExecutionMixin [UNIT - jsdom]', () => {
             await ctx.handleApprovalResponse('apr_1', true);
             
             expect(window.serviceClient.post).toHaveBeenCalledWith(
-                ServiceName.g8ed,
+                ServiceName.GATEWAY,
                 ApiPaths.approval.respond(),
                 expect.objectContaining({
                     approval_id: 'apr_1',
@@ -622,7 +622,7 @@ describe('TerminalExecutionMixin [UNIT - jsdom]', () => {
             await ctx.handleApprovalResponse('apr_1', false);
             
             expect(window.serviceClient.post).toHaveBeenCalledWith(
-                ServiceName.g8ed,
+                ServiceName.GATEWAY,
                 ApiPaths.approval.respond(),
                 expect.objectContaining({
                     approved: false,
@@ -2003,7 +2003,7 @@ describe('TerminalExecutionMixin [UNIT - jsdom]', () => {
             ctx.denyAllPendingApprovals('User logged out');
             
             expect(window.serviceClient.post).toHaveBeenCalledWith(
-                ServiceName.g8ed,
+                ServiceName.GATEWAY,
                 ApiPaths.approval.respond(),
                 expect.objectContaining({
                     approval_id: 'apr_1',

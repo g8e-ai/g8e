@@ -34,3 +34,8 @@ func HeartbeatChannel(operatorID, operatorSessionID string) string {
 func ReceiptsChannel(operatorID, operatorSessionID string) string {
 	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixReceipts, operatorID, operatorSessionID)
 }
+
+// AuditChannel returns the LFAA audit ingest channel for an operator session.
+func AuditChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixAudit, operatorID, operatorSessionID)
+}

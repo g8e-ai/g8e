@@ -37,7 +37,7 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 			},
 		},
 		{
-			name: "reported zeros and elapsed span remain observed",
+			name: "reported prompt output zeros remain observed while optional counters stay unavailable",
 			result: &evalv1.EvaluationAssignmentResult{
 				ModelInferences:          []*evalv1.ModelInferenceRecord{{UsageAvailability: reported, RetryCount: &zero}},
 				ScoredInferenceSpanNanos: proto.Uint64(2_000_000),
@@ -45,10 +45,64 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 			assertions: func(t *testing.T, summary *PublicResourceSummary) {
 				require.NotNil(t, summary.InputTokens.Value)
 				assert.Zero(t, *summary.InputTokens.Value)
+				require.NotNil(t, summary.OutputTokens.Value)
+				assert.Zero(t, *summary.OutputTokens.Value)
+				assert.Nil(t, summary.ThinkingTokens.Value)
+				assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE, summary.ThinkingTokens.UnavailableReason)
+				assert.Nil(t, summary.CacheTokens.Value)
+				assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE, summary.CacheTokens.UnavailableReason)
 				require.NotNil(t, summary.Retries.Value)
 				assert.Zero(t, *summary.Retries.Value)
 				require.NotNil(t, summary.LatencyMS.Value)
 				assert.Equal(t, float64(2), *summary.LatencyMS.Value)
+			},
+		},
+		{
+			name: "explicit zero optional counters remain observed",
+			result: &evalv1.EvaluationAssignmentResult{
+				ModelInferences: []*evalv1.ModelInferenceRecord{{
+					UsageAvailability: reported,
+					ThinkingTokens:    &zero,
+					CacheTokens:       &zero,
+				}},
+			},
+			assertions: func(t *testing.T, summary *PublicResourceSummary) {
+				require.NotNil(t, summary.ThinkingTokens.Value)
+				assert.Zero(t, *summary.ThinkingTokens.Value)
+				require.NotNil(t, summary.CacheTokens.Value)
+				assert.Zero(t, *summary.CacheTokens.Value)
+			},
+		},
+		{
+			name: "cache absent on one call leaves input output observed and cache unavailable",
+			result: &evalv1.EvaluationAssignmentResult{
+				ModelInferences: []*evalv1.ModelInferenceRecord{
+					{UsageAvailability: reported, PromptTokens: 3, CompletionTokens: 4, CacheTokens: &zero},
+					{UsageAvailability: reported, PromptTokens: 1, CompletionTokens: 2},
+				},
+			},
+			assertions: func(t *testing.T, summary *PublicResourceSummary) {
+				require.NotNil(t, summary.InputTokens.Value)
+				assert.Equal(t, float64(4), *summary.InputTokens.Value)
+				require.NotNil(t, summary.OutputTokens.Value)
+				assert.Equal(t, float64(6), *summary.OutputTokens.Value)
+				assert.Nil(t, summary.CacheTokens.Value)
+				assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE, summary.CacheTokens.UnavailableReason)
+			},
+		},
+		{
+			name: "mixed thinking presence is incomplete without affecting complete cache",
+			result: &evalv1.EvaluationAssignmentResult{
+				ModelInferences: []*evalv1.ModelInferenceRecord{
+					{UsageAvailability: reported, ThinkingTokens: proto.Uint32(2), CacheTokens: &zero},
+					{UsageAvailability: reported, CacheTokens: &zero},
+				},
+			},
+			assertions: func(t *testing.T, summary *PublicResourceSummary) {
+				assert.Nil(t, summary.ThinkingTokens.Value)
+				assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE, summary.ThinkingTokens.UnavailableReason)
+				require.NotNil(t, summary.CacheTokens.Value)
+				assert.Zero(t, *summary.CacheTokens.Value)
 			},
 		},
 		{

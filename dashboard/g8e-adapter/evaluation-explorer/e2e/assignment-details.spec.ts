@@ -127,7 +127,7 @@ async function installMirror(page: Page, records: unknown[], options: { malforme
 function expectPublicOnly(requests: string[]): void {
   expect(requests.every((request) => {
     const url = new URL(request);
-    return url.origin === mirrorOrigin && ['/bootstrap', '/history', '/snapshot', '/stream'].some((path) => url.pathname === path);
+    return url.origin === mirrorOrigin && ['/bootstrap', '/history', '/snapshot', '/stream', '/proof-catalog'].some((path) => url.pathname === path);
   })).toBe(true);
   expect(requests.some((request) => /api|gateway|operator|ensemble|audit|receipt|tool/i.test(request))).toBe(false);
 }
@@ -142,8 +142,8 @@ test('renders rich assignment evidence from mirror history and follows sibling r
   const requests = await installMirror(page, records);
 
   await page.goto(`/evaluations/${datasetId}/${runId}/assignments/assignment-1`);
-  await expect(page.getByRole('heading', { name: 'Assignment context' })).toBeVisible();
   await expect(page.getByText('Follows a bounded response-format instruction.')).toBeVisible();
+  await expect(page.getByLabel('Public criteria')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'What happened' })).toBeVisible();
   await expect(page.getByText('1 observed')).toBeVisible();
   await expect(page.getByText('Criterion passed')).toBeVisible();
@@ -155,7 +155,7 @@ test('renders rich assignment evidence from mirror history and follows sibling r
   await expect(page.getByText('Stage timeline not published for this assignment.')).not.toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Assignment context' })).toBeVisible();
+  await expect(page.getByText('Follows a bounded response-format instruction.')).toBeVisible();
   await expect(page.getByText('Evaluation projection')).toBeVisible();
   expectPublicOnly(requests);
 });

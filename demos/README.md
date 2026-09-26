@@ -235,26 +235,23 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 
 Ensemble scenarios exercise the core product path: a user sends a chat message to the ensemble (g8ee), the AI reasons about the request and submits governed tool calls through the operator to the gateway for admission. The gateway runs the 5-layer governance gauntlet (L1 doctrine, L2 consensus, L3 notary, L4 warden, L5 actuator), and the operator executes the admitted command. The scenarios verify the end-to-end flow by polling the audit vault for signed ActionReceipts.
 
-Ensemble scenarios require the **unified platform compose** (`docker-compose.yml` at the repo root), not the per-demo composes (which do not include the ensemble). Bring up the full stack with the two-phase bootstrap profile:
+Ensemble scenarios require the **unified platform compose** (`docker-compose.yml` at the repo root), not the per-demo composes (which do not include the ensemble). Bring up the full stack:
 
 ```bash
-# 1. Start the gateway (default profile).
-docker compose up -d g8e-gateway
+# 1. Start the unified stack (default profile).
+docker compose up -d
 
 # 2. Enroll the first owner.
 ./g8e auth enroll user -e localhost
 
-# 3. Bring up the bootstrapped workloads (operator, ensemble, dashboard).
-docker compose --profile bootstrapped up -d
-
-# 4. Approve the workload enrollment requests.
+# 3. Approve the workload enrollment requests.
 ./g8e auth enroll pending
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
 # ./g8e auth enroll deny <request-id> --yes
 
-# 5. Refresh the owner CLI session after Operator enrollment.
+# 4. Refresh the owner CLI session after Operator enrollment.
 ./g8e auth refresh
 ```
 

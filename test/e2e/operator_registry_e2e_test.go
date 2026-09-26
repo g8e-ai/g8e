@@ -83,12 +83,7 @@ func TestOperatorRegistry_HeartbeatTimestampSet(t *testing.T) {
 	require.NotEmpty(t, operators.Operators)
 
 	var active *models.OperatorDocumentGo
-	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
-			active = &operators.Operators[i]
-			break
-		}
-	}
+	active = findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, active, "an active operator must exist")
 	assert.False(t, active.UpdatedAt.IsZero(),
 		"active operator UpdatedAt must be set by at least one heartbeat delivery")

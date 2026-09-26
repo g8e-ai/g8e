@@ -141,7 +141,7 @@ class TestLoadProtocolJsonFailClosed:
     def test_valid_file_returns_data(self, monkeypatch, tmp_path):
         good_dir = tmp_path / "good-protocol"
         good_dir.mkdir(parents=True)
-        payload = {"status": {"action_status": {"foo": {"value": "bar", "_python_const": "FOO"}}}}
+        payload = {"status": {"thinking_phase": {"foo": {"value": "bar", "_python_const": "FOO"}}}}
         (good_dir / "status.json").write_text(json.dumps(payload))
         monkeypatch.setattr(constants_module, "_PROTOCOL_CONSTANTS_DIR", good_dir)
         data = constants_module._load_protocol_json("status.json")
@@ -154,7 +154,7 @@ class TestStatusBundleIntegrity:
     def test_status_has_expected_categories(self):
         from g8e.constants import STATUS
         cats = STATUS["status"]
-        expected = {"action_status", "action_type"}
+        expected = {"thinking_phase", "action_type"}
         assert expected.issubset(cats.keys()), (
             f"STATUS['status'] missing expected categories {expected - cats.keys()}"
         )

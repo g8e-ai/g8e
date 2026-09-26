@@ -34,7 +34,7 @@
     },
     "Notification": {
       "_go_const": "PlatformNotification",
-      "value": "g8e.v1.platform.notification"
+      "value": "g8e.v1.platform.notification.sent"
     },
     "SentinelModeChanged": {
       "_go_const": "PlatformSentinelModeChanged",
@@ -110,7 +110,7 @@
     },
     "AuthInfo": {
       "_go_const": "PlatformAuthInfo",
-      "value": "g8e.v1.platform.auth.info"
+      "value": "g8e.v1.platform.auth.info.updated"
     },
     "SseConnectionFailed": {
       "_go_const": "PlatformSseConnectionFailed",

@@ -18,6 +18,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/audit"
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/eval"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gw"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/mcp"
+	operatorcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/operator"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/swagger"
+	testcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/test"
+	vaultcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/vault"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 )
 
@@ -164,30 +174,30 @@ func TestCommandExecutionErrorHandling(t *testing.T) {
 
 func TestSubcommandRegistration(t *testing.T) {
 	t.Run("all subcommands are non-nil", func(t *testing.T) {
-		assert.NotNil(t, gatewayCmd(), "gatewayCmd should not be nil")
-		assert.NotNil(t, authCmd(), "authCmd should not be nil")
-		assert.NotNil(t, mcpCmd(), "mcpCmd should not be nil")
-		assert.NotNil(t, operatorCmd(), "operatorCmd should not be nil")
-		assert.NotNil(t, vaultCmd(), "vaultCmd should not be nil")
-		assert.NotNil(t, testCmd(), "testCmd should not be nil")
-		assert.NotNil(t, demosCmd(), "demosCmd should not be nil")
-		assert.NotNil(t, auditCmd(), "auditCmd should not be nil")
-		assert.NotNil(t, swaggerCmd(), "swaggerCmd should not be nil")
-		assert.NotNil(t, evalCmd(), "evalCmd should not be nil")
+		assert.NotNil(t, gw.Cmd(), "gatewayCmd should not be nil")
+		assert.NotNil(t, authcmd.Cmd(), "authCmd should not be nil")
+		assert.NotNil(t, mcp.Cmd(), "mcpCmd should not be nil")
+		assert.NotNil(t, operatorcmd.Cmd(), "operatorCmd should not be nil")
+		assert.NotNil(t, vaultcmd.Cmd(), "vaultCmd should not be nil")
+		assert.NotNil(t, testcmd.Cmd(), "testCmd should not be nil")
+		assert.NotNil(t, demos.Cmd(), "demosCmd should not be nil")
+		assert.NotNil(t, audit.Cmd(), "auditCmd should not be nil")
+		assert.NotNil(t, swagger.Cmd(), "swaggerCmd should not be nil")
+		assert.NotNil(t, eval.Cmd(), "evalCmd should not be nil")
 	})
 
 	t.Run("all subcommands have valid cobra.Command structure", func(t *testing.T) {
 		commands := []*cobra.Command{
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-			evalCmd(),
+			gw.Cmd(),
+			authcmd.Cmd(),
+			mcp.Cmd(),
+			operatorcmd.Cmd(),
+			vaultcmd.Cmd(),
+			testcmd.Cmd(),
+			demos.Cmd(),
+			audit.Cmd(),
+			swagger.Cmd(),
+			eval.Cmd(),
 		}
 
 		for _, cmd := range commands {
@@ -241,15 +251,15 @@ func TestRootCommandConsistency(t *testing.T) {
 
 	t.Run("subcommand aliases are consistent", func(t *testing.T) {
 		commands := []*cobra.Command{
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
+			gw.Cmd(),
+			authcmd.Cmd(),
+			mcp.Cmd(),
+			operatorcmd.Cmd(),
+			vaultcmd.Cmd(),
+			testcmd.Cmd(),
+			demos.Cmd(),
+			audit.Cmd(),
+			swagger.Cmd(),
 		}
 
 		for _, cmd := range commands {

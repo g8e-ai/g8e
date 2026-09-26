@@ -738,22 +738,24 @@ func ensembleScenarios() []Scenario {
 				// model). All required fields are set so the merge=true patch
 				// in step 3 can prove they survive.
 				initialTitle := fmt.Sprintf("Initial investigation %s", uniqueRunID())
-				initialFields := map[string]any{
-					"case_title":    initialTitle,
-					"case_id":       uniqueRunID(),
-					"user_id":       kit.UserID,
-					"sentinel_mode": true,
-					"status":        "open",
-				}
+				caseID := uniqueRunID()
+				statusOpen := "open"
+				sentinelMode := true
 				createReq := clientpkg.DocumentUpdateRequest{
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					RequestorUserID:   kit.UserID,
 					Collection:        collection,
 					DocumentID:        documentID,
-					Updates:           initialFields,
-					Merge:             false,
-					StateRoot:         stateRoot,
+					Updates: clientpkg.InvestigationUpdate{
+						CaseTitle:    &initialTitle,
+						CaseID:       &caseID,
+						UserID:       &kit.UserID,
+						SentinelMode: &sentinelMode,
+						Status:       &statusOpen,
+					},
+					Merge:     false,
+					StateRoot: stateRoot,
 				}
 				if _, _, err := submitDocumentUpdateAndCorrelate(ctx, c, r, persona, createReq); err != nil {
 					return err
@@ -793,7 +795,7 @@ func ensembleScenarios() []Scenario {
 					RequestorUserID:   kit.UserID,
 					Collection:        collection,
 					DocumentID:        documentID,
-					Updates:           map[string]any{"case_title": refinedTitle},
+					Updates:           clientpkg.InvestigationUpdate{CaseTitle: &refinedTitle},
 					Merge:             true,
 					StateRoot:         stateRoot,
 				}
@@ -843,15 +845,17 @@ func ensembleScenarios() []Scenario {
 				if err != nil {
 					return fmt.Errorf("document delete: fetch state root for create: %w", err)
 				}
+				deleteTitle := fmt.Sprintf("Delete target %s", uniqueRunID())
+				deleteStatus := "open"
 				createReq := clientpkg.DocumentUpdateRequest{
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					RequestorUserID:   kit.UserID,
 					Collection:        collection,
 					DocumentID:        documentID,
-					Updates: map[string]any{
-						"case_title": fmt.Sprintf("Delete target %s", uniqueRunID()),
-						"status":     "open",
+					Updates: clientpkg.InvestigationUpdate{
+						CaseTitle: &deleteTitle,
+						Status:    &deleteStatus,
 					},
 					Merge:     false,
 					StateRoot: stateRoot,

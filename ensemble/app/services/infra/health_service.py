@@ -12,7 +12,7 @@ from fastapi import Request
 
 from app.constants import G8EE_COMPONENT, HealthStatus
 from app.models.health import DependencyStatus, HealthCheckResult
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 

@@ -23,7 +23,7 @@ import (
 // DispatchRequest is the typed JSON body for POST /api/v1/operators/commands.
 type DispatchRequest struct {
 	TargetOperatorSessionID string `json:"target_operator_session_id"`
-	ActionType              string `json:"action_type"`
+	EventType               string `json:"event_type"`
 	Payload                 []byte `json:"payload"`
 	TargetResource          string `json:"target_resource,omitempty"`
 	CliSessionID            string `json:"cli_session_id,omitempty"`
@@ -76,7 +76,7 @@ func BuildExecuteBashDispatchRequest(operatorSessionID, command, executionID, cl
 	}
 	return DispatchRequest{
 		TargetOperatorSessionID: operatorSessionID,
-		ActionType:              string(constants.ActionTypeExecuteBash),
+		EventType:               string(constants.Event.Operator.Command.Requested),
 		Payload:                 payload,
 		TargetResource:          "cli",
 		CliSessionID:            cliSessionID,

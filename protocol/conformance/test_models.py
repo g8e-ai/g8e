@@ -432,10 +432,10 @@ class TestEventPayloadConformance:
     def test_chat_thinking_payload_round_trip(self):
         from g8e.models import ChatThinkingPayload
 
-        payload = ChatThinkingPayload(thinking="hmm", action_type="execute_bash")
+        payload = ChatThinkingPayload(thinking="hmm", phase="execute_bash")
         parsed = json.loads(payload.model_dump_json())
         assert parsed["thinking"] == "hmm"
-        assert parsed["action_type"] == "execute_bash"
+        assert parsed["phase"] == "execute_bash"
 
     def test_chat_turn_complete_payload_round_trip(self):
         from g8e.models import ChatTurnCompletePayload
@@ -809,9 +809,9 @@ class TestGovernanceEnvelopeConformance:
             state_merkle_root="root",
             nonce="n1",
         )
-        assert envelope.protocol_version == "1.0"
+        assert envelope.protocol_version == "2"
         data = envelope.model_dump(mode="json")
-        assert data["protocol_version"] == "1.0"
+        assert data["protocol_version"] == "2"
 
     def test_governance_envelope_protocol_version_non_default(self):
         from g8e.models import GovernanceEnvelope
@@ -827,8 +827,8 @@ class TestGovernanceEnvelopeConformance:
             target_resource="/tmp",
             state_merkle_root="root",
             nonce="n1",
-            protocol_version="2.0",
+            protocol_version="1.0",
         )
-        assert envelope.protocol_version == "2.0"
+        assert envelope.protocol_version == "1.0"
         data = envelope.model_dump(mode="json")
-        assert data["protocol_version"] == "2.0"
+        assert data["protocol_version"] == "1.0"

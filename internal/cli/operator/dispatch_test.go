@@ -27,7 +27,7 @@ func TestBuildExecuteBashDispatchRequest(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.Equal(t, "4881d566-90a9-44c9-9e3e-c6bb51e07f5c", request.TargetOperatorSessionID)
-	assert.Equal(t, string(constants.ActionTypeExecuteBash), request.ActionType)
+	assert.Equal(t, string(constants.Event.Operator.Command.Requested), request.EventType)
 	assert.Equal(t, "cli-1", request.CliSessionID)
 
 	var payload operatorv1.CommandRequested
@@ -60,7 +60,7 @@ func TestParseCommandResult_Success(t *testing.T) {
 	result, err := ParseCommandResult(&DispatchResponse{
 		Success:       true,
 		EventType:     "g8e.v1.operator.command.completed",
-		ActionType:    "EXECUTE_BASH_RESULT",
+		ActionType:    string(constants.ActionTypeExecuteBash),
 		ResultPayload: payload,
 	})
 	require.NoError(t, err)

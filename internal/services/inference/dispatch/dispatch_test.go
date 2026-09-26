@@ -196,7 +196,7 @@ func TestDispatchInference_SingleCapableOperatorSelected(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Equal(t, 1, dispatcher.calls)
 	assert.Equal(t, "sess-inf", dispatcher.lastReq.TargetOperatorSessionID)
-	assert.Equal(t, string(constants.ActionTypeInference), dispatcher.lastReq.ActionType)
+	assert.Equal(t, string(constants.Event.Operator.Inference.Requested), dispatcher.lastReq.EventType)
 	assert.Equal(t, RequestDeadline, dispatcher.lastReq.Timeout, "inference dispatch must carry the single explicit request deadline")
 }
 

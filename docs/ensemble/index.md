@@ -2,7 +2,7 @@
 
 **g8e-Compliant Agentic Ensemble** — Reference AI reasoning system for g8e infrastructure operations.
 
-g8ee is an optional agentic application that performs triage, model reasoning, tool loops, command generation, memory management, and event publication. It sends typed `CommandIntent` messages for host operations and canonical governance envelopes for designated application-record writes; the Gateway and executing Operator perform the platform's five-layer verification pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator).
+g8ee is an optional agentic application that performs triage, model reasoning, tool loops, command generation, memory management, and event publication. It dispatches host operations through Gateway HTTP (`POST /api/v1/operators/commands` with a registered request `event_type`) and submits canonical governance envelopes for designated application-record writes; the Gateway and executing Operator perform the platform's five-layer verification pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator). g8ee does not use Gateway pub/sub.
 
 ## Documentation
 

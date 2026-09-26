@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -5,133 +6,152 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-#!/bin/bash
-# ----------------------------------------------------------
-# g8e Linux Dev Setup Script
-# Bootstraps a developer workspace from fresh clone to working binary.
-# Validates dependencies, installs missing tooling, builds, and adds to PATH.
-# See: docs/architecture/scripts.md and docs/guides/getting_started.md
-# ==========================================================
+# g8e Linux dev setup: validate toolchain, build evaluation-explorer, make build,
+# and add the repository root to PATH.
+# See docs/architecture/scripts.md and docs/guides/getting_started.md
 
-set -e  # Exit on error
+set -euo pipefail
 
-G8E_GO_MIN="1.26"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/dev-setup-common.sh
+source "${SCRIPT_DIR}/lib/dev-setup-common.sh"
 
-echo -e "\n[SETUP] Starting g8e Dev Environment Setup...\n"
+g8e_linux_install_make() {
+    if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update && sudo apt-get install -y make
+        return 0
+    fi
+    if command -v dnf >/dev/null 2>&1; then
+        sudo dnf install -y make
+        return 0
+    fi
+    if command -v pacman >/dev/null 2>&1; then
+        sudo pacman -S --noconfirm make
+        return 0
+    fi
+    if command -v zypper >/dev/null 2>&1; then
+        sudo zypper install -y make
+        return 0
+    fi
+    return 1
+}
 
-# --- SECTION 1: Dependency Validation & Installation ---
-echo "[STEP 1/3] Validating required dependencies (make, go >= $G8E_GO_MIN)..."
+g8e_linux_install_go() {
+    if command -v snap >/dev/null 2>&1; then
+        echo "Installing Go via snap (recommended on Linux; distro golang packages are often too old)..."
+        sudo snap install go --classic
+        return 0
+    fi
+    return 1
+}
+
+g8e_linux_install_node() {
+    if command -v snap >/dev/null 2>&1; then
+        echo "Installing Node.js via snap..."
+        sudo snap install node --classic --channel=22
+        return 0
+    fi
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "Installing Node.js via apt (verify the version is >= ${G8E_NODE_MIN_MAJOR} after install)..."
+        sudo apt-get update && sudo apt-get install -y nodejs npm
+        return 0
+    fi
+    if command -v dnf >/dev/null 2>&1; then
+        sudo dnf install -y nodejs npm
+        return 0
+    fi
+    return 1
+}
+
+g8e_linux_install_git() {
+    if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update && sudo apt-get install -y git
+        return 0
+    fi
+    if command -v dnf >/dev/null 2>&1; then
+        sudo dnf install -y git
+        return 0
+    fi
+    if command -v pacman >/dev/null 2>&1; then
+        sudo pacman -S --noconfirm git
+        return 0
+    fi
+    if command -v zypper >/dev/null 2>&1; then
+        sudo zypper install -y git
+        return 0
+    fi
+    return 1
+}
+
+g8e_linux_install_missing() {
+    local missing=("$@")
+    local item
+
+    for item in "${missing[@]}"; do
+        case "$item" in
+            make)
+                if g8e_setup_confirm "Install make now? [y/N] "; then
+                    g8e_linux_install_make || echo "  could not install make automatically"
+                fi
+                ;;
+            git)
+                if g8e_setup_confirm "Install git now? [y/N] "; then
+                    g8e_linux_install_git || echo "  could not install git automatically"
+                fi
+                ;;
+            go)
+                echo "Go must satisfy go.mod (currently $G8E_GO_MIN)."
+                echo "  Preferred: install from https://go.dev/dl/"
+                if g8e_setup_confirm "Try snap install go --classic now? [y/N] "; then
+                    g8e_linux_install_go || echo "  snap install failed; install Go manually from https://go.dev/dl/"
+                fi
+                ;;
+            node)
+                echo "Node.js ${G8E_NODE_MIN_MAJOR}+ is required to build the embedded evaluation explorer."
+                if g8e_setup_confirm "Attempt automatic Node.js install now? [y/N] "; then
+                    g8e_linux_install_node || echo "  could not install Node.js automatically; install Node ${G8E_NODE_MIN_MAJOR}+ manually"
+                fi
+                ;;
+        esac
+    done
+}
+
+g8e_setup_init "$@"
+
+echo -e "\n[SETUP] g8e Linux dev environment setup\n"
+echo "[STEP 1/4] Checking prerequisites (git, make, go >= ${G8E_GO_MIN}, node >= ${G8E_NODE_MIN_MAJOR})..."
 
 MISSING=()
+g8e_check_git || MISSING+=("git")
+g8e_check_make || MISSING+=("make")
+g8e_check_go || MISSING+=("go")
+g8e_check_node || MISSING+=("node")
 
-if ! command -v make &> /dev/null; then
-    MISSING+=("make")
-else
-    echo "  make: detected"
-fi
-
-GO_OK=false
-if command -v go &> /dev/null; then
-    GO_VERSION=$(go version 2>/dev/null | grep -oE 'go[0-9]+\.[0-9]+' | head -1 | sed 's/go//')
-    if [ -n "$GO_VERSION" ]; then
-        GO_MAJOR=$(echo "$GO_VERSION" | cut -d. -f1)
-        GO_MINOR=$(echo "$GO_VERSION" | cut -d. -f2)
-        MIN_MAJOR=$(echo "$G8E_GO_MIN" | cut -d. -f1)
-        MIN_MINOR=$(echo "$G8E_GO_MIN" | cut -d. -f2)
-        if [ "$GO_MAJOR" -gt "$MIN_MAJOR" ] || { [ "$GO_MAJOR" -eq "$MIN_MAJOR" ] && [ "$GO_MINOR" -ge "$MIN_MINOR" ]; }; then
-            echo "  go: detected (v$GO_VERSION)"
-            GO_OK=true
-        else
-            echo "  go: detected (v$GO_VERSION) but v$G8E_GO_MIN+ is required"
-            MISSING+=("golang")
-        fi
-    else
-        echo "  go: detected but version unknown"
-        MISSING+=("golang")
-    fi
-else
-    MISSING+=("golang")
-fi
-
-if [ ${#MISSING[@]} -gt 0 ]; then
-    echo -e "\nThe following dependencies are missing or outdated: ${MISSING[*]}"
-
-    # Detect package manager and map package names
-    PKG_MGR=""
-    INSTALL_CMD=""
-    if command -v apt-get &> /dev/null; then
-        PKG_MGR="apt-get"
-        PKG_NAMES=$(echo "${MISSING[@]}" | sed 's/golang/golang-go/g')
-        INSTALL_CMD="sudo apt-get update && sudo apt-get install -y $PKG_NAMES"
-        MANUAL_HINT="sudo apt-get install -y $PKG_NAMES"
-    elif command -v dnf &> /dev/null; then
-        PKG_MGR="dnf"
-        PKG_NAMES=$(echo "${MISSING[@]}" | sed 's/golang/golang/g')
-        INSTALL_CMD="sudo dnf install -y $PKG_NAMES"
-        MANUAL_HINT="sudo dnf install -y $PKG_NAMES"
-    elif command -v pacman &> /dev/null; then
-        PKG_MGR="pacman"
-        PKG_NAMES=$(echo "${MISSING[@]}" | sed 's/golang/go/g')
-        INSTALL_CMD="sudo pacman -S --noconfirm $PKG_NAMES"
-        MANUAL_HINT="sudo pacman -S $PKG_NAMES"
-    elif command -v zypper &> /dev/null; then
-        PKG_MGR="zypper"
-        PKG_NAMES=$(echo "${MISSING[@]}" | sed 's/golang/go/g')
-        INSTALL_CMD="sudo zypper install -y $PKG_NAMES"
-        MANUAL_HINT="sudo zypper install $PKG_NAMES"
-    else
-        echo "FATAL: No supported package manager found (apt-get, dnf, pacman, zypper)."
-        echo "Please install manually: ${MISSING[*]}"
-        exit 1
-    fi
-
-    echo "Package manager detected: $PKG_MGR"
-    echo "They can be installed via: $MANUAL_HINT"
-    read -p "Would you like to install them now? [y/N] " response
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        echo "Installing: ${MISSING[*]}"
-        eval "$INSTALL_CMD"
-        echo "Installation complete."
-    else
-        echo "FATAL: Required dependencies not installed. Please install them manually: $MANUAL_HINT"
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    echo
+    echo "Missing or outdated tooling: ${MISSING[*]}"
+    g8e_linux_install_missing "${MISSING[@]}"
+    echo
+    echo "Re-checking prerequisites..."
+    MISSING=()
+    g8e_check_git || MISSING+=("git")
+    g8e_check_make || MISSING+=("make")
+    g8e_check_go || MISSING+=("go")
+    g8e_check_node || MISSING+=("node")
+    if [[ ${#MISSING[@]} -gt 0 ]]; then
+        echo "FATAL: still missing: ${MISSING[*]}"
+        echo "Install the remaining tools, then rerun: bash scripts/linux-setup.sh"
         exit 1
     fi
 fi
 
-# --- SECTION 2: Build ---
-echo -e "\n[STEP 2/3] Building g8e..."
-make build
+echo -e "\n[STEP 2/4] Building evaluation-explorer assets..."
+g8e_build_evaluation_explorer
+
+echo -e "\n[STEP 3/4] Building g8e..."
+g8e_run_make_build
 echo "Build successful."
 
-# --- SECTION 3: Add g8e to PATH ---
-echo -e "\n[STEP 3/3] Adding g8e to PATH..."
-G8E_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PATH_LINE="export PATH=\"\$PATH:$G8E_DIR\""
-
-# Detect shell profile
-if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "/bin/zsh" ]; then
-    PROFILE_FILE="$HOME/.zshrc"
-elif [ -n "$BASH_VERSION" ] || [ "$SHELL" = "/bin/bash" ]; then
-    PROFILE_FILE="$HOME/.bashrc"
-else
-    PROFILE_FILE="$HOME/.profile"
-fi
-
-if grep -qF "$G8E_DIR" "$PROFILE_FILE" 2>/dev/null; then
-    echo "  g8e directory already in $PROFILE_FILE — skipping."
-else
-    echo "" >> "$PROFILE_FILE"
-    echo "# g8e: add binary to PATH" >> "$PROFILE_FILE"
-    echo "$PATH_LINE" >> "$PROFILE_FILE"
-    echo "  Added $G8E_DIR to PATH in $PROFILE_FILE."
-fi
-
-# Also export for the current session
-export PATH="$PATH:$G8E_DIR"
-
-# --- Complete ---
-echo -e "\n[SETUP COMPLETE]"
-echo "---------------------------------------------------------------"
-echo "Binary available at: g8e (in PATH)"
-echo "Start the gateway with: g8e gw start"
-echo "Note: Open a new terminal or run 'source $PROFILE_FILE' to use g8e in other shells."
+echo -e "\n[STEP 4/4] Adding repository root to PATH..."
+g8e_configure_path_unix
+g8e_print_next_steps_unix

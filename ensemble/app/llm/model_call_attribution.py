@@ -18,8 +18,11 @@ from app.llm.model_evidence import (
     recorded_model_boundary_privacy,
 )
 from app.llm.provider import LLMProvider
+from app.decision.provider import DecisionProvider
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
+
+ProviderForTelemetry = LLMProvider | DecisionProvider
 
 
 def prepare_provider_call(
@@ -60,7 +63,7 @@ def governed_telemetry_fields(provider: LLMProvider) -> dict[str, Any]:
 
 def build_model_call_telemetry(
     *,
-    provider: LLMProvider,
+    provider: ProviderForTelemetry,
     agent_role: str,
     model: str,
     monotonic_start: float,
@@ -69,8 +72,8 @@ def build_model_call_telemetry(
     monotonic_end: float | None = None,
     input_tokens: int = 0,
     output_tokens: int = 0,
-    thinking_tokens: int = 0,
-    cache_tokens: int = 0,
+    thinking_tokens: int | None = None,
+    cache_tokens: int | None = None,
     total_tokens: int = 0,
     usage_reported: bool = False,
     finish_reason: str | None = None,

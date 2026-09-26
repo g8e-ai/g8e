@@ -49,9 +49,9 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.tribunal_commands import TribunalGenerationRequest
-from app.utils.ids import generate_tribunal_correlation_id
+from app.utils.time_ids.ids import generate_tribunal_correlation_id
 from app.models.tool_results import CommandRiskAnalysis
-from app.utils.safety import validate_command_safety
+from app.utils.validation.safety import validate_command_safety
 
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor

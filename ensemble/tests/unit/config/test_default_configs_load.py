@@ -10,12 +10,12 @@
 This ensures that typos or gutted config files are caught by CI before deploy.
 """
 
-from app.utils.auto_approved_validator import (
+from app.utils.validation.auto_approved_validator import (
     get_auto_approved_validator,
     register_auto_approved_validator,
 )
-from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
-from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
+from app.utils.validation.blacklist_validator import get_blacklist_validator, register_blacklist_validator
+from app.utils.validation.whitelist_validator import get_whitelist_validator, register_whitelist_validator
 
 
 class TestDefaultWhitelistConfigLoads:
@@ -26,7 +26,7 @@ class TestDefaultWhitelistConfigLoads:
 
         This catches typos and malformed JSON in the config file before deploy.
         """
-        import app.utils.whitelist_validator as wv_module
+        import app.utils.validation.whitelist_validator as wv_module
 
         wv_module._validator_instance = None
         validator = get_whitelist_validator(whitelist_path=None)
@@ -42,7 +42,7 @@ class TestDefaultBlacklistConfigLoads:
 
         This catches typos and malformed JSON in the config file before deploy.
         """
-        import app.utils.blacklist_validator as bv_module
+        import app.utils.validation.blacklist_validator as bv_module
 
         bv_module._validator = None
         validator = get_blacklist_validator(blacklist_path=None)
@@ -58,7 +58,7 @@ class TestDefaultAutoApprovedConfigLoads:
 
         This catches typos and malformed JSON in the config file before deploy.
         """
-        import app.utils.auto_approved_validator as av_module
+        import app.utils.validation.auto_approved_validator as av_module
 
         av_module._validator = None
         validator = get_auto_approved_validator(auto_approved_path=None)
@@ -71,7 +71,7 @@ class TestDefaultAutoApprovedConfigLoads:
         Since auto_approved.json is enabled by default, we verify it contains expected entries
         to catch gutted files.
         """
-        import app.utils.auto_approved_validator as av_module
+        import app.utils.validation.auto_approved_validator as av_module
 
         av_module._validator = None
         validator = get_auto_approved_validator(auto_approved_path=None)

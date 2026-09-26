@@ -422,7 +422,7 @@ class TestNoCircularImport:
     ``app.security.__init__`` → ``request_timestamp`` →
     ``app.services.cache.cache_aside`` → ``app.services.__init__`` →
     ``app.services.ai.agent`` → ``app.services.operator.execution_service``
-    → ``app.security.operator_command_validator`` (still loading).  The
+    (still loading).  The
     fix moved the import under ``TYPE_CHECKING`` with
     ``from __future__ import annotations``.
     """

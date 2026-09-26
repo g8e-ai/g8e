@@ -46,6 +46,26 @@ export interface PublicHistory {
   readonly limit: number;
 }
 
+export interface PublicProofCatalogEntry {
+  readonly artifact_id: string;
+  readonly filename: string;
+  readonly media_type: string;
+  readonly byte_size: number;
+  readonly sha256: string;
+  readonly classification: string;
+  readonly campaign_id: string;
+  readonly source_run_id?: string;
+  readonly generated_at: string;
+  readonly verification_command: string;
+  readonly immutable_url: string;
+}
+
+export interface PublicProofCatalog {
+  readonly schema_version: string;
+  readonly entries: readonly PublicProofCatalogEntry[];
+  readonly generated_at: string;
+}
+
 export interface PublicRecord {
   readonly sequence: number;
   readonly record_type: string;

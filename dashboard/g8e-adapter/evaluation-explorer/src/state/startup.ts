@@ -21,6 +21,7 @@ import { evalStore } from './store';
 import {
   fetchBootstrap,
   fetchHistoryPage,
+  fetchProofCatalog,
   fetchSnapshot,
   fetchSnapshotAt,
   loadRuntimeConfig,
@@ -119,6 +120,15 @@ export async function startFeed(opts: StartOptions = {}): Promise<void> {
     const snapshot = bootstrap.snapshot;
     const recent = bootstrap.recent_projections.map(normalizeRecentProjection);
     evalStore.initBootstrap(snapshot, recent, bootstrap.proof_catalog_summary.artifact_count);
+    if (bootstrap.proof_catalog_summary.artifact_count > 0) {
+      try {
+        const catalog = await fetchProofCatalog(runtime.mirror_origin, snapshot.source_id, fetchImpl);
+        if (gen !== generation) return;
+        evalStore.initProofCatalog(catalog.entries);
+      } catch {
+        // Feed history still reconciles; audit downloads stay absent without catalog entries.
+      }
+    }
     const cached = await loadCompatibleCache(cacheStorage, runtime.mirror_origin, snapshot, fetchImpl);
     if (gen !== generation) return;
     const records = cached ? [...cached.records] : [];

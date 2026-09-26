@@ -1,8 +1,5 @@
 # LLM Providers
 
-Last Updated: 2026-09-23
-Version: v2.1.12
-
 ## Overview
 
 The g8e Agentic Ensemble (`g8ee`) uses a provider-neutral interface for model requests. The interface normalizes messages, streamed chunks, tool calls, structured responses, token usage, finish reasons, and provider reasoning into common application types. The provider factory selects a configured adapter for each model role and reuses its client across calls.
@@ -17,7 +14,7 @@ g8ee has three independently configurable model roles:
 | --- | --- | --- |
 | `primary` | Primary | Complex chat turns, tool-capable agent loops, and primary reasoning work |
 | `assistant` | Assistant | The model selected for simple chat turns |
-| `lite` | Lite | Triage, Tribunal generation, risk analysis, title generation, memory extraction, and other concise or structured tasks |
+| `lite` | Lite | Triage, Tribunal generation, risk analysis, title generation, memory extraction, semantic eval judge, and other concise or structured tasks |
 
 Wire values are canonical in APIs, settings, telemetry, and persisted records. User-facing documentation and UI copy use the display labels (`Primary`, `Assistant`, `Lite`). Do not introduce alternate display names for `lite`.
 
@@ -68,6 +65,7 @@ The LLM settings model also carries these cross-provider controls:
 | llama.cpp (`llamacpp`) | Endpoint; API key is optional; default endpoint is `http://localhost:11444` | Uses the OpenAI-compatible adapter and appends `/v1` when absent; actual tool, schema, and streaming support depends on the server and loaded model |
 | g8e (`g8e`) | No provider endpoint or API key; requires the startup-injected `InternalHttpClient` | Sends inference through the Gateway's `/api/v1/inference/dispatch` endpoint over the app's mTLS client. The Gateway and Inference Operator apply the governed L1-L5 path and return a signed receipt with the typed result. Ordered messages, tools, structured output, thinking controls, usage, and evaluation bindings cross the governed request; inline-data parts are rejected |
 | Fake (`fake`) | No credentials or endpoint | Runs in process without network access; emits deterministic text, structured lite responses, and selected tool calls for CI, air-gapped tests, and scenarios |
+| Jev (`jev`) | API key; default endpoint is `https://api.typesafe.ai/v1/systemone` | **Lite role only.** System One decision API for triage and semantic eval judge — not a generative LLM. See [Decision Providers](decision-providers.md) |
 
 Provider validation runs for every configured role before chat starts. A configured model without a provider fails validation. OpenAI and Anthropic require both credentials and endpoints, Gemini requires credentials, Ollama and llama.cpp require endpoints, and the fake and g8e providers have no provider-level credential or endpoint requirements. The g8e provider still fails if the startup-injected `InternalHttpClient` is unavailable.
 
@@ -96,7 +94,7 @@ The registry contains these unique model names:
 | OpenAI | `gpt-5.4`, `gpt-5.4-mini` | `gpt-5.4` has no declared thinking support; mini supports off, minimal, and low | Enabled |
 | Ollama | `gemma4:e4b`, `gemma4:e2b`, `llama3.2:3b`, `qwen3.5:2b` | Gemma4 and Qwen use an off/high native toggle; Llama has no thinking mode | Structured output is disabled in the registry; the adapter can serialize a supplied schema when a caller provides one |
 
-Adapters can send other model names to a backend, but unknown names use the shared unknown profile. That profile disables thinking, tools, and provider-enforced structured-output decisions. Register a model profile before relying on reasoning, tools, or provider-enforced structured output for a custom model. The llama.cpp default model name is not currently registered, so it uses this unknown profile unless an equivalent model is registered.
+Adapters can send other model names to a backend, but unknown names use the shared unknown profile. That profile disables thinking, tools, and provider-enforced structured-output decisions. Register a model profile before relying on reasoning, tools, or provider-enforced structured output for a custom model. Unregistered llama.cpp model names use the unknown profile.
 
 ### Thinking translation
 
@@ -113,7 +111,7 @@ Gemini and Anthropic may return opaque provider signatures with thinking content
 
 ## Structured Output and Tools
 
-Canonical tool declarations and JSON Schemas are converted at the provider boundary. Primary calls can expose tools when the model profile permits them. Assistant and lite calls can carry a response format, but enforcement depends on the adapter: Gemini, OpenAI-compatible providers, and Ollama pass a schema to the backend; Anthropic currently relies on prompt instructions because its adapter ignores the response format.
+Canonical tool declarations and JSON Schemas are converted at the provider boundary. Primary calls can expose tools when the model profile permits them. Assistant and lite calls can carry a response format, but enforcement depends on the adapter: Gemini, OpenAI-compatible providers, and Ollama pass a schema to the backend; the Anthropic adapter ignores `response_format` and relies on prompt instructions for structured output.
 
 Provider capability failures are translated only at catch sites that know the request asked for thinking or tools. Recognized rejection messages become typed thinking or tool capability errors; unrelated provider failures retain the original exception. This translation is concentrated on primary tool-capable calls rather than every assistant and lite request.
 
@@ -131,6 +129,7 @@ Usage fields remain zero with `usage_reported=false` when a provider omits usage
 
 ## Related
 
+- [Decision Providers](decision-providers.md): Jev (System One) for lite-role triage and eval judge
 - [Ensemble Architecture](../architecture/ensemble.md): Platform-level summary of g8ee's role
 - [Architecture](architecture.md): Ensemble components and request flow
 - [Agents](agents.md): Agent roles and model-tier assignments

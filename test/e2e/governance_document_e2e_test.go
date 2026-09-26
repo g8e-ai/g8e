@@ -44,7 +44,7 @@ func buildE2EDocumentEnvelope(
 	}
 
 	env := &governance.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   governance.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
 		SourceComponent:   commonv1.Component_COMPONENT_AGENT,

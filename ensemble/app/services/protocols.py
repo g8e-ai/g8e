@@ -9,16 +9,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Protocol, runtime_checkable, TYPE_CHECKING, Any
 
 from app.constants import (
     EventType,
     FileOperation,
     HistoryActor,
-    OperatorStatus,
 )
-from app.constants.generated_status import OperatorHistoryEventType, OperatorType
 from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,
@@ -57,12 +54,10 @@ from app.models.operators import (
     AgentContinueApprovalRequest,
     ApprovalResult,
     CommandApprovalRequest,
-    CommandResultRecord,
     DirectCommandResult,
     FileEditApprovalRequest,
     IntentApprovalRequest,
     OperatorDocument,
-    HeartbeatSnapshot,
     PendingApproval,
     StreamApprovalRequest,
     TargetSystem,
@@ -96,14 +91,13 @@ from app.models.command_request_payloads import (
     CheckPortRequestPayload,
 )
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
-from app.utils.whitelist_validator import CommandWhitelistValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
 from app.models.tool_results import ToolResult
 from app.constants.prompts import AgentMode
 from app.llm import llm_types as types
 
 if TYPE_CHECKING:
-    from app.clients.pubsub_client import PubSubClient
     from app.clients.http_client import HTTPClient
     from app.services.cache.cache_aside import CacheAsideService
 
@@ -133,16 +127,6 @@ class EventServiceProtocol(Protocol):
         """Publish a session or background event."""
         raise NotImplementedError
 
-    async def publish_command_event(
-        self,
-        event_type: EventType,
-        data: G8eBaseModel,
-        g8e_context: G8eHttpContext,
-        *,
-        task_id: str,
-    ) -> None:
-        """Publish a command-related event."""
-        raise NotImplementedError
 
     async def publish_reputation_event(
         self,
@@ -360,8 +344,14 @@ class OperatorDataServiceProtocol(Protocol):
     collection: str
     cache: CacheAsideService
 
-    async def get_operator(self, operator_id: str) -> OperatorDocument | None:
-        """Retrieve operator metadata."""
+    async def get_operator(
+        self, operator_id: str, *, user_id: str | None = None
+    ) -> OperatorDocument | None:
+        """Retrieve operator metadata from the Gateway registry."""
+        raise NotImplementedError
+
+    async def get_operator_by_session(self, session_id: str) -> OperatorDocument | None:
+        """Retrieve operator metadata by active operator session ID."""
         raise NotImplementedError
 
     async def get_cli_session(self, cli_session_id: str) -> CliSessionDocument | None:
@@ -379,125 +369,10 @@ class OperatorDataServiceProtocol(Protocol):
         field_filters: list[dict[str, object]] | None = None,
         limit: int = 1000,
         bypass_cache: bool = False,
+        *,
+        user_id: str,
     ) -> list[OperatorDocument]:
-        """Query operator documents. ``bypass_cache=True`` skips the query cache."""
-        raise NotImplementedError
-
-    async def create_operator(self, operator: OperatorDocument) -> bool:
-        """Create a new operator document."""
-        raise NotImplementedError
-
-    async def update_operator(self, operator: OperatorDocument) -> bool:
-        """Update an existing operator document."""
-        raise NotImplementedError
-
-    async def add_history_entry(
-        self,
-        operator_id: str,
-        event_type: OperatorHistoryEventType,
-        actor: HistoryActor,
-        summary: str,
-        details: dict[str, object] | None = None,
-        additional_updates: dict[str, object] | None = None,
-        status_check: tuple[OperatorStatus, ...] | None = None,
-    ) -> OperatorDocument:
-        """Atomic status + history update under a keyed lock."""
-        raise NotImplementedError
-
-    async def update_operator_status(
-        self,
-        operator_id: str,
-        status: OperatorStatus,
-    ) -> bool:
-        """Update an operator's ``status`` field (no history entry).
-
-        Used by reconcilers (e.g. ``HeartbeatStaleMonitorService``) that need a
-        plain status write without the audit-trail semantics of
-        ``add_history_entry``.
-        """
-        raise NotImplementedError
-
-    async def update_document(
-        self,
-        collection: str,
-        document_id: str,
-        data: dict[str, object],
-        merge: bool = True,
-    ) -> CacheOperationResult:
-        """Update a document."""
-        raise NotImplementedError
-
-    async def update_operator_heartbeat(
-        self,
-        operator_id: str,
-        heartbeat: HeartbeatSnapshot,
-        investigation_id: str | None,
-        case_id: str | None,
-    ) -> bool:
-        """Update operator heartbeat and session status.
-
-        investigation_id/case_id are None when the heartbeat arrives outside an
-        investigation context; callers MUST NOT coerce absence to sentinel strings.
-        """
-        raise NotImplementedError
-
-    async def append_command_result(
-        self, operator_id: str, command_result: CommandResultRecord
-    ) -> bool:
-        """Append a command result to operator history."""
-        raise NotImplementedError
-
-    async def add_operator_activity(
-        self,
-        operator_id: str,
-        sender: str,
-        content: str,
-        metadata: ConversationMessageMetadata,
-    ) -> bool:
-        """Log operator-specific activity message."""
-        raise NotImplementedError
-
-    async def add_operator_approval(
-        self,
-        operator_id: str,
-        event_type: EventType,
-        metadata: ConversationMessageMetadata,
-    ) -> bool:
-        """Log an approval lifecycle event in the operator activity log."""
-        raise NotImplementedError
-
-
-@runtime_checkable
-class OperatorLifecycleServiceProtocol(Protocol):
-    """Protocol for operator lifecycle orchestration (domain layer)."""
-
-    async def claim_operator_slot(
-        self,
-        operator_id: str,
-        operator_session_id: str,
-        bound_web_session_id: str | None,
-        bound_cli_session_id: str | None = None,
-        operator_type: OperatorType | str | None = None,
-    ) -> bool:
-        """Claim an operator slot for an active session."""
-        raise NotImplementedError
-
-    async def terminate_operator(
-        self,
-        operator_id: str,
-        actor: HistoryActor = HistoryActor.SYSTEM,
-        summary: str = "Operator terminated",
-        details: dict[str, object] | None = None,
-    ) -> OperatorDocument:
-        """Mark an operator TERMINATED."""
-        raise NotImplementedError
-
-    async def update_operator_status(
-        self,
-        operator_id: str,
-        status: OperatorStatus,
-    ) -> bool:
-        """Update operator status."""
+        """List operator documents from the Gateway registry for a user."""
         raise NotImplementedError
 
 
@@ -728,79 +603,6 @@ class AIResponseAnalyzerProtocol(Protocol):
 
 
 @runtime_checkable
-class PubSubServiceProtocol(Protocol):
-    pubsub_client: PubSubClient | None
-
-    @property
-    def is_ready(self) -> bool:
-        raise NotImplementedError
-
-    def set_pubsub_client(self, client: PubSubClient) -> None:
-        raise NotImplementedError
-
-    def register_future(self, execution_id: str) -> asyncio.Future[G8eoResultEnvelope]:
-        raise NotImplementedError
-
-    def release_future(self, execution_id: str) -> None:
-        raise NotImplementedError
-
-    async def start(self) -> None:
-        raise NotImplementedError
-
-    async def stop(self) -> None:
-        raise NotImplementedError
-
-    async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        raise NotImplementedError
-
-    async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        raise NotImplementedError
-
-    async def publish_command(
-        self, operator_id: str, operator_session_id: str, command_data: G8eMessage
-    ) -> int:
-        raise NotImplementedError
-
-
-@runtime_checkable
-class HeartbeatSnapshotStaleMonitorServiceProtocol(Protocol):
-    async def start(self) -> None:
-        raise NotImplementedError
-
-    async def stop(self) -> None:
-        raise NotImplementedError
-
-    async def tick(self) -> None:
-        raise NotImplementedError
-
-
-@runtime_checkable
-class HeartbeatSnapshotServiceProtocol(Protocol):
-    @property
-    def operator_data_service(self) -> OperatorDataServiceProtocol:
-        raise NotImplementedError
-
-    @property
-    def event_service(self) -> EventServiceProtocol:
-        raise NotImplementedError
-
-    async def start(self) -> None:
-        raise NotImplementedError
-
-    async def stop(self) -> None:
-        raise NotImplementedError
-
-    async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        raise NotImplementedError
-
-    async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        raise NotImplementedError
-
-    def set_pubsub_client(self, client: PubSubClient) -> None:
-        raise NotImplementedError
-
-
-@runtime_checkable
 class ApprovalServiceProtocol(Protocol):
     @property
     def operator_data_service(self) -> OperatorDataServiceProtocol:
@@ -841,24 +643,14 @@ class ApprovalServiceProtocol(Protocol):
 
 @runtime_checkable
 class ExecutionServiceProtocol(Protocol):
-    @property
-    def event_service(self) -> EventServiceProtocol:
-        raise NotImplementedError
 
     @property
     def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
         raise NotImplementedError
 
-    @property
-    def operator_data_service(self) -> OperatorDataServiceProtocol:
-        raise NotImplementedError
 
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
-        raise NotImplementedError
-
-    @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
         raise NotImplementedError
 
     @property
@@ -916,10 +708,6 @@ class LFAAServiceProtocol(Protocol):
 @runtime_checkable
 class FileServiceProtocol(Protocol):
     @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        raise NotImplementedError
-
-    @property
     def approval_service(self) -> ApprovalServiceProtocol:
         raise NotImplementedError
 
@@ -967,10 +755,6 @@ class FileServiceProtocol(Protocol):
 
 @runtime_checkable
 class FilesystemServiceProtocol(Protocol):
-    @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        raise NotImplementedError
-
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
         raise NotImplementedError

@@ -6,6 +6,8 @@
 // uint64 protojson strings, and version-specific wire fields are validated
 // before any adapter conversion is allowed.
 
+import { parseWireActivityFamily, WIRE_UNAVAILABLE_REASONS, type WireActivityFamily } from './activity-family';
+import { PUBLIC_UNAVAILABLE_REASONS } from './types';
 import { ValidationError } from './validators';
 
 export const CAMPAIGN_LIFECYCLE_SCHEMA_VERSION = '1.0.0' as const;
@@ -49,25 +51,6 @@ const VERDICT_STATUSES = [
 ] as const;
 const VERIFICATION_STATUSES = ['verified', 'unverified', 'failed', 'invalid'] as const;
 const GRADING_METHODS = ['EVALUATION_GRADING_METHOD_DETERMINISTIC', 'EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE'] as const;
-const ACTIVITY_AVAILABILITIES = [
-  'PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED',
-  'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE',
-  'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE',
-] as const;
-const UNAVAILABLE_REASONS = [
-  'PUBLIC_UNAVAILABLE_REASON_HISTORICAL_NOT_CAPTURED',
-  'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED',
-  'PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE',
-  'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE',
-  'PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE',
-  'PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS',
-  'historical_not_captured',
-  'source_not_captured',
-  'source_unavailable',
-  'scenario_not_applicable',
-  'incomplete_contributor_evidence',
-  'no_scored_calls',
-] as const;
 const FINISH_STATES = [
   'PUBLIC_FINISH_STATE_STOP',
   'PUBLIC_FINISH_STATE_LENGTH',
@@ -109,6 +92,8 @@ const EVIDENCE_KINDS = [
   'efficiency_observation',
   'statistical_analysis',
   'source_manifest',
+  'assignment_audit_slice',
+  'assignment_audit_vault_key',
 ] as const;
 const TOOL_DIMENSIONS = [
   'PUBLIC_TOOL_SCORE_DIMENSION_TOOL_RECOGNITION',
@@ -133,9 +118,11 @@ const TOOL_DIMENSIONS = [
   'TOOL_SCORE_DIMENSION_RECOVERY',
 ] as const;
 
+type WireMetricUnavailableReason = (typeof WIRE_UNAVAILABLE_REASONS)[number] | (typeof PUBLIC_UNAVAILABLE_REASONS)[number];
+
 interface WireMetric {
   value?: number;
-  unavailable_reason?: (typeof UNAVAILABLE_REASONS)[number];
+  unavailable_reason?: WireMetricUnavailableReason;
 }
 
 interface WireScore {
@@ -220,12 +207,6 @@ interface WireGovernedActionActivityRecord {
   reported_policy_outcome: (typeof POLICY_OUTCOMES)[number];
   receipt_status: (typeof RECEIPT_STATUSES)[number];
   evidence_source: (typeof EVIDENCE_SOURCES)[number];
-}
-
-interface WireActivityFamily<T> {
-  availability: (typeof ACTIVITY_AVAILABILITIES)[number];
-  unavailable_reason?: (typeof UNAVAILABLE_REASONS)[number];
-  records: T[];
 }
 
 interface WireActivitySummary {
@@ -376,7 +357,7 @@ function assertMetric(value: unknown, path: string): asserts value is WireMetric
     assert(typeof value.value === 'number' && Number.isFinite(value.value), `${path}.value`, 'expected finite number');
     assert(value.value >= 0, `${path}.value`, 'must be nonnegative');
   }
-  if (hasReason) assertEnum(value.unavailable_reason, UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
+  if (hasReason) assertEnum(value.unavailable_reason, [...WIRE_UNAVAILABLE_REASONS, ...PUBLIC_UNAVAILABLE_REASONS], `${path}.unavailable_reason`);
 }
 
 function assertStringArray(value: unknown, path: string, maxItems: number, maxBytes = 128): asserts value is string[] {
@@ -481,39 +462,14 @@ function assertUint64String(value: unknown, path: string): void {
   assert(BigInt(value) <= BigInt(Number.MAX_SAFE_INTEGER), path, 'numeric value exceeds browser-safe range');
 }
 
-function assertActivityFamily(value: unknown, path: string, recordCheck: (value: unknown, path: string) => void): void {
-  assertObject(value, path);
-  rejectUnknown(value, ['availability', 'unavailable_reason', 'records'], path);
-  assertEnum(value.availability, ACTIVITY_AVAILABILITIES, `${path}.availability`);
-  if (value.availability === 'PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED') {
-    assert(value.unavailable_reason === undefined, `${path}.unavailable_reason`, 'observed activity cannot have unavailable_reason');
-  } else {
-    assertEnum(value.unavailable_reason, UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
-    if (value.availability === 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE') {
-      assert(
-        value.unavailable_reason === 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE' ||
-          value.unavailable_reason === 'scenario_not_applicable',
-        `${path}.unavailable_reason`,
-        'not_applicable activity requires scenario_not_applicable',
-      );
-    }
-  }
-  assert(Array.isArray(value.records), `${path}.records`, 'expected array');
-  assert(value.records.length <= 128, `${path}.records`, 'expected at most 128 entries');
-  for (let index = 0; index < value.records.length; index++) recordCheck(value.records[index], `${path}.records[${index}]`);
-  if (value.availability !== 'PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED') {
-    assert(value.records.length === 0, `${path}.records`, 'unavailable activity cannot contain records');
-  }
-}
-
 function assertActivitySummary(value: unknown, path: string): void {
   assertObject(value, path);
   rejectUnknown(value, ['model_activity', 'tool_decisions', 'tool_calls', 'policy_decisions', 'governed_actions'], path);
-  assertActivityFamily(value.model_activity, `${path}.model_activity`, assertModelActivityRecord);
-  assertActivityFamily(value.tool_decisions, `${path}.tool_decisions`, assertToolDecisionRecord);
-  assertActivityFamily(value.tool_calls, `${path}.tool_calls`, assertToolCallRecord);
-  assertActivityFamily(value.policy_decisions, `${path}.policy_decisions`, assertPolicyDecisionRecord);
-  assertActivityFamily(value.governed_actions, `${path}.governed_actions`, assertGovernedActionRecord);
+  parseWireActivityFamily(value.model_activity, `${path}.model_activity`, assertModelActivityRecord);
+  parseWireActivityFamily(value.tool_decisions, `${path}.tool_decisions`, assertToolDecisionRecord);
+  parseWireActivityFamily(value.tool_calls, `${path}.tool_calls`, assertToolCallRecord);
+  parseWireActivityFamily(value.policy_decisions, `${path}.policy_decisions`, assertPolicyDecisionRecord);
+  parseWireActivityFamily(value.governed_actions, `${path}.governed_actions`, assertGovernedActionRecord);
 }
 
 function assertModelActivityRecord(value: unknown, path: string): void {

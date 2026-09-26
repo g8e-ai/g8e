@@ -54,8 +54,8 @@ class TurnState(BaseModel):
     finish_reason: str = DEFAULT_FINISH_REASON
     input_tokens: int = 0
     output_tokens: int = 0
-    thinking_tokens: int = 0
-    cache_tokens: int = 0
+    thinking_tokens: int | None = None
+    cache_tokens: int | None = None
     total_tokens: int = 0
     usage_reported: bool = False
     time_to_first_token_seconds: float | None = None
@@ -91,13 +91,15 @@ def handle_usage_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> N
         usage = chunk.usage_metadata
         chunk_in = usage.prompt_token_count or 0
         chunk_out = usage.candidates_token_count or 0
-        chunk_thinking = usage.thinking_token_count or 0
-        chunk_cache = usage.cache_token_count or 0
+        chunk_thinking = usage.thinking_token_count
+        chunk_cache = usage.cache_token_count
         chunk_total = usage.total_token_count or 0
         state.input_tokens += chunk_in
         state.output_tokens += chunk_out
-        state.thinking_tokens += chunk_thinking
-        state.cache_tokens += chunk_cache
+        if chunk_thinking is not None:
+            state.thinking_tokens = (state.thinking_tokens or 0) + chunk_thinking
+        if chunk_cache is not None:
+            state.cache_tokens = (state.cache_tokens or 0) + chunk_cache
         state.total_tokens += chunk_total
         state.usage_reported = state.usage_reported or usage.usage_reported
         # Timing fields are point measurements, not counters: the last

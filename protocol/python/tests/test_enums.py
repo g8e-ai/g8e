@@ -23,7 +23,6 @@ class TestNameConversions:
     @pytest.mark.parametrize(
         "snake,expected",
         [
-            ("action_status", "ActionStatus"),
             ("action_type", "ActionType"),
             ("priority", "Priority"),
             ("slash_tier", "SlashTier"),
@@ -36,8 +35,7 @@ class TestNameConversions:
         "pascal,expected",
         [
             ("AiLLMChat", "AI_LLM_CHAT"),
-            ("G8eActionType", "G8E_ACTION_TYPE"),
-            ("ActionStatus", "ACTION_STATUS"),
+            ("ThinkingPhase", "THINKING_PHASE"),
             ("EventType", "EVENT_TYPE"),
         ],
     )
@@ -47,9 +45,8 @@ class TestNameConversions:
     @pytest.mark.parametrize(
         "pascal,expected",
         [
-            ("ActionStatus", "action_status"),
             ("AISource", "ai_source"),
-            ("G8eActionType", "g8e_action_type"),
+            ("ThinkingPhase", "thinking_phase"),
             ("ApprovalErrorType", "approval_error_type"),
         ],
     )
@@ -60,23 +57,6 @@ class TestNameConversions:
 class TestStatusEnumGeneration:
     """Verify that status categories produce valid enums."""
 
-    def test_action_status_enum_is_str_enum(self):
-        cls = _build_enum("action_status")
-        assert issubclass(cls, StrEnum)
-
-    def test_action_status_enum_has_members(self):
-        cls = _build_enum("action_status")
-        members = list(cls)
-        assert len(members) > 0
-
-    def test_action_status_cancelled_value(self):
-        cls = _build_enum("action_status")
-        assert cls.CANCELLED == "cancelled"
-
-    def test_action_status_completed_value(self):
-        cls = _build_enum("action_status")
-        assert cls.COMPLETED == "completed"
-
     def test_priority_enum_is_int_enum(self):
         cls = _build_enum("priority")
         assert issubclass(cls, IntEnum)
@@ -86,8 +66,8 @@ class TestStatusEnumGeneration:
         assert issubclass(cls, IntEnum)
 
     def test_enum_values_preserve_protocol_wire_format(self):
-        cls = _build_enum("action_status")
-        assert cls.USER_CANCELLED == "user.cancelled"
+        cls = _build_enum("thinking_phase")
+        assert cls.START == "start"
 
 
 class TestEventTypeEnum:
@@ -113,10 +93,10 @@ class TestEventTypeEnum:
 class TestDynamicAttributeAccess:
     """Verify __getattr__ dynamic enum access works."""
 
-    def test_access_action_status_via_getattr(self):
-        cls = g8e.enums.ActionStatus
+    def test_access_thinking_phase_via_getattr(self):
+        cls = g8e.enums.ThinkingPhase
         assert issubclass(cls, StrEnum)
-        assert cls.CANCELLED == "cancelled"
+        assert cls.START == "start"
 
     def test_access_event_type_via_getattr(self):
         cls = g8e.enums.EventType
@@ -129,7 +109,7 @@ class TestDynamicAttributeAccess:
     def test_dir_lists_all_enums(self):
         names = dir(g8e.enums)
         assert "EventType" in names
-        assert "ActionStatus" in names
+        assert "ThinkingPhase" in names
         assert "Channel" in names
         assert "Intent" in names
         assert "Prompt" in names

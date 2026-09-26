@@ -15,24 +15,29 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-type stubCapabilityProbeBackend struct {
-	byAttempt map[string]func(models.GenerateRequest) (*models.GenerateResponse, error)
+type stubGovernedCapabilityProbeDispatcher struct {
+	bySuffix map[string]func(InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error)
 }
 
-func (s *stubCapabilityProbeBackend) Generate(_ context.Context, req models.GenerateRequest) (*models.GenerateResponse, error) {
-	handler, ok := s.byAttempt[req.ProviderAttemptID]
-	if !ok {
-		return nil, fmt.Errorf("unexpected attempt %s", req.ProviderAttemptID)
+func (s *stubGovernedCapabilityProbeDispatcher) DispatchInference(_ context.Context, req *operatorv1.InferenceDispatchRequest) (*operatorv1.InferenceDispatchResponse, error) {
+	for suffix, handler := range s.bySuffix {
+		if req.GetProviderAttemptId() == capabilityProbeAttemptPrefix+"-"+suffix {
+			probeReq := InferenceProbeRequest{
+				ProviderAttemptID:       req.GetProviderAttemptId(),
+				Model:                   req.GetModel(),
+				TargetOperatorSessionID: req.GetTargetOperatorSessionId(),
+			}
+			return handler(probeReq)
+		}
 	}
-	return handler(req)
+	return nil, fmt.Errorf("unexpected attempt %s", req.GetProviderAttemptId())
 }
 
-func TestRunModelCapabilityProbes_RecordsDescriptiveOutcomesWithoutExclusion(t *testing.T) {
+func TestGovernedCapabilityProbeRunner_RecordsDescriptiveOutcomesWithoutExclusion(t *testing.T) {
 	variant := &evalv1.ModelVariant{
 		VariantId:      "probe-model",
 		ProviderClass:  "ollama",
@@ -40,21 +45,22 @@ func TestRunModelCapabilityProbes_RecordsDescriptiveOutcomesWithoutExclusion(t *
 		ModelDigest:    repeatHex('d', 64),
 		ContextLimit:   4096,
 	}
-	backend := &stubCapabilityProbeBackend{byAttempt: map[string]func(models.GenerateRequest) (*models.GenerateResponse, error){
-		capabilityProbeAttemptPrefix + "-completion": func(models.GenerateRequest) (*models.GenerateResponse, error) {
-			return &models.GenerateResponse{Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "capability-probe-ok"}}}}, nil
+	dispatcher := &stubGovernedCapabilityProbeDispatcher{bySuffix: map[string]func(InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error){
+		"completion": func(req InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {
+			return probeResponse(req.ProviderAttemptID, "capability-probe-ok"), nil
 		},
-		capabilityProbeAttemptPrefix + "-tools": func(models.GenerateRequest) (*models.GenerateResponse, error) {
+		"tools": func(InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {
 			return nil, fmt.Errorf("tools unsupported")
 		},
-		capabilityProbeAttemptPrefix + "-structured": func(models.GenerateRequest) (*models.GenerateResponse, error) {
-			return &models.GenerateResponse{Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "not-json"}}}}, nil
+		"structured": func(req InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {
+			return probeResponse(req.ProviderAttemptID, "not-json"), nil
 		},
-		capabilityProbeAttemptPrefix + "-thinking": func(models.GenerateRequest) (*models.GenerateResponse, error) {
+		"thinking": func(InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {
 			return nil, fmt.Errorf("thinking unsupported")
 		},
 	}}
-	observations, err := RunModelCapabilityProbes(context.Background(), backend, variant)
+	runner := NewGovernedCapabilityProbeRunner(dispatcher, "infer-session", func(prefix string) string { return prefix })
+	observations, err := runner.RunCapabilityProbes(context.Background(), variant)
 	require.NoError(t, err)
 	require.Len(t, observations, len(RequiredModelCapabilityKinds()))
 	outcomes := map[evalv1.ModelCapabilityKind]evalv1.EvaluationVerdictStatus{}
@@ -67,4 +73,17 @@ func TestRunModelCapabilityProbes_RecordsDescriptiveOutcomesWithoutExclusion(t *
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, outcomes[evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT])
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSUPPORTED, outcomes[evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_THINKING])
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, outcomes[evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_CONTEXT_LIMIT])
+}
+
+func probeResponse(attemptID, text string) *operatorv1.InferenceDispatchResponse {
+	result := &operatorv1.InferenceResult{
+		ProviderAttemptId: attemptID,
+		RequestedModel:    "probe-model:latest",
+		ResultDigest:      "digest",
+		Parts:             []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: text}}},
+	}
+	return &operatorv1.InferenceDispatchResponse{
+		Result:  result,
+		Receipt: &operatorv1.ActionReceipt{ResultSummary: result.GetResultDigest()},
+	}
 }

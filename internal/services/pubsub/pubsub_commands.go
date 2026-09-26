@@ -56,6 +56,17 @@ type PubSubCommandMessage struct {
 	InferenceResult *operatorv1.InferenceResult `json:"-"`
 }
 
+// verifiedActionHandler executes a governed action class after L4 verification.
+// A non-empty summary is stamped into the signed ActionReceipt.
+type verifiedActionHandler func(ctx context.Context, msg *PubSubCommandMessage) (string, error)
+
+func fireAndForgetActionHandler(fn func(context.Context, *PubSubCommandMessage)) verifiedActionHandler {
+	return func(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+		fn(ctx, msg)
+		return "", nil
+	}
+}
+
 // OperatorPubSubService manages the Operator pub/sub connection and dispatches inbound
 // Operator commands to the appropriate first-class service handler.
 type OperatorPubSubService struct {
@@ -68,6 +79,7 @@ type OperatorPubSubService struct {
 	commands  *CommandService
 	fileOps   *FileOpsService
 	ports     *PortService
+	ollama    *OllamaMaintenanceService
 	audit     *AuditService
 	history   *HistoryService
 
@@ -81,7 +93,8 @@ type OperatorPubSubService struct {
 
 	ShutdownChan chan string
 
-	handlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)
+	actionHandlers      map[constants.ActionType]verifiedActionHandler
+	legacyEventHandlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)
 
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -204,6 +217,10 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	rs.ports.SetScrubbingService(c.Scrubbing)
 	rs.ports.auditStore = c.AuditStore
 
+	rs.ollama = NewOllamaMaintenanceService(c.Config, c.Logger, client)
+	rs.ollama.SetScrubbingService(c.Scrubbing)
+	rs.ollama.auditStore = c.AuditStore
+
 	rs.audit = NewAuditService(c.Config, c.Logger, c.AuditStore)
 
 	rs.history = NewHistoryService(c.Config, c.Logger, client)
@@ -308,9 +325,11 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	// Wire the platform enrollment handler from gateway-side dependencies.
 	// In gateway mode, platform enrollment dependencies are required and wired
 	// at construction so rs.platformEnrollment is always non-nil.
-	if c.GovDeps.PlatformEnrollmentDeps != nil {
-		rs.platformEnrollment = newPlatformEnrollmentHandler(*c.GovDeps.PlatformEnrollmentDeps, c.Logger)
+	if c.GovDeps.PlatformEnrollmentDeps == nil {
+		return nil, fmt.Errorf("gateway operator pubsub: %w", constants.ErrPlatformEnrollmentDepsRequired)
 	}
+	rs.platformEnrollment = newPlatformEnrollmentHandler(*c.GovDeps.PlatformEnrollmentDeps, c.Logger)
+	rs.registerPlatformEnrollmentHandlers()
 
 	return rs, nil
 }
@@ -373,93 +392,57 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, co
 }
 
 func (rs *OperatorPubSubService) buildHandlers() {
-	rs.handlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
-		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
-		constants.Event.Operator.Heartbeat:                  rs.handleHeartbeatEvent,
-		constants.Event.Operator.Command.Requested:          rs.commands.HandleExecutionRequest,
-		constants.Event.Operator.Command.CancelRequested:    rs.commands.HandleCancelRequest,
-		constants.Event.Operator.FileEdit.Requested:         rs.fileOps.HandleFileEditRequest,
-		constants.Event.Operator.FsList.Requested:           rs.fileOps.HandleFsListRequest,
-		constants.Event.Operator.FsRead.Requested:           rs.fileOps.HandleFsReadRequest,
-		constants.Event.Operator.FsGrep.Requested:           rs.fileOps.HandleFsGrepRequest,
-		constants.Event.Operator.PortCheck.Requested:        rs.ports.HandlePortCheckRequest,
-		constants.Event.Operator.FetchLogs.Requested:        rs.history.HandleFetchLogsRequest,
-		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,
-		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,
-		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
-		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
-		constants.Event.Operator.Audit.UserMsg: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if err := rs.audit.HandleUserMsgRequest(ctx, msg); err != nil {
-				rs.logger.Error("failed to handle audit user message", "error", err)
-			}
-		},
-		constants.Event.Operator.Audit.AIMsg: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if err := rs.audit.HandleAIMsgRequest(ctx, msg); err != nil {
-				rs.logger.Error("failed to handle audit AI message", "error", err)
-			}
-		},
-		constants.Event.Operator.Audit.DirectCmd: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if err := rs.audit.HandleDirectCmdRequest(ctx, msg); err != nil {
-				rs.logger.Error("failed to handle direct command audit", "error", err)
-			}
-		},
-		constants.Event.Operator.Audit.DirectCmdResult: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if err := rs.audit.HandleDirectCmdResultRequest(ctx, msg); err != nil {
-				rs.logger.Error("failed to handle direct command result audit", "error", err)
-			}
-		},
-		constants.Event.Operator.FetchFileDiff.Requested: rs.history.HandleFetchFileDiffRequest,
-		// Governed document mutations dispatch through the canonical
-		// document-request events. MapActionTypeToEventType resolves both
-		// DOCUMENT_UPDATE and DOCUMENT_DELETE deterministically to these two
-		// events regardless of which app-level event (case/investigation/memory)
-		// originated the envelope, so a single handler per action type is
-		// sufficient and dispatch is stable across repeated calls.
-		constants.EventAppDocumentUpdateRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-				rs.logger.Error("Document update handler failed", "error", err)
-			}
-		},
-		constants.EventAppDocumentDeleteRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
-				rs.logger.Error("Document delete handler failed", "error", err)
-			}
-		},
+	rs.legacyEventHandlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
+		constants.Event.Operator.Heartbeat: rs.handleHeartbeatEvent,
 	}
 
-	// Register the inference handler unconditionally: INFERENCE is a
-	// recognized platform action, so an unconfigured backend must fail
-	// closed with ErrInferenceBackendNotRegistered inside
-	// handleInferenceRequestSync rather than surfacing as an unknown
-	// action type at the dispatch gate.
-	rs.handlers[constants.Event.Operator.Inference.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleInferenceRequestSync(ctx, msg); err != nil {
-			rs.logger.Error("Inference handler failed", "error", err)
-		}
-	}
-	rs.handlers[constants.Event.Operator.ProviderBoundaryObservation.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleProviderBoundaryObservationSync(ctx, msg); err != nil {
-			rs.logger.Error("Provider boundary observation handler failed", "error", err)
-		}
-	}
-	rs.handlers[constants.Event.Operator.ModelProvenanceObservation.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleModelProvenanceObservationSync(ctx, msg); err != nil {
-			rs.logger.Error("Model provenance observation handler failed", "error", err)
-		}
+	rs.actionHandlers = map[constants.ActionType]verifiedActionHandler{
+		constants.ActionTypeHeartbeat:                   fireAndForgetActionHandler(rs.heartbeat.HandleRequest),
+		constants.ActionTypeExecuteBash:                 fireAndForgetActionHandler(rs.commands.HandleExecutionRequest),
+		constants.ActionTypeCancel:                      fireAndForgetActionHandler(rs.commands.HandleCancelRequest),
+		constants.ActionTypeFileEdit:                    fireAndForgetActionHandler(rs.fileOps.HandleFileEditRequest),
+		constants.ActionTypeFsList:                      fireAndForgetActionHandler(rs.fileOps.HandleFsListRequest),
+		constants.ActionTypeFsRead:                      fireAndForgetActionHandler(rs.fileOps.HandleFsReadRequest),
+		constants.ActionTypeFsGrep:                      fireAndForgetActionHandler(rs.fileOps.HandleFsGrepRequest),
+		constants.ActionTypePortCheck:                   fireAndForgetActionHandler(rs.ports.HandlePortCheckRequest),
+		constants.ActionTypeOllamaModelInventory:        fireAndForgetActionHandler(rs.ollama.HandleInventoryRequest),
+		constants.ActionTypeOllamaModelResidency:        fireAndForgetActionHandler(rs.ollama.HandleResidencyRequest),
+		constants.ActionTypeFetchLogs:                   fireAndForgetActionHandler(rs.history.HandleFetchLogsRequest),
+		constants.ActionTypeFetchHistory:                fireAndForgetActionHandler(rs.history.HandleFetchHistoryRequest),
+		constants.ActionTypeFetchFileHistory:            fireAndForgetActionHandler(rs.history.HandleFetchFileHistoryRequest),
+		constants.ActionTypeRestoreFile:                 fireAndForgetActionHandler(rs.history.HandleRestoreFileRequest),
+		constants.ActionTypeFetchFileDiff:               fireAndForgetActionHandler(rs.history.HandleFetchFileDiffRequest),
+		constants.ActionTypeDocumentUpdate:              rs.handleDocumentUpdateSync,
+		constants.ActionTypeDocumentDelete:              rs.handleDocumentDeleteSync,
+		constants.ActionTypeEvalAnswer:                  rs.handleEvalAnswerRequestSync,
+		constants.ActionTypeInference:                   rs.handleInferenceRequestSync,
+		constants.ActionTypeProviderBoundaryObservation: rs.handleProviderBoundaryObservationSync,
+		constants.ActionTypeModelProvenanceObservation:  rs.handleModelProvenanceObservationSync,
+		constants.ActionTypeShutdown: func(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+			return rs.handleShutdownRequest(msg)
+		},
 	}
 }
 
+func (rs *OperatorPubSubService) registerPlatformEnrollmentHandlers() {
+	if rs.platformEnrollment == nil {
+		return
+	}
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentCreate] = rs.platformEnrollment.HandleCreate
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentDecide] = rs.platformEnrollment.HandleDecide
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentIssue] = rs.platformEnrollment.HandleIssue
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentPersistPolicy] = rs.platformEnrollment.HandlePersistPolicy
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentCreateSession] = rs.platformEnrollment.HandleCreateSession
+	rs.actionHandlers[constants.ActionTypePlatformEnrollmentRevoke] = rs.platformEnrollment.HandleRevoke
+}
+
 func (rs *OperatorPubSubService) buildGatewayHandlers() {
-	rs.handlers[constants.Event.Operator.Mcp.CallRequested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleMcpCallRequestSync(ctx, msg); err != nil {
-			rs.logger.Error("MCP call request handler failed", "error", err)
-		}
-	}
-	rs.handlers[constants.Event.Operator.A2a.CallRequested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleA2aCallRequestSync(ctx, msg); err != nil {
-			rs.logger.Error("A2A call request handler failed", "error", err)
-		}
-	}
+	rs.actionHandlers[constants.ActionTypeMcpCall] = rs.handleMcpCallRequestSync
+	rs.actionHandlers[constants.ActionTypeA2aCall] = rs.handleA2aCallRequestSync
+	rs.actionHandlers[constants.ActionTypeMcpResourceRead] = rs.handleMcpResourceReadSync
+	rs.actionHandlers[constants.ActionTypeMcpPromptGet] = rs.handleMcpPromptGetSync
+	rs.actionHandlers[constants.ActionTypeMcpResourceList] = rs.handleMcpResourceListSync
+	rs.actionHandlers[constants.ActionTypeMcpPromptList] = rs.handleMcpPromptListSync
 }
 
 func (rs *OperatorPubSubService) Start(ctx context.Context) error {
@@ -492,6 +475,13 @@ func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 		go func() {
 			defer rs.wg.Done()
 			rs.listenForCommands(channelName)
+		}()
+
+		auditChannel := AuditChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
+		rs.wg.Add(1)
+		go func() {
+			defer rs.wg.Done()
+			rs.listenForAuditRecords(auditChannel)
 		}()
 	} else if rs.gatewayMode {
 		rs.logger.Info("Command service starting in Gateway mode (no pub/sub subscription)",
@@ -641,6 +631,53 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 	}
 }
 
+func (rs *OperatorPubSubService) listenForAuditRecords(channelName string) {
+	if rs.audit == nil || rs.client == nil {
+		rs.logger.Error("Audit ingest listener disabled: audit service or pubsub client missing")
+		return
+	}
+
+	for {
+		select {
+		case <-rs.ctx.Done():
+			return
+		default:
+		}
+
+		msgCh, err := rs.client.Subscribe(rs.ctx, channelName)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			rs.logger.Warn("[AUDIT] Failed to subscribe to audit channel", "error", err)
+			if !waitForReconnect(rs.ctx, rs.reconnectBaseDelay) {
+				return
+			}
+			continue
+		}
+
+		rs.logger.Info("Subscribed to audit ingest channel", "channel_name", channelName)
+		disconnected := false
+		for !disconnected {
+			select {
+			case <-rs.ctx.Done():
+				return
+			case payload, ok := <-msgCh:
+				if !ok {
+					disconnected = true
+					break
+				}
+				if err := rs.audit.HandleAuditRecord(rs.ctx, payload, rs.client); err != nil {
+					rs.logger.Error("Failed to ingest audit record", "error", err)
+				}
+			}
+		}
+		if !waitForReconnect(rs.ctx, rs.reconnectBaseDelay) {
+			return
+		}
+	}
+}
+
 // nextReconnectDelay doubles the current delay, capped at max. This implements
 // exponential backoff for the reconnect loop.
 func waitForReconnect(ctx context.Context, delay time.Duration) bool {
@@ -715,6 +752,13 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, fmt.Errorf("%w: %w", constants.ErrTxInvalidEnvelope, err)
 	}
 
+	if err := constants.ValidateGovernedEnvelopeFields(
+		constants.EventType(envelope.EventType),
+		constants.ActionType(envelope.ActionType),
+	); err != nil {
+		return nil, err
+	}
+
 	if rs.l4warden == nil {
 		return nil, constants.ErrPubSubTransactionVerifier
 	}
@@ -738,7 +782,10 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, constants.ErrPubSubActuator
 	}
 
-	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	eventType := constants.EventType(verified.Envelope.EventType)
+	if eventType == "" {
+		return nil, constants.ErrTxUnknownEventType
+	}
 	cmdMsg := &PubSubCommandMessage{
 		ID:                envelope.Id,
 		EventType:         eventType,
@@ -781,6 +828,19 @@ func gatewayDispatchedVerificationContext(parent context.Context, env *govpkg.Go
 
 // handleGovernanceEnvelope processes a GovernanceEnvelope using the TransactionVerifier, Consensus and Actuator services.
 func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.GovernanceEnvelope) {
+	if _, err := constants.ValidateGovernedRequest(constants.EventType(env.EventType)); err == nil {
+		if err := constants.ValidateGovernedEnvelopeFields(
+			constants.EventType(env.EventType),
+			constants.ActionType(env.ActionType),
+		); err != nil {
+			rs.logger.Error("Governed envelope field validation failed",
+				string(constants.ConnectionStateError), err,
+				"message_id", env.Id)
+			rs.logBlockedTransaction(env, err)
+			return
+		}
+	}
+
 	var verified *governance.VerifiedTransaction
 
 	// Strict transaction verification (P0: fail-closed gate before any dispatch)
@@ -814,9 +874,12 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 		return
 	}
 
-	// Convert GovernanceEnvelope to PubSubCommandMessage for execution through Actuator
-	// Map GovernanceEnvelope action types back to protobuf event types for handler dispatch
-	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	// Convert GovernanceEnvelope to PubSubCommandMessage for execution through Actuator.
+	eventType := constants.EventType(env.EventType)
+	if eventType == "" {
+		rs.logger.Error("GovernanceEnvelope missing event_type - request rejected", "message_id", env.Id)
+		return
+	}
 
 	payload := env.Payload
 	if len(payload) == 0 {
@@ -897,59 +960,24 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 	}
 	rs.logger.Info("Executing verified transaction through Actuator", "event_type", eventType)
 
-	// Platform enrollment actions are synchronous: each handler performs a
-	// typed mutation and returns a receipt summary string for the L5
-	// actuator to stamp into the signed final receipt. These event types
-	// are not registered in the handlers map (they use a different
-	// signature), so they must be dispatched before the handler lookup.
-	switch eventType {
-	case constants.EventPlatformEnrollmentCreateRequested:
-		return rs.platformEnrollment.HandleCreate(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentDecideRequested:
-		return rs.platformEnrollment.HandleDecide(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentIssueRequested:
-		return rs.platformEnrollment.HandleIssue(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentPersistPolicyRequested:
-		return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentCreateSessionRequested:
-		return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentRevokeRequested:
-		return rs.platformEnrollment.HandleRevoke(ctx, pubsubMsg)
-	case constants.Event.Operator.ShutdownRequested:
-		return rs.handleShutdownRequest(pubsubMsg)
+	if handler, ok := rs.legacyEventHandlers[eventType]; ok {
+		handler(ctx, pubsubMsg)
+		return "", nil
 	}
 
-	handler, ok := rs.handlers[eventType]
+	actionType, err := constants.ValidateGovernedRequest(eventType)
+	if err != nil {
+		rs.logger.Error("No governed action for event type", "event_type", string(eventType), string(constants.ConnectionStateError), err)
+		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), err)
+	}
+
+	handler, ok := rs.actionHandlers[actionType]
 	if !ok {
-		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
-		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), constants.ErrTxUnknownActionType)
+		rs.logger.Error("No handler registered for action type", "action_type", string(actionType))
+		return "", fmt.Errorf("no handler for action type %s: %w", string(actionType), constants.ErrTxUnknownActionType)
 	}
 
-	// Special case for EVAL_ANSWER which is synchronous and returns the answer as summary
-	if eventType == constants.Event.Operator.Eval.AnswerRequested {
-		return rs.handleEvalAnswerRequestSync(ctx, pubsubMsg)
-	}
-
-	// MCP_CALL must return the downstream MCP server's result text as the
-	// receipt summary so the gateway can forward it back to the client.
-	if eventType == constants.Event.Operator.Mcp.CallRequested {
-		return rs.handleMcpCallRequestSync(ctx, pubsubMsg)
-	}
-	if eventType == constants.Event.Operator.A2a.CallRequested {
-		return rs.handleA2aCallRequestSync(ctx, pubsubMsg)
-	}
-	if eventType == constants.Event.Operator.Inference.Requested {
-		return rs.handleInferenceRequestSync(ctx, pubsubMsg)
-	}
-	if eventType == constants.Event.Operator.ProviderBoundaryObservation.Requested {
-		return rs.handleProviderBoundaryObservationSync(ctx, pubsubMsg)
-	}
-	if eventType == constants.Event.Operator.ModelProvenanceObservation.Requested {
-		return rs.handleModelProvenanceObservationSync(ctx, pubsubMsg)
-	}
-
-	handler(ctx, pubsubMsg)
-	return "", nil
+	return handler(ctx, pubsubMsg)
 }
 
 // handleMcpCallRequestSync is the Actuator egress for MCP_CALL transactions:
@@ -995,6 +1023,78 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 	}
 
 	return summary, nil
+}
+
+func mcpGatewayOrErr(rs *OperatorPubSubService) (*mcp.GatewayService, error) {
+	gw := rs.GetMCPGateway()
+	if gw == nil {
+		return nil, constants.ErrPubSubMCPGateway
+	}
+	return gw, nil
+}
+
+// handleMcpResourceReadSync is the Actuator egress for MCP_RESOURCE_READ.
+func (rs *OperatorPubSubService) handleMcpResourceReadSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	gw, err := mcpGatewayOrErr(rs)
+	if err != nil {
+		return "", err
+	}
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		return "", err
+	}
+	mcpReq, ok := req.(*operatorv1.McpResourceReadRequested)
+	if !ok {
+		return "", fmt.Errorf("invalid payload type for MCP resource read %T: %w", req, constants.ErrTxPayloadActionMismatch)
+	}
+	if mcpReq.Uri == "" {
+		return "", constants.ErrGatewayURIRequired
+	}
+	return gw.ExecuteResourceRead(ctx, mcpReq.Uri)
+}
+
+// handleMcpPromptGetSync is the Actuator egress for MCP_PROMPT_GET.
+func (rs *OperatorPubSubService) handleMcpPromptGetSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	gw, err := mcpGatewayOrErr(rs)
+	if err != nil {
+		return "", err
+	}
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		return "", err
+	}
+	mcpReq, ok := req.(*operatorv1.McpPromptGetRequested)
+	if !ok {
+		return "", fmt.Errorf("invalid payload type for MCP prompt get %T: %w", req, constants.ErrTxPayloadActionMismatch)
+	}
+	if mcpReq.Name == "" {
+		return "", constants.ErrGatewayNameRequired
+	}
+	return gw.ExecutePromptGet(ctx, mcpReq.Name)
+}
+
+// handleMcpResourceListSync is the Actuator egress for MCP_RESOURCE_LIST.
+func (rs *OperatorPubSubService) handleMcpResourceListSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	gw, err := mcpGatewayOrErr(rs)
+	if err != nil {
+		return "", err
+	}
+	if _, err := unmarshalPayload(msg.EventType, msg.Payload); err != nil {
+		return "", err
+	}
+	return gw.ExecuteResourceList(ctx)
+}
+
+// handleMcpPromptListSync is the Actuator egress for MCP_PROMPT_LIST.
+func (rs *OperatorPubSubService) handleMcpPromptListSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	gw, err := mcpGatewayOrErr(rs)
+	if err != nil {
+		return "", err
+	}
+	if _, err := unmarshalPayload(msg.EventType, msg.Payload); err != nil {
+		return "", err
+	}
+	return gw.ExecutePromptList(ctx)
 }
 
 // handleA2aCallRequestSync is the Actuator egress for A2A_CALL transactions:

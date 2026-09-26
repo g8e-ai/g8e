@@ -679,8 +679,8 @@ message ModelInferenceRecord {
   EvaluationUsageAvailability usage_availability = 16;
   uint32 prompt_tokens = 17;
   uint32 completion_tokens = 18;
-  uint32 thinking_tokens = 19;
-  uint32 cache_tokens = 20;
+  optional uint32 thinking_tokens = 19;
+  optional uint32 cache_tokens = 20;
   uint64 request_started_at_unix_nanos = 21;
   uint64 first_token_at_unix_nanos = 22;
   uint64 generation_duration_nanos = 23;
@@ -975,8 +975,8 @@ message PublicModelActivityRecord {
   EvaluationUsageAvailability usage_availability = 4;
   uint64 input_tokens = 5;
   uint64 output_tokens = 6;
-  uint64 thinking_tokens = 7;
-  uint64 cache_tokens = 8;
+  optional uint64 thinking_tokens = 7;
+  optional uint64 cache_tokens = 8;
   uint64 total_duration_nanos = 9;
   uint64 generation_duration_nanos = 10;
   optional uint32 retry_count = 11;

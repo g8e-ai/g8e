@@ -28,7 +28,7 @@ async function mirrorReachable(fetchImpl: typeof fetch): Promise<boolean> {
 describe('live mirror ingest', () => {
   afterEach(() => stopFeed());
 
-  it('reconstructs the north-star live dataset from the public mirror when available', async () => {
+  it('reconstructs the north-star live dataset from the public mirror when available', { timeout: 30_000 }, async () => {
     const runtimeRaw = readFileSync(join(publicDir, 'runtime.json'), 'utf8');
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;

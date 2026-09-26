@@ -8,6 +8,7 @@ import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockAuthState, MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
+import { MessageSender } from '@g8ed/public/js/constants/message-senders.js';
 
 const INVESTIGATION_ID = 'inv-dispatch-abc123';
 const WEB_SESSION_ID = 'session-dispatch-abc123';
@@ -383,7 +384,7 @@ describe('ChatComponent — handleAITextChunk edge cases [FRONTEND - jsdom]', ()
     it('event bus wiring: LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED triggers handleAITextChunk', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
+        eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, {
             web_session_id: WEB_SESSION_ID,
             investigation_id: INVESTIGATION_ID,
             content: 'streamed token',
@@ -514,7 +515,7 @@ describe('ChatComponent — handleChatStopped [FRONTEND - jsdom]', () => {
     it('event bus wiring: LLM_CHAT_ITERATION_STOPPED triggers handleChatStopped', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_CHAT_ITERATION_STOPPED, {
+        eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_STOPPED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             reason: 'User requested stop',
@@ -661,14 +662,14 @@ describe('ChatComponent — addRestoredMessage [FRONTEND - jsdom]', () => {
     });
 
     it('routes USER_CHAT messages to appendUserMessage', () => {
-        chat.addRestoredMessage('Hello', EventType.EVENT_SOURCE_USER_CHAT, new Date().toISOString());
+        chat.addRestoredMessage('Hello', MessageSender.USER_CHAT, new Date().toISOString());
 
         expect(terminalSpy.appendUserMessage).toHaveBeenCalledOnce();
         expect(terminalSpy.appendAIResponse).not.toHaveBeenCalled();
     });
 
     it('passes the message content to appendUserMessage', () => {
-        chat.addRestoredMessage('Good morning', EventType.EVENT_SOURCE_USER_CHAT, null);
+        chat.addRestoredMessage('Good morning', MessageSender.USER_CHAT, null);
 
         const [content] = terminalSpy.appendUserMessage.mock.calls[0];
         expect(content).toBe('Good morning');
@@ -676,7 +677,7 @@ describe('ChatComponent — addRestoredMessage [FRONTEND - jsdom]', () => {
 
     it('formats originalTimestamp for display when present', () => {
         const ts = '2026-03-15T12:09:30.000Z';
-        chat.addRestoredMessage('msg', EventType.EVENT_SOURCE_USER_CHAT, ts);
+        chat.addRestoredMessage('msg', MessageSender.USER_CHAT, ts);
 
         const [, displayTime] = terminalSpy.appendUserMessage.mock.calls[0];
         expect(displayTime).not.toBeNull();
@@ -684,14 +685,14 @@ describe('ChatComponent — addRestoredMessage [FRONTEND - jsdom]', () => {
     });
 
     it('passes null displayTime when originalTimestamp is falsy', () => {
-        chat.addRestoredMessage('msg', EventType.EVENT_SOURCE_USER_CHAT, null);
+        chat.addRestoredMessage('msg', MessageSender.USER_CHAT, null);
 
         const [, displayTime] = terminalSpy.appendUserMessage.mock.calls[0];
         expect(displayTime).toBeNull();
     });
 
     it('routes AI_PRIMARY messages to appendAIResponse', () => {
-        chat.addRestoredMessage('AI reply', EventType.EVENT_SOURCE_AI_PRIMARY, null);
+        chat.addRestoredMessage('AI reply', MessageSender.AI_PRIMARY, null);
 
         expect(terminalSpy.appendAIResponse).toHaveBeenCalledOnce();
         expect(terminalSpy.appendUserMessage).not.toHaveBeenCalled();
@@ -701,7 +702,7 @@ describe('ChatComponent — addRestoredMessage [FRONTEND - jsdom]', () => {
         const renderContent = vi.fn(() => '<p>rendered</p>');
         chat.messageRenderer = { renderContent };
 
-        chat.addRestoredMessage('**bold**', EventType.EVENT_SOURCE_AI_PRIMARY, null);
+        chat.addRestoredMessage('**bold**', MessageSender.AI_PRIMARY, null);
 
         expect(renderContent).toHaveBeenCalledWith('**bold**');
         const [html] = terminalSpy.appendAIResponse.mock.calls[0];
@@ -711,14 +712,14 @@ describe('ChatComponent — addRestoredMessage [FRONTEND - jsdom]', () => {
     it('passes groundingMetadata to appendAIResponse', () => {
         const metadata = { grounding_used: true, sources: [{ url: 'x.com', title: 'X' }] };
 
-        chat.addRestoredMessage('AI reply', EventType.EVENT_SOURCE_AI_PRIMARY, null, null, metadata);
+        chat.addRestoredMessage('AI reply', MessageSender.AI_PRIMARY, null, null, metadata);
 
         const [, , receivedMetadata] = terminalSpy.appendAIResponse.mock.calls[0];
         expect(receivedMetadata).toBe(metadata);
     });
 
     it('routes SYSTEM messages to appendSystemMessage', () => {
-        chat.addRestoredMessage('System event', EventType.EVENT_SOURCE_SYSTEM, null);
+        chat.addRestoredMessage('System event', MessageSender.SYSTEM, null);
 
         expect(terminalSpy.appendSystemMessage).toHaveBeenCalledOnce();
         expect(terminalSpy.appendUserMessage).not.toHaveBeenCalled();
@@ -726,7 +727,7 @@ describe('ChatComponent — addRestoredMessage [FRONTEND - jsdom]', () => {
     });
 
     it('passes the message content to appendSystemMessage', () => {
-        chat.addRestoredMessage('Note: operator connected', EventType.EVENT_SOURCE_SYSTEM, null);
+        chat.addRestoredMessage('Note: operator connected', MessageSender.SYSTEM, null);
 
         const [content] = terminalSpy.appendSystemMessage.mock.calls[0];
         expect(content).toBe('Note: operator connected');
@@ -735,7 +736,7 @@ describe('ChatComponent — addRestoredMessage [FRONTEND - jsdom]', () => {
     it('does nothing when anchoredTerminal is null', () => {
         chat.anchoredTerminal = null;
 
-        expect(() => chat.addRestoredMessage('msg', EventType.EVENT_SOURCE_USER_CHAT, null)).not.toThrow();
+        expect(() => chat.addRestoredMessage('msg', MessageSender.USER_CHAT, null)).not.toThrow();
     });
 
     it('does nothing for an unknown sender', () => {
@@ -954,14 +955,14 @@ describe('ChatComponent — handleSearchWebIndicator / handleSearchWebCompleted 
     it('SEARCH_WEB event bus wiring: REQUESTED → COMPLETED completes the indicator', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
+        eventBus.emit(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
             query: 'test query',
         });
 
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, {
+        eventBus.emit(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
@@ -974,14 +975,14 @@ describe('ChatComponent — handleSearchWebIndicator / handleSearchWebCompleted 
     it('SEARCH_WEB event bus wiring: REQUESTED → FAILED completes the indicator', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
+        eventBus.emit(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
             query: 'test query',
         });
 
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, {
+        eventBus.emit(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
@@ -1429,7 +1430,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
         const log = serviceClient.getRequestLog();
         expect(log).toHaveLength(1);
         expect(log[0].method).toBe('POST');
-        expect(log[0].path).toBe('/api/chat/send');
+        expect(log[0].path).toBe('/api/v1/chat');
     });
 
     it('includes message, case_id, and investigation_id in the payload', async () => {
@@ -1492,7 +1493,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
     });
 
     it('rejects and appends error message when the response is not ok', async () => {
-        serviceClient.setResponse('g8ed', '/api/chat/send', {
+        serviceClient.setResponse('gateway', '/api/v1/chat', {
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',
@@ -1505,7 +1506,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
     });
 
     it('hides the waiting indicator when the response is not ok', async () => {
-        serviceClient.setResponse('g8ed', '/api/chat/send', {
+        serviceClient.setResponse('gateway', '/api/v1/chat', {
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',
@@ -1540,7 +1541,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
     });
 
     it('focuses the terminal even after a failed response', async () => {
-        serviceClient.setResponse('g8ed', '/api/chat/send', {
+        serviceClient.setResponse('gateway', '/api/v1/chat', {
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',
@@ -1555,7 +1556,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
         const spy = vi.spyOn(chat, 'submitChatMessage');
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_CHAT_SUBMITTED, {
+        eventBus.emit(EventType.AI_LLM_CHAT_SUBMITTED, {
             message: 'wired message',
             attachments: [],
         });

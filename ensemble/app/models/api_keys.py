@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 from app.constants import APIKeyStatus
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 from .base import G8eBaseModel, UTCDatetime, Field
 
 

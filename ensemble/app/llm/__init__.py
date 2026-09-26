@@ -43,7 +43,7 @@ from .llm_types import (
 )
 
 from .provider import LLMProvider
-from .factory import get_llm_provider, clear_provider_cache
+from .factory import clear_provider_cache, get_generative_lite_provider, get_llm_provider
 
 __all__ = [
     "Candidate",
@@ -64,5 +64,6 @@ __all__ = [
     "Type",
     "UsageMetadata",
     "clear_provider_cache",
+    "get_generative_lite_provider",
     "get_llm_provider",
 ]

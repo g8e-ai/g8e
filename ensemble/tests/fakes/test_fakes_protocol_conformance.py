@@ -17,7 +17,6 @@ from app.services.protocols import (
     LFAAServiceProtocol,
     MemoryDataServiceProtocol,
     OperatorDataServiceProtocol,
-    PubSubServiceProtocol,
 )
 from tests.fakes.factories import build_production_operator_document
 from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
@@ -31,8 +30,6 @@ from tests.fakes.fake_investigation_service import FakeInvestigationService
 from tests.fakes.fake_lfaa_service import FakeLFAAService
 from tests.fakes.fake_memory_data_service import FakeMemoryDataService
 from tests.fakes.fake_operator_cache import FakeOperatorCache
-from tests.fakes.fake_pubsub_service import FakePubSubService
-
 
 def test_fakes_implement_protocols():
     """Verify that all Fakes structurally implement their designated protocols.
@@ -45,7 +42,6 @@ def test_fakes_implement_protocols():
         (FakeOperatorCache(), OperatorDataServiceProtocol),
         (FakeHTTPService(), HTTPServiceProtocol),
         (FakeLFAAService(), LFAAServiceProtocol),
-        (FakePubSubService(), PubSubServiceProtocol),
         (FakeG8eClient(), G8eClientProtocol),
         (FakeApprovalService(), ApprovalServiceProtocol),
         (FakeInvestigationService(), InvestigationServiceProtocol),

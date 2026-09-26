@@ -11,26 +11,28 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestLoadConfigSuccess(t *testing.T) {
-	cfg, err := loadConfig("")
+	cfg, err := shared.LoadConfig("")
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 	assert.NotEmpty(t, cfg.ProjectRoot)
 }
 
 func TestLoadConfigWrapsError(t *testing.T) {
-	originalLoad := configLoad
-	configLoad = func(string) (*config.Config, error) {
+	originalLoad := shared.ConfigLoad
+	shared.ConfigLoad = func(string) (*config.Config, error) {
 		return nil, fmt.Errorf("disk read failure")
 	}
-	defer func() { configLoad = originalLoad }()
+	defer func() { shared.ConfigLoad = originalLoad }()
 
-	cfg, err := loadConfig("")
+	cfg, err := shared.LoadConfig("")
 	assert.Nil(t, cfg)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)

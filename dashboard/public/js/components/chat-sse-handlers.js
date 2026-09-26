@@ -1,8 +1,11 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-import { EventType, ToolDisplayCategory } from '../constants/events.js';
+import { EventType } from '../constants/events.js';
+import { ToolDisplayCategory } from '../constants/display-constants.js';
+import { UIEventType } from '../constants/ui-events.js';
 import { ApiPaths } from '../constants/api-paths.js';
+import { ServiceName } from '../constants/service-client-constants.js';
 import { decodeHtmlEntities } from '../utils/html.js';
 import { notificationService } from '../utils/notification-service.js';
 
@@ -19,44 +22,44 @@ export const ChatSSEHandlersMixin = {
             return;
         }
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, (data) => {
             this.handleAITextChunk(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_COMPLETED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_COMPLETED, (data) => {
             this.handleTurnComplete(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED, (data) => {
             this.handleCitationsReady(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED, (data) => {
             this.handleResponseComplete(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TEXT_TRUNCATED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_TEXT_TRUNCATED, (data) => {
             this.handleResponseComplete(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_FAILED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_FAILED, (data) => {
             this.handleChatError(data);
             this._handleLLMChatIterationFailed(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_STOPPED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_STOPPED, (data) => {
             this.handleChatStopped(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
             this.handleSearchWebIndicator(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
             this.handleSearchWebCompleted(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, (data) => {
+        this.eventBus.on(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED, (data) => {
             this.handleSearchWebFailed(data);
         });
 
@@ -171,7 +174,7 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalFallback(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_SUBMITTED, (payload) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_SUBMITTED, (payload) => {
             this.submitChatMessage(payload.message, {
                 attachments: payload.attachments
             }).catch((error) => {
@@ -179,8 +182,8 @@ export const ChatSSEHandlersMixin = {
             });
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_STOP_SHOW, () => this.showAIStopButton());
-        this.eventBus.on(EventType.LLM_CHAT_STOP_HIDE, () => this.hideAIStopButton());
+        this.eventBus.on(UIEventType.CHAT_STOP_SHOW, () => this.showAIStopButton());
+        this.eventBus.on(UIEventType.CHAT_STOP_HIDE, () => this.hideAIStopButton());
 
         this.eventBus.on(EventType.OPERATOR_TERMINAL_THINKING_APPEND, ({ webSessionId, text }) => {
             if (this.anchoredTerminal) {
@@ -194,16 +197,16 @@ export const ChatSSEHandlersMixin = {
             }
         });
 
-        this.eventBus.on(EventType.CASE_SELECTED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_SELECTED, (data) => {
             this.clearChat();
             this.handleCaseSelected(data);
         });
 
-        this.eventBus.on(EventType.CASE_CREATED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_CREATED, (data) => {
             this.handleCaseCreated(data);
         });
 
-        this.eventBus.on(EventType.CASE_CLEARED, () => {
+        this.eventBus.on(EventType.APP_CASE_CLEARED, () => {
             this.handleCaseCleared();
         });
 
@@ -255,7 +258,7 @@ export const ChatSSEHandlersMixin = {
         };
 
         try {
-            const response = await this.serviceClient.post('g8ed', ApiPaths.chat.send(), chatPayload);
+            const response = await this.serviceClient.post(ServiceName.GATEWAY, ApiPaths.chat.send(), chatPayload);
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -593,7 +596,7 @@ export const ChatSSEHandlersMixin = {
         this._debouncedRenderChunk.cancel();
 
         if (!data.event_type) {
-            data.event_type = EventType.LLM_CHAT_ITERATION_FAILED;
+            data.event_type = EventType.AI_LLM_CHAT_ITERATION_FAILED;
         }
 
         const errorText = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : 'The AI session encountered an error.';

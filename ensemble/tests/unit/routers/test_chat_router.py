@@ -1,3 +1,4 @@
+from app.constants.message_sender import MessageSender
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -11,7 +12,6 @@ import pytest
 from fastapi import Request
 
 from app.constants import ChatSessionStatus, InvestigationStatus, ComponentName
-from app.constants.generated_status import EventType
 from app.errors import ResourceNotFoundError
 from app.routers.chat_router import router
 from app.models.http_context import G8eHttpContext
@@ -175,7 +175,7 @@ class TestGetLatestChatSessionForCase:
             user_id=user_id,
         )
         investigation.conversation_history = [
-            create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="Hello")
+            create_conversation_message(sender=MessageSender.USER_CHAT, content="Hello")
         ]
         mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(
             return_value=[investigation]
@@ -247,13 +247,13 @@ class TestGetLatestChatSessionForCase:
             investigation_id="inv-old", case_id="case-789", user_id=user_id
         )
         inv_old.conversation_history = [
-            create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="Old")
+            create_conversation_message(sender=MessageSender.USER_CHAT, content="Old")
         ]
         inv_new = create_investigation_data(
             investigation_id="inv-new", case_id="case-789", user_id=user_id
         )
         inv_new.conversation_history = [
-            create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="New")
+            create_conversation_message(sender=MessageSender.USER_CHAT, content="New")
         ]
         mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(
             return_value=[inv_old, inv_new]

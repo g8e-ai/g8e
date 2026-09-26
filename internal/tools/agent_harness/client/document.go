@@ -34,6 +34,47 @@ import (
 // what the ensemble would produce.
 const ActingAppG8ee = "g8ee"
 
+// DocumentUpdateFields is the typed field payload for a DOCUMENT_UPDATE.
+// Each implementation matches one collection's update schema. The harness
+// marshals it into the protobuf Struct on DocumentUpdateRequested.
+type DocumentUpdateFields interface {
+	isDocumentUpdateFields()
+}
+
+// InvestigationUpdate is the investigations-collection document patch.
+// Pointer fields are omitted when unset so a merge sends only the fields
+// the caller set, including an explicit false sentinel_mode.
+type InvestigationUpdate struct {
+	CaseTitle    *string `json:"case_title,omitempty"`
+	CaseID       *string `json:"case_id,omitempty"`
+	UserID       *string `json:"user_id,omitempty"`
+	SentinelMode *bool   `json:"sentinel_mode,omitempty"`
+	Status       *string `json:"status,omitempty"`
+}
+
+func (InvestigationUpdate) isDocumentUpdateFields() {}
+
+func documentUpdateStruct(fields DocumentUpdateFields) (*structpb.Struct, error) {
+	if fields == nil {
+		return structpb.NewStruct(nil)
+	}
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("submit document update: marshal fields: %w", err)
+	}
+	// structpb.NewStruct accepts only map[string]any. The typed
+	// DocumentUpdateFields value is the contract; this map is the protobuf boundary.
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, fmt.Errorf("submit document update: decode fields: %w", err)
+	}
+	updates, err := structpb.NewStruct(decoded)
+	if err != nil {
+		return nil, fmt.Errorf("submit document update: build updates struct: %w", err)
+	}
+	return updates, nil
+}
+
 // DocumentUpdateRequest is the input for a governed DOCUMENT_UPDATE envelope
 // submitted directly to the admission API (POST /api/v1/governance/envelopes).
 // This bypasses the ensemble/AI layer so scenarios can deterministically
@@ -45,8 +86,8 @@ type DocumentUpdateRequest struct {
 	RequestorUserID   string // human user who authorized the action
 	Collection        string
 	DocumentID        string
-	Updates           map[string]any // field updates (merged when Merge=true, replaced when Merge=false)
-	Merge             bool           // true=PATCH (merge), false=PUT (replace)
+	Updates           DocumentUpdateFields // field updates (merged when Merge=true, replaced when Merge=false)
+	Merge             bool                 // true=PATCH (merge), false=PUT (replace)
 	StateRoot         string
 	TTL               time.Duration
 }
@@ -103,9 +144,9 @@ func (d DocumentResponse) GetBool(field string) bool {
 // the envelope and included in the transaction hash so they are
 // cryptographically tamper-evident.
 func (c *Client) SubmitDocumentUpdate(ctx context.Context, p Persona, req DocumentUpdateRequest) (txHash string, status int, body []byte, err error) {
-	updates, err := structpb.NewStruct(req.Updates)
+	updates, err := documentUpdateStruct(req.Updates)
 	if err != nil {
-		return "", 0, nil, fmt.Errorf("submit document update: build updates struct: %w", err)
+		return "", 0, nil, err
 	}
 
 	payload := &operatorv1.DocumentUpdateRequested{

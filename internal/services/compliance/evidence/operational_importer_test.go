@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -328,4 +330,76 @@ func TestOperationalExportImporter_ReplaysExportedReceiptAndPersistenceBodies(t 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
 	assert.Equal(t, "operational-export", importer.SourceID())
+}
+
+func TestOperationalExportImporter_VerifiesAuditChainAndCrossLinksReceipts(t *testing.T) {
+	executedAt := time.UnixMilli(1_700_000_001_000).UTC()
+	signer := newOperationalCommitmentSigner(t)
+	commitment := signer.commitment(t, "tx-1", "external-prior", executedAt)
+	receipt := newEvalVerifiedChainReceipt(signer.keyID)
+	receipt.TransactionHash = commitment.GetTransactionHash()
+	for _, stage := range receipt.DeterministicStageEvidence {
+		stage.TransactionHash = receipt.GetTransactionHash()
+		if stage.GetKind() == operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND {
+			stage.CommitmentHash = commitment.GetHash()
+			stage.PriorCommitmentHash = commitment.GetPriorCommitmentHash()
+			stage.SignerKeyId = commitment.GetAuditorKeyId()
+			stage.L2SignatureDigest = commitment.GetL2SignatureDigest()
+			stage.L3SignatureDigest = commitment.GetHumanSignatureDigest()
+		}
+	}
+	receiptPayload, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(signer.privateKey, receiptPayload))
+	receiptBody, err := compliancev1.MarshalCanonical(receipt)
+	require.NoError(t, err)
+
+	timestamp := timesvc.FormatTimestamp(executedAt.UTC())
+	digest, err := storage.ComputeAuditEventContentDigest(&storage.Event{ContentText: string(receiptBody)})
+	require.NoError(t, err)
+	prevHash := strings.Repeat("0", 64)
+	hash := storage.AuditEventChainHash(7, prevHash, string(constants.EventOperatorReceiptRecorded), "session-1", timestamp, digest, receipt.GetTransactionId())
+
+	outputDir := t.TempDir()
+	inventory, err := ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{
+		Receipts:    []storage.OperationalReceiptSource{{TransactionID: receipt.GetTransactionId(), ExecutedAt: executedAt, Body: receiptBody}},
+		Commitments: []storage.OperationalCommitmentSource{{Sequence: 10, TransactionID: commitment.GetTransactionId(), CommittedAt: executedAt, Body: canonicalOperationalCommitment(t, commitment)}},
+		AuditChain: []storage.OperationalAuditChainSource{{
+			Seq:               7,
+			PrevHash:          prevHash,
+			Hash:              hash,
+			EventType:         string(constants.EventOperatorReceiptRecorded),
+			OperatorSessionID: "session-1",
+			Timestamp:         executedAt,
+			ContentDigest:     digest,
+			TransactionID:     receipt.GetTransactionId(),
+			ContentText:       string(receiptBody),
+		}},
+	}, operationalExportRequestForTest(outputDir, executedAt))
+	require.NoError(t, err)
+	assert.Equal(t, 1, inventory.AuditChainCount)
+
+	files := operationalExportFiles(t, outputDir, inventory, "source-1")
+	admission := operationalAdmissionForTest()
+	importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
+	nodes, err := importer.Import(context.Background())
+	require.NoError(t, err)
+
+	var receiptNode, chainNode, commitmentNode *EvidenceNode
+	for index := range nodes {
+		switch nodes[index].ArtifactType {
+		case ArtifactTypeActionReceipt:
+			receiptNode = &nodes[index]
+		case ArtifactTypeAuditChainEntry:
+			chainNode = &nodes[index]
+		case ArtifactTypeCommitment:
+			commitmentNode = &nodes[index]
+		}
+	}
+	require.NotNil(t, receiptNode)
+	require.NotNil(t, chainNode)
+	require.NotNil(t, commitmentNode)
+	assert.Contains(t, receiptNode.References, chainNode.ArtifactID)
+	assert.Contains(t, chainNode.References, receiptNode.ArtifactID)
+	assert.Contains(t, commitmentNode.References, receiptNode.ArtifactID)
 }

@@ -3,6 +3,7 @@
 
 import { EventType } from '../constants/events.js';
 import { CasesManager } from './cases-manager.js';
+import { UIEventType } from '../constants/ui-events.js';
 
 export const ChatAuthMixin = {
     subscribeToAuthState() {
@@ -22,7 +23,7 @@ export const ChatAuthMixin = {
             return;
         }
 
-        this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, (data) => {
+        this.eventBus.once(UIEventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, (data) => {
             this.completeInitialization(data);
         });
     },
@@ -49,7 +50,7 @@ export const ChatAuthMixin = {
 
         this.updateChatInputForAuthState(data.isAuthenticated);
 
-        this.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_CHAT, {
+        this.eventBus.emit(UIEventType.AUTH_COMPONENT_INITIALIZED_CHAT, {
             isAuthenticated: data.isAuthenticated,
             user: this.currentUser
         });
@@ -57,21 +58,21 @@ export const ChatAuthMixin = {
 
     handleAuthStateChange(event, data) {
         switch (event) {
-            case EventType.AUTH_USER_AUTHENTICATED:
+            case EventType.PLATFORM_AUTH_USER_AUTHENTICATED:
                 this.currentUser = data.webSessionModel;
                 this.webSessionModel = data.webSessionModel;
                 this.currentWebSessionId = data.webSessionModel.id;
                 break;
 
-            case EventType.AUTH_USER_UNAUTHENTICATED:
-            case EventType.AUTH_SESSION_EXPIRED:
+            case EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED:
+            case EventType.PLATFORM_AUTH_SESSION_EXPIRED:
                 this.currentUser = null;
                 this.webSessionModel = null;
                 this.currentWebSessionId = null;
                 window.location.reload();
                 break;
 
-            case EventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE:
+            case UIEventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE:
                 break;
 
             default:

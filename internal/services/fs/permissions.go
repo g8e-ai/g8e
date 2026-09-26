@@ -19,8 +19,10 @@ import (
 // EnforceDirPermissions recursively enforces directory permissions on
 // the given path and all contents.
 func (fs *localFS) EnforceDirPermissions(ctx context.Context, relPath string, mode os.FileMode) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 
@@ -47,8 +49,10 @@ func (fs *localFS) EnforceDirPermissions(ctx context.Context, relPath string, mo
 
 // EnforceFilePermissions enforces file permissions on a single file.
 func (fs *localFS) EnforceFilePermissions(ctx context.Context, relPath string, mode os.FileMode) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	if err := os.Chmod(absPath, mode); err != nil {

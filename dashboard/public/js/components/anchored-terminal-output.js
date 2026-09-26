@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { templateLoader } from '../utils/template-loader.js';
-import { TribunalOutcome, TribunalFallbackReason } from '../constants/events.js';
+import { TribunalOutcome, TribunalFallbackReason } from '../constants/display-constants.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {

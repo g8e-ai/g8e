@@ -53,7 +53,7 @@ The quorum counts affirmative votes from trusted policy members. Each signer ide
 
 The Gateway-owned MCP tool, MCP resource, MCP prompt, and A2A call paths construct a canonical `GovernanceEnvelope`. Under `consensus` and `notary`, those paths send the completed envelope to the configured L2 deliberator before L4 verification. The reference Gateway wires an in-process deliberator from the policy selected by `--consensus-id`.
 
-Direct envelope submission does not add missing votes, so its caller must supply a complete vote set under `consensus` or `notary`. The outbound Operator `CommandIntent` relay also constructs an envelope without running L2 deliberation, but its intent format cannot carry L2 votes. Non-bootstrap commands sent through that relay therefore fail L2 verification under an L2-enforcing posture.
+Direct envelope submission does not add missing votes, so its caller must supply a complete vote set under `consensus` or `notary`. Governed HTTP dispatch to an outbound Operator also constructs an envelope without running L2 deliberation and cannot carry L2 votes in the request. Non-bootstrap commands sent through that dispatch path therefore fail L2 verification under an L2-enforcing posture.
 
 The Gateway exposes an mTLS-protected deliberation route only while running a posture that requires L2. The route accepts and returns canonical protojson envelopes and limits request bodies to 1 MiB. The `--consensus-url` and `G8E_CONSENSUS_URL` settings are retained in Gateway configuration, but the reference Gateway does not construct a remote HTTP deliberation client from them; its automatic MCP and A2A flow uses the in-process service.
 

@@ -35,7 +35,7 @@ import (
 // locally to keep the E2E package decoupled from internal gateway types.
 type dispatchRequestJSON struct {
 	TargetOperatorSessionID string `json:"target_operator_session_id"`
-	ActionType              string `json:"action_type"`
+	EventType               string `json:"event_type"`
 	Payload                 []byte `json:"payload"`
 	TargetResource          string `json:"target_resource,omitempty"`
 }

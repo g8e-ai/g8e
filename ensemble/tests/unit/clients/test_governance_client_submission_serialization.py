@@ -24,7 +24,7 @@ def _message(document_id: str) -> G8eMessage:
     return G8eMessage(
         id=document_id,
         source_component=G8EE_COMPONENT,
-        event_type=EventType.APP_CASE_CREATED,
+        event_type=EventType.APP_CASE_CREATE_REQUESTED,
         case_id="test-case-id",
         user_id="test-user-id",
         operator_id="test-operator-id",

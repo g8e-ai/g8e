@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/gateway/embedded"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -50,6 +51,7 @@ type TestInfrastructure struct {
 	Auth               *AuthService
 	CLISessionSvc      *CLISessionService
 	OperatorSessionSvc *OperatorSessionService
+	Embedded           *embedded.Service
 	WebSessionSvc      *WebSessionService
 	Reg                *RegistrationService
 	Passkey            *PasskeyHandler
@@ -132,6 +134,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	userSvc.SetAuthService(auth)
 	cliSessionSvc := NewCLISessionService(docStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(docStore, logger)
+	embeddedOperator := embedded.New(docStore, operatorSessionSvc)
 	webSessionSvc := NewWebSessionService(docStore, logger)
 	reg := NewRegistrationService(docStore, kvStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(docStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
@@ -153,7 +156,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		Service:         passkey,
 		WebSessionSvc:   webSessionSvc,
 		OperatorBinder:  reg,
-		OperatorClaimer: newEmbeddedOperatorService(docStore, operatorSessionSvc),
+		OperatorClaimer: embeddedOperator,
 		Responder:       resp,
 		MaxPayload:      cfg.Gateway.MaxPayloadBytes,
 		Orchestrator:    passkeyOrchestrator,
@@ -182,6 +185,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		Auth:               auth,
 		CLISessionSvc:      cliSessionSvc,
 		OperatorSessionSvc: operatorSessionSvc,
+		Embedded:           embeddedOperator,
 		WebSessionSvc:      webSessionSvc,
 		Reg:                reg,
 		Passkey:            passkeyHandler,

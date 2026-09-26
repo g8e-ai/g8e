@@ -50,6 +50,48 @@ func TestBuildPublicAssignmentEvidence(t *testing.T) {
 	assert.Equal(t, "primary", activity.Summary.ModelActivity.Records[0].GetAgentPersona())
 }
 
+func TestBuildPublicAssignmentEvidence_ProjectsOptionalThinkingAndCachePresence(t *testing.T) {
+	zero := uint32(0)
+	cache := uint32(4)
+	result := &evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			ModelRole:         evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+			AgentPersona:      "primary",
+			ModelVariant:      &evalv1.ModelVariant{VariantId: "variant-a"},
+			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+			PromptTokens:      1,
+			CompletionTokens:  2,
+			ThinkingTokens:    &zero,
+			CacheTokens:       &cache,
+			FinishReason:      "stop",
+		}},
+	}
+	activity, _, err := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{Result: result})
+	require.NoError(t, err)
+	record := activity.Summary.ModelActivity.Records[0]
+	require.NotNil(t, record.ThinkingTokens)
+	assert.Zero(t, record.GetThinkingTokens())
+	require.NotNil(t, record.CacheTokens)
+	assert.Equal(t, uint64(4), record.GetCacheTokens())
+
+	absent := &evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			ModelRole:         evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+			AgentPersona:      "primary",
+			ModelVariant:      &evalv1.ModelVariant{VariantId: "variant-a"},
+			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+			PromptTokens:      1,
+			CompletionTokens:  2,
+			FinishReason:      "stop",
+		}},
+	}
+	activity, _, err = BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{Result: absent})
+	require.NoError(t, err)
+	record = activity.Summary.ModelActivity.Records[0]
+	assert.Nil(t, record.ThinkingTokens)
+	assert.Nil(t, record.CacheTokens)
+}
+
 func TestBuildPublicAssignmentEvidence_MissingCaptureAndEmptyObservedList(t *testing.T) {
 	activity, _, err := BuildPublicAssignmentEvidence(PublicAssignmentEvidenceInput{Result: &evalv1.EvaluationAssignmentResult{ToolDecisionsCaptured: true}})
 	require.NoError(t, err)

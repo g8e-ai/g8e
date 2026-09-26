@@ -184,9 +184,11 @@ def _parse_response_blocks(blocks: list) -> list[Part]:
     return parts
 
 
-def _cache_token_count(response_usage) -> int:
-    cache_tokens = getattr(response_usage, "cache_read_input_tokens", 0)
-    return cache_tokens if isinstance(cache_tokens, int) else 0
+def _cache_token_count(response_usage) -> int | None:
+    if not hasattr(response_usage, "cache_read_input_tokens"):
+        return None
+    cache_tokens = getattr(response_usage, "cache_read_input_tokens", None)
+    return cache_tokens if isinstance(cache_tokens, int) and not isinstance(cache_tokens, bool) else None
 
 
 def _build_usage(response_usage) -> UsageMetadata:

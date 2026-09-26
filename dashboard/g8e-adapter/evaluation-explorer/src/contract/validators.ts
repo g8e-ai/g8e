@@ -39,6 +39,8 @@ import {
   type EvaluationSummary,
   type AssignmentResult,
   type MethodologySnapshot,
+  type ProofCatalog,
+  type ProofCatalogEntry,
   ACTIVITY_AVAILABILITIES,
   PUBLIC_ACTIVITY_EVIDENCE_SOURCES,
   PUBLIC_EVIDENCE_KINDS,
@@ -621,18 +623,23 @@ function assertPublicScenarioSummary(value: unknown, path: string): void {
 
 function assertPublicActivityFamily(value: unknown, path: string, validateRecord: (value: unknown, path: string) => void): void {
   assertObject(value, path);
-  rejectUnknown(value, ['availability', 'unavailable_reason', 'records'], path);
   assertEnum(value.availability, ACTIVITY_AVAILABILITIES, `${path}.availability`);
   if (value.availability === 'observed') {
+    rejectUnknown(value, ['availability', 'records'], path);
     assert(value.unavailable_reason === undefined, `${path}.unavailable_reason`, 'observed activity cannot have unavailable_reason');
-  } else {
-    assertEnum(value.unavailable_reason, PUBLIC_UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
-    if (value.availability === 'not_applicable') assert(value.unavailable_reason === 'scenario_not_applicable', `${path}.unavailable_reason`, 'not_applicable activity requires scenario_not_applicable');
+    assert(Array.isArray(value.records), `${path}.records`, 'expected array');
+    assert(value.records.length <= 128, `${path}.records`, 'expected at most 128 entries');
+    for (let index = 0; index < value.records.length; index++) validateRecord(value.records[index], `${path}.records[${index}]`);
+    return;
   }
-  assert(Array.isArray(value.records), `${path}.records`, 'expected array');
-  assert(value.records.length <= 128, `${path}.records`, 'expected at most 128 entries');
-  for (let index = 0; index < value.records.length; index++) validateRecord(value.records[index], `${path}.records[${index}]`);
-  if (value.availability !== 'observed') assert(value.records.length === 0, `${path}.records`, 'unavailable activity cannot contain records');
+  if (value.availability === 'unavailable') {
+    rejectUnknown(value, ['availability', 'unavailable_reason'], path);
+    assertEnum(value.unavailable_reason, PUBLIC_UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
+    return;
+  }
+  rejectUnknown(value, ['availability'], path);
+  assert(value.unavailable_reason === undefined, `${path}.unavailable_reason`, 'not_applicable activity cannot have unavailable_reason');
+  assert(value.records === undefined, `${path}.records`, 'not_applicable activity cannot contain records');
 }
 
 function assertPublicModelActivityRecord(value: unknown, path: string): void {
@@ -1001,6 +1008,54 @@ export function isFeedHistoryPage(value: unknown): asserts value is FeedHistoryP
   assertInteger(value.limit, 'feed_history.limit');
   assert(value.limit >= 0, 'feed_history.limit', 'must be >= 0');
   if (value.cursor !== undefined) assertString(value.cursor, 'feed_history.cursor');
+}
+
+function isProofCatalogEntry(value: unknown): asserts value is ProofCatalogEntry {
+  assertObject(value, 'proof_catalog_entry');
+  rejectUnknown(
+    value,
+    [
+      'artifact_id',
+      'filename',
+      'media_type',
+      'byte_size',
+      'sha256',
+      'classification',
+      'campaign_id',
+      'source_run_id',
+      'generated_at',
+      'verification_command',
+      'immutable_url',
+    ],
+    'proof_catalog_entry',
+  );
+  assertString(value.artifact_id, 'proof_catalog_entry.artifact_id');
+  assertString(value.filename, 'proof_catalog_entry.filename');
+  assertString(value.media_type, 'proof_catalog_entry.media_type');
+  assertInteger(value.byte_size, 'proof_catalog_entry.byte_size');
+  assert(value.byte_size >= 0, 'proof_catalog_entry.byte_size', 'must be >= 0');
+  assertString(value.sha256, 'proof_catalog_entry.sha256');
+  assert(/^[0-9a-f]{64}$/.test(value.sha256), 'proof_catalog_entry.sha256', 'expected sha256 hex');
+  assert(value.artifact_id === value.sha256, 'proof_catalog_entry.artifact_id', 'must match sha256');
+  assertString(value.classification, 'proof_catalog_entry.classification');
+  assertString(value.campaign_id, 'proof_catalog_entry.campaign_id');
+  assertOptional(value.source_run_id, 'proof_catalog_entry.source_run_id', assertString);
+  assertString(value.generated_at, 'proof_catalog_entry.generated_at');
+  assertString(value.verification_command, 'proof_catalog_entry.verification_command');
+  assertString(value.immutable_url, 'proof_catalog_entry.immutable_url');
+  assert(value.immutable_url === `/proofs/${value.sha256}`, 'proof_catalog_entry.immutable_url', 'must match content address');
+}
+
+export function isProofCatalog(value: unknown): asserts value is ProofCatalog {
+  assertObject(value, 'proof_catalog');
+  rejectUnknown(value, ['schema_version', 'entries', 'generated_at'], 'proof_catalog');
+  assertString(value.schema_version, 'proof_catalog.schema_version');
+  assert(value.schema_version === '1.0.0', 'proof_catalog.schema_version', 'expected 1.0.0');
+  assert(Array.isArray(value.entries), 'proof_catalog.entries', 'expected array');
+  for (let index = 0; index < value.entries.length; index++) {
+    isProofCatalogEntry(value.entries[index]);
+  }
+  assertString(value.generated_at, 'proof_catalog.generated_at');
 }
 
 /** Validate a snapshot record kind against the closed set. */

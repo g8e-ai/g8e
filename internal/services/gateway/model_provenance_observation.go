@@ -172,21 +172,23 @@ func (c *ModelProvenanceObservationCoordinator) PreflightCommandDelivery(ctx con
 
 // PreflightStorageAttestation verifies that the active provenance operator can
 // read and attest the expected Ollama manifest for one served model tag before
-// campaign execute burns scored assignments.
-func (c *ModelProvenanceObservationCoordinator) PreflightStorageAttestation(ctx context.Context, servedModelTag, expectedModelDigest string) error {
+// campaign execute burns scored assignments. The returned window is keyed to a
+// preflight probe attempt id and must be rebound to inference provider_attempt_id
+// before execute-time witness persistence.
+func (c *ModelProvenanceObservationCoordinator) PreflightStorageAttestation(ctx context.Context, servedModelTag, expectedModelDigest string) (*evalv1.ModelProvenanceAttestationWindow, error) {
 	if servedModelTag == "" || expectedModelDigest == "" {
-		return fmt.Errorf("model provenance attestation preflight: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("model provenance attestation preflight: %w", constants.ErrMissingRequiredField)
 	}
 	if !models.IsSHA256Hex(expectedModelDigest) {
-		return fmt.Errorf("model provenance attestation preflight: invalid expected digest")
+		return nil, fmt.Errorf("model provenance attestation preflight: invalid expected digest")
 	}
 	if err := c.PreflightCommandDelivery(ctx); err != nil {
-		return fmt.Errorf("model provenance attestation preflight: %w", err)
+		return nil, fmt.Errorf("model provenance attestation preflight: %w", err)
 	}
 
 	probeID, err := newModelProvenancePreflightAttemptID()
 	if err != nil {
-		return fmt.Errorf("model provenance attestation preflight: %w", err)
+		return nil, fmt.Errorf("model provenance attestation preflight: %w", err)
 	}
 	now := time.Now().UTC().UnixMilli()
 	begin := &evalv1.ModelProvenanceObservationCommand{
@@ -197,7 +199,7 @@ func (c *ModelProvenanceObservationCoordinator) PreflightStorageAttestation(ctx 
 		ExpectedModelDigest:    expectedModelDigest,
 	}
 	if err := c.publishCommand(ctx, begin); err != nil {
-		return fmt.Errorf("model provenance attestation preflight: begin: %w", err)
+		return nil, fmt.Errorf("model provenance attestation preflight: begin: %w", err)
 	}
 	finalize := &evalv1.ModelProvenanceObservationCommand{
 		ProviderAttemptId:        probeID,
@@ -209,31 +211,31 @@ func (c *ModelProvenanceObservationCoordinator) PreflightStorageAttestation(ctx 
 		ExpectedModelDigest:      expectedModelDigest,
 	}
 	if err := c.publishCommand(ctx, finalize); err != nil {
-		return fmt.Errorf("model provenance attestation preflight: finalize: %w", err)
+		return nil, fmt.Errorf("model provenance attestation preflight: finalize: %w", err)
 	}
 
 	deadline := time.Now().Add(modelProvenanceAttestationPreflightTimeout)
 	for {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return nil, ctx.Err()
 		}
 		window, loadErr := c.windows.Load(ctx, probeID)
 		if loadErr == nil {
 			if !window.GetDigestMatch() {
-				return fmt.Errorf("model provenance attestation preflight: digest mismatch for %q (observed %s)",
+				return nil, fmt.Errorf("model provenance attestation preflight: digest mismatch for %q (observed %s)",
 					servedModelTag, window.GetObservedModelDigest())
 			}
-			return nil
+			return window, nil
 		}
 		if !errors.Is(loadErr, constants.ErrNotFound) {
-			return fmt.Errorf("model provenance attestation preflight: load probe window: %w", loadErr)
+			return nil, fmt.Errorf("model provenance attestation preflight: load probe window: %w", loadErr)
 		}
 		if time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	return fmt.Errorf("model provenance attestation preflight: %w: operator did not attest %q (verify --model-storage-root and Ollama manifest layout)",
+	return nil, fmt.Errorf("model provenance attestation preflight: %w: operator did not attest %q (verify --model-storage-root and Ollama manifest layout)",
 		constants.ErrEvaluationObservationUnavailable, servedModelTag)
 }
 
@@ -332,7 +334,7 @@ func (c *ModelProvenanceObservationCoordinator) publishCommand(ctx context.Conte
 	}
 	txID, err := c.dispatch.PublishCommand(ctx, PublishCommandRequest{
 		TargetOperatorSessionID: operator.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeModelProvenanceObservation),
+		EventType:               string(constants.Event.Operator.ModelProvenanceObservation.Requested),
 		Payload:                 payload,
 	})
 	if err != nil {

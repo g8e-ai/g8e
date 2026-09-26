@@ -249,6 +249,7 @@ const (
 	DockerBootstrappedProfile        = "bootstrapped"
 	DockerCrossEnrollProfile         = "cross-enrollment"
 	DockerEvaluationProfile          = "evaluation"
+	DockerG8ellamaProfile            = "g8ellama"
 	DockerGatewayContainer           = "g8e-gateway"
 	DockerOperatorContainer          = "g8e-operator"
 	DockerEnsembleContainer          = "ensemble"
@@ -684,6 +685,7 @@ const (
 	ComplianceOperationalReceiptsDirname         = "receipts"
 	ComplianceOperationalPersistenceDirname      = "persistence"
 	ComplianceOperationalCommitmentsDirname      = "commitments"
+	ComplianceOperationalAuditChainDirname       = "audit-chain"
 )
 
 // Release evidence output filename suffixes. The per-release compliance
@@ -728,6 +730,8 @@ const (
 	CommitmentsDirname                            = "commitments"
 	CommitmentEvidenceVerifierID                  = "g8e-commitment-evidence-importer"
 	CommitmentEvidenceVerifierVersion             = "1.0.0"
+	AuditChainEvidenceVerifierID                  = "g8e-audit-chain-evidence-importer"
+	AuditChainEvidenceVerifierVersion             = "1.0.0"
 	LedgerCommitReferencePrefix                   = "ledger-commit"
 	LedgerCommitCollectionReferencePrefix         = "ledger-commit-collection"
 	LedgerStateReferencePrefix                    = "ledger-state"
@@ -978,24 +982,28 @@ const (
 	PublicProofsDirname                      = "public-proofs"
 	PublicProofCatalogFilename               = "proof-catalog.json"
 	PublicProofManifestFilename              = "proof-manifest.json"
+	PublicProofMirrorSyncFilename            = "proof-mirror-sync.json"
 )
 
 // Public feed schema and protocol version constants.
 const (
-	PublicFeedProtocolVersion         = "1.0.0"
-	PublicFeedSchemaVersion           = "1.0.0"
-	PublicProofManifestSchemaVersion  = "1.0.0"
-	PublicProofCatalogSchemaVersion   = "1.0.0"
-	PublicFeedBatchMaxRecords         = 100
-	PublicFeedBatchMaxBytes           = 4 << 20
-	PublicFeedRetryMaxAttempts        = 5
-	PublicFeedRetryInitialBackoff     = 1
-	PublicFeedRetryMaxBackoff         = 60
-	PublicFeedAckWindowSeconds        = 300
-	PublicFeedMaxArtifactBytes        = 64 << 20
-	PublicFeedProofIngestMaxBytes     = 512 << 20
-	PublicFeedKeyRegistrationMaxBytes = 16 << 10
-	PublicFeedProofMaxArtifacts       = 1000
+	PublicFeedProtocolVersion          = "1.0.0"
+	PublicFeedSchemaVersion            = "1.0.0"
+	PublicProofManifestSchemaVersion   = "1.0.0"
+	PublicProofCatalogSchemaVersion    = "1.0.0"
+	PublicProofMirrorSyncSchemaVersion = "1.0.0"
+	PublicFeedBatchMaxRecords          = 100
+	PublicFeedBatchMaxBytes            = 4 << 20
+	PublicFeedRetryMaxAttempts         = 5
+	PublicFeedRetryInitialBackoff      = 1
+	PublicFeedRetryMaxBackoff          = 60
+	PublicFeedAckWindowSeconds         = 300
+	PublicFeedMaxArtifactBytes         = 64 << 20
+	PublicFeedProofIngestMaxBytes      = 512 << 20
+	PublicFeedKeyRegistrationMaxBytes  = 16 << 10
+	// Init-campaign restore publishes two proof artifacts per assignment across
+	// many verified runs; keep headroom above ~3k assignment-audit artifacts.
+	PublicFeedProofMaxArtifacts       = 8192
 	PublicFeedFreshnessDelayedSeconds = 60
 	PublicFeedFreshnessStaleSeconds   = 300
 	PublicFeedFreshnessOfflineSeconds = 900

@@ -58,3 +58,13 @@ type AuditSummaryResponse struct {
 	ReceiptsTotal   int            `json:"receipts_total"`
 	TotalRecords    int            `json:"total_records"`
 }
+
+// AuditVerifyResponse is the typed response for GET /api/v1/audit/verify.
+type AuditVerifyResponse struct {
+	Success         bool   `json:"success"`
+	OK              bool   `json:"ok"`
+	VerifiedFromSeq int64  `json:"verified_from_seq"`
+	HeadSeq         int64  `json:"head_seq"`
+	HeadHash        string `json:"head_hash"`
+	Error           string `json:"error,omitempty"`
+}

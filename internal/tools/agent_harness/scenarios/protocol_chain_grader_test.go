@@ -80,7 +80,7 @@ func buildVerifiedChainStages(txID, txHash, investigationID string) []*operatorv
 		},
 	}
 	for _, stage := range stages {
-		stage.ActionType = "FILE_EDIT"
+		stage.ActionType = string(constants.ActionTypeFileEdit)
 	}
 	return stages
 }
@@ -104,7 +104,7 @@ func buildRejectedChainStages(txID, txHash, investigationID string) []*operatorv
 		},
 	}
 	for _, stage := range stages {
-		stage.ActionType = "FILE_EDIT"
+		stage.ActionType = string(constants.ActionTypeFileEdit)
 	}
 	return stages
 }
@@ -113,6 +113,8 @@ func buildVerifiedChainReceipt() *operatorv1.ActionReceipt {
 	return &operatorv1.ActionReceipt{
 		TransactionId:   "transaction-1",
 		TransactionHash: "transaction-hash-1",
+		EventType:       string(constants.EventOperatorFileEditRequested),
+		ActionType:      string(constants.ActionTypeFileEdit),
 		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		StateRootBefore: "root-before",
 		StateRootAfter:  "root-after",
@@ -130,6 +132,8 @@ func buildRejectedChainReceipt() *operatorv1.ActionReceipt {
 	return &operatorv1.ActionReceipt{
 		TransactionId:   "transaction-1",
 		TransactionHash: "transaction-hash-1",
+		EventType:       string(constants.EventOperatorFileEditRequested),
+		ActionType:      string(constants.ActionTypeFileEdit),
 		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 		SignerKeyId:     "signer-1",
 		Signature:       "receipt-signature-1",

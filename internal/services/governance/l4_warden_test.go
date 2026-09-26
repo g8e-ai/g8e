@@ -8,6 +8,7 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -72,6 +74,10 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 		msg = &operatorv1.FsGrepRequested{Path: constants.PathCurrentDir, Pattern: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypePortCheck:
 		msg = &operatorv1.CheckPortRequested{Port: 8080, ExecutionId: "exec-1"}
+	case constants.ActionTypeOllamaModelInventory:
+		msg = &operatorv1.OllamaModelInventoryRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypeOllamaModelResidency:
+		msg = &operatorv1.OllamaModelResidencyRequested{ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchLogs:
 		msg = &operatorv1.FetchLogsRequested{ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchHistory:
@@ -183,13 +189,19 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		nonceSuffix = "empty"
 	}
 
+	eventType, err := constants.RequestEventForAction(actionType)
+	if err != nil {
+		t.Fatalf("failed to resolve request event for %v: %v", actionType, err)
+	}
+
 	env := &govtypes.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "operator-session-1",
+		EventType:         string(eventType),
 		ActionType:        string(actionType),
 		TargetResource:    "localhost",
 		Payload:           payload,
@@ -238,6 +250,19 @@ func rehash(t *testing.T, env *govtypes.GovernanceEnvelope) {
 	}
 	env.Id = hash
 	env.TransactionHash = hash
+}
+
+func TestL4Warden_EventActionMismatchRejected(t *testing.T) {
+	t.Parallel()
+
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, constants.PostureDoctrine)
+	env.ActionType = string(constants.ActionTypeExecuteBash)
+	rehash(t, env)
+
+	_, err := verifier.VerifyEnvelope(context.Background(), env)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrTxEventActionMismatch)
 }
 
 // TestNewGovernancePosture_PanicsOnInvalidPosture verifies that invalid posture

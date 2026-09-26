@@ -8,13 +8,9 @@
 package evaluation
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -25,27 +21,6 @@ type ModelRegistryFreeze struct {
 	CampaignID string
 	Digest     string
 	Variants   []*operatorv1.InferenceModelVariant
-}
-
-// FreezeModelRegistryFromProvider queries the approved Ollama endpoint and
-// computes the deterministic campaign registry digest for campaignID.
-func FreezeModelRegistryFromProvider(ctx context.Context, endpoint, campaignID string, logger *slog.Logger) (*ModelRegistryFreeze, error) {
-	if campaignID == "" {
-		return nil, fmt.Errorf("evaluation: freeze model registry: %w", constants.ErrMissingRequiredField)
-	}
-	backend, err := inference.NewOllamaBackend(endpoint, logger)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: freeze model registry: %w", err)
-	}
-	variants, err := backend.ListModelVariants(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: freeze model registry: %w", err)
-	}
-	digest, err := models.ComputeInferenceModelRegistryDigest(campaignID, variants)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: freeze model registry: %w", err)
-	}
-	return &ModelRegistryFreeze{CampaignID: campaignID, Digest: digest, Variants: variants}, nil
 }
 
 // LookupModelVariant returns the frozen variant for model when present.

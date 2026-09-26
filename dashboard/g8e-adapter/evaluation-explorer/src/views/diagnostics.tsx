@@ -39,10 +39,10 @@ export function DiagnosticsDisclosure({
         {formatNumber(missingCount)} {missingCount === 1 ? 'assignment' : 'assignments'} with missing or
         insufficient observations
       </summary>
-      <div style={{ marginTop: '10px', fontSize: '13px', color: 'var(--fg-muted)' }}>
+      <div style={{ marginTop: '10px', fontSize: 'var(--text-lg)', color: 'var(--fg-muted)' }}>
         {diagnostics.failedSuites.length > 0 ? (
           <section aria-label="Verification failures" style={{ marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '13px', margin: '0 0 6px', color: 'var(--fg)' }}>
+            <h3 style={{ fontSize: 'var(--text-lg)', margin: '0 0 6px', color: 'var(--fg)' }}>
               Suites that failed canonical verification
             </h3>
             <ul style={{ margin: 0, paddingLeft: '18px' }}>
@@ -55,7 +55,7 @@ export function DiagnosticsDisclosure({
                   {suite.run_ids.map((runId) => (
                     <span key={runId}>
                       {' '}
-                      <Link to={`/evaluations/${datasetId}/${runId}`} style={{ fontFamily: 'var(--mono)', fontSize: '12px' }}>
+                      <Link to={`/evaluations/${datasetId}/${runId}`} style={{ fontFamily: 'var(--mono)', fontSize: 'var(--text-md)' }}>
                         {runId}
                       </Link>
                     </span>
@@ -67,13 +67,13 @@ export function DiagnosticsDisclosure({
         ) : null}
         {diagnostics.flaggedByRun.length > 0 ? (
           <section aria-label="Missing observations by run" style={{ marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '13px', margin: '0 0 6px', color: 'var(--fg)' }}>
+            <h3 style={{ fontSize: 'var(--text-lg)', margin: '0 0 6px', color: 'var(--fg)' }}>
               Missing or insufficient observations by run
             </h3>
             <ul style={{ margin: 0, paddingLeft: '18px' }}>
               {diagnostics.flaggedByRun.map((entry) => (
                 <li key={entry.run_id}>
-                  <Link to={`/evaluations/${datasetId}/${entry.run_id}`} style={{ fontFamily: 'var(--mono)', fontSize: '12px' }}>
+                  <Link to={`/evaluations/${datasetId}/${entry.run_id}`} style={{ fontFamily: 'var(--mono)', fontSize: 'var(--text-md)' }}>
                     {entry.suite_id ?? entry.run_id}
                   </Link>
                   <span> — {formatNumber(entry.count)} affected assignments</span>

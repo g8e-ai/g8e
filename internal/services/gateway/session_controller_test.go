@@ -161,7 +161,7 @@ func TestHandleSessionInfo_ReturnsPersistedBinding(t *testing.T) {
 
 	// Claim the embedded operator for the user so its session is the
 	// persisted binding the CLI session carries.
-	operatorID, operatorSessionID, err := newEmbeddedOperatorService(infra.DocStore, infra.OperatorSessionSvc).ClaimEmbeddedOperator(user.ID)
+	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(user.ID)
 	require.NoError(t, err)
 
 	cliSessionID := "cli-session-info-bound"
@@ -231,7 +231,7 @@ func TestHandleSessionInfo_NonCLIIdentityReturns401(t *testing.T) {
 	user, err := infra.UserSvc.CreateUser()
 	require.NoError(t, err)
 
-	operatorID, operatorSessionID, err := newEmbeddedOperatorService(infra.DocStore, infra.OperatorSessionSvc).ClaimEmbeddedOperator(user.ID)
+	operatorID, operatorSessionID, err := infra.Embedded.ClaimEmbeddedOperator(user.ID)
 	require.NoError(t, err)
 
 	t.Run("operator certificate without CLI session", func(t *testing.T) {

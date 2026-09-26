@@ -238,7 +238,7 @@ class TestAPIKeyService:
     async def test_validate_key_expired(self, api_key_service, mock_cache_aside):
         """Test validating an expired API key."""
         from datetime import timedelta
-        from app.utils.timestamp import now
+        from app.utils.time_ids.timestamp import now
 
         expired_time = now() - timedelta(days=1)
         doc = APIKeyDocument(

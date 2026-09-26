@@ -2173,7 +2173,7 @@ class TestTribunalEmitter:
 
         with pytest.raises(RuntimeError, match="broker down"):
             await emitter.emit(
-                EventType.AI_CONSENSUS_SESSION_AUDITOR_FAILED,
+                EventType.AI_CONSENSUS_SESSION_GENERATION_FAILED,
                 TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
             )
 

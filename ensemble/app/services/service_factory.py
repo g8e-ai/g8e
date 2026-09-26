@@ -41,19 +41,12 @@ from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.auth_service import AuthService
 from app.services.auth.certificate_service import CertificateService
 from app.services.auth.certificate_data_service import CertificateDataService
-from app.services.operator.operator_session_service import OperatorSessionService
-from app.services.operator.operator_auth_service import OperatorAuthService
-from app.services.operator.session_auth_listener import SessionAuthListener
-from app.services.operator.heartbeat_stale_monitor import HeartbeatStaleMonitorService
 from app.services.protocols import (
     HTTPServiceProtocol,
     InvestigationServiceProtocol,
     InvestigationDataServiceProtocol,
     OperatorDataServiceProtocol,
-    OperatorLifecycleServiceProtocol,
     MemoryDataServiceProtocol,
-    HeartbeatSnapshotServiceProtocol,
-    HeartbeatSnapshotStaleMonitorServiceProtocol,
     EventServiceProtocol,
     AIResponseAnalyzerProtocol,
     ToolExecutorProtocol,
@@ -61,13 +54,12 @@ from app.services.protocols import (
 )
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
-from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
+from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.services.data.case_data_service import CaseDataService
-from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from app.models.settings import G8eeAppSettings
-from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
-from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
-from app.utils.auto_approved_validator import (
+from app.utils.validation.whitelist_validator import get_whitelist_validator, register_whitelist_validator
+from app.utils.validation.blacklist_validator import get_blacklist_validator, register_blacklist_validator
+from app.utils.validation.auto_approved_validator import (
     get_auto_approved_validator,
     register_auto_approved_validator,
 )
@@ -77,13 +69,11 @@ from app.db.blob_service import BlobService
 
 if TYPE_CHECKING:
     from app.clients.blob_client import BlobClient
-    from app.clients.pubsub_client import PubSubClient
     from app.clients.governance_client import GovernanceClient
     from app.services.investigation.investigation_service import InvestigationService
     from app.services.investigation.investigation_data_service import InvestigationDataService
     from app.services.operator.operator_data_service import OperatorDataService
     from app.services.investigation.memory_data_service import MemoryDataService
-    from app.services.operator.heartbeat_service import HeartbeatSnapshotService
     from app.services.ai.response_analyzer import AIResponseAnalyzer
     from app.services.operator.approval_service import OperatorApprovalService
 
@@ -100,7 +90,7 @@ class CoreServices:
 class DataServices:
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
-    operator_lifecycle_service: OperatorLifecycleService | OperatorLifecycleServiceProtocol
+    gateway_operator_client: GatewayOperatorClient
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
@@ -118,14 +108,7 @@ class DomainServices:
 
 @dataclass(frozen=True)
 class OperatorServices:
-    heartbeat_service: HeartbeatSnapshotService | HeartbeatSnapshotServiceProtocol
-    heartbeat_stale_monitor: (
-        HeartbeatStaleMonitorService | HeartbeatSnapshotStaleMonitorServiceProtocol
-    )
-    operator_session_service: OperatorSessionService
-    operator_auth_service: OperatorAuthService
     auth_service: AuthService
-    session_auth_listener: SessionAuthListener
     api_key_service: APIKeyService
     certificate_service: CertificateService
 
@@ -158,7 +141,6 @@ class AllServices:
     settings_service: SettingsService
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
-    operator_lifecycle_service: OperatorLifecycleService | OperatorLifecycleServiceProtocol
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
@@ -168,16 +150,10 @@ class AllServices:
     memory_generation_service: MemoryGenerationService
     reputation_service: ReputationService
     ssh_inventory_service: SshInventoryService
-    heartbeat_service: HeartbeatSnapshotService | HeartbeatSnapshotServiceProtocol
-    heartbeat_stale_monitor: (
-        HeartbeatStaleMonitorService | HeartbeatSnapshotStaleMonitorServiceProtocol
-    )
-    operator_session_service: OperatorSessionService
-    operator_auth_service: OperatorAuthService
     auth_service: AuthService
-    session_auth_listener: SessionAuthListener
     api_key_service: APIKeyService
     certificate_service: CertificateService
+    gateway_operator_client: GatewayOperatorClient
 
 
 class ServiceFactory:
@@ -221,9 +197,10 @@ class ServiceFactory:
             governance_client=governance_client,
         )
 
+        gateway_operator_client = GatewayOperatorClient(core_services.internal_http_client)
         operator_data_service = OperatorDataService(
             cache=cache_aside_service,
-            internal_http_client=core_services.internal_http_client,  # type: ignore[arg-type]
+            gateway_operator_client=gateway_operator_client,
         )
 
         memory_data_service = MemoryDataService(
@@ -253,15 +230,10 @@ class ServiceFactory:
             governance_client=governance_client,
         )
 
-        # Create lifecycle service after data service is available
-        operator_lifecycle_service = OperatorLifecycleService(
-            operator_data_service=operator_data_service,
-        )
-
         return DataServices(
             investigation_data_service=investigation_data_service,
             operator_data_service=operator_data_service,
-            operator_lifecycle_service=operator_lifecycle_service,
+            gateway_operator_client=gateway_operator_client,
             memory_data_service=memory_data_service,
             case_data_service=case_data_service,
             agent_activity_data_service=agent_activity_data_service,
@@ -303,53 +275,17 @@ class ServiceFactory:
     @staticmethod
     def create_operator_services(
         core_services: CoreServices,
-        data_services: DataServices,
         cache_aside_service: CacheAsideService,
-        pubsub_client: PubSubClient | None = None,
     ) -> OperatorServices:
-        """Create operator-specific services."""
+        """Create auth-adjacent services still used by non-operator g8ee routes."""
         api_key_service = APIKeyService(cache_aside=cache_aside_service)
-
-        operator_session_service = OperatorSessionService(cache_aside=cache_aside_service)
-
         certificate_service = CertificateService(
             data_service=CertificateDataService(cache_aside_service)
         )
-
-        operator_auth_service = OperatorAuthService(
-            api_key_service=api_key_service,
-            session_service=operator_session_service,
-            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
-            lifecycle_service=data_services.operator_lifecycle_service,  # type: ignore[arg-type]
-            certificate_service=certificate_service,
-            cache_aside=cache_aside_service,
-        )
-
         auth_service = AuthService(internal_http_client=core_services.internal_http_client)
 
-        session_auth_listener = SessionAuthListener(
-            pubsub_client=pubsub_client,
-            session_service=operator_session_service,
-            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
-        )
-
-        heartbeat_service = HeartbeatSnapshotService(
-            operator_data_service=data_services.operator_data_service,
-            event_service=core_services.event_service,
-        )
-
-        heartbeat_stale_monitor = HeartbeatStaleMonitorService(
-            operator_data_service=data_services.operator_data_service,
-            event_service=core_services.event_service,
-        )
-
         return OperatorServices(
-            heartbeat_service=heartbeat_service,
-            heartbeat_stale_monitor=heartbeat_stale_monitor,
-            operator_session_service=operator_session_service,
-            operator_auth_service=operator_auth_service,
             auth_service=auth_service,
-            session_auth_listener=session_auth_listener,
             api_key_service=api_key_service,
             certificate_service=certificate_service,
         )
@@ -362,15 +298,10 @@ class ServiceFactory:
         kv_service: KVService,
         blob_service: BlobService,
         governance_client: GovernanceClient,
-        pubsub_client: PubSubClient | None = None,
         blob_service_client: BlobClient | None = None,
         web_search_provider: WebSearchProvider | None = None,
     ) -> AllServices:
         """Create all g8ee services in proper dependency order.
-
-        When *pubsub_client* is supplied (production path), both the
-        OperatorCommandService and HeartbeatService are wired to the
-        shared PubSubClient and ready for ``start_services``.
 
         *web_search_provider* allows tests to inject a provider without
         requiring platform settings to have search configured.
@@ -383,15 +314,7 @@ class ServiceFactory:
             settings, data_services, core_services
         )
         operator_services = ServiceFactory.create_operator_services(
-            core_services, data_services, cache_aside_service, pubsub_client
-        )
-
-        # Wire APIKeyService into OperatorLifecycleService now that both exist.
-        # OperatorLifecycleService is built in create_data_services (earlier phase),
-        # while APIKeyService is built in create_operator_services. Setter injection
-        # bridges the factory phase ordering. See operator_lifecycle_service.set_api_key_service.
-        data_services.operator_lifecycle_service.set_api_key_service(  # type: ignore[union-attr]
-            operator_services.api_key_service
+            core_services, cache_aside_service
         )
 
         attachment_service = AttachmentService(
@@ -416,6 +339,8 @@ class ServiceFactory:
             investigation_data_service=data_services.investigation_data_service,
         )
 
+        gateway_operator_client = data_services.gateway_operator_client
+
         stream_executor = OperatorStreamExecutor(
             approval_service=approval_service,
             internal_http_client=core_services.internal_http_client,
@@ -431,24 +356,16 @@ class ServiceFactory:
         register_auto_approved_validator(auto_approved_validator)
 
         operator_command_service = OperatorCommandService.build(
-            cache_aside_service=cache_aside_service,
-            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
             investigation_service=domain_services.investigation_service,  # type: ignore[arg-type]
-            event_service=core_services.event_service,  # type: ignore[arg-type]
             settings=settings,
             ai_response_analyzer=response_analyzer,  # type: ignore[arg-type]
             internal_http_client=core_services.internal_http_client,
             approval_service=approval_service,  # type: ignore[arg-type]
+            gateway_operator_client=gateway_operator_client,
             whitelist_validator=whitelist_validator,
             blacklist_validator=blacklist_validator,
             auto_approved_validator=auto_approved_validator,
         )
-
-        if pubsub_client is not None:
-            operator_command_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
-            operator_services.heartbeat_service.set_pubsub_client(
-                cast("PubSubClient", pubsub_client)
-            )
 
         chat_task_manager = BackgroundTaskManager()
 
@@ -508,7 +425,6 @@ class ServiceFactory:
             settings_service=core_services.settings_service,
             investigation_data_service=data_services.investigation_data_service,
             operator_data_service=data_services.operator_data_service,
-            operator_lifecycle_service=data_services.operator_lifecycle_service,
             memory_data_service=data_services.memory_data_service,
             case_data_service=data_services.case_data_service,
             agent_activity_data_service=data_services.agent_activity_data_service,
@@ -518,14 +434,10 @@ class ServiceFactory:
             memory_generation_service=domain_services.memory_generation_service,
             reputation_service=domain_services.reputation_service,
             ssh_inventory_service=domain_services.ssh_inventory_service,
-            heartbeat_service=operator_services.heartbeat_service,
-            heartbeat_stale_monitor=operator_services.heartbeat_stale_monitor,
-            operator_session_service=operator_services.operator_session_service,
-            operator_auth_service=operator_services.operator_auth_service,
             auth_service=operator_services.auth_service,
-            session_auth_listener=operator_services.session_auth_listener,
             api_key_service=operator_services.api_key_service,
             certificate_service=operator_services.certificate_service,
+            gateway_operator_client=gateway_operator_client,
         )
 
     @staticmethod
@@ -538,10 +450,7 @@ class ServiceFactory:
     async def start_services(services: AllServices) -> None:
         """Run lifecycle start hooks for services that require them."""
         await services.certificate_service.initialize()
-        await services.operator_command_service.start_pubsub_listeners()
         await services.http_service.start()
-        await services.heartbeat_service.start()
-        await services.heartbeat_stale_monitor.start()
 
     @staticmethod
     async def stop_services(services: AllServices) -> None:
@@ -560,24 +469,9 @@ class ServiceFactory:
             _logger.error("Error awaiting background tasks: %s", exc)
 
         try:
-            await services.heartbeat_stale_monitor.stop()
-        except Exception as exc:
-            _logger.error("Error stopping heartbeat stale monitor: %s", exc)
-
-        try:
-            await services.heartbeat_service.stop()
-        except Exception as exc:
-            _logger.error("Error stopping heartbeat service: %s", exc)
-
-        try:
             await services.http_service.stop()
         except Exception as exc:
             _logger.error("Error stopping HTTP service: %s", exc)
-
-        try:
-            await services.operator_command_service.stop_pubsub_listeners()
-        except Exception as exc:
-            _logger.error("Error stopping pubsub listeners: %s", exc)
 
         try:
             await services.certificate_service.cleanup()

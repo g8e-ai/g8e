@@ -30,7 +30,7 @@ from app.models.reputation import GENESIS_PREV_ROOT, ReputationState
 from app.models.http_context import RequestContext
 from app.services.ai.auditor_service import commit_reputation
 from app.services.data.reputation_data_service import ReputationDataService
-from app.utils.merkle import leaf_bytes, merkle_root
+from app.utils.hashing.merkle import leaf_bytes, merkle_root
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 

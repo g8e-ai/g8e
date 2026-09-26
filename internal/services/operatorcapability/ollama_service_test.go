@@ -44,6 +44,20 @@ func TestOllamaReleaseCommand_ValidatesServedModelTag(t *testing.T) {
 	}
 }
 
+func TestOllamaMaintenanceCommands_BuildExpectedOperatorPaths(t *testing.T) {
+	t.Parallel()
+	pull, err := OllamaPullCommand("qwen3:0.6b")
+	require.NoError(t, err)
+	assert.Equal(t, "/g8e operator model pull qwen3:0.6b", pull)
+
+	copyCmd, err := OllamaCopyCommand("qwen3:0.6b", "qwen3.8:27b")
+	require.NoError(t, err)
+	assert.Equal(t, "/g8e operator model copy qwen3:0.6b qwen3.8:27b", copyCmd)
+
+	assert.Equal(t, "/g8e operator model inventory", OllamaInventoryCommand())
+	assert.Equal(t, "/g8e operator model residency", OllamaResidencyCommand())
+}
+
 func TestValidateWitnessCommand(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

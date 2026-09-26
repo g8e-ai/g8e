@@ -93,6 +93,10 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// (requires a client certificate and extracts the user ID from it).
 	r.addExact(constants.APIPaths.PublicFeedBatches, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PublicFeedSnapshot, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.PublicFeedProofs, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.PublicFeedProofsBatch, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.PublicFeedProofsPush, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.PublicFeedProofsPrune, RouteAuthMTLS)
 	r.addPrefix(constants.APIPaths.EvalCampaignPublicationStateByRun, RouteAuthMTLS)
 	r.addPrefix(constants.APIPaths.InferenceProviderObservations, RouteAuthMTLS)
 	r.addPrefix(constants.APIPaths.InferenceModelProvenanceAttestations, RouteAuthMTLS)
@@ -154,6 +158,32 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.ObserveProducerPrefix, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ObserveProducerAgentState, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ObserveProducerRunState, RouteAuthMTLS)
+
+	// mTLS-only operator sub-paths (must precede the browser-capable prefix).
+	r.addExact(constants.APIPaths.OperatorsValidate, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.OperatorsTarget, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.OperatorsReauth, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.OperatorsCommands, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.OperatorsStop, RouteAuthMTLS)
+	r.addPrefix(constants.APIPaths.OperatorsSession, RouteAuthMTLS)
+	// Browser operator list/bind/unbind (cookie or mTLS for CLI parity).
+	r.addExact(constants.APIPaths.Operators, RouteAuthDual)
+	r.addExact(constants.APIPaths.OperatorsBind, RouteAuthDual)
+	r.addExact(constants.APIPaths.OperatorsUnbind, RouteAuthDual)
+	// Browser operator detail/stop under /api/v1/operators/{id}/ (terminate remains mTLS-enforced in handler).
+	r.addPrefix(constants.APIPaths.OperatorsByID, RouteAuthDual)
+
+	// Ensemble browser proxy (Gateway → g8ee with stamped identity).
+	r.addPrefix(constants.APIPaths.EnsembleChatPrefix, RouteAuthWebSession)
+	r.addPrefix(constants.APIPaths.EnsembleSettingsPrefix, RouteAuthWebSession)
+	r.addPrefix(constants.APIPaths.EnsembleCasesPrefix, RouteAuthWebSession)
+	r.addExact(constants.APIPaths.EnsembleInvestigations, RouteAuthWebSession)
+	r.addPrefix(constants.APIPaths.EnsembleOperatorPrefix, RouteAuthWebSession)
+
+	// Browser audit read routes (cookie auth). Write/ingest paths remain mTLS default.
+	r.addExact(constants.APIPaths.AuditEvents, RouteAuthWebSession)
+	r.addExact(constants.APIPaths.AuditSummary, RouteAuthWebSession)
+	r.addExact(constants.APIPaths.AuditVerify, RouteAuthWebSession)
 
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)

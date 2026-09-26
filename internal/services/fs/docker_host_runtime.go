@@ -20,6 +20,9 @@ import (
 // Compose starts the gateway. Host CLI identity lives in .g8e/pki/; gateway
 // spectator and observation state live in the g8e-gateway-data volume.
 func EnsureDockerHostRuntimeLayout(ctx context.Context, fileSvc RuntimeFileService) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := verifyRuntimeDirWritable(fileSvc); err != nil {
 		return err
 	}

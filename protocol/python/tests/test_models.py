@@ -400,6 +400,7 @@ class TestGovernanceEnvelope:
     def test_compute_transaction_hash_deterministic(self):
         kwargs = dict(
             action_type="EXECUTE_BASH",
+            event_type="g8e.v1.operator.command.requested",
             target_resource="/tmp",
             payload="dGVzdA==",
             state_merkle_root="abc123",
@@ -417,6 +418,7 @@ class TestGovernanceEnvelope:
     def test_compute_transaction_hash_changes_with_fields(self):
         base_kwargs = dict(
             action_type="EXECUTE_BASH",
+            event_type="g8e.v1.operator.command.requested",
             target_resource="/tmp",
             payload="dGVzdA==",
             state_merkle_root="abc123",
@@ -434,6 +436,7 @@ class TestGovernanceEnvelope:
     def test_compute_transaction_hash_intent_ordering(self):
         kwargs1 = dict(
             action_type="EXECUTE_BASH",
+            event_type="g8e.v1.operator.command.requested",
             target_resource="/tmp",
             payload="dGVzdA==",
             state_merkle_root="abc",
@@ -443,6 +446,7 @@ class TestGovernanceEnvelope:
         )
         kwargs2 = dict(
             action_type="EXECUTE_BASH",
+            event_type="g8e.v1.operator.command.requested",
             target_resource="/tmp",
             payload="dGVzdA==",
             state_merkle_root="abc",
@@ -455,6 +459,7 @@ class TestGovernanceEnvelope:
     def test_compute_transaction_hash_optional_fields(self):
         hash_with_none = compute_transaction_hash(
             action_type="EXECUTE_BASH",
+            event_type="g8e.v1.operator.command.requested",
             target_resource="/tmp",
             payload="dGVzdA==",
             state_merkle_root="abc",
@@ -464,6 +469,7 @@ class TestGovernanceEnvelope:
         )
         hash_with_empty = compute_transaction_hash(
             action_type="EXECUTE_BASH",
+            event_type="g8e.v1.operator.command.requested",
             target_resource="/tmp",
             payload="dGVzdA==",
             state_merkle_root="abc",
@@ -478,6 +484,7 @@ class TestGovernanceEnvelope:
     def test_governance_envelope_serialization_round_trip(self):
         tx_hash = compute_transaction_hash(
             action_type="EXECUTE_BASH",
+            event_type="g8e.v1.operator.command.requested",
             target_resource="/tmp",
             payload="dGVzdA==",
             state_merkle_root="root",

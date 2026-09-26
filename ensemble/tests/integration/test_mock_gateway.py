@@ -7,19 +7,15 @@
 
 """Smoke tests for the in-memory mock g8e gateway.
 
-Verifies that the real g8ee clients (DBClient, KVCacheClient, BlobClient,
-PubSubClient) can connect to and interact with MockGateway.
+Verifies that the real g8ee clients (DBClient, KVCacheClient, BlobClient)
+can connect to and interact with MockGateway.
 """
 
-import asyncio
 import pytest
 
 from app.clients.blob_client import BlobClient
 from app.clients.db_client import DBClient
 from app.clients.kv_cache_client import KVCacheClient
-from app.clients.pubsub_client import PubSubClient
-from app.constants import G8EE_COMPONENT
-
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 
@@ -57,19 +53,6 @@ class TestMockGatewayHealth:
             assert ok
         finally:
             await blob.close()
-
-    async def test_pubsub_connect(self, mock_gateway):
-        pubsub = PubSubClient(
-            pubsub_url=mock_gateway.gateway_settings.pubsub_url,
-            component_name=G8EE_COMPONENT,
-            tls_config=mock_gateway.tls_config,
-        )
-        try:
-            ok = await pubsub.connect()
-            assert ok
-        finally:
-            await pubsub.close()
-
 
 class TestMockGatewayKV:
     async def test_set_and_get(self, mock_gateway):
@@ -240,60 +223,3 @@ class TestMockGatewayBlob:
         finally:
             await blob.close()
 
-
-class TestMockGatewayPubSub:
-    async def test_subscribe_and_publish(self, mock_gateway):
-        pubsub = PubSubClient(
-            pubsub_url=mock_gateway.gateway_settings.pubsub_url,
-            component_name=G8EE_COMPONENT,
-            tls_config=mock_gateway.tls_config,
-        )
-        try:
-            await pubsub.connect()
-
-            received: list[str] = []
-            done = asyncio.Event()
-
-            async def handler(channel: str, data):
-                received.append(data.decode() if isinstance(data, bytes) else str(data))
-                done.set()
-
-            pubsub.on_channel_message("test_channel", handler)
-            await pubsub.subscribe("test_channel")
-
-            await asyncio.sleep(0.1)
-            await pubsub.publish("test_channel", b"hello world")
-
-            await asyncio.wait_for(done.wait(), timeout=5.0)
-            assert "hello world" in received
-        finally:
-            await pubsub.close()
-
-    async def test_psubscribe_pattern(self, mock_gateway):
-        pubsub = PubSubClient(
-            pubsub_url=mock_gateway.gateway_settings.pubsub_url,
-            component_name=G8EE_COMPONENT,
-            tls_config=mock_gateway.tls_config,
-        )
-        try:
-            await pubsub.connect()
-
-            received: list[tuple[str, str]] = []
-            done = asyncio.Event()
-
-            async def handler(pattern: str, channel: str, data):
-                received.append((channel, data.decode() if isinstance(data, bytes) else str(data)))
-                done.set()
-
-            pubsub.on_pmessage("events:*", handler)
-            await pubsub.psubscribe("events:*")
-
-            await asyncio.sleep(0.1)
-            await pubsub.publish("events:foo", b"event data")
-
-            await asyncio.wait_for(done.wait(), timeout=5.0)
-            assert len(received) == 1
-            assert received[0][0] == "events:foo"
-            assert received[0][1] == "event data"
-        finally:
-            await pubsub.close()

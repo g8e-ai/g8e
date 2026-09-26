@@ -21,9 +21,14 @@ from typing import Any
 
 import pytest
 
-from g8e.models.governance import _canonicalize_value, compute_transaction_hash
+from g8e.models.governance import (
+    GOVERNANCE_PROTOCOL_VERSION_V1,
+    _canonicalize_value,
+    compute_transaction_hash,
+)
 
 VECTORS_PATH = Path(__file__).parent / "hash_vectors.json"
+VECTORS_V2_PATH = Path(__file__).parent / "hash_vectors_v2.json"
 
 
 def _load_vectors() -> list[dict[str, Any]]:
@@ -39,11 +44,38 @@ def _vector_ids() -> list[str]:
     return [v["name"] for v in _load_vectors()]
 
 
+def _load_v2_vectors() -> list[dict[str, Any]]:
+    assert VECTORS_V2_PATH.exists(), f"Hash v2 vectors file not found: {VECTORS_V2_PATH}"
+    with open(VECTORS_V2_PATH, encoding="utf-8") as f:
+        data = json.load(f)
+    return data["vectors"]
+
+
+@pytest.mark.parametrize("vector", _load_v2_vectors(), ids=[v["name"] for v in _load_v2_vectors()])
+def test_hash_parity_v2_vector(vector: dict[str, Any]) -> None:
+    """Protocol version 2 vectors must match Go GenerateMessageID."""
+    actual = compute_transaction_hash(
+        action_type=vector["action_type"],
+        event_type=vector["event_type"],
+        protocol_version=vector["protocol_version"],
+        target_resource=vector["target_resource"],
+        payload=vector["payload_b64"],
+        state_merkle_root=vector["state_merkle_root"],
+        nonce=vector["nonce"],
+        expires_at=vector["expires_at"],
+        intent_data=vector["intent_data"],
+        requestor_user_id=vector.get("requestor_user_id"),
+        acting_app_id=vector.get("acting_app_id"),
+    )
+    assert actual == vector["expected_hash"]
+
+
 @pytest.mark.parametrize("vector", _load_vectors(), ids=_vector_ids())
 def test_hash_parity_vector(vector: dict[str, Any]) -> None:
     """Each vector must produce the expected SHA-256 hash."""
     actual = compute_transaction_hash(
         action_type=vector["action_type"],
+        protocol_version=GOVERNANCE_PROTOCOL_VERSION_V1,
         target_resource=vector["target_resource"],
         payload=vector["payload_b64"],
         state_merkle_root=vector["state_merkle_root"],
@@ -75,6 +107,7 @@ def test_hash_parity_timestamp_normalization() -> None:
 
     hash_no_frac = compute_transaction_hash(
         action_type=no_frac["action_type"],
+        protocol_version=GOVERNANCE_PROTOCOL_VERSION_V1,
         target_resource=no_frac["target_resource"],
         payload=no_frac["payload_b64"],
         state_merkle_root=no_frac["state_merkle_root"],
@@ -84,6 +117,7 @@ def test_hash_parity_timestamp_normalization() -> None:
     )
     hash_with_frac = compute_transaction_hash(
         action_type=with_frac["action_type"],
+        protocol_version=GOVERNANCE_PROTOCOL_VERSION_V1,
         target_resource=with_frac["target_resource"],
         payload=with_frac["payload_b64"],
         state_merkle_root=with_frac["state_merkle_root"],
@@ -100,6 +134,7 @@ def test_hash_parity_optional_fields_none_vs_empty() -> None:
     """None and empty string for optional fields must produce the same hash (both omitted)."""
     base = dict(
         action_type="EXECUTE_BASH",
+        protocol_version=GOVERNANCE_PROTOCOL_VERSION_V1,
         target_resource="localhost",
         payload="dGVzdA==",
         state_merkle_root="root-opt",
@@ -120,6 +155,7 @@ def test_hash_parity_deterministic() -> None:
     v = vectors[0]
     kwargs = dict(
         action_type=v["action_type"],
+        protocol_version=GOVERNANCE_PROTOCOL_VERSION_V1,
         target_resource=v["target_resource"],
         payload=v["payload_b64"],
         state_merkle_root=v["state_merkle_root"],

@@ -16,7 +16,7 @@ from typing import cast
 
 from fastapi import APIRouter, Request
 
-from app.utils.timestamp import now_iso
+from app.utils.time_ids.timestamp import now_iso
 from app.models.state import G8eeAppState
 
 router = APIRouter(tags=["health"])
@@ -58,7 +58,9 @@ async def detailed_health_check(
         "cache_aside_service": "up"
         if services and getattr(services, "cache_aside_service", None)
         else "down",
-        "operator_kv": "up" if hasattr(state, "pubsub_client") and state.pubsub_client else "down",
+        "operator_kv": "up"
+        if hasattr(state, "kv_cache_client") and state.kv_cache_client
+        else "down",
         "internal_http_client": "up"
         if services and getattr(services, "internal_http_client", None)
         else "down",

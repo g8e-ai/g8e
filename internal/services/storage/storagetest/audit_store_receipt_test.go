@@ -10,6 +10,7 @@
 package storagetest
 
 import (
+	"context"
 	"crypto/ed25519"
 	"fmt"
 	"path/filepath"
@@ -240,6 +241,67 @@ func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
 	assert.Equal(t, "completed", persisted.ResultSummary)                                    // Updated
 	assert.Equal(t, "root-after-updated", persisted.StateRootAfter)                          // Updated
 	assert.Equal(t, "signature-updated", persisted.Signature)                                // Updated
+}
+
+func TestSQLAuditStore_RecordActionReceipt_ChainsEveryStage(t *testing.T) {
+	tempDir := testutil.TempDir(t)
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := CreateTestVault(t, vaultDir, privKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
+	config := &TestSQLAuditStoreConfig{
+		DBPath:                    "test.db",
+		LedgerDir:                 "ledger",
+		MaxDBSizeMB:               100,
+		RetentionDays:             7,
+		PruneIntervalMinutes:      60,
+		OutputTruncationThreshold: 102400,
+		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
+	}
+
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	require.NoError(t, err)
+	defer avs.Close()
+
+	base := &models.ActionReceiptRecord{
+		TransactionID:     "tx-chain-123",
+		TransactionHash:   "hash-chain",
+		OperatorID:        "operator-1",
+		OperatorSessionID: "session-1",
+		ActionType:        constants.ActionTypeExecuteBash,
+		TargetResource:    "localhost",
+		StateRootBefore:   "root-before",
+		StateRootAfter:    "root-after",
+		ExecutedAt:        time.Now().UTC(),
+		SignerKeyID:       "key-1",
+		Signature:         "signature-1",
+		Timestamp:         time.Now().UTC(),
+	}
+
+	executing := *base
+	executing.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING
+	executing.ResultSummary = "executing"
+	require.NoError(t, avs.RecordActionReceipt(&executing))
+
+	completed := *base
+	completed.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
+	completed.ResultSummary = "completed"
+	completed.Signature = "signature-2"
+	require.NoError(t, avs.RecordActionReceipt(&completed))
+
+	events, err := avs.GetEvents("session-1", 100, 0)
+	require.NoError(t, err)
+	receiptFacts := 0
+	for _, event := range events {
+		if event.Type == constants.EventOperatorReceiptRecorded {
+			receiptFacts++
+		}
+	}
+	assert.Equal(t, 2, receiptFacts)
+	require.NoError(t, avs.VerifyChain(context.Background(), 0))
 }
 
 func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {

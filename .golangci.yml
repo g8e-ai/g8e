@@ -118,7 +118,7 @@ linters:
         text: G115
       - linters:
           - gosec
-        path: internal/cli/cmd/auth_context\.go
+        path: internal/cli/cmd/auth/auth_context\.go
         text: G117
       - linters:
           - unparam
@@ -129,12 +129,16 @@ linters:
       - linters:
           - goconst
         path: _test\.go
+      - linters:
+          - gocyclo
+        path: internal/services/compliance/evidence/operational_importer\.go
     paths:
       - third_party$
       - builtin$
       - examples$
       - vendor$
       - node_modules
+      - \.local\.dev
       - protocol/docs/mcp_tool_template\.go$
 issues:
   max-issues-per-linter: 0
@@ -151,4 +155,5 @@ formatters:
       - examples$
       - vendor$
       - node_modules
+      - \.local\.dev
       - protocol/docs/mcp_tool_template\.go$

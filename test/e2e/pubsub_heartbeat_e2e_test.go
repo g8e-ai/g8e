@@ -39,7 +39,8 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 	firstUpdatedAt := first.UpdatedAt
 	require.False(t, firstUpdatedAt.IsZero(),
 		"first observation: active operator UpdatedAt must be set by at least one heartbeat")
-	t.Logf("first heartbeat observation: updated_at=%s", firstUpdatedAt.UTC().Format(time.RFC3339Nano))
+	t.Logf("first heartbeat observation: operator_id=%s updated_at=%s hostname=%s",
+		first.ID, firstUpdatedAt.UTC().Format(time.RFC3339Nano), first.CurrentHostname)
 
 	// Poll until UpdatedAt advances past the first observation. The E2E
 	// stack uses a short configurable heartbeat interval so a dead path
@@ -50,19 +51,24 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		second = findActiveRemoteOperator(operators.Operators)
+		second = findOperatorByID(operators.Operators, first.ID)
 		return second != nil && second.UpdatedAt.After(firstUpdatedAt)
 	}, 45*time.Second, 500*time.Millisecond,
-		"heartbeat UpdatedAt did not advance past %s within 45s — pub/sub heartbeat path may be dead",
-		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
+		"heartbeat UpdatedAt for operator %s did not advance past %s within 45s — pub/sub heartbeat path may be dead",
+		first.ID, firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 
 	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),
 		"second heartbeat observation must be strictly later than the first")
 	assert.Equal(t, constants.OperatorStatusActive, second.Status,
 		"operator must remain active across heartbeat observations")
-	t.Logf("second heartbeat observation: updated_at=%s (advanced by %s)",
+	assert.NotEmpty(t, second.CurrentHostname,
+		"active remote operator CurrentHostname must be populated from heartbeat telemetry")
+	assert.NotEmpty(t, second.LatestHeartbeat,
+		"active remote operator LatestHeartbeat must be populated from heartbeat telemetry")
+	t.Logf("second heartbeat observation: updated_at=%s (advanced by %s), hostname=%s",
 		second.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		second.UpdatedAt.Sub(firstUpdatedAt).Round(time.Second))
+		second.UpdatedAt.Sub(firstUpdatedAt).Round(time.Second),
+		second.CurrentHostname)
 }
 
 // activeOperator fetches the operator list and returns a pointer to the first
@@ -75,16 +81,11 @@ func activeOperator(t *testing.T, ctx context.Context) *models.OperatorDocumentG
 	require.NoError(t, err, "operator list must succeed for heartbeat observation")
 	require.True(t, operators.Success, "operator list response must report success")
 	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
-	operator := findActiveRemoteOperator(operators.Operators)
+	operator := findLiveActiveRemoteOperator(operators.Operators)
 	require.NotNil(t, operator, "no active remote operator found in registry — heartbeat test requires an approved stack with a live operator")
 	return operator
 }
 
 func findActiveRemoteOperator(operators []models.OperatorDocumentGo) *models.OperatorDocumentGo {
-	for i := range operators {
-		if operators[i].Status == constants.OperatorStatusActive && operators[i].OperatorType == constants.OperatorTypeRemote {
-			return &operators[i]
-		}
-	}
-	return nil
+	return findLiveActiveRemoteOperator(operators)
 }

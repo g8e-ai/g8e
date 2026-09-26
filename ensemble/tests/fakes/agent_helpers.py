@@ -302,7 +302,6 @@ def make_event_service():
         return await capture_publish(session_event)
 
     svc.publish = AsyncMock(side_effect=capture_publish)
-    svc.publish_command_event = AsyncMock()
     svc.publish_investigation_event = AsyncMock(side_effect=capture_publish_investigation_event)
 
     async def capture_publish_reputation(event_type, data, g8e_context):

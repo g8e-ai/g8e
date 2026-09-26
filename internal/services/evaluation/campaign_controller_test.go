@@ -34,6 +34,7 @@ func (s *stubCampaignExecutor) ExecuteAssignment(_ context.Context, req Assignme
 		Lane:            req.Assignment.GetLane(),
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 		CompletedAt:     timestamppb.Now(),
+		ModelInferences: StubHomogeneousAssignmentModelInferences(req.Assignment),
 	}
 	digest, err := ComputeAssignmentResultDigest(result)
 	if err != nil {

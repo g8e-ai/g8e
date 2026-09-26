@@ -113,6 +113,31 @@ describe('ModelsView', () => {
     expect(screen.queryByRole('link', { name: 'Partially covered model' })).not.toBeInTheDocument();
   });
 
+  it('only lists quality filter options that exist in the current catalog', () => {
+    const source = allFixtureSnapshotRecords.find((record): record is ModelSummary => record.kind === 'model_summary' && Boolean(record.pass_rate));
+    expect(source).toBeDefined();
+    evalStore.loadFixtures([
+      { ...source!, variant_id: 'verified-model', display_name: 'Verified model', quality_state: 'exploratory_verified' },
+      { ...source!, variant_id: 'partial-model', display_name: 'Partial model', quality_state: 'exploratory_partial' },
+    ], []);
+
+    render(
+      <MemoryRouter>
+        <ModelsView />
+      </MemoryRouter>,
+    );
+
+    const qualityFilter = screen.getByRole('combobox', { name: 'Filter by quality state' });
+    const labels = Array.from(qualityFilter.querySelectorAll('option')).map((option) => option.textContent);
+    expect(labels).toEqual([
+      'All quality states',
+      'Run-scoped verification passed',
+      'Not fully verified',
+    ]);
+    expect(labels).not.toContain('Current-standard verified');
+    expect(labels).not.toContain('Not evaluated');
+  });
+
   it('quality filter includes verified exploratory rows without promoting partial rows', () => {
     const source = allFixtureSnapshotRecords.find((record): record is ModelSummary => record.kind === 'model_summary' && Boolean(record.pass_rate));
     expect(source).toBeDefined();

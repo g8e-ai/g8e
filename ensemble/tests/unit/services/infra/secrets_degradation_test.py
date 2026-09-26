@@ -33,35 +33,6 @@ from app.services.infra.settings_service import SettingsService
 pytestmark = pytest.mark.unit
 
 
-class TestPubSubClientAuditorHmacKeyNone:
-    """PubSubClient must construct with `auditor_hmac_key=None` and skip signing.
-
-    The PubSubClient stores the key but does not sign pubsub events itself —
-    event signing is the Tribunal Auditor stage's responsibility, which reads
-    the key from `AIToolService.auditor_hmac_key` (raising `ConfigurationError`
-    only on the tribunal path, not at construction). Construction with `None`
-    must succeed so the ensemble can boot without the HMAC key provisioned.
-    """
-
-    def test_constructs_with_none(self) -> None:
-        from app.clients.pubsub_client import PubSubClient
-
-        client = PubSubClient(
-            pubsub_url="wss://localhost:443",
-            auditor_hmac_key=None,
-        )
-        assert client._auditor_hmac_key is None
-
-    def test_constructs_with_key(self) -> None:
-        from app.clients.pubsub_client import PubSubClient
-
-        client = PubSubClient(
-            pubsub_url="wss://localhost:443",
-            auditor_hmac_key="test-key-1234",
-        )
-        assert client._auditor_hmac_key == "test-key-1234"
-
-
 class TestBootstrapServiceMissingSecretsDir:
     """BootstrapService must degrade gracefully when the secrets directory is
     empty or missing — returning `None` and logging the absence, not raising."""

@@ -140,10 +140,20 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 			failures = append(failures, fmt.Sprintf("assignment %s result load failed: %v", assignment.GetAssignmentId(), err))
 			continue
 		}
-		trace, err := LoadAssignmentTraceEvidence(ctx, store.files, runID, assignment.GetAssignmentId())
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("assignment %s trace load failed: %v", assignment.GetAssignmentId(), err))
-			continue
+		var trace EvaluationTrace
+		var formationRunEvidence *FormationRunEvidence
+		if IsHeterogeneousAssignment(assignment) {
+			trace = EvaluationTrace{}
+			formationRunEvidence, err = store.LoadAssignmentFormationRun(ctx, runID, assignment.GetAssignmentId())
+			if err != nil {
+				formationRunEvidence = nil
+			}
+		} else {
+			trace, err = LoadAssignmentTraceEvidence(ctx, store.files, runID, assignment.GetAssignmentId())
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("assignment %s trace load failed: %v", assignment.GetAssignmentId(), err))
+				continue
+			}
 		}
 		artifact, ok := artifacts[assignment.GetScenarioId()]
 		if !ok {
@@ -178,6 +188,7 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 			ScenarioTools:             scenarioTools,
 			GradingMethod:             gradingMethod,
 			Trace:                     trace,
+			FormationRunEvidence:      formationRunEvidence,
 			ProviderObservationReader: v.providerObservationReader,
 			ProviderObservationPolicy: v.providerObservationPolicy,
 			ModelProvenanceReader:     v.modelProvenanceReader,

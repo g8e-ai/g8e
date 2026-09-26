@@ -98,6 +98,15 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 // owner's user_id on the operator document so the owner can discover and
 // manage it through this method. ListOperatorSlots remains limited to
 // slots for callers that only want user-created slots.
+// GetOperator returns a single operator document by ID.
+func (s *RegistrationService) GetOperator(operatorID string) (*models.OperatorDocumentGo, error) {
+	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	if err != nil {
+		return nil, err
+	}
+	return s.toOperatorDoc(doc)
+}
+
 func (s *RegistrationService) ListUserOperators(userID string) ([]models.OperatorDocumentGo, error) {
 	if userID == "" {
 		return nil, constants.ErrRegistrationUserIDRequired

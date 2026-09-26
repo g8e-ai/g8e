@@ -163,6 +163,67 @@ func (c *E2EClient) ListOperators(ctx context.Context) (models.OperatorSlotRespo
 	return decodeJSON[models.OperatorSlotResponse](body, "operator list")
 }
 
+// findLiveActiveRemoteOperator returns the active remote operator with the most
+// recent UpdatedAt among operators reporting heartbeat telemetry. Multi-operator
+// stacks may retain stale active registrations from prior sessions; heartbeat
+// assertions must target a live operator rather than the first list entry.
+// When several operators share a fresh UpdatedAt window, prefer the one whose
+// CurrentHostname differs from enrollment Name — that signals canonical
+// heartbeat telemetry rather than stale enrollment metadata.
+func findLiveActiveRemoteOperator(operators []models.OperatorDocumentGo) *models.OperatorDocumentGo {
+	var candidates []*models.OperatorDocumentGo
+	for i := range operators {
+		op := &operators[i]
+		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+			continue
+		}
+		if op.CurrentHostname == "" && len(op.LatestHeartbeat) == 0 {
+			continue
+		}
+		candidates = append(candidates, op)
+	}
+	if len(candidates) == 0 {
+		var fallback *models.OperatorDocumentGo
+		for i := range operators {
+			op := &operators[i]
+			if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+				continue
+			}
+			if fallback == nil || op.UpdatedAt.After(fallback.UpdatedAt) {
+				fallback = op
+			}
+		}
+		return fallback
+	}
+
+	best := candidates[0]
+	for _, op := range candidates[1:] {
+		if op.UpdatedAt.After(best.UpdatedAt) {
+			best = op
+		}
+	}
+
+	const freshWindow = 90 * time.Second
+	for _, op := range candidates {
+		if best.UpdatedAt.Sub(op.UpdatedAt) > freshWindow {
+			continue
+		}
+		if op.CurrentHostname != "" && op.Name != "" && op.CurrentHostname != op.Name {
+			return op
+		}
+	}
+	return best
+}
+
+func findOperatorByID(operators []models.OperatorDocumentGo, id string) *models.OperatorDocumentGo {
+	for i := range operators {
+		if operators[i].ID == id {
+			return &operators[i]
+		}
+	}
+	return nil
+}
+
 // GetOperatorBySession fetches a single operator by session ID via the
 // owner-authenticated session lookup endpoint and returns the typed response.
 func (c *E2EClient) GetOperatorBySession(ctx context.Context, sessionID string) (models.OperatorResponse, error) {
@@ -311,6 +372,58 @@ func (c *E2EClient) GetAuditSummary(ctx context.Context) (models.AuditSummaryRes
 	return decodeJSON[models.AuditSummaryResponse](body, "audit summary")
 }
 
+// VerifyAuditChain fetches GET /api/v1/audit/verify and returns the typed response.
+func (c *E2EClient) VerifyAuditChain(ctx context.Context, fromSeq int64) (models.AuditVerifyResponse, error) {
+	path := constants.APIPaths.AuditVerify
+	if fromSeq > 0 {
+		path += fmt.Sprintf("?from_seq=%d", fromSeq)
+	}
+	req, err := c.newAuthenticatedRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return models.AuditVerifyResponse{}, err
+	}
+	body, _, err := doRequest(c.mtlsClient, req, http.StatusOK)
+	if err != nil {
+		return models.AuditVerifyResponse{}, fmt.Errorf("verify audit chain: %w", err)
+	}
+	return decodeJSON[models.AuditVerifyResponse](body, "audit verify")
+}
+
+// IngestAuditRecord posts an LFAA audit record to POST /api/v1/audit/records
+// and returns the operator chain acknowledgement.
+func (c *E2EClient) IngestAuditRecord(ctx context.Context, req models.AuditRecordIngestRequest) (models.AuditRecordIngestResponse, error) {
+	bodyBytes, err := json.Marshal(req)
+	if err != nil {
+		return models.AuditRecordIngestResponse{}, fmt.Errorf("marshal audit ingest body: %w", err)
+	}
+	httpReq, err := c.newAuthenticatedRequest(ctx, http.MethodPost, constants.APIPaths.AuditRecords, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return models.AuditRecordIngestResponse{}, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	body, _, err := doRequest(c.mtlsClient, httpReq, http.StatusOK)
+	if err != nil {
+		return models.AuditRecordIngestResponse{}, fmt.Errorf("ingest audit record: %w", err)
+	}
+	return decodeJSON[models.AuditRecordIngestResponse](body, "audit ingest")
+}
+
+// DispatchCommandExpectStatus posts a dispatch request and returns the HTTP status
+// and raw body without requiring success.
+func (c *E2EClient) DispatchCommandExpectStatus(ctx context.Context, body dispatchRequestJSON, expectedStatus int) (int, []byte, error) {
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return 0, nil, fmt.Errorf("marshal dispatch body: %w", err)
+	}
+	req, err := c.newAuthenticatedRequest(ctx, http.MethodPost, constants.APIPaths.OperatorsCommands, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	respBody, status, err := doRequest(c.mtlsClient, req, expectedStatus)
+	return status, respBody, err
+}
+
 // GetAuditEvents fetches the authenticated audit events list and returns the
 // typed response.
 func (c *E2EClient) GetAuditEvents(ctx context.Context) (models.AuditEventsResponse, error) {
@@ -341,15 +454,10 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
 
 	var target *models.OperatorDocumentGo
-	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
-			target = &operators.Operators[i]
-			break
-		}
-	}
-	require.NotNil(t, target, "an active operator must exist as the dispatch target")
+	target = findLiveActiveRemoteOperator(operators.Operators)
+	require.NotNil(t, target, "a live active remote operator must exist as the dispatch target")
 	require.NotEmpty(t, target.OperatorSessionID, "target operator must have a session ID")
-	t.Logf("dispatch target: id=%s session=%s", target.ID, target.OperatorSessionID)
+	t.Logf("dispatch target: id=%s session=%s hostname=%s", target.ID, target.OperatorSessionID, target.CurrentHostname)
 
 	fsReadReq := &operatorv1.FsReadRequested{Path: constants.PathEtcHostname}
 	payload, err := proto.Marshal(fsReadReq)
@@ -357,7 +465,7 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 
 	reqBody := dispatchRequestJSON{
 		TargetOperatorSessionID: target.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType:               string(constants.EventOperatorFilesystemReadRequested),
 		Payload:                 payload,
 		TargetResource:          constants.PathEtcHostname,
 	}

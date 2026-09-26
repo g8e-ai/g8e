@@ -29,6 +29,12 @@ func TestCreateRuntimeTree_CancelledContextReturnsError(t *testing.T) {
 	assert.True(t, errors.Is(err, context.Canceled))
 }
 
+func TestCreateRuntimeTree_NilContextSucceeds(t *testing.T) {
+	svc := setupTestFS(t)
+	var nilCtx context.Context
+	require.NoError(t, svc.CreateRuntimeTree(nilCtx))
+}
+
 func TestCreateRuntimeTree_DataDirIsStandard(t *testing.T) {
 	svc := setupTestFS(t)
 	ctx := context.Background()

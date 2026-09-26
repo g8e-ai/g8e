@@ -44,6 +44,7 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -71,6 +72,7 @@ from app.models.operators import (
     HeartbeatSnapshot,
     HeartbeatSystemIdentity,
     HeartbeatUserDetails,
+    OperatorDocument,
 )
 from app.services.investigation.investigation_service import (
     extract_all_operators_context,
@@ -86,6 +88,32 @@ from tests.fakes.factories import (
 )
 
 pytestmark = [pytest.mark.integration]
+
+
+def wire_gateway_operator_registry(gateway_operator_client) -> list[dict]:
+    """Route operator reads in integration tests through an in-memory Gateway registry."""
+    registry: list[dict] = []
+
+    async def list_operators(user_id: str) -> list[dict]:
+        return [op for op in registry if op.get("user_id") == user_id]
+
+    async def get_by_session(session_id: str) -> dict | None:
+        for operator_doc in registry:
+            if operator_doc.get("operator_session_id") == session_id:
+                return operator_doc
+        return None
+
+    gateway_operator_client.list = AsyncMock(side_effect=list_operators)
+    gateway_operator_client.get_by_session = AsyncMock(side_effect=get_by_session)
+    return registry
+
+
+async def seed_operator_document(
+    operator_registry: list[dict],
+    operator: OperatorDocument,
+) -> None:
+    """Seed a Gateway-owned operator document for integration tests."""
+    operator_registry.append(operator.model_dump(mode="json"))
 
 
 @pytest.fixture
@@ -107,6 +135,9 @@ async def all_services(cache_aside_service, test_settings):
         kv_service=MagicMock(),
         blob_service=MagicMock(),
         governance_client=make_write_through_governance_client(cache_aside_service),
+    )
+    services.gateway_operator_client._operator_registry = wire_gateway_operator_registry(
+        services.gateway_operator_client
     )
     yield services
     await ServiceFactory.stop_services(services)
@@ -542,7 +573,6 @@ class TestOperatorEnrichment:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
 
         # Create investigation and operator
         investigation = create_investigation_data()
@@ -557,7 +587,7 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(operator)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator)
 
         # Create g8e context with bound operator
         bound_operator = BoundOperator(
@@ -600,7 +630,6 @@ class TestOperatorEnrichment:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
 
         # Create investigation and multiple operators
         investigation = create_investigation_data()
@@ -617,9 +646,9 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(operator1)
-        await operator_data_service.create_operator(operator2)
-        await operator_data_service.create_operator(operator3)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator1)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator2)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator3)
 
         # Create g8e context with multiple bound operators
         bound_operators = [
@@ -666,7 +695,6 @@ class TestOperatorEnrichment:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
 
         # Create investigation and operators with different statuses
         investigation = create_investigation_data()
@@ -687,9 +715,15 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(bound_operator)
-        await operator_data_service.create_operator(claimed_operator)
-        await operator_data_service.create_operator(offline_operator)
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, bound_operator
+        )
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, claimed_operator
+        )
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, offline_operator
+        )
 
         # Create g8e context with mixed status operators
         bound_operators = [
@@ -786,7 +820,6 @@ class TestOperatorEnrichment:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
 
         # Create remote operator with intents
         remote_operator = build_production_operator_document(
@@ -804,7 +837,9 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(remote_operator)
+        await seed_operator_document(
+            all_services.gateway_operator_client._operator_registry, remote_operator
+        )
 
         # Create g8e context and enrich
         bound_operator = BoundOperator(
@@ -855,7 +890,6 @@ class TestCompleteContextAssembly:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
         memory_data_service = all_services.memory_data_service
 
         # Create complete test data
@@ -891,8 +925,8 @@ class TestCompleteContextAssembly:
             user_id=created_investigation.user_id,
         )
         await memory_data_service.save_memory(memory, is_new=True, context=memory_context)
-        await operator_data_service.create_operator(operator1)
-        await operator_data_service.create_operator(operator2)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator1)
+        await seed_operator_document(all_services.gateway_operator_client._operator_registry, operator2)
 
         # Create g8e context with both operators
         bound_operators = [
@@ -1079,7 +1113,7 @@ class TestAIContextExtraction:
                 memory_mb=8192,
                 current_user="testuser",
             ),
-            network=HeartbeatNetworkInfo(
+            network_info=HeartbeatNetworkInfo(
                 public_ip="192.168.1.100",
             ),
             os_details=HeartbeatOSDetails(

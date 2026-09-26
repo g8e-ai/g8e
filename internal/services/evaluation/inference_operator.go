@@ -9,7 +9,6 @@ package evaluation
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -83,21 +82,20 @@ func inferenceOperatorOllamaEndpoint(op models.OperatorDocumentGo) string {
 	return strings.TrimSpace(op.RuntimeConfig.InferenceOllamaEndpoint)
 }
 
-// ResolveInferenceOllamaEndpoint selects the Ollama provider URL for campaign
-// model maintenance and residency checking. Resolution order: explicit flag override, process
-// environment, active inference operator runtime_config, then loopback default.
-func ResolveInferenceOllamaEndpoint(flag string, operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
-	if endpoint := strings.TrimSpace(flag); endpoint != "" {
-		return endpoint, nil
-	}
-	if endpoint := strings.TrimSpace(os.Getenv("G8E_OLLAMA_ENDPOINT")); endpoint != "" {
-		return endpoint, nil
+// GovernedInferenceOllamaEndpoint returns the approved provider endpoint from
+// the exact Inference Operator runtime_config. Campaign-host environment
+// overrides are intentionally rejected.
+func GovernedInferenceOllamaEndpoint(operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
+	if inferenceSessionID == "" {
+		return "", fmt.Errorf("evaluation: governed inference endpoint: %w", constants.ErrMissingRequiredField)
 	}
 	selected, err := SelectInferenceOperator(operators, inferenceSessionID)
-	if err == nil {
-		if endpoint := strings.TrimSpace(selected.OllamaEndpoint); endpoint != "" {
-			return endpoint, nil
-		}
+	if err != nil {
+		return "", fmt.Errorf("evaluation: governed inference endpoint: %w", err)
 	}
-	return fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort), nil
+	endpoint := strings.TrimSpace(selected.OllamaEndpoint)
+	if endpoint == "" {
+		return "", fmt.Errorf("evaluation: governed inference endpoint: %w", constants.ErrInferenceEndpointInvalid)
+	}
+	return endpoint, nil
 }

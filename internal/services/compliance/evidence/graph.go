@@ -11,7 +11,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -30,35 +29,37 @@ import (
 type ArtifactType string
 
 const (
-	ArtifactTypeDemoManifest              ArtifactType = "demo-manifest"
-	ArtifactTypeDemoResult                ArtifactType = "demo-result"
-	ArtifactTypeDemoStepResult            ArtifactType = "demo-step-result"
-	ArtifactTypeDemoDefinition            ArtifactType = "demo-definition"
-	ArtifactTypeActionReceipt             ArtifactType = "action-receipt"
-	ArtifactTypeReceiptPersistence        ArtifactType = "receipt-persistence"
-	ArtifactTypeStateObservation          ArtifactType = "state-observation"
-	ArtifactTypeDemoMetric                ArtifactType = "demo-metric"
-	ArtifactTypeProtocolChain             ArtifactType = "protocol-chain"
-	ArtifactTypeEvalManifest              ArtifactType = "eval-manifest"
-	ArtifactTypeEvalTask                  ArtifactType = "eval-task"
-	ArtifactTypeEvalAttempt               ArtifactType = "eval-attempt"
-	ArtifactTypeEvalMetric                ArtifactType = "eval-metric"
-	ArtifactTypeEvalObservation           ArtifactType = "eval-observation"
-	ArtifactTypeEvalExchange              ArtifactType = "eval-exchange"
-	ArtifactTypeEvalStage                 ArtifactType = "eval-stage"
-	ArtifactTypeEvalReceipt               ArtifactType = "eval-receipt"
-	ArtifactTypeEvaluationScenarioInput   ArtifactType = "evaluation-scenario-input"
-	ArtifactTypeEvaluationScenarioGold    ArtifactType = "evaluation-scenario-gold"
-	ArtifactTypeEvaluationAssignmentTrace ArtifactType = "evaluation-assignment-trace"
-	ArtifactTypeAuditRecord               ArtifactType = "audit-record"
-	ArtifactTypeLedgerCommit              ArtifactType = "ledger-commit"
-	ArtifactTypeLedgerState               ArtifactType = "ledger-state"
-	ArtifactTypeCommitment                ArtifactType = "commitment"
-	ArtifactTypeKSIResult                 ArtifactType = "ksi-result"
-	ArtifactTypeBuildAttestation          ArtifactType = "build-attestation"
-	ArtifactTypeConfigAttestation         ArtifactType = "config-attestation"
-	ArtifactTypeCustomerAttestation       ArtifactType = "customer-attestation"
-	ArtifactTypeAssessorAttestation       ArtifactType = "assessor-attestation"
+	ArtifactTypeDemoManifest                     ArtifactType = "demo-manifest"
+	ArtifactTypeDemoResult                       ArtifactType = "demo-result"
+	ArtifactTypeDemoStepResult                   ArtifactType = "demo-step-result"
+	ArtifactTypeDemoDefinition                   ArtifactType = "demo-definition"
+	ArtifactTypeActionReceipt                    ArtifactType = "action-receipt"
+	ArtifactTypeReceiptPersistence               ArtifactType = "receipt-persistence"
+	ArtifactTypeStateObservation                 ArtifactType = "state-observation"
+	ArtifactTypeDemoMetric                       ArtifactType = "demo-metric"
+	ArtifactTypeProtocolChain                    ArtifactType = "protocol-chain"
+	ArtifactTypeEvalManifest                     ArtifactType = "eval-manifest"
+	ArtifactTypeEvalTask                         ArtifactType = "eval-task"
+	ArtifactTypeEvalAttempt                      ArtifactType = "eval-attempt"
+	ArtifactTypeEvalMetric                       ArtifactType = "eval-metric"
+	ArtifactTypeEvalObservation                  ArtifactType = "eval-observation"
+	ArtifactTypeEvalExchange                     ArtifactType = "eval-exchange"
+	ArtifactTypeEvalStage                        ArtifactType = "eval-stage"
+	ArtifactTypeEvalReceipt                      ArtifactType = "eval-receipt"
+	ArtifactTypeEvaluationScenarioInput          ArtifactType = "evaluation-scenario-input"
+	ArtifactTypeEvaluationScenarioGold           ArtifactType = "evaluation-scenario-gold"
+	ArtifactTypeEvaluationAssignmentTrace        ArtifactType = "evaluation-assignment-trace"
+	ArtifactTypeEvaluationAssignmentFormationRun ArtifactType = "evaluation-assignment-formation-run"
+	ArtifactTypeAuditRecord                      ArtifactType = "audit-record"
+	ArtifactTypeAuditChainEntry                  ArtifactType = "audit-chain-entry"
+	ArtifactTypeLedgerCommit                     ArtifactType = "ledger-commit"
+	ArtifactTypeLedgerState                      ArtifactType = "ledger-state"
+	ArtifactTypeCommitment                       ArtifactType = "commitment"
+	ArtifactTypeKSIResult                        ArtifactType = "ksi-result"
+	ArtifactTypeBuildAttestation                 ArtifactType = "build-attestation"
+	ArtifactTypeConfigAttestation                ArtifactType = "config-attestation"
+	ArtifactTypeCustomerAttestation              ArtifactType = "customer-attestation"
+	ArtifactTypeAssessorAttestation              ArtifactType = "assessor-attestation"
 )
 
 func EvalScopeID(suiteID string) string {
@@ -85,6 +86,7 @@ func SupportedArtifactTypes() []ArtifactType {
 		ArtifactTypeEvalStage,
 		ArtifactTypeEvalReceipt,
 		ArtifactTypeAuditRecord,
+		ArtifactTypeAuditChainEntry,
 		ArtifactTypeLedgerCommit,
 		ArtifactTypeLedgerState,
 		ArtifactTypeCommitment,
@@ -591,6 +593,3 @@ func validBundlePath(path string) bool {
 	}
 	return true
 }
-
-// ErrGraphInvalid is returned when ValidateAll detects failures.
-var ErrGraphInvalid = errors.New("compliance: evidence graph validation failed")

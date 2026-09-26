@@ -20,7 +20,7 @@ from app.constants import (
     ToolCallStatus,
     UNKNOWN_ERROR_MESSAGE,
     StreamChunkFromModelType,
-    ThinkingActionType,
+    ThinkingPhase,
 )
 from app.constants.generated_status import OperatorToolName
 from app.services.ai.tool_registry import AI_UNIVERSAL_TOOLS
@@ -42,7 +42,7 @@ from app.models.events import (
     ChatThinkingPayload,
     ChatTurnCompletePayload,
 )
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 from app.errors import ValidationError
 from app.services.infra.event_service import EventService
 from app.services.evaluation.tool_evidence import (
@@ -248,8 +248,8 @@ async def deliver_via_sse(
 
             elif chunk.type == StreamChunkFromModelType.THINKING:
                 # Determine action type based on whether this is the first thinking chunk
-                action_type = (
-                    ThinkingActionType.START if not _thinking_started else ThinkingActionType.UPDATE
+                phase = (
+                    ThinkingPhase.START if not _thinking_started else ThinkingPhase.UPDATE
                 )
                 _thinking_started = True
 
@@ -257,7 +257,7 @@ async def deliver_via_sse(
                     EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
                     ChatThinkingPayload(
                         thinking=chunk.data.thinking,
-                        action_type=action_type,
+                        phase=phase,
                     ),
                 )
 
@@ -268,7 +268,7 @@ async def deliver_via_sse(
                     EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
                     ChatThinkingPayload(
                         thinking=None,
-                        action_type=ThinkingActionType.END,
+                        phase=ThinkingPhase.END,
                     ),
                 )
 

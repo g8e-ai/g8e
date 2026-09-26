@@ -13,6 +13,7 @@ package constants
 //	results:{operator_id}:{operator_session_id}    Operator -> Agent
 //	heartbeat:{operator_id}:{operator_session_id}  Operator -> Agent
 //	receipts:{operator_id}:{operator_session_id}   Operator -> Gateway (intercepted)
+//	audit:{operator_id}:{operator_session_id}      Gateway -> Operator (LFAA ingest)
 //
 // Constructors live in internal/services/pubsub.
 // Reference values in protocol/constants/channels.json for external consumers.
@@ -51,6 +52,7 @@ const (
 	ChannelPrefixResults   = "results"
 	ChannelPrefixHeartbeat = "heartbeat"
 	ChannelPrefixReceipts  = "receipts"
+	ChannelPrefixAudit     = "audit"
 )
 
 // SSE event type strings (used in SSE event framing and consumer dispatch).

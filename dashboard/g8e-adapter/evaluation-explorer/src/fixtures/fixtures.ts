@@ -562,10 +562,10 @@ export const fixtureEnrichedAssignmentResult: AssignmentResult = {
         },
       ],
     },
-    tool_decisions: { availability: 'not_applicable', unavailable_reason: 'scenario_not_applicable', records: [] },
-    tool_calls: { availability: 'not_applicable', unavailable_reason: 'scenario_not_applicable', records: [] },
-    policy_decisions: { availability: 'not_applicable', unavailable_reason: 'scenario_not_applicable', records: [] },
-    governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured', records: [] },
+    tool_decisions: { availability: 'not_applicable' },
+    tool_calls: { availability: 'not_applicable' },
+    policy_decisions: { availability: 'not_applicable' },
+    governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured' },
   },
   evidence_bindings: [
     {
@@ -624,11 +624,11 @@ export const fixtureCampaignResultEnvelope: CampaignProjectionEnvelope = {
     },
     semantic_grade_summaries: [],
     activity_summary: {
-      model_activity: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
-      tool_decisions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE', records: [] },
-      tool_calls: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE', records: [] },
-      policy_decisions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
-      governed_actions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
+      model_activity: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED' },
+      tool_decisions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE' },
+      tool_calls: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE' },
+      policy_decisions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED' },
+      governed_actions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED' },
     },
     evidence_bindings: [{ sha256: 'e'.repeat(64), schema_ref: 'g8e.eval.v1.PublicAssignmentResultProjection', kind: 'evaluation_projection' }],
     verification_metadata: {

@@ -37,9 +37,9 @@ from app.services.ai.generator import (
     TribunalDisabledError,
 )
 from app.services.ai.tool_service import AIToolService
-from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.whitelist_validator import CommandWhitelistValidator
-from app.utils.ids import is_valid_command_execution_id
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+from app.utils.time_ids.ids import is_valid_command_execution_id
 
 pytestmark = [pytest.mark.unit]
 

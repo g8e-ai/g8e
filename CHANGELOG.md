@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v2.2.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 2.2.0 | 2026-09-26 | Major platform modernization, architecture refactoring, and documentation standardization release: modularizes CLI into Cobra group packages (`internal/cli/cmd/<group>/`), isolates embedded Operator substrate (`internal/services/gateway/embedded/`), introduces dev docs standard and rewrites maintainer guides (`docs/devs/`), centralizes sentinel errors (`internal/constants/errors.go`), strengthens type safety across live events, harness scenarios, and settings models, advances evaluation formation topologies, witness evidence persistence, and Evaluation Explorer telemetry, and includes verified signed first-party compliance evidence projections. | [v2.2.0](docs/release_notes/v2.2.x/v2.2.0.md) |
+
 ## v2.1.x
 
 | Version | Date | Description | Notes |

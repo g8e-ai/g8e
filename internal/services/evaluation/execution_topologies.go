@@ -14,7 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -76,6 +79,9 @@ type Formation struct {
 	Primary     FormationModel
 	Assistant   FormationModel
 	Lite        FormationModel
+	// RelaxedValidation skips catalog provider/family/VRAM gates for campaign
+	// heterogeneous stacks that already passed scheduler digest validation.
+	RelaxedValidation bool
 }
 
 // Roles returns the execution order. Lite runs first as the L1 gatekeeper,
@@ -120,8 +126,29 @@ func (f Formation) Validate() error {
 	if f.ID == "" || f.DisplayName == "" || f.Description == "" || f.MaxVRAMMiB == 0 {
 		return fmt.Errorf("formation %q: %w", f.ID, constants.ErrFormationInvalid)
 	}
-	seenProviders := make(map[string]FormationRole, 3)
-	seenFamilies := make(map[string]FormationRole, 3)
+	if !f.RelaxedValidation {
+		seenProviders := make(map[string]FormationRole, 3)
+		seenFamilies := make(map[string]FormationRole, 3)
+		for _, role := range []FormationRole{FormationRolePrimary, FormationRoleAssistant, FormationRoleLite} {
+			model, err := f.Model(role)
+			if err != nil {
+				return err
+			}
+			provider := formationIdentity(model.Provider)
+			if previous, exists := seenProviders[provider]; exists {
+				return fmt.Errorf("formation %q: roles %s and %s share provider %q: %w", f.ID, previous, role, model.Provider, constants.ErrFormationProviderOverlap)
+			}
+			seenProviders[provider] = role
+			family := formationIdentity(model.Family)
+			if previous, exists := seenFamilies[family]; exists {
+				return fmt.Errorf("formation %q: roles %s and %s share family %q: %w", f.ID, previous, role, model.Family, constants.ErrFormationFamilyOverlap)
+			}
+			seenFamilies[family] = role
+		}
+		if f.EstimatedVRAMMiB() >= f.MaxVRAMMiB {
+			return fmt.Errorf("formation %q: estimated %d MiB must remain below %d MiB: %w", f.ID, f.EstimatedVRAMMiB(), f.MaxVRAMMiB, constants.ErrFormationVRAMBudgetExceeded)
+		}
+	}
 	for _, role := range []FormationRole{FormationRolePrimary, FormationRoleAssistant, FormationRoleLite} {
 		model, err := f.Model(role)
 		if err != nil {
@@ -130,19 +157,6 @@ func (f Formation) Validate() error {
 		if err := validateFormationModel(role, model); err != nil {
 			return err
 		}
-		provider := formationIdentity(model.Provider)
-		if previous, exists := seenProviders[provider]; exists {
-			return fmt.Errorf("formation %q: roles %s and %s share provider %q: %w", f.ID, previous, role, model.Provider, constants.ErrFormationProviderOverlap)
-		}
-		seenProviders[provider] = role
-		family := formationIdentity(model.Family)
-		if previous, exists := seenFamilies[family]; exists {
-			return fmt.Errorf("formation %q: roles %s and %s share family %q: %w", f.ID, previous, role, model.Family, constants.ErrFormationFamilyOverlap)
-		}
-		seenFamilies[family] = role
-	}
-	if f.EstimatedVRAMMiB() >= f.MaxVRAMMiB {
-		return fmt.Errorf("formation %q: estimated %d MiB must remain below %d MiB: %w", f.ID, f.EstimatedVRAMMiB(), f.MaxVRAMMiB, constants.ErrFormationVRAMBudgetExceeded)
 	}
 	return nil
 }
@@ -216,7 +230,7 @@ type ExecutionTopologies struct {
 	formations []Formation
 }
 
-// NewExecutionTopologies returns the five preregistered benchmark formations.
+// NewExecutionTopologies returns the preregistered sovereign benchmark formations.
 func NewExecutionTopologies() (*ExecutionTopologies, error) {
 	formations := defaultExecutionTopologies()
 	for _, formation := range formations {
@@ -273,12 +287,6 @@ func defaultExecutionTopologies() []Formation {
 			Primary:   formationModel("phi35-mini-38b-speed", "Phi-3.5 Mini 3.8B", "Microsoft", "Phi-3.5", "phi3.5:3.8b-mini-instruct-q4_K_M", 3_800_000_000, "Q4_K_M", 2560, 256),
 			Assistant: formationModel("gemma2-2b-speed", "Gemma 2 2B", "Google", "Gemma 2", "gemma2:2b-instruct-q4_K_M", 2_000_000_000, "Q4_K_M", 1536, 256),
 			Lite:      formationModel("qwen25-05b-speed", "Qwen 2.5 0.5B", "Alibaba", "Qwen 2.5", "qwen2.5:0.5b-instruct-q4_K_M", 500_000_000, "Q4_K_M", 512, 256),
-		},
-		{
-			ID: "hybrid-delegator", DisplayName: "Hybrid Delegator", Description: "Delegated cloud reasoning with sovereign edge execution and gatekeeping.", MaxVRAMMiB: FormationMaxVRAMMiB,
-			Primary:   FormationModel{VariantID: "gemini15-pro", DisplayName: "Gemini 1.5 Pro", Provider: "Google Cloud", Family: "Gemini 1.5", ProviderClass: "gemini", ServedModelTag: "gemini-1.5-pro", Trust: FormationTrustDelegated, ParameterCount: 0},
-			Assistant: formationModel("llama31-8b-hybrid", "Llama 3.1 8B", "Meta", "Llama 3.1", "llama3.1:8b-instruct-q4_K_M", 8_000_000_000, "Q4_K_M", 5120, 512),
-			Lite:      formationModel("qwen25-15b-hybrid", "Qwen 2.5 1.5B", "Alibaba", "Qwen 2.5 1.5", "qwen2.5:1.5b-instruct-q4_K_M", 1_500_000_000, "Q4_K_M", 1024, 256),
 		},
 	}
 }
@@ -337,6 +345,8 @@ type FormationRoleResult struct {
 	MutationCandidate       []byte
 	StateMutation           bool
 	ProviderAttemptID       string
+	UsageAvailability       evalv1.EvaluationUsageAvailability
+	PromptTokens            uint32
 	TTFTNanos               uint64
 	GenerationTokens        uint32
 	GenerationDurationNanos uint64
@@ -377,6 +387,8 @@ type FormationRoleTelemetry struct {
 	AttestationVerified     bool
 	AttestationDigest       string
 	ProviderAttemptID       string
+	UsageAvailability       evalv1.EvaluationUsageAvailability
+	PromptTokens            uint32
 	PeakVRAMMiB             uint64
 	TTFTNanos               uint64
 	GenerationTokens        uint32
@@ -403,13 +415,15 @@ type FormationRunResult struct {
 // governance dependencies. It never allocates a sovereign model before its
 // storage-side attestation passes.
 type FormationRunner struct {
-	provenance FormationProvenanceOperator
-	observer   FormationProviderObserver
-	allocator  FormationAllocator
-	executor   FormationRoleExecutor
-	policy     FormationPolicyGate
-	now        func() time.Time
-	newID      func(string) string
+	provenance     FormationProvenanceOperator
+	observer       FormationProviderObserver
+	allocator      FormationAllocator
+	executor       FormationRoleExecutor
+	policy         FormationPolicyGate
+	onRoleStarting func(context.Context, FormationRole) error
+	onRoleProgress func(context.Context, *FormationRunResult) error
+	now            func() time.Time
+	newID          func(string) string
 }
 
 // NewFormationRunner constructs a runner for one governed execution topology.
@@ -424,6 +438,24 @@ func NewFormationRunner(provenance FormationProvenanceOperator, observer Formati
 		newID = func(prefix string) string { return fmt.Sprintf("%s-%d", prefix, now().UTC().UnixNano()) }
 	}
 	return &FormationRunner{provenance: provenance, observer: observer, allocator: allocator, executor: executor, policy: policy, now: now, newID: newID}, nil
+}
+
+// WithRoleStarting publishes one planned invocation row before a role executes.
+func (r *FormationRunner) WithRoleStarting(callback func(context.Context, FormationRole) error) *FormationRunner {
+	if r != nil {
+		r.onRoleStarting = callback
+	}
+	return r
+}
+
+// WithRoleProgress publishes a completed role snapshot before the next role
+// begins. The callback is observational and must not mutate the supplied
+// result; the runner continues to own the terminal result.
+func (r *FormationRunner) WithRoleProgress(callback func(context.Context, *FormationRunResult) error) *FormationRunner {
+	if r != nil {
+		r.onRoleProgress = callback
+	}
+	return r
 }
 
 // Run executes one formation and returns canonical role telemetry. State is
@@ -492,6 +524,11 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 	state := append([]byte(nil), initialState...)
 	for _, role := range formation.Roles() {
 		model, _ := formation.Model(role)
+		if r.onRoleStarting != nil {
+			if startErr := r.onRoleStarting(ctx, role); startErr != nil {
+				return result, fmt.Errorf("formation: role starting: %w", startErr)
+			}
+		}
 		attemptID := r.newID(fmt.Sprintf("%s-%s", formation.ID, role))
 		if err := r.observer.Begin(ctx, attemptID, model); err != nil {
 			return result, fmt.Errorf("formation: observer begin %s: %w", role, err)
@@ -518,13 +555,18 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 		}
 		telemetry := FormationRoleTelemetry{
 			Role: role, Model: model, AttemptID: attemptID,
-			AttestationStatus:   formationAttestationStatus(model.Trust),
-			AttestationVerified: model.Trust == FormationTrustDelegated || attestations[formationAttestationIndex(role)].Verified,
-			AttestationDigest:   attestations[formationAttestationIndex(role)].Digest,
-			ProviderAttemptID:   roleResult.ProviderAttemptID, PeakVRAMMiB: roleResult.PeakVRAMMiB,
-			TTFTNanos: roleResult.TTFTNanos, GenerationTokens: roleResult.GenerationTokens,
+			AttestationStatus:       formationAttestationStatus(model.Trust),
+			AttestationVerified:     model.Trust == FormationTrustDelegated || attestations[formationAttestationIndex(role)].Verified,
+			AttestationDigest:       attestations[formationAttestationIndex(role)].Digest,
+			ProviderAttemptID:       roleResult.ProviderAttemptID,
+			UsageAvailability:       roleResult.UsageAvailability,
+			PromptTokens:            roleResult.PromptTokens,
+			PeakVRAMMiB:             roleResult.PeakVRAMMiB,
+			TTFTNanos:               roleResult.TTFTNanos,
+			GenerationTokens:        roleResult.GenerationTokens,
 			GenerationDurationNanos: roleResult.GenerationDurationNanos, StateMutation: roleResult.StateMutation,
-			ObserverEvidence: observation, ProvenanceEvidence: attestationForRole(attestations, role),
+			ObserverEvidence:   observation,
+			ProvenanceEvidence: bindFormationProvenanceEvidence(attestationForRole(attestations, role), roleResult.ProviderAttemptID),
 		}
 		if telemetry.GenerationDurationNanos > 0 {
 			telemetry.GenerationTokensPerSec = float64(telemetry.GenerationTokens) / (float64(telemetry.GenerationDurationNanos) / float64(time.Second))
@@ -548,6 +590,13 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 			result.AllPolicyLayersValid = true
 		}
 		result.Roles = append(result.Roles, telemetry)
+		if r.onRoleProgress != nil {
+			progress := *result
+			progress.Roles = append([]FormationRoleTelemetry(nil), result.Roles...)
+			if progressErr := r.onRoleProgress(ctx, &progress); progressErr != nil {
+				return result, fmt.Errorf("formation: role progress: %w", progressErr)
+			}
+		}
 		state = append([]byte(nil), roleResult.OutputState...)
 	}
 	result.Passed = true
@@ -575,6 +624,30 @@ func formationAttestationIndex(role FormationRole) int {
 func attestationForRole(attestations []FormationAttestation, role FormationRole) *FormationAttestation {
 	attestation := attestations[formationAttestationIndex(role)]
 	return &attestation
+}
+
+func bindFormationProvenanceEvidence(attestation *FormationAttestation, providerAttemptID string) *FormationAttestation {
+	if attestation == nil || attestation.Window == nil || providerAttemptID == "" {
+		return attestation
+	}
+	if attestation.Window.GetProviderAttemptId() == providerAttemptID {
+		return attestation
+	}
+	cloned, ok := proto.Clone(attestation.Window).(*evalv1.ModelProvenanceAttestationWindow)
+	if !ok {
+		return attestation
+	}
+	cloned.ProviderAttemptId = providerAttemptID
+	digest, err := model_provenance.ComputeAttestationDigest(cloned)
+	if err != nil {
+		return attestation
+	}
+	cloned.AttestationDigest = digest
+	return &FormationAttestation{
+		Verified: attestation.Verified,
+		Digest:   attestation.Digest,
+		Window:   cloned,
+	}
 }
 
 func observedPeakVRAMMiB(window *evalv1.ProviderBoundaryObservationWindow) uint64 {

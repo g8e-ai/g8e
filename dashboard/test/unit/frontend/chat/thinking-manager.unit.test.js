@@ -4,7 +4,9 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { MockEventBus } from '@test/mocks/mock-browser-env.js';
-import { EventType, ThinkingActionType } from '@g8ed/public/js/constants/events.js';
+import { EventType } from '@g8ed/public/js/constants/events.js';
+import { UIEventType } from '@g8ed/public/js/constants/ui-events.js';
+import { ThinkingPhase } from '@g8ed/public/js/models/ai-event-models.js';
 
 async function loadThinkingManager() {
     const { ThinkingManager } = await import('@g8ed/public/js/components/thinking.js');
@@ -34,8 +36,8 @@ describe('ThinkingManager [UNIT]', () => {
         eventBus.on(EventType.OPERATOR_TERMINAL_THINKING_COMPLETE, ({ webSessionId }) => {
             completeCalls.push(webSessionId);
         });
-        eventBus.on(EventType.LLM_CHAT_STOP_SHOW, () => { aiStopShowCount++; });
-        eventBus.on(EventType.LLM_CHAT_STOP_HIDE, () => { aiStopHideCount++; });
+        eventBus.on(UIEventType.CHAT_STOP_SHOW, () => { aiStopShowCount++; });
+        eventBus.on(UIEventType.CHAT_STOP_HIDE, () => { aiStopHideCount++; });
     });
 
     afterEach(() => {
@@ -55,12 +57,12 @@ describe('ThinkingManager [UNIT]', () => {
         });
     });
 
-    describe('EventType.LLM_CHAT_ITERATION_THINKING_STARTED — ThinkingEvent.parse() integration', () => {
+    describe('EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED — ThinkingEvent.parse() integration', () => {
         it('parses raw event bus payload via ThinkingEvent.parse() before dispatch', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                 thinking: 'starting',
-                action_type: ThinkingActionType.START,
+                phase: ThinkingPhase.START,
                 web_session_id: 'sess-1',
             });
             expect(appendCalls.some(c => c.webSessionId === 'sess-1')).toBe(true);
@@ -68,9 +70,8 @@ describe('ThinkingManager [UNIT]', () => {
 
         it('strips unknown fields from raw payload — phase is not forwarded', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                 thinking: 'hi',
-                action_type: ThinkingActionType.UPDATE,
                 web_session_id: 'sess-2',
                 phase: 'start',
                 thinking_content: 'legacy',
@@ -80,30 +81,30 @@ describe('ThinkingManager [UNIT]', () => {
             expect(appendCalls.filter(c => c.webSessionId === 'sess-2')).toHaveLength(1);
         });
 
-        it('routes action_type START to handleThinkingStart', () => {
+        it('routes phase START to handleThinkingStart', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                 thinking: 'thinking...',
-                action_type: ThinkingActionType.START,
+                phase: ThinkingPhase.START,
                 web_session_id: 'sess-start',
             });
             expect(mgr.thinkingActive).toBe(true);
             expect(mgr.activeSessions.has('sess-start')).toBe(true);
         });
 
-        it('routes action_type END to handleThinkingEnd', () => {
+        it('routes phase END to handleThinkingEnd', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-end' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-end' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-end' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END, web_session_id: 'sess-end' });
             expect(mgr.activeSessions.has('sess-end')).toBe(false);
             expect(completeCalls).toContain('sess-end');
         });
 
-        it('routes unknown action_type to handleThinkingUpdate', () => {
+        it('routes unknown phase to handleThinkingUpdate', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                 thinking: 'iterating',
-                action_type: ThinkingActionType.UPDATE,
+                phase: ThinkingPhase.UPDATE,
                 web_session_id: 'sess-upd',
             });
             expect(mgr.thinkingActive).toBe(true);
@@ -111,10 +112,10 @@ describe('ThinkingManager [UNIT]', () => {
         });
 
         it('drops event when CHAT.FILTER_EVENT rejects it', () => {
-            eventBus.on(EventType.LLM_CHAT_FILTER_EVENT, ({ reject }) => reject());
+            eventBus.on(EventType.AI_LLM_CHAT_FILTER_EVENT, ({ reject }) => reject());
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
-                action_type: ThinkingActionType.START,
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
+                phase: ThinkingPhase.START,
                 web_session_id: 'sess-filtered',
             });
             expect(mgr.thinkingActive).toBe(false);
@@ -122,10 +123,10 @@ describe('ThinkingManager [UNIT]', () => {
         });
     });
 
-    describe('EventType.LLM_CHAT_ITERATION_STARTED — ThinkingEvent.parse() integration', () => {
+    describe('EventType.AI_LLM_CHAT_ITERATION_STARTED — ThinkingEvent.parse() integration', () => {
         it('parses raw AI_ITERATING payload and calls handleThinkingUpdate', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_STARTED, {
                 thinking: 'iterating thought',
                 web_session_id: 'sess-iter',
             });
@@ -134,9 +135,9 @@ describe('ThinkingManager [UNIT]', () => {
         });
 
         it('drops AI_ITERATING event when CHAT.FILTER_EVENT rejects it', () => {
-            eventBus.on(EventType.LLM_CHAT_FILTER_EVENT, ({ reject }) => reject());
+            eventBus.on(EventType.AI_LLM_CHAT_FILTER_EVENT, ({ reject }) => reject());
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_STARTED, {
                 thinking: 'x',
                 web_session_id: 'sess-iter-filtered',
             });
@@ -147,22 +148,22 @@ describe('ThinkingManager [UNIT]', () => {
     describe('handleThinkingStart', () => {
         it('adds session to activeSessions and sets thinkingActive', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-a' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-a' });
             expect(mgr.activeSessions.has('sess-a')).toBe(true);
             expect(mgr.thinkingActive).toBe(true);
         });
 
         it('emits CHAT.AI_STOP_SHOW', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-a' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-a' });
             expect(aiStopShowCount).toBeGreaterThan(0);
         });
 
         it('emits THINKING_APPEND with thinking text', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                 thinking: 'initial thought',
-                action_type: ThinkingActionType.START,
+                phase: ThinkingPhase.START,
                 web_session_id: 'sess-a',
             });
             expect(appendCalls).toContainEqual({ webSessionId: 'sess-a', text: 'initial thought' });
@@ -170,14 +171,14 @@ describe('ThinkingManager [UNIT]', () => {
 
         it('does not emit THINKING_APPEND when thinking is null', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-notext' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-notext' });
             expect(appendCalls).toHaveLength(0);
         });
 
         it('warns and skips when web_session_id is missing', () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START });
             expect(mgr.thinkingActive).toBe(false);
             expect(appendCalls).toHaveLength(0);
             expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('web_session_id'));
@@ -186,8 +187,8 @@ describe('ThinkingManager [UNIT]', () => {
 
         it('tracks multiple concurrent sessions independently', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-1' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-2' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-1' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-2' });
             expect(mgr.activeSessions.size).toBe(2);
             expect(mgr.activeSessions.has('sess-1')).toBe(true);
             expect(mgr.activeSessions.has('sess-2')).toBe(true);
@@ -197,15 +198,15 @@ describe('ThinkingManager [UNIT]', () => {
     describe('handleThinkingUpdate', () => {
         it('does not emit THINKING_APPEND when thinking is null', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.UPDATE, web_session_id: 'sess-upd' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.UPDATE, web_session_id: 'sess-upd' });
             expect(appendCalls).toHaveLength(0);
         });
 
         it('emits THINKING_APPEND with actual thinking text when present', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                 thinking: 'new chunk',
-                action_type: ThinkingActionType.UPDATE,
+                phase: ThinkingPhase.UPDATE,
                 web_session_id: 'sess-upd',
             });
             expect(appendCalls).toContainEqual({ webSessionId: 'sess-upd', text: 'new chunk' });
@@ -214,7 +215,7 @@ describe('ThinkingManager [UNIT]', () => {
         it('warns and skips when web_session_id is missing', () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.UPDATE });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.UPDATE });
             expect(appendCalls).toHaveLength(0);
             expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('web_session_id'));
             warnSpy.mockRestore();
@@ -224,31 +225,31 @@ describe('ThinkingManager [UNIT]', () => {
     describe('handleThinkingEnd', () => {
         it('removes session from activeSessions', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-e' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END, web_session_id: 'sess-e' });
             expect(mgr.activeSessions.has('sess-e')).toBe(false);
         });
 
         it('sets thinkingActive false when no sessions remain', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-e' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END, web_session_id: 'sess-e' });
             expect(mgr.thinkingActive).toBe(false);
         });
 
         it('keeps thinkingActive true when other sessions still active', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-1' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-2' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-1' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-1' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-2' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END, web_session_id: 'sess-1' });
             expect(mgr.thinkingActive).toBe(true);
             expect(mgr.activeSessions.has('sess-2')).toBe(true);
         });
 
         it('emits THINKING_COMPLETE', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-e' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END, web_session_id: 'sess-e' });
             expect(completeCalls).toContain('sess-e');
         });
 
@@ -257,11 +258,11 @@ describe('ThinkingManager [UNIT]', () => {
             const order = [];
             eventBus.on(EventType.OPERATOR_TERMINAL_THINKING_APPEND, () => order.push('append'));
             eventBus.on(EventType.OPERATOR_TERMINAL_THINKING_COMPLETE, () => order.push('complete'));
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-e' });
             appendCalls.length = 0;
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                 thinking: 'final thought',
-                action_type: ThinkingActionType.END,
+                phase: ThinkingPhase.END,
                 web_session_id: 'sess-e',
             });
             expect(appendCalls).toContainEqual({ webSessionId: 'sess-e', text: 'final thought' });
@@ -271,23 +272,23 @@ describe('ThinkingManager [UNIT]', () => {
 
         it('does not emit THINKING_APPEND when thinking is null on END', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-e' });
             appendCalls.length = 0;
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END, web_session_id: 'sess-e' });
             expect(appendCalls).toHaveLength(0);
         });
 
         it('emits CHAT.AI_STOP_HIDE', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-e' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-e' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END, web_session_id: 'sess-e' });
             expect(aiStopHideCount).toBeGreaterThan(0);
         });
 
         it('warns and skips when web_session_id is missing', () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END });
             expect(completeCalls).toHaveLength(0);
             expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('web_session_id'));
             warnSpy.mockRestore();
@@ -297,7 +298,7 @@ describe('ThinkingManager [UNIT]', () => {
     describe('hideThinkingIndicator', () => {
         it('emits THINKING_COMPLETE for a specific session', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-h' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-h' });
             mgr.hideThinkingIndicator('sess-h');
             expect(completeCalls).toContain('sess-h');
             expect(mgr.activeSessions.has('sess-h')).toBe(false);
@@ -305,8 +306,8 @@ describe('ThinkingManager [UNIT]', () => {
 
         it('emits THINKING_COMPLETE for all sessions when called without argument', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-1' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-2' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-1' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-2' });
             mgr.hideThinkingIndicator();
             expect(completeCalls).toContain('sess-1');
             expect(completeCalls).toContain('sess-2');
@@ -315,7 +316,7 @@ describe('ThinkingManager [UNIT]', () => {
 
         it('sets thinkingActive false after clearing all sessions', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-1' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-1' });
             mgr.hideThinkingIndicator();
             expect(mgr.thinkingActive).toBe(false);
         });
@@ -331,15 +332,15 @@ describe('ThinkingManager [UNIT]', () => {
     describe('clearAllThinkingData', () => {
         it('resets thinkingActive to false', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-c' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-c' });
             mgr.clearAllThinkingData();
             expect(mgr.thinkingActive).toBe(false);
         });
 
         it('clears all active sessions', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-1' });
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-2' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-1' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-2' });
             mgr.clearAllThinkingData();
             expect(mgr.activeSessions.size).toBe(0);
         });
@@ -366,9 +367,9 @@ describe('ThinkingManager [UNIT]', () => {
         it('constructs and handles events without throwing', () => {
             const mgr = new ThinkingManager(eventBus, null, null);
             expect(() => {
-                eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, {
+                eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                     thinking: 'hi',
-                    action_type: ThinkingActionType.START,
+                    phase: ThinkingPhase.START,
                     web_session_id: 'sess-nocomp',
                 });
             }).not.toThrow();
@@ -377,9 +378,9 @@ describe('ThinkingManager [UNIT]', () => {
 
         it('handles END without throwing', () => {
             new ThinkingManager(eventBus, null, null);
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-n' });
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.START, web_session_id: 'sess-n' });
             expect(() => {
-                eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-n' });
+                eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, { phase: ThinkingPhase.END, web_session_id: 'sess-n' });
             }).not.toThrow();
         });
     });

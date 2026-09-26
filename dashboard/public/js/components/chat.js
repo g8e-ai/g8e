@@ -3,6 +3,7 @@
 
 import { EventType } from '../constants/events.js';
 import { ApiPaths } from '../constants/api-paths.js';
+import { ServiceName } from '../constants/service-client-constants.js';
 import { AnchoredOperatorTerminal } from './anchored-terminal.js';
 import { SentinelModeManager } from './sentinel-mode-manager.js';
 import { LlmModelManager } from './llm-model-manager.js';
@@ -114,7 +115,7 @@ export class ChatComponent {
         }
 
         try {
-            const response = await this.serviceClient.post('g8ed', ApiPaths.chat.stop(), {
+            const response = await this.serviceClient.post(ServiceName.GATEWAY, ApiPaths.chat.stop(), {
                 investigation_id: investigationId,
                 reason: reason
             });

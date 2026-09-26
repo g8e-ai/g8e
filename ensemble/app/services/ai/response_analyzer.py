@@ -16,7 +16,7 @@ import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.errors import OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
-from app.llm import get_llm_provider, Role
+from app.llm import get_generative_lite_provider, Role
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.structured import parse_structured_response
@@ -202,7 +202,7 @@ class AIResponseAnalyzer:
             return fallback_no_model()
 
         try:
-            client = get_llm_provider(settings.llm, is_lite=True)
+            client = get_generative_lite_provider(settings.llm)
             response_schema = response_model.model_json_schema()
             response_schema.get("properties", {}).pop("model_call", None)
             config = AIGenerationConfigBuilder.build_lite_settings(
@@ -342,7 +342,7 @@ class AIResponseAnalyzer:
             prompt_build_duration_ms,
         )
 
-        lite_model = resolved_settings.llm.resolved_lite_model
+        lite_model = resolved_settings.llm.resolved_generative_lite_model
 
         def log_result(analysis: CommandRiskAnalysis) -> None:
             total_duration_ms = (time.time() - analysis_start_time) * 1000
@@ -415,7 +415,7 @@ class AIResponseAnalyzer:
             prompt_build_duration_ms,
         )
 
-        lite_model = resolved_settings.llm.resolved_lite_model
+        lite_model = resolved_settings.llm.resolved_generative_lite_model
 
         def post_process(analysis: ErrorAnalysisResult) -> None:
             if retry_count >= 2:
@@ -502,7 +502,7 @@ class AIResponseAnalyzer:
             prompt_build_duration_ms,
         )
 
-        lite_model = resolved_settings.llm.resolved_lite_model
+        lite_model = resolved_settings.llm.resolved_generative_lite_model
 
         def post_process(analysis: FileOperationRiskAnalysis) -> None:
             analysis.is_system_file = any(file_path.startswith(p) for p in SYSTEM_PATH_PREFIXES)

@@ -520,7 +520,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	}
 
 	hash, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:      constants.ActionTypeMcpCall,
+		eventType:       constants.Event.Operator.Mcp.CallRequested,
 		targetResource:  callParams.Name,
 		payloadBytes:    payloadBytes,
 		investigationID: investigationID,
@@ -709,7 +709,7 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 	}
 
 	_, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:     constants.ActionTypeMcpResourceRead,
+		eventType:      constants.Event.Operator.Mcp.ResourceReadRequested,
 		targetResource: readParams.URI,
 		payloadBytes:   payloadBytes,
 	})
@@ -762,7 +762,7 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 	}
 
 	_, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:     constants.ActionTypeMcpPromptGet,
+		eventType:      constants.Event.Operator.Mcp.PromptGetRequested,
 		targetResource: getParams.Name,
 		payloadBytes:   payloadBytes,
 	})
@@ -797,8 +797,72 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 	return mcpRes, nil
 }
 
+// ExecuteResourceRead is the L5 egress for a verified MCP_RESOURCE_READ.
+func (g *GatewayService) ExecuteResourceRead(ctx context.Context, uri string) (string, error) {
+	if uri == "" {
+		return "", constants.ErrGatewayURIRequired
+	}
+	raw, err := g.proxyMCPMethod(ctx, "resources/read", map[string]string{"uri": uri})
+	if err != nil {
+		return "", err
+	}
+	return mcpResultSummary(raw), nil
+}
+
+// ExecutePromptGet is the L5 egress for a verified MCP_PROMPT_GET.
+func (g *GatewayService) ExecutePromptGet(ctx context.Context, name string) (string, error) {
+	if name == "" {
+		return "", constants.ErrGatewayNameRequired
+	}
+	raw, err := g.proxyMCPMethod(ctx, "prompts/get", map[string]string{"name": name})
+	if err != nil {
+		return "", err
+	}
+	return mcpResultSummary(raw), nil
+}
+
+// ExecuteResourceList is the L5 egress for a verified MCP_RESOURCE_LIST.
+func (g *GatewayService) ExecuteResourceList(ctx context.Context) (string, error) {
+	res, err := g.listResourcesResult(ctx)
+	if err != nil {
+		return "", err
+	}
+	return marshalMCPCatalog(res)
+}
+
+// ExecutePromptList is the L5 egress for a verified MCP_PROMPT_LIST.
+func (g *GatewayService) ExecutePromptList(ctx context.Context) (string, error) {
+	res, err := g.listPromptsResult(ctx)
+	if err != nil {
+		return "", err
+	}
+	return marshalMCPCatalog(res)
+}
+
+func marshalMCPCatalog(res interface{}) (string, error) {
+	if raw, ok := res.(json.RawMessage); ok {
+		return mcpResultSummary(raw), nil
+	}
+	body, err := json.Marshal(res)
+	if err != nil {
+		return "", fmt.Errorf("gateway: %w", constants.ErrInternal)
+	}
+	return mcpResultSummary(body), nil
+}
+
+func mcpResultSummary(raw json.RawMessage) string {
+	summary := strings.TrimSpace(string(raw))
+	if summary == "" || summary == "null" {
+		return "completed"
+	}
+	if len(summary) > constants.ReceiptSummaryMaxBytes {
+		return summary[:constants.ReceiptSummaryMaxBytes]
+	}
+	return summary
+}
+
 type processGatewayOptions struct {
-	actionType      constants.ActionType
+	eventType       constants.EventType
 	targetResource  string
 	payloadBytes    []byte
 	investigationID string
@@ -827,15 +891,21 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		}
 	}
 
+	actionType, err := constants.ValidateGovernedRequest(opts.eventType)
+	if err != nil {
+		return "", nil, "", fmt.Errorf("gateway: %w", err)
+	}
+
 	now := time.Now().UTC()
 	env := &commonv1.GovernanceEnvelope{
 		Timestamp:       timestamppb.New(now),
 		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
 		SourceComponent: commonv1.Component_COMPONENT_CLIENT,
-		ActionType:      string(opts.actionType),
+		EventType:       string(opts.eventType),
+		ActionType:      string(actionType),
 		TargetResource:  opts.targetResource,
 		Payload:         opts.payloadBytes,
-		ProtocolVersion: "1.0",
+		ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 		Nonce:           uuid.NewString(),
 		StateMerkleRoot: stateRoot,
 		Posture:         g.posture,
@@ -945,7 +1015,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 	}
 
 	hash, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:     constants.ActionTypeA2aCall,
+		eventType:      constants.Event.Operator.A2a.CallRequested,
 		targetResource: req.SkillName,
 		payloadBytes:   payloadBytes,
 	})

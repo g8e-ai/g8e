@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-09-23
-Version: v2.1.13
+Last Updated: 2026-09-26
+Version: v2.2.0
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -114,7 +114,15 @@ All envelopes use canonical JSON (protojson) encoding for client-facing surfaces
 - **Signing basis**: deterministic `transaction_hash` computed from normalized envelope fields in proto field order
 - **Internal storage**: protobuf bytes (implementation detail)
 
-The transaction hash is computed from the following fields in order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC fixed microsecond precision), `intent_data` (canonicalized map with sorted keys), `requestor_user_id`, and `acting_app_id`. The result is hashed with SHA-256 and hex-encoded. The L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked to authorize.
+The transaction hash is versioned. Protocol version `2` (required for new
+ingress) prefixes `g8e-tx-v2|` and binds both `event_type` and the
+registry-derived `action_type` plus the remaining v1 fields: `target_resource`,
+`payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC
+fixed microsecond precision), `intent_data` (canonicalized map with sorted
+keys), `requestor_user_id`, and `acting_app_id`. The result is hashed with
+SHA-256 and hex-encoded. Verifiers keep version `1` only for historical stored
+records. The L3 proof is intentionally excluded from the hash so that L2
+consensus can sign before the human notary is asked to authorize.
 
 This ensures compatibility with JSON-based ecosystems while maintaining typed schema validation.
 

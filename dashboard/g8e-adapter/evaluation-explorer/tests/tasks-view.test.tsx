@@ -27,6 +27,7 @@ describe('TasksView', () => {
     expect(screen.getAllByRole('link', { name: 'View full definition' })).toHaveLength(SCENARIO_TASKS.length);
     expect(screen.getByRole('heading', { name: /Instruction adherence/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Security & policy/i })).toBeInTheDocument();
+    expect(screen.getByText(/Cards show a prompt excerpt/i)).toBeInTheDocument();
   });
 
   it('shows a detailed definition for a selected task with g8e source links', () => {
@@ -40,6 +41,10 @@ describe('TasksView', () => {
     expect(within(panel).getByText(task!.publicDescription)).toBeInTheDocument();
     expect(within(panel).getByText(task!.userPrompt)).toBeInTheDocument();
     expect(within(panel).getByRole('heading', { name: 'Expected tools' })).toBeInTheDocument();
+    expect(within(panel).getByText(/not one whitelist/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/Fixed rules over trace evidence/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/User prompt sent to the agent/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/Which tool is called affects the grade/i)).toBeInTheDocument();
     expect(within(panel).getByRole('link', { name: /Scenario definition in g8e/i })).toHaveAttribute(
       'href',
       scenarioTaskSourceUrl(task!),

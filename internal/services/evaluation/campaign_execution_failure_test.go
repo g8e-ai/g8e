@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -25,7 +26,7 @@ type failingCampaignExecutor struct {
 }
 
 func (f *failingCampaignExecutor) ExecuteAssignment(_ context.Context, _ AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
-	return nil, fmt.Errorf("%s", f.message)
+	return nil, assignmentExecutionError(f.message, fmt.Errorf("injected executor failure"))
 }
 
 func TestBuildExecutorFailureAssignmentResult_ClassifiesProviderFailures(t *testing.T) {
@@ -43,6 +44,13 @@ func TestBuildExecutorFailureAssignmentResult_ClassifiesValidationFailures(t *te
 	result, err := BuildExecutorFailureAssignmentResult(req, fmt.Errorf(`evaluation: execute assignment: submit chat: ensemble chat: status 422: {"detail":[{"loc":["body","evaluation_context","gold_summary","expected_tools"]}]}`), time.Unix(1_700_000_000, 0).UTC())
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, result.GetLifecycleStatus())
+}
+
+func TestIsRecoverableAssignmentExecutionError_UsesTypedSentinel(t *testing.T) {
+	t.Parallel()
+	assert.True(t, isRecoverableAssignmentExecutionError(assignmentExecutionError("evaluation: execute heterogeneous assignment", fmt.Errorf("status 503"))))
+	assert.False(t, isRecoverableAssignmentExecutionError(fmt.Errorf("evaluation: execute heterogeneous assignment: status 503")))
+	assert.ErrorIs(t, assignmentExecutionError("evaluation: execute assignment: submit chat", fmt.Errorf("connection refused")), constants.ErrEvaluationAssignmentExecutionFailed)
 }
 
 func TestExecuteNextAssignment_PersistsResultOnRecoverableExecutorFailure(t *testing.T) {
@@ -79,6 +87,42 @@ func TestExecuteNextAssignment_PersistsResultOnRecoverableExecutorFailure(t *tes
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED, result.GetLifecycleStatus())
 
 	exists, err := store.AssignmentResultExists(context.Background(), req.RunID, result.GetAssignmentId())
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+func TestExecuteNextAssignment_PersistsResultOnRecoverableHeterogeneousExecutorFailure(t *testing.T) {
+	variants := testHeterogeneousVariants()
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	executor := &failingCampaignExecutor{message: "evaluation: execute heterogeneous assignment"}
+	controller := NewCampaignController(store, executor, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	req := testCampaignInitRequest(t)
+	req.Lane = evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM
+	var err error
+	req.Inventory, err = MaterializeModelRegistry(req.CampaignID, variants)
+	require.NoError(t, err)
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.GenerateHeterogeneousStackSet(context.Background(), run.GetCampaignBinding().GetCampaignId(), 11)
+	require.NoError(t, err)
+
+	_, err = controller.ScheduleHeterogeneousRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+
+	result, executed, err := controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), CampaignExecutionBinding{
+		InferenceOperatorSessionID: "inf-session",
+		DataOperatorID:             "data-op",
+		DataOperatorSessionID:      "data-session",
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              InferenceVariantsFromEvalRegistry(variants),
+	}, req.ScenarioArtifacts)
+	require.NoError(t, err)
+	require.True(t, executed)
+	require.NotNil(t, result)
+	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, result.GetLifecycleStatus())
+
+	exists, err := store.AssignmentResultExists(context.Background(), run.GetRunId(), result.GetAssignmentId())
 	require.NoError(t, err)
 	assert.True(t, exists)
 }

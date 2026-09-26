@@ -20,22 +20,16 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func TestNewExecutionTopologies_ReturnsFiveValidTargetFormations(t *testing.T) {
+func TestNewExecutionTopologies_ReturnsFourValidTargetFormations(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
 	formations := topologies.Formations()
-	require.Len(t, formations, 5)
+	require.Len(t, formations, 4)
 	for _, formation := range formations {
 		require.NoError(t, formation.Validate())
 		assert.Less(t, formation.EstimatedVRAMMiB(), formation.MaxVRAMMiB)
 		assert.Less(t, formation.EstimatedVRAMMiB(), FormationMaxVRAMMiB)
 	}
-
-	hybrid, err := topologies.Formation("hybrid-delegator")
-	require.NoError(t, err)
-	assert.Equal(t, FormationTrustDelegated, hybrid.Primary.Trust)
-	assert.Equal(t, FormationAttestationNotNeeded, formationAttestationStatus(hybrid.Primary.Trust))
-	assert.Equal(t, "gemini-1.5-pro", hybrid.Primary.ServedModelTag)
 }
 
 func TestFormationValidateRejectsProviderAndFamilyOverlap(t *testing.T) {
@@ -159,8 +153,15 @@ func TestFormationRunnerAttestsBeforeAllocationAndPassesStateThroughGovernance(t
 	allocator := &formationTestAllocator{}
 	executor := &formationTestExecutor{}
 	policy := &formationTestPolicy{}
+	var roleProgress []FormationRole
 	runner, err := NewFormationRunner(provenance, observer, allocator, executor, policy, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-attempt" })
 	require.NoError(t, err)
+	runner.WithRoleProgress(func(_ context.Context, progress *FormationRunResult) error {
+		require.NotNil(t, progress)
+		require.NotEmpty(t, progress.Roles)
+		roleProgress = append(roleProgress, progress.Roles[len(progress.Roles)-1].Role)
+		return nil
+	})
 
 	result, err := runner.Run(context.Background(), formation, []byte("initial"))
 	require.NoError(t, err)
@@ -177,13 +178,26 @@ func TestFormationRunnerAttestsBeforeAllocationAndPassesStateThroughGovernance(t
 	assert.Len(t, provenance.events, 3)
 	assert.Equal(t, []string{"allocate:qwen25-14b", "allocate:gemma2-2b", "allocate:llama32-1b"}, allocator.events[:3])
 	assert.Len(t, result.Roles, 3)
+	assert.Equal(t, []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary}, roleProgress)
 	assert.Equal(t, FormationAttestationVerified, result.Roles[0].AttestationStatus)
 	assert.InDelta(t, 2000.0, result.Roles[0].GenerationTokensPerSec, 0.1)
 	assert.Len(t, allocator.events, 6)
 }
 
 func TestFormationRunnerSkipsProvenanceForDelegatedPrimary(t *testing.T) {
-	formation := formationWithDigests(t, "hybrid-delegator")
+	formation := Formation{
+		ID: "delegated-smoke", DisplayName: "Delegated Smoke", Description: "Validates delegated-primary attestation behavior.", MaxVRAMMiB: FormationMaxVRAMMiB,
+		Primary: FormationModel{
+			VariantID: "delegated-primary", DisplayName: "Delegated Primary", Provider: "Cloud", Family: "Delegated",
+			ProviderClass: "delegated", ServedModelTag: "delegated-primary", Trust: FormationTrustDelegated,
+		},
+		Assistant: formationModel("assistant-local", "Assistant", "LocalA", "LocalA", "assistant:local", 1_000_000_000, "Q4_K_M", 1024, 256),
+		Lite:      formationModel("lite-local", "Lite", "LocalB", "LocalB", "lite:local", 500_000_000, "Q4_K_M", 512, 256),
+	}
+	formation.Primary.ModelDigest = "primary-digest"
+	formation.Assistant.ModelDigest = "assistant-digest"
+	formation.Lite.ModelDigest = "lite-digest"
+
 	provenance := &formationTestProvenance{}
 	runner, err := NewFormationRunner(provenance, &formationTestObserver{}, &formationTestAllocator{}, &formationTestExecutor{}, &formationTestPolicy{}, time.Now, nil)
 	require.NoError(t, err)

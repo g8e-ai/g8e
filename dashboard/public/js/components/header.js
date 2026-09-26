@@ -31,8 +31,8 @@ export class Header {
     }
 
     _bindEvents() {
-        this.eventBus.on(EventType.AUTH_USER_AUTHENTICATED, () => this._onAuthenticated());
-        this.eventBus.on(EventType.AUTH_USER_UNAUTHENTICATED, () => this._onUnauthenticated());
+        this.eventBus.on(EventType.PLATFORM_AUTH_USER_AUTHENTICATED, () => this._onAuthenticated());
+        this.eventBus.on(EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED, () => this._onUnauthenticated());
     }
 
     _onAuthenticated() {
@@ -44,8 +44,8 @@ export class Header {
     }
 
     destroy() {
-        this.eventBus.off(EventType.AUTH_USER_AUTHENTICATED);
-        this.eventBus.off(EventType.AUTH_USER_UNAUTHENTICATED);
+        this.eventBus.off(EventType.PLATFORM_AUTH_USER_AUTHENTICATED);
+        this.eventBus.off(EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED);
         this._root = null;
         this._authContainer = null;
     }

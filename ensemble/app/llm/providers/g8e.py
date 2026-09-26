@@ -286,10 +286,14 @@ def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetad
         candidates_token_count=inference_result.completion_tokens,
         total_token_count=inference_result.total_tokens,
         thinking_token_count=(
-            inference_result.thinking_tokens if inference_result.HasField("thinking_tokens") else 0
+            inference_result.thinking_tokens
+            if inference_result.HasField("thinking_tokens")
+            else None
         ),
         cache_token_count=(
-            inference_result.cache_tokens if inference_result.HasField("cache_tokens") else 0
+            inference_result.cache_tokens
+            if inference_result.HasField("cache_tokens")
+            else None
         ),
         usage_reported=inference_result.usage_reported,
         time_to_first_token_seconds=(

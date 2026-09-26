@@ -10,6 +10,7 @@ package constants
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -61,7 +62,6 @@ func TestOtherNewEventConstants(t *testing.T) {
 		{EventAppInvestigationDeleted, "g8e.v1.app.investigation.deleted"},
 		{EventAppMemoryCreated, "g8e.v1.app.memory.created"},
 		{EventAppMemoryUpdated, "g8e.v1.app.memory.updated"},
-		{EventOperatorPortCheckRequested, "g8e.v1.operator.port.check.requested"},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.value, string(tc.goConst))
@@ -124,4 +124,71 @@ func TestEventsJSONGoConstPresence(t *testing.T) {
 		assert.NotEmpty(t, meta.GoConst, "event %s missing _go_const", key)
 		assert.NotEmpty(t, meta.Value, "event %s missing value", key)
 	}
+}
+
+func loadEventsJSONRegistry(t *testing.T) map[string]struct {
+	GoConst string `json:"_go_const"`
+	Value   string `json:"value"`
+} {
+	t.Helper()
+	data, err := os.ReadFile("../../protocol/constants/events.json")
+	require.NoError(t, err)
+	var raw struct {
+		Events map[string]struct {
+			GoConst string `json:"_go_const"`
+			Value   string `json:"value"`
+		} `json:"events"`
+	}
+	require.NoError(t, json.Unmarshal(data, &raw))
+	return raw.Events
+}
+
+func loadGoEventConstants(t *testing.T) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile("events_gen.go")
+	require.NoError(t, err)
+	re := regexp.MustCompile(`^const (Event[A-Za-z0-9]+) EventType = "(g8e\.v1\.[^"]+)"`)
+	goConsts := make(map[string]string)
+	for _, line := range regexp.MustCompile(`\r?\n`).Split(string(data), -1) {
+		m := re.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		goConsts[m[1]] = m[2]
+	}
+	require.NotEmpty(t, goConsts, "failed to parse EventType constants from events_gen.go")
+	return goConsts
+}
+
+func TestEventsJSONGoRegistryParity(t *testing.T) {
+	jsonEvents := loadEventsJSONRegistry(t)
+	goEvents := loadGoEventConstants(t)
+
+	jsonByGoConst := make(map[string]string, len(jsonEvents))
+	valueOwners := make(map[string]string, len(jsonEvents))
+	for key, meta := range jsonEvents {
+		jsonByGoConst[meta.GoConst] = meta.Value
+		if owner, exists := valueOwners[meta.Value]; exists {
+			t.Errorf("duplicate wire value %q: %s and %s", meta.Value, owner, key)
+			continue
+		}
+		valueOwners[meta.Value] = key
+	}
+
+	for goConst, goValue := range goEvents {
+		jsonValue, ok := jsonByGoConst[goConst]
+		if !ok {
+			t.Errorf("Go constant %s missing from events.json", goConst)
+			continue
+		}
+		assert.Equal(t, goValue, jsonValue, "wire value mismatch for %s", goConst)
+	}
+
+	for goConst := range jsonByGoConst {
+		if _, ok := goEvents[goConst]; !ok {
+			t.Errorf("events.json _go_const %s missing from events_gen.go", goConst)
+		}
+	}
+
+	assert.Equal(t, len(goEvents), len(jsonEvents), "Go and JSON event counts must match")
 }

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,10 +7,27 @@
       name="description"
       content="OpenDevOps.AI evaluation explorer: measured model performance, evaluation suites, and live evaluation progress from the public g8e mirror."
     />
-    <meta name="theme-color" content="#f5f7fb" />
+    <meta name="theme-color" content="#0d1117" />
     <title>OpenDevOps.AI — Evaluation Explorer</title>
-    <script type="module" crossorigin src="/assets/index-CGvF_iv6.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BArEU10s.css">
+    <script>
+      (function () {
+        var VALID = { dark: 1, light: 1 };
+        var DEFAULT = 'dark';
+        function readCookie() {
+          var match = document.cookie.match(/(?:^|;\s*)theme=([^;]+)/);
+          return match && VALID[match[1]] ? match[1] : null;
+        }
+        function systemTheme() {
+          return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+        var theme = readCookie() || systemTheme() || DEFAULT;
+        document.documentElement.setAttribute('data-theme', theme);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', theme === 'dark' ? '#0d1117' : '#f5f7fb');
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-CaFUDh7d.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-D2EXxyM5.css">
   </head>
   <body>
     <div id="root"></div>

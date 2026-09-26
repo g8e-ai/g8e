@@ -62,7 +62,7 @@ const EnvelopeExpiry = 5 * time.Minute
 type BuildEnvelopeParams struct {
 	OperatorID        string
 	OperatorSessionID string
-	ActionType        string
+	EventType         string
 	Payload           []byte
 	TargetResource    string
 	RequestorUserID   string
@@ -91,9 +91,8 @@ type BuildEnvelopeParams struct {
 // sets L1.Validated=true only after a clean pass. It fails closed on nil
 // doctrine (ErrTxDoctrineMissing), decode failure
 // (ErrTxPayloadDecodeFailed), and L1 forbidden-pattern violations
-// (ErrTxL1ValidationFailed). Action types without a typed proto decode
-// case (decoded payload is nil) skip L1 validation, matching the warden's
-// behavior.
+// (ErrTxL1ValidationFailed). Governed request events without a typed proto
+// decode case fail closed with ErrTxPayloadDecoderMissing.
 //
 // L3 gating: the gateway dispatch path cannot mint L3 human proofs. When
 // the posture requires L3 proof (ratify, notary) and the action is a
@@ -108,7 +107,11 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrTxDoctrineMissing)
 	}
 
-	actionType := constants.ActionType(params.ActionType)
+	eventType := constants.EventType(params.EventType)
+	actionType, err := constants.ValidateGovernedRequest(eventType)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: build envelope: %w", err)
+	}
 
 	// L3 gate: the gateway dispatch path cannot mint L3 human proofs.
 	// Reject mutation-classified actions under postures that require L3
@@ -123,19 +126,18 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 	}
 
 	// L1 screening: decode the typed payload and run doctrine validation.
-	// A nil decoded payload (action type without a typed proto case) skips
-	// L1 validation, matching the warden's behavior.
 	l1Validated := false
 	decoded, err := governance.DecodePayloadForAction(actionType, params.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrTxPayloadDecodeFailed)
 	}
-	if decoded != nil {
-		if violations := params.Doctrine.ValidatePayload(decoded); len(violations) > 0 {
-			return nil, fmt.Errorf("gateway: build envelope: %w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
-		}
-		l1Validated = true
+	if decoded == nil {
+		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrTxPayloadDecoderMissing)
 	}
+	if violations := params.Doctrine.ValidatePayload(decoded); len(violations) > 0 {
+		return nil, fmt.Errorf("gateway: build envelope: %w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
+	}
+	l1Validated = true
 
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
@@ -143,15 +145,15 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 	}
 
 	env := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(EnvelopeExpiry)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        params.OperatorID,
 		OperatorSessionId: params.OperatorSessionID,
-		ActionType:        params.ActionType,
+		ActionType:        string(actionType),
 		TargetResource:    params.TargetResource,
-		EventType:         string(constants.MapActionTypeToEventType(constants.ActionType(params.ActionType))),
+		EventType:         string(eventType),
 		Payload:           params.Payload,
 		StateMerkleRoot:   params.StateMerkleRoot,
 		Nonce:             hex.EncodeToString(nonce),
@@ -181,7 +183,7 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 // DispatchRequest is the input to the command dispatch service.
 type DispatchRequest struct {
 	TargetOperatorSessionID string
-	ActionType              string
+	EventType               string
 	Payload                 []byte
 	TargetResource          string
 	RequestorUserID         string
@@ -296,7 +298,12 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	operatorID := op.ID
 	operatorSessionID := op.OperatorSessionID
 
-	if err := validateWitnessCommandDispatch(op, req.ActionType, req.Payload); err != nil {
+	actionType, err := constants.ValidateGovernedRequest(constants.EventType(req.EventType))
+	if err != nil {
+		return nil, fmt.Errorf("dispatch: %w", err)
+	}
+
+	if err := validateWitnessCommandDispatch(op, string(actionType), req.Payload); err != nil {
 		return nil, err
 	}
 
@@ -312,7 +319,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        operatorID,
 		OperatorSessionID: operatorSessionID,
-		ActionType:        req.ActionType,
+		EventType:         req.EventType,
 		Payload:           req.Payload,
 		TargetResource:    req.TargetResource,
 		RequestorUserID:   req.RequestorUserID,
@@ -372,7 +379,15 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			return
 		}
 		if resultEnv.Id == txHash {
-			if isShellCommandDispatch(req.ActionType) && !isOperatorCommandTerminalResult(resultEnv) {
+			if isShellCommandDispatch(req.EventType) && !isOperatorCommandTerminalResult(resultEnv) {
+				return
+			}
+			if err := constants.ValidateGovernedResultEnvelope(
+				constants.EventType(req.EventType),
+				constants.EventType(resultEnv.GetEventType()),
+				constants.ActionType(resultEnv.GetActionType()),
+			); err != nil {
+				d.logger.Warn("dispatch: reject result envelope", "error", err, "transaction_id", txHash)
 				return
 			}
 			select {
@@ -427,7 +442,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		case overflowErr := <-overflow:
 			return nil, fmt.Errorf("dispatch: %w", overflowErr)
 		case resultEnv := <-resultCh:
-			if req.ActionType == string(constants.ActionTypeInference) {
+			if actionType == constants.ActionTypeInference {
 				if progress, ok := decodeInferenceProgressEnvelope(resultEnv); ok {
 					if req.OnInferenceProgress != nil {
 						if err := req.OnInferenceProgress(progress); err != nil {
@@ -448,7 +463,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 				}
 				return result, nil
 			}
-			if isShellCommandDispatch(req.ActionType) {
+			if isShellCommandDispatch(req.EventType) {
 				if payload := operatorCommandResultPayload(resultEnv); len(payload) > 0 {
 					resultEnv.Payload = payload
 				}
@@ -645,8 +660,8 @@ func (r *DispatchResult) ToResponse() DispatchResponse {
 	return resp
 }
 
-func isShellCommandDispatch(actionType string) bool {
-	return actionType == string(constants.ActionTypeExecuteBash)
+func isShellCommandDispatch(eventType string) bool {
+	return eventType == string(constants.Event.Operator.Command.Requested)
 }
 
 func isOperatorCommandTerminalResult(env *commonv1.GovernanceEnvelope) bool {
@@ -691,7 +706,7 @@ func operatorCommandResultPayload(env *commonv1.GovernanceEnvelope) []byte {
 // OperatorCommandRequest is the typed JSON request for POST /api/v1/operators/commands.
 type OperatorCommandRequest struct {
 	TargetOperatorSessionID string `json:"target_operator_session_id"`
-	ActionType              string `json:"action_type"`
+	EventType               string `json:"event_type"`
 	Payload                 []byte `json:"payload"`
 	TargetResource          string `json:"target_resource,omitempty"`
 	CaseID                  string `json:"case_id,omitempty"`
@@ -706,11 +721,14 @@ func (r *OperatorCommandRequest) Validate() error {
 	if r.TargetOperatorSessionID == "" {
 		return constants.ErrGatewayOperatorSessionIDRequired
 	}
-	if r.ActionType == "" {
-		return constants.ErrTxUnknownActionType
+	if r.EventType == "" {
+		return constants.ErrTxUnknownEventType
 	}
 	if len(r.Payload) == 0 {
 		return constants.ErrTxPayloadMissing
+	}
+	if _, err := constants.ValidateGovernedRequest(constants.EventType(r.EventType)); err != nil {
+		return err
 	}
 	return nil
 }
@@ -759,13 +777,15 @@ func (c *DispatchController) HandleDispatch(w http.ResponseWriter, r *http.Reque
 
 	// Extract the requestor's user ID from the mTLS identity context.
 	requestorUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	actingAppID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 
 	result, err := c.dispatchSvc.Dispatch(r.Context(), DispatchRequest{
 		TargetOperatorSessionID: req.TargetOperatorSessionID,
-		ActionType:              req.ActionType,
+		EventType:               req.EventType,
 		Payload:                 req.Payload,
 		TargetResource:          req.TargetResource,
 		RequestorUserID:         requestorUserID,
+		ActingAppID:             actingAppID,
 		CaseID:                  req.CaseID,
 		InvestigationID:         req.InvestigationID,
 		TaskID:                  req.TaskID,

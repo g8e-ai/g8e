@@ -1,0 +1,717 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+package demos
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
+	operatorcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/operator"
+	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+)
+
+func TestNewDemoRunID_DiffersForRunsStartedInSameSecond(t *testing.T) {
+	startedAt := time.Date(2026, time.September, 2, 14, 27, 58, 0, time.UTC)
+
+	first := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+	second := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+
+	assert.NotEqual(t, first, second)
+	assert.True(t, strings.HasPrefix(first, "fedramp-run-20260902T142758Z-"))
+	assert.True(t, strings.HasPrefix(second, "fedramp-run-20260902T142758Z-"))
+}
+
+func TestToDockerPath_NonWindowsReturnsPathUnchanged(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping non-Windows test on Windows")
+	}
+	assert.Equal(t, "/foo/bar/baz", ToDockerPath("/foo/bar/baz"))
+}
+
+func TestToDockerPath_WindowsConvertsBackslashes(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Skipping Windows test on non-Windows platform")
+	}
+	assert.Equal(t, "C:/foo/bar", ToDockerPath("C:\\foo\\bar"))
+}
+
+func TestTitleCase_CapitalizesEachWord(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello world", "Hello World"},
+		{"single", "Single"},
+		{"already capitalized", "Already Capitalized"},
+		{"MIXED case WORDS", "Mixed Case Words"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, titleCase(tt.input))
+		})
+	}
+}
+
+func TestTitleCase_EmptyStringReturnsEmpty(t *testing.T) {
+	assert.Equal(t, "", titleCase(""))
+}
+
+func TestBuildScpArgs_AllFlagsEnabled(t *testing.T) {
+	args := operatorcmd.BuildScpArgs(2222, "/home/user/.ssh/id_rsa", true, true, true, true, "/src/file", "user@host:/dst")
+	assert.Contains(t, args, "-P")
+	assert.Contains(t, args, "2222")
+	assert.Contains(t, args, "-i")
+	assert.Contains(t, args, "/home/user/.ssh/id_rsa")
+	assert.Contains(t, args, "-r")
+	assert.Contains(t, args, "-p")
+	assert.Contains(t, args, "-v")
+	assert.Contains(t, args, "-C")
+	assert.Equal(t, "/src/file", args[len(args)-2])
+	assert.Equal(t, "user@host:/dst", args[len(args)-1])
+}
+
+func TestBuildScpArgs_NoFlagsSet(t *testing.T) {
+	args := operatorcmd.BuildScpArgs(0, "", false, false, false, false, "/src/file", "user@host:/dst")
+	assert.Len(t, args, 2)
+	assert.Equal(t, "/src/file", args[0])
+	assert.Equal(t, "user@host:/dst", args[1])
+}
+
+func TestBuildScpArgs_PartialFlags(t *testing.T) {
+	args := operatorcmd.BuildScpArgs(2222, "", false, false, true, false, "/src/file", "user@host:/dst")
+	assert.Contains(t, args, "-P")
+	assert.Contains(t, args, "2222")
+	assert.Contains(t, args, "-v")
+	assert.NotContains(t, args, "-i")
+	assert.NotContains(t, args, "-r")
+	assert.NotContains(t, args, "-p")
+	assert.NotContains(t, args, "-C")
+}
+
+func TestCopyFile_SmallFile(t *testing.T) {
+	src := filepath.Join(testutil.TempDir(t), "src.txt")
+	dst := filepath.Join(testutil.TempDir(t), "dst.txt")
+	require.NoError(t, os.WriteFile(src, []byte("hello world"), 0o644))
+
+	require.NoError(t, operatorcmd.CopyFile(src, dst))
+
+	data, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, "hello world", string(data))
+}
+
+func TestCopyFile_NonExistentSource(t *testing.T) {
+	dst := filepath.Join(testutil.TempDir(t), "dst.txt")
+	err := operatorcmd.CopyFile("/nonexistent/source/file.txt", dst)
+	assert.Error(t, err)
+}
+
+func TestCopyFile_DestinationInNonExistentDir(t *testing.T) {
+	src := filepath.Join(testutil.TempDir(t), "src.txt")
+	require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
+	dst := filepath.Join(testutil.TempDir(t), "nonexistent", "dst.txt")
+	err := operatorcmd.CopyFile(src, dst)
+	assert.Error(t, err)
+}
+
+func TestCopyFile_PreservesFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - Unix file modes not supported")
+	}
+	src := filepath.Join(testutil.TempDir(t), "src.sh")
+	dst := filepath.Join(testutil.TempDir(t), "dst.sh")
+	require.NoError(t, os.WriteFile(src, []byte("#!/bin/sh\n"), 0o755))
+
+	require.NoError(t, operatorcmd.CopyFile(src, dst))
+
+	info, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o755), info.Mode())
+}
+
+func TestCopyFile_EmptyFile(t *testing.T) {
+	src := filepath.Join(testutil.TempDir(t), "empty.txt")
+	dst := filepath.Join(testutil.TempDir(t), "copy.txt")
+	require.NoError(t, os.WriteFile(src, []byte{}, 0o644))
+
+	require.NoError(t, operatorcmd.CopyFile(src, dst))
+
+	info, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), info.Size())
+}
+
+func TestHarnessRun_ExecMode(t *testing.T) {
+	cfg := defaultHarnessConfig("agent-runtime")
+	args := harnessRun("mcp_basic_read", cfg)
+
+	assert.Equal(t, "docker", args[0])
+	assert.Equal(t, "compose", args[1])
+	assert.Equal(t, "exec", args[2])
+	assert.Equal(t, "-T", args[3])
+	assert.Equal(t, "-e", args[4])
+	assert.Equal(t, string(constants.EnvVar.DemoScenarioID)+"=mcp_basic_read", args[5])
+	assert.Equal(t, "agent-runtime", args[6])
+	assert.Equal(t, "/g8e", args[7])
+	assert.Equal(t, "demos", args[8])
+	assert.Equal(t, "scenarios", args[9])
+	assert.Equal(t, "run", args[10])
+	assert.Contains(t, args, "--mtls-url")
+	assert.Contains(t, args, "https://g8e.local:8443")
+	assert.Contains(t, args, "--public-url")
+	assert.Contains(t, args, "http://g8e.local:8080")
+	assert.Contains(t, args, "--cert")
+	assert.Contains(t, args, constants.ContainerOperatorCert)
+	assert.Contains(t, args, "--key")
+	assert.Contains(t, args, constants.ContainerOperatorKey)
+	assert.Contains(t, args, "--ca")
+	assert.Contains(t, args, constants.ContainerCABundle)
+	assert.Equal(t, "mcp_basic_read", args[len(args)-1])
+}
+
+func TestHarnessRun_RunMode(t *testing.T) {
+	cfg := defaultHarnessConfig("agent-runtime")
+	cfg.UseRun = true
+	args := harnessRun("a2a_discover", cfg)
+
+	assert.Equal(t, "docker", args[0])
+	assert.Equal(t, "compose", args[1])
+	assert.Equal(t, "run", args[2])
+	assert.Equal(t, "--rm", args[3])
+	assert.Equal(t, "-T", args[4])
+	assert.Equal(t, "--no-deps", args[5])
+	assert.Equal(t, "-e", args[6])
+	assert.Equal(t, string(constants.EnvVar.DemoScenarioID)+"=a2a_discover", args[7])
+	assert.Equal(t, "agent-runtime", args[8])
+	assert.Equal(t, "demos", args[9])
+	assert.Equal(t, "scenarios", args[10])
+	assert.Equal(t, "run", args[11])
+}
+
+func TestHarnessRun_PropagatesDemoCorrelation(t *testing.T) {
+	tests := []struct {
+		name   string
+		useRun bool
+	}{
+		{name: "exec mode"},
+		{name: "run mode", useRun: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := defaultHarnessConfig("agent-runtime")
+			cfg.UseRun = tt.useRun
+			cfg.RunID = "healthcare-run-123"
+
+			args := harnessRun("healthcare-gold-card", cfg)
+
+			assert.Contains(t, args, "-e")
+			assert.Contains(t, args, string(constants.EnvVar.DemoRunID)+"=healthcare-run-123")
+			assert.Contains(t, args, string(constants.EnvVar.DemoScenarioID)+"=healthcare-gold-card")
+		})
+	}
+}
+
+func TestHarnessConfigForResult_UsesCanonicalCorrelation(t *testing.T) {
+	result := &compliancev1.DemoScenarioResult{
+		RunId:       "fedramp-run-123",
+		ScenarioRef: &compliancev1.VersionedReference{Id: "fedramp-provision", Version: "1.0.0"},
+	}
+
+	cfg := harnessConfigForResult("agent-runtime", result)
+
+	assert.Equal(t, "fedramp-run-123", cfg.RunID)
+	assert.Equal(t, "fedramp-provision", cfg.ScenarioID)
+	args := harnessRun("shared-harness-scenario", cfg)
+	assert.Contains(t, args, string(constants.EnvVar.DemoScenarioID)+"=fedramp-provision")
+}
+
+func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
+	cfg := defaultHarnessConfig("my-container")
+
+	assert.Equal(t, "my-container", cfg.Container)
+	assert.Equal(t, "https://g8e.local:8443", cfg.MTLSURL)
+	assert.Equal(t, "http://g8e.local:8080", cfg.PublicURL)
+	assert.Equal(t, constants.ContainerOperatorCert, cfg.CertPath)
+	assert.Equal(t, constants.ContainerOperatorKey, cfg.KeyPath)
+	assert.Equal(t, constants.ContainerCABundle, cfg.CAPath)
+	assert.False(t, cfg.UseRun)
+	assert.False(t, cfg.JSON)
+}
+
+func TestHarnessRun_JSONFlagAppendedWhenEnabled(t *testing.T) {
+	cfg := defaultHarnessConfig("agent-runtime")
+	cfg.JSON = true
+	args := harnessRun("fedramp-provision", cfg)
+
+	assert.Contains(t, args, "--json")
+	// The scenario name must still be the last positional argument.
+	assert.Equal(t, "fedramp-provision", args[len(args)-1])
+}
+
+func TestHarnessRun_JSONFlagOmittedWhenDisabled(t *testing.T) {
+	cfg := defaultHarnessConfig("agent-runtime")
+	args := harnessRun("fedramp-provision", cfg)
+
+	assert.NotContains(t, args, "--json")
+}
+
+func TestCheckDemoDirExists_ExistingDirReturnsNil(t *testing.T) {
+	tmp := testutil.TempDir(t)
+	assert.NoError(t, checkDemoDirExists(tmp, "test-org"))
+}
+
+func TestCheckDemoDirExists_NonExistentReturnsNotFound(t *testing.T) {
+	tmp := testutil.TempDir(t)
+	nonExistent := filepath.Join(tmp, "no-such-dir")
+	err := checkDemoDirExists(nonExistent, "no-such-org")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrNotFound))
+}
+
+func TestCheckComposeFileExists_ExistingFileReturnsNil(t *testing.T) {
+	tmp := testutil.TempDir(t)
+	composePath := filepath.Join(tmp, constants.DemosComposeFile)
+	require.NoError(t, os.WriteFile(composePath, []byte("version: '3'"), 0o644))
+	assert.NoError(t, checkComposeFileExists(composePath, "test-org"))
+}
+
+func TestCheckComposeFileExists_NonExistentReturnsNotFound(t *testing.T) {
+	err := checkComposeFileExists("/nonexistent/compose.yml", "test-org")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrNotFound))
+}
+
+func TestConfirmAction_YesResponse(t *testing.T) {
+	cmd := cmdtest.SilentCobraCommand()
+	cmd.SetIn(strings.NewReader("y\n"))
+	assert.True(t, ConfirmAction(cmd, "Proceed?"))
+}
+
+func TestConfirmAction_NoResponse(t *testing.T) {
+	cmd := cmdtest.SilentCobraCommand()
+	cmd.SetIn(strings.NewReader("n\n"))
+	assert.False(t, ConfirmAction(cmd, "Proceed?"))
+}
+
+func TestConfirmAction_EmptyResponse(t *testing.T) {
+	cmd := cmdtest.SilentCobraCommand()
+	cmd.SetIn(strings.NewReader("\n"))
+	assert.False(t, ConfirmAction(cmd, "Proceed?"))
+}
+
+func TestConfirmAction_YesFullWord(t *testing.T) {
+	cmd := cmdtest.SilentCobraCommand()
+	cmd.SetIn(strings.NewReader("yes\n"))
+	assert.True(t, ConfirmAction(cmd, "Proceed?"))
+}
+
+func TestNewDemoEmitter_NilProgramIsNoOp(t *testing.T) {
+	e := NewDemoEmitter(nil)
+	assert.NotNil(t, e)
+	e.Pipeline(tui.StageL1, tui.StatusActive, "tx-1", "detail")
+	e.Ledger(tui.LevelInfo, "message")
+	e.Consensus(constants.ConsensusMemberAxiom, true, true, 2, 3, tui.ConsensusReached, "hash-1")
+}
+
+func TestRunDemosWithTUILifecycle_EarlyQuitCancelsAndWaitsForScenario(t *testing.T) {
+	scenarioStarted := make(chan struct{})
+	scenarioExited := make(chan struct{})
+	program := &stubDemoProgram{
+		run: func() (tea.Model, error) {
+			<-scenarioStarted
+			return tui.NewModel(tui.Options{}), nil
+		},
+		sent: make(chan tea.Msg, 1),
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(ctx context.Context) error {
+		close(scenarioStarted)
+		<-ctx.Done()
+		close(scenarioExited)
+		return ctx.Err()
+	})
+
+	assert.ErrorIs(t, err, constants.ErrDemoScenarioCancelled)
+	assert.ErrorIs(t, err, context.Canceled)
+	assertClosed(t, scenarioExited)
+	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+	require.True(t, ok)
+	assert.Equal(t, tui.ScenarioCancelled, msg.Status)
+}
+
+func TestRunDemosWithTUILifecycle_SuccessBeforeQuitReturnsSuccess(t *testing.T) {
+	program := &stubDemoProgram{sent: make(chan tea.Msg, 1)}
+	program.run = func() (tea.Model, error) {
+		msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+		require.True(t, ok)
+		assert.Equal(t, tui.ScenarioSucceeded, msg.Status)
+		return tui.NewModel(tui.Options{}), nil
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(context.Context) error {
+		return nil
+	})
+
+	assert.NoError(t, err)
+}
+
+func TestRunDemosWithTUILifecycle_ScenarioErrorBeforeQuitReturnsScenarioError(t *testing.T) {
+	errScenario := fmt.Errorf("scenario failed")
+	program := &stubDemoProgram{sent: make(chan tea.Msg, 1)}
+	program.run = func() (tea.Model, error) {
+		msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+		require.True(t, ok)
+		assert.Equal(t, tui.ScenarioFailed, msg.Status)
+		return tui.NewModel(tui.Options{}), nil
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(context.Context) error {
+		return errScenario
+	})
+
+	assert.ErrorIs(t, err, errScenario)
+}
+
+func TestRunDemosWithTUILifecycle_ProgramErrorCancelsAndWaitsForScenario(t *testing.T) {
+	errProgram := fmt.Errorf("program failed")
+	scenarioStarted := make(chan struct{})
+	scenarioExited := make(chan struct{})
+	program := &stubDemoProgram{
+		run: func() (tea.Model, error) {
+			<-scenarioStarted
+			return tui.NewModel(tui.Options{}), errProgram
+		},
+		sent: make(chan tea.Msg, 1),
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(ctx context.Context) error {
+		close(scenarioStarted)
+		<-ctx.Done()
+		close(scenarioExited)
+		return ctx.Err()
+	})
+
+	assert.ErrorIs(t, err, errProgram)
+	assertClosed(t, scenarioExited)
+	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+	require.True(t, ok)
+	assert.Equal(t, tui.ScenarioCancelled, msg.Status)
+}
+
+func TestRunDemosWithTUILifecycle_ParentDeadlineCancelsAndWaitsForScenario(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now())
+	t.Cleanup(cancel)
+	scenarioExited := make(chan struct{})
+	program := &stubDemoProgram{
+		run: func() (tea.Model, error) {
+			return tui.NewModel(tui.Options{}), nil
+		},
+		sent: make(chan tea.Msg, 1),
+	}
+
+	err := runDemosWithTUILifecycle(ctx, program, func(ctx context.Context) error {
+		<-ctx.Done()
+		close(scenarioExited)
+		return ctx.Err()
+	})
+
+	assert.ErrorIs(t, err, constants.ErrDemoScenarioCancelled)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assertClosed(t, scenarioExited)
+	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+	require.True(t, ok)
+	assert.Equal(t, tui.ScenarioCancelled, msg.Status)
+}
+
+type stubDemoProgram struct {
+	run  func() (tea.Model, error)
+	sent chan tea.Msg
+}
+
+func (p *stubDemoProgram) Run() (tea.Model, error) {
+	return p.run()
+}
+
+func (p *stubDemoProgram) Send(msg tea.Msg) {
+	p.sent <- msg
+}
+
+func assertClosed(t *testing.T, ch <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-ch:
+	default:
+		assert.Fail(t, "channel is not closed")
+	}
+}
+
+func TestDemoPrintln_VerboseMode(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = true
+	t.Cleanup(func() { demoVerbose = original })
+
+	var buf bytes.Buffer
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		r.Close()
+	})
+
+	demoPrintln("test output")
+	w.Close()
+	buf.ReadFrom(r)
+	assert.Contains(t, buf.String(), "test output")
+}
+
+func TestDemoPrintln_NonVerboseMode(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = false
+	t.Cleanup(func() { demoVerbose = original })
+
+	var buf bytes.Buffer
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		r.Close()
+	})
+
+	demoPrintln("should not appear")
+	w.Close()
+	buf.ReadFrom(r)
+	assert.Empty(t, buf.String())
+}
+
+func TestDemoPrintf_VerboseMode(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = true
+	t.Cleanup(func() { demoVerbose = original })
+
+	var buf bytes.Buffer
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		r.Close()
+	})
+
+	demoPrintf("formatted %s", "output")
+	w.Close()
+	buf.ReadFrom(r)
+	assert.Contains(t, buf.String(), "formatted output")
+}
+
+func TestDemoStep_CommandSucceeds(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = false
+	t.Cleanup(func() { demoVerbose = original })
+
+	tmp := testutil.TempDir(t)
+	err := demoStep(context.Background(), tmp, "true command", false, "true")
+	assert.NoError(t, err)
+}
+
+func TestDemoStep_CommandFails(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = false
+	t.Cleanup(func() { demoVerbose = original })
+
+	tmp := testutil.TempDir(t)
+	err := demoStep(context.Background(), tmp, "false command", false, "false")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "false command")
+}
+
+func TestDemoStep_FatalError(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = false
+	t.Cleanup(func() { demoVerbose = original })
+
+	tmp := testutil.TempDir(t)
+	err := demoStep(context.Background(), tmp, "critical step", true, "false")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "critical step")
+	assert.NotContains(t, err.Error(), "non-fatal")
+}
+
+func TestDemoScenarioStep_Success(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = false
+	t.Cleanup(func() { demoVerbose = original })
+
+	tmp := testutil.TempDir(t)
+	assert.True(t, demoScenarioStep(context.Background(), tmp, "step that succeeds", []string{"true"}))
+}
+
+func TestDemoScenarioStep_Failure(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = false
+	t.Cleanup(func() { demoVerbose = original })
+
+	tmp := testutil.TempDir(t)
+	assert.False(t, demoScenarioStep(context.Background(), tmp, "step that fails", []string{"false"}))
+}
+
+func TestDemoStepWarn_FailurePrintsWarning(t *testing.T) {
+	original := demoVerbose
+	demoVerbose = false
+	t.Cleanup(func() { demoVerbose = original })
+
+	tmp := testutil.TempDir(t)
+	var buf bytes.Buffer
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		r.Close()
+	})
+
+	demoStepWarn(context.Background(), tmp, "warning step", "false")
+	w.Close()
+	buf.ReadFrom(r)
+	assert.Contains(t, buf.String(), "warning")
+}
+
+func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
+	results := []*compliancev1.DemoScenarioResult{
+		newDemoScenarioResult("1", "First Scenario", demoStatusPassed, "100% good"),
+		newDemoScenarioResult("2", "Second Scenario", demoStatusFailed, "timeout"),
+	}
+
+	var buf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	printResultsTable(cmd, "healthcare", results)
+	output := buf.String()
+	assert.Contains(t, output, "Healthcare")
+	assert.Contains(t, output, "First Scenario")
+	assert.Contains(t, output, "PASS")
+	assert.Contains(t, output, "Second Scenario")
+	assert.Contains(t, output, "FAIL")
+}
+
+func TestRunScenarioWithResults_UnknownOrgReturnsNotFound(t *testing.T) {
+	_, err := runScenarioWithResults(context.Background(), nil, "unknown-org", "/tmp", demoTestRunID, "1")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrNotFound))
+}
+
+func TestRunAllScenarios_UnknownOrgReturnsNotFound(t *testing.T) {
+	cmd := cmdtest.SilentCobraCommand()
+	err := runAllScenarios(context.Background(), nil, cmd, "unknown-org", "/tmp", demoTestRunID)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrNotFound))
+}
+
+func TestRunAllScenarios_CancelledContextStopsBeforeScenarioLookup(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := runAllScenarios(ctx, nil, cmdtest.SilentCobraCommand(), "unknown-org", "/tmp", demoTestRunID)
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.NotErrorIs(t, err, constants.ErrNotFound)
+}
+
+func TestRunAllScenariosWithRunner_PreservesResultsAfterScenarioError(t *testing.T) {
+	scenarioErr := fmt.Errorf("persistence failure")
+	callCount := 0
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		callCount++
+		result := newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")
+		if scenario == "2" {
+			return []*compliancev1.DemoScenarioResult{result}, scenarioErr
+		}
+		return []*compliancev1.DemoScenarioResult{result}, nil
+	}
+
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	err := runAllScenariosWithRunner(context.Background(), nil, cmd, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	assert.ErrorIs(t, err, scenarioErr)
+	assert.Equal(t, 4, callCount, "all scenarios should run even when one errors")
+	for i := 1; i <= 4; i++ {
+		assert.Contains(t, output.String(), fmt.Sprintf("scenario %d", i))
+	}
+}
+
+func TestRunAllScenariosWithRunner_ContextCancellationStopsLoop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	callCount := 0
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		callCount++
+		if scenario == "2" {
+			cancel()
+		}
+		return []*compliancev1.DemoScenarioResult{newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")}, nil
+	}
+
+	err := runAllScenariosWithRunner(ctx, nil, cmdtest.SilentCobraCommand(), constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 2, callCount, "loop should stop after context cancellation")
+}
+
+func TestRunAllScenariosWithRunner_FiltersNilResultsFromErroredScenarios(t *testing.T) {
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		if scenario == "2" {
+			return nil, fmt.Errorf("validation failure")
+		}
+		return []*compliancev1.DemoScenarioResult{newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")}, nil
+	}
+
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	err := runAllScenariosWithRunner(context.Background(), nil, cmd, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	require.Error(t, err)
+	assert.NotContains(t, output.String(), "scenario 2")
+	assert.Contains(t, output.String(), "scenario 1")
+	assert.Contains(t, output.String(), "scenario 3")
+	assert.Contains(t, output.String(), "scenario 4")
+}
+
+func TestRunDemosRun_NoArgsReturnsMissingRequiredField(t *testing.T) {
+	cmd := &cobra.Command{}
+	err := runDemosRun(cmd, []string{}, false, nil)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrMissingRequiredField))
+}
+
+func TestRunDemosRun_TooManyArgsReturnsValidationFailed(t *testing.T) {
+	cmd := &cobra.Command{}
+	err := runDemosRun(cmd, []string{"org", "1", "extra"}, false, nil)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrValidationFailed))
+}

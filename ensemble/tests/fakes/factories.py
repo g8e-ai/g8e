@@ -19,7 +19,6 @@ from app.constants import (
     EscalationRisk,
     EventType,
     G8EE_COMPONENT,
-    HeartbeatType,
     InvestigationStatus,
     OperatorStatus,
     OperatorType,
@@ -53,7 +52,7 @@ from app.models.operators import (
     OperatorDocument,
 )
 from app.models.pubsub_messages import G8eoResultEnvelope, G8eoResultPayload
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 # ---------------------------------------------------------------------------
 # Investigation Factories
@@ -402,7 +401,7 @@ def build_operator_heartbeat(
     """Build a valid HeartbeatSnapshot for testing."""
     return HeartbeatSnapshot(
         timestamp=timestamp or now(),
-        heartbeat_type=HeartbeatType.AUTOMATIC,
+        status="automatic",
         system_identity=HeartbeatSystemIdentity(
             hostname="test-host",
             os="linux",
@@ -410,13 +409,13 @@ def build_operator_heartbeat(
             cpu_count=8,
             memory_mb=16384,
         ),
-        performance=HeartbeatPerformanceMetrics(
+        performance_metrics=HeartbeatPerformanceMetrics(
             cpu_percent=10.0,
             memory_percent=25.0,
             disk_percent=50.0,
             network_latency=5.0,
         ),
-        uptime=HeartbeatUptimeInfo(
+        uptime_info=HeartbeatUptimeInfo(
             uptime_display="1 day, 2:30:15",
             uptime_seconds=95415,
         ),

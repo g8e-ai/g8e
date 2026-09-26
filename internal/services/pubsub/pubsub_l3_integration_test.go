@@ -30,7 +30,6 @@ import (
 // rejects mutation envelopes when L3 verification fails, ensuring fail-closed behavior
 // through the full ProcessEnvelope → L4Warden → Actuator chain.
 func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
-	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -77,7 +76,8 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 				SignerStore:       signerStore,
 				Doctrine:          governance.NewL1Doctrine(),
 			},
-			ConsensusPolicyStore: testConsensusStore(),
+			ConsensusPolicyStore:   testConsensusStore(),
+			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
 	if err != nil {
@@ -96,18 +96,20 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	}
 
 	envelope := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-		Payload:           payloadBytes,
-		StateMerkleRoot:   "test-root",
-		Nonce:             "nonce-test-1",
-		Posture:           constants.PostureNotary,
+		EventType:         string(constants.Event.Operator.Command.Requested),
+
+		ActionType:      string(constants.ActionTypeExecuteBash),
+		TargetResource:  "localhost",
+		Payload:         payloadBytes,
+		StateMerkleRoot: "test-root",
+		Nonce:           "nonce-test-1",
+		Posture:         constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
@@ -168,7 +170,6 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 // accepts mutation envelopes when L3 verification passes, ensuring the full
 // ProcessEnvelope → L4Warden → Actuator chain works correctly.
 func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
-	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -215,7 +216,8 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 				SignerStore:       signerStore,
 				Doctrine:          governance.NewL1Doctrine(),
 			},
-			ConsensusPolicyStore: testConsensusStore(),
+			ConsensusPolicyStore:   testConsensusStore(),
+			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
 	if err != nil {
@@ -234,18 +236,20 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	}
 
 	envelope := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-		Payload:           payloadBytes,
-		StateMerkleRoot:   "test-root",
-		Nonce:             "nonce-test-2",
-		Posture:           constants.PostureNotary,
+		EventType:         string(constants.Event.Operator.Command.Requested),
+
+		ActionType:      string(constants.ActionTypeExecuteBash),
+		TargetResource:  "localhost",
+		Payload:         payloadBytes,
+		StateMerkleRoot: "test-root",
+		Nonce:           "nonce-test-2",
+		Posture:         constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
@@ -304,7 +308,6 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 // TestOperatorPubSubService_L3NilNotary_FailClosed verifies that OperatorPubSubService
 // rejects mutation envelopes when L3Notary is nil, ensuring fail-closed behavior.
 func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
-	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -348,7 +351,8 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 				SignerStore:       signerStore,
 				Doctrine:          governance.NewL1Doctrine(),
 			},
-			ConsensusPolicyStore: testConsensusStore(),
+			ConsensusPolicyStore:   testConsensusStore(),
+			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
 	if err != nil {
@@ -367,18 +371,20 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	}
 
 	envelope := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-		Payload:           payloadBytes,
-		StateMerkleRoot:   "test-root",
-		Nonce:             "nonce-test-3",
-		Posture:           constants.PostureNotary,
+		EventType:         string(constants.Event.Operator.Command.Requested),
+
+		ActionType:      string(constants.ActionTypeExecuteBash),
+		TargetResource:  "localhost",
+		Payload:         payloadBytes,
+		StateMerkleRoot: "test-root",
+		Nonce:           "nonce-test-3",
+		Posture:         constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3

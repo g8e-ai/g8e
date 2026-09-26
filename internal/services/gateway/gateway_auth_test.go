@@ -441,6 +441,30 @@ func TestRouteAuthRegistry_RemovedTrustScriptPaths(t *testing.T) {
 	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.WellKnownPKIFingerprint), "fingerprint must remain RouteAuthNone")
 }
 
+func TestRouteAuthRegistry_BrowserOperatorAndEnsembleProxy(t *testing.T) {
+	registry := NewRouteAuthRegistry(false)
+
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.Operators))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.OperatorsBind))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.OperatorsUnbind))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.OperatorsByID+"op-1"))
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.OperatorsByID+"op-1/stop"))
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.OperatorsValidate))
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.OperatorsStop))
+
+	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleChatPrefix))
+	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleChatPrefix+"/stop"))
+	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleSettingsPrefix+"/user"))
+	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleInvestigations))
+	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.EnsembleOperatorApprovalPrefix+"respond"))
+
+	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.AuditEvents))
+	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.AuditSummary))
+	assert.Equal(t, RouteAuthWebSession, registry.AuthMode(constants.APIPaths.AuditVerify))
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuditRecords))
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuditReceipts))
+}
+
 func TestRouteAuthRegistry_SSEDualAuth(t *testing.T) {
 
 	registry := NewRouteAuthRegistry(false)

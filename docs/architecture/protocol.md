@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-09-24
 Version: v2.1.13
 
-The g8e Protocol Library is the canonical wire contract for governed operations that enter the platform through a g8e ingress. It provides protobuf schemas and generated bindings, JSON constant registries, JSON model schemas, Python Pydantic models, canonicalization and verification helpers, SPIFFE workload identity helpers, and examples for compatible clients and services. Governed mutations use the five-layer interlock; discovery, read-only operations, and the external MCP wrapper have narrower behavior documented in [AI Agents and the g8e Governance Boundary](./agents.md).
+The g8e Protocol Library is the canonical wire contract for governed operations that enter the platform through a g8e ingress. It provides protobuf schemas and generated bindings, JSON constant registries, JSON model schemas, Python Pydantic models, canonicalization and verification helpers, SPIFFE workload identity helpers, and examples for compatible clients and services. Governed mutations use the five-layer interlock; discovery, read-only operations, and the external MCP wrapper have narrower behavior documented in [AI Agents and the g8e Governance Boundary](./agents.md). The event vocabulary, transport ownership, and registry contract are defined in [Event and Action Protocol](./events.md).
 
 - **L1 Doctrine**: Hard gates, forbidden-pattern matching, and threat detection.
 - **L2 Consensus**: K-of-N Ed25519 protocol authorization over the transaction hash when required by posture.

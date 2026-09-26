@@ -9,6 +9,7 @@ import {
   isSuiteSummary,
   isFeedSnapshot,
   isFeedBootstrap,
+  isProofCatalog,
   decodeViewRecord,
   normalizeVerifierFailureSummary,
 } from '../src/contract/validators';
@@ -154,6 +155,48 @@ describe('isFeedBootstrap', () => {
   });
 });
 
+describe('proof catalog contract', () => {
+  const artifactID = 'a'.repeat(64);
+
+  it('accepts a mirror proof catalog entry', () => {
+    expect(() => isProofCatalog({
+      schema_version: '1.0.0',
+      generated_at: '2026-09-20T00:00:00Z',
+      entries: [{
+        artifact_id: artifactID,
+        filename: 'assignment.db',
+        media_type: 'application/vnd.sqlite3',
+        byte_size: 512,
+        sha256: artifactID,
+        classification: 'public_safe',
+        campaign_id: 'campaign-1',
+        generated_at: '2026-09-20T00:00:00Z',
+        verification_command: 'g8e public verify-assignment --db assignment.db --vault-key assignment.vault.key',
+        immutable_url: `/proofs/${artifactID}`,
+      }],
+    })).not.toThrow();
+  });
+
+  it('rejects a catalog entry whose immutable_url does not match the hash', () => {
+    expect(() => isProofCatalog({
+      schema_version: '1.0.0',
+      generated_at: '2026-09-20T00:00:00Z',
+      entries: [{
+        artifact_id: artifactID,
+        filename: 'assignment.db',
+        media_type: 'application/vnd.sqlite3',
+        byte_size: 512,
+        sha256: artifactID,
+        classification: 'public_safe',
+        campaign_id: 'campaign-1',
+        generated_at: '2026-09-20T00:00:00Z',
+        verification_command: 'g8e public verify-assignment --db assignment.db --vault-key assignment.vault.key',
+        immutable_url: '/proofs/deadbeef',
+      }],
+    })).toThrow(ValidationError);
+  });
+});
+
 describe('benchmark observation contract', () => {
   const enrichedAssignment = {
     ...fixtureAssignmentResults[0],
@@ -294,13 +337,15 @@ describe('schema 1.4 assignment contract', () => {
   });
 
   it('rejects an unknown nested activity field', () => {
+    const modelActivity = fixtureEnrichedAssignmentResult.activity_summary!.model_activity;
+    if (modelActivity.availability !== 'observed') throw new Error('fixture must provide observed model activity');
     const bad = {
       ...fixtureEnrichedAssignmentResult,
       activity_summary: {
         ...fixtureEnrichedAssignmentResult.activity_summary!,
         model_activity: {
-          ...fixtureEnrichedAssignmentResult.activity_summary!.model_activity,
-          records: [{ ...fixtureEnrichedAssignmentResult.activity_summary!.model_activity.records[0]!, private_inference_id: 'secret' }],
+          ...modelActivity,
+          records: [{ ...modelActivity.records[0]!, private_inference_id: 'secret' }],
         },
       },
     };
@@ -312,7 +357,7 @@ describe('schema 1.4 assignment contract', () => {
       ...fixtureEnrichedAssignmentResult,
       activity_summary: {
         ...fixtureEnrichedAssignmentResult.activity_summary!,
-        tool_calls: { availability: 'unavailable', unavailable_reason: 'because', records: [] },
+        tool_calls: { availability: 'unavailable', unavailable_reason: 'because' },
       },
     };
     expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);

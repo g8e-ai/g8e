@@ -12,7 +12,7 @@ import time
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
 from app.errors import OllamaEmptyResponseError
-from app.llm import get_llm_provider, Role
+from app.llm import get_generative_lite_provider, Role
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.structured import parse_structured_response
@@ -156,15 +156,15 @@ class MemoryGenerationService:
         system_instructions = f"{memory_persona.get_system_prompt()}\n\nYou are analyzing a technical support conversation for case: {memory.case_title}."
 
         # Use the lite model for memory generation (Codex), with assistant_model as fallback
-        lite_model = settings.llm.resolved_lite_model
+        lite_model = settings.llm.resolved_generative_lite_model
 
         if not lite_model:
             logger.warning(
-                "[MEMORY-GEN] No lite_model or assistant_model configured, skipping AI memory update"
+                "[MEMORY-GEN] No generative lite model configured, skipping AI memory update"
             )
             return None
 
-        provider = get_llm_provider(settings.llm, is_lite=True)
+        provider = get_generative_lite_provider(settings.llm)
         prepare_provider_call(provider, g8e_context=g8e_context)
 
         config = AIGenerationConfigBuilder.build_lite_settings(

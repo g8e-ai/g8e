@@ -20,25 +20,24 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.constants import EventType
+from app.constants import EventType, ThinkingPhase
 from app.models.base import G8eBaseModel, UTCDatetime
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
+from g8e.models.events import ChatThinkingPayload, _SSEEventBody
 
 pytestmark = pytest.mark.unit
 
 
-class _SamplePayload(G8eBaseModel):
-    message: str
-    timestamp: UTCDatetime | None = None
-    count: int | None = None
+def _thinking_payload(message: str = "test", timestamp: UTCDatetime | None = None) -> ChatThinkingPayload:
+    return ChatThinkingPayload(thinking=message, phase=ThinkingPhase.START, timestamp=timestamp)
 
 
 class TestSessionEventWireContract:
     """Contract tests for SessionEventWire serialization."""
 
     def test_from_session_event_creates_wire_structure(self):
-        payload = _SamplePayload(
-            message="test", timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
+        payload = _thinking_payload(
+            message="test", timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC).isoformat()
         )
         session_event = SessionEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
@@ -54,7 +53,7 @@ class TestSessionEventWireContract:
 
         assert wire.web_session_id == "sess-123"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
-        assert wire.event.data["message"] == "test"
+        assert wire.event.data["thinking"] == "test"
         assert wire.event.data["web_session_id"] == "sess-123"
         assert wire.event.data["user_id"] == "user-abc"
         assert wire.event.data["case_id"] == "case-xyz"
@@ -62,7 +61,7 @@ class TestSessionEventWireContract:
         assert wire.event.data["task_id"] == "task-ghi"
 
     def test_from_session_event_with_optional_fields_none(self):
-        payload = _SamplePayload(message="test")
+        payload = _thinking_payload()
         session_event = SessionEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
@@ -74,7 +73,7 @@ class TestSessionEventWireContract:
 
         assert wire.web_session_id == "sess-123"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
-        assert wire.event.data["message"] == "test"
+        assert wire.event.data["thinking"] == "test"
         assert wire.event.data["web_session_id"] == "sess-123"
         assert wire.event.data["user_id"] == "user-abc"
         assert "case_id" not in wire.event.data
@@ -82,7 +81,7 @@ class TestSessionEventWireContract:
         assert "task_id" not in wire.event.data
 
     def test_wire_dump_serializes_to_json_safe_dict(self):
-        payload = _SamplePayload(message="test")
+        payload = _thinking_payload()
         session_event = SessionEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
@@ -99,11 +98,11 @@ class TestSessionEventWireContract:
         assert dumped["event"]["data"]["user_id"] == "user-abc"
         assert dumped["event"]["type"] == "g8e.v1.ai.llm.chat.iteration.thinking.started"
         assert isinstance(dumped["event"]["data"], dict)
-        assert dumped["event"]["data"]["message"] == "test"
+        assert dumped["event"]["data"]["thinking"] == "test"
 
     def test_wire_dump_datetime_emits_z_suffix(self):
         dt = datetime(2026, 1, 15, 10, 30, 0, 123456, tzinfo=UTC)
-        payload = _SamplePayload(message="test", timestamp=dt)
+        payload = _thinking_payload(timestamp=dt.isoformat().replace("+00:00", "Z"))
         session_event = SessionEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
@@ -119,7 +118,7 @@ class TestSessionEventWireContract:
         assert ".123456Z" in dumped["event"]["data"]["timestamp"]
 
     def test_wire_dump_omits_none_optional_fields(self):
-        payload = _SamplePayload(message="test", timestamp=None, count=None)
+        payload = ChatThinkingPayload(thinking="test", phase=ThinkingPhase.START)
         session_event = SessionEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
@@ -131,15 +130,14 @@ class TestSessionEventWireContract:
         dumped = wire.model_dump(mode="json")
 
         assert "timestamp" not in dumped["event"]["data"]
-        assert "count" not in dumped["event"]["data"]
 
 
 class TestBackgroundEventWireContract:
     """Contract tests for BackgroundEventWire serialization."""
 
     def test_from_background_event_creates_wire_structure(self):
-        payload = _SamplePayload(
-            message="test", timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
+        payload = _thinking_payload(
+            message="test", timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC).isoformat()
         )
         background_event = BackgroundEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
@@ -154,14 +152,14 @@ class TestBackgroundEventWireContract:
 
         assert wire.user_id == "user-abc"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
-        assert wire.event.data["message"] == "test"
+        assert wire.event.data["thinking"] == "test"
         assert wire.event.data["user_id"] == "user-abc"
         assert wire.event.data["investigation_id"] == "inv-def"
         assert wire.event.data["case_id"] == "case-xyz"
         assert wire.event.data["task_id"] == "task-ghi"
 
     def test_from_background_event_with_optional_fields_none(self):
-        payload = _SamplePayload(message="test")
+        payload = _thinking_payload()
         background_event = BackgroundEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
@@ -172,14 +170,14 @@ class TestBackgroundEventWireContract:
 
         assert wire.user_id == "user-abc"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
-        assert wire.event.data["message"] == "test"
+        assert wire.event.data["thinking"] == "test"
         assert wire.event.data["user_id"] == "user-abc"
         assert "investigation_id" not in wire.event.data
         assert "case_id" not in wire.event.data
         assert "task_id" not in wire.event.data
 
     def test_wire_dump_serializes_to_json_safe_dict(self):
-        payload = _SamplePayload(message="test")
+        payload = _thinking_payload()
         background_event = BackgroundEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
@@ -193,11 +191,11 @@ class TestBackgroundEventWireContract:
         assert dumped["user_id"] == "user-abc"
         assert dumped["event"]["type"] == "g8e.v1.ai.llm.chat.iteration.thinking.started"
         assert isinstance(dumped["event"]["data"], dict)
-        assert dumped["event"]["data"]["message"] == "test"
+        assert dumped["event"]["data"]["thinking"] == "test"
 
     def test_wire_dump_datetime_emits_z_suffix(self):
         dt = datetime(2026, 1, 15, 10, 30, 0, 123456, tzinfo=UTC)
-        payload = _SamplePayload(message="test", timestamp=dt)
+        payload = _thinking_payload(timestamp=dt.isoformat().replace("+00:00", "Z"))
         background_event = BackgroundEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
@@ -212,7 +210,7 @@ class TestBackgroundEventWireContract:
         assert ".123456Z" in dumped["event"]["data"]["timestamp"]
 
     def test_wire_dump_omits_none_optional_fields(self):
-        payload = _SamplePayload(message="test", timestamp=None, count=None)
+        payload = ChatThinkingPayload(thinking="test", phase=ThinkingPhase.START)
         background_event = BackgroundEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
@@ -223,7 +221,6 @@ class TestBackgroundEventWireContract:
         dumped = wire.model_dump(mode="json")
 
         assert "timestamp" not in dumped["event"]["data"]
-        assert "count" not in dumped["event"]["data"]
 
 
 class TestSSEWireContractInvariants:
@@ -231,7 +228,7 @@ class TestSSEWireContractInvariants:
 
     def test_both_wire_models_use_model_dump_json_mode(self):
         """Both wire models must serialize via model_dump(mode="json")."""
-        payload = _SamplePayload(message="test")
+        payload = _thinking_payload()
 
         session_event = SessionEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
@@ -255,7 +252,7 @@ class TestSSEWireContractInvariants:
 
     def test_event_type_serializes_as_string(self):
         """EventType enum must serialize as string in wire format."""
-        payload = _SamplePayload(message="test")
+        payload = _thinking_payload()
 
         session_event = SessionEvent(
             event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
@@ -273,19 +270,20 @@ class TestSSEWireContractInvariants:
         """Nested G8eBaseModel payloads must serialize recursively."""
 
         class _NestedPayload(G8eBaseModel):
-            inner: _SamplePayload
+            inner: ChatThinkingPayload
 
-        inner = _SamplePayload(message="inner-test")
-        outer = _NestedPayload(inner=inner)
-
-        session_event = SessionEvent(
-            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
-            payload=outer,
+        outer = _NestedPayload(
+            inner=ChatThinkingPayload(thinking="inner-test", phase=ThinkingPhase.START)
+        )
+        session_wire = SessionEventWire(
             web_session_id="sess-123",
             user_id="user-abc",
+            event=_SSEEventBody(
+                type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
+                data=outer.model_dump(mode="json"),
+            ),
         )
-        session_wire = SessionEventWire.from_session_event(session_event)
         dumped = session_wire.model_dump(mode="json")
 
         assert isinstance(dumped["event"]["data"]["inner"], dict)
-        assert dumped["event"]["data"]["inner"]["message"] == "inner-test"
+        assert dumped["event"]["data"]["inner"]["thinking"] == "inner-test"

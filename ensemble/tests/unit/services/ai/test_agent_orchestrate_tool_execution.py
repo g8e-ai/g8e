@@ -83,7 +83,7 @@ def mock_tool_executor():
     mock_user_settings.command_validation = CommandValidationSettings()
     executor._user_settings = mock_user_settings
 
-    from app.utils.validators import get_blacklist_validator, get_whitelist_validator
+    from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
 
     executor._whitelist_validator = get_whitelist_validator()
     executor._blacklist_validator = get_blacklist_validator()

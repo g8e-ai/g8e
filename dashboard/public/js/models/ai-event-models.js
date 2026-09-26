@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { FrontendBaseModel, F } from './base.js';
-import { ThinkingActionType } from '../constants/events.js';
+export const ThinkingPhase = Object.freeze({ START: 'start', UPDATE: 'update', END: 'end' });
 
 /**
  * case.created — emitted as the first SSE event for new conversations.
@@ -34,24 +34,24 @@ export class TextEvent extends FrontendBaseModel {
 /**
  * thinking — LLM extended-thinking chunk SSE event.
  *
- * Shape: { thinking, action_type, web_session_id, investigation_id, case_id }
- * action_type: ThinkingActionType.START | ThinkingActionType.UPDATE | ThinkingActionType.END
+ * Shape: { thinking, phase, web_session_id, investigation_id, case_id }
+ * phase: ThinkingPhase.START | ThinkingPhase.UPDATE | ThinkingPhase.END
  */
 export class ThinkingEvent extends FrontendBaseModel {
     static fields = {
         thinking:         { type: F.string, default: null },
-        action_type:      { type: F.string, default: null },
+        phase:      { type: F.string, default: null },
         web_session_id:   { type: F.string, default: null },
         investigation_id: { type: F.string, default: null },
         case_id:          { type: F.string, default: null },
     };
 
     _validate() {
-        if (this.action_type !== null) {
-            const valid = Object.values(ThinkingActionType);
-            if (!valid.includes(this.action_type)) {
+        if (this.phase !== null) {
+            const valid = Object.values(ThinkingPhase);
+            if (!valid.includes(this.phase)) {
                 const err = new Error('Validation failed');
-                err.validationErrors = [`action_type must be one of: ${valid.join(', ')}`];
+                err.validationErrors = [`phase must be one of: ${valid.join(', ')}`];
                 throw err;
             }
         }

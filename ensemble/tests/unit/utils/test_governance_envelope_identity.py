@@ -138,6 +138,8 @@ class TestEnvelopeIdentityBinding:
         payload_b64 = base64.b64encode(payload_bytes).decode("ascii")
         hash_without_app = compute_transaction_hash(
             action_type=envelope.action_type,
+            event_type=envelope.event_type,
+            protocol_version=envelope.protocol_version,
             target_resource=envelope.target_resource,
             payload=payload_b64,
             state_merkle_root="root",
@@ -185,12 +187,16 @@ class TestHashParityVectors:
         assert len(vectors) >= 6
 
     def test_all_vectors_match_go_expected_hashes(self):
-        from g8e.models.governance import compute_transaction_hash
+        from g8e.models.governance import (
+            GOVERNANCE_PROTOCOL_VERSION_V1,
+            compute_transaction_hash,
+        )
 
         vectors = self._load_vectors()
         for v in vectors:
             result = compute_transaction_hash(
                 action_type=v["action_type"],
+                protocol_version=v.get("protocol_version") or GOVERNANCE_PROTOCOL_VERSION_V1,
                 target_resource=v["target_resource"],
                 payload=v["payload_b64"],
                 state_merkle_root=v["state_merkle_root"],

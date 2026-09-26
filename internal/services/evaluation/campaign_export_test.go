@@ -329,9 +329,9 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	assert.Equal(t, uint32(3), evaluationSummary.HeadlineMetrics.PassRate.EligibleCount)
 	assert.Equal(t, uint32(0), evaluationSummary.HeadlineMetrics.PassRate.UnavailableCount)
 	assert.Equal(t, "milliseconds", evaluationSummary.HeadlineMetrics.LatencyP50MS.Unit)
-	assert.Equal(t, "no_scored_calls", evaluationSummary.HeadlineMetrics.LatencyP50MS.UnavailableReason)
+	assert.Equal(t, "source_unavailable", evaluationSummary.HeadlineMetrics.LatencyP50MS.UnavailableReason)
 	assert.Equal(t, "tokens_per_second", evaluationSummary.HeadlineMetrics.OutputThroughputP50.Unit)
-	assert.Equal(t, "no_scored_calls", evaluationSummary.HeadlineMetrics.OutputThroughputP50.UnavailableReason)
+	assert.Equal(t, "incomplete_contributor_evidence", evaluationSummary.HeadlineMetrics.OutputThroughputP50.UnavailableReason)
 	assert.Equal(t, report.GetReportDigestRef().GetSha256(), evaluationSummary.VerificationMetadata.ReportDigest)
 	assert.Equal(t, report.GetVerifiedPopulationDigest(), evaluationSummary.VerificationMetadata.PopulationDigest)
 

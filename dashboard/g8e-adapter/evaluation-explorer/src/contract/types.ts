@@ -56,6 +56,8 @@ export const PUBLIC_EVIDENCE_KINDS = [
   'efficiency_observation',
   'statistical_analysis',
   'source_manifest',
+  'assignment_audit_slice',
+  'assignment_audit_vault_key',
 ] as const;
 export type PublicEvidenceKind = (typeof PUBLIC_EVIDENCE_KINDS)[number];
 
@@ -579,11 +581,10 @@ export interface PublicGovernedActionActivityRecord {
   evidence_source: PublicActivityEvidenceSource;
 }
 
-export interface PublicActivityFamily<T> {
-  availability: ActivityAvailability;
-  unavailable_reason?: PublicUnavailableReason;
-  records: T[];
-}
+export type PublicActivityFamily<T> =
+  | { availability: 'observed'; records: T[] }
+  | { availability: 'unavailable'; unavailable_reason: PublicUnavailableReason }
+  | { availability: 'not_applicable' };
 
 export interface PublicAssignmentActivity {
   model_activity: PublicActivityFamily<PublicModelActivityRecord>;
@@ -747,4 +748,26 @@ export interface FeedHistoryPage {
   cursor?: string;
   has_more: boolean;
   limit: number;
+}
+
+/** One content-addressed artifact from the mirror proof catalog. */
+export interface ProofCatalogEntry {
+  artifact_id: string;
+  filename: string;
+  media_type: string;
+  byte_size: number;
+  sha256: string;
+  classification: string;
+  campaign_id: string;
+  source_run_id?: string;
+  generated_at: string;
+  verification_command: string;
+  immutable_url: string;
+}
+
+/** Full public proof catalog served by the mirror. */
+export interface ProofCatalog {
+  schema_version: string;
+  entries: ProofCatalogEntry[];
+  generated_at: string;
 }

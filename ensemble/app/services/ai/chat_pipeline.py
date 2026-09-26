@@ -155,6 +155,9 @@ class ChatPipelineService:
         # Validate credentials for each configured tier
         validation_errors = []
 
+        from app.decision.providers.jev import JevProvider
+        from app.decision.validation import validate_jev_lite_coexistence
+
         # Provider class mapping for validation
         provider_classes = {
             LLMProvider.OPENAI.value: OpenAIProvider,
@@ -180,6 +183,18 @@ class ChatPipelineService:
                 validation_errors.append(
                     f"{tier_name.capitalize()} model '{model}' configured but no provider selected."
                 )
+                return
+
+            if provider == LLMProvider.JEV.value and tier_name != "lite":
+                validation_errors.append(
+                    f"{tier_name.capitalize()} provider 'jev' is only supported for the lite role."
+                )
+                return
+
+            if provider == LLMProvider.JEV.value:
+                provider_errors = JevProvider.validate_config(api_key, endpoint)
+                for error in provider_errors:
+                    validation_errors.append(f"{tier_name.capitalize()} {error}")
                 return
 
             provider_class = provider_classes.get(provider)
@@ -227,6 +242,16 @@ class ChatPipelineService:
                 endpoint_override=lite_endpoint_override,
             )
             check_tier("lite", lite, provider, api_key, endpoint)
+
+        lite_provider, _, _, _ = llm.resolve(
+            "lite",
+            provider_override=lite_provider_override,
+            api_key_override=lite_api_key_override,
+            endpoint_override=lite_endpoint_override,
+            model_override=lite_model_override,
+        )
+        if lite_provider == LLMProvider.JEV.value:
+            validation_errors.extend(validate_jev_lite_coexistence(llm))
 
         if validation_errors:
             raise ConfigurationError(

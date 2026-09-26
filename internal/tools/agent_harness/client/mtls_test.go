@@ -30,7 +30,8 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/v2/internal/governance"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
@@ -154,7 +155,7 @@ func TestMTLSServerClient_Handshake(t *testing.T) {
 			return
 		}
 
-		var env governance.GovernanceEnvelope
+		var env govpkg.GovernanceEnvelope
 		if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
 			t.Errorf("Failed to decode envelope: %v", err)
 			http.Error(w, "Bad request", http.StatusBadRequest)
@@ -199,8 +200,8 @@ func TestMTLSServerClient_Handshake(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 
-	env := &governance.GovernanceEnvelope{
-		ProtocolVersion: "1.0",
+	env := &govpkg.GovernanceEnvelope{
+		ProtocolVersion: govpkg.GovernanceProtocolVersionV1,
 		OperatorId:      "test-operator",
 		Timestamp:       timestamppb.Now(),
 		ActionType:      "TEST_ACTION",
@@ -217,7 +218,7 @@ func TestMTLSServerClient_Handshake(t *testing.T) {
 		},
 	}
 
-	id, err := governance.GenerateMessageID(env)
+	id, err := govpkg.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("Failed to generate MessageID: %v", err)
 	}
@@ -297,10 +298,11 @@ func TestMTLSServerClient_InvalidClientCert(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_Integration(t *testing.T) {
-	env := &governance.GovernanceEnvelope{
-		ProtocolVersion: "1.0",
+	env := &govpkg.GovernanceEnvelope{
+		ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 		OperatorId:      "test-operator",
 		Timestamp:       timestamppb.Now(),
+		EventType:       string(constants.EventOperatorCommandRequested),
 		ActionType:      "EXECUTE_BASH",
 		TargetResource:  "localhost",
 		Payload:         []byte("echo test"),
@@ -315,7 +317,7 @@ func TestGovernanceEnvelope_Integration(t *testing.T) {
 		},
 	}
 
-	id, err := governance.GenerateMessageID(env)
+	id, err := govpkg.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("Failed to generate MessageID: %v", err)
 	}
@@ -331,7 +333,7 @@ func TestGovernanceEnvelope_Integration(t *testing.T) {
 		t.Fatalf("Failed to marshal envelope: %v", err)
 	}
 
-	var decoded governance.GovernanceEnvelope
+	var decoded govpkg.GovernanceEnvelope
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		t.Fatalf("Failed to unmarshal envelope: %v", err)
 	}

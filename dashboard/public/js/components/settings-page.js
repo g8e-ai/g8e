@@ -254,7 +254,7 @@ export class SettingsPage {
         document.getElementById('settings-body').style.display = 'none';
 
         try {
-            const res = await fetch(ApiPaths.settings.list(), { credentials: 'include' });
+            const res = await fetch(`${window.G8E_GATEWAY_URL}${ApiPaths.settings.list()}`, { credentials: 'include' });
             if (res.status === 401 || res.status === 403) {
                 this._showStatus('error', 'Access denied. Admin role required.');
                 document.getElementById('settings-loading').style.display = 'none';
@@ -294,7 +294,7 @@ export class SettingsPage {
         this.dirty.forEach((val, key) => { updates[key] = val; });
 
         try {
-            const res = await fetch(ApiPaths.settings.save(), {
+            const res = await fetch(`${window.G8E_GATEWAY_URL}${ApiPaths.settings.save()}`, {
                 method: 'PUT',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },

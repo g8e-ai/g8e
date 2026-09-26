@@ -21,8 +21,10 @@ import (
 // caller must Close it. Used for log files that require streaming append
 // (WriteFile's atomic tmp+rename is wrong for logs).
 func (fs *localFS) OpenForAppend(ctx context.Context, relPath string, mode os.FileMode) (*os.File, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	parent := filepath.Dir(absPath)
@@ -40,8 +42,10 @@ func (fs *localFS) OpenForAppend(ctx context.Context, relPath string, mode os.Fi
 // constants.ErrNotFound if the file does not exist. The caller must Close
 // the returned handle. Used for tail/follow operations on log files.
 func (fs *localFS) OpenForRead(ctx context.Context, relPath string) (*os.File, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 	absPath := fs.Resolve(relPath)
 	f, err := os.Open(absPath)

@@ -762,7 +762,7 @@ class TestTokenAccumulation:
         assert complete_chunk.data.token_usage is not None
         assert complete_chunk.data.token_usage.input_tokens == 0
         assert complete_chunk.data.token_usage.output_tokens == 0
-        assert complete_chunk.data.token_usage.cache_tokens == 0
+        assert complete_chunk.data.token_usage.cache_tokens is None
         assert complete_chunk.data.token_usage.usage_reported is False
 
 

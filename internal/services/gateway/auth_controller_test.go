@@ -38,6 +38,7 @@ func setupTestBootstrapController(t *testing.T) (*BootstrapController, *config.C
 		PKI:                infra.PKI,
 		CLISessionSvc:      infra.CLISessionSvc,
 		OperatorSessionSvc: infra.OperatorSessionSvc,
+		EmbeddedOperator:   infra.Embedded,
 		Responder:          infra.Responder,
 	}), infra.Cfg
 }

@@ -45,7 +45,7 @@ from app.models.base import G8eBaseModel
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.settings import TLSConfig
 from app.utils.aiohttp_session import create_component_http_session
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 

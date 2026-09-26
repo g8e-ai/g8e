@@ -54,15 +54,10 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 			t.Logf("operator list attempt error: %v", err)
 			return false
 		}
-		for i := range operators.Operators {
-			if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
-				active = &operators.Operators[i]
-				return true
-			}
-		}
-		return false
+		active = findLiveActiveRemoteOperator(operators.Operators)
+		return active != nil
 	}, 180*time.Second, 3*time.Second,
-		"an active operator must appear in the registry on an approved stack")
+		"a live active remote operator must appear in the registry on an approved stack")
 	require.NotNil(t, active, "active operator must be discovered")
 	require.NotEmpty(t, active.OperatorSessionID,
 		"active operator must have a non-empty session ID — persisted identity must survive")
@@ -99,11 +94,11 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		second = findActiveRemoteOperator(operators.Operators)
+		second = findOperatorByID(operators.Operators, active.ID)
 		return second != nil && second.UpdatedAt.After(firstUpdatedAt)
 	}, 45*time.Second, 500*time.Millisecond,
-		"heartbeat UpdatedAt did not advance past %s within 45s — pub/sub heartbeat path may have failed",
-		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
+		"heartbeat UpdatedAt for operator %s did not advance past %s within 45s — pub/sub heartbeat path may have failed",
+		active.ID, firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),
 		"second heartbeat observation must be strictly later than the first")
 	assert.Equal(t, constants.OperatorStatusActive, second.Status,

@@ -11,6 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -75,6 +76,11 @@ type OperatorSession struct {
 // Event represents an event in the audit log (append-only)
 type Event struct {
 	ID                  int64
+	Seq                 int64
+	PrevHash            string
+	ContentDigest       string
+	Hash                string
+	TransactionID       string
 	OperatorSessionID   string
 	Timestamp           time.Time
 	Type                constants.EventType
@@ -233,6 +239,10 @@ func (ass *SQLAuditStore) initDatabase() error {
 		db.Close()
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
+	if err := MigrateEventChainColumns(db, ass.logger, ass.encryptionVault); err != nil {
+		db.Close()
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
+	}
 
 	ass.db = db
 	ass.commitmentLedger = NewCommitmentLedger(db, ass.logger)
@@ -265,7 +275,7 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		existing[name] = true
 	}
 
-	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json"} {
+	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json", "event_type"} {
 		if existing[col] {
 			continue
 		}
@@ -323,6 +333,11 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE TABLE IF NOT EXISTS events (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	seq INTEGER UNIQUE,
+	prev_hash TEXT,
+	content_digest TEXT,
+	hash TEXT,
+	transaction_id TEXT,
 	operator_session_id TEXT,
 	timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
 	type TEXT NOT NULL,
@@ -358,6 +373,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 	operator_session_id TEXT,
 	requestor_user_id TEXT,
 	acting_app_id TEXT,
+	event_type TEXT,
 	action_type TEXT NOT NULL,
 	target_resource TEXT,
 	status TEXT NOT NULL,
@@ -459,16 +475,19 @@ func (ass *SQLAuditStore) GetOperatorSession(id string) (*OperatorSession, error
 	return &session, nil
 }
 
-func (ass *SQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *Event) error {
+func (ass *SQLAuditStore) requireExistingSessionConn(conn *sql.Conn, event *Event) error {
 	if event == nil {
 		return constants.ErrAuditEventNil
+	}
+	if event.Type == constants.EventPlatformAuditChainCheckpointed {
+		return nil
 	}
 	if event.OperatorSessionID == "" || strings.TrimSpace(event.OperatorSessionID) != event.OperatorSessionID {
 		return constants.ErrAuditSessionMissing
 	}
 
 	var exists int
-	err := tx.QueryRow(`SELECT 1 FROM sessions WHERE id = ?`, event.OperatorSessionID).Scan(&exists)
+	err := conn.QueryRowContext(context.Background(), `SELECT 1 FROM sessions WHERE id = ?`, event.OperatorSessionID).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("%w: %s", constants.ErrAuditSessionUnknown, event.OperatorSessionID)
 	}
@@ -476,6 +495,44 @@ func (ass *SQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *Event) err
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreVerifySessionFailed, err)
 	}
 	return nil
+}
+
+func (ass *SQLAuditStore) prepareAuditEventInsert(event *Event) (PreparedAuditEventInsert, error) {
+	stdout, stdoutTruncated := ass.truncateOutput(event.CommandStdout)
+	stderr, stderrTruncated := ass.truncateOutput(event.CommandStderr)
+
+	contentTextBytes, err := ass.encryptContent(event.ContentText)
+	if err != nil {
+		return PreparedAuditEventInsert{}, fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptContentFailed, err)
+	}
+
+	stdoutBytes, err := ass.encryptContent(stdout)
+	if err != nil {
+		return PreparedAuditEventInsert{}, fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStdoutFailed, err)
+	}
+
+	stderrBytes, err := ass.encryptContent(stderr)
+	if err != nil {
+		return PreparedAuditEventInsert{}, fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStderrFailed, err)
+	}
+
+	encryptedFlag := 0
+	if ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked() {
+		encryptedFlag = 1
+	}
+
+	return PreparedAuditEventInsert{
+		Event:            event,
+		TimestampStr:     timesvc.FormatTimestamp(event.Timestamp),
+		ContentTextBytes: contentTextBytes,
+		StdoutBytes:      stdoutBytes,
+		StderrBytes:      stderrBytes,
+		StdoutTruncated:  stdoutTruncated,
+		StderrTruncated:  stderrTruncated,
+		EncryptedFlag:    encryptedFlag,
+		StdoutPlaintext:  stdout,
+		StderrPlaintext:  stderr,
+	}, nil
 }
 
 // RecordEvents records multiple events in a single database transaction.
@@ -490,65 +547,16 @@ func (ass *SQLAuditStore) RecordEvents(events []*Event) error {
 	ass.muWrites.Add(1)
 	defer ass.muWrites.Done()
 
-	return ass.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
-		query := `
-		INSERT INTO events (
-			operator_session_id, timestamp, type, content_text,
-			command_raw, command_exit_code, command_stdout, command_stderr,
-			execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`
-
-		stmt, err := tx.Prepare(query)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStorePrepareBatchFailed, err)
-		}
-		defer stmt.Close()
-
+	return ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
 		for _, event := range events {
-			if err := ass.requireExistingSessionTx(tx, event); err != nil {
+			if err := ass.requireExistingSessionConn(conn, event); err != nil {
 				return err
 			}
-
-			stdout, stdoutTruncated := ass.truncateOutput(event.CommandStdout)
-			stderr, stderrTruncated := ass.truncateOutput(event.CommandStderr)
-
-			encryptedFlag := 0
-			if ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked() {
-				encryptedFlag = 1
-			}
-
-			contentTextBytes, err := ass.encryptContent(event.ContentText)
+			prepared, err := ass.prepareAuditEventInsert(event)
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptContentFailed, err)
+				return err
 			}
-
-			stdoutBytes, err := ass.encryptContent(stdout)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStdoutFailed, err)
-			}
-
-			stderrBytes, err := ass.encryptContent(stderr)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStderrFailed, err)
-			}
-
-			_, err = stmt.Exec(
-				event.OperatorSessionID,
-				timesvc.FormatTimestamp(event.Timestamp),
-				event.Type,
-				contentTextBytes,
-				event.CommandRaw,
-				event.CommandExitCode,
-				stdoutBytes,
-				stderrBytes,
-				event.ExecutionDurationMs,
-				true, // stored_locally
-				stdoutTruncated,
-				stderrTruncated,
-				encryptedFlag,
-			)
-			if err != nil {
+			if _, _, _, err := AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrAuditStoreExecuteBatchFailed, err)
 			}
 		}
@@ -572,11 +580,11 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 	defer ass.muWrites.Done()
 
 	var eventID int64
-	err := ass.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+	err := ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
 		// Auto-create session row for app sessions to avoid FK race conditions
 		// This mirrors the behavior in RecordActionReceipt
 		if event.OperatorSessionID != "" {
-			if _, err := tx.Exec(
+			if _, err := conn.ExecContext(context.Background(),
 				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
 				event.OperatorSessionID, string(constants.SessionTypeApp), event.OperatorSessionID, event.OperatorSessionID,
 			); err != nil {
@@ -584,70 +592,28 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 			}
 		}
 
-		if err := ass.requireExistingSessionTx(tx, event); err != nil {
+		if err := ass.requireExistingSessionConn(conn, event); err != nil {
 			return err
 		}
 
-		stdout, stdoutTruncated := ass.truncateOutput(event.CommandStdout)
-		stderr, stderrTruncated := ass.truncateOutput(event.CommandStderr)
-
-		contentTextBytes, err := ass.encryptContent(event.ContentText)
+		prepared, err := ass.prepareAuditEventInsert(event)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptContentFailed, err)
+			return err
 		}
 
-		stdoutBytes, err := ass.encryptContent(stdout)
+		id, _, _, err := AppendPreparedAuditEvent(context.Background(), conn, prepared)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStdoutFailed, err)
+			return err
 		}
-
-		stderrBytes, err := ass.encryptContent(stderr)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStderrFailed, err)
-		}
-
-		query := `
-		INSERT INTO events (
-			operator_session_id, timestamp, type, content_text,
-			command_raw, command_exit_code, command_stdout, command_stderr,
-			execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`
-
-		encryptedFlag := 0
-		if ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked() {
-			encryptedFlag = 1
-		}
-
-		result, err := tx.Exec(query,
-			event.OperatorSessionID,
-			timesvc.FormatTimestamp(event.Timestamp),
-			event.Type,
-			contentTextBytes,
-			event.CommandRaw,
-			event.CommandExitCode,
-			stdoutBytes,
-			stderrBytes,
-			event.ExecutionDurationMs,
-			true, // stored_locally
-			stdoutTruncated,
-			stderrTruncated,
-			encryptedFlag,
-		)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordEventFailed, err)
-		}
-
-		id, _ := result.LastInsertId()
 		eventID = id
 
 		ass.logger.Info("Event recorded",
 			"event_id", eventID,
 			"type", event.Type,
 			"operator_session_id", event.OperatorSessionID,
-			"stdout_truncated", stdoutTruncated,
-			"stderr_truncated", stderrTruncated,
-			"encrypted", encryptedFlag,
+			"stdout_truncated", prepared.StdoutTruncated,
+			"stderr_truncated", prepared.StderrTruncated,
+			"encrypted", prepared.EncryptedFlag,
 			"exit_code", event.CommandExitCode)
 
 		return nil
@@ -656,8 +622,88 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 	return eventID, err
 }
 
-// RecordActionReceipt records a signed ActionReceipt in the audit store.
-// This is the authoritative transaction-native audit record.
+// RecordEventChained records an audit event and returns the chain metadata for acknowledgement.
+func (ass *SQLAuditStore) RecordEventChained(event *Event) (int64, int64, string, error) {
+	if ass == nil {
+		return 0, 0, "", nil
+	}
+	if ass.db == nil {
+		return 0, 0, "", constants.ErrAuditStoreDBNotInitialized
+	}
+
+	ass.muWrites.Add(1)
+	defer ass.muWrites.Done()
+
+	var eventID, seq int64
+	var hash string
+	err := ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		if event.OperatorSessionID != "" {
+			if _, err := conn.ExecContext(context.Background(),
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+				event.OperatorSessionID, string(constants.SessionTypeApp), event.OperatorSessionID, event.OperatorSessionID,
+			); err != nil {
+				return fmt.Errorf("audit store: create app session: %w", err)
+			}
+		}
+
+		if err := ass.requireExistingSessionConn(conn, event); err != nil {
+			return err
+		}
+
+		prepared, err := ass.prepareAuditEventInsert(event)
+		if err != nil {
+			return err
+		}
+
+		id, chainSeq, chainHash, err := AppendPreparedAuditEvent(context.Background(), conn, prepared)
+		if err != nil {
+			return err
+		}
+		eventID = id
+		seq = chainSeq
+		hash = chainHash
+
+		ass.logger.Info("Event recorded",
+			"event_id", eventID,
+			"type", event.Type,
+			"operator_session_id", event.OperatorSessionID,
+			"seq", seq,
+			"stdout_truncated", prepared.StdoutTruncated,
+			"stderr_truncated", prepared.StderrTruncated,
+			"encrypted", prepared.EncryptedFlag,
+			"exit_code", event.CommandExitCode)
+
+		return nil
+	})
+
+	return eventID, seq, hash, err
+}
+
+// GetEventChainMetaByTransactionID returns chain metadata for an idempotent audit append.
+func (ass *SQLAuditStore) GetEventChainMetaByTransactionID(transactionID string) (int64, string, bool, error) {
+	if ass == nil || ass.db == nil {
+		return 0, "", false, constants.ErrAuditStoreDBNotInitialized
+	}
+	if transactionID == "" {
+		return 0, "", false, nil
+	}
+
+	var seq int64
+	var hash string
+	err := ass.db.QueryRowContext(context.Background(), `
+		SELECT seq, hash FROM events WHERE transaction_id = ? ORDER BY id DESC LIMIT 1
+	`, transactionID).Scan(&seq, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", false, nil
+	}
+	if err != nil {
+		return 0, "", false, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryEventsFailed, err)
+	}
+	return seq, hash, true, nil
+}
+
+// RecordActionReceipt upserts the latest-stage receipt projection and appends a
+// chained operator.receipt.recorded fact for every stage write.
 func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
 	if ass == nil {
 		return nil
@@ -665,22 +711,12 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 	if ass.db == nil {
 		return constants.ErrAuditStoreDBNotInitialized
 	}
+	if record == nil {
+		return constants.ErrAuditStoreRecordReceiptFailed
+	}
 
 	ass.muWrites.Add(1)
 	defer ass.muWrites.Done()
-
-	// Gateway mode never pre-populates sessions; auto-create a row so the FK is satisfied.
-	// When OperatorSessionID is empty (e.g. platform enrollment governance actions
-	// that are not bound to an operator session), insert NULL so the nullable
-	// operator_session_id column accepts the row without violating the FK.
-	var sessionID sql.NullString
-	if record.OperatorSessionID != "" {
-		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
-		_, _ = ass.db.ExecWithRetry(
-			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
-			record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
-		)
-	}
 
 	receiptJSON := []byte(nil)
 	if record.ActionReceipt != nil {
@@ -691,14 +727,69 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		}
 	}
 
+	timestamp := record.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now().UTC()
+	}
+
+	err := ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		if record.OperatorSessionID != "" {
+			if _, err := conn.ExecContext(context.Background(),
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+				record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
+			); err != nil {
+				return fmt.Errorf("audit store: create operator session: %w", err)
+			}
+		}
+
+		if err := ass.upsertActionReceiptConn(conn, record, receiptJSON, timestamp); err != nil {
+			return err
+		}
+
+		chainEvent := &Event{
+			OperatorSessionID: record.OperatorSessionID,
+			Timestamp:         timestamp,
+			Type:              constants.EventOperatorReceiptRecorded,
+			ContentText:       string(receiptJSON),
+			TransactionID:     record.TransactionID,
+		}
+		if chainEvent.OperatorSessionID != "" {
+			if err := ass.requireExistingSessionConn(conn, chainEvent); err != nil {
+				return err
+			}
+		}
+		prepared, err := ass.prepareAuditEventInsert(chainEvent)
+		if err != nil {
+			return err
+		}
+		_, _, _, err = AppendPreparedAuditEvent(context.Background(), conn, prepared)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+	}
+
+	ass.logger.Info("ActionReceipt recorded",
+		"transaction_id", record.TransactionID,
+		"status", record.Status)
+
+	return nil
+}
+
+func (ass *SQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *models.ActionReceiptRecord, receiptJSON []byte, timestamp time.Time) error {
+	var sessionID sql.NullString
+	if record.OperatorSessionID != "" {
+		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
+	}
+
 	query := `
 	INSERT INTO receipts (
 		transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(transaction_id) DO UPDATE SET
 		investigation_id = excluded.investigation_id,
 		status = excluded.status,
@@ -710,7 +801,7 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		timestamp = excluded.timestamp
 	`
 
-	_, err := ass.db.ExecWithRetry(query,
+	_, err := conn.ExecContext(context.Background(), query,
 		record.TransactionID,
 		record.TransactionHash,
 		record.InvestigationID,
@@ -718,6 +809,7 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		sessionID,
 		record.RequestorUserID,
 		record.ActingAppID,
+		record.EventType,
 		record.ActionType,
 		record.TargetResource,
 		record.Status,
@@ -728,17 +820,32 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		record.SignerKeyID,
 		record.Signature,
 		receiptJSON,
-		timesvc.FormatTimestamp(record.Timestamp),
+		timesvc.FormatTimestamp(timestamp),
 	)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+		return fmt.Errorf("audit store: upsert receipt projection: %w", err)
+	}
+	return nil
+}
+
+// GetAuditChainHead returns the latest chained audit event sequence and hash.
+func (ass *SQLAuditStore) GetAuditChainHead(_ context.Context) (int64, string, error) {
+	if ass == nil || ass.db == nil {
+		return 0, "", constants.ErrAuditStoreDisabled
 	}
 
-	ass.logger.Info("ActionReceipt recorded",
-		"transaction_id", record.TransactionID,
-		"status", record.Status)
-
-	return nil
+	var headSeq int64
+	var headHash string
+	err := ass.db.QueryRowWithRetry(`
+		SELECT seq, hash FROM events WHERE seq IS NOT NULL ORDER BY seq DESC LIMIT 1
+	`).Scan(&headSeq, &headHash)
+	if err == sql.ErrNoRows {
+		return 0, auditChainGenesisPrevHash, nil
+	}
+	if err != nil {
+		return 0, "", fmt.Errorf("audit store: chain head: %w", err)
+	}
+	return headSeq, headHash, nil
 }
 
 func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionReceipt, error) {
@@ -784,7 +891,7 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 
 	query := `
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -800,7 +907,7 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 	var receiptJSON sql.NullString
 	err := ass.db.QueryRowWithRetry(query, transactionID).Scan(
 		&r.TransactionID, &r.TransactionHash, &investigationID, &r.OperatorID, &sessionID,
-		&r.RequestorUserID, &r.ActingAppID,
+		&r.RequestorUserID, &r.ActingAppID, &r.EventType,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
 		&r.SignerKeyID, &r.Signature, &receiptJSON, &timestampStr,
@@ -869,7 +976,7 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 	var query strings.Builder
 	query.WriteString(`
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -898,7 +1005,7 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
-			&row.record.RequestorUserID, &row.record.ActingAppID,
+			&row.record.RequestorUserID, &row.record.ActingAppID, &row.record.EventType,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
@@ -937,7 +1044,7 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 
 	query := `
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -960,7 +1067,7 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
-			&row.record.RequestorUserID, &row.record.ActingAppID,
+			&row.record.RequestorUserID, &row.record.ActingAppID, &row.record.EventType,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
@@ -1439,25 +1546,19 @@ func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {
 			return err
 		}
 
-		// 2. Delete events older than retention period
-		result, err := db.ExecWithRetry("DELETE FROM events WHERE timestamp < ?", cutoff)
-		if err != nil {
-			logger.Error("Failed to prune old events", string(constants.ConnectionStateError), err)
+		// 2. Checkpoint and delete chained events older than retention period
+		if err := PruneChainedAuditEvents(ctx, db, logger, cutoff); err != nil {
+			logger.Error("Failed to prune chained audit events", string(constants.ConnectionStateError), err)
 			return err
 		}
 
-		rowsDeleted, _ := result.RowsAffected()
-		if rowsDeleted > 0 {
-			logger.Info("Pruned old events", "rows_deleted", rowsDeleted)
-		}
-
 		// 3. Delete receipts older than retention period
-		result, err = db.ExecWithRetry("DELETE FROM receipts WHERE timestamp < ?", cutoff)
+		result, err := db.ExecWithRetry("DELETE FROM receipts WHERE timestamp < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old receipts", string(constants.ConnectionStateError), err)
 			return err
 		}
-		rowsDeleted, _ = result.RowsAffected()
+		rowsDeleted, _ := result.RowsAffected()
 		if rowsDeleted > 0 {
 			logger.Info("Pruned old receipts", "rows_deleted", rowsDeleted)
 		}
