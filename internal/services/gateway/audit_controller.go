@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
@@ -409,4 +410,47 @@ func (c *AuditController) handleAuditReport(w http.ResponseWriter, r *http.Reque
 		Success: true,
 		Report:  report,
 	})
+}
+
+func (c *AuditController) handleAuditVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.auditStore == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrAuditStoreDisabled.Error())
+		return
+	}
+
+	fromSeq := int64(0)
+	if raw := strings.TrimSpace(r.URL.Query().Get("from_seq")); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed < 0 {
+			c.responder.Error(w, http.StatusBadRequest, "from_seq must be a non-negative integer")
+			return
+		}
+		fromSeq = parsed
+	}
+
+	headSeq, headHash, err := c.auditStore.GetAuditChainHead(r.Context())
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditVerify: %w", err).Error())
+		return
+	}
+
+	verifyErr := c.auditStore.VerifyChain(r.Context(), fromSeq)
+	resp := models.AuditVerifyResponse{
+		Success:         true,
+		OK:              verifyErr == nil,
+		VerifiedFromSeq: fromSeq,
+		HeadSeq:         headSeq,
+		HeadHash:        headHash,
+	}
+	if verifyErr != nil {
+		resp.Error = verifyErr.Error()
+		c.responder.JSON(w, http.StatusOK, resp)
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, resp)
 }

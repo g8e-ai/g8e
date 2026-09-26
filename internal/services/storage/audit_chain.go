@@ -469,6 +469,14 @@ func appendAuditChainCheckpoint(
 	return head.PrevHash, nil
 }
 
+// VerifyAuditChainOnDB walks the audit event chain on an open SQLite database.
+func VerifyAuditChainOnDB(ctx context.Context, db *sqliteutil.DB, fromSeq int64) error {
+	if db == nil {
+		return constants.ErrAuditStoreDisabled
+	}
+	return (&SQLAuditStore{db: db}).VerifyChain(ctx, fromSeq)
+}
+
 // VerifyChain walks the audit event chain from fromSeq and recomputes hashes.
 // When fromSeq is zero, verification starts after the latest durable checkpoint.
 func (ass *SQLAuditStore) VerifyChain(ctx context.Context, fromSeq int64) error {

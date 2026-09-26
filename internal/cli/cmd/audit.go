@@ -38,6 +38,7 @@ func auditCmd() *cobra.Command {
 		auditReportCmd(),
 		auditEventsCmd(),
 		auditSummaryCmd(),
+		auditVerifyCmd(),
 	)
 
 	return cmd
@@ -520,6 +521,68 @@ Gateway over mTLS. Use --session to filter by operator session ID.`,
 	}
 
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Filter by Operator session ID")
+
+	return cmd
+}
+
+func auditVerifyCmd() *cobra.Command {
+	return auditVerifyCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
+}
+
+func auditVerifyCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
+	var fromSeq int64
+
+	cmd := &cobra.Command{
+		Use:   "verify",
+		Short: "Verify the Gateway audit event hash chain",
+		Long: `Walk the Gateway audit event hash chain and report the head sequence/hash.
+Use --from-seq to verify from a specific sequence number (defaults to the latest checkpoint).`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+
+			fileSvc, err := fileSvcFactory("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
+			if err != nil {
+				return fmt.Errorf("audit: create API client: %w", err)
+			}
+
+			path := constants.APIPaths.AuditVerify
+			if fromSeq > 0 {
+				path += fmt.Sprintf("?from_seq=%d", fromSeq)
+			}
+
+			resp, err := client.Get(path)
+			if err != nil {
+				return fmt.Errorf("audit: verify chain: %w", err)
+			}
+
+			if output.JSONEnabled(cmd) {
+				return output.WriteRawJSON(cmd.OutOrStdout(), resp)
+			}
+
+			var verifyResp models.AuditVerifyResponse
+			if err := json.Unmarshal(resp, &verifyResp); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+			}
+
+			if verifyResp.OK {
+				cmd.Printf("Audit chain OK (verified from seq %d)\n", verifyResp.VerifiedFromSeq)
+				cmd.Printf("Head: seq=%d hash=%s\n", verifyResp.HeadSeq, verifyResp.HeadHash)
+				return nil
+			}
+
+			return fmt.Errorf("audit chain verification failed from seq %d: %s", verifyResp.VerifiedFromSeq, verifyResp.Error)
+		},
+	}
+
+	cmd.Flags().Int64Var(&fromSeq, "from-seq", 0, "Verify from this sequence number (0 = latest checkpoint)")
 
 	return cmd
 }

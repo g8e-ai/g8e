@@ -779,27 +779,18 @@ func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionRec
 	return receipt, nil
 }
 
-// RecordActionReceipt records a signed ActionReceipt in the audit vault.
-// This is the authoritative transaction-native audit record.
+// RecordActionReceipt upserts the latest-stage receipt projection and appends a
+// chained operator.receipt.recorded fact for every stage write.
 func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}
+	if record == nil {
+		return constants.ErrAuditStoreRecordReceiptFailed
+	}
 
 	avs.muWrites.Add(1)
 	defer avs.muWrites.Done()
-
-	// Auto-create session row for FK satisfaction (matches production behavior).
-	// When OperatorSessionID is empty, insert NULL (matches production behavior
-	// for platform enrollment governance actions with no operator session).
-	var sessionID sql.NullString
-	if record.OperatorSessionID != "" {
-		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
-		_, _ = avs.db.ExecWithRetry(
-			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
-			record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
-		)
-	}
 
 	receiptJSON := []byte(nil)
 	if record.ActionReceipt != nil {
@@ -808,6 +799,61 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		if err != nil {
 			return fmt.Errorf("%w: marshal canonical receipt: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
 		}
+	}
+
+	timestamp := record.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now().UTC()
+	}
+
+	err := avs.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		if record.OperatorSessionID != "" {
+			if _, err := conn.ExecContext(context.Background(),
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+				record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
+			); err != nil {
+				return fmt.Errorf("audit vault: create operator session: %w", err)
+			}
+		}
+
+		if err := avs.upsertActionReceiptConn(conn, record, receiptJSON, timestamp); err != nil {
+			return err
+		}
+
+		chainEvent := &storage.Event{
+			OperatorSessionID: record.OperatorSessionID,
+			Timestamp:         timestamp,
+			Type:              constants.EventOperatorReceiptRecorded,
+			ContentText:       string(receiptJSON),
+			TransactionID:     record.TransactionID,
+		}
+		if chainEvent.OperatorSessionID != "" {
+			if err := avs.requireExistingSessionConn(conn, chainEvent); err != nil {
+				return err
+			}
+		}
+		prepared, err := avs.prepareAuditEventInsert(chainEvent)
+		if err != nil {
+			return err
+		}
+		_, _, _, err = storage.AppendPreparedAuditEvent(context.Background(), conn, prepared)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+	}
+
+	avs.logger.Info("ActionReceipt recorded",
+		"transaction_id", record.TransactionID,
+		"status", record.Status)
+
+	return nil
+}
+
+func (avs *TestSQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *models.ActionReceiptRecord, receiptJSON []byte, timestamp time.Time) error {
+	var sessionID sql.NullString
+	if record.OperatorSessionID != "" {
+		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
 	}
 
 	query := `
@@ -829,7 +875,7 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		timestamp = excluded.timestamp
 	`
 
-	_, err := avs.db.ExecWithRetry(query,
+	_, err := conn.ExecContext(context.Background(), query,
 		record.TransactionID,
 		record.TransactionHash,
 		record.InvestigationID,
@@ -848,16 +894,11 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		record.SignerKeyID,
 		record.Signature,
 		receiptJSON,
-		timesvc.FormatTimestamp(record.Timestamp),
+		timesvc.FormatTimestamp(timestamp),
 	)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+		return fmt.Errorf("audit vault: upsert receipt projection: %w", err)
 	}
-
-	avs.logger.Info("ActionReceipt recorded",
-		"transaction_id", record.TransactionID,
-		"status", record.Status)
-
 	return nil
 }
 
@@ -1568,6 +1609,14 @@ func (avs *TestSQLAuditStore) GetDataDir() string {
 		return ""
 	}
 	return avs.fileSvc.Resolve(constants.DataDirname)
+}
+
+// VerifyChain delegates to the production chain verifier using the test vault DB.
+func (avs *TestSQLAuditStore) VerifyChain(ctx context.Context, fromSeq int64) error {
+	if avs == nil || avs.db == nil {
+		return constants.ErrAuditStoreDisabled
+	}
+	return storage.VerifyAuditChainOnDB(ctx, avs.db, fromSeq)
 }
 
 // GetLedgerPath returns the ledger directory path

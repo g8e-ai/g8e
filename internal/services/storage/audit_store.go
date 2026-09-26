@@ -721,8 +721,8 @@ func (ass *SQLAuditStore) GetEventChainMetaByTransactionID(transactionID string)
 	return seq, hash, true, nil
 }
 
-// RecordActionReceipt records a signed ActionReceipt in the audit store.
-// This is the authoritative transaction-native audit record.
+// RecordActionReceipt upserts the latest-stage receipt projection and appends a
+// chained operator.receipt.recorded fact for every stage write.
 func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
 	if ass == nil {
 		return nil
@@ -730,22 +730,12 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 	if ass.db == nil {
 		return constants.ErrAuditStoreDBNotInitialized
 	}
+	if record == nil {
+		return constants.ErrAuditStoreRecordReceiptFailed
+	}
 
 	ass.muWrites.Add(1)
 	defer ass.muWrites.Done()
-
-	// Gateway mode never pre-populates sessions; auto-create a row so the FK is satisfied.
-	// When OperatorSessionID is empty (e.g. platform enrollment governance actions
-	// that are not bound to an operator session), insert NULL so the nullable
-	// operator_session_id column accepts the row without violating the FK.
-	var sessionID sql.NullString
-	if record.OperatorSessionID != "" {
-		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
-		_, _ = ass.db.ExecWithRetry(
-			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
-			record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
-		)
-	}
 
 	receiptJSON := []byte(nil)
 	if record.ActionReceipt != nil {
@@ -754,6 +744,61 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		if err != nil {
 			return fmt.Errorf("%w: marshal canonical receipt: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
 		}
+	}
+
+	timestamp := record.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now().UTC()
+	}
+
+	err := ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		if record.OperatorSessionID != "" {
+			if _, err := conn.ExecContext(context.Background(),
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+				record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
+			); err != nil {
+				return fmt.Errorf("audit store: create operator session: %w", err)
+			}
+		}
+
+		if err := ass.upsertActionReceiptConn(conn, record, receiptJSON, timestamp); err != nil {
+			return err
+		}
+
+		chainEvent := &Event{
+			OperatorSessionID: record.OperatorSessionID,
+			Timestamp:         timestamp,
+			Type:              constants.EventOperatorReceiptRecorded,
+			ContentText:       string(receiptJSON),
+			TransactionID:     record.TransactionID,
+		}
+		if chainEvent.OperatorSessionID != "" {
+			if err := ass.requireExistingSessionConn(conn, chainEvent); err != nil {
+				return err
+			}
+		}
+		prepared, err := ass.prepareAuditEventInsert(chainEvent)
+		if err != nil {
+			return err
+		}
+		_, _, _, err = AppendPreparedAuditEvent(context.Background(), conn, prepared)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+	}
+
+	ass.logger.Info("ActionReceipt recorded",
+		"transaction_id", record.TransactionID,
+		"status", record.Status)
+
+	return nil
+}
+
+func (ass *SQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *models.ActionReceiptRecord, receiptJSON []byte, timestamp time.Time) error {
+	var sessionID sql.NullString
+	if record.OperatorSessionID != "" {
+		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
 	}
 
 	query := `
@@ -775,7 +820,7 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		timestamp = excluded.timestamp
 	`
 
-	_, err := ass.db.ExecWithRetry(query,
+	_, err := conn.ExecContext(context.Background(), query,
 		record.TransactionID,
 		record.TransactionHash,
 		record.InvestigationID,
@@ -794,17 +839,32 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		record.SignerKeyID,
 		record.Signature,
 		receiptJSON,
-		timesvc.FormatTimestamp(record.Timestamp),
+		timesvc.FormatTimestamp(timestamp),
 	)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+		return fmt.Errorf("audit store: upsert receipt projection: %w", err)
+	}
+	return nil
+}
+
+// GetAuditChainHead returns the latest chained audit event sequence and hash.
+func (ass *SQLAuditStore) GetAuditChainHead(_ context.Context) (int64, string, error) {
+	if ass == nil || ass.db == nil {
+		return 0, "", constants.ErrAuditStoreDisabled
 	}
 
-	ass.logger.Info("ActionReceipt recorded",
-		"transaction_id", record.TransactionID,
-		"status", record.Status)
-
-	return nil
+	var headSeq int64
+	var headHash string
+	err := ass.db.QueryRowWithRetry(`
+		SELECT seq, hash FROM events WHERE seq IS NOT NULL ORDER BY seq DESC LIMIT 1
+	`).Scan(&headSeq, &headHash)
+	if err == sql.ErrNoRows {
+		return 0, auditChainGenesisPrevHash, nil
+	}
+	if err != nil {
+		return 0, "", fmt.Errorf("audit store: chain head: %w", err)
+	}
+	return headSeq, headHash, nil
 }
 
 func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionReceipt, error) {

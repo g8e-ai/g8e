@@ -3272,10 +3272,10 @@
       "value": "g8e.v1.operator.receipt.recorded",
       "kind": "fact",
       "producers": [
+        "gateway",
         "operator"
       ],
-      "persistence": "operator.audit_log",
-      "reserved": true
+      "persistence": "operator.audit_log"
     },
     "OperatorReputationCommitmentCreated": {
       "_go_const": "EventOperatorReputationCommitmentCreated",

@@ -1991,9 +1991,8 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_RECEIPT_RECORDED: Object.freeze({
         kind: 'fact',
-        producers: ['operator'],
+        producers: ['gateway', 'operator'],
         persistence: 'operator.audit_log',
-        reserved: true,
     }),
     OPERATOR_REPUTATION_COMMITMENT_CREATED: Object.freeze({
         kind: 'outcome',

@@ -2544,9 +2544,8 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Key: "OperatorReceiptRecorded",
 		Kind: EventKindFact,
 		Transport: nil,
-		Producers: []string{"operator"},
+		Producers: []string{"gateway", "operator"},
 		Persistence: "operator.audit_log",
-		Reserved: true,
 	},
 	EventOperatorReputationCommitmentCreated: {
 		Key: "OperatorReputationCommitmentCreated",
