@@ -52,6 +52,7 @@ const (
 	ArtifactTypeEvaluationAssignmentTrace ArtifactType = "evaluation-assignment-trace"
 	ArtifactTypeEvaluationAssignmentFormationRun ArtifactType = "evaluation-assignment-formation-run"
 	ArtifactTypeAuditRecord               ArtifactType = "audit-record"
+	ArtifactTypeAuditChainEntry           ArtifactType = "audit-chain-entry"
 	ArtifactTypeLedgerCommit              ArtifactType = "ledger-commit"
 	ArtifactTypeLedgerState               ArtifactType = "ledger-state"
 	ArtifactTypeCommitment                ArtifactType = "commitment"
@@ -86,6 +87,7 @@ func SupportedArtifactTypes() []ArtifactType {
 		ArtifactTypeEvalStage,
 		ArtifactTypeEvalReceipt,
 		ArtifactTypeAuditRecord,
+		ArtifactTypeAuditChainEntry,
 		ArtifactTypeLedgerCommit,
 		ArtifactTypeLedgerState,
 		ArtifactTypeCommitment,

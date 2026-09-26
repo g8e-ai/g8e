@@ -684,6 +684,7 @@ const (
 	ComplianceOperationalReceiptsDirname         = "receipts"
 	ComplianceOperationalPersistenceDirname      = "persistence"
 	ComplianceOperationalCommitmentsDirname      = "commitments"
+	ComplianceOperationalAuditChainDirname         = "audit-chain"
 )
 
 // Release evidence output filename suffixes. The per-release compliance
@@ -728,6 +729,8 @@ const (
 	CommitmentsDirname                            = "commitments"
 	CommitmentEvidenceVerifierID                  = "g8e-commitment-evidence-importer"
 	CommitmentEvidenceVerifierVersion             = "1.0.0"
+	AuditChainEvidenceVerifierID                  = "g8e-audit-chain-evidence-importer"
+	AuditChainEvidenceVerifierVersion             = "1.0.0"
 	LedgerCommitReferencePrefix                   = "ledger-commit"
 	LedgerCommitCollectionReferencePrefix         = "ledger-commit-collection"
 	LedgerStateReferencePrefix                    = "ledger-state"

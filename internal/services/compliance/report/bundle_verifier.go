@@ -621,6 +621,7 @@ var evidenceVerificationRoutes = map[evidence.ArtifactType]evidenceVerificationR
 	evidence.ArtifactTypeLedgerCommit:        evidenceVerificationRouteLedger,
 	evidence.ArtifactTypeLedgerState:         evidenceVerificationRouteLedger,
 	evidence.ArtifactTypeCommitment:          evidenceVerificationRouteCommitment,
+	evidence.ArtifactTypeAuditChainEntry:     evidenceVerificationRouteCommitment,
 	evidence.ArtifactTypeKSIResult:           evidenceVerificationRouteKSI,
 	evidence.ArtifactTypeBuildAttestation:    evidenceVerificationRouteBuildConfig,
 	evidence.ArtifactTypeConfigAttestation:   evidenceVerificationRouteBuildConfig,

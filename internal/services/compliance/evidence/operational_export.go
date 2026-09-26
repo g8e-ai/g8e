@@ -67,6 +67,12 @@ type OperationalSourceInventory struct {
 	CommitmentBoundaryPriorHash  string                      `json:"commitment_boundary_prior_hash,omitempty"`
 	CommitmentHeadHash           string                      `json:"commitment_head_hash,omitempty"`
 	CommitmentSequenceContiguous bool                        `json:"commitment_sequence_contiguous,omitempty"`
+	AuditChainCount              int                         `json:"audit_chain_count"`
+	AuditChainFirstSeq           int64                       `json:"audit_chain_first_seq,omitempty"`
+	AuditChainLastSeq            int64                       `json:"audit_chain_last_seq,omitempty"`
+	AuditChainBoundaryPriorHash  string                      `json:"audit_chain_boundary_prior_hash,omitempty"`
+	AuditChainHeadHash           string                      `json:"audit_chain_head_hash,omitempty"`
+	AuditChainSequenceContiguous bool                        `json:"audit_chain_sequence_contiguous,omitempty"`
 	Limitations                  []string                    `json:"limitations,omitempty"`
 	Artifacts                    []OperationalExportArtifact `json:"artifacts"`
 }
@@ -91,7 +97,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if len(snapshot.Receipts) > request.MaxRows || len(snapshot.Commitments) > request.MaxRows {
+	if len(snapshot.Receipts) > request.MaxRows || len(snapshot.Commitments) > request.MaxRows || len(snapshot.AuditChain) > request.MaxRows {
 		return nil, fmt.Errorf("%w: operational export exceeds row bound %d", constants.ErrEvidenceArtifactTooLarge, request.MaxRows)
 	}
 	if err := os.MkdirAll(request.OutputDir, constants.PermDirPrivate); err != nil {
@@ -114,7 +120,8 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 		WindowEndUTC:         request.WindowEnd.UTC().Format(time.RFC3339Nano),
 		ReceiptCount:         len(snapshot.Receipts),
 		CommitmentCount:      len(snapshot.Commitments),
-		Artifacts:            make([]OperationalExportArtifact, 0, len(snapshot.Receipts)+len(snapshot.Commitments)),
+		AuditChainCount:      len(snapshot.AuditChain),
+		Artifacts:            make([]OperationalExportArtifact, 0, len(snapshot.Receipts)+len(snapshot.Commitments)+len(snapshot.AuditChain)),
 	}
 	for _, receipt := range snapshot.Receipts {
 		if err := ctx.Err(); err != nil {
@@ -150,6 +157,45 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 		inventory.PersistenceCount++
 		inventory.Artifacts = append(inventory.Artifacts, persistenceArtifact)
 	}
+	chainEntries := append([]storage.OperationalAuditChainSource(nil), snapshot.AuditChain...)
+	sort.Slice(chainEntries, func(left, right int) bool { return chainEntries[left].Seq < chainEntries[right].Seq })
+	if len(chainEntries) > 0 {
+		inventory.AuditChainFirstSeq = chainEntries[0].Seq
+		inventory.AuditChainLastSeq = chainEntries[len(chainEntries)-1].Seq
+		inventory.AuditChainBoundaryPriorHash = chainEntries[0].PrevHash
+		inventory.AuditChainHeadHash = chainEntries[len(chainEntries)-1].Hash
+		inventory.AuditChainSequenceContiguous = true
+		for index, entry := range chainEntries {
+			if index > 0 && entry.Seq != chainEntries[index-1].Seq+1 {
+				inventory.AuditChainSequenceContiguous = false
+			}
+		}
+	}
+	for _, entry := range chainEntries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		body, err := storage.MarshalAuditChainSegmentEntry(storage.AuditChainSegmentEntry{
+			Seq:               entry.Seq,
+			PrevHash:          entry.PrevHash,
+			Hash:              entry.Hash,
+			EventType:         entry.EventType,
+			OperatorSessionID: entry.OperatorSessionID,
+			Timestamp:         entry.Timestamp.UTC().Format(time.RFC3339Nano),
+			ContentDigest:     entry.ContentDigest,
+			TransactionID:     entry.TransactionID,
+			ContentText:       entry.ContentText,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("operational export: marshal audit chain entry %d: %w", entry.Seq, err)
+		}
+		_, artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalAuditChainDirname, ArtifactTypeAuditChainEntry, entry.TransactionID, entry.Seq, entry.Timestamp, body)
+		if err != nil {
+			return nil, err
+		}
+		inventory.Artifacts = append(inventory.Artifacts, artifact)
+	}
+
 	commitments := append([]storage.OperationalCommitmentSource(nil), snapshot.Commitments...)
 	sort.Slice(commitments, func(left, right int) bool { return commitments[left].Sequence < commitments[right].Sequence })
 	if len(commitments) > 0 {

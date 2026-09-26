@@ -63,13 +63,23 @@ The SSE event buffer supports reconnection replay for authenticated browser and 
 
 ### SQL Audit Store
 
-The SQL audit store shares `g8e.db` with canonical platform persistence. It records Operator and app sessions, append-oriented events, file-mutation references, signed action receipts, and the commitment chain. Events require an associated session; single-event insertion creates an app session when necessary, while batch insertion requires every referenced session to exist and commits atomically.
+The SQL audit store shares `g8e.db` with canonical platform persistence. It records Operator and app sessions, hash-chained audit events, file-mutation references, signed action receipts, and the commitment chain. Events require an associated session; single-event insertion creates an app session when necessary, while batch insertion requires every referenced session to exist and commits atomically.
 
 The vault encrypts event content, command standard output, and command standard error. Command text, event metadata, file paths, ledger hashes, receipt fields, and canonical receipt JSON remain structured and are not protected by field-level vault encryption. Output above the configured threshold is reduced to head and tail sections before encryption.
 
-A receipt row changes over the life of one transaction. L5 first persists the signed `EXECUTING` receipt, then replaces it with the signed final receipt, and finally replaces it again with the receipt that contains the signed persistence attestation. The complete canonical protojson receipt remains available alongside searchable identity, action, state-root, status, signer, and signature fields.
+#### Hash-chained audit log
 
-For a remote Operator, the local audit store is authoritative. After execution, the Operator publishes the signed receipt to the Gateway receipt channel. The Gateway verifies the signer and mirrors an accepted receipt, but publication failure does not invalidate the already persisted local result.
+Every row in the `events` table is an append-only chain entry. Each entry records `seq`, `prev_hash`, a plaintext `content_digest`, and its own `hash`. Receipt stages, LFAA audit facts, and other persisted events share this chain. Structural verification recomputes hashes without decrypting vault-protected fields; content verification compares plaintext against `content_digest` when the vault is unlocked.
+
+Pruning deletes chained rows only after appending a `g8e.v1.platform.audit.chain.checkpointed` anchor that records the pruned range and terminal hash. `g8e audit verify` and `GET /api/v1/audit/verify` walk the chain from the latest checkpoint (or genesis) and report the head sequence and hash.
+
+#### Receipt projection
+
+The `receipts` table is a latest-stage query projection, not the audit record of record. L5 upserts one row per `transaction_id` as the receipt advances from `EXECUTING` through the signed final receipt to the receipt that carries the signed persistence attestation. Every stage write also appends a chained `g8e.v1.operator.receipt.recorded` fact whose `content_text` is the canonical protojson receipt for that stage.
+
+Compliance operational export carries both the retained receipt body and the matching chained receipt facts. The evidence importer verifies the exported chain segment, cross-links matching receipt projections to their chain entries, and cross-links commitments to receipts through deterministic stage evidence.
+
+For a remote Operator, the local audit store is authoritative. After execution, the Operator publishes the signed receipt to the Gateway receipt channel. The Gateway verifies the signer, mirrors an accepted receipt into its own chain and projection, but publication failure does not invalidate the already persisted local result.
 
 ### Commitment Ledger
 

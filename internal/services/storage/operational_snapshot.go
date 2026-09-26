@@ -43,12 +43,27 @@ type OperationalCommitmentSource struct {
 	Body          []byte
 }
 
+// OperationalAuditChainSource preserves one chained audit event and its linkage
+// metadata for offline compliance verification.
+type OperationalAuditChainSource struct {
+	Seq               int64
+	PrevHash          string
+	Hash              string
+	EventType         string
+	OperatorSessionID string
+	Timestamp         time.Time
+	ContentDigest     string
+	TransactionID     string
+	ContentText       string
+}
+
 // OperationalEvidenceSnapshot is the bounded result of one read-only SQLite
 // snapshot. A nil body records a retained row whose canonical source body is
 // unavailable rather than silently dropping that row.
 type OperationalEvidenceSnapshot struct {
 	Receipts    []OperationalReceiptSource
 	Commitments []OperationalCommitmentSource
+	AuditChain  []OperationalAuditChainSource
 }
 
 // ReadOnlyOperationalEvidence reads the Gateway or Operator-local audit
@@ -108,6 +123,9 @@ func (r *ReadOnlyOperationalEvidence) Snapshot(ctx context.Context, query Operat
 		return nil, err
 	}
 	if err := readOperationalCommitments(ctx, tx, query, snapshot); err != nil {
+		return nil, err
+	}
+	if err := readOperationalAuditChain(ctx, tx, query, snapshot); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -174,6 +192,63 @@ func readOperationalCommitments(ctx context.Context, tx *sql.Tx, query Operation
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("operational evidence: iterate commitments: %w", err)
+	}
+	return nil
+}
+
+func readOperationalAuditChain(ctx context.Context, tx *sql.Tx, query OperationalEvidenceQuery, snapshot *OperationalEvidenceSnapshot) error {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT seq, prev_hash, hash, type, operator_session_id, timestamp, content_digest, transaction_id, content_text
+		FROM events
+		WHERE seq IS NOT NULL
+		  AND type = ?
+		  AND timestamp >= ? AND timestamp <= ?
+		ORDER BY seq ASC
+	`, string(constants.EventOperatorReceiptRecorded), query.WindowStart.Format(time.RFC3339Nano), query.WindowEnd.Format(time.RFC3339Nano))
+	if err != nil {
+		return fmt.Errorf("operational evidence: query audit chain: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var entry OperationalAuditChainSource
+		var sessionID sql.NullString
+		var timestampStr string
+		var transactionID sql.NullString
+		var contentText sql.NullString
+		if err := rows.Scan(
+			&entry.Seq,
+			&entry.PrevHash,
+			&entry.Hash,
+			&entry.EventType,
+			&sessionID,
+			&timestampStr,
+			&entry.ContentDigest,
+			&transactionID,
+			&contentText,
+		); err != nil {
+			return fmt.Errorf("operational evidence: scan audit chain entry: %w", err)
+		}
+		if sessionID.Valid {
+			entry.OperatorSessionID = sessionID.String
+		}
+		if transactionID.Valid {
+			entry.TransactionID = transactionID.String
+		}
+		if contentText.Valid {
+			entry.ContentText = contentText.String
+		}
+		parsedAt, err := time.Parse(time.RFC3339Nano, timestampStr)
+		if err != nil {
+			return fmt.Errorf("operational evidence: parse audit chain timestamp: %w", err)
+		}
+		entry.Timestamp = parsedAt.UTC()
+		snapshot.AuditChain = append(snapshot.AuditChain, entry)
+		if len(snapshot.AuditChain) > query.MaxRows {
+			return fmt.Errorf("%w: audit chain population exceeds bound %d", constants.ErrEvidenceArtifactTooLarge, query.MaxRows)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("operational evidence: iterate audit chain: %w", err)
 	}
 	return nil
 }
