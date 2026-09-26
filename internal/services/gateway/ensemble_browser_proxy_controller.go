@@ -135,31 +135,67 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	}
 }
 
+// browserProxyContext is the identity object the browser proxy stamps onto
+// ensemble requests. Field order matches encoding/json map key order.
+type browserProxyContext struct {
+	UserID       string `json:"user_id"`
+	WebSessionID string `json:"web_session_id"`
+}
+
+// browserInvestigationsQuery is the body of the GET investigations compatibility
+// rewrite. Field order matches encoding/json map key order.
+type browserInvestigationsQuery struct {
+	CaseID            string              `json:"case_id,omitempty"`
+	Context           browserProxyContext `json:"context"`
+	InvestigationType string              `json:"investigation_type,omitempty"`
+	Limit             int                 `json:"limit"`
+	OrderBy           string              `json:"order_by,omitempty"`
+	OrderDirection    string              `json:"order_direction,omitempty"`
+	Priority          string              `json:"priority,omitempty"`
+	Status            string              `json:"status,omitempty"`
+	WebSessionID      string              `json:"web_session_id,omitempty"`
+}
+
 func (c *EnsembleBrowserProxyController) investigationsQueryBody(r *http.Request, userID, webSessionID string) ([]byte, error) {
-	payload := map[string]interface{}{
-		"context": map[string]interface{}{
-			"user_id":        userID,
-			"web_session_id": webSessionID,
+	payload := browserInvestigationsQuery{
+		Context: browserProxyContext{
+			UserID:       userID,
+			WebSessionID: webSessionID,
 		},
-		"limit": 20,
+		Limit: 20,
 	}
 	for key, vals := range r.URL.Query() {
 		if len(vals) == 0 {
 			continue
 		}
 		switch key {
-		case "case_id", "web_session_id", "status", "investigation_type", "priority", "order_by", "order_direction":
-			payload[key] = vals[0]
+		case "case_id":
+			payload.CaseID = vals[0]
+		case "web_session_id":
+			payload.WebSessionID = vals[0]
+		case "status":
+			payload.Status = vals[0]
+		case "investigation_type":
+			payload.InvestigationType = vals[0]
+		case "priority":
+			payload.Priority = vals[0]
+		case "order_by":
+			payload.OrderBy = vals[0]
+		case "order_direction":
+			payload.OrderDirection = vals[0]
 		case "limit":
 			var n int
 			if _, err := fmt.Sscanf(vals[0], "%d", &n); err == nil && n > 0 {
-				payload["limit"] = n
+				payload.Limit = n
 			}
 		}
 	}
 	return json.Marshal(payload)
 }
 
+// injectBrowserContext stamps browser identity onto a JSON object body.
+// The outer document and any extra context keys are caller-defined JSON with
+// no stable schema, so they stay map[string]interface{} and round-trip.
 func injectBrowserContext(body []byte, userID, webSessionID string) ([]byte, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {

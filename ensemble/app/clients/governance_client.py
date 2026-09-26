@@ -13,6 +13,10 @@ Gateway's fail-closed governance gate (POST /api/v1/governance/envelopes) and ve
 ActionReceipts returned by the Gateway.
 
 See: .local.dev/docs/plans/engine_gateway_secure_link.md
+
+Outbound envelopes are g8e.models.GovernanceEnvelope. Gateway ActionReceipt
+responses and document-update patches stay dict[str, Any]: g8e.models has no
+ActionReceipt model, and update maps are caller-defined field patches.
 """
 
 from __future__ import annotations

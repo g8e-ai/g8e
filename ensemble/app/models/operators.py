@@ -47,8 +47,8 @@ from app.models.tool_results import (
     CommandRiskAnalysis,
     FileOperationRiskAnalysis,
 )
-from app.utils.timestamp import now
-from app.utils.ledger_hash import compute_entry_hash
+from app.utils.time_ids.timestamp import now
+from app.utils.hashing.ledger_hash import compute_entry_hash
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 

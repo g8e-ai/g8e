@@ -5,11 +5,8 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-// os.Chdir is used for source-tree discovery (resolving internal/services/gateway/docs/,
-// cmd/g8e, and swagger spec paths via filepath.Abs against cwd), not .g8e/ runtime
-// state. This is a legitimate cwd usage — swagger init/serve/validate are developer
-// tooling commands that resolve source-tree paths relative to the working directory,
-// not through RuntimeFileService.
+// Swagger init/serve/validate discover source-tree paths from a root directory.
+// These tests pass testutil.TempDir through cliSourceRoot. They do not call os.Chdir.
 
 package cmd
 
@@ -89,10 +86,8 @@ func TestSwaggerInitCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Set flags to non-existent paths to trigger errors
 		err := cmd.Flags().Set("dir", "nonexistent-dir")
@@ -109,10 +104,8 @@ func TestSwaggerInitCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Don't set dir flag - should use default
 		err := cmd.RunE(cmd, []string{})
@@ -127,10 +120,8 @@ func TestSwaggerInitCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Don't set output flag - should use default
 		err := cmd.RunE(cmd, []string{})
@@ -166,10 +157,8 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create docs directory with swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -189,10 +178,8 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create docs directory with swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -212,10 +199,8 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create docs directory with swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -237,10 +222,8 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create docs directory with swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -262,10 +245,8 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create the docs directory but not swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -283,10 +264,8 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create the docs directory with swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -327,10 +306,8 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Don't set file flag - should use default
 		err := cmd.RunE(cmd, []string{})
@@ -345,10 +322,8 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		err := cmd.Flags().Set("file", "/nonexistent/swagger.json")
 		require.NoError(t, err)
@@ -364,10 +339,8 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create a custom swagger.json
 		customPath := filepath.Join(tmpDir, "custom-swagger.json")
@@ -387,10 +360,8 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -478,10 +449,8 @@ func TestSwaggerCommandPathResolution(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Set relative path
 		err := cmd.Flags().Set("dir", "relative/path")
@@ -501,10 +470,8 @@ func TestSwaggerCommandPathResolution(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create docs directory
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -524,13 +491,11 @@ func TestSwaggerCommandPathResolution(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create swagger.json in current directory
-		require.NoError(t, os.WriteFile("swagger.json", []byte("{}"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "swagger.json"), []byte("{}"), 0644))
 
 		err := cmd.Flags().Set("file", "swagger.json")
 		require.NoError(t, err)
@@ -555,10 +520,8 @@ func TestSwaggerCommandOutputFormatting(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create docs directory with swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -582,10 +545,8 @@ func TestSwaggerCommandOutputFormatting(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -624,10 +585,8 @@ func TestSwaggerCommandErrorMessages(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
@@ -709,10 +668,8 @@ func TestSwaggerCommandEdgeCases(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create empty docs directory
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -730,10 +687,8 @@ func TestSwaggerCommandEdgeCases(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Create empty swagger.json
 		docsPath := filepath.Join(tmpDir, "internal", "services", "gateway", "docs")
@@ -751,10 +706,8 @@ func TestSwaggerCommandEdgeCases(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
 		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
+		useCLISourceRoot(t, tmpDir)
 
 		// Set comma-separated directories (default format)
 		err := cmd.Flags().Set("dir", "dir1,dir2")

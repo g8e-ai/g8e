@@ -25,7 +25,7 @@ from app.models.whitelist import WhitelistedCommand
 from app.services.investigation.investigation_service import (
     extract_single_operator_context,
 )
-from app.utils.safety import map_os_string_to_platform
+from app.utils.validation.safety import map_os_string_to_platform
 from app.utils.csv_commands import parse_command_csv
 
 if TYPE_CHECKING:

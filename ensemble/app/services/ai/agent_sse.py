@@ -42,7 +42,7 @@ from app.models.events import (
     ChatThinkingPayload,
     ChatTurnCompletePayload,
 )
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 from app.errors import ValidationError
 from app.services.infra.event_service import EventService
 from app.services.evaluation.tool_evidence import (

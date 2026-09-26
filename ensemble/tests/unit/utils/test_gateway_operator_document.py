@@ -4,7 +4,7 @@ import pytest
 
 from app.constants import OperatorStatus
 from app.models.operators import OperatorDocument
-from app.utils.gateway_operator_document import operator_document_from_gateway
+from app.utils.gateway_decoding.gateway_operator_document import operator_document_from_gateway
 
 pytestmark = [pytest.mark.unit]
 

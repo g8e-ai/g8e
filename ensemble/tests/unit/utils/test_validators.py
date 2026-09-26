@@ -13,8 +13,8 @@ import pytest
 
 from app.constants import Platform
 from app.errors import ConfigurationError
-from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 pytestmark = [pytest.mark.unit]
 

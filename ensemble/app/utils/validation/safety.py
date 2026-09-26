@@ -14,9 +14,9 @@ from app.models.base import BaseModel, ConfigDict
 from app.constants import FORBIDDEN_COMMAND_PATTERNS, DEFAULT_OS_NAME
 from app.constants.generated_status import Platform, CommandErrorType
 from app.models.agent import OperatorContext
-from app.utils.validators import get_blacklist_validator, get_whitelist_validator
-from app.utils.whitelist_validator import CommandWhitelistValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
 
 logger = logging.getLogger(__name__)
 

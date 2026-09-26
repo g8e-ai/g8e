@@ -58,11 +58,11 @@ The generated documentation includes:
 			}
 
 			// Ensure paths are absolute
-			absSearchDir, err := filepath.Abs(searchDir)
+			absSearchDir, err := absUnderSourceRoot(searchDir)
 			if err != nil {
 				return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 			}
-			absOutputDir, err := filepath.Abs(outputDir)
+			absOutputDir, err := absUnderSourceRoot(outputDir)
 			if err != nil {
 				return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 			}
@@ -126,7 +126,7 @@ https://localhost:8443/swagger/index.html`,
 			}
 
 			docsPath := "internal/services/gateway/docs"
-			absDocsPath, err := filepath.Abs(docsPath)
+			absDocsPath, err := absUnderSourceRoot(docsPath)
 			if err != nil {
 				return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 			}
@@ -175,7 +175,7 @@ If no validation tool is installed, the command will suggest installing one of:
 				specFile = "internal/services/gateway/docs/swagger.json"
 			}
 
-			absSpecFile, err := filepath.Abs(specFile)
+			absSpecFile, err := absUnderSourceRoot(specFile)
 			if err != nil {
 				return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 			}

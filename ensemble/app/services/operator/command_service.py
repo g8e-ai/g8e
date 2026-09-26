@@ -72,17 +72,17 @@ from .filesystem_service import OperatorFilesystemService
 from .intent_service import OperatorIntentService
 from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
-from app.utils.safety import validate_command_safety
+from app.utils.validation.safety import validate_command_safety
 from app.utils.csv_commands import parse_command_csv
-from app.utils.validators import (
+from app.utils.validation.validators import (
     get_auto_approved_validator,
     get_blacklist_validator,
     get_whitelist_validator,
 )
-from app.utils.ids import generate_command_execution_id, generate_batch_id
-from app.utils.whitelist_validator import CommandWhitelistValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.time_ids.ids import generate_command_execution_id, generate_batch_id
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
 from app.errors import ValidationError, BusinessLogicError
 import asyncio
 

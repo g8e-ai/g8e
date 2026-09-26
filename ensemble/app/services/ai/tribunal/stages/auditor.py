@@ -34,7 +34,7 @@ from app.models.agents.tribunal import (
 )
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.command import normalise_command
-from app.utils.safety import validate_command_safety
+from app.utils.validation.safety import validate_command_safety
 from app.services.ai.auditor_service import (
     commit_reputation,
     build_auditor_prompt,

@@ -41,7 +41,7 @@ from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.json_utils import extract_json_from_text
 from app.utils.command import normalise_command
-from app.utils.safety import validate_command_safety
+from app.utils.validation.safety import validate_command_safety
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.utils import is_system_error, member_for_pass
 

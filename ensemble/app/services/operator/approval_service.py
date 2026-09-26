@@ -60,8 +60,8 @@ from app.models.operators import (
 )
 from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext, RequestContext
-from app.utils.ids import generate_approval_id, generate_intent_approval_id
-from app.utils.timestamp import now
+from app.utils.time_ids.ids import generate_approval_id, generate_intent_approval_id
+from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 

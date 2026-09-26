@@ -71,7 +71,7 @@ from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.event_service import EventService
 from app.services.protocols import ApprovalServiceProtocol
-from app.utils.ids import generate_command_execution_id
+from app.utils.time_ids.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
 

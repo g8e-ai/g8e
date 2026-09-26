@@ -42,7 +42,7 @@ __all__ = [
     "recursive_serialize",
 ]
 
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 
 def recursive_serialize(value: Any) -> Any:

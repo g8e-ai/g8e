@@ -40,7 +40,7 @@ from app.models.settings import (
     G8eeUserSettings,
     LLMSettings,
 )
-from app.utils.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
 from tests.fakes.builder import build_command_service
 from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from tests.fakes.fake_approval_service import FakeApprovalService

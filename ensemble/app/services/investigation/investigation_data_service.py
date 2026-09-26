@@ -9,7 +9,7 @@ import logging
 
 from app.models.base import TypeAdapter
 
-from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
 
 from app.constants import (
     ComponentStatus,
@@ -40,7 +40,7 @@ from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
 from app.utils.keyed_lock import KeyedAsyncLock
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 from app.clients.governance_client import GovernanceClient
 
 

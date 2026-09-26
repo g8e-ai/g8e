@@ -14,7 +14,7 @@ from app.models.sessions import CliSessionDocument
 from app.models.operators import OperatorDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
-from app.utils.gateway_operator_document import operator_document_from_gateway
+from app.utils.gateway_decoding.gateway_operator_document import operator_document_from_gateway
 
 logger = logging.getLogger(__name__)
 

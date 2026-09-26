@@ -13,7 +13,7 @@ import json
 from app.constants import ExecutionStatus, EventType
 from app.constants.proto_mappings import protobuf_execution_status_to_python
 from g8e.operator.v1 import operator_pb2
-from app.utils.result_decoder import (
+from app.utils.gateway_decoding.result_decoder import (
     decode_uap_envelope,
     decode_g8eo_result_envelope,
 )

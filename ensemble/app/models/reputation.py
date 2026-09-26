@@ -95,7 +95,7 @@ class ReputationLeaf(G8eBaseModel):
 
     The wire form fed to the hasher is ``f"{agent_id}:{scalar_str}"`` where
     ``scalar_str`` is the canonical decimal representation of the scalar
-    (see `app.utils.merkle.scalar_to_canonical_str`). The string form keeps
+    (see `app.utils.hashing.merkle.scalar_to_canonical_str`). The string form keeps
     the leaf format human-inspectable when grounding-citing a commitment.
     """
 

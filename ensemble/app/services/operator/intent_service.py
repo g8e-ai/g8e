@@ -39,13 +39,13 @@ from app.models.operators import (
 )
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.iam_command_builder import IamCommandBuilder
-from app.utils.ids import (
+from app.utils.time_ids.ids import (
     generate_iam_execution_id,
     generate_iam_revoke_intent_execution_id,
     generate_iam_verify_execution_id,
     generate_intent_execution_id,
 )
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 

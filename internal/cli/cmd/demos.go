@@ -242,7 +242,7 @@ func runDemosScenarios(cmd *cobra.Command, args []string) error {
 }
 
 func runDemosList(cmd *cobra.Command, args []string) error {
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -288,7 +288,7 @@ then use 'g8e demos export' to create a tar bundle for transfer.`,
 }
 
 func runDemosPull(cmd *cobra.Command, args []string) error {
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -338,7 +338,7 @@ Defaults to demos/images-export/ if no output directory is specified.`,
 }
 
 func runDemosExport(cmd *cobra.Command, args []string) error {
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -406,7 +406,7 @@ Defaults to demos/images-export/ if no input directory is specified.`,
 }
 
 func runDemosImport(cmd *cobra.Command, args []string) error {
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -466,7 +466,7 @@ func demosImagesCmd() *cobra.Command {
 }
 
 func runDemosImages(cmd *cobra.Command, args []string) error {
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -504,7 +504,7 @@ func demosStartCmd() *cobra.Command {
 
 func runDemosStart(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -670,7 +670,7 @@ func demosStopCmd() *cobra.Command {
 
 func runDemosStop(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -719,7 +719,7 @@ func demosStatusCmd() *cobra.Command {
 
 func runDemosStatus(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -774,7 +774,7 @@ This is a destructive operation that removes all associated Docker volumes and n
 }
 
 func runDemosClean(cmd *cobra.Command, args []string, skipConfirm bool) error {
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -986,7 +986,7 @@ Use --no-cache=false to reuse the Docker build cache.`,
 
 func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 	org := args[0]
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
@@ -1132,7 +1132,7 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool, fileSvc fs.Runt
 	}
 
 	org := args[0]
-	cwd, err := os.Getwd()
+	cwd, err := cliSourceRoot()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}

@@ -91,8 +91,8 @@ from app.models.command_request_payloads import (
     CheckPortRequestPayload,
 )
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
-from app.utils.whitelist_validator import CommandWhitelistValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
 from app.models.tool_results import ToolResult
 from app.constants.prompts import AgentMode
 from app.llm import llm_types as types

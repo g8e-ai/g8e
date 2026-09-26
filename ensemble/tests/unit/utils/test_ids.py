@@ -35,7 +35,7 @@ from app.constants import (
     INTENT_APPROVAL_ID_PREFIX,
     INTENT_EXECUTION_ID_PREFIX,
 )
-from app.utils.ids import (
+from app.utils.time_ids.ids import (
     COMMAND_EXECUTION_ID_PATTERN,
     generate_approval_id,
     generate_command_execution_id,

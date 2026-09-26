@@ -17,7 +17,7 @@ import hashlib
 
 import pytest
 
-from app.utils.merkle import (
+from app.utils.hashing.merkle import (
     leaf_bytes,
     merkle_proof,
     merkle_root,

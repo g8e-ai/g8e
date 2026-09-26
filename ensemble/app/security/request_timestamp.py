@@ -40,7 +40,7 @@ from app.constants import (
     TimestampErrorCode,
 )
 from app.models.base import G8eBaseModel
-from app.utils.timestamp import ensure_utc, now, parse_iso
+from app.utils.time_ids.timestamp import ensure_utc, now, parse_iso
 
 logger = logging.getLogger(__name__)
 

@@ -22,7 +22,7 @@ from app.models.internal_api import (
     ObserveProducerAgentStateRequest,
     ObserveProducerRunStateRequest,
 )
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 from .identity import (
     OBSERVE_PRODUCER_SCHEMA_VERSION,
