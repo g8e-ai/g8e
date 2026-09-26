@@ -40,8 +40,8 @@ from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, Execution
 from app.models.tool_results import CommandInternalResult
 from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeAppSettings
-from app.utils.validators import get_blacklist_validator, get_whitelist_validator
-from app.utils.gateway_dispatch_result import envelope_from_gateway_dispatch
+from app.utils.validation.validators import get_blacklist_validator, get_whitelist_validator
+from app.utils.gateway_decoding.gateway_dispatch_result import envelope_from_gateway_dispatch
 
 logger = logging.getLogger(__name__)
 

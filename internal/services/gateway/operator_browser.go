@@ -135,11 +135,21 @@ func (c *OperatorController) handleBrowserStopOperator(w http.ResponseWriter, r 
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"success":             true,
-		"operator_id":         op.ID,
-		"operator_session_id": op.OperatorSessionID,
-		"transaction_id":      result.TransactionID,
-		"message":             "Stop command relayed to orchestrator",
+	c.responder.JSON(w, http.StatusOK, browserOperatorStopResponse{
+		Message:           "Stop command relayed to orchestrator",
+		OperatorID:        op.ID,
+		OperatorSessionID: op.OperatorSessionID,
+		Success:           true,
+		TransactionID:     result.TransactionID,
 	})
+}
+
+// browserOperatorStopResponse is the browser stop-operator acknowledgement.
+// Field order matches encoding/json map key order.
+type browserOperatorStopResponse struct {
+	Message           string `json:"message"`
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id"`
+	Success           bool   `json:"success"`
+	TransactionID     string `json:"transaction_id"`
 }

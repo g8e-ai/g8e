@@ -9,6 +9,10 @@
 
 This module deliberately contains transport DTOs only. It does not cache,
 authenticate, persist, or mutate Operator state in g8ee.
+
+Gateway operator HTTP bodies and responses stay dict[str, Any]. g8e.models has
+RequestContext and BoundOperator for session context, not these payloads, and
+there is no operator list, bind, dispatch, or audit-ingest model to substitute.
 """
 
 from __future__ import annotations

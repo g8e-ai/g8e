@@ -46,10 +46,10 @@ from app.services.ai.tool_registry import (
 )
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.operator.command_service import OperatorCommandService
-from app.utils.auto_approved_validator import CommandAutoApprovedValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.whitelist_validator import CommandWhitelistValidator
-from app.utils.validators import (
+from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+from app.utils.validation.validators import (
     get_auto_approved_validator,
     get_blacklist_validator,
     get_whitelist_validator,

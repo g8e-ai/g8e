@@ -57,9 +57,9 @@ from app.services.operator.operator_data_service import OperatorDataService
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.services.data.case_data_service import CaseDataService
 from app.models.settings import G8eeAppSettings
-from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
-from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
-from app.utils.auto_approved_validator import (
+from app.utils.validation.whitelist_validator import get_whitelist_validator, register_whitelist_validator
+from app.utils.validation.blacklist_validator import get_blacklist_validator, register_blacklist_validator
+from app.utils.validation.auto_approved_validator import (
     get_auto_approved_validator,
     register_auto_approved_validator,
 )

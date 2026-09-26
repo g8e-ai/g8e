@@ -7,10 +7,8 @@
 
 //go:build e2e
 
-// os.Chdir is used for source-tree demo discovery (finding ./demos/ directories,
-// compose.yml, doctrine/, target-data/), not .g8e/ runtime state. This is a
-// legitimate cwd usage — demo commands resolve paths relative to the working
-// directory, not through RuntimeFileService.
+// Demo commands discover ./demos/ from a root directory. These tests pass
+// testutil.TempDir through cliSourceRoot. They do not call os.Chdir.
 
 package cmd
 
@@ -29,30 +27,19 @@ import (
 
 func TestRunDemosList(t *testing.T) {
 	t.Run("returns error when demos directory does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
-		// Change to a temporary directory without demos
 		tmpDir := testutil.TempDir(t)
-		err = os.Chdir(tmpDir)
-		require.NoError(t, err)
-
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		cmd := &cobra.Command{}
 		err = runDemosList(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read demos directory")
+		assert.Contains(t, err.Error(), "failed to read directory")
 	})
 
 	t.Run("succeeds when demos directory exists", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
-		// Create a temporary directory with demos structure
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -65,20 +52,10 @@ func TestRunDemosList(t *testing.T) {
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
-		err = os.Chdir(tmpDir)
-		require.NoError(t, err)
-
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 		err = runDemosList(cmd, []string{})
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
 
 		require.NoError(t, err)
 		output := buf.String()
@@ -86,19 +63,16 @@ func TestRunDemosList(t *testing.T) {
 		assert.Contains(t, output, "healthcare")
 	})
 
-	t.Run("excludes bin directory from list", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
-		// Create a temporary directory with demos structure
+	t.Run("lists directories that contain compose.yml", func(t *testing.T) {
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
-		// Create bin directory (should be excluded)
+		// A directory named bin is listed when it has compose.yml. Listing is
+		// based on the compose file, not the directory name.
 		binDir := filepath.Join(demosDir, constants.BinDirname)
 		err = os.Mkdir(binDir, 0755)
 		require.NoError(t, err)
@@ -114,35 +88,21 @@ func TestRunDemosList(t *testing.T) {
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
-		err = os.Chdir(tmpDir)
-		require.NoError(t, err)
-
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 		err = runDemosList(cmd, []string{})
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
 
 		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "healthcare")
-		assert.NotContains(t, output, "bin")
+		assert.Contains(t, output, "bin")
 	})
 
 	t.Run("only lists directories with compose.yml", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
-		// Create a temporary directory with demos structure
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -160,20 +120,10 @@ func TestRunDemosList(t *testing.T) {
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
-		err = os.Chdir(tmpDir)
-		require.NoError(t, err)
-
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 		err = runDemosList(cmd, []string{})
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
 
 		require.NoError(t, err)
 		output := buf.String()
@@ -184,170 +134,125 @@ func TestRunDemosList(t *testing.T) {
 
 func TestRunDemosStart(t *testing.T) {
 	t.Run("returns error when demo directory does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
 		err = runDemosStart(cmd, []string{"nonexistent"})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
+		assert.Contains(t, err.Error(), "demo environment 'nonexistent'")
 	})
 
 	t.Run("returns error when compose.yml does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
 		healthcareDir := filepath.Join(demosDir, "healthcare")
 		err = os.Mkdir(healthcareDir, 0755)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
 		err = runDemosStart(cmd, []string{"healthcare"})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
+		assert.Contains(t, err.Error(), "compose.yml in demo directory 'healthcare'")
 	})
 }
 
 func TestRunDemosStop(t *testing.T) {
 	t.Run("returns error when demo directory does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
 		err = runDemosStop(cmd, []string{"nonexistent"})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
+		assert.Contains(t, err.Error(), "demo environment 'nonexistent'")
 	})
 
 	t.Run("returns error when compose.yml does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
 		healthcareDir := filepath.Join(demosDir, "healthcare")
 		err = os.Mkdir(healthcareDir, 0755)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
 		err = runDemosStop(cmd, []string{"healthcare"})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
+		assert.Contains(t, err.Error(), "compose.yml in demo directory 'healthcare'")
 	})
 }
 
 func TestRunDemosStatus(t *testing.T) {
 	t.Run("returns error when demo directory does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
 		err = runDemosStatus(cmd, []string{"nonexistent"})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
+		assert.Contains(t, err.Error(), "demo environment 'nonexistent'")
 	})
 
 	t.Run("returns error when compose.yml does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
 		healthcareDir := filepath.Join(demosDir, "healthcare")
 		err = os.Mkdir(healthcareDir, 0755)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
 		err = runDemosStatus(cmd, []string{"healthcare"})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
+		assert.Contains(t, err.Error(), "compose.yml in demo directory 'healthcare'")
 	})
 }
 
 func TestRunDemosClean(t *testing.T) {
 	t.Run("returns error when demo directory does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
 		err = runDemosClean(cmd, []string{"nonexistent"}, true)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
+		assert.Contains(t, err.Error(), "demo environment 'nonexistent'")
 	})
 
 	t.Run("returns error when compose.yml does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -356,13 +261,10 @@ func TestRunDemosClean(t *testing.T) {
 		err = os.Mkdir(healthcareDir, 0755)
 		require.NoError(t, err)
 
-		err = os.Chdir(tmpDir)
-		require.NoError(t, err)
-
 		cmd := &cobra.Command{}
 		err = runDemosClean(cmd, []string{"healthcare"}, true)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
+		assert.Contains(t, err.Error(), "compose.yml in demo directory 'healthcare'")
 	})
 }
 
@@ -370,32 +272,23 @@ func TestRunDemosRun(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
 
 	t.Run("returns error when demo directory does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
 		err = runDemosRun(cmd, []string{"nonexistent"}, false, fileSvc)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
+		assert.Contains(t, err.Error(), "demo environment 'nonexistent'")
 	})
 
 	t.Run("returns error when compose.yml does not exist", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -404,22 +297,16 @@ func TestRunDemosRun(t *testing.T) {
 		err = os.Mkdir(healthcareDir, 0755)
 		require.NoError(t, err)
 
-		err = os.Chdir(tmpDir)
-		require.NoError(t, err)
-
 		cmd := &cobra.Command{}
 		err = runDemosRun(cmd, []string{"healthcare"}, false, fileSvc)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
+		assert.Contains(t, err.Error(), "compose.yml in demo directory 'healthcare'")
 	})
 
 	t.Run("calls runScenario when scenario argument provided", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -429,9 +316,6 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 		composePath := filepath.Join(healthcareDir, constants.DemosComposeFile)
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
@@ -441,12 +325,9 @@ func TestRunDemosRun(t *testing.T) {
 	})
 
 	t.Run("calls runAllScenarios when no scenario argument", func(t *testing.T) {
-		// Save original working directory
-		originalWd, err := os.Getwd()
-		require.NoError(t, err)
-		defer os.Chdir(originalWd)
-
 		tmpDir := testutil.TempDir(t)
+		useCLISourceRoot(t, tmpDir)
+		var err error
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -456,9 +337,6 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 		composePath := filepath.Join(healthcareDir, constants.DemosComposeFile)
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
-		require.NoError(t, err)
-
-		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}

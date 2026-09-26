@@ -21,7 +21,7 @@ from app.constants import (
     INTENT_EXECUTION_ID_PREFIX,
     TRIBUNAL_CORRELATION_ID_PREFIX,
 )
-from app.utils.timestamp import now, to_timestamp
+from app.utils.time_ids.timestamp import now, to_timestamp
 
 
 # Canonical shape of a command execution ID: ``cmd_{hex12}_{unix_timestamp}``.

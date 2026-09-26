@@ -19,9 +19,9 @@ from app.models.settings import G8eeAppSettings
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.intent_service import OperatorIntentService
 from app.services.protocols import ExecutionServiceProtocol
-from app.utils.auto_approved_validator import CommandAutoApprovedValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient
 
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer

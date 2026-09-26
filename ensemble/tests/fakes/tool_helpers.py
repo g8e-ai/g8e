@@ -31,7 +31,7 @@ def create_tool_service_fake(
     """
     from app.models.operators import PendingApproval
     from app.services.investigation.investigation_service import InvestigationService
-    from app.utils.timestamp import now
+    from app.utils.time_ids.timestamp import now
 
     from .builder import build_command_service
 

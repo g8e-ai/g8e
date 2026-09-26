@@ -20,7 +20,7 @@ from app.constants import ExecutionStatus
 from app.constants.proto_mappings import protobuf_execution_status_to_python
 from app.models.http_context import G8eHttpContext
 from app.models.pubsub_messages import G8eoResultEnvelope
-from app.utils.result_decoder import parse_inbound_g8eo_payload
+from app.utils.gateway_decoding.result_decoder import parse_inbound_g8eo_payload
 from g8e.operator.v1 import operator_pb2
 
 _EVENT_TYPE_TO_RESULT_PROTO: dict[str, type[Message]] = {

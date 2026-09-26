@@ -767,7 +767,7 @@ class TestCommandGenerationIntegration:
         """
         from app.constants.generated_status import Platform
         from app.models.agent import OperatorContext
-        from app.utils.safety import map_os_string_to_platform, validate_command_safety
+        from app.utils.validation.safety import map_os_string_to_platform, validate_command_safety
 
         # Create a mock operator context
         operator_context = OperatorContext(

@@ -16,7 +16,7 @@ from typing import cast
 
 from fastapi import APIRouter, Request
 
-from app.utils.timestamp import now_iso
+from app.utils.time_ids.timestamp import now_iso
 from app.models.state import G8eeAppState
 
 router = APIRouter(tags=["health"])

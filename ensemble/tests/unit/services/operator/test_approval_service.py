@@ -36,7 +36,7 @@ from app.services.protocols import (
     InvestigationDataServiceProtocol,
     OperatorDataServiceProtocol,
 )
-from app.utils.ids import generate_approval_id
+from app.utils.time_ids.ids import generate_approval_id
 
 
 class TestOperatorApprovalServiceInit:

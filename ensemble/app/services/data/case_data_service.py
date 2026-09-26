@@ -42,7 +42,7 @@ from app.models.db_queries import CaseHistoryQuery
 from app.models.http_context import RequestContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.event_service import EventService
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 from app.clients.governance_client import GovernanceClient
 
 logger = logging.getLogger(__name__)

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from app.utils.ledger_hash import (
+from app.utils.hashing.ledger_hash import (
     canonical_json,
     compute_entry_hash,
     genesis_hash,

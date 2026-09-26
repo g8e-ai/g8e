@@ -17,7 +17,7 @@ from app.models.investigations import (
     InvestigationCreateRequest,
 )
 from app.services.investigation.investigation_data_service import InvestigationDataService
-from app.utils.ledger_hash import verify_chain
+from app.utils.hashing.ledger_hash import verify_chain
 
 
 def _make_gov_mock(cache) -> MagicMock:

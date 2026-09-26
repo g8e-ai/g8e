@@ -31,7 +31,7 @@ from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.utils.path import resolve_project_root
 from app.utils.security import resolve_safe_path_segments, validate_safe_filename
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 

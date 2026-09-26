@@ -44,7 +44,7 @@ from app.constants import (
 from app.errors import NetworkError, ValidationError
 from app.models.http_context import G8eHttpContext
 from app.models.settings import TLSConfig
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 pytestmark = pytest.mark.unit
 
@@ -132,7 +132,7 @@ class TestAiohttpResponse:
 
 
 class TestRequestTrace:
-    """RequestTrace must use timezone-aware datetimes from app.utils.timestamp.now()."""
+    """RequestTrace must use timezone-aware datetimes from app.utils.time_ids.timestamp.now()."""
 
     def test_from_headers_start_time_is_utc_aware(self):
         trace = RequestTrace(

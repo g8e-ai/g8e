@@ -23,7 +23,7 @@ ensemble routes governed operator dispatch through Gateway HTTP only.
 import pytest
 
 from app.constants.api_paths import GatewayAPIPaths
-from app.utils.ledger_hash import canonical_json
+from app.utils.hashing.ledger_hash import canonical_json
 
 pytestmark = pytest.mark.unit
 
@@ -150,7 +150,7 @@ class TestDeadAbstractionsRemoved:
     Envelope construction for the HTTP governance path now lives in
     ``app.clients.governance_client`` (using ``g8e.models.governance``
     directly), and inbound result decoding lives in
-    ``app.utils.result_decoder``. They must not be reintroduced.
+    ``app.utils.gateway_decoding.result_decoder``. They must not be reintroduced.
     """
 
     def test_uap_module_is_not_importable(self):

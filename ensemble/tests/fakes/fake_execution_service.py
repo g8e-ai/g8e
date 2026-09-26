@@ -21,8 +21,8 @@ from app.models.pubsub_messages import (
 )
 from app.models.tool_results import CommandInternalResult
 from app.services.protocols import ExecutionServiceProtocol
-from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
 
 # Create a default operator for the protocol instance
 _default_operator = OperatorDocument(

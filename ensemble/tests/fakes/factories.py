@@ -52,7 +52,7 @@ from app.models.operators import (
     OperatorDocument,
 )
 from app.models.pubsub_messages import G8eoResultEnvelope, G8eoResultPayload
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 # ---------------------------------------------------------------------------
 # Investigation Factories

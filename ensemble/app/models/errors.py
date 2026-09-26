@@ -9,7 +9,7 @@ from typing import Any
 
 from app.constants import ErrorCategory, ErrorCode, ErrorSeverity
 from app.models.base import Field, G8eBaseModel, UTCDatetime, field_validator
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 
 class ErrorCauseDetail(G8eBaseModel):

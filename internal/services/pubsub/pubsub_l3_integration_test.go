@@ -30,7 +30,6 @@ import (
 // rejects mutation envelopes when L3 verification fails, ensuring fail-closed behavior
 // through the full ProcessEnvelope → L4Warden → Actuator chain.
 func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
-	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -171,7 +170,6 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 // accepts mutation envelopes when L3 verification passes, ensuring the full
 // ProcessEnvelope → L4Warden → Actuator chain works correctly.
 func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
-	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -310,7 +308,6 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 // TestOperatorPubSubService_L3NilNotary_FailClosed verifies that OperatorPubSubService
 // rejects mutation envelopes when L3Notary is nil, ensuring fail-closed behavior.
 func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
-	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()

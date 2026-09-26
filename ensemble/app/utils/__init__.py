@@ -10,29 +10,24 @@ g8ee Utils
 
 Utility functions and classes for G8EE.
 
+Utility packages:
+- gateway_decoding/: Gateway operator documents and inbound result decoding
+- hashing/: Ledger hashes and Merkle roots
+- time_ids/: Timestamps and identifier generation
+- validation/: Whitelist, blacklist, auto-approve, and safety checks
+
 Utility modules:
 - agent_persona_loader.py: Agent persona loading utilities
 - aiohttp_session.py: Aiohttp session management
-- auto_approved_validator.py: Auto-approved command validation
-- blacklist_validator.py: Blacklist command validation
 - case_converter.py: Case conversion utilities
 - command.py: Command processing utilities
 - config_loader.py: Configuration loading utilities
 - csv_commands.py: CSV command parsing
-- envelope_builder.py: (removed) envelope construction now lives in governance_client.py; inbound decoding in result_decoder.py
-- result_decoder.py: Inbound g8eo result/heartbeat envelope decoding
-- ids.py: ID generation and validation
 - interrogation.py: Interrogation utilities
 - json_utils.py: JSON processing utilities
 - keyed_lock.py: Keyed lock implementation
-- ledger_hash.py: Ledger hashing utilities
-- merkle.py: Merkle tree utilities
 - path.py: Path manipulation utilities
-- safety.py: Safety checking utilities
 - security.py: Security utilities
 - service_init.py: Service initialization utilities
-- timestamp.py: Timestamp utilities
-- validators.py: General validation utilities
 - version.py: Version utilities
-- whitelist_validator.py: Whitelist command validation
 """
