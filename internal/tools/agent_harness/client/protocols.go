@@ -201,6 +201,50 @@ type AuditReceiptGetArgs struct {
 
 func (AuditReceiptGetArgs) isToolArgs() {}
 
+// PromptArgs is the typed argument payload for an MCP prompts/get invocation.
+// Each implementation matches one prompt's argument schema. The harness client
+// marshals the value under the "arguments" key, the same way ToolArgs replaced
+// loose maps for tools/call.
+type PromptArgs interface {
+	isPromptArgs()
+}
+
+// SummarizePromptArgs are the arguments for the summarize prompt.
+type SummarizePromptArgs struct {
+	Target string `json:"target"`
+}
+
+func (SummarizePromptArgs) isPromptArgs() {}
+
+// SkillPayload is the typed JSON payload for an A2A skill invocation.
+// Each implementation matches one skill's payload schema.
+type SkillPayload interface {
+	isSkillPayload()
+}
+
+// ListDirectorySkillPayload is the list_directory skill payload.
+// Recursive is omitted when unset so a path-only call stays path-only.
+type ListDirectorySkillPayload struct {
+	Path      string `json:"path"`
+	Recursive *bool  `json:"recursive,omitempty"`
+}
+
+func (ListDirectorySkillPayload) isSkillPayload() {}
+
+// ReadFileSkillPayload is the read_file skill payload.
+type ReadFileSkillPayload struct {
+	Path string `json:"path"`
+}
+
+func (ReadFileSkillPayload) isSkillPayload() {}
+
+// CommandSkillPayload is the payload for a skill that carries a shell command.
+type CommandSkillPayload struct {
+	Cmd string `json:"cmd"`
+}
+
+func (CommandSkillPayload) isSkillPayload() {}
+
 // ---- MCP params envelopes ---------------------------------------------------
 
 // toolsCallParams is the JSON-RPC params envelope for tools/call.
@@ -214,11 +258,10 @@ type resourcesReadParams struct {
 	URI string `json:"uri"`
 }
 
-// promptsGetParams is the JSON-RPC params envelope for prompts/get. Arguments
-// holds the schema-less prompt arguments whose shape varies per prompt name.
+// promptsGetParams is the JSON-RPC params envelope for prompts/get.
 type promptsGetParams struct {
-	Name      string `json:"name"`
-	Arguments any    `json:"arguments"`
+	Name      string     `json:"name"`
+	Arguments PromptArgs `json:"arguments"`
 }
 
 func (c *Client) MCPToolsList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
@@ -256,10 +299,9 @@ func (c *Client) MCPPromptsList(ctx context.Context, p Persona) (*JSONRPCRespons
 	return c.rpc(ctx, p, "/mcp", "prompts/list", struct{}{})
 }
 
-// MCPPromptsGet invokes a named prompt. args is a schema-less map because
-// prompt arguments vary by prompt definition — the harness client forwards
-// the caller-supplied map verbatim without interpreting its shape.
-func (c *Client) MCPPromptsGet(ctx context.Context, p Persona, name string, args map[string]any) (*JSONRPCResponse, error) {
+// MCPPromptsGet invokes a named prompt. args is a PromptArgs value matching
+// that prompt's argument schema.
+func (c *Client) MCPPromptsGet(ctx context.Context, p Persona, name string, args PromptArgs) (*JSONRPCResponse, error) {
 	return c.rpc(ctx, p, "/mcp", "prompts/get", promptsGetParams{
 		Name:      name,
 		Arguments: args,
@@ -270,9 +312,9 @@ func (c *Client) MCPPromptsGet(ctx context.Context, p Persona, name string, args
 
 // a2aCallParams is the JSON-RPC params envelope for a2a/call with a JSON payload.
 type a2aCallParams struct {
-	SkillName   string `json:"skill_name"`
-	Payload     any    `json:"payload"`
-	ExecutionID string `json:"execution_id"`
+	SkillName   string       `json:"skill_name"`
+	Payload     SkillPayload `json:"payload"`
+	ExecutionID string       `json:"execution_id"`
 }
 
 // a2aCallProtoParams is the JSON-RPC params envelope for a2a/call with a
@@ -285,11 +327,9 @@ type a2aCallProtoParams struct {
 	PayloadB64  string `json:"payload_b64"`
 }
 
-// A2ACall invokes an A2A skill with a plain JSON payload. payload is a
-// schema-less map because skill payloads vary by skill definition — the
-// harness client forwards the caller-supplied map verbatim without
-// interpreting its shape.
-func (c *Client) A2ACall(ctx context.Context, p Persona, skill string, payload map[string]any, execID string) (*JSONRPCResponse, error) {
+// A2ACall invokes an A2A skill with a typed JSON payload. payload matches
+// the skill's schema; a nil payload is forwarded as JSON null.
+func (c *Client) A2ACall(ctx context.Context, p Persona, skill string, payload SkillPayload, execID string) (*JSONRPCResponse, error) {
 	return c.rpc(ctx, p, "/api/a2a/v1/call", "a2a/call", a2aCallParams{
 		SkillName:   skill,
 		Payload:     payload,

@@ -20,6 +20,15 @@ import (
 // the ensemble. Its fields are validated by the evaluation service before use.
 type EvaluationTrace map[string]any
 
+// DecodeEvaluationTrace unmarshals one persisted g8ee trace document.
+func DecodeEvaluationTrace(raw []byte) (EvaluationTrace, error) {
+	var trace EvaluationTrace
+	if err := json.Unmarshal(raw, &trace); err != nil {
+		return nil, fmt.Errorf("evaluation: decode evaluation trace: %w", err)
+	}
+	return trace, nil
+}
+
 func evaluationTrace(value any) (EvaluationTrace, bool) {
 	switch typed := value.(type) {
 	case EvaluationTrace:
