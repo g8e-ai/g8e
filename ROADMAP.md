@@ -11,7 +11,7 @@ v2.2.0 is in progress on `draft/v2.2.0`. The theme is a boundaries release after
 
 - Protocol under [`protocol/`](protocol/README.md) is the schema and source of truth. Go and protobuf live there. Python and Node are consumers.
 - Keep three code boundaries distinct: the Gateway HTTP and control plane (`internal/services/gateway/`), the embedded Operator substrate (`internal/services/gateway/embedded/`), and the outbound Operator runtime (`G8eoService` in `internal/services/g8eo.go`). The embedded substrate package is extracted. Outbound Operator stays put. Splitting the gateway HTTP controllers further is not part of this line.
-- `./g8e` stays command-and-control: grouped commands, not a grab-bag. The [Code Map](docs/devs/codemap.md) lists the current groups. Splitting `internal/cli/cmd` into those groups is still open.
+- `./g8e` is command-and-control with one Go package per Cobra group under `internal/cli/cmd/<group>/`. The [Code Map](docs/devs/codemap.md) lists the packages. Shared helpers stay in `internal/cli/cmd/shared/`; gateway HTTP helpers shared by eval, public, and docker stay in `internal/cli/cmd/gwremote/`.
 - Diligence hygiene already merged to `draft/v2.2.0`: toolchain pins, typed contracts, test hygiene, and ensemble utils ownership ([#314](https://github.com/g8e-ai/g8e/pull/314), [#315](https://github.com/g8e-ai/g8e/pull/315), [#316](https://github.com/g8e-ai/g8e/pull/316)).
 - Merge to `main` only after the full [Release Process](docs/devs/release_process.md) checklist: change inventory, documentation reconciliation, release notes, version sync, compliance evidence, and the large-release gates.
 

@@ -118,7 +118,7 @@ linters:
         text: G115
       - linters:
           - gosec
-        path: internal/cli/cmd/auth_context\.go
+        path: internal/cli/cmd/auth/auth_context\.go
         text: G117
       - linters:
           - unparam

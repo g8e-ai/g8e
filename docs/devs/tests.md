@@ -78,7 +78,7 @@ The canonical trust bundle is `.g8e/pki/trust/g8eg-ca-bundle.pem`. Tests do not 
 
 Hermetic command tests use the shared environment and dependency-injection helpers in `internal/cli/cmd/testenv_test.go`. The environment pairs a temporary `RuntimeFileService` with a config whose `RuntimeDir` matches the service root, while injected config loaders, file-service factories, and client factories keep command tests independent of the developer's runtime tree and network.
 
-Every command constructor that accepts a file-service factory has a corresponding initialization-error test in `internal/cli/cmd/factory_error_test.go`. The test asserts that the command wraps `constants.ErrFileServiceInit`, preserves the original error for `errors.Is`, and does not call downstream dependencies.
+Every command constructor that accepts a file-service factory has a corresponding initialization-error test in `internal/cli/cmd/<group>/factory_error_<group>_test.go`. The test asserts that the command wraps `constants.ErrFileServiceInit`, preserves the original error for `errors.Is`, and does not call downstream dependencies.
 
 ### Working-directory changes
 

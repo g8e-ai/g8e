@@ -120,11 +120,10 @@ COVERAGE_EXCLUDE_PKGS := $(TEST_EXCLUDE_PKGS) $(COVERAGE_ONLY_EXCLUDE_PKGS)
 
 # Files excluded from coverage only (belong to otherwise-tested packages).
 EXCLUDE_FILES := \
-	internal/cli/cmd/demos.go \
-	internal/cli/cmd/demo_dhs.go \
-	internal/cli/cmd/demo_finance.go \
-	internal/cli/cmd/demo_healthcare.go \
-	internal/cli/cmd/mcp_backup.go
+	internal/cli/cmd/demos/demos.go \
+	internal/cli/cmd/demos/demo_dhs.go \
+	internal/cli/cmd/demos/demo_finance.go \
+	internal/cli/cmd/demos/demo_healthcare.go
 
 # Grep chains derived from the lists above — do not edit directly.
 _TEST_PKG_GREP := $(foreach p,$(TEST_EXCLUDE_PKGS),| grep -v "$(p)")

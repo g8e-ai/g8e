@@ -51,7 +51,7 @@ The root command registers these command groups:
 - `tui`: Tactical Governance Console.
 - `version`: Build metadata and optional FIPS module status.
 
-Use `g8e <command> --help` for the live command and flag hierarchy. The command constructors in `internal/cli/cmd/` are the implementation source of truth.
+Use `g8e <command> --help` for the live command and flag hierarchy. Each group above is a Go package under `internal/cli/cmd/<group>/`. `internal/cli/cmd/main.go` registers them. Package names match the directory except where the directory would collide with an existing import: `auth` is `authcmd`, `operator` is `operatorcmd`, `vault` is `vaultcmd`, `test` is `testcmd`, `tui` is `tuicmd`, and `compliance` is `compliancecmd`.
 
 ### Service Startup
 
@@ -179,7 +179,32 @@ Use `Resolve` only when an API requires an absolute path and `Rel` when converti
 
 ## CLI Packages
 
-- `internal/cli/cmd/`: Cobra command tree and dependency-injected command constructors.
+`./g8e` is a grouped command-and-control CLI. `internal/cli/cmd/` is the Cobra root (`main.go` plus root tests). Each command group is its own package:
+
+- `internal/cli/cmd/gw/`: `gw` lifecycle, data, security, and tunnel commands.
+- `internal/cli/cmd/auth/`: `auth` enrollment, approval, refresh, and context commands (`package authcmd`).
+- `internal/cli/cmd/mcp/`: `mcp` stdio and agent integration.
+- `internal/cli/cmd/operator/`: `operator` discovery, bind, run, and stream commands (`package operatorcmd`).
+- `internal/cli/cmd/vault/`: `vault` commands (`package vaultcmd`).
+- `internal/cli/cmd/test/`: `test` suite, chaos, and public-loop commands (`package testcmd`). `public loop` stays here; it is not the `public` spectator group.
+- `internal/cli/cmd/demos/`: `demos` environment and scenario commands.
+- `internal/cli/cmd/docker/`: `docker` Compose stack commands.
+- `internal/cli/cmd/eval/`: `eval` campaign, inference, and chat commands. The `public restore` command constructor lives here too, because the public group calls eval and eval tests exercise restore. `public.go` still registers it on the `public` command.
+- `internal/cli/cmd/public/`: `public` spectator feed commands.
+- `internal/cli/cmd/audit/`: `audit` receipt and event commands.
+- `internal/cli/cmd/report/`: `report` evidence commands.
+- `internal/cli/cmd/compliance/`: `compliance` evidence and KSI commands (`package compliancecmd`).
+- `internal/cli/cmd/swagger/`: `swagger` OpenAPI commands.
+- `internal/cli/cmd/tui/`: `tui` console command (`package tuicmd`).
+- `internal/cli/cmd/version/`: `version` build metadata command.
+
+Shared code that is not a command group:
+
+- `internal/cli/cmd/shared/`: config load, runtime file-service factory, source-root lookup, command context, and version-info context. Kept here so group packages do not import the root `cmd` package.
+- `internal/cli/cmd/gwremote/`: gateway HTTP publication, provenance, and provider-observation helpers used by `eval`, `public`, and `docker`. Not a Cobra group. It exists so those packages do not import `gw`.
+- `internal/cli/cmd/cmdtest/`: cross-package test helpers (temp chdir, mock API client, factories, campaign fixtures). Not a Cobra group.
+
+Files left at `internal/cli/cmd/` root are the root command, its tests, and the shared file-service and config-load tests. Factory-error tests live next to the group they cover (`factory_error_<group>_test.go`).
 - `internal/cli/api/`: Typed CLI HTTP client.
 - `internal/cli/auth/`: CLI enrollment, gateway enrollment transport, credential staging, key generation, passkey registration, trust bundles, and mTLS clients.
 - `internal/cli/browserorigin/`: Frontend-origin validation and normalization.
@@ -194,7 +219,7 @@ Use `Resolve` only when an API requires an absolute path and `Rel` when converti
 - `internal/cli/tui/`: Tactical Governance Console.
 - `internal/cli/wizard/`: Interactive gateway setup flow.
 
-Command functions that access `.g8e/` receive a `fileSvcFactory`. Their factory initialization errors wrap `constants.ErrFileServiceInit`, and matching tests live in `internal/cli/cmd/factory_error_test.go`.
+Command functions that access `.g8e/` receive a `fileSvcFactory`. Their factory initialization errors wrap `constants.ErrFileServiceInit`, and matching tests live beside each group as `internal/cli/cmd/<group>/factory_error_<group>_test.go`.
 
 ## Protocol and Generated Packages
 
@@ -246,7 +271,7 @@ Runtime compliance paths are centralized in `internal/constants/paths.go`; exter
 
 ### Ensemble
 
-`ensemble/app/main.py` is the g8ee application entry point. `ensemble/app/` contains API routers, middleware, typed models, LLM integrations, storage, security, gateway clients, and orchestration services. `ensemble/tests/` contains Python unit, integration, and external-provider tests. The independent Go-native evaluator lives under `internal/services/evaluation/` and is exposed by `internal/cli/cmd/eval.go`.
+`ensemble/app/main.py` is the g8ee application entry point. `ensemble/app/` contains API routers, middleware, typed models, LLM integrations, storage, security, gateway clients, and orchestration services. `ensemble/tests/` contains Python unit, integration, and external-provider tests. The independent Go-native evaluator lives under `internal/services/evaluation/` and is exposed by `internal/cli/cmd/eval/`.
 
 ### Dashboard
 
@@ -258,7 +283,7 @@ Dashboard application code lives in `dashboard/public/`, workload enrollment liv
 
 `internal/tools/agent_harness/` is a typed reference client for submitting real governance envelopes, exercising MCP and A2A, waiting for human approval, and querying audit evidence. Scenario implementations cover governance postures and the healthcare, finance, DHS, and FedRAMP environments.
 
-`demos/` contains the corresponding containerized services, datasets, actuator bridges, and verification scripts. Demo commands in `internal/cli/cmd/` orchestrate containers and persist typed compliance evidence through the same governed runtime surfaces.
+`demos/` contains the corresponding containerized services, datasets, actuator bridges, and verification scripts. Demo commands in `internal/cli/cmd/demos/` orchestrate containers and persist typed compliance evidence through the same governed runtime surfaces.
 
 ### Website and README
 

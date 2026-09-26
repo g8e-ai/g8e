@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 )
@@ -29,10 +30,9 @@ func TestVersionInfoFromCmd_WithVersionInfo(t *testing.T) {
 	}
 
 	cmd := &cobra.Command{}
-	ctx := context.WithValue(context.Background(), versionInfoKey{}, vi)
-	cmd.SetContext(ctx)
+	cmd.SetContext(shared.ContextWithVersionInfo(context.Background(), vi))
 
-	got := versionInfoFromCmd(cmd)
+	got := shared.VersionInfoFromCmd(cmd)
 	assert.Equal(t, "1.2.3", got.Version)
 	assert.Equal(t, "build-abc", got.BuildID)
 	assert.Equal(t, "2026-07-10", got.BuildTime)
@@ -42,7 +42,7 @@ func TestVersionInfoFromCmd_WithVersionInfo(t *testing.T) {
 func TestVersionInfoFromCmd_WithoutVersionInfo(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	got := versionInfoFromCmd(cmd)
+	got := shared.VersionInfoFromCmd(cmd)
 	assert.Equal(t, serve.VersionInfo{}, got)
 	assert.Empty(t, got.Version)
 	assert.Empty(t, got.BuildID)
@@ -57,7 +57,7 @@ func TestNewRootCmd_PassportVersionInfoIntoContext(t *testing.T) {
 	}
 
 	rootCmd := NewRootCmd("2.0.0", vi)
-	got := versionInfoFromCmd(rootCmd)
+	got := shared.VersionInfoFromCmd(rootCmd)
 	assert.Equal(t, "2.0.0", got.Version)
 	assert.Equal(t, "test-build", got.BuildID)
 }
