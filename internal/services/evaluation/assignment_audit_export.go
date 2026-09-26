@@ -432,12 +432,12 @@ func appendAssignmentAuditCommitment(db *sqliteutil.DB, priorHash string, eventI
 	digest := assignmentAuditEventDigest(event.Type, event.Timestamp, event.Payload)
 	hash := assignmentAuditCommitmentHash(priorHash, digest)
 	attestation := map[string]string{
-		"event_id":                fmt.Sprintf("%d", eventID),
-		"event_digest":            digest,
-		"prior_commitment_hash":   priorHash,
-		"hash":                    hash,
-		"type":                    event.Type,
-		"timestamp":               event.Timestamp,
+		"event_id":              fmt.Sprintf("%d", eventID),
+		"event_digest":          digest,
+		"prior_commitment_hash": priorHash,
+		"hash":                  hash,
+		"type":                  event.Type,
+		"timestamp":             event.Timestamp,
 	}
 	attestationJSON, err := json.Marshal(attestation)
 	if err != nil {

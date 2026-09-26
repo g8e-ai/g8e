@@ -684,7 +684,7 @@ const (
 	ComplianceOperationalReceiptsDirname         = "receipts"
 	ComplianceOperationalPersistenceDirname      = "persistence"
 	ComplianceOperationalCommitmentsDirname      = "commitments"
-	ComplianceOperationalAuditChainDirname         = "audit-chain"
+	ComplianceOperationalAuditChainDirname       = "audit-chain"
 )
 
 // Release evidence output filename suffixes. The per-release compliance
@@ -986,20 +986,20 @@ const (
 
 // Public feed schema and protocol version constants.
 const (
-	PublicFeedProtocolVersion         = "1.0.0"
-	PublicFeedSchemaVersion           = "1.0.0"
-	PublicProofManifestSchemaVersion  = "1.0.0"
-	PublicProofCatalogSchemaVersion   = "1.0.0"
-	PublicProofMirrorSyncSchemaVersion  = "1.0.0"
-	PublicFeedBatchMaxRecords         = 100
-	PublicFeedBatchMaxBytes           = 4 << 20
-	PublicFeedRetryMaxAttempts        = 5
-	PublicFeedRetryInitialBackoff     = 1
-	PublicFeedRetryMaxBackoff         = 60
-	PublicFeedAckWindowSeconds        = 300
-	PublicFeedMaxArtifactBytes        = 64 << 20
-	PublicFeedProofIngestMaxBytes     = 512 << 20
-	PublicFeedKeyRegistrationMaxBytes = 16 << 10
+	PublicFeedProtocolVersion          = "1.0.0"
+	PublicFeedSchemaVersion            = "1.0.0"
+	PublicProofManifestSchemaVersion   = "1.0.0"
+	PublicProofCatalogSchemaVersion    = "1.0.0"
+	PublicProofMirrorSyncSchemaVersion = "1.0.0"
+	PublicFeedBatchMaxRecords          = 100
+	PublicFeedBatchMaxBytes            = 4 << 20
+	PublicFeedRetryMaxAttempts         = 5
+	PublicFeedRetryInitialBackoff      = 1
+	PublicFeedRetryMaxBackoff          = 60
+	PublicFeedAckWindowSeconds         = 300
+	PublicFeedMaxArtifactBytes         = 64 << 20
+	PublicFeedProofIngestMaxBytes      = 512 << 20
+	PublicFeedKeyRegistrationMaxBytes  = 16 << 10
 	// Init-campaign restore publishes two proof artifacts per assignment across
 	// many verified runs; keep headroom above ~3k assignment-audit artifacts.
 	PublicFeedProofMaxArtifacts       = 8192

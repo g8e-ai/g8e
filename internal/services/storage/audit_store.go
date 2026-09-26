@@ -475,24 +475,7 @@ func (ass *SQLAuditStore) GetOperatorSession(id string) (*OperatorSession, error
 	return &session, nil
 }
 
-func (ass *SQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *Event) error {
-	if event == nil {
-		return constants.ErrAuditEventNil
-	}
-	if event.OperatorSessionID == "" || strings.TrimSpace(event.OperatorSessionID) != event.OperatorSessionID {
-		return constants.ErrAuditSessionMissing
-	}
 
-	var exists int
-	err := tx.QueryRow(`SELECT 1 FROM sessions WHERE id = ?`, event.OperatorSessionID).Scan(&exists)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("%w: %s", constants.ErrAuditSessionUnknown, event.OperatorSessionID)
-	}
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrAuditStoreVerifySessionFailed, err)
-	}
-	return nil
-}
 
 func (ass *SQLAuditStore) requireExistingSessionConn(conn *sql.Conn, event *Event) error {
 	if event == nil {

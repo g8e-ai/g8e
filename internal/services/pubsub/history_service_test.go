@@ -103,8 +103,8 @@ func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
-			EventType:         constants.Event.Operator.FetchLogs.Requested,
-			Payload: []byte("invalid protobuf"),
+			EventType: constants.Event.Operator.FetchLogs.Requested,
+			Payload:   []byte("invalid protobuf"),
 		}
 		svc.HandleFetchLogsRequest(context.Background(), msg)
 
@@ -167,8 +167,8 @@ func TestHistoryService_HandleFetchHistoryRequest(t *testing.T) {
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
-			EventType:         constants.Event.Operator.FetchHistory.Requested,
-			Payload: []byte("{}"),
+			EventType: constants.Event.Operator.FetchHistory.Requested,
+			Payload:   []byte("{}"),
 		}
 		svc.HandleFetchHistoryRequest(context.Background(), msg)
 
@@ -187,8 +187,8 @@ func TestHistoryService_HandleFetchFileHistoryRequest(t *testing.T) {
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
-			EventType:         constants.Event.Operator.FetchFileHistory.Requested,
-			Payload: []byte("invalid protobuf"),
+			EventType: constants.Event.Operator.FetchFileHistory.Requested,
+			Payload:   []byte("invalid protobuf"),
 		}
 		svc.HandleFetchFileHistoryRequest(context.Background(), msg)
 
@@ -229,8 +229,8 @@ func TestHistoryService_HandleRestoreFileRequest(t *testing.T) {
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
-			EventType:         constants.Event.Operator.RestoreFile.Requested,
-			Payload: []byte("invalid protobuf"),
+			EventType: constants.Event.Operator.RestoreFile.Requested,
+			Payload:   []byte("invalid protobuf"),
 		}
 		svc.HandleRestoreFileRequest(context.Background(), msg)
 
@@ -276,8 +276,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		req := &operatorv1.FetchFileDiffRequested{DiffId: "diff-1"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
-			EventType:         constants.Event.Operator.FetchFileDiff.Requested,
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchFileDiff.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 

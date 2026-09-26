@@ -27,11 +27,11 @@ import (
 
 // AuditController handles audit receipt, event, summary, report, and ingest endpoints.
 type AuditController struct {
-	cfg               *config.Config
-	logger            *slog.Logger
-	auditStore        *storage.SQLAuditStore
-	auditIngestSvc    *AuditIngestService
-	responder         *response.Writer
+	cfg            *config.Config
+	logger         *slog.Logger
+	auditStore     *storage.SQLAuditStore
+	auditIngestSvc *AuditIngestService
+	responder      *response.Writer
 }
 
 // AuditControllerDeps groups all dependencies for AuditController.

@@ -50,13 +50,13 @@ type campaignFeedPublishRequest struct {
 // CampaignPublicationCoordinator projects canonical campaign state into typed
 // public records and coordinates idempotent publisher export.
 type CampaignPublicationCoordinator struct {
-	store             CampaignStore
-	files             fs.RuntimeFileService
-	publicationState  CampaignPublicationStateStore
-	exporter          CampaignFeedExporter
-	proofPublisher    CampaignProofPublisher
-	observationRemote ProviderObservationRemote
-	mirrorProbe       CampaignMirrorProbe
+	store                  CampaignStore
+	files                  fs.RuntimeFileService
+	publicationState       CampaignPublicationStateStore
+	exporter               CampaignFeedExporter
+	proofPublisher         CampaignProofPublisher
+	observationRemote      ProviderObservationRemote
+	mirrorProbe            CampaignMirrorProbe
 	deferProofMirrorPush   bool
 	pendingProofMirrorPush bool
 	pendingProofInputs     []AssignmentAuditProofInput

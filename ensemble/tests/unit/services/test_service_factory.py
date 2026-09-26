@@ -68,7 +68,6 @@ class TestServiceFactorySmoke:
                 db_service=MagicMock(),
                 kv_service=MagicMock(),
                 blob_service=None,
-                pubsub_client=None,
                 web_search_provider=None,
                 governance_client=MagicMock(),
             )
@@ -101,7 +100,6 @@ class TestServiceFactorySmoke:
                 db_service=MagicMock(),
                 kv_service=MagicMock(),
                 blob_service=None,
-                pubsub_client=None,
                 web_search_provider=web_search_provider,
                 governance_client=MagicMock(),
             )

@@ -189,7 +189,7 @@ func TestBuildGovernanceEnvelope_Success(t *testing.T) {
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:         string(constants.Event.Operator.FsRead.Requested),
 		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserID:   "user-001",
@@ -229,7 +229,7 @@ func TestBuildGovernanceEnvelope_DeterministicTxHash(t *testing.T) {
 	params := BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:         string(constants.Event.Operator.FsRead.Requested),
 		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserID:   "user-001",
@@ -265,7 +265,7 @@ func TestBuildGovernanceEnvelope_MissingPostureFailsClosed(t *testing.T) {
 	_, err = BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:         string(constants.Event.Operator.FsRead.Requested),
 		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		StateMerkleRoot:   "root-abc",

@@ -191,6 +191,7 @@ class TestHashParityVectors:
         for v in vectors:
             result = compute_transaction_hash(
                 action_type=v["action_type"],
+                protocol_version=v.get("protocol_version", "1"),
                 target_resource=v["target_resource"],
                 payload=v["payload_b64"],
                 state_merkle_root=v["state_merkle_root"],

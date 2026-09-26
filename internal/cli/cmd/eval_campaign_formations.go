@@ -487,13 +487,6 @@ func loadFormationInventoryFreeze(cmd *cobra.Command, deps nativeEvalDeps, regis
 	return loadEvaluationInventoryFreeze(cmd.Context(), fileSvc, projectRoot, inventoryFile)
 }
 
-func evalv1CampaignSpecFromFreeze(freeze *evaluation.ModelInventoryFreeze) *evalv1.EvaluationCampaignSpec {
-	return &evalv1.EvaluationCampaignSpec{
-		CampaignId:          freeze.CampaignID,
-		ModelRegistryDigest: freeze.RegistryDigest,
-		ModelRegistry:       freeze.Variants,
-	}
-}
 
 type gatewayFormationProvenancePreflight struct {
 	fileSvc fs.RuntimeFileService

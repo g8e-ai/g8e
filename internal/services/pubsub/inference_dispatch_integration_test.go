@@ -207,12 +207,12 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 		OperatorSessionId: "session-inference-int",
 		EventType:         string(constants.Event.Operator.Inference.Requested),
 
-		ActionType:        string(constants.ActionTypeInference),
-		TargetResource:    "ollama",
-		Payload:           payloadBytes,
-		StateMerkleRoot:   "test-state-root",
-		Nonce:             fmt.Sprintf("nonce-inference-int-%d", inferenceEnvelopeNonce.Add(1)),
-		Posture:           constants.PostureDoctrine,
+		ActionType:      string(constants.ActionTypeInference),
+		TargetResource:  "ollama",
+		Payload:         payloadBytes,
+		StateMerkleRoot: "test-state-root",
+		Nonce:           fmt.Sprintf("nonce-inference-int-%d", inferenceEnvelopeNonce.Add(1)),
+		Posture:         constants.PostureDoctrine,
 	}
 
 	txHash, err := govpkg.GenerateMessageID(envelope)

@@ -9,16 +9,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Protocol, runtime_checkable, TYPE_CHECKING, Any
 
 from app.constants import (
     EventType,
     FileOperation,
     HistoryActor,
-    OperatorStatus,
 )
-from app.constants.generated_status import OperatorHistoryEventType, OperatorType
 from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,
@@ -386,16 +383,6 @@ class OperatorDataServiceProtocol(Protocol):
         user_id: str,
     ) -> list[OperatorDocument]:
         """List operator documents from the Gateway registry for a user."""
-        raise NotImplementedError
-
-    async def update_document(
-        self,
-        collection: str,
-        document_id: str,
-        data: dict[str, object],
-        merge: bool = True,
-    ) -> CacheOperationResult:
-        """Update a document."""
         raise NotImplementedError
 
 

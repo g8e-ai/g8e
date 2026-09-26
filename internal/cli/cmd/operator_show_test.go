@@ -270,4 +270,3 @@ func TestOperatorHostnameValue_FallbackToCurrentHostname(t *testing.T) {
 	assert.Equal(t, "", operatorHostnameValue(emptyOp))
 	assert.Equal(t, "-", operatorHostnameDisplay(emptyOp))
 }
-

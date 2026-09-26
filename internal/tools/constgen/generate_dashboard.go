@@ -24,7 +24,7 @@ export const EventType = Object.freeze({
 	for _, key := range keys {
 		entry := reg.Events[key]
 		member := registryKeyToJSEnum(key)
-		b.WriteString(fmt.Sprintf("    %s: '%s',\n", member, entry.Value))
+		fmt.Fprintf(&b, "    %s: '%s',\n", member, entry.Value)
 	}
 	b.WriteString(`});
 
@@ -33,26 +33,26 @@ export const EventRegistry = Object.freeze({
 	for _, key := range keys {
 		entry := reg.Events[key]
 		member := registryKeyToJSEnum(key)
-		b.WriteString(fmt.Sprintf("    %s: Object.freeze({\n", member))
-		b.WriteString(fmt.Sprintf("        kind: '%s',\n", entry.Kind))
+		fmt.Fprintf(&b, "    %s: Object.freeze({\n", member)
+		fmt.Fprintf(&b, "        kind: '%s',\n", entry.Kind)
 		if len(entry.Transport) > 0 {
 			quoted := make([]string, len(entry.Transport))
 			for i, t := range entry.Transport {
 				quoted[i] = fmt.Sprintf("'%s'", t)
 			}
-			b.WriteString(fmt.Sprintf("        transport: [%s],\n", strings.Join(quoted, ", ")))
+			fmt.Fprintf(&b, "        transport: [%s],\n", strings.Join(quoted, ", "))
 		}
 		if len(entry.Producers) > 0 {
 			quoted := make([]string, len(entry.Producers))
 			for i, p := range entry.Producers {
 				quoted[i] = fmt.Sprintf("'%s'", p)
 			}
-			b.WriteString(fmt.Sprintf("        producers: [%s],\n", strings.Join(quoted, ", ")))
+			fmt.Fprintf(&b, "        producers: [%s],\n", strings.Join(quoted, ", "))
 		}
-		b.WriteString(fmt.Sprintf("        persistence: '%s',\n", entry.Persistence))
+		fmt.Fprintf(&b, "        persistence: '%s',\n", entry.Persistence)
 		if entry.Governance != nil {
-			b.WriteString(fmt.Sprintf("        actionType: '%s',\n", entry.Governance.ActionType))
-			b.WriteString(fmt.Sprintf("        payload: '%s',\n", entry.Governance.Payload))
+			fmt.Fprintf(&b, "        actionType: '%s',\n", entry.Governance.ActionType)
+			fmt.Fprintf(&b, "        payload: '%s',\n", entry.Governance.Payload)
 		}
 		if entry.Reserved {
 			b.WriteString("        reserved: true,\n")

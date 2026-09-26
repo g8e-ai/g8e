@@ -1118,7 +1118,7 @@ class TestAIContextExtraction:
                 memory_mb=8192,
                 current_user="testuser",
             ),
-            network=HeartbeatNetworkInfo(
+            network_info=HeartbeatNetworkInfo(
                 public_ip="192.168.1.100",
             ),
             os_details=HeartbeatOSDetails(

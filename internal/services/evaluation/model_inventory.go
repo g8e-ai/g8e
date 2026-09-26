@@ -40,8 +40,8 @@ type ModelInventoryFreeze struct {
 
 // ModelInventoryOptions controls optional inventory freeze behavior.
 type ModelInventoryOptions struct {
-	RunCapabilityProbes    bool
-	CapabilityProbeRunner  GovernedCapabilityProbeRunner
+	RunCapabilityProbes   bool
+	CapabilityProbeRunner GovernedCapabilityProbeRunner
 }
 
 // GovernedCapabilityProbeRunner executes bounded non-scored capability probes

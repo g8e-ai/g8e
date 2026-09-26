@@ -38,20 +38,20 @@ func (r *recordingCampaignProofPublisher) FlushProofCatalog(context.Context) err
 
 func TestCollectAssignmentAuditEventsFromBodies(t *testing.T) {
 	body, err := MarshalPublicLiveEvent(map[string]any{
-		"schema_version": "1.5.0",
-		"kind":           "stage_updated",
-		"dataset_id":     "dataset-1",
-		"quality_state":  "live_in_progress",
-		"observed_at":    "2026-09-17T00:00:00Z",
-		"event_id":       "event-1",
-		"run_id":         "run-1",
-		"assignment_id":  "assignment-1",
-		"variant_id":     "variant-a",
-		"role":           "primary",
+		"schema_version":   "1.5.0",
+		"kind":             "stage_updated",
+		"dataset_id":       "dataset-1",
+		"quality_state":    "live_in_progress",
+		"observed_at":      "2026-09-17T00:00:00Z",
+		"event_id":         "event-1",
+		"run_id":           "run-1",
+		"assignment_id":    "assignment-1",
+		"variant_id":       "variant-a",
+		"role":             "primary",
 		"lifecycle_status": "running",
-		"completed":      1,
-		"total":          2,
-		"stage_label":    "model role invoked · primary · variant-a",
+		"completed":        1,
+		"total":            2,
+		"stage_label":      "model role invoked · primary · variant-a",
 	})
 	require.NoError(t, err)
 

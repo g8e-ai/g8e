@@ -472,9 +472,9 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 		RequiredConcepts:        requiredConcepts,
 		GradingMethod:           gradingMethod,
 		Binding:                 binding,
-		OnTraceProgress:          c.assignmentTraceProgressHook(assignment, attemptID),
-		OnFormationRoleStarting:  c.assignmentFormationRoleStartingHook(assignment),
-		OnFormationRoleProgress:  c.assignmentFormationProgressHook(assignment, attemptID),
+		OnTraceProgress:         c.assignmentTraceProgressHook(assignment, attemptID),
+		OnFormationRoleStarting: c.assignmentFormationRoleStartingHook(assignment),
+		OnFormationRoleProgress: c.assignmentFormationProgressHook(assignment, attemptID),
 	}
 	result, err := c.executor.ExecuteAssignment(ctx, execReq)
 	if err != nil {

@@ -242,26 +242,26 @@ type PublicProofCatalogPruneRequest struct {
 }
 
 type PublicProofCatalogPruneResponse struct {
-	Accepted      bool `json:"accepted"`
-	RemovedCount  int  `json:"removed_count"`
-	RemainingCount int `json:"remaining_count"`
+	Accepted       bool `json:"accepted"`
+	RemovedCount   int  `json:"removed_count"`
+	RemainingCount int  `json:"remaining_count"`
 }
 
 // PublicProofMirrorSyncState tracks the last proof package successfully pushed
 // to the public mirror so incremental pushes can omit already-synced artifacts.
 type PublicProofMirrorSyncState struct {
-	SchemaVersion       string    `json:"schema_version"`
-	SourceID            string    `json:"source_id"`
-	ProofRootSHA256     string    `json:"proof_root_sha256"`
-	SyncedArtifactIDs   []string  `json:"synced_artifact_ids"`
-	SyncedAt            time.Time `json:"synced_at"`
+	SchemaVersion     string    `json:"schema_version"`
+	SourceID          string    `json:"source_id"`
+	ProofRootSHA256   string    `json:"proof_root_sha256"`
+	SyncedArtifactIDs []string  `json:"synced_artifact_ids"`
+	SyncedAt          time.Time `json:"synced_at"`
 }
 
 type PublicAssignmentAuditProofPublishResponse struct {
-	Accepted         bool     `json:"accepted"`
-	DatabaseSHA256   string   `json:"database_sha256,omitempty"`
-	VaultKeySHA256   string   `json:"vault_key_sha256,omitempty"`
-	ProofRootSHA256  string   `json:"proof_root_sha256,omitempty"`
+	Accepted        bool   `json:"accepted"`
+	DatabaseSHA256  string `json:"database_sha256,omitempty"`
+	VaultKeySHA256  string `json:"vault_key_sha256,omitempty"`
+	ProofRootSHA256 string `json:"proof_root_sha256,omitempty"`
 }
 
 type PublicAssignmentAuditProofBatchPublishResponse struct {

@@ -34,7 +34,7 @@ func TestGovernanceFlow(t *testing.T) {
 	}
 
 	env := &govtypes.GovernanceEnvelope{
-		ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
+		ProtocolVersion: govtypes.GovernanceProtocolVersionV2,
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
 		EventType:       string(constants.Event.Operator.FetchLogs.Requested),

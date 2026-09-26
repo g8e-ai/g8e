@@ -208,10 +208,10 @@ func dispatchOllamaBashCommand(
 	}
 	executionID := maintenance.NewID(executionPrefix)
 	payload, err := MarshalOllamaModelCommandPayload(OllamaModelCommandDispatchRequest{
-		Command:          command,
-		ExecutionID:      executionID,
-		Environment:      maintenance.Environment,
-		TimeoutSeconds:   maintenance.timeoutSeconds(),
+		Command:        command,
+		ExecutionID:    executionID,
+		Environment:    maintenance.Environment,
+		TimeoutSeconds: maintenance.timeoutSeconds(),
 	})
 	if err != nil {
 		return nil, err

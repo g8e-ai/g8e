@@ -1226,7 +1226,7 @@ func (s *PublicPublisherService) PushProofPackage(ctx context.Context) error {
 		return s.saveProofMirrorSyncState(ctx, models.PublicProofMirrorSyncState{
 			SchemaVersion:     constants.PublicProofMirrorSyncSchemaVersion,
 			SourceID:          s.cfg.SourceID,
-			ProofRootSHA256: manifest.ProofRootSHA256,
+			ProofRootSHA256:   manifest.ProofRootSHA256,
 			SyncedArtifactIDs: catalogArtifactIDs(catalog),
 			SyncedAt:          time.Now().UTC(),
 		})
@@ -1465,36 +1465,12 @@ func (s *PublicPublisherService) saveProofMirrorSyncState(ctx context.Context, s
 	return s.fileSvc.WriteFile(ctx, constants.PublicProofMirrorSyncFilename, data, constants.PermFilePrivate)
 }
 
-func (s *PublicPublisherService) clearProofMirrorSyncState(ctx context.Context) error {
-	exists, err := s.fileSvc.FileExists(ctx, constants.PublicProofMirrorSyncFilename)
-	if err != nil {
-		return fmt.Errorf("public-feed: inspect proof mirror sync state: %w", err)
-	}
-	if !exists {
-		return nil
-	}
-	return s.fileSvc.Remove(ctx, constants.PublicProofMirrorSyncFilename)
-}
-
 func catalogArtifactIDs(catalog models.PublicProofCatalog) []string {
 	ids := make([]string, 0, len(catalog.Entries))
 	for _, entry := range catalog.Entries {
 		ids = append(ids, entry.ArtifactID)
 	}
 	return ids
-}
-
-func proofMirrorSyncedArtifactSet(state *models.PublicProofMirrorSyncState) map[string]struct{} {
-	synced := make(map[string]struct{})
-	if state == nil {
-		return synced
-	}
-	for _, artifactID := range state.SyncedArtifactIDs {
-		if artifactID != "" {
-			synced[artifactID] = struct{}{}
-		}
-	}
-	return synced
 }
 
 func (s *PublicPublisherService) writeProofArtifacts(ctx context.Context, campaignID string, artifacts []ProofArtifactInput) ([]models.PublicProofCatalogEntry, error) {

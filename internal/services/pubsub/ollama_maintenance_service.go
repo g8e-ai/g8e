@@ -24,11 +24,11 @@ import (
 // OllamaMaintenanceService owns typed governed Ollama provider inventory and
 // residency queries on the Inference Operator.
 type OllamaMaintenanceService struct {
-	config    *config.Config
-	logger    *slog.Logger
-	client    PubSubClient
+	config     *config.Config
+	logger     *slog.Logger
+	client     PubSubClient
 	auditStore AuditEventRecorder
-	scrubbing *scrubbing.ScrubbingService
+	scrubbing  *scrubbing.ScrubbingService
 }
 
 // NewOllamaMaintenanceService creates a new OllamaMaintenanceService.

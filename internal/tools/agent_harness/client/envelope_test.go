@@ -276,7 +276,7 @@ func TestSubmitEnvelope(t *testing.T) {
 			envelope := &commonv1.GovernanceEnvelope{
 				Id:              "test-id",
 				TransactionHash: "test-hash",
-				ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
+				ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 				ActionType:      "TEST_ACTION",
 			}
 
@@ -318,7 +318,7 @@ func TestSubmitEnvelope_MarshalError(t *testing.T) {
 	envelope := &commonv1.GovernanceEnvelope{
 		Id:              "test-id",
 		TransactionHash: "test-hash",
-		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
+		ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 		ActionType:      "TEST_ACTION",
 	}
 

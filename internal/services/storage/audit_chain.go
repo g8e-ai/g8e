@@ -88,8 +88,8 @@ func MigrateEventChainColumns(db *sqliteutil.DB, logger *slog.Logger, encryption
 	}
 
 	for _, col := range []struct {
-		name    string
-		ddl     string
+		name string
+		ddl  string
 	}{
 		{"seq", "ALTER TABLE events ADD COLUMN seq INTEGER"},
 		{"prev_hash", "ALTER TABLE events ADD COLUMN prev_hash TEXT"},
@@ -344,16 +344,16 @@ func loadAuditChainHeadConn(ctx context.Context, conn *sql.Conn) (auditChainHead
 
 // PreparedAuditEventInsert holds encrypted event fields ready for chained append.
 type PreparedAuditEventInsert struct {
-	Event             *Event
-	TimestampStr      string
-	ContentTextBytes  []byte
-	StdoutBytes       []byte
-	StderrBytes       []byte
-	StdoutTruncated   bool
-	StderrTruncated   bool
-	EncryptedFlag     int
-	StdoutPlaintext   string
-	StderrPlaintext   string
+	Event            *Event
+	TimestampStr     string
+	ContentTextBytes []byte
+	StdoutBytes      []byte
+	StderrBytes      []byte
+	StdoutTruncated  bool
+	StderrTruncated  bool
+	EncryptedFlag    int
+	StdoutPlaintext  string
+	StderrPlaintext  string
 }
 
 // AppendPreparedAuditEvent appends one event to the audit chain under SQLite's write lock.

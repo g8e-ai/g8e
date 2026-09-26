@@ -9,17 +9,17 @@ package models
 
 // AuditRecordIngestRequest is the HTTP body for POST /api/v1/audit/records.
 type AuditRecordIngestRequest struct {
-	EventType          string `json:"event_type"`
-	OperatorID         string `json:"operator_id"`
-	OperatorSessionID  string `json:"operator_session_id"`
-	IdempotencyKey     string `json:"idempotency_key"`
-	Payload            []byte `json:"payload"`
-	CaseID             string `json:"case_id,omitempty"`
-	InvestigationID    string `json:"investigation_id,omitempty"`
-	TaskID             string `json:"task_id,omitempty"`
-	WebSessionID       string `json:"web_session_id,omitempty"`
-	CliSessionID       string `json:"cli_session_id,omitempty"`
-	RequestorUserID    string `json:"requestor_user_id,omitempty"`
+	EventType         string `json:"event_type"`
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id"`
+	IdempotencyKey    string `json:"idempotency_key"`
+	Payload           []byte `json:"payload"`
+	CaseID            string `json:"case_id,omitempty"`
+	InvestigationID   string `json:"investigation_id,omitempty"`
+	TaskID            string `json:"task_id,omitempty"`
+	WebSessionID      string `json:"web_session_id,omitempty"`
+	CliSessionID      string `json:"cli_session_id,omitempty"`
+	RequestorUserID   string `json:"requestor_user_id,omitempty"`
 }
 
 // AuditRecordIngestResponse is returned after the operator acknowledges the append.

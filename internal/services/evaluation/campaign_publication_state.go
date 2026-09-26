@@ -26,11 +26,11 @@ type CampaignPublishedProofArtifacts struct {
 // CampaignPublicationState tracks exported public projection idempotency keys
 // for one campaign run. The gateway document store is authoritative.
 type CampaignPublicationState struct {
-	SchemaVersion            string
-	RunID                    string
-	PublishedIdempotency     []string
-	PublishedProofArtifacts  map[string]CampaignPublishedProofArtifacts
-	LastPublishedSequence    int64
+	SchemaVersion           string
+	RunID                   string
+	PublishedIdempotency    []string
+	PublishedProofArtifacts map[string]CampaignPublishedProofArtifacts
+	LastPublishedSequence   int64
 }
 
 // CampaignPublicationStateStore persists publication idempotency in the

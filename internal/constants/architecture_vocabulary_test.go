@@ -64,7 +64,7 @@ func walkProductionGoFiles(root string) ([]string, error) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case "vendor", "testdata", "docs":
+			case "vendor", "testdata", "docs", ".local.dev":
 				return filepath.SkipDir
 			}
 			return nil
@@ -96,6 +96,10 @@ func walkProductionPythonFiles(root string) ([]string, error) {
 			return err
 		}
 		if info.IsDir() {
+			switch info.Name() {
+			case "vendor", "testdata", "docs", ".local.dev", ".venv", "venv", "node_modules":
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if !strings.HasSuffix(path, ".py") || strings.HasSuffix(path, "_test.py") {
@@ -120,7 +124,8 @@ func walkProductionJSFiles(root string) ([]string, error) {
 			return err
 		}
 		if info.IsDir() {
-			if info.Name() == "constants" {
+			switch info.Name() {
+			case "constants", "node_modules", ".local.dev", "vendor":
 				return filepath.SkipDir
 			}
 			return nil

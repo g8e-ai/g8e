@@ -18,15 +18,13 @@ Note: g8eo Operator commands still use PubSub (external agent communication).
 
 import asyncio
 import logging
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, status
 from app.models.http_context import G8eHttpContext, RequestContext
 
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.constants import (
     DB_COLLECTION_MEMORIES,
     EventType,
-    G8EE_COMPONENT,
-    HistoryActor,
     InternalAPIPaths,
     OperatorStatus,
     Priority,
@@ -45,7 +43,6 @@ from app.models.cases import (
     CaseDeleteRequest,
 )
 from app.models.cache import FieldFilter
-from app.models.pubsub_messages import G8eMessage
 from app.models.internal_api import (
     APIKeyGenerationRequest,
     APIKeyGenerationResponse,
@@ -112,7 +109,6 @@ from app.models.operators import (
 )
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.errors import NetworkError
-from app.services.operator.operator_data_service import OperatorDataService
 from app.services.data.case_data_service import CaseDataService
 from app.services.data.attachment_store_service import AttachmentService
 from app.services.investigation.investigation_service import InvestigationService
@@ -124,7 +120,6 @@ from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.infra.settings_service import SettingsService
-from app.utils.timestamp import now
 from app.constants.message_sender import MessageSender
 
 _GATEWAY_OPERATOR_AUTHORITY_ERROR = (
@@ -144,7 +139,6 @@ from app.dependencies import (
     get_g8ee_event_service,
     get_g8ee_investigation_service,
     get_g8ee_operator_command_service,
-    get_g8ee_operator_data_service,
     get_g8ee_gateway_operator_client,
     get_g8ee_api_key_service,
     get_g8ee_certificate_service,

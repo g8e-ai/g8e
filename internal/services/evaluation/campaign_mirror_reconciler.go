@@ -35,13 +35,13 @@ type CampaignMirrorReconcileResult struct {
 type CampaignMirrorReconcileStatus string
 
 const (
-	CampaignMirrorReconcileChecking   CampaignMirrorReconcileStatus = "checking"
+	CampaignMirrorReconcileChecking    CampaignMirrorReconcileStatus = "checking"
 	CampaignMirrorReconcileRestored    CampaignMirrorReconcileStatus = "restored"
 	CampaignMirrorReconcileRepublished CampaignMirrorReconcileStatus = "republished"
 	CampaignMirrorReconcilePresent     CampaignMirrorReconcileStatus = "already_present"
-	CampaignMirrorReconcileMissing    CampaignMirrorReconcileStatus = "missing"
-	CampaignMirrorReconcileHostAbsent CampaignMirrorReconcileStatus = "host_absent"
-	CampaignMirrorReconcileFailed     CampaignMirrorReconcileStatus = "failed"
+	CampaignMirrorReconcileMissing     CampaignMirrorReconcileStatus = "missing"
+	CampaignMirrorReconcileHostAbsent  CampaignMirrorReconcileStatus = "host_absent"
+	CampaignMirrorReconcileFailed      CampaignMirrorReconcileStatus = "failed"
 )
 
 type CampaignMirrorReconcileProgress struct {

@@ -12,23 +12,22 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
 )
 
 // RolloutIntakeStageRequest stages catalog models through the governed Inference
 // Operator session.
 type RolloutIntakeStageRequest struct {
-	Context              context.Context
-	CatalogPath          string
-	PullTimeout          time.Duration
-	VariantIDs           []string
-	DryRun               bool
-	Progress             func(RolloutIntakeStageEvent)
-	Dispatcher           OllamaModelCommandDispatcher
-	InferenceSessionID   string
-	Environment          map[string]string
-	NewID                func(string) string
-	CaseID               string
+	Context            context.Context
+	CatalogPath        string
+	PullTimeout        time.Duration
+	VariantIDs         []string
+	DryRun             bool
+	Progress           func(RolloutIntakeStageEvent)
+	Dispatcher         OllamaModelCommandDispatcher
+	InferenceSessionID string
+	Environment        map[string]string
+	NewID              func(string) string
+	CaseID             string
 }
 
 // RolloutIntakeStageEvent reports pull/copy progress for one catalog entry.

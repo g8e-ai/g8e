@@ -270,7 +270,7 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 
 			_, err := svc.Dispatch(context.Background(), DispatchRequest{
 				TargetOperatorSessionID: op.OperatorSessionID,
-				EventType: string(tc.event),
+				EventType:               string(tc.event),
 				Payload:                 tc.payload(t),
 				RequestorUserID:         "user-001",
 			})
@@ -312,7 +312,7 @@ func TestDispatchService_L2DeliberationFailureFailsClosed(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayload(t),
 		RequestorUserID:         "user-001",
 	})

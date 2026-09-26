@@ -82,7 +82,7 @@ const (
 `)
 	for _, key := range keys {
 		meta := actionTypes[key]
-		b.WriteString(fmt.Sprintf("\t%s ActionType = %q\n", meta.GoConst, meta.Value))
+		fmt.Fprintf(&b, "\t%s ActionType = %q\n", meta.GoConst, meta.Value)
 	}
 	b.WriteString(`)
 
@@ -90,7 +90,7 @@ const (
 var AllActionTypes = []ActionType{
 `)
 	for _, key := range keys {
-		b.WriteString(fmt.Sprintf("\t%s,\n", actionTypes[key].GoConst))
+		fmt.Fprintf(&b, "\t%s,\n", actionTypes[key].GoConst)
 	}
 	b.WriteString(`}
 

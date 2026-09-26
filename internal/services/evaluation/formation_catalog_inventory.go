@@ -184,4 +184,3 @@ func formationCatalogFixtureVariant(model FormationModel, digest string) *evalv1
 	}
 	return variant
 }
-

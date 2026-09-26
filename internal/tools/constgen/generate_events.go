@@ -34,7 +34,7 @@ type EventType string
 
 	for _, key := range keys {
 		entry := reg.Events[key]
-		b.WriteString(fmt.Sprintf("const %s EventType = %q\n", entry.GoConst, entry.Value))
+		fmt.Fprintf(&b, "const %s EventType = %q\n", entry.GoConst, entry.Value)
 	}
 
 	b.WriteString(`
@@ -90,22 +90,22 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 
 	for _, key := range keys {
 		entry := reg.Events[key]
-		b.WriteString(fmt.Sprintf("\t%s: {\n", entry.GoConst))
-		b.WriteString(fmt.Sprintf("\t\tKey: %q,\n", key))
-		b.WriteString(fmt.Sprintf("\t\tKind: EventKind%s,\n", titleCase(entry.Kind)))
-		b.WriteString(fmt.Sprintf("\t\tTransport: %s,\n", goStringSlice(entry.Transport)))
-		b.WriteString(fmt.Sprintf("\t\tProducers: %s,\n", goStringSlice(entry.Producers)))
-		b.WriteString(fmt.Sprintf("\t\tPersistence: %q,\n", entry.Persistence))
+		fmt.Fprintf(&b, "\t%s: {\n", entry.GoConst)
+		fmt.Fprintf(&b, "\t\tKey: %q,\n", key)
+		fmt.Fprintf(&b, "\t\tKind: EventKind%s,\n", titleCase(entry.Kind))
+		fmt.Fprintf(&b, "\t\tTransport: %s,\n", goStringSlice(entry.Transport))
+		fmt.Fprintf(&b, "\t\tProducers: %s,\n", goStringSlice(entry.Producers))
+		fmt.Fprintf(&b, "\t\tPersistence: %q,\n", entry.Persistence)
 		if entry.Governance != nil {
 			goConst, err := actionTypeGoConst(actionTypes, entry.Governance.ActionType)
 			if err != nil {
 				return "", fmt.Errorf("%s: %v", key, err)
 			}
-			b.WriteString(fmt.Sprintf("\t\tGovernanceAction: %s,\n", goConst))
-			b.WriteString(fmt.Sprintf("\t\tGovernancePayload: %q,\n", entry.Governance.Payload))
+			fmt.Fprintf(&b, "\t\tGovernanceAction: %s,\n", goConst)
+			fmt.Fprintf(&b, "\t\tGovernancePayload: %q,\n", entry.Governance.Payload)
 		}
 		if len(entry.Outcomes) > 0 {
-			b.WriteString(fmt.Sprintf("\t\tOutcomes: %s,\n", goStringSlice(entry.Outcomes)))
+			fmt.Fprintf(&b, "\t\tOutcomes: %s,\n", goStringSlice(entry.Outcomes))
 		}
 		if entry.Reserved {
 			b.WriteString("\t\tReserved: true,\n")
@@ -196,16 +196,16 @@ func emitHierarchyTypes(b *strings.Builder, node *hierarchyNode, path string, ty
 	if len(node.children) == 0 {
 		return
 	}
-	b.WriteString(fmt.Sprintf("type %s struct {\n", typeNames[path]))
+	fmt.Fprintf(b, "type %s struct {\n", typeNames[path])
 	childNames := sortedMapKeys(node.children)
 	for _, child := range childNames {
 		childNode := node.children[child]
 		if childNode.leaf != "" && len(childNode.children) == 0 {
-			b.WriteString(fmt.Sprintf("\t%s EventType\n", child))
+			fmt.Fprintf(b, "\t%s EventType\n", child)
 			continue
 		}
 		childPath := path + child
-		b.WriteString(fmt.Sprintf("\t%s %s\n", child, typeNames[childPath]))
+		fmt.Fprintf(b, "\t%s %s\n", child, typeNames[childPath])
 	}
 	b.WriteString("}\n\n")
 	for _, child := range childNames {
@@ -219,9 +219,9 @@ func emitHierarchyTypes(b *strings.Builder, node *hierarchyNode, path string, ty
 
 func emitHierarchyVar(b *strings.Builder, node *hierarchyNode, path string, typeNames map[string]string) {
 	b.WriteString("var Event = struct {\n")
-	b.WriteString(fmt.Sprintf("\tOperator %s\n", typeNames["Operator"]))
+	fmt.Fprintf(b, "\tOperator %s\n", typeNames["Operator"])
 	b.WriteString("}{\n")
-	b.WriteString(fmt.Sprintf("\tOperator: %s{\n", typeNames["Operator"]))
+	fmt.Fprintf(b, "\tOperator: %s{\n", typeNames["Operator"])
 	emitHierarchyLiteral(b, node, typeNames, "Operator", "\t\t")
 	b.WriteString("\t},\n")
 	b.WriteString("}\n")
@@ -233,12 +233,12 @@ func emitHierarchyLiteral(b *strings.Builder, node *hierarchyNode, typeNames map
 		childNode := node.children[child]
 		childPath := path + child
 		if childNode.leaf != "" && len(childNode.children) == 0 {
-			b.WriteString(fmt.Sprintf("%s%s: %s,\n", indent, child, childNode.leaf))
+			fmt.Fprintf(b, "%s%s: %s,\n", indent, child, childNode.leaf)
 			continue
 		}
-		b.WriteString(fmt.Sprintf("%s%s: %s{\n", indent, child, typeNames[childPath]))
+		fmt.Fprintf(b, "%s%s: %s{\n", indent, child, typeNames[childPath])
 		emitHierarchyLiteral(b, childNode, typeNames, childPath, indent+"\t")
-		b.WriteString(fmt.Sprintf("%s},\n", indent))
+		fmt.Fprintf(b, "%s},\n", indent)
 	}
 }
 

@@ -77,7 +77,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 				SignerStore:       signerStore,
 				Doctrine:          governance.NewL1Doctrine(),
 			},
-			ConsensusPolicyStore: testConsensusStore(),
+			ConsensusPolicyStore:   testConsensusStore(),
 			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
@@ -105,12 +105,12 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		OperatorSessionId: "session-1",
 		EventType:         string(constants.Event.Operator.Command.Requested),
 
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-		Payload:           payloadBytes,
-		StateMerkleRoot:   "test-root",
-		Nonce:             "nonce-test-1",
-		Posture:           constants.PostureNotary,
+		ActionType:      string(constants.ActionTypeExecuteBash),
+		TargetResource:  "localhost",
+		Payload:         payloadBytes,
+		StateMerkleRoot: "test-root",
+		Nonce:           "nonce-test-1",
+		Posture:         constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
@@ -218,7 +218,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 				SignerStore:       signerStore,
 				Doctrine:          governance.NewL1Doctrine(),
 			},
-			ConsensusPolicyStore: testConsensusStore(),
+			ConsensusPolicyStore:   testConsensusStore(),
 			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
@@ -246,12 +246,12 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		OperatorSessionId: "session-1",
 		EventType:         string(constants.Event.Operator.Command.Requested),
 
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-		Payload:           payloadBytes,
-		StateMerkleRoot:   "test-root",
-		Nonce:             "nonce-test-2",
-		Posture:           constants.PostureNotary,
+		ActionType:      string(constants.ActionTypeExecuteBash),
+		TargetResource:  "localhost",
+		Payload:         payloadBytes,
+		StateMerkleRoot: "test-root",
+		Nonce:           "nonce-test-2",
+		Posture:         constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
@@ -354,7 +354,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 				SignerStore:       signerStore,
 				Doctrine:          governance.NewL1Doctrine(),
 			},
-			ConsensusPolicyStore: testConsensusStore(),
+			ConsensusPolicyStore:   testConsensusStore(),
 			PlatformEnrollmentDeps: &PlatformEnrollmentDeps{},
 		},
 	})
@@ -382,12 +382,12 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		OperatorSessionId: "session-1",
 		EventType:         string(constants.Event.Operator.Command.Requested),
 
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-		Payload:           payloadBytes,
-		StateMerkleRoot:   "test-root",
-		Nonce:             "nonce-test-3",
-		Posture:           constants.PostureNotary,
+		ActionType:      string(constants.ActionTypeExecuteBash),
+		TargetResource:  "localhost",
+		Payload:         payloadBytes,
+		StateMerkleRoot: "test-root",
+		Nonce:           "nonce-test-3",
+		Posture:         constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3

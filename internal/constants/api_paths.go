@@ -80,12 +80,12 @@ var APIPaths = struct {
 	AuditVerify         string `json:"audit_verify"`
 	AuditStream         string `json:"audit_stream"`
 	// Public feed routes
-	PublicFeedBatches  string `json:"public_feed_batches"`
-	PublicFeedSnapshot string `json:"public_feed_snapshot"`
-	PublicFeedProofs       string `json:"public_feed_proofs"`
-	PublicFeedProofsBatch  string `json:"public_feed_proofs_batch"`
-	PublicFeedProofsPush   string `json:"public_feed_proofs_push"`
-	PublicFeedProofsPrune  string `json:"public_feed_proofs_prune"`
+	PublicFeedBatches     string `json:"public_feed_batches"`
+	PublicFeedSnapshot    string `json:"public_feed_snapshot"`
+	PublicFeedProofs      string `json:"public_feed_proofs"`
+	PublicFeedProofsBatch string `json:"public_feed_proofs_batch"`
+	PublicFeedProofsPush  string `json:"public_feed_proofs_push"`
+	PublicFeedProofsPrune string `json:"public_feed_proofs_prune"`
 	// Native eval campaign publication state (gateway-owned idempotency)
 	EvalCampaignPublicationStateByRun string `json:"eval_campaign_publication_state_by_run"`
 	// User routes
@@ -259,8 +259,8 @@ var APIPaths = struct {
 	AuditVerify:         "/api/v1/audit/verify",
 	AuditStream:         "/api/v1/audit/stream",
 	// Public feed routes
-	PublicFeedBatches:  "/api/v1/public-feed/batches",
-	PublicFeedSnapshot: "/api/v1/public-feed/snapshot",
+	PublicFeedBatches:     "/api/v1/public-feed/batches",
+	PublicFeedSnapshot:    "/api/v1/public-feed/snapshot",
 	PublicFeedProofs:      "/api/v1/public-feed/proofs",
 	PublicFeedProofsBatch: "/api/v1/public-feed/proofs/batch",
 	PublicFeedProofsPush:  "/api/v1/public-feed/proofs/push",

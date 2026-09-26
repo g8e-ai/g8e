@@ -40,11 +40,11 @@ func TestBuildPublicAssignmentEvidence_EmitsEmptyActivityRecordsOnWire(t *testin
 	}
 	require.NoError(t, json.Unmarshal(record, &payload))
 	for familyName, familyRaw := range map[string]json.RawMessage{
-		"model_activity":    payload.ActivitySummary.ModelActivity,
-		"tool_decisions":    payload.ActivitySummary.ToolDecisions,
-		"tool_calls":        payload.ActivitySummary.ToolCalls,
-		"policy_decisions":  payload.ActivitySummary.PolicyDecisions,
-		"governed_actions":  payload.ActivitySummary.GovernedActions,
+		"model_activity":   payload.ActivitySummary.ModelActivity,
+		"tool_decisions":   payload.ActivitySummary.ToolDecisions,
+		"tool_calls":       payload.ActivitySummary.ToolCalls,
+		"policy_decisions": payload.ActivitySummary.PolicyDecisions,
+		"governed_actions": payload.ActivitySummary.GovernedActions,
 	} {
 		var family publicActivityFamilyWire
 		require.NoError(t, json.Unmarshal(familyRaw, &family), familyName)

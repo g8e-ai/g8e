@@ -26,8 +26,8 @@ type inventoryTestDispatcher struct {
 func (d *inventoryTestDispatcher) DispatchOllamaModelCommand(_ context.Context, request OllamaModelCommandDispatchRequest) (*OllamaModelCommandDispatchResult, error) {
 	d.request = request
 	return &OllamaModelCommandDispatchResult{
-		Status:  200,
-		Success: true,
+		Status:     200,
+		Success:    true,
 		ActionType: constants.ActionTypeOllamaModelInventory,
 		InventoryResult: &operatorv1.OllamaModelInventoryResult{
 			Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,

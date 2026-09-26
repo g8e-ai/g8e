@@ -625,16 +625,16 @@ func TestPubSubResultsService_PublishActionReceipt(t *testing.T) {
 			OperatorSessionId: "sess-001",
 			EventType:         string(constants.Event.Operator.FileEdit.Requested),
 
-			ActionType:        string(constants.ActionTypeFileEdit),
-			TargetResource:    "/tmp/test.txt",
-			RequestorUserId:   "user-001",
-			ActingAppId:       "spiffe://g8e.local/app/g8ee",
-			CaseId:            "case-1",
-			InvestigationId:   "inv-1",
-			TaskId:            "task-1",
-			WebSessionId:      "web-1",
-			CliSessionId:      "cli-1",
-			Posture:           "doctrine",
+			ActionType:      string(constants.ActionTypeFileEdit),
+			TargetResource:  "/tmp/test.txt",
+			RequestorUserId: "user-001",
+			ActingAppId:     "spiffe://g8e.local/app/g8ee",
+			CaseId:          "case-1",
+			InvestigationId: "inv-1",
+			TaskId:          "task-1",
+			WebSessionId:    "web-1",
+			CliSessionId:    "cli-1",
+			Posture:         "doctrine",
 		}
 
 		receipt := &pb.ActionReceipt{

@@ -146,7 +146,7 @@ type hashVectorV2 struct {
 
 type hashVectorsV2File struct {
 	Description string         `json:"description"`
-	Vectors     []hashVectorV2   `json:"vectors"`
+	Vectors     []hashVectorV2 `json:"vectors"`
 }
 
 func loadHashVectorsV2(t *testing.T) []hashVectorV2 {

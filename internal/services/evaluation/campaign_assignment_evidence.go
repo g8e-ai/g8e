@@ -27,7 +27,6 @@ var publicEvidenceKinds = map[string]struct{}{
 	AssignmentAuditSliceKind: {}, AssignmentAuditVaultKeyKind: {},
 }
 
-
 // BuildPublicAssignmentEvidence creates the disclosure-approved activity
 // families and copies only already-classified public proof bindings.
 func BuildPublicAssignmentEvidence(input PublicAssignmentEvidenceInput) (*PublicAssignmentActivity, []*evalv1.PublicEvidenceBinding, error) {

@@ -50,7 +50,7 @@ func (s *gatewayCampaignPublicationStateStore) Load(_ context.Context, runID str
 	return &evaluation.CampaignPublicationState{
 		SchemaVersion:           remote.SchemaVersion,
 		RunID:                   remote.RunID,
-		PublishedIdempotency:      remote.PublishedIdempotency,
+		PublishedIdempotency:    remote.PublishedIdempotency,
 		PublishedProofArtifacts: proofArtifacts,
 		LastPublishedSequence:   remote.LastPublishedSequence,
 	}, nil

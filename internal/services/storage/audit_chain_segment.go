@@ -45,17 +45,7 @@ type auditChainSegmentExport struct {
 // MarshalAuditChainSegmentEntry returns the canonical JSON body for one exported
 // chain entry artifact.
 func MarshalAuditChainSegmentEntry(entry AuditChainSegmentEntry) ([]byte, error) {
-	body, err := json.Marshal(auditChainSegmentExport{
-		Seq:               entry.Seq,
-		PrevHash:          entry.PrevHash,
-		Hash:              entry.Hash,
-		EventType:         entry.EventType,
-		OperatorSessionID: entry.OperatorSessionID,
-		Timestamp:         entry.Timestamp,
-		ContentDigest:     entry.ContentDigest,
-		TransactionID:     entry.TransactionID,
-		ContentText:       entry.ContentText,
-	})
+	body, err := json.Marshal(auditChainSegmentExport(entry))
 	if err != nil {
 		return nil, fmt.Errorf("audit chain segment: marshal entry: %w", err)
 	}
@@ -71,17 +61,7 @@ func UnmarshalAuditChainSegmentEntry(body []byte) (AuditChainSegmentEntry, error
 	if wire.Seq <= 0 || wire.PrevHash == "" || wire.Hash == "" || wire.EventType == "" || wire.Timestamp == "" || wire.ContentDigest == "" {
 		return AuditChainSegmentEntry{}, fmt.Errorf("%w: audit chain segment entry is incomplete", constants.ErrEvidenceArtifactMalformed)
 	}
-	return AuditChainSegmentEntry{
-		Seq:               wire.Seq,
-		PrevHash:          wire.PrevHash,
-		Hash:              wire.Hash,
-		EventType:         wire.EventType,
-		OperatorSessionID: wire.OperatorSessionID,
-		Timestamp:         wire.Timestamp,
-		ContentDigest:     wire.ContentDigest,
-		TransactionID:     wire.TransactionID,
-		ContentText:       wire.ContentText,
-	}, nil
+	return AuditChainSegmentEntry(wire), nil
 }
 
 // ComputeAuditEventContentDigest returns the plaintext content digest used by

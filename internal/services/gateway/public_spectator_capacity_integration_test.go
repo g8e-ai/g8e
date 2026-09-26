@@ -112,13 +112,15 @@ func capacitySyntheticClientAddress(globalIndex int) string {
 
 func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string) (outcome string, rateLimited bool) {
 	origin := env.baseURL
-	source := env.sourceID
 
 	bootstrap, status, err := capacityGetJSON[bootstrapCapacityResponse](ctx, env.client, origin+"/bootstrap", clientIP)
 	if err != nil || status != http.StatusOK {
 		return "bootstrap", status == http.StatusTooManyRequests
 	}
-	source = bootstrap.Snapshot.SourceID
+	source := bootstrap.Snapshot.SourceID
+	if source == "" {
+		source = env.sourceID
+	}
 	cursor := int64(0)
 	for _, record := range bootstrap.RecentProjections {
 		if record.Sequence > cursor {

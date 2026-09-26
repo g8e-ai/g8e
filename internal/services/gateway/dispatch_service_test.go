@@ -68,7 +68,7 @@ func TestOperatorCommandRequest_Validate(t *testing.T) {
 			name: "valid request",
 			req: OperatorCommandRequest{
 				TargetOperatorSessionID: "session-123",
-				EventType: string(constants.Event.Operator.FsRead.Requested),
+				EventType:               string(constants.Event.Operator.FsRead.Requested),
 				Payload:                 []byte("payload"),
 			},
 			wantErr: nil,
@@ -77,7 +77,7 @@ func TestOperatorCommandRequest_Validate(t *testing.T) {
 			name: "missing operator session id",
 			req: OperatorCommandRequest{
 				EventType: string(constants.Event.Operator.FsRead.Requested),
-				Payload:    []byte("payload"),
+				Payload:   []byte("payload"),
 			},
 			wantErr: constants.ErrGatewayOperatorSessionIDRequired,
 		},
@@ -93,7 +93,7 @@ func TestOperatorCommandRequest_Validate(t *testing.T) {
 			name: "missing payload",
 			req: OperatorCommandRequest{
 				TargetOperatorSessionID: "session-123",
-				EventType: string(constants.Event.Operator.FsRead.Requested),
+				EventType:               string(constants.Event.Operator.FsRead.Requested),
 			},
 			wantErr: constants.ErrTxPayloadMissing,
 		},
@@ -242,7 +242,7 @@ func TestDispatchService_Dispatch_Success(t *testing.T) {
 
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		TargetResource:          "/etc/hostname",
 		RequestorUserID:         "user-001",
@@ -262,7 +262,7 @@ func TestDispatchService_Dispatch_InvalidOperatorSession(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "invalid-session",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 []byte("payload"),
 	})
 	require.Error(t, err)
@@ -286,7 +286,7 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 []byte("payload"),
 	})
 	require.Error(t, err)
@@ -301,7 +301,7 @@ func TestDispatchService_Dispatch_ZeroDeliveryFailsClosed(t *testing.T) {
 	// subscribers, which is a terminal transport failure.
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 	})
 	require.Error(t, err)
@@ -323,7 +323,7 @@ func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
 
 	_, err := svc.Dispatch(ctx, DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 	})
 	require.Error(t, err)
@@ -340,7 +340,7 @@ func TestDispatchService_Dispatch_RequestTimeoutOverridesDefault(t *testing.T) {
 	start := time.Now()
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 100 * time.Millisecond,
 	})
@@ -364,7 +364,7 @@ func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
 
 	_, err := svc.Dispatch(ctx, DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 30 * time.Second,
 	})
@@ -412,7 +412,7 @@ func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testin
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		EventType: string(constants.Event.Operator.Inference.Requested),
+		EventType:               string(constants.Event.Operator.Inference.Requested),
 		Payload:                 inferencePayload(t),
 		Timeout:                 2 * time.Second,
 		OnInferenceProgress:     func(*operatorv1.InferenceProgressEvent) error { return nil },
@@ -458,7 +458,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionID,
-			EventType: string(constants.Event.Operator.FsRead.Requested),
+			EventType:               string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
 		require.NoError(t, err)
@@ -473,7 +473,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionID,
-			EventType: string(constants.Event.Operator.FsRead.Requested),
+			EventType:               string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 			Timeout:                 50 * time.Millisecond,
 		})
@@ -494,7 +494,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 		}()
 		_, err := svc.Dispatch(ctx, DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionID,
-			EventType: string(constants.Event.Operator.FsRead.Requested),
+			EventType:               string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
 		require.Error(t, err)
@@ -507,7 +507,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionID,
-			EventType: string(constants.Event.Operator.FsRead.Requested),
+			EventType:               string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
 		require.Error(t, err)
@@ -530,7 +530,7 @@ func TestDispatchService_Dispatch_LateResultDiscarded(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 50 * time.Millisecond,
 	})
@@ -571,7 +571,7 @@ func TestDispatchService_Dispatch_DuplicateResultDropped(t *testing.T) {
 
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		EventType: string(constants.Event.Operator.FsRead.Requested),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 5 * time.Second,
 	})
@@ -654,7 +654,7 @@ func TestDispatchController_HandleDispatch_WitnessCommandRejectedAsUnprocessable
 	require.NoError(t, err)
 	body, err := json.Marshal(OperatorCommandRequest{
 		TargetOperatorSessionID: observer.OperatorSessionID,
-		EventType: string(constants.Event.Operator.Command.Requested),
+		EventType:               string(constants.Event.Operator.Command.Requested),
 		Payload:                 payload,
 	})
 	require.NoError(t, err)
@@ -753,7 +753,7 @@ func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.
 
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		EventType: string(constants.Event.Operator.Command.Requested),
+		EventType:               string(constants.Event.Operator.Command.Requested),
 		Payload:                 execPayload,
 		TargetResource:          "cli",
 		RequestorUserID:         "user-001",

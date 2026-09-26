@@ -53,7 +53,7 @@ func makeEnvelope(t *testing.T, actionType string, payload []byte) *governance.G
 	eventType := eventTypeForAction(actionType)
 	require.NotEmpty(t, eventType, "consensus tests must use a registered action/event pair")
 	env := &governance.GovernanceEnvelope{
-		ProtocolVersion:   governance.GovernanceProtocolVersionV2,
+		ProtocolVersion: governance.GovernanceProtocolVersionV2,
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
 		EventType:       eventType,
@@ -200,7 +200,7 @@ func TestConsensusService_Deliberate_WithIntentData(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &governance.GovernanceEnvelope{
-		ProtocolVersion:   governance.GovernanceProtocolVersionV2,
+		ProtocolVersion: governance.GovernanceProtocolVersionV2,
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
 		EventType:       string(constants.Event.Operator.Command.Requested),
