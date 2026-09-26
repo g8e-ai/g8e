@@ -46,7 +46,7 @@ The command service creates a typed internal `G8eMessage`. `OperatorExecutionSer
 
 The Gateway dispatch endpoint rejects unknown events, invalid Operator sessions, and malformed payloads. It derives `action_type` from the event registry, obtains the current state root, adds identity, replay, expiry, and posture data, constructs the canonical `GovernanceEnvelope`, and forwards it only to the matching Operator session. The Operator independently performs its verification and execution stages. The HTTP response carries the correlated result envelope; g8ee decodes it and publishes the application result event.
 
-The agent stops for an application continuation decision after the configured `AGENT_MAX_TOOL_TURNS` limit, currently 25. Approval resets the loop counter; denial, timeout, or an unsuccessful approval request stops the loop. Triage clarification similarly pauses the application workflow until the caller answers, skips, or times out.
+The agent stops for an application continuation decision after the configured `AGENT_MAX_TOOL_TURNS` limit (`25`). Approval resets the loop counter; denial, timeout, or an unsuccessful approval request stops the loop. Triage clarification similarly pauses the application workflow until the caller answers, skips, or times out.
 
 See [Agents](agents.md) for persona responsibilities and Tribunal stages.
 

@@ -8,6 +8,7 @@ import { devLogger } from './dev-logger.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { gatewayUrl } from './gateway-url.js';
 import { normalizeGatewayEvent } from './gateway-sse-normalizer.js';
+import { GatewaySsePollingFallback } from './gateway-sse-polling-fallback.js';
 
 const _INFRASTRUCTURE_EVENTS = new Set([
     EventType.PLATFORM_SSE_CONNECTION_ESTABLISHED,
@@ -32,6 +33,18 @@ class SSEConnectionManager {
         this.reconnectTimer = null;
         this.consecutiveFailures = 0;
         this.connectionStartTime = null;
+        this.lastEventId = 0;
+        this.pollingFallback = new GatewaySsePollingFallback({
+            onEvent: (event) => {
+                this.handleSSEEvent({ type: event.type, data: event.payload, id: event.id, timestamp: event.timestamp });
+            },
+            onUnauthenticated: () => {
+                this.eventBus.emit(EventType.PLATFORM_SSE_CONNECTION_FAILED, {
+                    service: ServiceName.GATEWAY,
+                    reason: 'polling_unauthenticated',
+                });
+            },
+        });
         this._setupVisibilityHandling();
     }
 
@@ -106,6 +119,7 @@ class SSEConnectionManager {
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.consecutiveFailures = 0;
+            this.pollingFallback.stop();
 
             devLogger.log(`[SSE] SSE connection established in ${connectionDuration}ms`);
             this.eventBus.emit(EventType.PLATFORM_SSE_CONNECTION_OPENED, {
@@ -121,6 +135,10 @@ class SSEConnectionManager {
             this.resetKeepaliveTimeout();
             try {
                 const normalized = normalizeGatewayEvent(event.data, event.lastEventId);
+                if (normalized.id > this.lastEventId) {
+                    this.lastEventId = normalized.id;
+                    this.pollingFallback.setLastEventId(normalized.id);
+                }
                 devLogger.log(`[SSE] Message received: ${normalized.type}`, normalized);
                 this.handleSSEEvent({ type: normalized.type, data: normalized.payload, id: normalized.id, timestamp: normalized.timestamp });
             } catch (error) {
@@ -185,7 +203,8 @@ class SSEConnectionManager {
         }
 
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            devLogger.error('Max reconnection attempts reached. Manual reconnection required.');
+            devLogger.error('Max reconnection attempts reached. Falling back to SSE polling.');
+            this._startPollingFallback();
             this.eventBus.emit(EventType.PLATFORM_SSE_CONNECTION_FAILED, {
                 service: ServiceName.GATEWAY,
                 reason: SSEClientConfig.RECONNECT_FAILURE_REASON
@@ -258,6 +277,8 @@ class SSEConnectionManager {
     }
 
     disconnect() {
+        this.pollingFallback.stop();
+
         if (this.eventSource) {
             devLogger.log('Closing SSE connection');
             this.eventSource.close();
@@ -294,7 +315,12 @@ class SSEConnectionManager {
             return false;
         }
 
-        return this.isConnectionActive() && this.activeWebSessionId === webSessionId;
+        return (this.isConnectionActive() || this.pollingFallback.running) && this.activeWebSessionId === webSessionId;
+    }
+
+    _startPollingFallback() {
+        this.pollingFallback.setLastEventId(this.lastEventId);
+        this.pollingFallback.start();
     }
 }
 

@@ -100,6 +100,10 @@ export class AuthManager {
         this.session = null;
         this.subscribers = new Set();
         this.initialized = false;
+        this._pendingApproveTxHash = null;
+        this._pendingEnrollmentToken = null;
+        this._pendingRecoveryToken = null;
+        this._pendingPlatformEnrollmentId = null;
 
         Object.defineProperty(this, 'loading', {
             get: () => !this.initialized,
@@ -108,10 +112,265 @@ export class AuthManager {
     }
 
     async init() {
+        this._parseUrlHashFragments();
+
+        if (this._pendingEnrollmentToken) {
+            const token = this._pendingEnrollmentToken;
+            this._pendingEnrollmentToken = null;
+            try {
+                await this.registerPasskeyEnrollment(token);
+            } catch (error) {
+                console.error('[AUTH] Enrollment token flow error:', error.message);
+            } finally {
+                this.completeInitialization();
+            }
+            return;
+        }
+
         try {
             await this.validateSession();
         } catch (error) {
             console.error('[AUTH] Initialization error:', error.message);
+        }
+
+        await this._processAuthenticatedHashActions();
+    }
+
+    _parseUrlHashFragments() {
+        if (typeof window === 'undefined' || !window.location.hash) return;
+
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
+        const enrollMode = hashParams.get('enroll');
+        const enrollmentToken = hashParams.get('token');
+        const recoveryToken = hashParams.get('recovery');
+        const platformEnrollmentId = hashParams.get('platform-enrollment');
+        const approveTxHash = hashParams.get('approve');
+
+        if (recoveryToken) {
+            this._pendingRecoveryToken = recoveryToken;
+            this._clearUrlHashFragment();
+        }
+
+        if (enrollMode === '1' && enrollmentToken) {
+            this._pendingEnrollmentToken = enrollmentToken;
+            this._clearUrlHashFragment();
+        } else if (enrollmentToken) {
+            this._pendingEnrollmentToken = enrollmentToken;
+            this._clearUrlHashFragment();
+        }
+
+        if (platformEnrollmentId) {
+            this._pendingPlatformEnrollmentId = platformEnrollmentId;
+            this._clearUrlHashFragment();
+        }
+
+        if (approveTxHash) {
+            this._pendingApproveTxHash = approveTxHash;
+        }
+    }
+
+    _clearUrlHashFragment() {
+        if (typeof window === 'undefined') return;
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+
+    async _processAuthenticatedHashActions() {
+        if (this._pendingRecoveryToken) {
+            const token = this._pendingRecoveryToken;
+            this._pendingRecoveryToken = null;
+            if (this.isAuthenticated()) {
+                await this._promptRecoveryApproval(token);
+            } else {
+                this._pendingRecoveryToken = token;
+                this.showInfo('Sign in to review the CLI recovery request.');
+            }
+        }
+
+        if (this._pendingPlatformEnrollmentId) {
+            const requestId = this._pendingPlatformEnrollmentId;
+            this._pendingPlatformEnrollmentId = null;
+            if (this.isAuthenticated()) {
+                await this._promptPlatformEnrollmentDecision(requestId);
+            } else {
+                this._pendingPlatformEnrollmentId = requestId;
+                this.showInfo('Sign in to review the platform enrollment request.');
+            }
+        }
+
+        if (this._pendingApproveTxHash) {
+            const txHash = this._pendingApproveTxHash;
+            this._pendingApproveTxHash = null;
+            this._clearUrlHashFragment();
+            if (this.isAuthenticated()) {
+                await this.approveTransaction(txHash);
+            } else {
+                this._pendingApproveTxHash = txHash;
+                this.showInfo('Sign in to approve the pending transaction.');
+            }
+        }
+    }
+
+    async registerPasskeyEnrollment(enrollmentToken) {
+        if (!enrollmentToken) {
+            this.showError('Missing enrollment token.');
+            return { success: false, message: 'Missing enrollment token.' };
+        }
+
+        try {
+            const challengeRes = await window.serviceClient.post(
+                ServiceName.GATEWAY,
+                ApiPaths.auth.passkeys.enrollmentRegisterChallenge(),
+                { enrollment_token: enrollmentToken },
+            );
+            const challengeData = await challengeRes.json();
+            if (!challengeRes.ok || !challengeData.success) {
+                const message = challengeRes.status === 410 ? 'This enrollment link has expired.'
+                    : challengeRes.status === 409 ? 'This enrollment link has already been used.'
+                    : challengeRes.status === 401 ? 'Invalid enrollment link.'
+                    : challengeData.error || 'Failed to start enrollment';
+                this.showError(message);
+                return { success: false, message };
+            }
+
+            const publicKeyOptions = challengeData.options?.publicKey ?? challengeData.options;
+            const attestation = await navigator.credentials.create({
+                publicKey: _decodeRegistrationOptions(publicKeyOptions),
+            });
+
+            const verifyRes = await window.serviceClient.post(
+                ServiceName.GATEWAY,
+                ApiPaths.auth.passkeys.enrollmentRegisterVerify(),
+                {
+                    enrollment_token: enrollmentToken,
+                    attestation_response: _serializeCredential(attestation),
+                },
+            );
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok || !verifyData.success) {
+                const message = verifyData.error || 'Passkey enrollment failed';
+                this.showError(message);
+                return { success: false, message };
+            }
+
+            const session = AuthResponseModel.parse(verifyData).session;
+            if (session) {
+                const webSessionId = await this._fetchSessionId();
+                if (webSessionId) session.web_session_id = webSessionId;
+                const userId = verifyData.user_id || challengeData.options?.user?.id;
+                if (userId) localStorage.setItem(USER_ID_STORAGE_KEY, userId);
+                this.setSession(session);
+            }
+
+            this.showInfo('Passkey enrolled successfully.');
+            return { success: true };
+        } catch (error) {
+            const message = error.name === 'NotAllowedError' ? 'Enrollment cancelled.' : 'Passkey enrollment failed.';
+            this.showError(message);
+            return { success: false, message };
+        }
+    }
+
+    async approveTransaction(txHash) {
+        if (!txHash) return { success: false, message: 'Missing transaction hash.' };
+
+        try {
+            const challengeRes = await window.serviceClient.get(
+                ServiceName.GATEWAY,
+                ApiPaths.gateway.approvalChallenge(txHash),
+            );
+            const challengeData = await challengeRes.json();
+            if (!challengeRes.ok) {
+                const message = challengeData.error || 'Failed to get approval challenge';
+                this.showError(message);
+                return { success: false, message };
+            }
+
+            const publicKeyOptions = challengeData.publicKey ?? challengeData.options?.publicKey ?? challengeData.options;
+            const assertion = await navigator.credentials.get({
+                publicKey: _decodeAuthenticationOptions(publicKeyOptions),
+            });
+
+            const serialized = _serializeCredential(assertion);
+
+            const verifyRes = await window.serviceClient.post(
+                ServiceName.GATEWAY,
+                ApiPaths.gateway.approvalVerify(txHash),
+                {
+                    id: serialized.id,
+                    rawId: serialized.rawId,
+                    clientDataJSON: serialized.response.clientDataJSON,
+                    authenticatorData: serialized.response.authenticatorData,
+                    signature: serialized.response.signature,
+                    userHandle: serialized.response.userHandle,
+                },
+            );
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok) {
+                const message = verifyData.error || 'Approval failed';
+                this.showError(message);
+                return { success: false, message };
+            }
+
+            this.showInfo('Transaction approved.');
+            return { success: true };
+        } catch (error) {
+            const message = error.name === 'NotAllowedError' ? 'Approval cancelled.' : 'Approval failed.';
+            this.showError(message);
+            return { success: false, message };
+        }
+    }
+
+    async _promptRecoveryApproval(token) {
+        const approved = window.confirm(
+            'A new CLI is requesting enrollment access to this gateway.\n\nApprove this recovery request?'
+        );
+        await this._submitRecoveryDecision(token, approved);
+    }
+
+    async _submitRecoveryDecision(token, approve) {
+        try {
+            const response = await window.serviceClient.post(
+                ServiceName.GATEWAY,
+                ApiPaths.auth.cliRecoveryApprove(),
+                { token, approve },
+            );
+            const data = await response.json();
+            if (!response.ok) {
+                this.showError(data.error || 'CLI recovery decision failed');
+                return;
+            }
+            this.showInfo(approve
+                ? 'CLI recovery approved. The new CLI can now complete enrollment.'
+                : 'CLI recovery denied.');
+        } catch (error) {
+            this.showError(error.message || 'CLI recovery decision failed');
+        }
+    }
+
+    async _promptPlatformEnrollmentDecision(requestId) {
+        const approved = window.confirm(
+            'A workload is requesting platform enrollment.\n\nApprove this enrollment request?'
+        );
+        await this._submitPlatformEnrollmentDecision(requestId, approved ? 'approve' : 'deny');
+    }
+
+    async _submitPlatformEnrollmentDecision(requestId, decision) {
+        try {
+            const response = await window.serviceClient.post(
+                ServiceName.GATEWAY,
+                ApiPaths.auth.platformEnrollmentDecision(),
+                { request_id: requestId, decision },
+            );
+            const data = await response.json();
+            if (!response.ok) {
+                this.showError(data.error || 'Platform enrollment decision failed');
+                return;
+            }
+            this.showInfo(decision === 'approve'
+                ? 'Platform enrollment approved.'
+                : 'Platform enrollment denied.');
+        } catch (error) {
+            this.showError(error.message || 'Platform enrollment decision failed');
         }
     }
 
@@ -194,6 +453,8 @@ export class AuthManager {
             if (this.eventBus) {
                 this.eventBus.emit(EventType.PLATFORM_AUTH_USER_AUTHENTICATED, payload);
             }
+
+            this._processAuthenticatedHashActions();
 
             const currentPath = window.location.pathname;
             if (currentPath === '/' || currentPath === '/login') {

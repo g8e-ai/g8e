@@ -1,8 +1,5 @@
 # Governance
 
-Last Updated: 2026-09-23
-Version: v2.1.12
-
 ## Scope
 
 The g8e Agentic Ensemble (`g8ee`) is an optional first-party client of the g8e governance platform. It generates and evaluates operational intent, but it remains outside the trusted execution boundary. Tribunal agreement, Auditor review, application risk classification, and user approval inside g8ee do not authorize a platform transaction by themselves.
@@ -95,13 +92,13 @@ Use Gateway MCP or A2A when the Gateway must coordinate protocol consensus or hu
 
 ## Direct Governance Envelopes
 
-For governed platform records such as cases, investigations, memories, and agent activity, g8ee uses its `GovernanceClient` to submit a complete envelope to the synchronous governance endpoint. This is a privileged, Operator-credential path in the unified deployment, not the normal public app ingress.
+For governed platform records such as cases, investigations, memories, and agent activity, g8ee uses its `GovernanceClient` to submit a complete envelope to `POST /api/v1/governance/envelopes` over the enrolled g8ee app mTLS identity. The Gateway binds transport identity to envelope fields and applies the active posture.
 
 The client obtains the current state root when the caller does not provide one, serializes the typed payload, generates replay and expiry fields, binds requestor, acting-app, Operator, session, and application identifiers into the transaction hash, and submits canonical JSON over mTLS. The Gateway binds the envelope identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process L4 Warden and L5 Actuator.
 
 The client serializes submissions to reduce state-root races. If the Gateway rejects a submission because another transaction changed the state root, the client fetches the new root, rebuilds the envelope, and retries up to three times after the initial attempt.
 
-This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. The optional `agent_ids` argument only populates the envelope's `consensus_set_id`; it does not turn Tribunal members into enrolled protocol signers or attach votes. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path therefore succeeds only when the active posture does not require proofs absent from the envelope, which is normally `doctrine` for g8ee's current platform-record submissions.
+This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. The optional `agent_ids` argument only populates the envelope's `consensus_set_id`; it does not turn Tribunal members into enrolled protocol signers or attach votes. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path succeeds only when the active posture does not require proofs absent from the envelope. Platform-record submissions run under `doctrine` in the default unified deployment.
 
 A successful submission returns a signed `ActionReceipt`. `GovernanceClient` exposes receipt-signature verification using the configured Actuator public key, but submission does not invoke that verification automatically.
 

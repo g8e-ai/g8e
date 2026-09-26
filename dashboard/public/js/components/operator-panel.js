@@ -9,7 +9,6 @@ import { notificationService } from '../utils/notification-service.js';
 import { operatorSessionService } from '../utils/operator-session-service.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { OperatorDownloadMixin } from './operator-download-mixin.js';
-import { OperatorDeviceLinkMixin } from './operator-device-link-mixin.js';
 import { BindOperatorsMixin } from './operator-bind-mixin.js';
 import { OperatorDeviceAuthMixin } from './operator-device-auth-mixin.js';
 import { OperatorLayoutMixin } from './operator-layout-mixin.js';
@@ -485,7 +484,6 @@ export class OperatorPanel {
 }
 
 Object.assign(OperatorPanel.prototype, OperatorDownloadMixin);
-Object.assign(OperatorPanel.prototype, OperatorDeviceLinkMixin);
 Object.assign(OperatorPanel.prototype, BindOperatorsMixin);
 Object.assign(OperatorPanel.prototype, OperatorDeviceAuthMixin);
 Object.assign(OperatorPanel.prototype, OperatorLayoutMixin);

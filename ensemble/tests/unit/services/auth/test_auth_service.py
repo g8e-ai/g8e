@@ -13,6 +13,8 @@ from app.constants import (
     AUTHORIZATION,
     CLI_SESSION_ID,
     AuthMethod,
+    GATEWAY_BROWSER_PROXY_HEADER,
+    GATEWAY_BROWSER_PROXY_VALUE,
     OperatorStatus,
     X_PROXY_CLI_SESSION_ID,
     X_PROXY_ORGANIZATION_ID,
@@ -41,6 +43,7 @@ class TestAuthServiceProxyAuthentication:
     async def test_proxy_auth_extracts_user_and_cli_session_id(self, auth_service):
         request = MagicMock(spec=Request)
         request.headers = {
+            GATEWAY_BROWSER_PROXY_HEADER: GATEWAY_BROWSER_PROXY_VALUE,
             X_PROXY_USER_ID: "user-123",
             X_PROXY_USER_EMAIL: "user-123@g8e.local",
             X_PROXY_ORGANIZATION_ID: "org-456",
@@ -64,6 +67,7 @@ class TestAuthServiceProxyAuthentication:
     async def test_proxy_auth_extracts_web_session_id(self, auth_service):
         request = MagicMock(spec=Request)
         request.headers = {
+            GATEWAY_BROWSER_PROXY_HEADER: GATEWAY_BROWSER_PROXY_VALUE,
             X_PROXY_USER_ID: "user-123",
             X_PROXY_USER_EMAIL: "user-123@g8e.local",
             X_PROXY_WEB_SESSION_ID: "web-session-abc",
@@ -78,6 +82,19 @@ class TestAuthServiceProxyAuthentication:
         assert user.cli_session_id is None
         assert user.web_session_id == "web-session-abc"
         assert user.auth_method == AuthMethod.PROXY
+
+    @pytest.mark.asyncio
+    async def test_proxy_auth_missing_gateway_stamp_fails(self, auth_service):
+        request = MagicMock(spec=Request)
+        request.headers = {
+            X_PROXY_USER_ID: "user-123",
+            X_PROXY_USER_EMAIL: "user-123@g8e.local",
+        }
+        request.state = MagicMock()
+
+        settings = MagicMock()
+        with pytest.raises(AuthenticationError, match="Gateway browser proxy stamp"):
+            await auth_service.authenticate_request(request, settings)
 
     @pytest.mark.asyncio
     async def test_proxy_auth_missing_email_fails(self, auth_service):

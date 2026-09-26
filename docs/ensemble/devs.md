@@ -1,13 +1,10 @@
 # Development
 
-Last Updated: 2026-09-25
-Version: v2.1.14
-
 ## Scope and architecture
 
 The g8e Agentic Ensemble (`g8ee`) is an optional Python 3.12+ FastAPI application in `ensemble/`. It owns conversational orchestration, model-provider integration, typed tool execution, investigation and case workflows, application settings, Operator workflow coordination, and application event publication. It is not the Gateway or an Operator and it does not create an execution authority outside the g8e governance paths.
 
-For host operations, g8ee calls `GatewayOperatorClient.dispatch()` against `POST /api/v1/operators/commands` with a registered request `event_type` and typed protobuf payload bytes. The Gateway derives `action_type` from the event registry, constructs the governed envelope, and the target Operator independently performs the required verification and execution. For designated application-record writes, g8ee uses `GovernanceClient` to submit canonical protojson envelopes to the Gateway. LFAA audit records use `GatewayOperatorClient.ingest_audit_record()` against `POST /api/v1/audit/records`. g8ee has no Gateway pub/sub client. Application approvals, Tribunal agreement, model output, memories, reputation, and SSE events do not replace protocol L2 or L3 evidence. See [Ensemble Architecture](architecture.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the complete boundary model.
+For host operations, g8ee calls `GatewayOperatorClient.dispatch()` against `POST /api/v1/operators/commands` with a registered request `event_type` and typed protobuf payload bytes. The Gateway derives `action_type` from the event registry, constructs the governed envelope, and the target Operator independently performs the required verification and execution. For designated application-record writes, g8ee uses `GovernanceClient` to submit canonical protojson envelopes to `POST /api/v1/governance/envelopes` over the enrolled app mTLS identity. LFAA audit records use `GatewayOperatorClient.ingest_audit_record()` against `POST /api/v1/audit/records`. g8ee has no Gateway pub/sub client. Application approvals, Tribunal agreement, model output, memories, reputation, and SSE events do not replace protocol L2 or L3 evidence. See [Ensemble Architecture](architecture.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the complete boundary model.
 
 The FastAPI application is assembled in `ensemble/app/main.py`. Its lifespan loads bootstrap settings, resolves the enrolled g8ee application identity, connects the DB, KV, and blob clients, loads Gateway-backed platform settings, constructs `GovernanceClient`, `GatewayOperatorClient`, and the domain services, starts lifecycle services, and only then yields readiness. Shutdown stops services, clears provider state, closes transport clients, and closes the document service.
 
@@ -29,7 +26,7 @@ The application model hub is `app.models.base`. It re-exports the protocol `G8eB
 
 `app.models.http_context.RequestContext` extends the protocol request context with `operator_id`, `operator_session_id`, and evaluation context. `G8eHttpContext` validates session exclusivity, requires identity for non-exempt requests, binds context identifiers to the authenticated caller, and validates bound Operator sessions. The middleware and dependency functions in `app/middleware/http_context.py` and `app/dependencies.py` are the owners of request-context extraction and authentication dependencies.
 
-Most application modules import Pydantic types through `app.models.base`; `app/llm/model_evidence.py` currently retains a direct `BaseModel` import. New application models should use the hub and inherit the appropriate typed protocol or ensemble base rather than introducing parallel serialization behavior.
+Most application modules import Pydantic types through `app.models.base`; `app/llm/model_evidence.py` retains a direct `BaseModel` import. New application models should use the hub and inherit the appropriate typed protocol or ensemble base rather than introducing parallel serialization behavior.
 
 ## Local setup
 
@@ -107,7 +104,7 @@ Pre-commit runs the configured Ruff and Pyright checks on staged files. It is an
 
 ## LLM provider boundary
 
-Provider adapters live under `ensemble/app/llm/providers/`. The current provider implementations are OpenAI, Anthropic, Gemini, Ollama, llama.cpp, the fake test provider, and the governed `g8e` inference provider. Provider selection and role-specific model configuration are typed in `app.models.settings`; the roles are primary, assistant, and lite. Optional Vertex AI Search grounding is represented by `GroundingService` and `WebSearchProvider` when search is enabled.
+Provider adapters live under `ensemble/app/llm/providers/`. Supported providers are OpenAI, Anthropic, Gemini, Ollama, llama.cpp, the fake test provider, the governed `g8e` inference provider, and Jev (lite role only; see [Decision Providers](decision-providers.md)). Provider selection and role-specific model configuration are typed in `app.models.settings`; the roles are primary, assistant, and lite. Optional Vertex AI Search grounding is represented by `GroundingService` and `WebSearchProvider` when search is enabled.
 
 The `g8e` provider sends governed inference through the Gateway-backed internal HTTP client. Other provider adapters remain application/provider integrations and are not automatically made governed by the fact that the request originated in g8ee. Provider behavior, native network access, and side channels remain outside the g8e execution boundary.
 

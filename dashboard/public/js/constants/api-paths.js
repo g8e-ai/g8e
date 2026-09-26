@@ -79,8 +79,14 @@ export const ApiPaths = {
             registerVerify:        () => `${BASE.GATEWAY_PASSKEYS}/${Seg.auth.CONSOLE}/${Seg.auth.REGISTER}/${Seg.auth.VERIFY}`,
             authenticateChallenge: () => `${BASE.GATEWAY_PASSKEYS}/${Seg.auth.CONSOLE}/${Seg.auth.AUTHENTICATE}/${Seg.auth.CHALLENGE}`,
             authenticateVerify:    () => `${BASE.GATEWAY_PASSKEYS}/${Seg.auth.CONSOLE}/${Seg.auth.AUTHENTICATE}/${Seg.auth.VERIFY}`,
+            enrollmentRegisterChallenge: () => `${BASE.GATEWAY_PASSKEYS}/enrollment/register/challenge`,
+            enrollmentRegisterVerify:    () => `${BASE.GATEWAY_PASSKEYS}/enrollment/register/verify`,
             revoke:                (credentialId) => `${BASE.GATEWAY_PASSKEYS}/${credentialId}`,
         },
+        cliRecoveryStatus:  (token) => `${BASE.GATEWAY_AUTH}/cli/recovery/status?token=${encodeURIComponent(token)}`,
+        cliRecoveryApprove: () => `${BASE.GATEWAY_AUTH}/cli/recovery/approve`,
+        platformEnrollmentPending:  () => `${BASE.GATEWAY_AUTH}/platform-enrollments/pending`,
+        platformEnrollmentDecision: () => `${BASE.GATEWAY_AUTH}/platform-enrollments/decision`,
     },
     user: {
         me:      () => `${BASE.GATEWAY_USERS}/${Seg.user.ME}`,
@@ -113,6 +119,8 @@ export const ApiPaths = {
     },
     gateway: {
         approvals: () => `${BASE.GATEWAY_API}/approvals`,
+        approvalChallenge: (txHash) => `${BASE.GATEWAY_API}/approvals/${encodeURIComponent(txHash)}/challenge`,
+        approvalVerify: (txHash) => `${BASE.GATEWAY_API}/approvals/${encodeURIComponent(txHash)}/verify`,
         operatorBinary: (os, arch) => `${BASE.WELL_KNOWN_BIN}/${os}/${arch}`,
         operatorBinaryChecksum: (os, arch) => `${BASE.WELL_KNOWN_BIN}/${os}/${arch}/sha256`,
     },

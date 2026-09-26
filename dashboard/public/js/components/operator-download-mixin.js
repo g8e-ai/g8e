@@ -77,7 +77,6 @@ export const OperatorDownloadMixin = {
         });
 
         this._bindDeployApiKey(container, apiKey);
-        this._bindDeviceLinkGeneration(container, apiKey);
     },
 
     _bindDeployApiKey(container, apiKey) {

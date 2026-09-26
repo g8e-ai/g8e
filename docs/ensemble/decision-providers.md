@@ -1,8 +1,5 @@
 # Decision Providers
 
-Last Updated: 2026-09-25  
-Version: v2.2.x (ensemble MVP)
-
 ## Overview
 
 g8ee separates **text generation** (`LLMProvider` in `ensemble/app/llm/`) from **structured decision** workloads (`DecisionProvider` in `ensemble/app/decision/`). Decision providers evaluate a `state` plus typed `questions` and return structured answers with probabilities. They do not emit chat prose.
@@ -136,4 +133,3 @@ See [Testing](tests.md) for marker details.
 - [LLM Providers](llm-providers.md): Generative provider roles and adapters
 - [Evals](evals.md): Semantic judge grading and evidence
 - [Agents](agents.md): Triage and Judge personas
-- Plan: `.local.dev/docs/plans/in-progress/jev-decision-provider.md`

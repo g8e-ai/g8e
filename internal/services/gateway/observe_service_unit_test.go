@@ -395,11 +395,9 @@ func TestRouteAuthRegistry_GenericRoutesRemainMTLS(t *testing.T) {
 		constants.APIPaths.DataDB + "some-collection",
 		constants.APIPaths.DataItems,
 		constants.APIPaths.DataBlobs + "some-blob",
-		// Audit routes
+		// Audit write/export routes (browser read routes are RouteAuthWebSession)
 		constants.APIPaths.AuditReceipts,
 		constants.APIPaths.AuditReceiptsExport,
-		constants.APIPaths.AuditEvents,
-		constants.APIPaths.AuditSummary,
 		constants.APIPaths.AuditReport,
 		constants.APIPaths.AuditStream,
 		// KV routes

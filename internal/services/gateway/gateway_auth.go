@@ -180,6 +180,11 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.EnsembleInvestigations, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.EnsembleOperatorPrefix, RouteAuthWebSession)
 
+	// Browser audit read routes (cookie auth). Write/ingest paths remain mTLS default.
+	r.addExact(constants.APIPaths.AuditEvents, RouteAuthWebSession)
+	r.addExact(constants.APIPaths.AuditSummary, RouteAuthWebSession)
+	r.addExact(constants.APIPaths.AuditVerify, RouteAuthWebSession)
+
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)
 

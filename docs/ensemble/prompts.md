@@ -34,8 +34,6 @@ The runtime selects a mode from one boolean: `operator_bound`. `True` selects `A
 
 When no Operator is bound and `g8e_web_search_available` is `False`, the loader replaces the standard not-bound capability and execution files with `capabilities_no_search.txt` and `execution_no_search.txt`. The not-bound tools file is still loaded, but the system-prompt builder omits the tools section when web search is unavailable. The registered tool set is separately derived from `ToolSpec.agent_modes` and the web-search registration gate; prompt text does not itself expose or authorize a tool.
 
-`protocol/constants/prompts.json` declares `g8e.cloud.bound` as a protocol constant, but the current Python `AgentMode` and `load_mode_prompts()` implementation do not select a cloud-specific prompt directory. Cloud-provider metadata can appear in operator context, but it does not create a separate prompt mode in this builder.
-
 ## Tool descriptions and mode rules
 
 Per-tool descriptions are loaded by each tool module's `build()` function from a corresponding `PromptFile` under `app/prompts_data/tools/`. The description is placed in the provider-facing `ToolDeclaration`; the typed tool schema is built separately from the tool's Pydantic argument model. Registered tools and their execution handlers are declared in `app/services/ai/tool_registry.py` through `TOOL_SPECS`, which also defines scope, supported agent modes, display metadata, and the web-search condition.
@@ -63,7 +61,7 @@ The five Tribunal personas are Axiom, Concord, Variance, Pragma, and Nemesis. Th
 
 ## Protocol alignment
 
-Shared prompt identifiers are sourced through `g8e.constants.prompt()` in the Python package, which keeps the Python values aligned with the protocol registry. `AgentMode` currently exposes the bound and not-bound runtime values. `PromptSection` includes the shared safety, loyalty, dissent, capabilities, execution, tools, response-constraint, persona, identity, system-context, triage-context, investigation-context, and learned-context identifiers, plus the protocol-backed `VAULT_MODE` value and the local `SENTINEL_MODE` name for the same `sentinel_mode` value. The protocol registry represents that value through its `SectionVaultMode` entry; it does not imply that a separate cloud prompt loader exists.
+Shared prompt identifiers are sourced through `g8e.constants.prompt()` in the Python package, which keeps the Python values aligned with the protocol registry. `AgentMode` exposes the bound and not-bound runtime values. `PromptSection` includes the shared safety, loyalty, dissent, capabilities, execution, tools, response-constraint, persona, identity, system-context, triage-context, investigation-context, and learned-context identifiers, plus the protocol-backed `VAULT_MODE` value and the local `SENTINEL_MODE` name for the same `sentinel_mode` value.
 
 Alignment tests cover prompt-file loading and encoding, mode-file availability, section ordering, persona placement, Sage-only reasoning discipline, mode-file boundaries, and the relationship between active tool registrations and prompt descriptions.
 

@@ -123,15 +123,6 @@ export const OperatorListMixin = {
 
             const actionsHtml = `
                 <div class="operator-actions-inline">
-                    <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
-                        <span class="material-symbols-outlined">dns</span>
-                    </button>
-                    <button class="operator-action-btn api-key-btn" title="Copy API Key" data-operator-id="${operator.operator_id}">
-                        <span class="material-symbols-outlined">vpn_key</span>
-                    </button>
-                    <button class="operator-action-btn refresh-key-btn" title="Refresh API Key" data-operator-id="${operator.operator_id}">
-                        <span class="material-symbols-outlined">key_off</span>
-                    </button>
                     <button class="operator-action-btn bind-operator-btn" title="${bindBtnTitle}" data-operator-id="${operator.operator_id}" data-is-bound="${isBoundToMe}" data-is-stale="${isStale}"${bindBtnDisabled ? ' disabled' : ''}>
                         <span class="material-symbols-outlined">${bindBtnIcon}</span>
                     </button>
