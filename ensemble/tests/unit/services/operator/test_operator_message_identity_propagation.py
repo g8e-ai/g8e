@@ -89,7 +89,6 @@ class TestFileServiceIdentityPropagation:
         _stub_execute_for_identity(file_service)
         mock_op = _mock_operator()
         file_service.execution_service.resolve_operators = MagicMock(return_value=[mock_op])
-        file_service.event_service.publish_command_event = AsyncMock()
 
         args = FileEditRequestPayload(
             file_path="/etc/test",

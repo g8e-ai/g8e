@@ -29,10 +29,8 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 def _build_execution_service(mock_gateway_client: MagicMock) -> OperatorExecutionService:
     return OperatorExecutionService(
         approval_service=MagicMock(),
-        event_service=MagicMock(),
         settings=MagicMock(),
         ai_response_analyzer=MagicMock(),
-        operator_data_service=MagicMock(),
         investigation_service=MagicMock(),
         gateway_operator_client=mock_gateway_client,
     )

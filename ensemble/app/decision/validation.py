@@ -14,7 +14,7 @@ import logging
 from app.constants import LLMProvider
 from app.models.settings import LLMSettings
 
-# Call sites that invoke get_llm_provider(..., is_lite=True) for text generation.
+# Call sites that use get_generative_lite_provider() for text generation.
 # Triage and eval judge use DecisionProvider when lite_provider is jev.
 GENERATIVE_LITE_CALL_SITES: tuple[str, ...] = (
     "case title generation",
@@ -38,12 +38,11 @@ def validate_jev_lite_coexistence(llm: LLMSettings) -> list[str]:
 
 
 def jev_generative_lite_limitations_message() -> str:
-    """Summarize generative lite features that remain incompatible with Jev."""
+    """Summarize how generative lite features coexist when Jev is on the lite role."""
     sites = ", ".join(GENERATIVE_LITE_CALL_SITES)
     return (
         "Lite provider 'jev' supports triage and semantic eval judge via System One. "
-        f"The following chat features still require a generative lite provider ({sites}) "
-        "and will fail or degrade at runtime until a generative fallback is implemented."
+        f"Generative lite features ({sites}) use the assistant provider when lite is jev."
     )
 
 

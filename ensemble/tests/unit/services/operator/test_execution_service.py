@@ -32,24 +32,12 @@ def mock_approval():
 
 
 @pytest.fixture
-def mock_event_service():
-    mock = MagicMock()
-    mock.publish_command_event = AsyncMock()
-    return mock
-
-
-@pytest.fixture
 def mock_settings():
     return MagicMock()
 
 
 @pytest.fixture
 def mock_ai_analyzer():
-    return MagicMock()
-
-
-@pytest.fixture
-def mock_operator_data():
     return MagicMock()
 
 
@@ -68,19 +56,15 @@ def mock_gateway_client():
 @pytest.fixture
 def execution_service(
     mock_approval,
-    mock_event_service,
     mock_settings,
     mock_ai_analyzer,
-    mock_operator_data,
     mock_investigation,
     mock_gateway_client,
 ):
     return OperatorExecutionService(
         approval_service=mock_approval,
-        event_service=mock_event_service,
         settings=mock_settings,
         ai_response_analyzer=mock_ai_analyzer,
-        operator_data_service=mock_operator_data,
         investigation_service=mock_investigation,
         gateway_operator_client=mock_gateway_client,
     )
@@ -91,21 +75,17 @@ class TestOperatorExecutionServiceProperties:
         self,
         execution_service,
         mock_approval,
-        mock_event_service,
-        mock_operator_data,
         mock_ai_analyzer,
         mock_investigation,
     ):
         assert execution_service.approval_service == mock_approval
-        assert execution_service.event_service == mock_event_service
-        assert execution_service.operator_data_service == mock_operator_data
         assert execution_service.ai_response_analyzer == mock_ai_analyzer
         assert execution_service.investigation_service == mock_investigation
 
 
 class TestOperatorExecutionServiceFailCommand:
     @pytest.mark.asyncio
-    async def test_fail_command_broadcasts_event(self, execution_service, mock_event_service):
+    async def test_fail_command_returns_failure_result(self, execution_service):
         g8e_context = build_g8e_http_context()
         result = await execution_service._fail_command(
             error_msg="some error",
@@ -124,33 +104,11 @@ class TestOperatorExecutionServiceFailCommand:
 
         assert result.success is False
         assert result.error == "some error"
-        mock_event_service.publish_command_event.assert_called_once()
-        args = mock_event_service.publish_command_event.call_args
-        assert args[0][0] == EventType.OPERATOR_COMMAND_FAILED
-        assert args[0][1].execution_id == "exec-1"
-
-    @pytest.mark.asyncio
-    async def test_fail_command_handles_broadcast_exception(
-        self, execution_service, mock_event_service
-    ):
-        mock_event_service.publish_command_event.side_effect = Exception("broadcast failed")
-        g8e_context = build_g8e_http_context()
-        # Should not raise exception
-        result = await execution_service._fail_command(
-            error_msg="some error",
-            error_type=CommandErrorType.EXECUTION_FAILED,
-            command="echo hi",
-            g8e_context=g8e_context,
-            execution_id="exec-1",
-            operator_session_id="sess-1",
-            status=ExecutionStatus.FAILED,
-            approval_id="app-1",
-            rule="rule-1",
-            violations=["v1"],
-            denial_reason="denied",
-            feedback_reason="feedback",
-        )
-        assert result.success is False
+        assert result.error_type == CommandErrorType.EXECUTION_FAILED
+        assert result.execution_id == "exec-1"
+        assert result.rule == "rule-1"
+        assert result.denial_reason == "denied"
+        assert result.feedback_reason == "feedback"
 
 
 class TestOperatorExecutionServiceResolveOperators:
@@ -302,10 +260,8 @@ class TestOperatorExecutionServiceDispatch:
     async def test_dispatch_gateway_client_not_configured(self):
         svc = OperatorExecutionService(
             approval_service=MagicMock(),
-            event_service=MagicMock(),
             settings=MagicMock(),
             ai_response_analyzer=MagicMock(),
-            operator_data_service=MagicMock(),
             investigation_service=MagicMock(),
             gateway_operator_client=None,
         )
@@ -445,63 +401,3 @@ class TestOperatorExecutionServiceDirectCommand:
 
         assert res.status == ExecutionStatus.FAILED
         assert res.error == "Gateway operator client is not configured"
-
-    @pytest.mark.asyncio
-    async def test_broadcast_direct_command_payload_mismatch(
-        self, execution_service, mock_event_service
-    ):
-        from app.models.pubsub_messages import ExecutionStatusPayload
-
-        envelope = build_g8eo_result_envelope(
-            operator_id="op-1",
-            operator_session_id="sess-1",
-            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
-            payload=ExecutionStatusPayload(execution_id="exec-1", status=ExecutionStatus.EXECUTING),
-        )
-
-        g8e_context = build_g8e_http_context()
-        await execution_service._broadcast_direct_command_envelope(
-            "exec-1", "echo hi", envelope, g8e_context, "op-1", "sess-1"
-        )
-        mock_event_service.publish_command_event.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_broadcast_direct_command_failure(self, execution_service, mock_event_service):
-        g8e_context = build_g8e_http_context()
-        await execution_service._broadcast_direct_command_failure(
-            execution_id="exec-1",
-            command="echo hi",
-            g8e_context=g8e_context,
-            operator_id="op-1",
-            operator_session_id="sess-1",
-            hostname="host-1",
-            error="dispatch failed",
-        )
-        mock_event_service.publish_command_event.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_dispatch_direct_command_broadcasts_gateway_failure(
-        self, execution_service, mock_gateway_client, mock_event_service
-    ):
-        mock_gateway_client.dispatch = AsyncMock(
-            side_effect=NetworkError("unexpected gateway failure")
-        )
-        g8e_context = build_g8e_http_context()
-        from app.models.internal_api import DirectCommandRequest
-
-        payload = DirectCommandRequest(
-            execution_id="exec-1",
-            command="echo hi",
-            context=RequestContext(
-                case_id="case-1", investigation_id="inv-1", source_component="g8ee"
-            ),
-        )
-
-        await execution_service._dispatch_direct_command_and_broadcast(
-            command_payload=payload,
-            g8e_context=g8e_context,
-            operator_id="op-1",
-            operator_session_id="sess-1",
-        )
-
-        mock_event_service.publish_command_event.assert_called_once()

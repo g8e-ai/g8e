@@ -167,11 +167,10 @@ def build_command_service(
     if execution_service is None:
         execution_service = OperatorExecutionService(
             approval_service=approval_service,
-            event_service=event_service,
             settings=settings,
             ai_response_analyzer=ai_response_analyzer,
-            operator_data_service=operator_data_service,
             investigation_service=investigation_service,
+            gateway_operator_client=gateway_operator_client,
         )
 
     filesystem_service = OperatorFilesystemService(
@@ -185,7 +184,6 @@ def build_command_service(
 
     file_service = OperatorFileService(
         approval_service=approval_service,
-        event_service=event_service,
         execution_service=execution_service,
         ai_response_analyzer=ai_response_analyzer,
         investigation_service=investigation_service,
@@ -194,7 +192,6 @@ def build_command_service(
     intent_service = OperatorIntentService(
         approval_service=approval_service,
         execution_service=execution_service,
-        event_service=event_service,
         investigation_service=investigation_service,
         internal_http_client=internal_http_client,
     )
@@ -221,7 +218,6 @@ def build_intent_service(
     *,
     approval_service: FakeApprovalService | None = None,
     execution_service: FakeExecutionService | None = None,
-    event_service: FakeEventService | None = None,
     investigation_service: FakeInvestigationService | None = None,
     internal_http_client: FakeG8eClient | None = None,
 ) -> OperatorIntentService:
@@ -229,7 +225,6 @@ def build_intent_service(
     return OperatorIntentService(
         approval_service=approval_service or FakeApprovalService(),
         execution_service=execution_service or FakeExecutionService(),
-        event_service=event_service or FakeEventService(),
         investigation_service=investigation_service or FakeInvestigationService(),
         internal_http_client=internal_http_client or FakeG8eClient(),
     )

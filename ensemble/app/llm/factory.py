@@ -148,6 +148,21 @@ def reset_settings() -> None:
     _internal_http_client = None
 
 
+def get_generative_lite_provider(settings: LLMSettings) -> LLMProviderBase:
+    """Return an LLM provider for generative lite workloads.
+
+    When lite_provider is Jev, falls back to the assistant provider because Jev only
+    supports structured decision evaluation. Triage and eval judge should use
+    get_decision_provider() when lite_provider is jev.
+    """
+    if settings.lite_provider is LLMProvider.JEV:
+        logger.debug(
+            "Lite provider is jev; using assistant provider for generative lite call"
+        )
+        return get_llm_provider(settings, is_assistant=True)
+    return get_llm_provider(settings, is_lite=True)
+
+
 def get_llm_provider(
     settings: LLMSettings, is_assistant: bool = False, is_lite: bool = False
 ) -> LLMProviderBase:

@@ -27,14 +27,15 @@ Select Jev for the **lite role** when you want native System One classification 
 | Triage (complexity, intent, posture) | `get_decision_provider()` + batched `choice` questions | `generate_content_lite` when lite provider is not `jev` |
 | Semantic eval judge | `EvalJudge(decision_provider=…)` + `score` / `noul` questions | LLM JSON judge when lite provider is not `jev` |
 
-Jev is **not** a drop-in replacement for every lite call site. Features that still call `get_llm_provider(..., is_lite=True)` for text generation require a generative lite provider:
+Jev is **not** a drop-in replacement for every lite call site. Generative lite features use `get_generative_lite_provider()`, which falls back to the **assistant provider** when `lite_provider=jev`:
 
 - Case title generation
 - Memory extraction
 - Marshal response analysis
-- Tribunal command generation (blocked at validation when `G8E_LLM_COMMAND_GEN_ENABLED=true`)
 
-At startup, ensemble logs a warning when `lite_provider=jev` summarizing these limitations. Chat validation fails closed when Tribunal is enabled alongside Jev on the lite role.
+Tribunal command generation remains blocked at validation when `G8E_LLM_COMMAND_GEN_ENABLED=true` alongside Jev on the lite role.
+
+At startup, ensemble logs a warning when `lite_provider=jev` summarizing this coexistence model. Direct `get_llm_provider(..., is_lite=True)` with Jev still raises `ConfigurationError` — use `get_generative_lite_provider()` for text generation or `get_decision_provider()` for System One paths.
 
 ## Configuration
 
@@ -110,6 +111,7 @@ Pass/fail is deterministic from `score >= 3`. Jev does not emit prose reasoning;
 | Check | Behavior |
 | --- | --- |
 | `get_llm_provider(..., is_lite=True)` with `jev` | Raises `ConfigurationError` — no fake text stream |
+| `get_generative_lite_provider()` with `jev` lite | Uses assistant provider for title, memory, marshal analysis |
 | Primary or assistant `jev` | Rejected in `validate_llm_config` |
 | Jev lite + Tribunal enabled | Rejected in `validate_llm_config` and at startup |
 | Missing Jev API key | `JevProvider.validate_config` error on lite tier |

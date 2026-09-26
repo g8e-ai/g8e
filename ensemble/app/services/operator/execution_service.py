@@ -16,7 +16,6 @@ import logging
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.constants import EventType
 from app.constants.generated_status import (
-    AITaskId,
     CommandErrorType,
 )
 from app.constants.config import ExecutionStatus
@@ -24,10 +23,8 @@ from app.errors import BusinessLogicError, NetworkError, ValidationError
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ApprovalServiceProtocol,
-    EventServiceProtocol,
     ExecutionServiceProtocol,
     InvestigationServiceProtocol,
-    OperatorDataServiceProtocol,
 )
 
 from app.models.tool_results import CommandExecutionResult
@@ -35,8 +32,6 @@ from app.models.command_request_payloads import CommandCancelRequestPayload, Com
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CancelCommandResult,
-    CommandFailedBroadcastEvent,
-    CommandResultBroadcastEvent,
     DirectCommandResult,
     OperatorDocument,
     TargetSystem,
@@ -57,17 +52,13 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     def __init__(
         self,
         approval_service: ApprovalServiceProtocol,
-        event_service: EventServiceProtocol,
         settings: G8eeAppSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
-        operator_data_service: OperatorDataServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
         gateway_operator_client: GatewayOperatorClient | None = None,
     ) -> None:
         self._approval_service = approval_service
-        self._event_service = event_service
         self._settings = settings
-        self._operator_data_service = operator_data_service
         self._ai_response_analyzer = ai_response_analyzer
         self._investigation_service = investigation_service
         self._gateway_operator_client = gateway_operator_client
@@ -79,14 +70,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     @property
     def approval_service(self) -> ApprovalServiceProtocol:
         return self._approval_service
-
-    @property
-    def event_service(self) -> EventServiceProtocol:
-        return self._event_service
-
-    @property
-    def operator_data_service(self) -> OperatorDataServiceProtocol:
-        return self._operator_data_service
 
     @property
     def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
@@ -116,32 +99,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         denial_reason: str,
         feedback_reason: str,
     ) -> CommandExecutionResult:
-        try:
-            await self.event_service.publish_command_event(
-                EventType.OPERATOR_COMMAND_FAILED,
-                CommandFailedBroadcastEvent(
-                    command=command,
-                    execution_id=execution_id,
-                    operator_session_id=operator_session_id,
-                    status=status or ExecutionStatus.FAILED,
-                    error=error_msg,
-                    stderr=feedback_reason or error_msg,
-                    error_type=error_type,
-                    denial_reason=denial_reason,
-                    feedback_reason=feedback_reason,
-                    rule=rule,
-                    violations=violations,
-                    approval_id=approval_id,
-                ),
-                g8e_context,
-                task_id=AITaskId.COMMAND,
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to broadcast command event %s to client: %s",
-                EventType.OPERATOR_COMMAND_FAILED,
-                e,
-            )
+
         return CommandExecutionResult(
             success=False,
             error=error_msg,
@@ -476,15 +434,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 "[EXECUTION] Direct command timed out waiting for Gateway result for %s",
                 execution_id,
             )
-            await self._broadcast_direct_command_failure(
-                execution_id=execution_id,
-                command=command,
-                g8e_context=g8e_context,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                hostname=command_payload.hostname,
-                error=f"Execution timed out after {timeout_seconds}s",
-            )
             return
         except NetworkError as exc:
             logger.error(
@@ -492,15 +441,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 execution_id,
                 exc,
                 exc_info=True,
-            )
-            await self._broadcast_direct_command_failure(
-                execution_id=execution_id,
-                command=command,
-                g8e_context=g8e_context,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                hostname=command_payload.hostname,
-                error=str(exc),
             )
             return
         except Exception as e:
@@ -510,117 +450,14 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 e,
                 exc_info=True,
             )
-            await self._broadcast_direct_command_failure(
-                execution_id=execution_id,
-                command=command,
-                g8e_context=g8e_context,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                hostname=command_payload.hostname,
-                error=str(e),
-            )
             return
 
         if not dispatch_result.get("success", True):
-            await self._broadcast_direct_command_failure(
-                execution_id=execution_id,
-                command=command,
-                g8e_context=g8e_context,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                hostname=command_payload.hostname,
-                error=str(dispatch_result.get("error") or "Gateway dispatch failed"),
-            )
-            return
-
-        envelope = envelope_from_gateway_dispatch(
-            dispatch_result,
-            execution_id=execution_id,
-            operator_id=operator_id,
-            operator_session_id=operator_session_id,
-            g8e_context=g8e_context,
-        )
-        await self._broadcast_direct_command_envelope(
-            execution_id=execution_id,
-            command=command,
-            envelope=envelope,
-            g8e_context=g8e_context,
-            operator_id=operator_id,
-            operator_session_id=operator_session_id,
-            hostname=command_payload.hostname,
-        )
-
-    async def _broadcast_direct_command_envelope(
-        self,
-        execution_id: str,
-        command: str,
-        envelope: G8eoResultEnvelope | None,
-        g8e_context: G8eHttpContext,
-        operator_id: str,
-        operator_session_id: str,
-        hostname: str | None = None,
-    ) -> None:
-        """Broadcast a direct command result envelope to the client."""
-        if envelope is None or not isinstance(envelope.payload, ExecutionResultsPayload):
             logger.warning(
-                "[EXECUTION] Direct command result payload type mismatch for %s", execution_id
+                "[EXECUTION] Direct command Gateway dispatch failed for %s: %s",
+                execution_id,
+                dispatch_result.get("error"),
             )
             return
 
-        payload = envelope.payload
-        status = payload.status if payload.status else ExecutionStatus.COMPLETED
-
-        completion_event_type = (
-            EventType.OPERATOR_COMMAND_COMPLETED
-            if status == ExecutionStatus.COMPLETED
-            else EventType.OPERATOR_COMMAND_FAILED
-        )
-
-        await self.event_service.publish_command_event(
-            completion_event_type,
-            CommandResultBroadcastEvent(
-                execution_id=execution_id,
-                command=command,
-                status=status,
-                output=payload.stdout,
-                error=payload.error_message,
-                stderr=payload.stderr,
-                exit_code=payload.return_code,
-                execution_time_seconds=payload.duration_seconds or 0,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                hostname=hostname,
-                direct_execution=True,
-            ),
-            g8e_context,
-            task_id=AITaskId.DIRECT_COMMAND,
-        )
-
-        logger.info("[EXECUTION] Direct command result broadcasted for %s", execution_id)
-
-    async def _broadcast_direct_command_failure(
-        self,
-        execution_id: str,
-        command: str,
-        g8e_context: G8eHttpContext,
-        operator_id: str,
-        operator_session_id: str,
-        hostname: str | None,
-        error: str,
-    ) -> None:
-        await self.event_service.publish_command_event(
-            EventType.OPERATOR_COMMAND_FAILED,
-            CommandResultBroadcastEvent(
-                execution_id=execution_id,
-                command=command,
-                status=ExecutionStatus.FAILED,
-                error=error,
-                stderr=error,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                hostname=hostname,
-                direct_execution=True,
-            ),
-            g8e_context,
-            task_id=AITaskId.DIRECT_COMMAND,
-        )
+        logger.info("[EXECUTION] Direct command dispatched successfully for %s", execution_id)

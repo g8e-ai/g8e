@@ -411,6 +411,17 @@ class LLMSettings(_ProtocolLLMSettings):
         # Fall back to assistant model, then primary model (best available model for lite tasks)
         return self.resolved_assistant_model or self.resolved_primary_model
 
+    @property
+    def resolved_generative_lite_model(self) -> str | None:
+        """Return the model for generative lite workloads (title, memory, marshal analysis).
+
+        When lite_provider is Jev, returns the assistant (then primary) model because Jev
+        does not support text generation. Triage and eval judge use resolved_lite_model.
+        """
+        if self.lite_provider is LLMProvider.JEV:
+            return self.resolved_assistant_model or self.resolved_primary_model
+        return self.resolved_lite_model
+
     def resolve(
         self,
         role: str,
