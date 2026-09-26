@@ -1,7 +1,7 @@
 # g8e Code Map
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-26
+Version: v2.1.13
 
 This document maps the current repository by runtime entry point, service boundary, and supporting component. It identifies where behavior is owned without duplicating protocol specifications or user guides. The codebase remains the source of truth.
 
@@ -66,6 +66,12 @@ Use `g8e <command> --help` for the live command and flag hierarchy. The command 
 ### Gateway Mode
 
 `gateway.GatewayModeService` in `internal/services/gateway/gateway_service.go` is the top-level gateway runtime. Its builder assembles dependencies before the service starts.
+
+Three runtime boundaries are distinct:
+
+- **Gateway HTTP and control plane.** `GatewayModeService` and the HTTP controllers in `internal/services/gateway/`. This is the policy decision point: HTTP, PKI, persistence, MCP, pub/sub, and governance wiring.
+- **Embedded Operator substrate.** `embedded.Service` in `internal/services/gateway/embedded/`. It owns the in-process operator document: pending registration at gateway start, the single-user claim (`constants.ErrEmbeddedOperatorClaimed`, same-user idempotence, deterministic document ID `embedded-operator`), and the operator-session row browser bootstrap persists. The builder constructs one service and injects it into CLI bootstrap and browser claim sites. `operator_controller.go` stays in the gateway package as the HTTP shell. Web-session bind stays on `RegistrationService`.
+- **Outbound Operator runtime.** `services.G8eoService` in `internal/services/g8eo.go`, started from `internal/cli/serve/operator.go`. It is not part of the gateway package and is not the embedded substrate.
 
 The gateway runtime owns these major groups:
 
@@ -156,7 +162,8 @@ Use `Resolve` only when an API requires an absolute path and `Rel` when converti
 - `internal/services/publicdisclosure/`: Validation of public-disclosure records and signed projections used by the spectator publication path; Gateway publisher and mirror orchestration lives in `internal/services/gateway/`.
 - `internal/services/execution/`: Command execution and governed file edits.
 - `internal/services/fs/`: Scoped `.g8e/` runtime file operations.
-- `internal/services/gateway/`: Gateway orchestration, HTTP controllers, identity, PKI, enrollment, persistence stores, pub/sub, and embedded assets.
+- `internal/services/gateway/`: Gateway HTTP and control plane: orchestration, HTTP controllers, identity, PKI, enrollment, persistence stores, pub/sub, and embedded assets.
+- `internal/services/gateway/embedded/`: In-process embedded Operator substrate (pending registration, claim, bootstrap session persistence). Outbound Operator runtime stays `services.G8eoService`.
 - `internal/services/governance/`: L1, L3, L4, L5, governance interfaces, state root providers, signer stores, and public-key export.
 - `internal/services/keystore/`: Encrypted key storage used by gateway secrets and PKI.
 - `internal/services/logging/`: Runtime log file and `slog` configuration.

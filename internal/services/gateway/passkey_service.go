@@ -290,6 +290,13 @@ type embeddedOperatorBinder interface {
 	BindEmbeddedOperatorToWebSession(userID, webSessionID string) (bool, error)
 }
 
+// embeddedOperatorClaimer claims the gateway's embedded operator for a user
+// and persists the operator session the claim mints. Satisfied by
+// *embedded.Service.
+type embeddedOperatorClaimer interface {
+	ClaimEmbeddedOperator(userID string) (operatorID, operatorSessionID string, err error)
+}
+
 // PasskeyHandler handles HTTP endpoints for passkey registration, authentication,
 // credential management, and OOB approval flows. It wraps a PasskeyService for
 // domain logic and delegates business orchestration (MCP, suspended transactions,

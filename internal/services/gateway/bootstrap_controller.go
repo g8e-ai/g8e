@@ -17,7 +17,15 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/gateway/embedded"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
+)
+
+// The gateway stores satisfy the embedded substrate interfaces.
+var (
+	_ embedded.Store            = (*DocumentStoreService)(nil)
+	_ embedded.SessionPersister = (*OperatorSessionService)(nil)
+	_ embeddedOperatorClaimer   = (*embedded.Service)(nil)
 )
 
 // BootstrapControllerDeps groups all dependencies for BootstrapController.
@@ -29,6 +37,7 @@ type BootstrapControllerDeps struct {
 	PKI                *PKIAuthority
 	CLISessionSvc      *CLISessionService
 	OperatorSessionSvc *OperatorSessionService
+	EmbeddedOperator   *embedded.Service
 	Responder          *response.Writer
 }
 
@@ -42,10 +51,17 @@ type BootstrapController struct {
 	pki                *PKIAuthority
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
+	embeddedOperator   *embedded.Service
 	responder          *response.Writer
 }
 
 func newBootstrapController(deps BootstrapControllerDeps) *BootstrapController {
+	embeddedOperator := deps.EmbeddedOperator
+	if embeddedOperator == nil {
+		// Test fixtures that build a controller without the substrate
+		// still claim through the same package, over the same stores.
+		embeddedOperator = embedded.New(deps.DocStore, deps.OperatorSessionSvc)
+	}
 	return &BootstrapController{
 		cfg:                deps.Cfg,
 		logger:             deps.Logger,
@@ -54,6 +70,7 @@ func newBootstrapController(deps BootstrapControllerDeps) *BootstrapController {
 		pki:                deps.PKI,
 		cliSessionSvc:      deps.CLISessionSvc,
 		operatorSessionSvc: deps.OperatorSessionSvc,
+		embeddedOperator:   embeddedOperator,
 		responder:          deps.Responder,
 	}
 }
@@ -152,7 +169,7 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	// it sets the owner binding and mints the operator session ID every
 	// bootstrap-issued session is bound to. The embedded operator is
 	// certless — no CSR is signed for it.
-	operatorID, operatorSessionID, err := claimEmbeddedOperator(c.docStore, user.ID, req.SystemFingerprint, time.Now().UTC())
+	operatorID, operatorSessionID, err := c.embeddedOperator.Claim(user.ID, req.SystemFingerprint, time.Now().UTC())
 	if err != nil {
 		c.logger.Error("Failed to claim embedded operator during bootstrap", "error", err, "user_id", user.ID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to bind embedded operator")
