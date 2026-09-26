@@ -65,6 +65,14 @@ globalThis.EventSource = MockEventSource;
 
 const { SSEConnectionManager } = await import('@g8ed/public/js/utils/sse-connection-manager.js');
 
+beforeEach(() => {
+    window.G8E_GATEWAY_URL = 'https://localhost:8443';
+});
+
+afterEach(() => {
+    delete window.G8E_GATEWAY_URL;
+});
+
 function makeManager() {
     const eventBus = new MockEventBus();
     const manager = new SSEConnectionManager(eventBus);
@@ -690,9 +698,14 @@ describe('SSEConnectionManager.handleSSEEvent — payload fidelity [FRONTEND - j
 // ---------------------------------------------------------------------------
 
 describe('SSEConnectionManager.connect — EventSource construction [FRONTEND - jsdom]', () => {
+    beforeEach(() => {
+        window.G8E_GATEWAY_URL = 'https://localhost:8443';
+    });
+
     afterEach(() => {
         vi.restoreAllMocks();
         MockEventSource._lastInstance = null;
+        delete window.G8E_GATEWAY_URL;
     });
 
     it('creates an EventSource instance when connect() is called', () => {
@@ -702,7 +715,7 @@ describe('SSEConnectionManager.connect — EventSource construction [FRONTEND - 
 
         const es = MockEventSource._lastInstance;
         expect(es).toBeInstanceOf(MockEventSource);
-        expect(es.url).toBe('/api/v1/sse/events');
+        expect(es.url).toBe('https://localhost:8443/api/v1/sse/stream');
         expect(es.withCredentials).toBe(true);
     });
 
@@ -837,7 +850,7 @@ describe('SSEConnectionManager.getConnectionStatus [FRONTEND - jsdom]', () => {
         const status = manager.getConnectionStatus();
         expect(status.isConnected).toBe(true);
         expect(status.readyState).toBe(EventSource.OPEN);
-        expect(status.url).toBe('/api/v1/sse/events');
+        expect(status.url).toBe('https://localhost:8443/api/v1/sse/stream');
     });
 
     it('returns CLOSED readyState when no connection exists', () => {

@@ -7,6 +7,7 @@ import { OperatorStatus } from '../constants/operator-constants.js';
 import { templateLoader } from '../utils/template-loader.js';
 import { notificationService } from '../utils/notification-service.js';
 import { operatorSessionService } from '../utils/operator-session-service.js';
+import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { OperatorDownloadMixin } from './operator-download-mixin.js';
 import { OperatorDeviceLinkMixin } from './operator-device-link-mixin.js';
 import { BindOperatorsMixin } from './operator-bind-mixin.js';
@@ -87,6 +88,7 @@ export class OperatorPanel {
         this.bindEvents();
         this.setupThemeListener();
         this._setupAuthStateListener();
+        await this._refreshOperatorList();
         if (this._pendingRender) {
             this._applyOperatorState(this._pendingRender);
             this._pendingRender = null;
@@ -108,6 +110,15 @@ export class OperatorPanel {
 
         for (const eventType of _STATUS_UPDATED_VALUES) {
             this.eventBus.on(eventType, this._wireHandlers.onStatusUpdated);
+        }
+    }
+
+    async _refreshOperatorList() {
+        try {
+            const data = await operatorPanelService.listOperators();
+            this.eventBus.emit(EventType.OPERATOR_PANEL_LIST_UPDATED, data);
+        } catch (error) {
+            devLogger.warn('[OPERATOR-PANEL] Failed to load operators from gateway:', error);
         }
     }
 

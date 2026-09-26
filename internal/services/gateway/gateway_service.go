@@ -888,6 +888,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		},
 		ProviderObservationControllerDeps: providerObservationDeps,
 		ModelProvenanceControllerDeps:     modelProvenanceDeps,
+		EnsembleBrowserProxyControllerDeps: EnsembleBrowserProxyControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: ls.responder,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)

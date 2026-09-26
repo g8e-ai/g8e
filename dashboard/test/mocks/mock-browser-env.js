@@ -444,7 +444,7 @@ export class MockServiceClient {
     }
 
     setInvestigationsResponse(investigations) {
-        this.setResponse('g8ed', '/api/chat/investigations', {
+        this.setResponse('gateway', '/api/v1/investigations', {
             ok: true,
             status: 200,
             json: async () => ({
@@ -455,7 +455,7 @@ export class MockServiceClient {
     }
 
     setInvestigationsError(status, message) {
-        this.setResponse('g8ed', '/api/chat/investigations', {
+        this.setResponse('gateway', '/api/v1/investigations', {
             ok: false,
             status,
             statusText: message,

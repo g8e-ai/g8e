@@ -64,9 +64,10 @@ type GatewayFlags struct {
 	ConsensusID        string
 	ConsensusURL       string
 	ConsensusBootstrap string
-	MCPDownstreamURL   string
-	A2ADownstreamURL   string
-	PublicBaseURL      string
+	MCPDownstreamURL    string
+	A2ADownstreamURL    string
+	EnsembleUpstreamURL string
+	PublicBaseURL       string
 	AllowedOrigins     []string
 	DoctrineDir        string
 
@@ -101,6 +102,7 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.ConsensusBootstrap, "consensus-bootstrap", "", "Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup (for deterministic demo deployments)")
 	cmd.Flags().StringVar(&f.MCPDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
 	cmd.Flags().StringVar(&f.A2ADownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
+	cmd.Flags().StringVar(&f.EnsembleUpstreamURL, "ensemble-upstream-url", "", "HTTP URL of the g8ee ensemble for browser proxy forwarding (default: G8E_ENSEMBLE_URL or http://127.0.0.1:8000)")
 	cmd.Flags().StringVar(&f.PublicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
 	cmd.Flags().StringArrayVar(&f.AllowedOrigins, "cors-origin", nil, "Allowed CORS origin for cross-origin browser access (repeatable, e.g. https://lovable.dev)")
 	cmd.Flags().StringVar(&f.DoctrineDir, "doctrine-dir", "", "Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)")
@@ -152,6 +154,9 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	if f.DoctrineDir == "" {
 		f.DoctrineDir = os.Getenv(string(constants.EnvVar.DoctrineDir))
 	}
+	if f.EnsembleUpstreamURL == "" {
+		f.EnsembleUpstreamURL = os.Getenv("G8E_ENSEMBLE_URL")
+	}
 	return f
 }
 
@@ -180,6 +185,7 @@ func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 		ConsensusBootstrap:               f.ConsensusBootstrap,
 		MCPDownstreamURL:                 f.MCPDownstreamURL,
 		A2ADownstreamURL:                 f.A2ADownstreamURL,
+		EnsembleUpstreamURL:              f.EnsembleUpstreamURL,
 		PublicBaseURL:                    f.PublicBaseURL,
 		AllowedOrigins:                   f.AllowedOrigins,
 		DoctrineDir:                      f.DoctrineDir,

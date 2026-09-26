@@ -135,6 +135,7 @@ type GatewayConfig struct {
 	PasskeyRpOrigins []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
 	MCPDownstreamURL string         // URL of the downstream MCP server to proxy discovery and execution to
 	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
+	EnsembleUpstreamURL string     // HTTP URL of the g8ee ensemble for browser proxy forwarding
 	PublicBaseURL    string         // Public base URL for L3 approval links (e.g., https://localhost:8443)
 	JWKSURL          string         // URL to fetch JWKS for JWT validation
 	JWTRoleClaim     string         // The claim in JWT that contains roles (default: "roles")
@@ -359,9 +360,10 @@ type GatewayOptions struct {
 	PasskeyRpID      string
 	PasskeyRpName    string
 	PasskeyRpOrigins []string
-	MCPDownstreamURL string
-	A2ADownstreamURL string
-	PublicBaseURL    string
+	MCPDownstreamURL    string
+	A2ADownstreamURL    string
+	EnsembleUpstreamURL string
+	PublicBaseURL       string
 	JWKSURL          string
 	JWTRoleClaim     string
 	JWTIssuer        string
@@ -481,6 +483,10 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 
 	mcpDownstreamURL := opts.MCPDownstreamURL
 	a2aDownstreamURL := opts.A2ADownstreamURL
+	ensembleUpstreamURL := opts.EnsembleUpstreamURL
+	if ensembleUpstreamURL == "" {
+		ensembleUpstreamURL = os.Getenv("G8E_ENSEMBLE_URL")
+	}
 	secretsDir := opts.SecretsDir
 	if secretsDir == "" {
 		secretsDir = paths.Infra.SecretsDir
@@ -552,9 +558,10 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			PasskeyRpID:      passkeyRpID,
 			PasskeyRpName:    passkeyRpName,
 			PasskeyRpOrigins: opts.PasskeyRpOrigins,
-			MCPDownstreamURL: mcpDownstreamURL,
-			A2ADownstreamURL: a2aDownstreamURL,
-			PublicBaseURL:    opts.PublicBaseURL,
+			MCPDownstreamURL:    mcpDownstreamURL,
+			A2ADownstreamURL:    a2aDownstreamURL,
+			EnsembleUpstreamURL: ensembleUpstreamURL,
+			PublicBaseURL:       opts.PublicBaseURL,
 			JWKSURL:          jwksURL,
 			JWTRoleClaim:     jwtRoleClaim,
 			JWTIssuer:        jwtIssuer,

@@ -112,7 +112,7 @@ describe('ChatComponent message rendering [FRONTEND - jsdom]', () => {
         authState.getwebSessionId = () => WEB_SESSION_ID;
 
         serviceClient = new MockServiceClient();
-        serviceClient.setResponse('g8ed', '/js/components/templates/streaming-message.html', {
+        serviceClient.setResponse('gateway', '/js/components/templates/streaming-message.html', {
             ok: true, status: 200, text: async () => ''
         });
 

@@ -33,7 +33,6 @@ from tests.fakes.factories import (
     build_g8e_http_context,
     build_g8eo_result_envelope,
 )
-from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.fake_execution_service import FakeExecutionService
 
 pytestmark = pytest.mark.unit
@@ -70,11 +69,9 @@ def _make_service(
     resolve_error: Exception | None = None,
 ) -> tuple[OperatorPortService, FakeExecutionService]:
     operator = resolved_operator or _make_operator()
-    event_service = FakeEventService()
     execution = FakeExecutionService(
         resolved_operator=operator,
         resolve_error=resolve_error,
-        event_service=event_service,
     )
     service = OperatorPortService(
         execution_service=execution,

@@ -391,14 +391,14 @@ describe('CasesManager [UNIT]', () => {
 
             const log = serviceClient.getRequestLog();
             expect(log).toHaveLength(1);
-            expect(log[0].service).toBe(ServiceName.g8ed);
+            expect(log[0].service).toBe(ServiceName.GATEWAY);
             expect(log[0].path).toContain('investigations');
             expect(manager.casesLoaded).toBe(true);
             expect(manager.userCases).toHaveLength(2);
         });
 
         it('resets casesLoaded on HTTP error so retry is possible', async () => {
-            serviceClient.setResponse(ServiceName.g8ed, '/api/chat/investigations', {
+            serviceClient.setResponse(ServiceName.GATEWAY, '/api/v1/investigations', {
                 ok: false,
                 status: 500,
                 statusText: 'network error',
@@ -470,20 +470,20 @@ describe('CasesManager [UNIT]', () => {
     describe('switchToCase', () => {
         it('fetches investigation data for the given caseId', async () => {
             const caseId = 'case_abc';
-            serviceClient.setResponse(ServiceName.g8ed, `/api/chat/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
+            serviceClient.setResponse(ServiceName.GATEWAY, `/api/v1/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
 
             const manager = makeManager();
             await manager.switchToCase(caseId);
 
             const log = serviceClient.getRequestLog();
             expect(log).toHaveLength(1);
-            expect(log[0].service).toBe(ServiceName.g8ed);
+            expect(log[0].service).toBe(ServiceName.GATEWAY);
             expect(log[0].path).toContain(caseId);
         });
 
         it('sets currentCaseId and currentInvestigationId on success', async () => {
             const caseId = 'case_abc';
-            serviceClient.setResponse(ServiceName.g8ed, `/api/chat/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
+            serviceClient.setResponse(ServiceName.GATEWAY, `/api/v1/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
 
             const manager = makeManager();
             await manager.switchToCase(caseId);
@@ -494,7 +494,7 @@ describe('CasesManager [UNIT]', () => {
 
         it('emits CASES.SELECTED with full investigation data', async () => {
             const caseId = 'case_abc';
-            serviceClient.setResponse(ServiceName.g8ed, `/api/chat/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
+            serviceClient.setResponse(ServiceName.GATEWAY, `/api/v1/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
 
             const manager = makeManager();
             eventBus.clear();
@@ -507,7 +507,7 @@ describe('CasesManager [UNIT]', () => {
 
         it('emits CASES.SWITCHED after selecting', async () => {
             const caseId = 'case_abc';
-            serviceClient.setResponse(ServiceName.g8ed, `/api/chat/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
+            serviceClient.setResponse(ServiceName.GATEWAY, `/api/v1/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
 
             const manager = makeManager();
             eventBus.clear();
@@ -532,7 +532,7 @@ describe('CasesManager [UNIT]', () => {
 
         it('pushes URL state after switching to a case', async () => {
             const caseId = 'case_abc';
-            serviceClient.setResponse(ServiceName.g8ed, `/api/chat/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
+            serviceClient.setResponse(ServiceName.GATEWAY, `/api/v1/investigations?case_id=${caseId}`, makeSwitchToCaseResponse(caseId));
 
             const manager = makeManager();
             await manager.switchToCase(caseId);
@@ -836,7 +836,7 @@ describe('CasesManager [UNIT]', () => {
             vi.spyOn(dom.window.history, 'pushState').mockImplementation(() => {});
             vi.spyOn(dom.window.history, 'replaceState').mockImplementation(() => {});
 
-            serviceClient.setResponse(ServiceName.g8ed, '/api/chat/investigations?case_id=case_url_1', makeSwitchToCaseResponse('case_url_1'));
+            serviceClient.setResponse(ServiceName.GATEWAY, '/api/v1/investigations?case_id=case_url_1', makeSwitchToCaseResponse('case_url_1'));
 
             const manager = new CasesManager(eventBus);
             manager.init();

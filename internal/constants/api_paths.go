@@ -187,6 +187,14 @@ var APIPaths = struct {
 	State string `json:"state"`
 	// Landing
 	Landing string `json:"landing"`
+	// Ensemble browser proxy routes (Gateway → g8ee)
+	EnsembleChatPrefix             string `json:"ensemble_chat_prefix"`
+	EnsembleSettingsPrefix         string `json:"ensemble_settings_prefix"`
+	EnsembleCasesPrefix            string `json:"ensemble_cases_prefix"`
+	EnsembleInvestigations         string `json:"ensemble_investigations"`
+	EnsembleInvestigationsQuery    string `json:"ensemble_investigations_query"`
+	EnsembleOperatorApprovalPrefix string `json:"ensemble_operator_approval_prefix"`
+	EnsembleOperatorPrefix         string `json:"ensemble_operator_prefix"`
 }{
 	InternalPrefix: "/api/v1",
 	OperatorPrefix: "/api",
@@ -362,4 +370,12 @@ var APIPaths = struct {
 	State: "/api/v1/state",
 	// Landing
 	Landing: "/",
+	// Ensemble browser proxy routes (Gateway → g8ee)
+	EnsembleChatPrefix:             "/api/v1/chat",
+	EnsembleSettingsPrefix:         "/api/v1/settings",
+	EnsembleCasesPrefix:            "/api/v1/cases",
+	EnsembleInvestigations:         "/api/v1/investigations",
+	EnsembleInvestigationsQuery:    "/api/v1/investigations/query",
+	EnsembleOperatorApprovalPrefix: "/api/v1/operator/approval/",
+	EnsembleOperatorPrefix:         "/api/v1/operator/",
 }

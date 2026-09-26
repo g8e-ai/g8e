@@ -159,6 +159,27 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.ObserveProducerAgentState, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ObserveProducerRunState, RouteAuthMTLS)
 
+	// mTLS-only operator sub-paths (must precede the browser-capable prefix).
+	r.addExact(constants.APIPaths.OperatorsValidate, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.OperatorsTarget, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.OperatorsReauth, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.OperatorsCommands, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.OperatorsStop, RouteAuthMTLS)
+	r.addPrefix(constants.APIPaths.OperatorsSession, RouteAuthMTLS)
+	// Browser operator list/bind/unbind (cookie or mTLS for CLI parity).
+	r.addExact(constants.APIPaths.Operators, RouteAuthDual)
+	r.addExact(constants.APIPaths.OperatorsBind, RouteAuthDual)
+	r.addExact(constants.APIPaths.OperatorsUnbind, RouteAuthDual)
+	// Browser operator detail/stop under /api/v1/operators/{id}/ (terminate remains mTLS-enforced in handler).
+	r.addPrefix(constants.APIPaths.OperatorsByID, RouteAuthDual)
+
+	// Ensemble browser proxy (Gateway → g8ee with stamped identity).
+	r.addPrefix(constants.APIPaths.EnsembleChatPrefix, RouteAuthWebSession)
+	r.addPrefix(constants.APIPaths.EnsembleSettingsPrefix, RouteAuthWebSession)
+	r.addPrefix(constants.APIPaths.EnsembleCasesPrefix, RouteAuthWebSession)
+	r.addExact(constants.APIPaths.EnsembleInvestigations, RouteAuthWebSession)
+	r.addPrefix(constants.APIPaths.EnsembleOperatorPrefix, RouteAuthWebSession)
+
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)
 

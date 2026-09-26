@@ -4,6 +4,12 @@
 import { devLogger } from '../utils/dev-logger.js';
 import { templateLoader } from '../utils/template-loader.js';
 import { webSessionService } from '../utils/web-session-service.js';
+
+function gatewayBinaryArtifact(os, arch) {
+    const platform = os === 'mac' ? 'darwin' : os;
+    const base = `g8e-${platform}-${arch}`;
+    return platform === 'windows' ? `${base}.exe` : base;
+}
 import { BEARER_PREFIX } from '../constants/service-client-constants.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 
@@ -233,8 +239,10 @@ export const OperatorDownloadMixin = {
     populateDownloadDetails(overlay, os, arch) {
         const apiKey = webSessionService.getApiKey();
 
-        const downloadUrl = `${window.location.origin}/operator/download/${os}/${arch}`;
-        const checksumUrl = `${window.location.origin}/operator/download/${os}/${arch}/sha256`;
+        const gateway = window.G8E_GATEWAY_URL;
+        const artifact = gatewayBinaryArtifact(os, arch);
+        const downloadUrl = `${gateway}/.well-known/g8e/bin/${artifact}`;
+        const checksumUrl = `${gateway}/.well-known/g8e/bin/${artifact}.sha256`;
         const filename = os === 'windows' ? 'g8e-operator.exe' : 'g8e-operator';
 
         const cloudFlag = '';
@@ -439,8 +447,9 @@ export const OperatorDownloadMixin = {
 
         const apiKey = webSessionService.getApiKey() || 'YOUR_API_KEY';
 
-        const downloadUrl = `${window.location.origin}/operator/download/${os}/${arch}`;
-        const filename = os === 'windows' ? 'g8e-operator.exe' : 'g8e-operator';
+        const artifact = gatewayBinaryArtifact(os, arch);
+        const downloadUrl = `${window.G8E_GATEWAY_URL}/.well-known/g8e/bin/${artifact}`;
+        const filename = artifact;
         const curlCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_OPERATOR_API_KEY" -o ${filename} && chmod +x ${filename}`;
 
         const osNames = { mac: 'macOS', linux: 'Linux' };

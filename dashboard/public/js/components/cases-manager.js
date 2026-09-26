@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
+import { ServiceName } from '../constants/service-client-constants.js';
+
 /**
  * CasesManager - Handles case management functionality
  * 
@@ -284,7 +286,7 @@ export class CasesManager {
                 throw new Error('Service client not initialized');
             }
 
-            const response = await window.serviceClient.get('g8ed', ApiPaths.chat.investigations());
+            const response = await window.serviceClient.get(ServiceName.GATEWAY, ApiPaths.chat.investigations());
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -544,7 +546,7 @@ export class CasesManager {
             return;
         }
 
-        const response = await window.serviceClient.get('g8ed', ApiPaths.chat.investigations() + `?case_id=${caseId}`);
+        const response = await window.serviceClient.get(ServiceName.GATEWAY, ApiPaths.chat.investigations() + `?case_id=${caseId}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);

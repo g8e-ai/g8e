@@ -417,11 +417,9 @@ func TestRouteAuthRegistry_GenericRoutesRemainMTLS(t *testing.T) {
 		constants.APIPaths.PKIAppsDelegated,
 		constants.APIPaths.PKICertificatesRevoke,
 		constants.APIPaths.PKIRevocationBundle,
-		// Operator routes
-		constants.APIPaths.Operators,
-		constants.APIPaths.OperatorsByID + "some-operator",
+		// Operator mTLS-only sub-paths
 		constants.APIPaths.OperatorsValidate,
-		constants.APIPaths.OperatorsBind,
+		constants.APIPaths.OperatorsStop,
 		// Admin routes
 		constants.APIPaths.AdminConsensus,
 		constants.APIPaths.AdminAppsRevoke,

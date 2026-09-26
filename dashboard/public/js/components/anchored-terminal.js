@@ -9,6 +9,7 @@ import { TerminalOutputMixin } from './anchored-terminal-output.js';
 import { TerminalExecutionMixin } from './anchored-terminal-execution.js';
 import { EventType } from '../constants/events.js';
 import { ApiPaths } from '../constants/api-paths.js';
+import { ServiceName } from '../constants/service-client-constants.js';
 
 function applyMixins(target, ...mixins) {
     for (const mixin of mixins) {
@@ -215,7 +216,7 @@ export class AnchoredOperatorTerminal {
             const executingId = this.showExecutingIndicator(command);
             const executionId = `direct_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-            const response = await window.serviceClient.post('g8ed', ApiPaths.approval.directCommand(), {
+            const response = await window.serviceClient.post(ServiceName.GATEWAY, ApiPaths.approval.directCommand(), {
                 command: command,
                 execution_id: executionId,
                 operator_id: this.boundOperator?.operator_id,

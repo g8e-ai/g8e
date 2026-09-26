@@ -12,6 +12,7 @@ import { ApiPaths } from '../constants/api-paths.js';
 import { UIEventType } from '../constants/ui-events.js';
 
 const CLI_SESSION_ID = 'browser';
+const USER_ID_STORAGE_KEY = 'g8e_user_id';
 
 function _base64urlToBuffer(base64url) {
     const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
@@ -257,8 +258,9 @@ export class AuthManager {
                 return { success: false, message: 'Registration challenge missing user id' };
             }
 
+            const publicKeyOptions = challengeData.options?.publicKey ?? challengeData.options;
             const attestation = await navigator.credentials.create({
-                publicKey: _decodeRegistrationOptions(challengeData.options),
+                publicKey: _decodeRegistrationOptions(publicKeyOptions),
             });
 
             const verifyRes = await window.serviceClient.post(
@@ -280,6 +282,7 @@ export class AuthManager {
             if (session) {
                 const webSessionId = await this._fetchSessionId();
                 if (webSessionId) session.web_session_id = webSessionId;
+                if (userId) localStorage.setItem(USER_ID_STORAGE_KEY, userId);
                 this.setSession(session);
             }
 
@@ -294,16 +297,17 @@ export class AuthManager {
     // Passkey authentication (returning user)
     // =========================================================================
 
-    async passkeyLogin() {
+    async passkeyLogin(userId = null) {
         try {
-            // Discoverable-credential flow: omit user_id so the gateway returns
-            // a challenge without allowCredentials, letting the browser pick
-            // any resident passkey. The user_id is recovered from the
-            // assertion's userHandle during verification.
+            const resolvedUserId = (userId || localStorage.getItem(USER_ID_STORAGE_KEY) || '').trim();
+            if (!resolvedUserId) {
+                return { success: false, message: 'User ID required' };
+            }
+
             const challengeRes = await window.serviceClient.post(
                 ServiceName.GATEWAY,
                 ApiPaths.auth.passkeys.authenticateChallenge(),
-                {},
+                { user_id: resolvedUserId },
             );
             const challengeData = await challengeRes.json();
             if (!challengeRes.ok || !challengeData.success) {
@@ -313,20 +317,18 @@ export class AuthManager {
                 return { success: false, message: challengeData.error || 'Failed to get authentication challenge' };
             }
 
+            const publicKeyOptions = challengeData.options?.publicKey ?? challengeData.options;
             const assertion = await navigator.credentials.get({
-                publicKey: _decodeAuthenticationOptions(challengeData.options),
+                publicKey: _decodeAuthenticationOptions(publicKeyOptions),
             });
 
-            // Recover user_id from the assertion's userHandle if the gateway
-            // did not provide it in the challenge response.
             const serialized = _serializeCredential(assertion);
-            const userId = challengeData.user_id || challengeData.options?.user_id || serialized.response.userHandle;
 
             const verifyRes = await window.serviceClient.post(
                 ServiceName.GATEWAY,
                 ApiPaths.auth.passkeys.authenticateVerify(),
                 {
-                    user_id: userId,
+                    user_id: resolvedUserId,
                     assertion_response: serialized,
                 },
             );
@@ -340,6 +342,7 @@ export class AuthManager {
             if (session) {
                 const webSessionId = await this._fetchSessionId();
                 if (webSessionId) session.web_session_id = webSessionId;
+                localStorage.setItem(USER_ID_STORAGE_KEY, resolvedUserId);
                 this.setSession(session);
             }
             return { success: true };
@@ -650,8 +653,16 @@ export class AuthManager {
 
         const desc = document.createElement('p');
         desc.className = 'auth-modal-description';
-        desc.textContent = 'Use a passkey to sign in to g8e.';
+        desc.textContent = 'Enter your g8e user ID, then authenticate with your passkey.';
         card.appendChild(desc);
+
+        const userIdInput = document.createElement('input');
+        userIdInput.type = 'text';
+        userIdInput.className = 'auth-modal-input';
+        userIdInput.placeholder = 'User ID';
+        userIdInput.value = localStorage.getItem(USER_ID_STORAGE_KEY) || '';
+        userIdInput.autocomplete = 'username';
+        card.appendChild(userIdInput);
 
         const errorEl = document.createElement('div');
         errorEl.className = 'auth-modal-error hidden';
@@ -666,7 +677,7 @@ export class AuthManager {
             submitBtn.textContent = 'Signing in...';
             errorEl.classList.add('hidden');
 
-            const result = await this.passkeyLogin();
+            const result = await this.passkeyLogin(userIdInput.value.trim());
 
             if (result.success) {
                 const modal = document.getElementById('auth-modal');

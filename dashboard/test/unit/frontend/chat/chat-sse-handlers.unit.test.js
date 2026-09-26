@@ -1430,7 +1430,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
         const log = serviceClient.getRequestLog();
         expect(log).toHaveLength(1);
         expect(log[0].method).toBe('POST');
-        expect(log[0].path).toBe('/api/chat/send');
+        expect(log[0].path).toBe('/api/v1/chat');
     });
 
     it('includes message, case_id, and investigation_id in the payload', async () => {
@@ -1493,7 +1493,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
     });
 
     it('rejects and appends error message when the response is not ok', async () => {
-        serviceClient.setResponse('g8ed', '/api/chat/send', {
+        serviceClient.setResponse('gateway', '/api/v1/chat', {
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',
@@ -1506,7 +1506,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
     });
 
     it('hides the waiting indicator when the response is not ok', async () => {
-        serviceClient.setResponse('g8ed', '/api/chat/send', {
+        serviceClient.setResponse('gateway', '/api/v1/chat', {
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',
@@ -1541,7 +1541,7 @@ describe('ChatComponent — submitChatMessage [FRONTEND - jsdom]', () => {
     });
 
     it('focuses the terminal even after a failed response', async () => {
-        serviceClient.setResponse('g8ed', '/api/chat/send', {
+        serviceClient.setResponse('gateway', '/api/v1/chat', {
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',

@@ -112,11 +112,11 @@ def _build_service(
     approval_service = FakeApprovalService()
     event_service = FakeEventService()
     execution_service = FakeExecutionService(
-        event_service=event_service,
         ai_response_analyzer=FakeAIResponseAnalyzer(),
     )
     validator = CommandAutoApprovedValidator(auto_approved_path=str(auto_approved_path))
     service = build_command_service(
+        event_service=event_service,
         approval_service=approval_service,
         execution_service=execution_service,
         auto_approved_validator=validator,

@@ -10,10 +10,10 @@ The [platform-level dashboard architecture](../architecture/dashboard.md) descri
 | --- | --- |
 | Application delivery and browser-facing Gateway configuration | Active. The dashboard host serves the application and supplies the configured Gateway origin. |
 | Existing browser session restoration and logout | Active. The Gateway validates and invalidates its HttpOnly browser session cookie. |
-| Interactive passkey registration and sign-in | Not operational in the current interface. The sign-in flow does not provide the user identifier required by the Gateway. |
+| Interactive passkey registration and sign-in | Active. Registration and sign-in use Gateway console ceremony paths with `options.publicKey` and an explicit `user_id` on authenticate challenge. |
 | Dashboard workload enrollment | Active and required before the dashboard begins serving. The running host does not use the resulting workload credential after startup. |
-| Server-Sent Events | Not operational in the standard separate-origin deployment. The browser requests events from the dashboard origin, which does not provide or proxy the event stream. |
-| Chat, cases, Operator management, approvals, audit, settings, and terminal actions | Not operational in the current runtime. The browser contains these interfaces, but the dashboard host does not provide their API backend. |
+| Server-Sent Events | Active via Gateway `/api/v1/sse/stream` (absolute URL, nested envelope normalization). |
+| Chat, cases, Operator management, approvals, settings, and terminal actions | Active via Gateway browser routes and Gateway→g8ee proxy paths. |
 
 The active dashboard is therefore a static browser application with limited Gateway-direct session support, not a complete operational control plane. Feature modules and tests in the dashboard source do not by themselves indicate that a feature is available in the deployed runtime.
 

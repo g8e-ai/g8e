@@ -204,7 +204,7 @@ export class TerminalExecutionMixin {
                 throw new Error('No active session');
             }
 
-            await window.serviceClient.post(ServiceName.g8ed, ApiPaths.approval.respond(), {
+            await window.serviceClient.post(ServiceName.GATEWAY, ApiPaths.approval.respond(), {
                 approval_id: approvalId,
                 approved: approved,
                 reason: approved ? 'User approved via terminal' : 'User denied via terminal',
@@ -652,7 +652,7 @@ export class TerminalExecutionMixin {
 
         for (const [approvalId, approvalData] of this.pendingApprovals) {
             if (webSessionId) {
-                window.serviceClient?.post(ServiceName.g8ed, ApiPaths.approval.respond(), {
+                window.serviceClient?.post(ServiceName.GATEWAY, ApiPaths.approval.respond(), {
                     approval_id: approvalId,
                     approved: false,
                     reason: reason,

@@ -366,6 +366,8 @@ from g8e.constants import (
 X_PROXY_USER_EMAIL = "X-Proxy-User-Email"
 X_PROXY_CLI_SESSION_ID = "X-Proxy-CLI-Session-Id"
 X_PROXY_WEB_SESSION_ID = "X-Proxy-Web-Session-Id"
+GATEWAY_BROWSER_PROXY_HEADER = "X-G8E-Gateway-Browser-Proxy"
+GATEWAY_BROWSER_PROXY_VALUE = "1"
 
 __all__ = [
     "ACCEPT",

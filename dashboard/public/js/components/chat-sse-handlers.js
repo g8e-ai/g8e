@@ -5,6 +5,7 @@ import { EventType } from '../constants/events.js';
 import { ToolDisplayCategory } from '../constants/display-constants.js';
 import { UIEventType } from '../constants/ui-events.js';
 import { ApiPaths } from '../constants/api-paths.js';
+import { ServiceName } from '../constants/service-client-constants.js';
 import { decodeHtmlEntities } from '../utils/html.js';
 import { notificationService } from '../utils/notification-service.js';
 
@@ -257,7 +258,7 @@ export const ChatSSEHandlersMixin = {
         };
 
         try {
-            const response = await this.serviceClient.post('g8ed', ApiPaths.chat.send(), chatPayload);
+            const response = await this.serviceClient.post(ServiceName.GATEWAY, ApiPaths.chat.send(), chatPayload);
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);

@@ -156,7 +156,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsStop, h.operatorController.handleStopOperator)
 	mux.HandleFunc(constants.APIPaths.OperatorsValidate, h.operatorController.handleValidateOperatorSession)
-	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleTerminateOperator))
+	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleOperatorsByID))
 	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsUnbind, h.operatorController.handleUnbindOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsTarget, h.operatorController.handleSetTargetContext)
@@ -231,6 +231,16 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.ApprovePage, h.passkeyController.handleApprovalPage)
 	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.passkeyController.handleCLIApprovalStatus)
 	mux.HandleFunc(constants.APIPaths.ApprovalsCLIList, h.passkeyController.handleCLIListSuspended)
+
+	// Ensemble browser proxy (RouteAuthWebSession — Gateway stamps identity for g8ee).
+	mux.HandleFunc(constants.APIPaths.EnsembleChatPrefix, h.ensembleBrowserProxyController.handleProxy)
+	mux.HandleFunc(constants.APIPaths.EnsembleChatPrefix+"/", h.ensembleBrowserProxyController.handleProxy)
+	mux.HandleFunc(constants.APIPaths.EnsembleSettingsPrefix, h.ensembleBrowserProxyController.handleProxy)
+	mux.HandleFunc(constants.APIPaths.EnsembleSettingsPrefix+"/", h.ensembleBrowserProxyController.handleProxy)
+	mux.HandleFunc(constants.APIPaths.EnsembleCasesPrefix, h.ensembleBrowserProxyController.handleProxy)
+	mux.HandleFunc(constants.APIPaths.EnsembleCasesPrefix+"/", h.ensembleBrowserProxyController.handleProxy)
+	mux.HandleFunc(constants.APIPaths.EnsembleInvestigations, h.ensembleBrowserProxyController.handleProxy)
+	mux.HandleFunc(constants.APIPaths.EnsembleOperatorPrefix, h.ensembleBrowserProxyController.handleProxy)
 
 	// Browser-facing routes (RouteAuthWebSession — unified middleware validates cookie)
 	mux.HandleFunc(constants.APIPaths.UsersMe, h.userController.handleUserMe)

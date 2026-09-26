@@ -58,19 +58,20 @@ At startup, the browser requests the current user and public web-session identif
 | --- | --- |
 | Static application and runtime Gateway configuration | Active. Express serves checked-in assets and the browser-facing Gateway origin. |
 | Passkey session restoration and logout | Active. The browser calls the Gateway directly over HTTPS when an existing valid session cookie is present. |
-| Passkey registration and sign-in | Not operational in the current g8ed interface. The sign-in flow omits the Gateway-required user identifier. |
+| Passkey registration and sign-in | Active via Gateway-direct WebAuthn (`options.publicKey`, explicit `user_id` on authenticate challenge). |
 | Container workload enrollment | Active and required before the static host listens. The resulting mTLS identity is not consumed by the running host after startup. |
-| Server-Sent Events | Not operational in the standard separate-origin deployment. The client uses a relative Gateway event path, which resolves to the dashboard origin, and the static host does not proxy it. |
-| Chat, cases, Operator management, approvals, audit, settings, and terminal actions | Not operational in the running host. Their browser modules call dashboard-origin API paths, but Express mounts no handlers for those paths. |
+| Server-Sent Events | Active via absolute `${G8E_GATEWAY_URL}/api/v1/sse/stream` with Gateway nested push envelope normalization. |
+| Chat, cases, Operator management, approvals, settings, and terminal actions | Active via Gateway browser routes and the Gateway→g8ee ensemble proxy (`/api/v1/chat`, `/api/v1/settings`, `/api/v1/operator/*`). |
+| Audit log UI | Browser calls Gateway audit paths; full audit aggregation may remain limited to mTLS operator surfaces. |
 | Gateway mTLS WebSocket access | Not available to the browser. The static host does not proxy the Gateway's workload-only WebSocket surface. |
 
 This status distinction prevents browser components present in the source tree from being mistaken for deployed platform capabilities. New browser integration uses the Gateway origin explicitly; the dashboard origin serves application assets and configuration only.
 
 ## Event Delivery
 
-The legacy g8ed browser client creates one credentialed `EventSource`, decodes its expected event shape, and distributes application payloads through an in-browser event bus. It monitors activity and retries failures with bounded backoff and jitter. This client is not operational against the Gateway in the standard deployment: it uses the relative `/api/v1/sse/events` URL, which resolves to the dashboard origin, selects the Gateway's finite polling endpoint rather than `/api/v1/sse/stream`, and expects a different event envelope.
+The g8ed browser client creates one credentialed `EventSource` against the absolute Gateway stream URL, normalizes the nested Gateway push envelope (shared logic with `g8e-adapter`), and distributes application payloads through an in-browser event bus. It monitors activity and retries failures with bounded backoff and jitter.
 
-The separate `g8e-adapter` uses the corrected absolute Gateway origin and `/api/v1/sse/stream` contract, with replay cursors, event normalization, reconciliation, and polling fallback. It is intended for observe frontends and is not mounted by `dashboard/server.js`. A reverse proxy could map the legacy dashboard path, but that alone would not fix its endpoint or envelope mismatch. See [Dashboard Server-Sent Events](../dashboard/sse.md), [SSE Streaming](./sse.md), and the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md).
+The separate `g8e-adapter` remains the audited reference for observe frontends (replay cursors, reconciliation, polling fallback). See [Dashboard Server-Sent Events](../dashboard/sse.md), [SSE Streaming](./sse.md), and the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md).
 
 ## Security Properties
 
