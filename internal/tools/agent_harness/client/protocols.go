@@ -44,7 +44,8 @@ type JSONRPCError struct {
 
 type DispatchCommandRequest struct {
 	TargetOperatorSessionID string `json:"target_operator_session_id"`
-	ActionType              string `json:"action_type"`
+	ActionType              string `json:"action_type,omitempty"`
+	EventType               string `json:"event_type,omitempty"`
 	Payload                 []byte `json:"payload"`
 	TargetResource          string `json:"target_resource,omitempty"`
 	CaseID                  string `json:"case_id,omitempty"`
@@ -82,8 +83,25 @@ func (c *Client) Health(ctx context.Context) (*models.HealthResponse, []byte, er
 }
 
 func (c *Client) DispatchCommand(ctx context.Context, persona Persona, request DispatchCommandRequest) (int, *DispatchCommandResponse, []byte, error) {
-	if request.TargetOperatorSessionID == "" || request.ActionType == "" || len(request.Payload) == 0 {
+	if request.TargetOperatorSessionID == "" || (request.ActionType == "" && request.EventType == "") || len(request.Payload) == 0 {
 		return 0, nil, nil, constants.ErrMissingRequiredField
+	}
+	if request.EventType == "" && request.ActionType != "" {
+		eventType, err := constants.RequestEventForAction(constants.ActionType(request.ActionType))
+		if err != nil {
+			return 0, nil, nil, fmt.Errorf("agent harness: resolve request event: %w", err)
+		}
+		request.EventType = string(eventType)
+	}
+	if request.ActionType == "" && request.EventType != "" {
+		actionType, err := constants.ValidateGovernedRequest(constants.EventType(request.EventType))
+		if err != nil {
+			return 0, nil, nil, fmt.Errorf("agent harness: resolve action type: %w", err)
+		}
+		request.ActionType = string(actionType)
+	}
+	if err := constants.ValidateGovernedEnvelopeFields(constants.EventType(request.EventType), constants.ActionType(request.ActionType)); err != nil {
+		return 0, nil, nil, fmt.Errorf("agent harness: validate request fields: %w", err)
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
