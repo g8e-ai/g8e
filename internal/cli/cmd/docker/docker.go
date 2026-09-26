@@ -70,6 +70,9 @@ func checkDockerComposeFileExists() error {
 // prepareDockerHostRuntime ensures the host-side .g8e tree exists and is
 // writable before Docker Compose starts the gateway container.
 func prepareDockerHostRuntime(ctx context.Context, fileSvc fs.RuntimeFileService) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := fs.EnsureDockerHostRuntimeLayout(ctx, fileSvc); err != nil {
 		return fmt.Errorf("docker: prepare host runtime: %w", err)
 	}
@@ -324,7 +327,7 @@ already-enrolled CLI.`,
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
-			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
+			if err := prepareDockerHostRuntime(shared.CommandContext(cmd), fileSvc); err != nil {
 				return err
 			}
 
@@ -334,7 +337,7 @@ already-enrolled CLI.`,
 					return fmt.Errorf("docker init: build arguments: %w", err)
 				}
 				cmd.Println("Building Docker images for the unified stack...")
-				if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, dockerFullStackProfiles()...); err != nil {
+				if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, dockerFullStackProfiles()...); err != nil {
 					return err
 				}
 				cmd.Println("Docker images built and runtime binary exported to ./g8e.")
@@ -357,7 +360,7 @@ already-enrolled CLI.`,
 				coordinator := enrollerFactory(func(format string, a ...any) {
 					cmd.Printf(format+"\n", a...)
 				}, fileSvc, cfg)
-				result, err := coordinator.Enroll(cmd.Context(), dockerOwnerEnrollmentOptions(headlessEnroll))
+				result, err := coordinator.Enroll(shared.CommandContext(cmd), dockerOwnerEnrollmentOptions(headlessEnroll))
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrDockerInitEnrollmentFailed, err)
 				}
@@ -407,7 +410,7 @@ already-enrolled CLI.`,
 				cmd.Println("Campaign publish may still work once the gateway exports the first batch.")
 			} else {
 				cmd.Printf("Checking verified campaign mirror presence (timeout %s)...\n", eval.DockerInitCampaignMirrorRestoreTimeout)
-				result, err := eval.ReconcileVerifiedCampaignMirrorFromDockerInit(cmd.Context(), fileSvc, cfg)
+				result, err := eval.ReconcileVerifiedCampaignMirrorFromDockerInit(shared.CommandContext(cmd), fileSvc, cfg)
 				if err != nil {
 					cmd.Printf("Warning: verified campaign mirror restore failed: %v\n", err)
 					cmd.Println("Run 'g8e public restore --queue' to retry outside Docker init.")
@@ -578,7 +581,7 @@ Use --skip-enroll to start the stack without the interactive walkthrough
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
-			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
+			if err := prepareDockerHostRuntime(shared.CommandContext(cmd), fileSvc); err != nil {
 				return err
 			}
 
@@ -631,7 +634,7 @@ Use --skip-enroll to start the stack without the interactive walkthrough
 // operator. Each prompt is skippable (any answer other than y skips that
 // component without aborting the walkthrough).
 func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
-	ctx := cmd.Context()
+	ctx := shared.CommandContext(cmd)
 
 	cmd.Println()
 	cmd.Println("=== Interactive enrollment walkthrough ===")
@@ -701,7 +704,7 @@ func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 // bootstrap endpoint responds after init. Host campaigns do not require
 // `g8e public init`; the gateway initializes feed state on startup.
 func reportDockerPublicSpectatorReady(cmd *cobra.Command) error {
-	bootstrap, err := gwremote.FetchPublicMirrorBootstrap(cmd.Context())
+	bootstrap, err := gwremote.FetchPublicMirrorBootstrap(shared.CommandContext(cmd))
 	if err != nil {
 		return err
 	}
@@ -1051,7 +1054,7 @@ func dockerBuildCmd() *cobra.Command {
 				return fmt.Errorf("docker: build arguments: %w", err)
 			}
 			cmd.Println("Building Docker images...")
-			if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, resolveDockerProfiles(true, profile)...); err != nil {
+			if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, resolveDockerProfiles(true, profile)...); err != nil {
 				return err
 			}
 			cmd.Println("\nDocker images built and runtime binary exported to ./g8e.")
@@ -1131,7 +1134,7 @@ func dockerResetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
-			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
+			if err := prepareDockerHostRuntime(shared.CommandContext(cmd), fileSvc); err != nil {
 				return err
 			}
 			profiles := resolveDockerProfiles(full, profile)
@@ -1176,14 +1179,14 @@ Use --no-cache=false to reuse the Docker build cache.`,
 				return fmt.Errorf("docker rebuild: build arguments: %w", err)
 			}
 			cmd.Println("\nRebuilding Docker images...")
-			if err := buildDockerImagesAndExport(cmd.Context(), buildArgs, profile); err != nil {
+			if err := buildDockerImagesAndExport(shared.CommandContext(cmd), buildArgs, profile); err != nil {
 				return err
 			}
 			fileSvc, err := shared.NewFileSvc("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
-			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
+			if err := prepareDockerHostRuntime(shared.CommandContext(cmd), fileSvc); err != nil {
 				return err
 			}
 			profiles := resolveDockerProfiles(full, profile)

@@ -33,6 +33,19 @@ func TestEnsureDockerHostRuntimeLayout_CreatesRuntimeTree(t *testing.T) {
 	assert.True(t, info.IsDir())
 }
 
+func TestEnsureDockerHostRuntimeLayout_NilContext(t *testing.T) {
+	baseDir := t.TempDir()
+	svc, err := NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+
+	var nilCtx context.Context
+	require.NoError(t, EnsureDockerHostRuntimeLayout(nilCtx, svc))
+
+	info, statErr := os.Stat(filepath.Join(baseDir, constants.RuntimeDirname, constants.PkiDirname))
+	require.NoError(t, statErr)
+	assert.True(t, info.IsDir())
+}
+
 func TestVerifyRuntimeDirWritable_AllowsMissingRuntimeDir(t *testing.T) {
 	baseDir := t.TempDir()
 	svc, err := NewRuntimeFileService(baseDir, testutil.NewTestLogger())

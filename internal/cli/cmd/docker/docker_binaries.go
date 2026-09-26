@@ -22,6 +22,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	g8ebinaries "github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
 )
@@ -131,7 +132,7 @@ Windows, and macOS artifact set.`,
 				}
 				output = filepath.Join(cwd, constants.BinDirname)
 			}
-			if err := exportDockerG8eBinaries(cmd.Context(), execDockerBinaryRunner{}, image, output); err != nil {
+			if err := exportDockerG8eBinaries(shared.CommandContext(cmd), execDockerBinaryRunner{}, image, output); err != nil {
 				return err
 			}
 			cmd.Printf("Exported g8e binaries from %s to %s.\n", image, output)
