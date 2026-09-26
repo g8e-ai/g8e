@@ -23,7 +23,7 @@ from app.services.protocols import ExecutionServiceProtocol
 from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
-from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient, FakePubSubClient
+from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient
 
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService
@@ -121,10 +121,8 @@ def build_command_service(
     ai_response_analyzer: FakeAIResponseAnalyzer | None = None,
     internal_http_client: FakeG8eClient | None = None,
     investigation_service: FakeInvestigationService | None = None,
-    pubsub_client: FakePubSubClient | None = None,
     settings: G8eeAppSettings | None = None,
     approval_service: FakeApprovalService | None = None,
-    skip_pubsub_client: bool = False,
     whitelist_validator: CommandWhitelistValidator | None = None,
     blacklist_validator: CommandBlacklistValidator | None = None,
     auto_approved_validator: CommandAutoApprovedValidator | None = None,
@@ -161,9 +159,6 @@ def build_command_service(
     from app.services.operator.intent_service import OperatorIntentService
     from app.services.operator.lfaa_service import OperatorLFAAService
     from app.services.operator.port_service import OperatorPortService
-    from app.services.operator.pubsub_service import OperatorPubSubService
-
-    pubsub_service = OperatorPubSubService()
 
     lfaa_service = OperatorLFAAService(
         gateway_operator_client=gateway_operator_client,
@@ -171,7 +166,6 @@ def build_command_service(
 
     if execution_service is None:
         execution_service = OperatorExecutionService(
-            pubsub_service=pubsub_service,
             approval_service=approval_service,
             event_service=event_service,
             settings=settings,
@@ -206,7 +200,6 @@ def build_command_service(
     )
 
     svc = OperatorCommandService(
-        pubsub_service=pubsub_service,
         approval_service=approval_service,
         execution_service=execution_service,
         filesystem_service=filesystem_service,
@@ -222,9 +215,6 @@ def build_command_service(
         blacklist_validator=blacklist_validator,
         auto_approved_validator=auto_approved_validator,
     )
-    if not skip_pubsub_client:
-        svc.set_pubsub_client(pubsub_client or FakePubSubClient())
-
     svc._store = {}
     return svc
 

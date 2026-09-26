@@ -11,7 +11,6 @@ from typing import cast
 from fastapi import Depends, Request
 
 from app.clients.kv_cache_client import KVCacheClient
-from app.clients.pubsub_client import PubSubClient
 from app.clients.blob_client import BlobClient
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.models.state import G8eeAppState
@@ -95,16 +94,6 @@ async def get_g8ee_app_settings(request: Request) -> G8eeAppSettings:
         raise ConfigurationError("Settings not available")
 
     return state.settings
-
-
-async def get_g8ee_pubsub_client(request: Request) -> PubSubClient:
-    state = cast(G8eeAppState, request.app.state)
-    client = state.pubsub_client
-    if not client:
-        logger.error("PubSubClient not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("PubSubClient not available")
-
-    return client
 
 
 async def get_g8ee_kv_cache_client(request: Request) -> KVCacheClient:
@@ -487,7 +476,6 @@ __all__ = [
     "get_g8ee_operator_cache",
     "get_g8ee_operator_command_service",
     "get_g8ee_operator_data_service",
-    "get_g8ee_pubsub_client",
     "get_g8ee_settings_service",
     "get_g8ee_settings_service_write",
     "get_g8ee_user_settings",

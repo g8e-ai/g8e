@@ -48,7 +48,13 @@ DELETED_OPERATOR_IMPORT_PREFIXES = (
     "app.services.operator.heartbeat_stale_monitor",
 )
 
-ALLOWED_DIRECT_PUBSUB_PUBLISHERS: set[Path] = set()
+FORBIDDEN_PUBSUB_PATTERNS = (
+    ".publish_command(",
+    "PubSubClient",
+    "OperatorPubSubService",
+    "pubsub_client",
+    "pubsub_service",
+)
 
 
 def _python_files_under(path: Path) -> list[Path]:
@@ -116,22 +122,16 @@ class TestOperatorGatewayBoundary:
             assert "pubsub_service" not in text, f"{name} must not retain pubsub_service wiring"
             assert ".publish_command(" not in text, f"{name} must not publish commands directly"
 
-    def test_direct_pubsub_publishers_are_explicitly_allowlisted(self):
-        """Governed dispatch uses Gateway HTTP; only documented fire-and-forget paths may publish."""
+    def test_g8ee_app_has_no_pubsub_publish_or_subscribe(self):
+        """g8ee talks to Gateway over HTTP only; no pub/sub client or operator channel wiring."""
         offenders: list[str] = []
-        operator_dir = ENSEMBLE_APP / "services" / "operator"
-        for path in _python_files_under(operator_dir):
-            if path.name == "pubsub_service.py":
-                continue
+        for path in _python_files_under(ENSEMBLE_APP):
             text = _read(path)
-            if ".publish_command(" not in text:
-                continue
-            if path.resolve() not in {p.resolve() for p in ALLOWED_DIRECT_PUBSUB_PUBLISHERS}:
-                offenders.append(str(path.relative_to(REPO_ROOT)))
-        assert offenders == [], (
-            "Unexpected direct pub/sub command publishers outside allowlist: "
-            f"{offenders}. Route through GatewayOperatorClient.dispatch() or extend the allowlist."
-        )
+            for pattern in FORBIDDEN_PUBSUB_PATTERNS:
+                if pattern in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)} matches {pattern}")
+                    break
+        assert offenders == [], f"g8ee must not use pub/sub transport: {offenders}"
 
     def test_deleted_operator_modules_are_not_imported_in_g8ee_app(self):
         offenders: list[str] = []

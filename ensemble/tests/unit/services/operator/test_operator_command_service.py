@@ -87,48 +87,6 @@ class TestOperatorCommandServiceInit:
         service = _make_service()
         assert service is not None
 
-    def test_pubsub_client_starts_as_none(self):
-        """pubsub_client is None until set_pubsub_client is called."""
-        service = build_command_service(skip_pubsub_client=True)
-        assert service._pubsub_service.pubsub_client is None
-
-    def test_pubsub_ready_starts_false(self):
-        """_pubsub_ready starts False."""
-        service = _make_service()
-        assert service._pubsub_service._pubsub_ready is False
-
-
-# ---------------------------------------------------------------------------
-# set_pubsub_client
-# ---------------------------------------------------------------------------
-
-
-class TestClientSetters:
-    """Guards on set_pubsub_client."""
-
-    pytestmark = pytest.mark.unit
-
-    def test_set_pubsub_client_stores_client(self):
-        """set_pubsub_client assigns the client."""
-        service = _make_service()
-        # pubsub_client is already a FakePubSubClient from builder
-        client = service._pubsub_service.pubsub_client
-        service.set_pubsub_client(client)
-        assert service._pubsub_service.pubsub_client is client
-
-    def test_set_pubsub_client_raises_validation_error_on_none(self):
-        """set_pubsub_client(None) must raise ValidationError."""
-        service = _make_service()
-        with pytest.raises(ValidationError):
-            service.set_pubsub_client(None)
-
-    def test_set_pubsub_client_raises_validation_error_on_falsy(self):
-        """set_pubsub_client with falsy value must raise ValidationError."""
-        service = _make_service()
-        with pytest.raises(ValidationError):
-            service.set_pubsub_client(0)
-
-
 # ---------------------------------------------------------------------------
 # publish_command_event (formerly _broadcast_command_event)
 # ---------------------------------------------------------------------------

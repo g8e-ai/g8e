@@ -10,14 +10,12 @@ package gateway
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -25,7 +23,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
-	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	pubsubv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/pubsub/v1"
 )
@@ -43,11 +40,13 @@ func TestVerifyPublishACL(t *testing.T) {
 		wantErrContain string
 	}{
 		{
-			name:       "app publishes to cmd: channel permitted",
-			channel:    "cmd:op-001:sess-001",
-			operatorID: "op-001",
-			spiffeID:   "spiffe://g8e.local/app/g8ee",
-			wantErr:    false,
+			name:           "app publishes to cmd: channel rejected",
+			channel:        "cmd:op-001:sess-001",
+			operatorID:     "op-001",
+			spiffeID:       "spiffe://g8e.local/app/g8ee",
+			wantErr:        true,
+			wantErrIs:      constants.ErrPubSubPublishUnauthorized,
+			wantErrContain: "gateway-internal only",
 		},
 		{
 			name:           "operator publishes to cmd: channel rejected",
@@ -56,7 +55,7 @@ func TestVerifyPublishACL(t *testing.T) {
 			spiffeID:       "spiffe://g8e.local/operator/org-1/op-001/sess-1",
 			wantErr:        true,
 			wantErrIs:      constants.ErrPubSubPublishUnauthorized,
-			wantErrContain: "operators cannot publish to cmd:",
+			wantErrContain: "gateway-internal only",
 		},
 		{
 			name:       "operator publishes to own heartbeat channel permitted",
@@ -128,11 +127,13 @@ func TestVerifyPublishACL(t *testing.T) {
 			wantErr:    false,
 		},
 		{
-			name:       "ensemble app publishes to cmd: channel permitted",
-			channel:    "cmd:op-001:sess-001",
-			operatorID: "g8ee",
-			spiffeID:   "spiffe://g8e.local/app/g8ee",
-			wantErr:    false,
+			name:           "ensemble app publishes to cmd: channel rejected",
+			channel:        "cmd:op-001:sess-001",
+			operatorID:     "g8ee",
+			spiffeID:       "spiffe://g8e.local/app/g8ee",
+			wantErr:        true,
+			wantErrIs:      constants.ErrPubSubPublishUnauthorized,
+			wantErrContain: "gateway-internal only",
 		},
 		{
 			name:           "unknown channel prefix rejected",
@@ -276,54 +277,12 @@ func TestBuildGovernanceEnvelope_MissingPostureFailsClosed(t *testing.T) {
 		"missing posture must fail closed with ErrEnvelopePostureMissing, got: %v", err)
 }
 
-// --- Command intent relay unit tests ---
+// --- handlePublish integration tests ---
 
-// marshalCommandIntent builds a commonv1.CommandIntent and marshals it to
-// protojson bytes, the wire format the ensemble publishes to cmd: channels.
-func marshalCommandIntent(t *testing.T, intent *commonv1.CommandIntent) []byte {
-	t.Helper()
-	wire, err := protojson.Marshal(intent)
-	require.NoError(t, err)
-	return wire
-}
-
-// fileEditPayload marshals a valid FileEditRequested for use as a command
-// intent payload. The envelope builder decodes the typed payload for L1
-// doctrine screening, so cmd: relay tests must carry real proto-marshaled
-// payloads rather than opaque byte strings.
-func fileEditPayload(t *testing.T) []byte {
-	t.Helper()
-	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
-		FilePath:    "/etc/hostname",
-		Operation:   "write",
-		Content:     "relay test content",
-		ExecutionId: "exec-1",
-	})
-	require.NoError(t, err)
-	return payload
-}
-
-// newCommandIntent builds a commonv1.CommandIntent with the supplied fields.
-func newCommandIntent(operatorID, operatorSessionID, eventType string, payload []byte) *commonv1.CommandIntent {
-	return &commonv1.CommandIntent{
-		OperatorId:        operatorID,
-		OperatorSessionId: operatorSessionID,
-		EventType:         eventType,
-		Payload:           payload,
-	}
-}
-
-// newRelayTestBroker creates a GatewayWebSocketHandler wired with stub
-// state root provider and session validator for command intent relay
-// unit tests. Returns the broker and the stub validator so tests can
-// override the validator's return values.
-func newRelayTestBroker(t *testing.T, stateRoot string, op *models.OperatorDocumentGo) (*GatewayWebSocketHandler, *stubOperatorSessionValidator) {
+func newTestBroker(t *testing.T) *GatewayWebSocketHandler {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewGatewayWebSocketHandler(logger)
-	validator := &stubOperatorSessionValidator{op: op}
-	broker.SetCommandRelayDeps(&stubStateRootProvider{root: stateRoot}, validator, "doctrine", governance.NewL1Doctrine())
-	return broker, validator
+	return NewGatewayWebSocketHandler(logger)
 }
 
 // newAppSessionHandler creates a pubSubSessionHandler for an app workload
@@ -354,73 +313,24 @@ func newOperatorSessionHandler(broker *GatewayWebSocketHandler, operatorID strin
 	}
 }
 
-func TestHandlePublish_AppCommandIntentTransformedToGovernanceEnvelope(t *testing.T) {
-	op := &models.OperatorDocumentGo{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
-	}
-	broker, _ := newRelayTestBroker(t, "root-abc", op)
+func TestHandlePublish_AppCommandPublishRejectedAtACL(t *testing.T) {
+	broker := newTestBroker(t)
 	handler := newAppSessionHandler(broker, "g8ee")
 
-	// Register an in-process handler on the cmd channel to capture the
-	// transformed envelope (simulating the operator subscriber).
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-	var capturedData []byte
+	cmdChannel := pubsub.CmdChannel("op-001", "sess-001")
+	var called bool
 	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		capturedData = data
+		called = true
 	})
 	defer unregister()
-
-	payload := fileEditPayload(t)
-	intent := &commonv1.CommandIntent{
-		OperatorId:        op.ID,
-		OperatorSessionId: op.OperatorSessionID,
-		EventType: string(constants.Event.Operator.FileEdit.Requested),
-		Payload:           payload,
-		TargetResource:    "/etc/hostname",
-		RequestorUserId:   "user-001",
-		CaseId:            "case-1",
-		InvestigationId:   "inv-1",
-		TaskId:            "task-1",
-		WebSessionId:      "web-1",
-		CliSessionId:      "cli-1",
-	}
-	intentJSON := marshalCommandIntent(t, intent)
 
 	handler.handleAction(&pubsubv1.PubSubMessage{
 		Action:  constants.PubSubActionPublish,
 		Channel: cmdChannel,
-		Data:    intentJSON,
+		Data:    []byte(`{"operator_id":"op-001","operator_session_id":"sess-001"}`),
 	})
 
-	require.NotNil(t, capturedData, "transformed envelope must be fanned out to cmd channel")
-
-	// Verify the fanned-out envelope is a valid GovernanceEnvelope with
-	// the gateway's state root and a valid transaction hash.
-	env := &commonv1.GovernanceEnvelope{}
-	err := protojson.UnmarshalOptions{DiscardUnknown: true}.Unmarshal(capturedData, env)
-	require.NoError(t, err, "fanned-out frame must be a valid protojson GovernanceEnvelope")
-
-	assert.Equal(t, "root-abc", env.StateMerkleRoot, "envelope must carry the gateway's state root")
-	assert.Equal(t, op.ID, env.OperatorId)
-	assert.Equal(t, op.OperatorSessionID, env.OperatorSessionId)
-	assert.Equal(t, string(constants.Event.Operator.FileEdit.Requested), env.EventType)
-	assert.Equal(t, string(constants.ActionTypeFileEdit), env.ActionType)
-	assert.Equal(t, "/etc/hostname", env.TargetResource)
-	assert.Equal(t, payload, env.Payload)
-	assert.Equal(t, "user-001", env.RequestorUserId)
-	assert.Equal(t, "spiffe://g8e.local/app/g8ee", env.ActingAppId)
-	assert.Equal(t, "case-1", env.CaseId, "context fields must propagate from CommandIntent")
-	assert.Equal(t, "inv-1", env.InvestigationId)
-	assert.Equal(t, "task-1", env.TaskId)
-	assert.Equal(t, "web-1", env.WebSessionId)
-	assert.Equal(t, "cli-1", env.CliSessionId)
-	assert.NotEmpty(t, env.Nonce)
-	assert.NotEmpty(t, env.Id)
-	assert.Equal(t, env.Id, env.TransactionHash)
-	require.NotNil(t, env.Governance)
-	require.NotNil(t, env.Governance.L1)
-	assert.True(t, env.Governance.L1.Validated)
+	assert.False(t, called, "app publish to cmd: must be rejected at ACL; use HTTP dispatch")
 }
 
 func TestHandlePublish_OperatorPublishToCmdRejected(t *testing.T) {
@@ -428,7 +338,7 @@ func TestHandlePublish_OperatorPublishToCmdRejected(t *testing.T) {
 		ID:                "op-001",
 		OperatorSessionID: "sess-001",
 	}
-	broker, _ := newRelayTestBroker(t, "root-abc", op)
+	broker := newTestBroker(t)
 	handler := newOperatorSessionHandler(broker, "op-001")
 
 	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
@@ -450,7 +360,7 @@ func TestHandlePublish_OperatorPublishToCmdRejected(t *testing.T) {
 }
 
 func TestHandlePublish_OperatorPublishToHeartbeatPermitted(t *testing.T) {
-	broker, _ := newRelayTestBroker(t, "root-abc", nil)
+	broker := newTestBroker(t)
 	handler := newOperatorSessionHandler(broker, "op-001")
 
 	heartbeatChannel := pubsub.HeartbeatChannel("op-001", "sess-001")
@@ -473,7 +383,7 @@ func TestHandlePublish_OperatorPublishToHeartbeatPermitted(t *testing.T) {
 }
 
 func TestHandlePublish_OperatorPublishToResultsPermitted(t *testing.T) {
-	broker, _ := newRelayTestBroker(t, "root-abc", nil)
+	broker := newTestBroker(t)
 	handler := newOperatorSessionHandler(broker, "op-001")
 
 	resultsChannel := pubsub.ResultsChannel("op-001", "sess-001")
@@ -494,260 +404,10 @@ func TestHandlePublish_OperatorPublishToResultsPermitted(t *testing.T) {
 	assert.Equal(t, payload, capturedData, "operator publish to results: must be fanned out verbatim")
 }
 
-func TestHandlePublish_MalformedCommandIntentDroppedFailClosed(t *testing.T) {
-	op := &models.OperatorDocumentGo{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
-	}
-	broker, _ := newRelayTestBroker(t, "root-abc", op)
-	handler := newAppSessionHandler(broker, "g8ee")
-
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-
-	var called bool
-	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		called = true
-	})
-	defer unregister()
-
-	// Publish malformed JSON (not a valid command intent).
-	handler.handleAction(&pubsubv1.PubSubMessage{
-		Action:  constants.PubSubActionPublish,
-		Channel: cmdChannel,
-		Data:    []byte("{invalid json"),
-	})
-
-	assert.False(t, called, "malformed command intent must be dropped fail-closed, no fan-out")
-}
-
-// TestHandlePublish_RawG8eMessageJSONDroppedFailClosed verifies that a raw
-// G8eMessage JSON object (the legacy ensemble wire format with event_type
-// and a nested payload object) is rejected fail-closed by the protojson
-// unmarshaler. The gateway only accepts typed commonv1.CommandIntent
-// protojson payloads on cmd: channels.
-func TestHandlePublish_RawG8eMessageJSONDroppedFailClosed(t *testing.T) {
-	op := &models.OperatorDocumentGo{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
-	}
-	broker, _ := newRelayTestBroker(t, "root-abc", op)
-	handler := newAppSessionHandler(broker, "g8ee")
-
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-
-	var called bool
-	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		called = true
-	})
-	defer unregister()
-
-	// Raw G8eMessage JSON: nested payload object, event_type (not action_type),
-	// no operator_id/operator_session_id at the top level. This is the
-	// legacy ensemble wire format that produced the interop failure.
-	rawG8eMessageJSON := []byte(`{
-		"event_type": "g8e.v1.operator.file_edit.requested",
-		"source_component": "g8ee",
-		"payload": {"file_path": "/etc/hostname", "operation": "write"},
-		"user_id": "user-001"
-	}`)
-
-	handler.handleAction(&pubsubv1.PubSubMessage{
-		Action:  constants.PubSubActionPublish,
-		Channel: cmdChannel,
-		Data:    rawG8eMessageJSON,
-	})
-
-	assert.False(t, called, "raw G8eMessage JSON must be dropped fail-closed; only CommandIntent protojson is accepted")
-}
-
-// TestHandlePublish_InvalidProtoJSONDroppedFailClosed verifies that invalid
-// protojson (wrong field types) is rejected fail-closed by the unmarshaler.
-func TestHandlePublish_InvalidProtoJSONDroppedFailClosed(t *testing.T) {
-	op := &models.OperatorDocumentGo{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
-	}
-	broker, _ := newRelayTestBroker(t, "root-abc", op)
-	handler := newAppSessionHandler(broker, "g8ee")
-
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-
-	var called bool
-	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		called = true
-	})
-	defer unregister()
-
-	// Valid JSON but wrong types for CommandIntent fields (payload must be
-	// base64 string, not object; action_type missing).
-	invalidProtoJSON := []byte(`{"operator_id": "op-001", "operator_session_id": "sess-001", "payload": {}}`)
-
-	handler.handleAction(&pubsubv1.PubSubMessage{
-		Action:  constants.PubSubActionPublish,
-		Channel: cmdChannel,
-		Data:    invalidProtoJSON,
-	})
-
-	assert.False(t, called, "invalid protojson must be dropped fail-closed")
-}
-
-func TestHandlePublish_InvalidOperatorSessionDroppedFailClosed(t *testing.T) {
-	broker, validator := newRelayTestBroker(t, "root-abc", nil)
-	validator.err = fmt.Errorf("session not found")
-	handler := newAppSessionHandler(broker, "g8ee")
-
-	cmdChannel := pubsub.CmdChannel("op-001", "sess-001")
-
-	var called bool
-	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		called = true
-	})
-	defer unregister()
-
-	intent := newCommandIntent("op-001", "sess-001", string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
-	intent.TargetResource = "/etc/hostname"
-	intent.RequestorUserId = "user-001"
-	intentJSON := marshalCommandIntent(t, intent)
-
-	handler.handleAction(&pubsubv1.PubSubMessage{
-		Action:  constants.PubSubActionPublish,
-		Channel: cmdChannel,
-		Data:    intentJSON,
-	})
-
-	assert.False(t, called, "invalid operator session must be dropped fail-closed, no fan-out")
-}
-
-func TestHandlePublish_StateRootErrorDroppedFailClosed(t *testing.T) {
-	op := &models.OperatorDocumentGo{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
-	}
-	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewGatewayWebSocketHandler(logger)
-	broker.SetCommandRelayDeps(
-		&stubStateRootProvider{err: fmt.Errorf("state root unavailable")},
-		&stubOperatorSessionValidator{op: op},
-		"doctrine",
-		governance.NewL1Doctrine(),
-	)
-	handler := newAppSessionHandler(broker, "g8ee")
-
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-
-	var called bool
-	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		called = true
-	})
-	defer unregister()
-
-	intent := newCommandIntent(op.ID, op.OperatorSessionID, string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
-	intent.TargetResource = "/etc/hostname"
-	intent.RequestorUserId = "user-001"
-	intentJSON := marshalCommandIntent(t, intent)
-
-	handler.handleAction(&pubsubv1.PubSubMessage{
-		Action:  constants.PubSubActionPublish,
-		Channel: cmdChannel,
-		Data:    intentJSON,
-	})
-
-	assert.False(t, called, "state root error must be dropped fail-closed, no fan-out")
-}
-
-func TestHandlePublish_CommandIntentMissingOperatorIDDropped(t *testing.T) {
-	op := &models.OperatorDocumentGo{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
-	}
-	broker, _ := newRelayTestBroker(t, "root-abc", op)
-	handler := newAppSessionHandler(broker, "g8ee")
-
-	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
-
-	var called bool
-	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		called = true
-	})
-	defer unregister()
-
-	// Intent with missing operator_id.
-	intent := newCommandIntent("", "sess-001", string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
-	intent.RequestorUserId = "user-001"
-	intentJSON := marshalCommandIntent(t, intent)
-
-	handler.handleAction(&pubsubv1.PubSubMessage{
-		Action:  constants.PubSubActionPublish,
-		Channel: cmdChannel,
-		Data:    intentJSON,
-	})
-
-	assert.False(t, called, "command intent missing operator_id must be dropped fail-closed")
-}
-
-func TestHandlePublish_CommandIntentChannelMismatchDropped(t *testing.T) {
-	op := &models.OperatorDocumentGo{
-		ID:                "op-001",
-		OperatorSessionID: "sess-001",
-	}
-	broker, _ := newRelayTestBroker(t, "root-abc", op)
-	handler := newAppSessionHandler(broker, "g8ee")
-
-	// Publish to op-001's channel but the intent targets op-002.
-	cmdChannel := pubsub.CmdChannel("op-001", "sess-001")
-
-	var called bool
-	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		called = true
-	})
-	defer unregister()
-
-	intent := newCommandIntent("op-002", "sess-002", string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
-	intent.RequestorUserId = "user-001"
-	intentJSON := marshalCommandIntent(t, intent)
-
-	handler.handleAction(&pubsubv1.PubSubMessage{
-		Action:  constants.PubSubActionPublish,
-		Channel: cmdChannel,
-		Data:    intentJSON,
-	})
-
-	assert.False(t, called, "command intent channel mismatch must be dropped fail-closed")
-}
-
-func TestHandlePublish_RelayDisabledWhenDepsNotConfigured(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewGatewayWebSocketHandler(logger)
-	// Do NOT call SetCommandRelayDeps — relay is disabled.
-	handler := newAppSessionHandler(broker, "g8ee")
-
-	cmdChannel := pubsub.CmdChannel("op-001", "sess-001")
-
-	var called bool
-	unregister := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
-		called = true
-	})
-	defer unregister()
-
-	intent := newCommandIntent("op-001", "sess-001", string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
-	intent.RequestorUserId = "user-001"
-	intentJSON := marshalCommandIntent(t, intent)
-
-	// Should not panic, should not fan out, should be silently dropped.
-	assert.NotPanics(t, func() {
-		handler.handleAction(&pubsubv1.PubSubMessage{
-			Action:  constants.PubSubActionPublish,
-			Channel: cmdChannel,
-			Data:    intentJSON,
-		})
-	})
-	assert.False(t, called, "cmd: relay must be dropped when deps are not configured")
-}
-
 // TestHandlePublish_OperatorCrossOperatorHeartbeatRejected verifies that
 // an operator cannot publish to another operator's heartbeat channel.
 func TestHandlePublish_OperatorCrossOperatorHeartbeatRejected(t *testing.T) {
-	broker, _ := newRelayTestBroker(t, "root-abc", nil)
+	broker := newTestBroker(t)
 	handler := newOperatorSessionHandler(broker, "op-001")
 
 	heartbeatChannel := pubsub.HeartbeatChannel("op-other", "sess-001")

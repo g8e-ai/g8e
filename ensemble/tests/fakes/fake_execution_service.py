@@ -52,7 +52,6 @@ class FakeExecutionService:
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
         envelope: G8eoResultEnvelope | None = None,
-        pubsub_service: Any = None,
     ) -> None:
         self._exit_code = exit_code
         self._output = output
@@ -62,7 +61,6 @@ class FakeExecutionService:
         self._ai_response_analyzer = ai_response_analyzer
         self.whitelist_validator = whitelist_validator
         self.blacklist_validator = blacklist_validator
-        self._pubsub_service = pubsub_service
         self._envelope = envelope
         self.execute_calls: list[dict] = []
         self.resolve_calls: list[dict] = []
@@ -81,13 +79,6 @@ class FakeExecutionService:
                 "timeout_seconds": timeout_seconds,
             }
         )
-        if self.pubsub_service:
-            await self.pubsub_service.publish_command(
-                operator_id=g8e_message.operator_id,
-                operator_session_id=g8e_message.operator_session_id,
-                command_data=g8e_message,
-            )
-
         # If an envelope was provided, try to extract a result from it
         if self._envelope and hasattr(self._envelope, "payload"):
             if isinstance(self._envelope.payload, ExecutionResultsPayload):
@@ -147,9 +138,6 @@ class FakeExecutionService:
         return None
 
     @property
-    def pubsub_service(self):
-        return self._pubsub_service
-
     @property
     def approval_service(self):
         return None

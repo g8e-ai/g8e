@@ -69,7 +69,6 @@ from app.db.blob_service import BlobService
 
 if TYPE_CHECKING:
     from app.clients.blob_client import BlobClient
-    from app.clients.pubsub_client import PubSubClient
     from app.clients.governance_client import GovernanceClient
     from app.services.investigation.investigation_service import InvestigationService
     from app.services.investigation.investigation_data_service import InvestigationDataService
@@ -299,15 +298,10 @@ class ServiceFactory:
         kv_service: KVService,
         blob_service: BlobService,
         governance_client: GovernanceClient,
-        pubsub_client: PubSubClient | None = None,
         blob_service_client: BlobClient | None = None,
         web_search_provider: WebSearchProvider | None = None,
     ) -> AllServices:
         """Create all g8ee services in proper dependency order.
-
-        When *pubsub_client* is supplied (production path), both the
-        OperatorCommandService and HeartbeatService are wired to the
-        shared PubSubClient and ready for ``start_services``.
 
         *web_search_provider* allows tests to inject a provider without
         requiring platform settings to have search configured.
@@ -375,9 +369,6 @@ class ServiceFactory:
             blacklist_validator=blacklist_validator,
             auto_approved_validator=auto_approved_validator,
         )
-
-        if pubsub_client is not None:
-            operator_command_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
 
         chat_task_manager = BackgroundTaskManager()
 
@@ -462,7 +453,6 @@ class ServiceFactory:
     async def start_services(services: AllServices) -> None:
         """Run lifecycle start hooks for services that require them."""
         await services.certificate_service.initialize()
-        await services.operator_command_service.start_pubsub_listeners()
         await services.http_service.start()
 
     @staticmethod
@@ -485,11 +475,6 @@ class ServiceFactory:
             await services.http_service.stop()
         except Exception as exc:
             _logger.error("Error stopping HTTP service: %s", exc)
-
-        try:
-            await services.operator_command_service.stop_pubsub_listeners()
-        except Exception as exc:
-            _logger.error("Error stopping pubsub listeners: %s", exc)
 
         try:
             await services.certificate_service.cleanup()

@@ -28,7 +28,6 @@ from app.services.protocols import (
     ExecutionServiceProtocol,
     InvestigationServiceProtocol,
     OperatorDataServiceProtocol,
-    PubSubServiceProtocol,
 )
 
 from app.models.tool_results import CommandExecutionResult
@@ -57,7 +56,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
     def __init__(
         self,
-        pubsub_service: PubSubServiceProtocol,
         approval_service: ApprovalServiceProtocol,
         event_service: EventServiceProtocol,
         settings: G8eeAppSettings,
@@ -66,7 +64,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         investigation_service: InvestigationServiceProtocol,
         gateway_operator_client: GatewayOperatorClient | None = None,
     ) -> None:
-        self._pubsub_service = pubsub_service
         self._approval_service = approval_service
         self._event_service = event_service
         self._settings = settings
@@ -78,10 +75,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
         self.whitelist_validator = get_whitelist_validator()
         self.blacklist_validator = get_blacklist_validator()
-
-    @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        return self._pubsub_service
 
     @property
     def approval_service(self) -> ApprovalServiceProtocol:

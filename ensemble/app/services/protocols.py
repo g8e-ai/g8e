@@ -101,7 +101,6 @@ from app.constants.prompts import AgentMode
 from app.llm import llm_types as types
 
 if TYPE_CHECKING:
-    from app.clients.pubsub_client import PubSubClient
     from app.clients.http_client import HTTPClient
     from app.services.cache.cache_aside import CacheAsideService
 
@@ -627,41 +626,6 @@ class AIResponseAnalyzerProtocol(Protocol):
 
 
 @runtime_checkable
-class PubSubServiceProtocol(Protocol):
-    pubsub_client: PubSubClient | None
-
-    @property
-    def is_ready(self) -> bool:
-        raise NotImplementedError
-
-    def set_pubsub_client(self, client: PubSubClient) -> None:
-        raise NotImplementedError
-
-    def register_future(self, execution_id: str) -> asyncio.Future[G8eoResultEnvelope]:
-        raise NotImplementedError
-
-    def release_future(self, execution_id: str) -> None:
-        raise NotImplementedError
-
-    async def start(self) -> None:
-        raise NotImplementedError
-
-    async def stop(self) -> None:
-        raise NotImplementedError
-
-    async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        raise NotImplementedError
-
-    async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        raise NotImplementedError
-
-    async def publish_command(
-        self, operator_id: str, operator_session_id: str, command_data: G8eMessage
-    ) -> int:
-        raise NotImplementedError
-
-
-@runtime_checkable
 class ApprovalServiceProtocol(Protocol):
     @property
     def operator_data_service(self) -> OperatorDataServiceProtocol:
@@ -719,10 +683,6 @@ class ExecutionServiceProtocol(Protocol):
         raise NotImplementedError
 
     @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        raise NotImplementedError
-
-    @property
     def approval_service(self) -> ApprovalServiceProtocol:
         raise NotImplementedError
 
@@ -777,10 +737,6 @@ class LFAAServiceProtocol(Protocol):
 @runtime_checkable
 class FileServiceProtocol(Protocol):
     @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        raise NotImplementedError
-
-    @property
     def approval_service(self) -> ApprovalServiceProtocol:
         raise NotImplementedError
 
@@ -828,10 +784,6 @@ class FileServiceProtocol(Protocol):
 
 @runtime_checkable
 class FilesystemServiceProtocol(Protocol):
-    @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        raise NotImplementedError
-
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
         raise NotImplementedError

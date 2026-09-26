@@ -38,7 +38,6 @@ _PATCHES = [
     "app.main.AppEnrollmentService",
     "app.main.DBClient",
     "app.main.KVCacheClient",
-    "app.main.PubSubClient",
     "app.main.BlobClient",
     "app.main.GovernanceClient",
     "app.main.DBService",
@@ -58,7 +57,7 @@ def _build_mocks():
     for p in patches:
         mock_obj = p.start()
         name = p.attribute
-        if name in ("DBClient", "KVCacheClient", "PubSubClient", "BlobClient"):
+        if name in ("DBClient", "KVCacheClient", "BlobClient"):
             mock_obj.return_value.connect = AsyncMock(return_value=True)
             mock_obj.return_value.close = AsyncMock()
         mocks[name] = mock_obj
@@ -149,7 +148,7 @@ def mock_app():
 
 
 class TestLifespanStartup:
-    async def test_connects_four_core_clients(self, mock_app):
+    async def test_connects_three_core_clients(self, mock_app):
         mocks, patches = _build_mocks()
         _configure_settings(mocks)
         _configure_factory(mocks)
@@ -159,7 +158,6 @@ class TestLifespanStartup:
 
             mocks["DBClient"].return_value.connect.assert_called_once()
             mocks["KVCacheClient"].return_value.connect.assert_called_once()
-            mocks["PubSubClient"].return_value.connect.assert_called_once()
             mocks["BlobClient"].return_value.connect.assert_called_once()
         finally:
             for p in patches:
@@ -191,7 +189,7 @@ class TestLifespanStartup:
 
             factory.create_all_services.assert_called_once()
             call_kwargs = factory.create_all_services.call_args
-            assert call_kwargs.kwargs.get("pubsub_client") is not None
+            assert "pubsub_client" not in (call_kwargs.kwargs or {})
             assert "heartbeat_client" not in (call_kwargs.kwargs or {})
 
             factory.bind_to_app_state.assert_called_once()
@@ -259,7 +257,6 @@ class TestLifespanShutdown:
 
             factory.stop_services.assert_called_once()
 
-            mock_app.state.pubsub_client.close.assert_called_once()
             mock_app.state.kv_cache_client.close.assert_called_once()
             mock_app.state.blob_client.close.assert_called_once()
             mock_app.state.services.db_service.close.assert_called_once()

@@ -27,17 +27,6 @@ pytestmark = [pytest.mark.unit]
 
 
 @pytest.fixture
-def mock_pubsub():
-    mock = MagicMock()
-    mock.is_ready = True
-    mock.register_future = MagicMock()
-    mock.register_operator_session = AsyncMock()
-    mock.publish_command = AsyncMock(return_value=1)
-    mock.release_future = MagicMock()
-    return mock
-
-
-@pytest.fixture
 def mock_approval():
     return MagicMock()
 
@@ -78,7 +67,6 @@ def mock_gateway_client():
 
 @pytest.fixture
 def execution_service(
-    mock_pubsub,
     mock_approval,
     mock_event_service,
     mock_settings,
@@ -88,7 +76,6 @@ def execution_service(
     mock_gateway_client,
 ):
     return OperatorExecutionService(
-        pubsub_service=mock_pubsub,
         approval_service=mock_approval,
         event_service=mock_event_service,
         settings=mock_settings,
@@ -103,14 +90,12 @@ class TestOperatorExecutionServiceProperties:
     def test_properties(
         self,
         execution_service,
-        mock_pubsub,
         mock_approval,
         mock_event_service,
         mock_operator_data,
         mock_ai_analyzer,
         mock_investigation,
     ):
-        assert execution_service.pubsub_service == mock_pubsub
         assert execution_service.approval_service == mock_approval
         assert execution_service.event_service == mock_event_service
         assert execution_service.operator_data_service == mock_operator_data
@@ -314,9 +299,8 @@ class TestOperatorExecutionServiceDispatch:
             await execution_service.dispatch_command(msg, g8e_context)
 
     @pytest.mark.asyncio
-    async def test_dispatch_gateway_client_not_configured(self, mock_pubsub):
+    async def test_dispatch_gateway_client_not_configured(self):
         svc = OperatorExecutionService(
-            pubsub_service=mock_pubsub,
             approval_service=MagicMock(),
             event_service=MagicMock(),
             settings=MagicMock(),
@@ -410,7 +394,7 @@ class TestOperatorExecutionServiceCancel:
         assert res.status == ExecutionStatus.CANCELLED
         mock_gateway_client.dispatch.assert_called_once()
         dispatch_kwargs = mock_gateway_client.dispatch.call_args.kwargs
-        assert dispatch_kwargs["action_type"] == "CANCEL"
+        assert dispatch_kwargs["event_type"] == EventType.OPERATOR_COMMAND_CANCEL_REQUESTED
         assert dispatch_kwargs["operator_session_id"] == "sess-1"
 
     @pytest.mark.asyncio

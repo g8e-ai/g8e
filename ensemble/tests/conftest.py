@@ -851,33 +851,6 @@ async def db_client(cache_aside_service):
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def pubsub_service(test_settings):
-    from app.clients.pubsub_client import PubSubClient
-
-
-    settings = test_settings
-
-    client = PubSubClient(
-        pubsub_url=settings.gateway.pubsub_url,
-        component_name=G8EE_COMPONENT,
-    )
-    await client.connect()
-
-    class FakeService:
-        def __init__(self, c):
-            self.pubsub_client = c
-
-    yield FakeService(client)
-    await client.close()
-
-
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def pubsub_client(pubsub_service):
-    """Returns the protocol PubSubClient instance from pubsub_service."""
-    yield pubsub_service.pubsub_client
-
-
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def db_service(test_settings, cache_aside_service, mock_governance_client):
     from app.services.investigation.investigation_data_service import InvestigationDataService
 

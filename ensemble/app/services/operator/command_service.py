@@ -8,7 +8,6 @@
 from __future__ import annotations
 import logging
 
-from app.clients.pubsub_client import PubSubClient
 from app.clients.gateway_operator_client import GatewayOperatorClient
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.constants.generated_status import CommandErrorType, RiskLevel
@@ -63,7 +62,6 @@ from app.services.protocols import (
     IntentServiceProtocol,
     LFAAServiceProtocol,
     PortServiceProtocol,
-    PubSubServiceProtocol,
     G8eClientProtocol,
 )
 from app.services.cache.cache_aside import CacheAsideService
@@ -76,7 +74,6 @@ from .filesystem_service import OperatorFilesystemService
 from .intent_service import OperatorIntentService
 from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
-from .pubsub_service import OperatorPubSubService
 from app.utils.safety import validate_command_safety
 from app.utils.csv_commands import parse_command_csv
 from app.utils.validators import (
@@ -100,7 +97,6 @@ class OperatorCommandService:
 
     def __init__(
         self,
-        pubsub_service: PubSubServiceProtocol,
         approval_service: ApprovalServiceProtocol,
         execution_service: ExecutionServiceProtocol,
         filesystem_service: FilesystemServiceProtocol,
@@ -116,7 +112,6 @@ class OperatorCommandService:
         blacklist_validator: CommandBlacklistValidator | None = None,
         auto_approved_validator: CommandAutoApprovedValidator | None = None,
     ) -> None:
-        self._pubsub_service = pubsub_service
         self._approval_service = approval_service
         self._execution_service = execution_service
         self._filesystem_service = filesystem_service
@@ -187,14 +182,11 @@ class OperatorCommandService:
         auto_approved_validator: CommandAutoApprovedValidator | None = None,
     ) -> OperatorCommandService:
         """Construct, wire, and return a fully-initialised OperatorCommandService."""
-        pubsub_service = OperatorPubSubService()
-
         lfaa_service = OperatorLFAAService(
             gateway_operator_client=gateway_operator_client,
         )
 
         execution_service = OperatorExecutionService(
-            pubsub_service=pubsub_service,
             approval_service=approval_service,
             event_service=event_service,
             settings=settings,
@@ -230,7 +222,6 @@ class OperatorCommandService:
         )
 
         return cls(
-            pubsub_service=pubsub_service,
             approval_service=approval_service,
             execution_service=execution_service,
             filesystem_service=filesystem_service,
@@ -246,15 +237,6 @@ class OperatorCommandService:
             blacklist_validator=blacklist_validator,
             auto_approved_validator=auto_approved_validator,
         )
-
-    def set_pubsub_client(self, client: PubSubClient) -> None:
-        self._pubsub_service.set_pubsub_client(client)
-
-    async def start_pubsub_listeners(self) -> None:
-        await self._pubsub_service.start()
-
-    async def stop_pubsub_listeners(self) -> None:
-        await self._pubsub_service.stop()
 
     async def execute_command(
         self,

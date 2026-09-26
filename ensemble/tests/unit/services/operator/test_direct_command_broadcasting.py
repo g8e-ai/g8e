@@ -40,7 +40,6 @@ def _build_execution_service(
     event_service.publish_command_event = AsyncMock()
 
     svc = OperatorExecutionService.__new__(OperatorExecutionService)
-    svc._pubsub_service = MagicMock()
     svc._event_service = event_service
     svc._approval_service = None
     svc._settings = None
@@ -100,7 +99,7 @@ class TestDirectCommandBroadcasting:
 
         gateway_client.dispatch.assert_called_once()
         dispatch_kwargs = gateway_client.dispatch.call_args.kwargs
-        assert dispatch_kwargs["action_type"] == "EXECUTE_BASH"
+        assert dispatch_kwargs["event_type"] == EventType.OPERATOR_COMMAND_REQUESTED
         assert dispatch_kwargs["operator_session_id"] == "sess-1"
         assert dispatch_kwargs["context"] == g8e_context
 

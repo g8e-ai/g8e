@@ -17,8 +17,7 @@ The dead ``PubSubGovernanceClient`` and its sibling ``*_pubsub.py`` client
 variants were removed: they targeted a ``storage_type:operator_id:session_id``
 routing scheme that does not exist on the operator side, were never imported
 in production code, and bypassed the gateway's governance pipeline. The
-ensemble now publishes raw command intent to ``cmd:`` and lets the gateway
-construct the governed envelope.
+ensemble routes governed operator dispatch through Gateway HTTP only.
 """
 
 import pytest
@@ -128,45 +127,20 @@ class TestDeadPubSubClientsRemoved:
         assert not hasattr(clients_pkg, "PubSubKvCacheClient")
 
 
-class TestPubSubClientDoesNotConstructEnvelopes:
-    """Regression: PubSubClient must not construct governance envelopes.
+class TestPubSubClientRemovedFromG8ee:
+    """Regression: g8ee must not ship a PubSubClient for operator dispatch."""
 
-    The gateway is the relay and enforcement point for operator command
-    dispatch. The ensemble publishes a ``CommandIntent`` (protojson) to
-    ``cmd:`` and the gateway intercepts, validates authorization, decodes
-    the ``CommandIntent``, constructs the governed GovernanceEnvelope with
-    the current state Merkle root, and forwards it to the operator. The
-    ensemble must not import or call ``build_uap_envelope_json`` and must
-    not expose ``check_operator_online`` or ``publish_storage_request``.
-    """
+    def test_pubsub_client_module_is_not_importable(self):
+        import importlib
 
-    def test_pubsub_client_does_not_import_build_uap_envelope_json(self):
-        import inspect
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module("app.clients.pubsub_client")
 
-        import app.clients.pubsub_client as mod
+    def test_clients_init_does_not_export_pubsub_client(self):
+        import app.clients as clients_pkg
 
-        source = inspect.getsource(mod)
-        assert "build_uap_envelope_json" not in source
-        assert "build_uap_envelope" not in source
-
-    def test_pubsub_client_has_no_check_operator_online(self):
-        from app.clients.pubsub_client import PubSubClient
-
-        assert not hasattr(PubSubClient, "check_operator_online")
-
-    def test_pubsub_client_has_no_publish_storage_request(self):
-        from app.clients.pubsub_client import PubSubClient
-
-        assert not hasattr(PubSubClient, "publish_storage_request")
-
-    def test_pubsub_client_sources_command_intent_from_g8e_models(self):
-        """PubSubClient must source CommandIntent from g8e.models.governance."""
-        import inspect
-
-        import app.clients.pubsub_client as mod
-
-        source = inspect.getsource(mod)
-        assert "from g8e.models.governance import CommandIntent" in source
+        assert "PubSubClient" not in clients_pkg.__all__
+        assert not hasattr(clients_pkg, "PubSubClient")
 
 
 class TestDeadAbstractionsRemoved:

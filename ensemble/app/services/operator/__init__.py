@@ -20,7 +20,6 @@ from .intent_service import OperatorIntentService
 from .lfaa_service import OperatorLFAAService
 from .operator_data_service import OperatorDataService
 from .port_service import OperatorPortService
-from .pubsub_service import OperatorPubSubService
 
 __all__ = [
     "OperatorApprovalService",
@@ -32,5 +31,4 @@ __all__ = [
     "OperatorIntentService",
     "OperatorLFAAService",
     "OperatorPortService",
-    "OperatorPubSubService",
 ]
