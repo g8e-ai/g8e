@@ -69,13 +69,8 @@ class TestOperatorCommandServiceInit:
     def test_raises_type_error_when_required_arg_missing(self):
         """Missing required arg must raise TypeError at construction time."""
         with pytest.raises(TypeError):
-            # Missing one or more required positional arguments to build()
-            # The current implementation has 8 required arguments.
             OperatorCommandService.build(
-                cache_aside_service=None,
-                operator_data_service=None,
                 # investigation_service is missing
-                event_service=None,
                 settings=None,
                 ai_response_analyzer=None,
                 internal_http_client=None,
@@ -86,68 +81,6 @@ class TestOperatorCommandServiceInit:
         """Service constructs without error when all required deps are provided."""
         service = _make_service()
         assert service is not None
-
-# ---------------------------------------------------------------------------
-# publish_command_event (formerly _broadcast_command_event)
-# ---------------------------------------------------------------------------
-
-
-class TestBroadcastCommandEvent:
-    pytestmark: ClassVar = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
-
-    async def test_publishes_event_to_client(self):
-        """OperatorExecutionService publishes events via event_service.publish_command_event."""
-        service = _make_service()
-        execution_svc = service._execution_service
-        execution_svc.event_service.publish_command_event = AsyncMock()
-
-        class _TestEvent(G8eBaseModel):
-            operator_session_id: str
-
-        data = _TestEvent(operator_session_id="sess-abc")
-        g8e_context = build_g8e_http_context(
-            web_session_id="web-abc",
-            user_id="user-abc",
-            case_id="case-xyz",
-            investigation_id="inv-111",
-        )
-        await execution_svc.event_service.publish_command_event(
-            EventType.OPERATOR_COMMAND_REQUESTED,
-            data,
-            g8e_context=g8e_context,
-            task_id="task-123",
-        )
-
-        execution_svc.event_service.publish_command_event.assert_awaited_once()
-        call_args = execution_svc.event_service.publish_command_event.call_args
-        assert call_args.args[0] == EventType.OPERATOR_COMMAND_REQUESTED
-        assert call_args.kwargs["g8e_context"].web_session_id == "web-abc"
-        assert call_args.kwargs["g8e_context"].case_id == "case-xyz"
-
-    async def test_swallows_client_publish_exception(self):
-        """client publish exceptions from execute_command_internal paths must not propagate."""
-        service = _make_service()
-        execution_svc = service._execution_service
-        execution_svc.event_service.publish_command_event = AsyncMock(
-            side_effect=Exception("client unreachable")
-        )
-
-        class _EmptyEvent(G8eBaseModel):
-            pass
-
-        g8e_context = build_g8e_http_context(
-            web_session_id="web-abc",
-            user_id="user-abc",
-            case_id="case-xyz",
-            investigation_id="inv-111",
-        )
-        with contextlib.suppress(Exception):
-            await execution_svc.event_service.publish_command_event(
-                EventType.OPERATOR_COMMAND_REQUESTED,
-                _EmptyEvent(),
-                g8e_context=g8e_context,
-                task_id="task-123",
-            )
 
 
 # ---------------------------------------------------------------------------

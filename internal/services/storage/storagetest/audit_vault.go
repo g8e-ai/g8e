@@ -538,8 +538,6 @@ func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSe
 	return &session, nil
 }
 
-
-
 func (avs *TestSQLAuditStore) requireExistingSessionConn(conn *sql.Conn, event *storage.Event) error {
 	if event == nil {
 		return constants.ErrAuditEventNil

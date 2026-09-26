@@ -356,10 +356,7 @@ class ServiceFactory:
         register_auto_approved_validator(auto_approved_validator)
 
         operator_command_service = OperatorCommandService.build(
-            cache_aside_service=cache_aside_service,
-            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
             investigation_service=domain_services.investigation_service,  # type: ignore[arg-type]
-            event_service=core_services.event_service,  # type: ignore[arg-type]
             settings=settings,
             ai_response_analyzer=response_analyzer,  # type: ignore[arg-type]
             internal_http_client=core_services.internal_http_client,

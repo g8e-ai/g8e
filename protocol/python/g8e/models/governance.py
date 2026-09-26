@@ -382,7 +382,7 @@ def compute_transaction_hash(
         if not event_type:
             raise ValueError("event_type is required for protocol version 2")
         message = f"{_TX_HASH_V2_PREFIX}{action_type}|{event_type}|{v1_message}"
-    elif protocol_version in {"", GOVERNANCE_PROTOCOL_VERSION_V1}:
+    elif protocol_version in {"", "1", GOVERNANCE_PROTOCOL_VERSION_V1}:
         message = v1_message
     else:
         raise ValueError(f"unsupported protocol_version: {protocol_version}")

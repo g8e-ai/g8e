@@ -138,6 +138,8 @@ class TestEnvelopeIdentityBinding:
         payload_b64 = base64.b64encode(payload_bytes).decode("ascii")
         hash_without_app = compute_transaction_hash(
             action_type=envelope.action_type,
+            event_type=envelope.event_type,
+            protocol_version=envelope.protocol_version,
             target_resource=envelope.target_resource,
             payload=payload_b64,
             state_merkle_root="root",

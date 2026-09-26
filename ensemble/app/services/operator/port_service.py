@@ -26,7 +26,6 @@ from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.pubsub_messages import PortCheckResultPayload, G8eMessage
 from app.models.tool_results import PortCheckToolResult
 
@@ -139,19 +138,6 @@ class OperatorPortService:
 
             logger.info("[PORT_CHECK] Dispatching port check via Gateway")
 
-            # Notify start
-            await self.execution_service.event_service.publish_command_event(
-                EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED,
-                CommandExecutingBroadcastEvent(
-                    command=f"port_check {host}:{port} ({protocol})",
-                    execution_id=exec_id,
-                    operator_session_id=operator_session_id,
-                    port=port,
-                ),
-                g8e_context,
-                task_id=AITaskId.PORT_CHECK,
-            )
-
             _, envelope = await self.execution_service.execute(
                 g8e_message=command_data,
                 g8e_context=g8e_context,
@@ -163,21 +149,6 @@ class OperatorPortService:
                     f"Port check timed out after {OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS} seconds"
                 )
                 logger.warning("[PORT_CHECK] %s", timeout_error)
-
-                # Notify failure (timeout)
-                await self.execution_service.event_service.publish_command_event(
-                    EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
-                    CommandResultBroadcastEvent(
-                        execution_id=exec_id,
-                        command=f"port_check {host}:{port} ({protocol})",
-                        status=ExecutionStatus.TIMEOUT,
-                        error=timeout_error,
-                        operator_id=operator_id,
-                        operator_session_id=operator_session_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.PORT_CHECK,
-                )
 
                 return PortCheckToolResult(
                     success=False,
@@ -196,30 +167,6 @@ class OperatorPortService:
             if isinstance(envelope.payload, PortCheckResultPayload):
                 payload = envelope.payload
                 failed = envelope.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
-
-                # Notify completion/failure
-                completion_event_type = (
-                    EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED
-                    if not failed
-                    else EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
-                )
-
-                await self.execution_service.event_service.publish_command_event(
-                    completion_event_type,
-                    CommandResultBroadcastEvent(
-                        execution_id=exec_id,
-                        command=f"port_check {host}:{port} ({protocol})",
-                        status=ExecutionStatus.COMPLETED if not failed else ExecutionStatus.FAILED,
-                        output=f"Port {port} on {host} is {'OPEN' if payload.is_open else 'CLOSED'}"
-                        if not failed
-                        else None,
-                        error=payload.error if failed else None,
-                        operator_id=operator_id,
-                        operator_session_id=operator_session_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.PORT_CHECK,
-                )
 
                 if failed:
                     return PortCheckToolResult(

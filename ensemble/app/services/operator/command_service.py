@@ -46,6 +46,7 @@ from app.models.tool_results import (
     FetchFileHistoryToolResult,
     FetchFileDiffToolResult,
     FileEditResult,
+    FsGrepToolResult,
     FsListToolResult,
     FsReadToolResult,
     IntentPermissionResult,
@@ -54,7 +55,6 @@ from app.models.tool_results import (
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ApprovalServiceProtocol,
-    EventServiceProtocol,
     ExecutionServiceProtocol,
     FileServiceProtocol,
     FilesystemServiceProtocol,
@@ -64,9 +64,7 @@ from app.services.protocols import (
     PortServiceProtocol,
     G8eClientProtocol,
 )
-from app.services.cache.cache_aside import CacheAsideService
 from app.services.investigation.investigation_service import extract_single_operator_context
-from .operator_data_service import OperatorDataService
 
 from .execution_service import OperatorExecutionService
 from .file_service import OperatorFileService
@@ -86,7 +84,6 @@ from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 from app.errors import ValidationError, BusinessLogicError
-from app.models.operators import CommandResultBroadcastEvent, CommandExecutingBroadcastEvent
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -104,8 +101,6 @@ class OperatorCommandService:
         file_service: FileServiceProtocol,
         intent_service: IntentServiceProtocol,
         lfaa_service: LFAAServiceProtocol,
-        cache_aside_service: CacheAsideService,
-        operator_data_service: OperatorDataService,
         investigation_service: InvestigationServiceProtocol,
         settings: G8eeAppSettings,
         whitelist_validator: CommandWhitelistValidator | None = None,
@@ -119,10 +114,7 @@ class OperatorCommandService:
         self._file_service = file_service
         self._intent_service = intent_service
         self._lfaa_service = lfaa_service
-        self._cache_aside_service = cache_aside_service
-        self._operator_data_service = operator_data_service
         self._investigation_service = investigation_service
-        self.event_service = execution_service.event_service
         self._settings = settings
 
         self._whitelist_validator = (
@@ -136,14 +128,7 @@ class OperatorCommandService:
             if auto_approved_validator is not None
             else get_auto_approved_validator()
         )
-
-        self._CommandResultBroadcastEvent = CommandResultBroadcastEvent
-        self._CommandExecutingBroadcastEvent = CommandExecutingBroadcastEvent
         self._init_logic(settings)
-
-    @property
-    def operator_data_service(self) -> OperatorDataService:
-        return self._operator_data_service
 
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
@@ -168,10 +153,7 @@ class OperatorCommandService:
     @classmethod
     def build(
         cls,
-        cache_aside_service: CacheAsideService,
-        operator_data_service: OperatorDataService,
         investigation_service: InvestigationServiceProtocol,
-        event_service: EventServiceProtocol,
         settings: G8eeAppSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         internal_http_client: G8eClientProtocol,
@@ -188,10 +170,8 @@ class OperatorCommandService:
 
         execution_service = OperatorExecutionService(
             approval_service=approval_service,
-            event_service=event_service,
             settings=settings,
             ai_response_analyzer=ai_response_analyzer,
-            operator_data_service=operator_data_service,
             investigation_service=investigation_service,
             gateway_operator_client=gateway_operator_client,
         )
@@ -207,7 +187,6 @@ class OperatorCommandService:
 
         file_service = OperatorFileService(
             approval_service=approval_service,
-            event_service=event_service,
             execution_service=execution_service,
             ai_response_analyzer=ai_response_analyzer,
             investigation_service=investigation_service,
@@ -216,7 +195,6 @@ class OperatorCommandService:
         intent_service = OperatorIntentService(
             approval_service=approval_service,
             execution_service=execution_service,
-            event_service=event_service,
             investigation_service=investigation_service,
             internal_http_client=internal_http_client,
         )
@@ -229,8 +207,6 @@ class OperatorCommandService:
             file_service=file_service,
             intent_service=intent_service,
             lfaa_service=lfaa_service,
-            cache_aside_service=cache_aside_service,
-            operator_data_service=operator_data_service,
             investigation_service=investigation_service,
             settings=settings,
             whitelist_validator=whitelist_validator,
@@ -253,10 +229,6 @@ class OperatorCommandService:
         dispatches correlated by a batch_id. For N==1 the return shape matches the single-operator response.
         """
         command = args.command.strip()
-        # Sage never writes `command` directly; the Tribunal produces it from
-        # Sage's request+guidelines. The approval UI still shows a "justification"
-        # line to the user, which in the new model is Sage's natural-language
-        # request (plus optional guidelines).
         justification_parts = [args.request.strip()] if args.request else []
         if args.guidelines and args.guidelines.strip():
             justification_parts.append(f"Guidelines: {args.guidelines.strip()}")
@@ -295,12 +267,9 @@ class OperatorCommandService:
         )
         is_batch = len(target_operator_docs) > 1
 
-        # Primary operator is the first resolved - used for approval identity fields.
         primary = target_operator_docs[0]
 
         # 2. Command validation (L1Doctrine technical bedrock: whitelist/blacklist/forbidden patterns)
-        # Prefer the per-request (user) command_validation settings - get_user_settings
-        # already falls back to platform defaults when no user document exists.
         cv = request_settings.command_validation if request_settings else self._cv
         whitelist_override = parse_command_csv(cv.whitelisted_commands)
         operator_context = extract_single_operator_context(primary) if primary else None
@@ -328,21 +297,11 @@ class OperatorCommandService:
         primary_session_id = primary.operator_session_id or ""
         batch_id = generate_batch_id() if is_batch else None
 
-        # Generate per-operator execution IDs upfront so PREPARING can correlate with STARTED
         per_operator_exec_ids = [generate_command_execution_id() for _ in target_operator_docs]
-
-        # For single operator, use its exec_id as the approval_execution_id to unify IDs
-        # For batch, use a separate approval_execution_id but include per-operator IDs in PREPARING
         approval_execution_id = (
             per_operator_exec_ids[0] if not is_batch else generate_command_execution_id()
         )
 
-        # Auto-approval gate (separate from whitelist hard-allow-list).
-        # The human has rubber-stamped these base commands as benign, so
-        # individual approval prompts are skipped. Auto-approve is independent
-        # of whitelisting: a command must still pass ALL L1 hard gates above
-        # (forbidden patterns, blacklist, and whitelist if enabled) before
-        # auto-approve can apply.
         csv_auto_approve_override = parse_command_csv(cv.auto_approved_commands)
         base_command = command.split()[0] if command else ""
         auto_approve_result = self._auto_approved_validator.is_auto_approved(
@@ -360,26 +319,7 @@ class OperatorCommandService:
                 command,
             )
 
-        # 3. Notify preparing (one event for the approval card).
-        # Skip for auto-approved commands since they bypass the approval UI.
-        if not is_auto_approved:
-            await self.event_service.publish_command_event(
-                EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
-                self._CommandExecutingBroadcastEvent(
-                    command=command,
-                    execution_id=approval_execution_id,
-                    operator_session_id=primary_session_id,
-                    operator_id=primary_operator_id,
-                    batch_id=batch_id,
-                    per_operator_execution_ids=per_operator_exec_ids if is_batch else [],
-                ),
-                g8e_context,
-                task_id=AITaskId.COMMAND,
-            )
-
-        # 4. Approval gate - a single approval covers the whole batch.
-        # Auto-approved base commands skip the human approval prompt
-        # (the human has rubber-stamped them via auto_approved_commands).
+        # 3. Approval gate - a single approval covers the whole batch.
         if is_auto_approved:
             approval_result = ApprovalResult(
                 approved=True,
@@ -396,7 +336,7 @@ class OperatorCommandService:
                     operator_id=primary_operator_id,
                     operator_session_id=primary_session_id,
                     command=command,
-                    risk_analysis=args.risk_analysis,  # Risk analysis now passed from Tribunal flow
+                    risk_analysis=args.risk_analysis,
                     task_id=AITaskId.COMMAND,
                     target_systems=target_systems,
                     batch_id=batch_id,
@@ -414,39 +354,11 @@ class OperatorCommandService:
                 approval_id=approval_result.approval_id,
             )
 
-        # 5. Fan-out dispatch - one execution_id per operator, bounded concurrency.
+        # 4. Fan-out dispatch - one execution_id per operator, bounded concurrency.
         max_concurrency = self._be.max_concurrency
         fail_fast = self._be.fail_fast
         semaphore = asyncio.Semaphore(max_concurrency)
         cancel_event = asyncio.Event()
-
-        async def _publish_failed(
-            exec_id: str, op_id: str, op_session_id: str, hostname: str, error_msg: str
-        ) -> None:
-            """Emit OPERATOR_COMMAND_FAILED so the UI always reflects every operator in the batch."""
-            try:
-                await self.event_service.publish_command_event(
-                    EventType.OPERATOR_COMMAND_FAILED,
-                    self._CommandResultBroadcastEvent(
-                        execution_id=exec_id,
-                        command=command,
-                        status=ExecutionStatus.FAILED,
-                        output=None,
-                        error=error_msg,
-                        stderr=None,
-                        exit_code=None,
-                        execution_time_seconds=None,
-                        operator_id=op_id,
-                        operator_session_id=op_session_id,
-                        hostname=hostname,
-                        approval_id=approval_result.approval_id,
-                        batch_id=batch_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.COMMAND,
-                )
-            except Exception as e:
-                logger.warning("[COMMAND] Failed to publish FAILED event for %s: %s", op_id, e)
 
         async def _dispatch(op: OperatorDocument, exec_id: str) -> BatchOperatorExecutionResult:
             op_id = op.id
@@ -462,9 +374,6 @@ class OperatorCommandService:
             )
 
             if cancel_event.is_set():
-                await _publish_failed(
-                    exec_id, op_id, op_session_id, hostname, "Cancelled by fail-fast"
-                )
                 return BatchOperatorExecutionResult(
                     hostname=hostname,
                     operator_id=op_id,
@@ -475,9 +384,6 @@ class OperatorCommandService:
 
             async with semaphore:
                 if cancel_event.is_set():
-                    await _publish_failed(
-                        exec_id, op_id, op_session_id, hostname, "Cancelled by fail-fast"
-                    )
                     return BatchOperatorExecutionResult(
                         hostname=hostname,
                         operator_id=op_id,
@@ -506,20 +412,6 @@ class OperatorCommandService:
                     ),
                 )
 
-                await self.event_service.publish_command_event(
-                    EventType.OPERATOR_COMMAND_STARTED,
-                    self._CommandExecutingBroadcastEvent(
-                        command=command,
-                        execution_id=exec_id,
-                        operator_session_id=op_session_id,
-                        operator_id=op_id,
-                        approval_id=approval_result.approval_id,
-                        batch_id=batch_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.COMMAND,
-                )
-
                 try:
                     internal_result, _ = await self._execution_service.execute(
                         g8e_message=g8e_message,
@@ -534,9 +426,6 @@ class OperatorCommandService:
                     logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
                     if fail_fast:
                         cancel_event.set()
-                    await _publish_failed(
-                        exec_id, op_id, op_session_id, hostname, f"Command execution failed: {e}"
-                    )
                     return BatchOperatorExecutionResult(
                         hostname=hostname,
                         operator_id=op_id,
@@ -544,32 +433,6 @@ class OperatorCommandService:
                         success=False,
                         error=f"Command execution failed: {e}. Check operator status and retry.",
                     )
-
-                completion_event_type = (
-                    EventType.OPERATOR_COMMAND_COMPLETED
-                    if internal_result.status == ExecutionStatus.COMPLETED
-                    else EventType.OPERATOR_COMMAND_FAILED
-                )
-                await self.event_service.publish_command_event(
-                    completion_event_type,
-                    self._CommandResultBroadcastEvent(
-                        execution_id=exec_id,
-                        command=command,
-                        status=internal_result.status,
-                        output=internal_result.output,
-                        error=internal_result.error,
-                        stderr=internal_result.stderr,
-                        exit_code=internal_result.exit_code,
-                        execution_time_seconds=internal_result.execution_time_seconds,
-                        operator_id=op_id,
-                        operator_session_id=op_session_id,
-                        hostname=hostname,
-                        approval_id=approval_result.approval_id,
-                        batch_id=batch_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.COMMAND,
-                )
 
                 succeeded = internal_result.status == ExecutionStatus.COMPLETED
                 if not succeeded and fail_fast:

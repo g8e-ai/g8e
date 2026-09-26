@@ -475,8 +475,6 @@ func (ass *SQLAuditStore) GetOperatorSession(id string) (*OperatorSession, error
 	return &session, nil
 }
 
-
-
 func (ass *SQLAuditStore) requireExistingSessionConn(conn *sql.Conn, event *Event) error {
 	if event == nil {
 		return constants.ErrAuditEventNil

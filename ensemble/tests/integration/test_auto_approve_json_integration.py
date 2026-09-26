@@ -223,4 +223,3 @@ class TestAutoApproveJsonIntegration:
         assert len(approval_service.command_approval_calls) == 1, (
             "Verb missing from JSON and CSV must still go through human approval"
         )
-        assert len(_approval_preparing_events(event_service)) == 1

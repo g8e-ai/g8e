@@ -487,7 +487,6 @@ func loadFormationInventoryFreeze(cmd *cobra.Command, deps nativeEvalDeps, regis
 	return loadEvaluationInventoryFreeze(cmd.Context(), fileSvc, projectRoot, inventoryFile)
 }
 
-
 type gatewayFormationProvenancePreflight struct {
 	fileSvc fs.RuntimeFileService
 	cfg     *config.Config

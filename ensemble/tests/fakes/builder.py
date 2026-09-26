@@ -207,8 +207,6 @@ def build_command_service(
         file_service=file_service,
         intent_service=intent_service,
         lfaa_service=lfaa_service,
-        cache_aside_service=cache_aside_service,
-        operator_data_service=operator_data_service,
         investigation_service=investigation_service,
         settings=settings,
         whitelist_validator=whitelist_validator,
