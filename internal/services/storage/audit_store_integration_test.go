@@ -14,11 +14,14 @@ import (
 	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	vault "github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -326,4 +329,146 @@ func TestPruneChainedAuditEvents_WritesCheckpoint(t *testing.T) {
 	assert.Zero(t, remaining)
 
 	require.NoError(t, ass.VerifyChain(context.Background(), 0))
+}
+
+func TestSQLAuditStore_VerifyChain_PrevHashTamper(t *testing.T) {
+	ass := newIntegrationAuditStore(t)
+	require.NoError(t, ass.CreateSession("prevhash-session", constants.SessionTypeOperator, "PrevHash", "user-prev"))
+
+	for i := 0; i < 3; i++ {
+		_, err := ass.RecordEvent(&Event{
+			OperatorSessionID: "prevhash-session",
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Audit.Command,
+			ContentText:       "event-" + string(rune('a'+i)),
+			CommandExitCode:   constants.ExitCodeNone,
+		})
+		require.NoError(t, err)
+	}
+	require.NoError(t, ass.VerifyChain(context.Background(), 0))
+
+	_, err := ass.db.ExecWithRetry(`UPDATE events SET prev_hash = ? WHERE seq = 2`, auditChainGenesisPrevHash)
+	require.NoError(t, err)
+	err = ass.VerifyChain(context.Background(), 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "prev_hash mismatch")
+}
+
+func TestSQLAuditStore_VerifyChain_SeqReorderTamper(t *testing.T) {
+	ass := newIntegrationAuditStore(t)
+	require.NoError(t, ass.CreateSession("reorder-session", constants.SessionTypeOperator, "Reorder", "user-reorder"))
+
+	for i := 0; i < 3; i++ {
+		_, err := ass.RecordEvent(&Event{
+			OperatorSessionID: "reorder-session",
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Audit.Command,
+			ContentText:       "ordered-" + string(rune('a'+i)),
+			CommandExitCode:   constants.ExitCodeNone,
+		})
+		require.NoError(t, err)
+	}
+	require.NoError(t, ass.VerifyChain(context.Background(), 0))
+
+	// Swap seq 1 and 2 while leaving stale prev_hash/hash columns — breaks linkage.
+	_, err := ass.db.ExecWithRetry(`UPDATE events SET seq = 999 WHERE seq = 1`)
+	require.NoError(t, err)
+	_, err = ass.db.ExecWithRetry(`UPDATE events SET seq = 1 WHERE seq = 2`)
+	require.NoError(t, err)
+	_, err = ass.db.ExecWithRetry(`UPDATE events SET seq = 2 WHERE seq = 999`)
+	require.NoError(t, err)
+
+	err = ass.VerifyChain(context.Background(), 0)
+	require.Error(t, err)
+}
+
+func TestSQLAuditStore_VerifyChain_ConcurrentAppends(t *testing.T) {
+	ass := newIntegrationAuditStore(t)
+	require.NoError(t, ass.CreateSession("concurrent-session", constants.SessionTypeOperator, "Concurrent", "user-concurrent"))
+
+	const workers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			_, err := ass.RecordEvent(&Event{
+				OperatorSessionID: "concurrent-session",
+				Timestamp:         time.Now().UTC(),
+				Type:              constants.Event.Operator.Audit.Command,
+				ContentText:       "concurrent-" + string(rune('a'+n)),
+				CommandExitCode:   constants.ExitCodeNone,
+			})
+			errs <- err
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+
+	var count int
+	require.NoError(t, ass.db.QueryRowWithRetry(`SELECT COUNT(*) FROM events WHERE seq IS NOT NULL`).Scan(&count))
+	assert.Equal(t, workers, count)
+	require.NoError(t, ass.VerifyChain(context.Background(), 0))
+}
+
+func TestSQLAuditStore_VerifyChain_SurvivesVaultRekey(t *testing.T) {
+	tempDir := testutil.TempDir(t)
+	oldKey := []byte("audit-chain-old-vault-key!!")
+	newKey := []byte("audit-chain-new-vault-key!!")
+
+	fileSvc, _ := newTestFileSvc(t, tempDir)
+	testVault := CreateTestVault(t, fileSvc, oldKey)
+
+	config := DefaultAuditStoreConfig()
+	config.EncryptionVault = testVault
+	ass, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	require.NoError(t, err)
+
+	require.NoError(t, ass.CreateSession("rekey-chain-session", constants.SessionTypeOperator, "Rekey Chain", "user-rekey"))
+	for i := 0; i < 2; i++ {
+		_, err := ass.RecordEvent(&Event{
+			OperatorSessionID: "rekey-chain-session",
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Audit.Command,
+			ContentText:       "pre-rekey-" + string(rune('a'+i)),
+			CommandExitCode:   constants.ExitCodeNone,
+		})
+		require.NoError(t, err)
+	}
+	require.NoError(t, ass.VerifyChain(context.Background(), 0))
+
+	require.NoError(t, ass.Close())
+	testVault.Close()
+
+	fileSvcForVault, err := fs.NewRuntimeFileService(tempDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	rekeyedVault, err := vault.NewVault(&vault.VaultConfig{
+		FileSvc: fileSvcForVault,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, rekeyedVault.Rekey(oldKey, newKey))
+	require.NoError(t, rekeyedVault.Unlock(newKey))
+	t.Cleanup(func() { rekeyedVault.Close() })
+
+	config.EncryptionVault = rekeyedVault
+	ass2, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, ass2.Close()) })
+
+	require.NoError(t, ass2.VerifyChain(context.Background(), 0))
+
+	_, err = ass2.RecordEvent(&Event{
+		OperatorSessionID: "rekey-chain-session",
+		Timestamp:         time.Now().UTC(),
+		Type:              constants.Event.Operator.Audit.AIMsg,
+		ContentText:       "post-rekey",
+		CommandExitCode:   constants.ExitCodeNone,
+	})
+	require.NoError(t, err)
+	require.NoError(t, ass2.VerifyChain(context.Background(), 0))
 }

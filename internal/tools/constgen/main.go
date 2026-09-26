@@ -31,12 +31,22 @@ type eventEntry struct {
 	Transport             []string `json:"transport"`
 	Producers             []string `json:"producers"`
 	Persistence           string   `json:"persistence"`
+	Outcomes              []string `json:"outcomes"`
 	Governance            *struct {
 		ActionType string `json:"action_type"`
 		Payload    string `json:"payload"`
 	} `json:"governance"`
 	GrammarAllowlistOwner string `json:"grammar_allowlist_owner"`
 	Reserved              bool   `json:"reserved"`
+}
+
+// pendingGovernedRequestEvents lists action types that still lack a registry
+// governed request event. W5 adds OperatorMcp*Requested entries and removes these.
+var pendingGovernedRequestEvents = map[string]string{
+	"MCP_PROMPT_GET":     "W5",
+	"MCP_PROMPT_LIST":    "W5",
+	"MCP_RESOURCE_LIST":  "W5",
+	"MCP_RESOURCE_READ":  "W5",
 }
 
 var (
@@ -274,6 +284,44 @@ func validateRegistry(reg registryFile, actionTypes map[string]struct{}, strictG
 		if entry.Kind == "stream" && entry.Persistence != "ephemeral" {
 			errs = append(errs, fmt.Sprintf("%s: stream events must use ephemeral persistence", key))
 		}
+
+		for _, outcomeKey := range entry.Outcomes {
+			outcomeEntry, ok := reg.Events[outcomeKey]
+			if !ok {
+				errs = append(errs, fmt.Sprintf("%s: outcomes references missing event %q", key, outcomeKey))
+				continue
+			}
+			if outcomeEntry.Kind != "outcome" && outcomeEntry.Kind != "fact" {
+				errs = append(errs, fmt.Sprintf("%s: outcomes entry %q must be kind outcome or fact, got %q", key, outcomeKey, outcomeEntry.Kind))
+			}
+		}
+	}
+
+	actionTypesWithRequest := map[string]bool{}
+	for _, entry := range reg.Events {
+		if entry.Governance == nil || entry.Governance.ActionType == "" {
+			continue
+		}
+		hasGoverned := false
+		for _, t := range entry.Transport {
+			if t == "governed" {
+				hasGoverned = true
+				break
+			}
+		}
+		if !hasGoverned || entry.Kind != "request" {
+			continue
+		}
+		actionTypesWithRequest[entry.Governance.ActionType] = true
+	}
+	for actionType := range actionTypes {
+		if actionTypesWithRequest[actionType] {
+			continue
+		}
+		if pendingGovernedRequestEvents[actionType] != "" {
+			continue
+		}
+		errs = append(errs, fmt.Sprintf("action type %q has no governed request event in registry", actionType))
 	}
 
 	if len(errs) > 0 {

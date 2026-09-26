@@ -77,6 +77,50 @@ func TestValidateRegistryRejectsMissingProducers(t *testing.T) {
 	require.Contains(t, err.Error(), "missing producers")
 }
 
+func TestValidateRegistryRejectsMissingOutcomeReference(t *testing.T) {
+	reg := registryFile{
+		Events: map[string]eventEntry{
+			"Request": {
+				GoConst:     "EventRequest",
+				Value:       "g8e.v1.operator.audit.user.record.requested",
+				Kind:        "request",
+				Transport:   []string{"pubsub"},
+				Producers:   []string{"ensemble"},
+				Persistence: "operator.audit_log",
+				Outcomes:    []string{"MissingOutcome"},
+			},
+		},
+	}
+	err := validateRegistry(reg, map[string]struct{}{}, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing event")
+}
+
+func TestValidateRegistryRejectsActionTypeWithoutRequestEvent(t *testing.T) {
+	reg := registryFile{
+		Events: map[string]eventEntry{
+			"Command": {
+				GoConst:     "EventOperatorCommandRequested",
+				Value:       "g8e.v1.operator.command.requested",
+				Kind:        "request",
+				Transport:   []string{"governed"},
+				Producers:   []string{"ensemble"},
+				Persistence: "ephemeral",
+				Governance: &struct {
+					ActionType string `json:"action_type"`
+					Payload    string `json:"payload"`
+				}{ActionType: "EXECUTE_BASH", Payload: "g8e.operator.v1.CommandRequested"},
+			},
+		},
+	}
+	err := validateRegistry(reg, map[string]struct{}{
+		"EXECUTE_BASH": {},
+		"FS_READ":      {},
+	}, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `action type "FS_READ" has no governed request event`)
+}
+
 func TestLoadRegistryFromCommittedFile(t *testing.T) {
 	root, err := findRepoRoot()
 	require.NoError(t, err)
