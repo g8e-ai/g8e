@@ -75,7 +75,6 @@ def _stub_execute_for_identity(service) -> None:
     service.execution_service.execute = AsyncMock(
         return_value=(internal_result, _mock_envelope())
     )
-    service.execution_service.event_service.publish_command_event = AsyncMock()
 
 
 class TestFileServiceIdentityPropagation:
@@ -215,7 +214,6 @@ class TestExecutionServiceIdentityPropagation:
 
         exec_service._gateway_operator_client = MagicMock()
         exec_service._gateway_operator_client.dispatch = AsyncMock(return_value={"success": True})
-        exec_service._event_service.publish_command_event = AsyncMock()
 
         mock_op = MagicMock()
         mock_op.operator_id = "op-123"

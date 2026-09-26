@@ -27,7 +27,6 @@ import pytest_asyncio
 
 from app.constants import (
     AgentMode,
-    EventType,
     InvestigationStatus,
     TriageComplexityClassification,
     TriageConfidence,

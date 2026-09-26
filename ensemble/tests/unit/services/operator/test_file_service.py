@@ -9,7 +9,6 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from app.constants import ExecutionStatus, FileOperation, G8EE_COMPONENT
-from app.constants.generated_status import EventType
 from app.models.command_request_payloads import FileEditRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext

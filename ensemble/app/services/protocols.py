@@ -127,16 +127,6 @@ class EventServiceProtocol(Protocol):
         """Publish a session or background event."""
         raise NotImplementedError
 
-    async def publish_command_event(
-        self,
-        event_type: EventType,
-        data: G8eBaseModel,
-        g8e_context: G8eHttpContext,
-        *,
-        task_id: str,
-    ) -> None:
-        """Publish a command-related event."""
-        raise NotImplementedError
 
     async def publish_reputation_event(
         self,
@@ -653,17 +643,11 @@ class ApprovalServiceProtocol(Protocol):
 
 @runtime_checkable
 class ExecutionServiceProtocol(Protocol):
-    @property
-    def event_service(self) -> EventServiceProtocol:
-        raise NotImplementedError
 
     @property
     def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
         raise NotImplementedError
 
-    @property
-    def operator_data_service(self) -> OperatorDataServiceProtocol:
-        raise NotImplementedError
 
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:

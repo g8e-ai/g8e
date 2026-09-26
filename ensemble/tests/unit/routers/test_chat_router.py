@@ -12,7 +12,6 @@ import pytest
 from fastapi import Request
 
 from app.constants import ChatSessionStatus, InvestigationStatus, ComponentName
-from app.constants.generated_status import EventType
 from app.errors import ResourceNotFoundError
 from app.routers.chat_router import router
 from app.models.http_context import G8eHttpContext

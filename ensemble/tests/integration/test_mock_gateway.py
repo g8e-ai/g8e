@@ -11,7 +11,6 @@ Verifies that the real g8ee clients (DBClient, KVCacheClient, BlobClient)
 can connect to and interact with MockGateway.
 """
 
-import asyncio
 import pytest
 
 from app.clients.blob_client import BlobClient

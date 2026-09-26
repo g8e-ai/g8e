@@ -573,7 +573,6 @@ class TestOperatorEnrichment:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
 
         # Create investigation and operator
         investigation = create_investigation_data()
@@ -631,7 +630,6 @@ class TestOperatorEnrichment:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
 
         # Create investigation and multiple operators
         investigation = create_investigation_data()
@@ -697,7 +695,6 @@ class TestOperatorEnrichment:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
 
         # Create investigation and operators with different statuses
         investigation = create_investigation_data()
@@ -823,7 +820,6 @@ class TestOperatorEnrichment:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
 
         # Create remote operator with intents
         remote_operator = build_production_operator_document(
@@ -894,7 +890,6 @@ class TestCompleteContextAssembly:
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
-        operator_data_service = all_services.operator_data_service
         memory_data_service = all_services.memory_data_service
 
         # Create complete test data

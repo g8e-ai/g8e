@@ -22,8 +22,6 @@ async def test_filesystem_service_grep_import_fix():
     # This test primarily verifies that the imports in filesystem_service.py are correct
     # and don't raise NameError when the methods are called/referenced.
     execution_service = MagicMock()
-    execution_service.event_service.publish_command_event = AsyncMock()
-
     investigation_service = MagicMock()
 
     service = OperatorFilesystemService(

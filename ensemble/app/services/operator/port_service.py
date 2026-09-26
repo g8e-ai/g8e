@@ -21,7 +21,7 @@ from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
 )
-from app.constants.config import ExecutionStatus, OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
+from app.constants.config import OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext

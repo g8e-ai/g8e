@@ -47,7 +47,6 @@ class FakeExecutionService:
         output: str = "fake output",
         resolved_operator: OperatorDocument = _default_operator,
         resolve_error: Exception | None = None,
-        event_service: Any = None,
         ai_response_analyzer: Any = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
@@ -57,7 +56,6 @@ class FakeExecutionService:
         self._output = output
         self._resolved_operator = resolved_operator
         self._resolve_error = resolve_error
-        self._event_service = event_service
         self._ai_response_analyzer = ai_response_analyzer
         self.whitelist_validator = whitelist_validator
         self.blacklist_validator = blacklist_validator
@@ -122,16 +120,8 @@ class FakeExecutionService:
         self._envelope = value
 
     @property
-    def event_service(self):
-        return self._event_service
-
-    @property
     def ai_response_analyzer(self):
         return self._ai_response_analyzer
-
-    @property
-    def operator_data_service(self):
-        return None
 
     @property
     def investigation_service(self):

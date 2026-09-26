@@ -308,8 +308,6 @@ class OperatorIntentService:
                 error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
             )
 
-        execution_id = generate_intent_execution_id()
-
         iam_results: list[IamIntentResult] = []
         for intent in requested_intents:
             detach_cmd = self._build_iam_detach_command(intent)

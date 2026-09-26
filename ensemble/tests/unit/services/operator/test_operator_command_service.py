@@ -17,27 +17,21 @@ Covers the service's own responsibilities:
 
 """
 
-import contextlib
 from typing import ClassVar
-from unittest.mock import AsyncMock
 
 import pytest
 
 from app.constants import (
-    EventType,
     G8EE_COMPONENT,
 )
 from app.constants.generated_status import CommandErrorType
-from app.errors import ValidationError
 from app.models.agent import ExecutorCommandArgs
-from app.models.base import G8eBaseModel
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import OperatorDocument, OperatorType
 from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
 from app.services.operator import OperatorCommandService
 from tests.fakes.builder import build_command_service
-from tests.fakes.factories import build_g8e_http_context
 from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from tests.fakes.fake_approval_service import FakeApprovalService
 from tests.fakes.fake_event_service import FakeEventService

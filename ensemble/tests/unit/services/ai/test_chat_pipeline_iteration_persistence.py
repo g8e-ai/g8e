@@ -28,7 +28,6 @@ import pytest
 from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     AgentMode,
-    EventType,
     ThinkingLevel,
     TriageComplexityClassification,
     TriageConfidence,

@@ -85,7 +85,6 @@ The SSE subsystem in `g8ee` is built on two primary infrastructure layers: `Even
 The `EventService` class (`app/services/infra/event_service.py`) implements `EventServiceProtocol` and provides the high-level publishing interface consumed across the ensemble. Its publishing methods are:
 
 - **`publish(event)`** — Validates routing targets and delegates the wire model transmission to `InternalHttpClient.push_sse_event()`.
-- **`publish_command_event(event_type, data, g8e_context, *, task_id)`** — Packages command execution telemetry into a targetless `BackgroundEvent`. `EventService.publish()` skips this event because the Gateway requires a session target; it is not delivered over SSE.
 - **`publish_investigation_event(investigation_id, event_type, payload, web_session_id, case_id, user_id, *, cli_session_id)`** — Constructs a `RequestContext` and publishes a targeted `SessionEvent` containing investigation and case correlation metadata.
 - **`publish_reputation_event(event_type, payload, g8e_context)`** — Converts the application context into a targeted `SessionEvent` and publishes reputation updates through the same route.
 - **`publish_agent_state(request)` / `publish_run_state(request)`** — Sends typed observe projections to the Gateway's separate mTLS producer endpoints. These calls are best-effort, skip targetless requests, swallow transport failures, and preserve cancellation.

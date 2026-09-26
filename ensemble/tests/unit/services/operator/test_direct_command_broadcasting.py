@@ -12,14 +12,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.constants.generated_status import EventType
-from app.constants.generated_status import AITaskId
 from app.constants import ExecutionStatus
 from app.models.http_context import RequestContext
 from app.models.internal_api import DirectCommandRequest
-from app.models.operators import (
-    CommandResultBroadcastEvent,
-    DirectCommandResult,
-)
+from app.models.operators import DirectCommandResult
 from app.services.operator.execution_service import OperatorExecutionService
 from g8e.operator.v1 import operator_pb2
 from tests.fakes.factories import (
@@ -32,29 +28,24 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 def _build_execution_service(
     dispatch_result: dict,
-) -> tuple[OperatorExecutionService, MagicMock, MagicMock]:
+) -> tuple[OperatorExecutionService, MagicMock]:
     gateway_client = MagicMock()
     gateway_client.dispatch = AsyncMock(return_value=dispatch_result)
 
-    event_service = MagicMock()
-    event_service.publish_command_event = AsyncMock()
-
     svc = OperatorExecutionService.__new__(OperatorExecutionService)
-    svc._event_service = event_service
     svc._approval_service = None
     svc._settings = None
-    svc._operator_data_service = None
     svc._ai_response_analyzer = None
     svc._investigation_service = None
     svc._gateway_operator_client = gateway_client
     svc._background_tasks = set()
 
-    return svc, gateway_client, event_service
+    return svc, gateway_client
 
 
-class TestDirectCommandBroadcasting:
-    async def test_send_command_to_operator_broadcasts_result_in_background(self):
-        """Direct commands dispatch through Gateway and broadcast the terminal result."""
+class TestDirectCommandDispatch:
+    async def test_send_command_to_operator_dispatches_in_background(self):
+        """Direct commands dispatch through Gateway."""
         command_result = operator_pb2.CommandResult(
             execution_id="direct-exec-1",
             status=operator_pb2.ExecutionStatus.EXECUTION_STATUS_COMPLETED,
@@ -62,7 +53,7 @@ class TestDirectCommandBroadcasting:
             return_code=0,
             execution_time_seconds=1.5,
         )
-        svc, gateway_client, event_service = _build_execution_service(
+        svc, gateway_client = _build_execution_service(
             {
                 "success": True,
                 "transaction_id": "tx-1",
@@ -103,28 +94,9 @@ class TestDirectCommandBroadcasting:
         assert dispatch_kwargs["operator_session_id"] == "sess-1"
         assert dispatch_kwargs["context"] == g8e_context
 
-        event_service.publish_command_event.assert_called_once()
-        args, kwargs = event_service.publish_command_event.call_args
-
-        event_type = args[0]
-        event_data = args[1]
-        ctx = args[2]
-        task_id_kwarg = kwargs.get("task_id")
-
-        assert event_type == EventType.OPERATOR_COMMAND_COMPLETED
-        assert isinstance(event_data, CommandResultBroadcastEvent)
-        assert event_data.execution_id == exec_id
-        assert event_data.command == command
-        assert event_data.output == "file1\nfile2"
-        assert event_data.status == ExecutionStatus.COMPLETED
-        assert event_data.direct_execution is True
-        assert event_data.hostname == "test-host"
-        assert ctx == g8e_context
-        assert task_id_kwarg == AITaskId.DIRECT_COMMAND
-
-    async def test_send_command_to_operator_broadcasts_failure_result(self):
-        """Gateway dispatch failures are broadcast to the terminal client."""
-        svc, gateway_client, event_service = _build_execution_service(
+    async def test_send_command_to_operator_handles_gateway_failure(self):
+        """Gateway dispatch failures do not crash the background task."""
+        svc, gateway_client = _build_execution_service(
             {"success": False, "error": "No operator available"}
         )
 
@@ -142,19 +114,12 @@ class TestDirectCommandBroadcasting:
             ),
         )
 
-        await svc.send_command_to_operator(request, g8e_context)
+        result = await svc.send_command_to_operator(request, g8e_context)
+
+        assert isinstance(result, DirectCommandResult)
+        assert result.status == ExecutionStatus.EXECUTING
 
         for _ in range(5):
             await asyncio.sleep(0)
 
         gateway_client.dispatch.assert_called_once()
-        event_service.publish_command_event.assert_called_once()
-        args, _ = event_service.publish_command_event.call_args
-
-        event_type = args[0]
-        event_data = args[1]
-
-        assert event_type == EventType.OPERATOR_COMMAND_FAILED
-        assert event_data.status == ExecutionStatus.FAILED
-        assert event_data.error == "No operator available"
-        assert event_data.direct_execution is True

@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.constants import EventType, InvestigationStatus
+from app.constants import InvestigationStatus
 from app.constants.message_sender import MessageSender
 from app.llm.llm_types import Content, Role
 from app.models.investigations import (

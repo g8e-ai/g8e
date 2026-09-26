@@ -5,7 +5,6 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import asyncio
 import base64
 from unittest.mock import MagicMock, AsyncMock
 
@@ -21,7 +20,7 @@ from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatS
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
 from g8e.operator.v1 import operator_pb2
-from tests.fakes.factories import build_g8e_http_context, build_g8eo_result_envelope
+from tests.fakes.factories import build_g8e_http_context
 
 pytestmark = [pytest.mark.unit]
 

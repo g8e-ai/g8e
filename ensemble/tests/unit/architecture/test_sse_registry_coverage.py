@@ -46,7 +46,7 @@ def test_sse_payloads_are_registered_for_ensemble_sse() -> None:
 def test_sse_payload_values_match_registry_json() -> None:
     events_json = _load_repo_events()
     by_value = {entry["value"]: key for key, entry in events_json.items() if entry.get("value")}
-    for event_type, payload_cls in SSE_PAYLOADS.items():
+    for event_type in SSE_PAYLOADS:
         key = by_value.get(event_type.value)
         assert key is not None, f"{event_type} missing from events.json"
         entry = events_json[key]

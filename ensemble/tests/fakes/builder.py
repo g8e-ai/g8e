@@ -18,7 +18,6 @@ from app.models.cache import CacheOperationResult
 from app.models.settings import G8eeAppSettings
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.intent_service import OperatorIntentService
-from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import ExecutionServiceProtocol
 from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
@@ -133,7 +132,6 @@ def build_command_service(
     All parameters are optional - provide only the fakes you need to configure
     or assert on. Omitted deps default to a fresh fake with sensible defaults.
     """
-    cache_aside_service = create_mock_cache_aside_service()
     internal_http_client = internal_http_client or FakeG8eClient()
 
     # Ensure all required fakes are present
@@ -145,10 +143,6 @@ def build_command_service(
     from app.clients.gateway_operator_client import GatewayOperatorClient
 
     gateway_operator_client = GatewayOperatorClient(internal_http_client)
-    operator_data_service = OperatorDataService(
-        cache=cache_aside_service,
-        gateway_operator_client=gateway_operator_client,
-    )
 
     approval_service = approval_service or FakeApprovalService()
 
