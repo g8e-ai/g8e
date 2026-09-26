@@ -21,8 +21,11 @@ The repository-level equivalents are:
 
 ```bash
 make dashboard-lint
+make dashboard-boundary-check
 make dashboard-test
 ```
+
+`dashboard-boundary-check` greps runtime paths for forbidden BFF patterns (`ServiceName.g8ed`, `/api/operators`, `cache_aside`, `operator_slot`, `VSE_INTERNAL`). `test/unit/architecture/test_g8ed_gateway_boundary.test.js` asserts the static host shape and legacy tree absence.
 
 ## Configuration
 

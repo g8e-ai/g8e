@@ -15,7 +15,7 @@ The [platform-level dashboard architecture](../architecture/dashboard.md) descri
 | Server-Sent Events | Active via Gateway `/api/v1/sse/stream` (absolute URL, nested envelope normalization). |
 | Chat, cases, Operator management, approvals, settings, and terminal actions | Active via Gateway browser routes and Gateway→g8ee proxy paths. |
 
-The active dashboard is therefore a static browser application with limited Gateway-direct session support, not a complete operational control plane. Feature modules and tests in the dashboard source do not by themselves indicate that a feature is available in the deployed runtime.
+The active dashboard is a static browser application that routes all API, SSE, and passkey traffic directly to the Gateway. The dashboard host does not proxy or implement platform APIs. Individual features may still have product gaps (for example, audit REST paths require Gateway route reclassification, and device-link UI remains visible but stub-rejects).
 
 ## Start and Connect
 
@@ -25,17 +25,17 @@ The active dashboard is therefore a static browser application with limited Gate
 4. Start the dashboard. On first startup, it requests a `g8ed` workload identity and remains unavailable until an owner approves the request through the Gateway console.
 5. After approval, the dashboard stores its workload credential in the persistent runtime directory and begins serving over plain HTTP. Use an external proxy or load balancer when the dashboard origin requires HTTPS.
 
-See [Unified Docker Stack](../guides/unified_stack.md) for the deployment procedure and [Development](devs.md) for local setup. Because interactive sign-in is currently unavailable, using the active session-dependent interface requires an existing valid Gateway browser session.
+See [Unified Docker Stack](../guides/unified_stack.md) for the deployment procedure and [Development](devs.md) for local setup. For same-machine deployments, `./g8e gw connect http://localhost:3000` validates CORS, health, and certificate configuration before opening the app.
 
 ## Documentation
 
 | Document | Description |
 | --- | --- |
 | [Architecture](architecture.md) | Runtime boundaries, browser composition, identity separation, and current feature activation |
-| [Authentication](auth.md) | Browser session behavior, the current passkey limitation, and dashboard workload enrollment |
-| [Gateway Integration](gateway.md) | Browser-direct connectivity, cross-origin requirements, configuration, and active request ownership |
-| [Server-Sent Events](sse.md) | Event lifecycle, authentication, reconnection behavior, and the current routing limitation |
-| [Operator Surfaces](operators.md) | Operator, deployment, approval, and terminal interfaces, including their current inactive status |
+| [Authentication](auth.md) | Browser session behavior, Gateway-direct passkey ceremonies, and dashboard workload enrollment |
+| [Gateway Integration](gateway.md) | Browser-direct connectivity, cross-origin requirements, configuration, and request ownership |
+| [Server-Sent Events](sse.md) | Gateway stream lifecycle, envelope normalization, authentication, and reconnection behavior |
+| [Operator Surfaces](operators.md) | Operator, deployment, approval, and terminal interfaces via Gateway browser routes |
 | [Development](devs.md) | Local setup, environment, source organization, Docker startup, and development model |
 | [Testing](tests.md) | Vitest configuration, test scope, browser harness, enrollment tests, and verification commands |
 

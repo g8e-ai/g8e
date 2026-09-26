@@ -1,12 +1,12 @@
 # Gateway Integration
 
-The dashboard separates static application delivery from Gateway access. Its Node.js and Express process serves the browser application over plain HTTP, while the browser sends supported authentication, session, and passkey requests directly to the Gateway over HTTPS. The dashboard container also enrolls its own workload identity during startup, but that identity is separate from browser authentication.
+The dashboard separates static application delivery from Gateway access. Its Node.js and Express process serves the browser application over plain HTTP, while the browser sends authentication, session, API, and SSE requests directly to the Gateway over HTTPS. The dashboard container also enrolls its own workload identity during startup, but that identity is separate from browser authentication.
 
 ## Runtime Boundaries
 
 The dashboard requires `G8E_GATEWAY_URL` before it starts. It publishes that browser-facing origin through the no-cache `/g8e-config.js` endpoint, with no hardcoded fallback, and includes the same origin in the browser Content Security Policy. Browser requests to the configured Gateway include credentials so the browser can send the Gateway-issued HttpOnly session cookie; the dashboard does not create bearer tokens, API keys, or replacement session headers for those requests.
 
-The Node.js process is a static application host, not an API proxy. It does not provide live handlers for the retained operator, chat, approval, device-link, audit, settings, console, metrics, system, or documentation requests that the browser still directs to the dashboard origin. Those interfaces remain visible in parts of the application but are not operational in the current runtime.
+The Node.js process is a static application host, not an API proxy. It does not mount Express routers for platform APIs. All feature traffic uses `ServiceName.GATEWAY` in `service-client.js`, which resolves paths against `window.G8E_GATEWAY_URL`.
 
 ## Current Browser Capabilities
 
@@ -14,10 +14,14 @@ The Node.js process is a static application host, not an API proxy. It does not 
 | --- | --- |
 | Session restoration | Operational. On page load, the dashboard asks the Gateway for the current user and public web-session identifier. A valid Gateway cookie restores the in-memory dashboard session. |
 | Logout | Operational. The dashboard asks the Gateway to invalidate the cookie-backed session, disconnects event handling, and clears local session state. |
-| Passkey registration and sign-in | The browser calls the Gateway directly, but the normal dashboard sign-in flow sends an empty authentication-challenge request while the Gateway requires a user identifier. The follow-up first-passkey setup form therefore cannot be reached through the normal flow, and interactive sign-in and setup are not operational. See [Authentication](auth.md#current-passkey-limitation). |
-| Passkey management | The current dashboard has no active controls for listing or revoking passkeys. |
-| Server-sent events | Not operational. The browser uses a relative URL that resolves against the static dashboard host, selects the Gateway polling endpoint instead of its live stream, and expects a different event envelope from the Gateway stream. See [Server-Sent Events](sse.md#current-url-resolution-constraint). |
-| Operator, chat, approvals, audit, settings, and console features | These requests target the dashboard origin, where the static host provides no API implementation. They are not operational in the current runtime. |
+| Passkey registration and sign-in | Operational. The browser calls Gateway console ceremony paths with `options.publicKey` and an explicit `user_id` on authenticate challenge. Returning users may persist `user_id` in `localStorage`. See [Authentication](auth.md). |
+| Server-sent events | Operational. The browser opens a credentialed `EventSource` to `${G8E_GATEWAY_URL}/api/v1/sse/stream` and normalizes the nested Gateway push envelope. Polling fallback to `/api/v1/sse/events` is not yet implemented in the first-party SPA. See [Server-Sent Events](sse.md). |
+| Operator list, bind, unbind, stop | Operational via Gateway `/api/v1/operators` browser routes (`RouteAuthDual`). |
+| Chat, settings, cases, investigations | Operational via Gateway→g8ee ensemble proxy (`/api/v1/chat`, `/api/v1/settings`, `/api/v1/cases`, `/api/v1/investigations`). |
+| Approvals and terminal direct commands | Operational via Gateway `/api/v1/operator/approval/*` and `/api/v1/operator/direct-command` proxy paths. |
+| Audit log REST | Browser retargeted to Gateway `/api/v1/audit/*`, but those paths currently default to mTLS-only in the Gateway auth registry. Cookie-authenticated audit list may fail until route reclassification. |
+| Device links and Operator API keys | Stub-rejected from the browser in `operator-panel-service.js`. UI may still expose controls that return errors. |
+| Operator binary download | Operational via Gateway `/.well-known/g8e/bin/{os}/{arch}` paths. |
 
 ## Deployment Requirements
 
@@ -28,8 +32,11 @@ A browser deployment uses different addresses for browser traffic and container 
 3. Add the dashboard origin with `--passkey-rp-origin`, and set `--passkey-rp-id` to the dashboard hostname or a valid registrable parent-domain suffix. The RP ID does not include a scheme or port.
 4. Use a Gateway certificate trusted by the user's browser. The dashboard must run in a WebAuthn secure context, either HTTPS or the browser's localhost development exception.
 5. Keep the Gateway plain-HTTP bootstrap surface reachable from the dashboard container for health checks and workload enrollment.
+6. For Docker stacks with a separate ensemble service, set `G8E_ENSEMBLE_URL` on the Gateway (for example `http://ensemble:8000`) so browser chat and settings proxy paths reach g8ee.
 
 When cross-origin access is configured, the Gateway issues its Secure, HttpOnly web-session cookie with `SameSite=None`; without configured cross-origin origins, it uses `SameSite=Lax`. The dashboard host allows browser connections only to itself and `G8E_GATEWAY_URL`; it does not allow browser WebSocket connections. Browser events use SSE because the Gateway WebSocket surface requires mTLS.
+
+For same-machine development, `./g8e gw connect http://localhost:3000` validates health, certificate chain, and CORS against the running Gateway.
 
 ### Workstation Enrollment Instructions
 
@@ -57,10 +64,11 @@ The unified Docker deployment publishes the dashboard on host port `G8E_DASHBOAR
 ## Troubleshooting
 
 - If the container exits before the dashboard listens, verify the health URL, runtime directory permissions, workload enrollment status, and all required variables.
-- If browser requests fail with CORS errors, confirm that `--cors-origin` exactly matches the dashboard origin, including its scheme and port.
-- If the browser rejects passkey operations, confirm the Gateway certificate trust, secure-context status, RP ID, and RP origin before accounting for the [current dashboard sign-in limitation](auth.md#current-passkey-limitation).
-- If authentication succeeds but no events arrive, see the [current event integration constraints](sse.md#current-url-resolution-constraint). The browser currently uses the wrong origin, endpoint, and event envelope for the Gateway stream.
-- If operator, chat, approval, audit, settings, or console requests return the SPA document or a not-found response, the request is reaching the static dashboard host. Those retained interfaces have no live dashboard API backend.
+- If browser requests fail with CORS errors, confirm that `--cors-origin` exactly matches the dashboard origin, including its scheme and port. Run `./g8e gw connect <origin>` to verify CORS programmatically.
+- If the browser rejects passkey operations, confirm the Gateway certificate trust, secure-context status, RP ID, RP origin, and that sign-in supplies an explicit `user_id`.
+- If authentication succeeds but no events arrive, confirm `G8E_GATEWAY_URL` in `/g8e-config.js`, Gateway trust, and that the browser connects to `/api/v1/sse/stream` (not the dashboard origin). See [Server-Sent Events](sse.md).
+- If chat or settings fail with upstream errors in Docker, confirm the Gateway has `G8E_ENSEMBLE_URL` pointing at the ensemble service.
+- If operator, chat, or approval requests return HTML or 404 from port 3000, the request is hitting the static dashboard host instead of the Gateway. Check `service-client.js` routing and `window.G8E_GATEWAY_URL`.
 
 ## Related
 

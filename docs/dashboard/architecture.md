@@ -4,14 +4,13 @@
 
 g8ed is the first-party browser interface for g8e. The current runtime separates application delivery, browser authentication, and container workload identity into distinct security boundaries. The dashboard host serves the browser application and runtime configuration, the browser authenticates directly to the Gateway, and the dashboard container enrolls its own workload identity before it begins serving.
 
-The current dashboard is not a complete operational control plane. It can restore an existing Gateway browser session and request logout, and it exposes user-interface modules for chat, Operator management, approvals, audit, settings, and terminal activity. The running dashboard host does not provide the API backend required by those retained modules.
+The dashboard is a static host plus Gateway-direct browser client. Feature modules call the Gateway for sessions, passkeys, SSE, operators, chat, settings, cases, investigations, approvals, and terminal actions. The dashboard host does not implement platform APIs.
 
 ```mermaid
 flowchart LR
     Browser[Browser application] -->|Application assets and runtime configuration| Host[Dashboard static host]
     Browser -->|Credentialed HTTPS requests| Gateway[g8e Gateway]
-    Browser -.->|Current relative event and feature requests| Host
-    Host -.->|No API or event handlers| Browser
+    Gateway -->|mTLS + stamped user context| Ensemble[g8ee ensemble]
     Container[Dashboard container] -->|Health and workload enrollment over HTTP| Bootstrap[Gateway bootstrap surface]
     Bootstrap -->|Workload certificate and trust bundle| Runtime[Persistent dashboard runtime]
 ```
@@ -22,7 +21,7 @@ flowchart LR
 
 The Node.js 22 and Express 5 process serves the checked-in browser application over plain HTTP. It publishes the required browser-reachable Gateway origin through `/g8e-config.js`, applies browser security headers, logs requests, serves static assets, and returns the single-page document for unknown `GET` requests that accept HTML. The HTML fallback is rate-limited.
 
-`G8E_GATEWAY_URL` is required at startup and has no fallback. The host does not terminate TLS, authenticate browser users, store browser sessions, proxy Gateway traffic, or mount dashboard API and event routes. Deployments that require HTTPS on the dashboard origin terminate TLS in an external proxy or load balancer.
+`G8E_GATEWAY_URL` is required at startup and has no fallback. The host does not terminate TLS, authenticate browser users, store browser sessions, proxy Gateway traffic, or mount dashboard API routes. Deployments that require HTTPS on the dashboard origin terminate TLS in an external proxy or load balancer.
 
 ### Browser Application
 
@@ -62,25 +61,27 @@ In the root Compose deployment, the dashboard is the `bootstrapped`-profile `das
 
 ## Request Ownership
 
-Browser requests currently fall into three groups:
+Browser requests fall into these groups:
 
 | Request group | Owner | Current status |
 | --- | --- | --- |
 | Static assets, feature templates, and runtime Gateway configuration | Dashboard host | Operational |
-| Current-user lookup, public session lookup, logout, and passkey ceremonies | Gateway | Session restoration and logout are operational; interactive registration and sign-in are not operational in the current interface |
-| Chat, cases, Operator management, approvals, device links, audit, settings, console, and terminal actions | Dashboard-origin API surface | Not operational because the static host mounts no handlers for these requests |
+| Current-user lookup, public session lookup, logout, and passkey ceremonies | Gateway | Operational |
+| SSE stream | Gateway (`/api/v1/sse/stream`, `RouteAuthDual`) | Operational |
+| Operator list, bind, unbind, stop | Gateway (`/api/v1/operators`, `RouteAuthDual`) | Operational |
+| Chat, settings, cases, investigations, operator approval/command | Gateway→g8ee ensemble proxy | Operational when `G8E_ENSEMBLE_URL` is configured |
+| Audit REST | Gateway (`/api/v1/audit/*`) | Browser retargeted; routes currently mTLS-default — may fail for cookie sessions |
+| Device links and Operator API keys from browser | Not available | Stub-rejected in service layer |
 
-The browser contains passkey registration and authentication ceremonies, but the live sign-in flow does not supply the user identifier required by the Gateway. As a result, the current interface can restore and log out an existing valid Gateway browser session but cannot establish a new one. See [Authentication](auth.md#current-passkey-limitation) for the exact limitation.
-
-Server-side routes, services, middleware, models, and rendered views remain in the source tree, but the live static host does not activate them. Their presence and unit tests do not make their interfaces available in a deployed dashboard.
+Legacy BFF routes, services, models, views, and middleware were removed from the repository. `make dashboard-boundary-check` and `test_g8ed_gateway_boundary.test.js` guard against reintroduction.
 
 ## Event Delivery
 
-The browser creates a credentialed event client after restoring an authenticated session and obtaining its public web-session identifier. The event manager tracks activity, closes stale connections, retries failures with bounded exponential backoff and jitter, and forwards decoded application events through the browser event bus.
+The browser creates a credentialed event client to `${G8E_GATEWAY_URL}/api/v1/sse/stream` after restoring an authenticated session and obtaining its public web-session identifier. The event manager normalizes Gateway push envelopes, tracks activity, closes stale connections, retries failures with bounded exponential backoff and jitter, and forwards decoded application events through the browser event bus.
 
-Event delivery is not operational in the standard deployment. The client requests a relative event URL, so the browser sends it to the dashboard origin rather than `G8E_GATEWAY_URL`; the static host provides no event handler or proxy. The selected path is also the Gateway's finite polling endpoint rather than its live stream, and the client expects a different event envelope from the Gateway stream. See [Server-Sent Events](sse.md#current-url-resolution-constraint) for the three integration constraints.
+Polling fallback to `/api/v1/sse/events` is not yet implemented in the first-party SPA. See [Server-Sent Events](sse.md).
 
-The browser cannot use the Gateway's mTLS WebSocket surface because it does not hold a workload certificate. The Gateway provides a credentialed SSE surface for browser event delivery, but the current dashboard client does not connect to it correctly.
+The browser cannot use the Gateway's mTLS WebSocket surface because it does not hold a workload certificate.
 
 ## Security Properties
 
@@ -92,16 +93,25 @@ The browser cannot use the Gateway's mTLS WebSocket surface because it does not 
 
 ## Verification Model
 
-Browser assets are served directly from the repository without bundling or transpilation. The dashboard test suite covers the static host, browser authentication logic, event connection behavior, startup enrollment, model parsing, and feature modules. Unit coverage of retained modules does not prove that their routes are mounted or that they work against a live Gateway.
+Browser assets are served directly from the repository without bundling or transpilation. The dashboard test suite covers the static host, browser authentication logic, event connection behavior, startup enrollment, model parsing, feature modules, and architecture boundary guards. Deployment verification checks the complete browser path: Gateway certificate trust, exact CORS and WebAuthn origins, session-cookie behavior, runtime Gateway configuration, workload enrollment, and the active request owner for each feature.
 
-Deployment verification therefore checks the complete browser path: Gateway certificate trust, exact CORS and WebAuthn origins, session-cookie behavior, runtime Gateway configuration, workload enrollment, and the active request owner for each feature. See [Testing](tests.md) for the dashboard test scope and [Development](devs.md) for local verification commands.
+Repository-level commands:
+
+```bash
+make dashboard-lint
+make dashboard-boundary-check
+make dashboard-test
+./g8e gw connect http://localhost:3000
+```
+
+See [Testing](tests.md) for the dashboard test scope and [Development](devs.md) for local verification commands.
 
 ## Related
 
-- [Authentication](auth.md): Browser sessions, passkey limitations, and workload enrollment.
+- [Authentication](auth.md): Browser sessions, passkey ceremonies, and workload enrollment.
 - [Gateway Integration](gateway.md): Request ownership, cross-origin configuration, and deployment requirements.
-- [Server-Sent Events](sse.md): Event lifecycle and current integration constraints.
-- [Operator Surfaces](operators.md): Current status of Operator, approval, and terminal interfaces.
+- [Server-Sent Events](sse.md): Event lifecycle and Gateway stream integration.
+- [Operator Surfaces](operators.md): Operator, approval, and terminal interfaces.
 - [Platform-level Dashboard Architecture](../architecture/dashboard.md): g8ed's role in the platform and its trust boundaries.
 - [Gateway Architecture](../architecture/gateway.md): Gateway component design, protocol surfaces, and PKI authority.
 - [Network Architecture](../architecture/network.md): Gateway protocol surfaces, ports, and network topology.

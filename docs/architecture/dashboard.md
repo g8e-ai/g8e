@@ -5,16 +5,16 @@ parent: Architecture
 
 # Dashboard (g8ed)
 
-Last Updated: 2026-09-23
+Last Updated: 2026-09-26
 Version: v2.1.12
 
 ## Purpose
 
 g8ed is the first-party browser interface for g8e. A Node.js 22 and Express 5 process serves a framework-free JavaScript single-page application. The browser and the dashboard container have separate identities and communicate with different Gateway surfaces.
 
-The current g8ed runtime provides static application delivery, Gateway-direct session restoration, and logout. Its browser interface also contains passkey registration and sign-in controls plus modules for ensemble chat, Operator management, approvals, audit inspection, settings, and terminal activity, but the current sign-in flow does not provide the user identifier required by the Gateway, and the retained feature modules do not have an active API backend in the running dashboard server. Interactive registration and sign-in are therefore not operational in this interface.
+The current g8ed runtime is a static host plus Gateway-direct browser client. Express serves application assets and injects the browser-facing Gateway origin. The browser authenticates to the Gateway with WebAuthn, sends credentialed API requests to Gateway browser routes and the Gateway→g8ee ensemble proxy, and connects SSE to `${G8E_GATEWAY_URL}/api/v1/sse/stream` with nested envelope normalization. The dashboard container enrolls its own `g8ed` workload identity at startup; the running static host does not use that credential for outbound requests.
 
-The audited `g8e-adapter` package at `dashboard/g8e-adapter/` is a separate, generator-neutral integration core for observe frontends. It implements the Gateway browser contract (absolute configured origin, `/api/v1/sse/stream`, nested envelope parsing, `withCredentials: true`, endpoint allowlist) and its current Vitest suite passes 445 tests, including the contract-pack drift check. The adapter is not the transport used by the legacy g8ed SPA. It supplies the minimal host, reference frontend, and generated observe-frontends described in the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md). The evaluation explorer is another adapter consumer and is served by the Gateway's evaluation-explorer listener, not by the dashboard container. The legacy dashboard transport (`dashboard/server.js`, `dashboard/public/js/`, `dashboard/routes/`) remains separate because its authentication and SSE behavior do not match the Gateway browser contract.
+The audited `g8e-adapter` package at `dashboard/g8e-adapter/` is a separate, generator-neutral integration core for observe frontends. It implements the Gateway browser contract (absolute configured origin, `/api/v1/sse/stream`, nested envelope parsing, `withCredentials: true`, endpoint allowlist) and its Vitest suite passes 445 tests, including the contract-pack drift check. The adapter is not the transport used by the first-party g8ed SPA. It supplies the minimal host, reference frontend, and generated observe-frontends described in the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md). The evaluation explorer is another adapter consumer and is served by the Gateway's evaluation-explorer listener, not by the dashboard container.
 
 See the [Dashboard documentation](../dashboard/index.md) for component-level details and development guidance.
 
@@ -46,9 +46,7 @@ See [Unified Docker Stack](../guides/unified_stack.md) for the deployment proced
 
 ## Browser Authentication
 
-The browser's passkey registration and authentication code calls the Gateway directly and translates Gateway challenge data for the WebAuthn browser API. In the current g8ed interface, however, the sign-in request omits the user identifier required by the Gateway, so a new registration or sign-in does not complete. Existing valid sessions can still be restored, and logout remains Gateway-authoritative.
-
-A successful ceremony would create an HttpOnly `g8e_web_session_cookie` at the Gateway origin. Dashboard JavaScript cannot read this cookie and does not synthesize bearer, session, cookie, or API-key headers for Gateway requests. The browser attaches the cookie to credentialed requests, and the Gateway remains the authority for session validity and user identity.
+The browser's passkey registration and authentication ceremonies call the Gateway directly, translate Gateway challenge data for the WebAuthn browser API using `options.publicKey`, and supply an explicit `user_id` on authenticate challenge. Returning users may persist `user_id` in `localStorage` under `g8e_user_id`. A successful ceremony creates an HttpOnly `g8e_web_session_cookie` at the Gateway origin. Dashboard JavaScript cannot read this cookie and does not synthesize bearer, session, cookie, or API-key headers for Gateway requests.
 
 At startup, the browser requests the current user and public web-session identifier. Logout asks the Gateway to invalidate the session, disconnects event delivery, clears local state, and returns to the home route. See [Dashboard Authentication](../dashboard/auth.md) and [Authentication and Authorization](./auth.md).
 
@@ -60,12 +58,13 @@ At startup, the browser requests the current user and public web-session identif
 | Passkey session restoration and logout | Active. The browser calls the Gateway directly over HTTPS when an existing valid session cookie is present. |
 | Passkey registration and sign-in | Active via Gateway-direct WebAuthn (`options.publicKey`, explicit `user_id` on authenticate challenge). |
 | Container workload enrollment | Active and required before the static host listens. The resulting mTLS identity is not consumed by the running host after startup. |
-| Server-Sent Events | Active via absolute `${G8E_GATEWAY_URL}/api/v1/sse/stream` with Gateway nested push envelope normalization. |
-| Chat, cases, Operator management, approvals, settings, and terminal actions | Active via Gateway browser routes and the Gateway→g8ee ensemble proxy (`/api/v1/chat`, `/api/v1/settings`, `/api/v1/operator/*`). |
-| Audit log UI | Browser calls Gateway audit paths; full audit aggregation may remain limited to mTLS operator surfaces. |
+| Server-Sent Events | Active via absolute `${G8E_GATEWAY_URL}/api/v1/sse/stream` with Gateway nested push envelope normalization. Polling fallback is not yet implemented in the first-party SPA. |
+| Chat, cases, Operator management, approvals, settings, and terminal actions | Active via Gateway browser routes and the Gateway→g8ee ensemble proxy (`/api/v1/chat`, `/api/v1/settings`, `/api/v1/operator/*`, etc.). |
+| Audit log UI | Browser calls Gateway `/api/v1/audit/*` paths, but those routes currently default to mTLS-only in the Gateway auth registry. Audit REST from the browser may fail until Gateway route reclassification or a UI downgrade. |
+| Device links and Operator API keys from browser | Stub-rejected in `operator-panel-service.js`; UI controls may still be visible. |
 | Gateway mTLS WebSocket access | Not available to the browser. The static host does not proxy the Gateway's workload-only WebSocket surface. |
 
-This status distinction prevents browser components present in the source tree from being mistaken for deployed platform capabilities. New browser integration uses the Gateway origin explicitly; the dashboard origin serves application assets and configuration only.
+This status distinction prevents browser components present in the source tree from being mistaken for deployed platform capabilities without checking Gateway route ownership.
 
 ## Event Delivery
 
@@ -85,9 +84,9 @@ When a supported Gateway request produces a governed operation, authorization re
 
 ## Build and Verification
 
-The legacy dashboard browser assets have no compilation step; Node serves the checked-in files directly. From `dashboard/`, `npm start` runs the server, `npm run lint` runs ESLint, and `npm test` runs the Vitest suite. Repository-level verification uses `make dashboard-lint` and `make dashboard-test`, while `make build-dashboard` builds the dashboard container image. The separate adapter is verified from `dashboard/g8e-adapter/` with `npm test`, `npm run lint`, `npm run build`, `npm run build:host`, and `npm run gen:contract-pack:check`.
+The legacy dashboard browser assets have no compilation step; Node serves the checked-in files directly. From `dashboard/`, `npm start` runs the server, `npm run lint` runs ESLint, and `npm test` runs the Vitest suite. Repository-level verification uses `make dashboard-lint`, `make dashboard-boundary-check`, and `make dashboard-test`, while `make build-dashboard` builds the dashboard container image. The separate adapter is verified from `dashboard/g8e-adapter/` with `npm test`, `npm run lint`, `npm run build`, `npm run build:host`, and `npm run gen:contract-pack:check`.
 
-The current local runs for this repository version pass 2,145 legacy-dashboard tests and 445 adapter tests. The dashboard tests cover browser authentication, event handling and reconnection, static-host behavior, startup enrollment, UI components, models, and inactive server-side modules; they do not make inactive routes operational. See [Dashboard Development](../dashboard/devs.md), [Dashboard Tests](../dashboard/tests.md), and the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md).
+The current local runs for this repository version pass 2,118 legacy-dashboard tests and 445 adapter tests. The dashboard tests cover browser authentication, event handling and reconnection, static-host behavior, startup enrollment, UI components, models, and architecture boundary guards. See [Dashboard Development](../dashboard/devs.md), [Dashboard Tests](../dashboard/tests.md), and the [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md).
 
 ## Related Documentation
 
