@@ -16,6 +16,7 @@ var (
 	ErrTransactionIDMissing       = constants.ErrTxTransactionIDMissing
 	ErrPayloadMissing             = constants.ErrTxPayloadMissing
 	ErrUnknownActionType          = constants.ErrTxUnknownActionType
+	ErrEventActionMismatch        = constants.ErrTxEventActionMismatch
 	ErrPayloadDecodeFailed        = constants.ErrTxPayloadDecodeFailed
 	ErrTransactionHashMissing     = constants.ErrTxTransactionHashMissing
 	ErrTransactionHashMismatch    = constants.ErrTxTransactionHashMismatch

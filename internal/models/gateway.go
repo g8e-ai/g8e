@@ -149,6 +149,7 @@ type ActionReceiptRecord struct {
 	OperatorSessionID string                     `json:"operator_session_id"`
 	RequestorUserID   string                     `json:"requestor_user_id"`
 	ActingAppID       string                     `json:"acting_app_id"`
+	EventType         constants.EventType        `json:"event_type"`
 	ActionType        constants.ActionType       `json:"action_type"`
 	TargetResource    string                     `json:"target_resource"`
 	Status            operatorv1.ExecutionStatus `json:"status"`

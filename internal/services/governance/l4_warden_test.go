@@ -8,6 +8,7 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -248,6 +250,19 @@ func rehash(t *testing.T, env *govtypes.GovernanceEnvelope) {
 	}
 	env.Id = hash
 	env.TransactionHash = hash
+}
+
+func TestL4Warden_EventActionMismatchRejected(t *testing.T) {
+	t.Parallel()
+
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, constants.PostureDoctrine)
+	env.ActionType = string(constants.ActionTypeExecuteBash)
+	rehash(t, env)
+
+	_, err := verifier.VerifyEnvelope(context.Background(), env)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrTxEventActionMismatch)
 }
 
 // TestNewGovernancePosture_PanicsOnInvalidPosture verifies that invalid posture

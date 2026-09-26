@@ -91,7 +91,7 @@ func TestL4Warden_Notary_FailClosedProofs(t *testing.T) {
 		want   error
 	}{
 		{name: "missing id", mutate: func(env *govtypes.GovernanceEnvelope) { env.Id = "" }, want: ErrTransactionIDMissing},
-		{name: "unknown action", mutate: func(env *govtypes.GovernanceEnvelope) { env.ActionType = "UNKNOWN" }, want: ErrUnknownActionType},
+		{name: "unknown action", mutate: func(env *govtypes.GovernanceEnvelope) { env.ActionType = "UNKNOWN" }, want: ErrEventActionMismatch},
 		{name: "missing payload", mutate: func(env *govtypes.GovernanceEnvelope) { env.Payload = nil }, want: ErrPayloadMissing},
 		{name: "invalid typed payload", mutate: func(env *govtypes.GovernanceEnvelope) { env.Payload = []byte("not protobuf") }, want: ErrPayloadDecodeFailed},
 		{name: "missing transaction hash", mutate: func(env *govtypes.GovernanceEnvelope) { env.TransactionHash = "" }, want: ErrTransactionHashMissing},

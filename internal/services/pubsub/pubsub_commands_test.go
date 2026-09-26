@@ -560,7 +560,7 @@ func TestOperatorPubSubService_ExecuteVerifiedTransaction(t *testing.T) {
 		}
 		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), msg.EventType, msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no handler for event type")
+		assert.Contains(t, err.Error(), "no handler for")
 	})
 }
 
@@ -1916,8 +1916,8 @@ func TestOperatorPubSubService_StartOutboundModeDoesNotRequireMCPGatewayBinding(
 	require.NoError(t, svc.Start(context.Background()))
 	t.Cleanup(func() { require.NoError(t, svc.Stop()) })
 	assert.Nil(t, svc.GetMCPGateway())
-	_, hasMCPHandler := svc.handlers[constants.Event.Operator.Mcp.CallRequested]
-	_, hasA2AHandler := svc.handlers[constants.Event.Operator.A2a.CallRequested]
+	_, hasMCPHandler := svc.actionHandlers[constants.ActionTypeMcpCall]
+	_, hasA2AHandler := svc.actionHandlers[constants.ActionTypeA2aCall]
 	assert.False(t, hasMCPHandler)
 	assert.False(t, hasA2AHandler)
 }

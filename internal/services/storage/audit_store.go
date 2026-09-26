@@ -274,7 +274,7 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		existing[name] = true
 	}
 
-	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json"} {
+	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json", "event_type"} {
 		if existing[col] {
 			continue
 		}
@@ -372,6 +372,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 	operator_session_id TEXT,
 	requestor_user_id TEXT,
 	acting_app_id TEXT,
+	event_type TEXT,
 	action_type TEXT NOT NULL,
 	target_resource TEXT,
 	status TEXT NOT NULL,
@@ -677,11 +678,11 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 	query := `
 	INSERT INTO receipts (
 		transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(transaction_id) DO UPDATE SET
 		investigation_id = excluded.investigation_id,
 		status = excluded.status,
@@ -701,6 +702,7 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		sessionID,
 		record.RequestorUserID,
 		record.ActingAppID,
+		record.EventType,
 		record.ActionType,
 		record.TargetResource,
 		record.Status,
@@ -767,7 +769,7 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 
 	query := `
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -783,7 +785,7 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 	var receiptJSON sql.NullString
 	err := ass.db.QueryRowWithRetry(query, transactionID).Scan(
 		&r.TransactionID, &r.TransactionHash, &investigationID, &r.OperatorID, &sessionID,
-		&r.RequestorUserID, &r.ActingAppID,
+		&r.RequestorUserID, &r.ActingAppID, &r.EventType,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
 		&r.SignerKeyID, &r.Signature, &receiptJSON, &timestampStr,
@@ -852,7 +854,7 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 	var query strings.Builder
 	query.WriteString(`
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -881,7 +883,7 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
-			&row.record.RequestorUserID, &row.record.ActingAppID,
+			&row.record.RequestorUserID, &row.record.ActingAppID, &row.record.EventType,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
@@ -920,7 +922,7 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 
 	query := `
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -943,7 +945,7 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
-			&row.record.RequestorUserID, &row.record.ActingAppID,
+			&row.record.RequestorUserID, &row.record.ActingAppID, &row.record.EventType,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,

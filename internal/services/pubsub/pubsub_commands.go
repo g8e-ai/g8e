@@ -56,6 +56,17 @@ type PubSubCommandMessage struct {
 	InferenceResult *operatorv1.InferenceResult `json:"-"`
 }
 
+// verifiedActionHandler executes a governed action class after L4 verification.
+// A non-empty summary is stamped into the signed ActionReceipt.
+type verifiedActionHandler func(ctx context.Context, msg *PubSubCommandMessage) (string, error)
+
+func fireAndForgetActionHandler(fn func(context.Context, *PubSubCommandMessage)) verifiedActionHandler {
+	return func(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+		fn(ctx, msg)
+		return "", nil
+	}
+}
+
 // OperatorPubSubService manages the Operator pub/sub connection and dispatches inbound
 // Operator commands to the appropriate first-class service handler.
 type OperatorPubSubService struct {
@@ -82,7 +93,8 @@ type OperatorPubSubService struct {
 
 	ShutdownChan chan string
 
-	handlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)
+	actionHandlers      map[constants.ActionType]verifiedActionHandler
+	legacyEventHandlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)
 
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -377,58 +389,9 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, co
 	return nil
 }
 
-func (rs *OperatorPubSubService) registerDocumentMutationHandlers(handlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)) {
-	updateHandler := func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-			rs.logger.Error("Document update handler failed", "error", err)
-		}
-	}
-	deleteHandler := func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
-			rs.logger.Error("Document delete handler failed", "error", err)
-		}
-	}
-
-	for _, eventType := range []constants.EventType{
-		constants.EventAppDocumentUpdateRequested,
-		constants.EventAppAgentActivityRecordRequested,
-		constants.EventAppCaseCreateRequested,
-		constants.EventAppCaseUpdateRequested,
-		constants.EventAppInvestigationCreateRequested,
-		constants.EventAppInvestigationUpdateRequested,
-		constants.EventAppMemoryCreateRequested,
-		constants.EventAppMemoryUpdateRequested,
-		constants.EventOperatorReputationStateUpdateRequested,
-	} {
-		handlers[eventType] = updateHandler
-	}
-	for _, eventType := range []constants.EventType{
-		constants.EventAppDocumentDeleteRequested,
-		constants.EventAppCaseDeleteRequested,
-		constants.EventAppInvestigationDeleteRequested,
-	} {
-		handlers[eventType] = deleteHandler
-	}
-}
-
 func (rs *OperatorPubSubService) buildHandlers() {
-	rs.handlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
-		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
-		constants.Event.Operator.Heartbeat:                  rs.handleHeartbeatEvent,
-		constants.Event.Operator.Command.Requested:          rs.commands.HandleExecutionRequest,
-		constants.Event.Operator.Command.CancelRequested:    rs.commands.HandleCancelRequest,
-		constants.Event.Operator.FileEdit.Requested:         rs.fileOps.HandleFileEditRequest,
-		constants.Event.Operator.FsList.Requested:           rs.fileOps.HandleFsListRequest,
-		constants.Event.Operator.FsRead.Requested:           rs.fileOps.HandleFsReadRequest,
-		constants.Event.Operator.FsGrep.Requested:           rs.fileOps.HandleFsGrepRequest,
-		constants.Event.Operator.PortCheck.Requested:        rs.ports.HandlePortCheckRequest,
-		constants.Event.Operator.OllamaModelInventory.Requested: rs.ollama.HandleInventoryRequest,
-		constants.Event.Operator.OllamaModelResidency.Requested: rs.ollama.HandleResidencyRequest,
-		constants.Event.Operator.FetchLogs.Requested:        rs.history.HandleFetchLogsRequest,
-		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,
-		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,
-		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
-		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
+	rs.legacyEventHandlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
+		constants.Event.Operator.Heartbeat: rs.handleHeartbeatEvent,
 		constants.Event.Operator.Audit.UserMsg: func(ctx context.Context, msg *PubSubCommandMessage) {
 			if err := rs.audit.HandleUserMsgRequest(ctx, msg); err != nil {
 				rs.logger.Error("failed to handle audit user message", "error", err)
@@ -449,43 +412,45 @@ func (rs *OperatorPubSubService) buildHandlers() {
 				rs.logger.Error("failed to handle direct command result audit", "error", err)
 			}
 		},
-		constants.Event.Operator.FetchFileDiff.Requested: rs.history.HandleFetchFileDiffRequest,
 	}
-	rs.registerDocumentMutationHandlers(rs.handlers)
 
-	// Register the inference handler unconditionally: INFERENCE is a
-	// recognized platform action, so an unconfigured backend must fail
-	// closed with ErrInferenceBackendNotRegistered inside
-	// handleInferenceRequestSync rather than surfacing as an unknown
-	// action type at the dispatch gate.
-	rs.handlers[constants.Event.Operator.Inference.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleInferenceRequestSync(ctx, msg); err != nil {
-			rs.logger.Error("Inference handler failed", "error", err)
-		}
-	}
-	rs.handlers[constants.Event.Operator.ProviderBoundaryObservation.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleProviderBoundaryObservationSync(ctx, msg); err != nil {
-			rs.logger.Error("Provider boundary observation handler failed", "error", err)
-		}
-	}
-	rs.handlers[constants.Event.Operator.ModelProvenanceObservation.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleModelProvenanceObservationSync(ctx, msg); err != nil {
-			rs.logger.Error("Model provenance observation handler failed", "error", err)
-		}
+	rs.actionHandlers = map[constants.ActionType]verifiedActionHandler{
+		constants.ActionTypeHeartbeat: fireAndForgetActionHandler(rs.heartbeat.HandleRequest),
+		constants.ActionTypeExecuteBash: fireAndForgetActionHandler(rs.commands.HandleExecutionRequest),
+		constants.ActionTypeCancel: fireAndForgetActionHandler(rs.commands.HandleCancelRequest),
+		constants.ActionTypeFileEdit: fireAndForgetActionHandler(rs.fileOps.HandleFileEditRequest),
+		constants.ActionTypeFsList: fireAndForgetActionHandler(rs.fileOps.HandleFsListRequest),
+		constants.ActionTypeFsRead: fireAndForgetActionHandler(rs.fileOps.HandleFsReadRequest),
+		constants.ActionTypeFsGrep: fireAndForgetActionHandler(rs.fileOps.HandleFsGrepRequest),
+		constants.ActionTypePortCheck: fireAndForgetActionHandler(rs.ports.HandlePortCheckRequest),
+		constants.ActionTypeOllamaModelInventory: fireAndForgetActionHandler(rs.ollama.HandleInventoryRequest),
+		constants.ActionTypeOllamaModelResidency: fireAndForgetActionHandler(rs.ollama.HandleResidencyRequest),
+		constants.ActionTypeFetchLogs: fireAndForgetActionHandler(rs.history.HandleFetchLogsRequest),
+		constants.ActionTypeFetchHistory: fireAndForgetActionHandler(rs.history.HandleFetchHistoryRequest),
+		constants.ActionTypeFetchFileHistory: fireAndForgetActionHandler(rs.history.HandleFetchFileHistoryRequest),
+		constants.ActionTypeRestoreFile: fireAndForgetActionHandler(rs.history.HandleRestoreFileRequest),
+		constants.ActionTypeFetchFileDiff: fireAndForgetActionHandler(rs.history.HandleFetchFileDiffRequest),
+		constants.ActionTypeDocumentUpdate: rs.handleDocumentUpdateSync,
+		constants.ActionTypeDocumentDelete: rs.handleDocumentDeleteSync,
+		constants.ActionTypeEvalAnswer: rs.handleEvalAnswerRequestSync,
+		constants.ActionTypeInference: rs.handleInferenceRequestSync,
+		constants.ActionTypeProviderBoundaryObservation: rs.handleProviderBoundaryObservationSync,
+		constants.ActionTypeModelProvenanceObservation: rs.handleModelProvenanceObservationSync,
+		constants.ActionTypeShutdown: func(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+			return rs.handleShutdownRequest(msg)
+		},
+		constants.ActionTypePlatformEnrollmentCreate: rs.platformEnrollment.HandleCreate,
+		constants.ActionTypePlatformEnrollmentDecide: rs.platformEnrollment.HandleDecide,
+		constants.ActionTypePlatformEnrollmentIssue: rs.platformEnrollment.HandleIssue,
+		constants.ActionTypePlatformEnrollmentPersistPolicy: rs.platformEnrollment.HandlePersistPolicy,
+		constants.ActionTypePlatformEnrollmentCreateSession: rs.platformEnrollment.HandleCreateSession,
+		constants.ActionTypePlatformEnrollmentRevoke: rs.platformEnrollment.HandleRevoke,
 	}
 }
 
 func (rs *OperatorPubSubService) buildGatewayHandlers() {
-	rs.handlers[constants.Event.Operator.Mcp.CallRequested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleMcpCallRequestSync(ctx, msg); err != nil {
-			rs.logger.Error("MCP call request handler failed", "error", err)
-		}
-	}
-	rs.handlers[constants.Event.Operator.A2a.CallRequested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-		if _, err := rs.handleA2aCallRequestSync(ctx, msg); err != nil {
-			rs.logger.Error("A2A call request handler failed", "error", err)
-		}
-	}
+	rs.actionHandlers[constants.ActionTypeMcpCall] = rs.handleMcpCallRequestSync
+	rs.actionHandlers[constants.ActionTypeA2aCall] = rs.handleA2aCallRequestSync
 }
 
 func (rs *OperatorPubSubService) Start(ctx context.Context) error {
@@ -817,6 +782,19 @@ func gatewayDispatchedVerificationContext(parent context.Context, env *govpkg.Go
 
 // handleGovernanceEnvelope processes a GovernanceEnvelope using the TransactionVerifier, Consensus and Actuator services.
 func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.GovernanceEnvelope) {
+	if _, err := constants.ValidateGovernedRequest(constants.EventType(env.EventType)); err == nil {
+		if err := constants.ValidateGovernedEnvelopeFields(
+			constants.EventType(env.EventType),
+			constants.ActionType(env.ActionType),
+		); err != nil {
+			rs.logger.Error("Governed envelope field validation failed",
+				string(constants.ConnectionStateError), err,
+				"message_id", env.Id)
+			rs.logBlockedTransaction(env, err)
+			return
+		}
+	}
+
 	var verified *governance.VerifiedTransaction
 
 	// Strict transaction verification (P0: fail-closed gate before any dispatch)
@@ -936,59 +914,24 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 	}
 	rs.logger.Info("Executing verified transaction through Actuator", "event_type", eventType)
 
-	// Platform enrollment actions are synchronous: each handler performs a
-	// typed mutation and returns a receipt summary string for the L5
-	// actuator to stamp into the signed final receipt. These event types
-	// are not registered in the handlers map (they use a different
-	// signature), so they must be dispatched before the handler lookup.
-	switch eventType {
-	case constants.EventPlatformEnrollmentCreateRequested:
-		return rs.platformEnrollment.HandleCreate(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentDecideRequested:
-		return rs.platformEnrollment.HandleDecide(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentIssueRequested:
-		return rs.platformEnrollment.HandleIssue(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentPersistPolicyRequested:
-		return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentCreateSessionRequested:
-		return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
-	case constants.EventPlatformEnrollmentRevokeRequested:
-		return rs.platformEnrollment.HandleRevoke(ctx, pubsubMsg)
-	case constants.Event.Operator.ShutdownRequested:
-		return rs.handleShutdownRequest(pubsubMsg)
+	if handler, ok := rs.legacyEventHandlers[eventType]; ok {
+		handler(ctx, pubsubMsg)
+		return "", nil
 	}
 
-	handler, ok := rs.handlers[eventType]
+	actionType, err := constants.ValidateGovernedRequest(eventType)
+	if err != nil {
+		rs.logger.Error("No governed action for event type", "event_type", string(eventType), string(constants.ConnectionStateError), err)
+		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), err)
+	}
+
+	handler, ok := rs.actionHandlers[actionType]
 	if !ok {
-		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
-		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), constants.ErrTxUnknownActionType)
+		rs.logger.Error("No handler registered for action type", "action_type", string(actionType))
+		return "", fmt.Errorf("no handler for action type %s: %w", string(actionType), constants.ErrTxUnknownActionType)
 	}
 
-	// Special case for EVAL_ANSWER which is synchronous and returns the answer as summary
-	if eventType == constants.Event.Operator.Eval.AnswerRequested {
-		return rs.handleEvalAnswerRequestSync(ctx, pubsubMsg)
-	}
-
-	// MCP_CALL must return the downstream MCP server's result text as the
-	// receipt summary so the gateway can forward it back to the client.
-	if eventType == constants.Event.Operator.Mcp.CallRequested {
-		return rs.handleMcpCallRequestSync(ctx, pubsubMsg)
-	}
-	if eventType == constants.Event.Operator.A2a.CallRequested {
-		return rs.handleA2aCallRequestSync(ctx, pubsubMsg)
-	}
-	if eventType == constants.Event.Operator.Inference.Requested {
-		return rs.handleInferenceRequestSync(ctx, pubsubMsg)
-	}
-	if eventType == constants.Event.Operator.ProviderBoundaryObservation.Requested {
-		return rs.handleProviderBoundaryObservationSync(ctx, pubsubMsg)
-	}
-	if eventType == constants.Event.Operator.ModelProvenanceObservation.Requested {
-		return rs.handleModelProvenanceObservationSync(ctx, pubsubMsg)
-	}
-
-	handler(ctx, pubsubMsg)
-	return "", nil
+	return handler(ctx, pubsubMsg)
 }
 
 // handleMcpCallRequestSync is the Actuator egress for MCP_CALL transactions:

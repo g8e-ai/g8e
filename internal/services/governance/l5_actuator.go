@@ -819,6 +819,11 @@ func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *ope
 // buildReceiptRecord constructs an ActionReceiptRecord from a GovernanceEnvelope and ActionReceipt.
 // This is the single source of truth for record construction, used by both LogReceipt and logReceiptDocument.
 func BuildReceiptRecord(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) *models.ActionReceiptRecord {
+	eventType := constants.EventType(env.EventType)
+	if eventType == "" && r.EventType != "" {
+		eventType = constants.EventType(r.EventType)
+	}
+
 	return &models.ActionReceiptRecord{
 		TransactionID:     r.TransactionId,
 		TransactionHash:   r.TransactionHash,
@@ -827,6 +832,7 @@ func BuildReceiptRecord(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionRe
 		OperatorSessionID: env.OperatorSessionId,
 		RequestorUserID:   env.RequestorUserId,
 		ActingAppID:       env.ActingAppId,
+		EventType:         eventType,
 		ActionType:        constants.ActionType(env.ActionType),
 		TargetResource:    env.TargetResource,
 		Status:            r.Status,
