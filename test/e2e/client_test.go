@@ -372,6 +372,39 @@ func (c *E2EClient) GetAuditSummary(ctx context.Context) (models.AuditSummaryRes
 	return decodeJSON[models.AuditSummaryResponse](body, "audit summary")
 }
 
+// VerifyAuditChain fetches GET /api/v1/audit/verify and returns the typed response.
+func (c *E2EClient) VerifyAuditChain(ctx context.Context, fromSeq int64) (models.AuditVerifyResponse, error) {
+	path := constants.APIPaths.AuditVerify
+	if fromSeq > 0 {
+		path += fmt.Sprintf("?from_seq=%d", fromSeq)
+	}
+	req, err := c.newAuthenticatedRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return models.AuditVerifyResponse{}, err
+	}
+	body, _, err := doRequest(c.mtlsClient, req, http.StatusOK)
+	if err != nil {
+		return models.AuditVerifyResponse{}, fmt.Errorf("verify audit chain: %w", err)
+	}
+	return decodeJSON[models.AuditVerifyResponse](body, "audit verify")
+}
+
+// DispatchCommandExpectStatus posts a dispatch request and returns the HTTP status
+// and raw body without requiring success.
+func (c *E2EClient) DispatchCommandExpectStatus(ctx context.Context, body dispatchRequestJSON, expectedStatus int) (int, []byte, error) {
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return 0, nil, fmt.Errorf("marshal dispatch body: %w", err)
+	}
+	req, err := c.newAuthenticatedRequest(ctx, http.MethodPost, constants.APIPaths.OperatorsCommands, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	respBody, status, err := doRequest(c.mtlsClient, req, expectedStatus)
+	return status, respBody, err
+}
+
 // GetAuditEvents fetches the authenticated audit events list and returns the
 // typed response.
 func (c *E2EClient) GetAuditEvents(ctx context.Context) (models.AuditEventsResponse, error) {
@@ -413,7 +446,7 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 
 	reqBody := dispatchRequestJSON{
 		TargetOperatorSessionID: target.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType:               string(constants.EventOperatorFilesystemReadRequested),
 		Payload:                 payload,
 		TargetResource:          constants.PathEtcHostname,
 	}

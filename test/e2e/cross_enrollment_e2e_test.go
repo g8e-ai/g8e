@@ -335,7 +335,7 @@ func dispatchFsReadToOperator(t *testing.T, ctx context.Context, operatorSession
 
 	reqBody := dispatchRequestJSON{
 		TargetOperatorSessionID: operatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType:               string(constants.EventOperatorFilesystemReadRequested),
 		Payload:                 payload,
 		TargetResource:          constants.PathEtcHostname,
 	}

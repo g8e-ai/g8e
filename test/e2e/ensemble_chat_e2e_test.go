@@ -100,6 +100,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 
 	var foundReceipt *struct {
 		TransactionID   string
+		EventType       string
 		ActionType      string
 		TargetResource  string
 		Signature       string
@@ -131,6 +132,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 			}
 			foundReceipt = &struct {
 				TransactionID   string
+				EventType       string
 				ActionType      string
 				TargetResource  string
 				Signature       string
@@ -138,6 +140,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 				ActingAppID     string
 			}{
 				TransactionID:   r.TransactionID,
+				EventType:       string(r.EventType),
 				ActionType:      string(r.ActionType),
 				TargetResource:  r.TargetResource,
 				Signature:       r.Signature,
@@ -150,6 +153,10 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	}, 60*time.Second, 2*time.Second, "FILE_EDIT receipt for %s must be recorded within 60s", filePath)
 
 	require.NotNil(t, foundReceipt, "correlated FILE_EDIT receipt must be found")
+	assert.Equal(t, string(constants.EventOperatorFileEditRequested), foundReceipt.EventType,
+		"receipt must carry the originating governed request event_type")
+	assert.Equal(t, string(constants.ActionTypeFileEdit), foundReceipt.ActionType,
+		"receipt must carry the registry-derived action_type")
 	assert.NotEmpty(t, foundReceipt.TransactionID, "receipt must carry transaction_id")
 	assert.GreaterOrEqual(t, len(foundReceipt.Signature), 64, "receipt signature must be valid hex Ed25519 signature")
 	assert.Equal(t, e2eClient.userID, foundReceipt.RequestorUserID, "receipt requestor_user_id must match authenticated user")
@@ -163,7 +170,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 
 	readReqBody := dispatchRequestJSON{
 		TargetOperatorSessionID: targetSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType:               string(constants.EventOperatorFilesystemReadRequested),
 		Payload:                 payload,
 		TargetResource:          filePath,
 	}
