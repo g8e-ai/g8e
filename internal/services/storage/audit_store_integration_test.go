@@ -10,6 +10,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
@@ -239,4 +240,90 @@ func TestSQLAuditStore_RecordActionReceiptWithoutSessionAutoCreatesRow(t *testin
 	require.NotNil(t, persisted)
 	require.NotNil(t, persisted.ActionReceipt)
 	assert.Equal(t, record.TransactionID, persisted.ActionReceipt.GetTransactionId())
+}
+
+func TestSQLAuditStore_VerifyChain_AppendAndTamper(t *testing.T) {
+	ass := newIntegrationAuditStore(t)
+	require.NoError(t, ass.CreateSession("chain-session", constants.SessionTypeOperator, "Chain Session", "user-1"))
+
+	events := []*Event{
+		{
+			OperatorSessionID: "chain-session",
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Audit.Command,
+			ContentText:       "first",
+			CommandExitCode:   constants.ExitCodeNone,
+		},
+		{
+			OperatorSessionID: "chain-session",
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Audit.AIMsg,
+			ContentText:       "second",
+			CommandExitCode:   constants.ExitCodeNone,
+		},
+	}
+	for _, event := range events {
+		_, err := ass.RecordEvent(event)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, ass.VerifyChain(context.Background(), 0))
+
+	_, err := ass.db.ExecWithRetry(`UPDATE events SET content_digest = ? WHERE seq = 1`, "tampered")
+	require.NoError(t, err)
+	err = ass.VerifyChain(context.Background(), 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "hash mismatch")
+}
+
+func TestSQLAuditStore_VerifyChain_BackfillLegacyRows(t *testing.T) {
+	fileSvc, _ := newTestFileSvc(t, testutil.TempDir(t))
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := CreateTestVault(t, fileSvc, privKey)
+
+	config := DefaultAuditStoreConfig()
+	config.EncryptionVault = testVault
+
+	ass, err := NewSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, ass.Close()) })
+
+	require.NoError(t, ass.CreateSession("legacy-session", constants.SessionTypeOperator, "Legacy", "user-legacy"))
+	_, err = ass.db.ExecWithRetry(`
+		INSERT INTO events (operator_session_id, timestamp, type, content_text, command_exit_code, stored_locally)
+		VALUES (?, ?, ?, ?, ?, 1)
+	`, "legacy-session", "2026-01-01T00:00:00.000000Z", string(constants.Event.Operator.Audit.UserMsg), "legacy payload", constants.ExitCodeNone)
+	require.NoError(t, err)
+
+	require.NoError(t, MigrateEventChainColumns(ass.db, ass.logger, ass.encryptionVault))
+	require.NoError(t, ass.VerifyChain(context.Background(), 0))
+}
+
+func TestPruneChainedAuditEvents_WritesCheckpoint(t *testing.T) {
+	ass := newIntegrationAuditStore(t)
+	require.NoError(t, ass.CreateSession("prune-session", constants.SessionTypeOperator, "Prune", "user-prune"))
+
+	oldTimestamp := time.Now().UTC().AddDate(0, 0, -120)
+	_, err := ass.RecordEvent(&Event{
+		OperatorSessionID: "prune-session",
+		Timestamp:         oldTimestamp,
+		Type:              constants.Event.Operator.Audit.Command,
+		ContentText:       "old event",
+		CommandExitCode:   constants.ExitCodeNone,
+	})
+	require.NoError(t, err)
+
+	cutoff := time.Now().UTC().AddDate(0, 0, -30).Format(time.RFC3339Nano)
+	require.NoError(t, PruneChainedAuditEvents(context.Background(), ass.db, ass.logger, cutoff))
+
+	var checkpointCount int
+	require.NoError(t, ass.db.QueryRowWithRetry(`SELECT COUNT(*) FROM audit_chain_checkpoints`).Scan(&checkpointCount))
+	assert.Positive(t, checkpointCount)
+
+	var remaining int
+	require.NoError(t, ass.db.QueryRowWithRetry(`SELECT COUNT(*) FROM events WHERE type != ?`, string(constants.EventPlatformAuditChainCheckpointed)).Scan(&remaining))
+	assert.Zero(t, remaining)
+
+	require.NoError(t, ass.VerifyChain(context.Background(), 0))
 }
