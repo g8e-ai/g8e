@@ -242,6 +242,7 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 			EvalExplorerAddr:                 "127.0.0.1:5173",
 			EvalExplorerRoot:                 "/eval-explorer",
 			PublicSpectatorTrustedProxyCIDRs: []string{"172.28.0.1/32"},
+			EnsembleUpstreamURL:              "http://127.0.0.1:8000",
 		},
 	}
 

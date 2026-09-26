@@ -161,16 +161,15 @@ func dockerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docker",
 		Short: "Manage the Docker Compose unified stack",
-		Long: `Manage the root Docker Compose unified stack (gateway, operator, ensemble, dashboard).
+		Long: `Manage the root Docker Compose unified stack (gateway, operator, inference operator, ensemble, dashboard).
 
 Use ` + "`" + `g8e docker init` + "`" + ` to build images and bring the full evaluation stack online in one
 command (owner enrollment, platform approvals, readiness checks). See
 docs/guides/unified_stack.md.
 
-The root ` + "`" + `docker-compose.yml` + "`" + ` deploys the full platform. Only the gateway starts
-by default; the operator, ensemble, and dashboard are gated behind the
-` + "`" + `bootstrapped` + "`" + ` profile and require owner enrollment before they can start. Pass
---profile bootstrapped (or --full) to bring up the workloads after enrolling.
+The root ` + "`" + `docker-compose.yml` + "`" + ` deploys the full platform directly in the default profile.
+Host binaries in ` + "`" + `bin/` + "`" + ` are mounted via volume; restarting the operators (` + "`" + `g8e docker restart` + "`" + `)
+aligns them with a local ` + "`" + `make build` + "`" + ` without rebuilding container images.
 
 Run these commands from the repository root where ` + "`" + `docker-compose.yml` + "`" + ` lives.`,
 	}
@@ -178,6 +177,7 @@ Run these commands from the repository root where ` + "`" + `docker-compose.yml`
 		dockerInitCmd(),
 		dockerStartCmd(),
 		dockerStopCmd(),
+		dockerRestartCmd(),
 		dockerStatusCmd(),
 		dockerBuildCmd(),
 		dockerCleanCmd(),
@@ -189,24 +189,52 @@ Run these commands from the repository root where ` + "`" + `docker-compose.yml`
 	return cmd
 }
 
-// dockerFullStackProfiles returns the compose profiles required for the full
-// evaluation topology (data operator, inference operator, ensemble, dashboard).
-func dockerFullStackProfiles() []string {
-	return []string{
-		constants.DockerBootstrappedProfile,
-		constants.DockerEvaluationProfile,
+// dockerRestartCmd restarts services in the Docker Compose unified stack.
+func dockerRestartCmd() *cobra.Command {
+	var profile string
+
+	cmd := &cobra.Command{
+		Use:   "restart [service...]",
+		Short: "Restart services in the Docker Compose unified stack",
+		Long: `Restart services in the Docker Compose unified stack.
+
+If no services are specified, restarts g8e-operator and g8e-inference-operator
+so they align with the current host-mounted binary (from 'make build').`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := checkDockerComposeFileExists(); err != nil {
+				return err
+			}
+			restartArgs := []string{"restart"}
+			if len(args) > 0 {
+				restartArgs = append(restartArgs, args...)
+			} else {
+				restartArgs = append(restartArgs, "g8e-operator", "g8e-inference-operator")
+			}
+			cmd.Printf("Restarting %s...\n", strings.Join(restartArgs[1:], ", "))
+			if err := runDockerCompose(restartArgs, profile); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+			}
+			cmd.Println("\nRestart complete. Operators are aligned with current binary.")
+			return nil
+		},
 	}
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target")
+	return cmd
+}
+
+// dockerFullStackProfiles returns the compose profiles required for the full
+// evaluation topology. Because the unified stack now starts in the default profile,
+// this returns nil.
+func dockerFullStackProfiles() []string {
+	return nil
 }
 
 // resolveDockerProfiles returns compose profiles to activate for start/build.
-// When full is true and no explicit profile override is set, returns bootstrapped
-// and evaluation so the inference operator starts with the rest of the stack.
+// Because the unified stack runs in the default profile, returns nil unless an
+// explicit profile is specified.
 func resolveDockerProfiles(full bool, profile string) []string {
 	if profile != "" {
 		return []string{profile}
-	}
-	if full {
-		return dockerFullStackProfiles()
 	}
 	return nil
 }
@@ -478,6 +506,8 @@ func dockerTeardownProfiles(explicit string) []string {
 	return []string{
 		constants.DockerBootstrappedProfile,
 		constants.DockerEvaluationProfile,
+		constants.DockerCrossEnrollProfile,
+		constants.DockerG8ellamaProfile,
 	}
 }
 
@@ -514,27 +544,26 @@ func dockerStartCmdWithConfig(
 		Short: "Start the Docker Compose unified stack",
 		Long: `Start the Docker Compose unified stack in the background.
 
-By default only the gateway starts. Pass --full (or --profile bootstrapped) to
-also start the operator, ensemble, and dashboard workloads, which require
-owner enrollment before they become ready.
+Starts the full unified stack: gateway, data operator, inference operator,
+ensemble, and dashboard.
 
-When --full is set, the command walks the owner through interactive enrollment:
+When starting without --skip-enroll, the command walks the owner through interactive enrollment:
   1. Enrolls the CLI user (the first owner) with the gateway.
   2. Prompts to approve the Ensemble platform enrollment request.
   3. Prompts to approve the Dashboard platform enrollment request.
   4. Prompts to approve the Operator platform enrollment request.
 
 Each component prompt accepts y to approve or n (or any other input) to skip.
-Use --skip-enroll to start the bootstrapped profile without the interactive
-walkthrough (the workloads will block waiting for manual approval).`,
+Use --skip-enroll to start the stack without the interactive walkthrough
+(the workloads will block waiting for manual approval).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
 			profiles := resolveDockerProfiles(full, profile)
-			scope := "gateway"
+			scope := "unified stack"
 			if len(profiles) > 0 {
-				scope = fmt.Sprintf("full stack (profiles %s)", strings.Join(profiles, ", "))
+				scope = fmt.Sprintf("unified stack (profiles %s)", strings.Join(profiles, ", "))
 			}
 
 			fileSvc, err := fileSvcFactory("", slog.Default())
@@ -546,7 +575,7 @@ walkthrough (the workloads will block waiting for manual approval).`,
 			}
 
 			var walkthroughDeps *dockerStartDeps
-			if len(profiles) > 0 && !skipEnroll {
+			if !skipEnroll {
 				cfg, err := configLoader("")
 				if err != nil {
 					return err
@@ -569,13 +598,6 @@ walkthrough (the workloads will block waiting for manual approval).`,
 			cmd.Println("Run 'g8e docker status' to check service status.")
 			cmd.Println("Run 'g8e docker logs' to follow logs.")
 
-			if len(profiles) == 0 {
-				cmd.Println()
-				cmd.Println("To bring up the operator, ensemble, and dashboard after enrolling")
-				cmd.Println("the first owner, run 'g8e docker start --full'.")
-				return nil
-			}
-
 			if skipEnroll {
 				cmd.Println()
 				cmd.Println("--skip-enroll set: workloads are started but will block waiting")
@@ -588,9 +610,9 @@ walkthrough (the workloads will block waiting for manual approval).`,
 			return runDockerStartWalkthrough(cmd, *walkthroughDeps)
 		},
 	}
-	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
-	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Start the bootstrapped profile without the interactive enrollment walkthrough")
+	cmd.Flags().BoolVar(&full, "full", true, "Start the full stack (enabled by default)")
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (optional)")
+	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Start without the interactive enrollment walkthrough")
 	return cmd
 }
 
@@ -1157,13 +1179,9 @@ Use --no-cache=false to reuse the Docker build cache.`,
 				return err
 			}
 			profiles := resolveDockerProfiles(full, profile)
-			scope := "gateway"
+			scope := "unified stack"
 			if len(profiles) > 0 {
-				scope = fmt.Sprintf("full stack (profiles %s)", strings.Join(profiles, ", "))
-			} else {
-				cmd.Println("\nWarning: restarting gateway only. Operator, ensemble, inference-operator, and dashboard stay down.")
-				cmd.Println("Provider-boundary observation ingest will not run until the full stack is up.")
-				cmd.Println("Use --full (or ./g8e docker init --headless) before eval campaign execute.")
+				scope = fmt.Sprintf("unified stack (profiles %s)", strings.Join(profiles, ", "))
 			}
 			cmd.Printf("\nStarting Docker Compose %s...\n", scope)
 			if err := runDockerCompose([]string{"up", "-d"}, profiles...); err != nil {

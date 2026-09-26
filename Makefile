@@ -603,7 +603,7 @@ test-integration:
 #   ./g8e test e2e --run TestPlatformEnrollment_Headless
 #
 # Cross-enrollment scenarios (require --profile cross-enrollment):
-#   docker compose --profile bootstrapped --profile cross-enrollment up -d
+#   docker compose --profile cross-enrollment up -d
 #   ./g8e auth enroll user --headless
 #   ./g8e test e2e --run TestCrossEnrollment_GatewayAsOperator_PendingDiscovery
 #   ./g8e test e2e --run TestCrossEnrollment_GatewayAsOperator_ApproveAndActivate

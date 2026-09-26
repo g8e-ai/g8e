@@ -105,7 +105,7 @@ Rebuild and replace only the affected platform container when its image changed:
 ```bash
 cd /home/bob/g8e
 docker compose build ensemble
-docker compose --profile bootstrapped up -d --no-deps ensemble
+docker compose up -d --no-deps ensemble
 curl -fsS http://127.0.0.1:8000/health
 ```
 

@@ -16,11 +16,15 @@ The supported Docker Compose flow starts the gateway, operator, ensemble, and da
 From the repository root, build the images and start the full stack:
 
 ```bash
+# Pure Docker:
+docker compose up -d
+
+# Or CLI:
 ./g8e docker build
-./g8e docker start --full
+./g8e docker start
 ```
 
-The default Compose profile starts only the gateway. The `bootstrapped` profile contains the operator, ensemble, and dashboard, and those workloads remain pending until an enrolled owner approves them. The helper above manages that flow; see the [Unified Docker Stack guide](../docs/guides/unified_stack.md) for the manual commands and troubleshooting steps.
+The unified stack starts all 5 core services (gateway, data operator, inference operator, ensemble, and dashboard) together in the default Compose profile. Workloads remain pending until an enrolled owner approves them. The helper above manages that flow; see the [Unified Docker Stack guide](../docs/guides/unified_stack.md) for the manual commands and troubleshooting steps.
 
 After enrollment completes, the ensemble health endpoint is available at `http://localhost:8000/health`. Set `G8E_ENSEMBLE_PORT` before starting Compose to publish a different host port.
 

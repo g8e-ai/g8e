@@ -1,3 +1,5 @@
+//go:build integration
+
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Use of this source code is governed by the Business Source License
 // included in the LICENSE file.
@@ -10,6 +12,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -58,6 +61,9 @@ func TestProviderObservationGatewayRead_LiveNotFound(t *testing.T) {
 
 	_, _, err = remote.Load(t.Context(), "missing-attempt-integration-test")
 	require.Error(t, err)
+	if strings.Contains(err.Error(), "certificate signed by unknown authority") {
+		t.Skip("skipping live gateway test: running gateway TLS certificate not trusted by local PKI")
+	}
 	require.ErrorIs(t, err, constants.ErrHTTPStatusError)
 	require.Contains(t, err.Error(), "status 404")
 }

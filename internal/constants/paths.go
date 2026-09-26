@@ -249,6 +249,7 @@ const (
 	DockerBootstrappedProfile        = "bootstrapped"
 	DockerCrossEnrollProfile         = "cross-enrollment"
 	DockerEvaluationProfile          = "evaluation"
+	DockerG8ellamaProfile            = "g8ellama"
 	DockerGatewayContainer           = "g8e-gateway"
 	DockerOperatorContainer          = "g8e-operator"
 	DockerEnsembleContainer          = "ensemble"

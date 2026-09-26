@@ -37,6 +37,7 @@ func TestDockerCommandSubcommands(t *testing.T) {
 			"init",
 			"start",
 			"stop",
+			"restart",
 			"status",
 			"build",
 			"clean",
@@ -334,6 +335,8 @@ func TestDockerTeardownProfiles(t *testing.T) {
 	assert.Equal(t, []string{
 		constants.DockerBootstrappedProfile,
 		constants.DockerEvaluationProfile,
+		constants.DockerCrossEnrollProfile,
+		constants.DockerG8ellamaProfile,
 	}, dockerTeardownProfiles(""))
 }
 

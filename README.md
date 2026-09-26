@@ -96,35 +96,44 @@ The recommended first run is the two-phase Docker Compose deployment. It starts 
 - A browser with WebAuthn support for interactive owner enrollment
 - Ports 8080, 8443, 8000, 3000, 8081, 8082, and 5173 available
 
-### 1. Start the Gateway
+### 1. Start the unified stack
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git
 cd g8e
 cp .env.example .env
 docker compose up -d --build
-docker cp g8e-gateway:/g8e ./g8e
+docker compose cp g8e-gateway:/g8e ./g8e && cp ./g8e bin/g8e
 ```
 
-Compose requires `G8E_OLLAMA_ENDPOINT` to be present in `.env` even when the evaluation profile is inactive. The example supplies a value; configure the actual approved remote Ollama endpoint only when running model campaigns.
+The unified stack starts all 5 core services (Gateway, Data Operator, Inference Operator, ensemble, dashboard) together. Workloads automatically submit platform enrollment requests and wait for owner approval.
 
 ### 2. Enroll the first owner
 
 ```bash
+# Host CLI (interactive passkey):
 ./g8e auth enroll user -e localhost
+
+# Or pure Docker (headless inside container):
+docker compose exec g8e-gateway /g8e auth enroll user --headless -e localhost
 ```
 
 This creates the first owner, issues CLI mTLS credentials, installs the Gateway root CA with consent, and opens the passkey ceremony. For an mTLS-only CLI without browser enrollment, add `--headless`.
 
-### 3. Start and approve the suite workloads
+### 3. Approve the suite workloads
 
 ```bash
-docker compose --profile bootstrapped up -d
+# Host CLI:
 ./g8e auth enroll pending
 
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
+./g8e auth enroll approve <inference-operator-request-id> --yes
+
+# Or pure Docker:
+docker compose exec g8e-gateway /g8e auth enroll pending
+docker compose exec g8e-gateway /g8e auth enroll approve <request-id> --yes
 ```
 
 Each workload generates its own key material and remains unready until the owner approves that exact enrollment request. Compare component identity and fingerprints before approval.

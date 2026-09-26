@@ -9,42 +9,70 @@ Run all commands from the repository root unless noted otherwise.
 
 ## Prerequisites
 
-- Docker Engine with the Docker Compose v2 plugin.
-- Built `./g8e` binary (`make build`).
+- Docker Engine with the Docker Compose v2 plugin. **Note: Local Go or `make` are NOT required on the host** — all builds can run inside Docker.
+- Optional: Host Go toolchain and `make` (when developing locally and using `make build`).
 - Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **3000**, **8081**, **8082**, **5173**. The mirror and explorer ports are loopback-only in the root Compose file.
 - Repository-root `.env` (copy from `.env.example`). Remove or comment out the sample `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` values when using dispatch-carried campaign authority.
-- `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider** (not loopback on the campaign host when Ollama runs elsewhere). Compose fails fast when this variable is unset because the evaluation profile's Inference Operator interpolates it.
+- `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider** (defaults to `http://127.0.0.1:11434` if unset).
 - Remote Ollama reachable from the Docker network, for example: `curl -fsS http://192.168.1.2:11434/api/version`.
 
-For interactive owner enrollment you need a browser with WebAuthn support. For headless campaign operation use `./g8e auth enroll user --headless -e localhost`.
+For interactive owner enrollment you need a browser with WebAuthn support. For headless campaign operation use `docker compose exec g8e-gateway /g8e auth enroll user --headless -e localhost` or `./g8e auth enroll user --headless -e localhost`.
 
-After source changes, rebuild images before restarting containers:
+### Binary building, volume mounts, and version alignment
 
-```bash
-make build
-./g8e docker build
-```
+The platform leverages Docker volume mounts (`./bin:/opt/g8e/bin:ro`) so that a local `make build` is gospel for the entire platform without requiring Docker image rebuilds. At the same time, the host launching this is only required to have Docker — the Dockerfile uses the repository `Makefile` inside multi-stage container builds.
 
-## Compose profiles and services
+**Strict Order of Binary Precedence inside Containers:**
+1. `G8E_BIN` explicit environment variable override (if set and executable).
+2. Host-mounted binary `/opt/g8e/bin/g8e` (from local `make build` gospel).
+3. Host-mounted architecture binary `/opt/g8e/bin/g8e-linux-${ARCH}` (from `make build-linux`).
+4. Container image baked-in binary `/g8e` (built in container via `Makefile` during image build).
 
-The root `docker-compose.yml` defines platform services on the `g8e-net` bridge network. Profiles control which containers start; they do not bypass owner enrollment.
+**Building and Aligning Operator Versions:**
+- **Local build (Make is gospel):** Run `make build`. The host binary is written to `bin/g8e` and `./g8e`. Restart the operators to align all versions immediately:
+  ```bash
+  # Pure Docker:
+  docker compose restart g8e-operator g8e-inference-operator
+
+  # ./g8e docker CLI equivalent:
+  ./g8e docker restart
+
+  # make equivalent:
+  make restart-operators
+  ```
+- **Docker-only build (no host Make required):** Build images via Docker and export `./g8e`:
+  ```bash
+  # Pure Docker:
+  docker compose build
+  docker compose cp g8e-gateway:/g8e ./g8e && cp ./g8e bin/g8e
+
+  # ./g8e docker CLI equivalent:
+  ./g8e docker build
+
+  # make equivalent:
+  make docker-build
+  ```
+
+## Compose services and unified stack
+
+The root `docker-compose.yml` defines the core platform services on the `g8e-net` bridge network. All five core services start together in the default profile without requiring clunky bootstrap profiles:
 
 | Service | Profile | Published ports | Role |
 | --- | --- | --- | --- |
 | `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS; 8081 private mirror ingest, 8082 public mirror read/SSE, 5173 evaluation explorer (loopback) | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A, public mirror, and evaluation explorer. |
-| `g8e-operator` | `bootstrapped` | none | **Data Operator** — governed tool/filesystem/process boundary for the Operator container runtime. |
-| `g8e-inference-operator` | `evaluation` | none | **Inference Operator** — governed inference to the remote Ollama provider. Requires `G8E_OLLAMA_ENDPOINT`; campaign authority travels on each governed dispatch. |
-| `ensemble` | `bootstrapped` | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
-| `dashboard` | `bootstrapped` | 3000 | g8ed browser static host; it is not the evaluation acceptance UI. |
+| `g8e-operator` | default | none | **Data Operator** — governed tool/filesystem/process boundary for the Operator container runtime. |
+| `g8e-inference-operator` | default | none | **Inference Operator** — governed inference to the remote Ollama provider. |
+| `ensemble` | default | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
+| `dashboard` | default | 3000 | g8ed browser static host; it is not the evaluation acceptance UI. |
 
-The Gateway and Operator containers use the same Go image. The evaluation acceptance topology requires **both** `bootstrapped` and `evaluation` profiles. The Observer Operator is a separately enrolled process on the remote provider host and is never a service in the unified Compose stack.
+The Gateway and Operator containers use the same image and share the host binary mount. All 5 services start with `docker compose up -d`. The Observer Operator is a separately enrolled process on the remote provider host and is never a service in the unified Compose stack.
 
-The root Compose file also defines optional profiles that are not part of the standard campaign stack:
+The root Compose file also defines optional profiles for specialized testing:
 
 | Profile | Services | Purpose |
 | --- | --- | --- |
 | `cross-enrollment` | `g8e-gateway-secondary` | Runs a second gateway binary in outbound Operator mode against the primary Gateway. |
-| `g8ellama` | `g8e-gateway-user`, `g8e-inference` | Legacy separate User Gateway and Inference Node topology for a remote Ollama provider; it is not used for model campaigns. |
+| `g8ellama` | `g8e-gateway-user`, `g8e-inference` | Legacy separate User Gateway and Inference Node topology for a remote Ollama provider. |
 
 The `g8ellama` services have separate volumes and ports (`8090`/`8453` for the User Gateway by default); do not combine that profile with the campaign topology unless you intend to run both independent deployments.
 
@@ -206,7 +234,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 | `G8E_PUBLIC_MIRROR_PRIVATE_PORT` | `8081` | Loopback-only authenticated public-mirror ingest listener |
 | `G8E_PUBLIC_MIRROR_PUBLIC_PORT` | `8082` | Loopback-only anonymous public-mirror read/SSE listener |
 | `G8E_EVAL_EXPLORER_PORT` | `5173` | Loopback-only evaluation explorer listener |
-| `G8E_OLLAMA_ENDPOINT` | — | Remote Ollama URL for Inference Operator (required for the evaluation profile and `docker init`) |
+| `G8E_OLLAMA_ENDPOINT` | `http://127.0.0.1:11434` | Remote Ollama URL for Inference Operator (required for live inference campaigns and `docker init`) |
 | `G8E_INFERENCE_PRIMARY_MODEL` | `gemm4:e4b` | Primary model tag passed to the Inference Operator |
 | `G8E_INFERENCE_ASSISTANT_MODEL` | `qwen3:1.7b` | Assistant model tag passed to the Inference Operator |
 | `G8E_INFERENCE_LITE_MODEL` | `smol-7b:latest` | Lite model tag passed to the Inference Operator |
@@ -216,42 +244,81 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 
 ## Standard bootstrap workflow
 
-### 1. Start the Gateway
+### 1. Start the unified stack
+
+All five core services (Gateway, Data Operator, Inference Operator, ensemble, and dashboard) start together in the default profile without requiring multi-stage profile bootstrapping. Workloads automatically submit platform enrollment requests and poll for owner approval.
 
 ```bash
+# Pure Docker:
 docker compose up -d
 until curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null; do sleep 2; done
+
+# ./g8e docker CLI equivalent:
+./g8e docker start
+
+# make equivalent:
+make up
 ```
 
-### 2. Enroll the owner
+### 2. Export host binary (optional for Docker-only hosts)
 
-Interactive (console access):
+If you only have Docker installed and want the CLI binary locally on your host:
 
 ```bash
-./g8e auth enroll user -e localhost
+# Pure Docker:
+docker compose cp g8e-gateway:/g8e ./g8e && cp ./g8e bin/g8e
+
+# ./g8e docker CLI equivalent:
+./g8e docker build
+
+# make equivalent:
+make docker-build
 ```
 
-Headless (CLI-only owner):
+### 3. Enroll the owner
 
+The stack services (`g8e-operator`, `g8e-inference-operator`, `ensemble`, `dashboard`) submit platform enrollment requests to the Gateway and poll for approval.
+
+Enroll the owner identity:
+
+**Pure Docker (container execution, no host Go or Make required):**
 ```bash
-./g8e auth enroll user --headless -e localhost
+docker compose exec g8e-gateway /g8e auth enroll user --headless -e localhost
 ```
 
-### 3. Start evaluation workloads
+**Host CLI:**
+- Interactive (browser WebAuthn passkey ceremony):
+  ```bash
+  ./g8e auth enroll user -e localhost
+  ```
+- Headless (CLI-only owner):
+  ```bash
+  ./g8e auth enroll user --headless -e localhost
+  ```
 
-```bash
-docker compose --profile bootstrapped --profile evaluation up -d
-```
+### 4. Approve platform enrollments
 
 Wait ~5s, then list pending enrollments:
 
 ```bash
+# Pure Docker:
+docker compose exec g8e-gateway /g8e auth enroll pending
+
+# Host CLI:
 ./g8e auth enroll pending
 ```
 
 Approve in this order (Data Operator first), or deny any request that should not be admitted:
 
 ```bash
+# Pure Docker:
+docker compose exec g8e-gateway /g8e auth enroll approve <data-operator-request-id> --yes
+docker compose exec g8e-gateway /g8e auth enroll approve <dashboard-request-id> --yes
+docker compose exec g8e-gateway /g8e auth enroll approve <ensemble-request-id> --yes
+docker compose exec g8e-gateway /g8e auth enroll approve <inference-operator-request-id> --yes
+# docker compose exec g8e-gateway /g8e auth enroll deny <request-id> --yes
+
+# Host CLI:
 ./g8e auth enroll approve <data-operator-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
@@ -261,9 +328,15 @@ Approve in this order (Data Operator first), or deny any request that should not
 
 Identify requests by instance ID: `operator-<container-id>` is the **Data** Operator; `operator-inference-operator` is the **Inference** Operator.
 
-### 4. Verify readiness
+### 5. Verify readiness and align versions
 
 ```bash
+# Pure Docker:
+until curl -fsS http://127.0.0.1:8000/health >/dev/null; do sleep 3; done
+docker compose exec g8e-gateway /g8e operator list
+docker compose exec g8e-gateway /g8e eval gate inference status --json
+
+# Host CLI:
 until curl -fsS http://127.0.0.1:8000/health >/dev/null; do sleep 3; done
 ./g8e operator list
 ./g8e eval gate inference status --json
@@ -273,11 +346,29 @@ Expect **two** remote Operators (data + inference) plus one embedded Gateway ope
 
 Session IDs change on every volume wipe. Rediscover them after any `docker compose down -v` or `./g8e docker clean`.
 
-### Stop or revoke an enrolled workload
-
-Use the Operator session ID from `./g8e operator list` for a reversible process stop:
+**Aligning Operator versions after a local `make build` (local Make is gospel):**
+Whenever you build locally with `make build`, the updated binary is installed to `bin/g8e` and `./g8e`. Because container operators mount `./bin:/opt/g8e/bin:ro`, restarting the operator containers immediately activates the new binary:
 
 ```bash
+# Pure Docker:
+docker compose restart g8e-operator g8e-inference-operator
+
+# ./g8e docker CLI equivalent:
+./g8e docker restart
+
+# make equivalent:
+make restart-operators
+```
+
+### Stop or revoke an enrolled workload
+
+Use the Operator session ID from `operator list` for a reversible process stop:
+
+```bash
+# Pure Docker:
+docker compose exec g8e-gateway /g8e operator stop <operator-session-id> --reason "planned maintenance"
+
+# Host CLI:
 ./g8e operator stop <operator-session-id> --reason "planned maintenance"
 ```
 
@@ -286,6 +377,10 @@ The command targets one active remote Operator owned by the authenticated user. 
 Use the completed platform enrollment request ID for permanent identity revocation:
 
 ```bash
+# Pure Docker:
+docker compose exec g8e-gateway /g8e auth enroll revoke <request-id> --reason "host retired" --yes
+
+# Host CLI:
 ./g8e auth enroll revoke <request-id> --reason "host retired" --yes
 ```
 
@@ -294,10 +389,11 @@ Operator revocation invalidates the Operator and companion CLI certificates, dea
 ### Automated alternative
 
 ```bash
+# Host CLI:
 ./g8e docker init
 ```
 
-`g8e docker init` runs the full bootstrap in one command: prepare the host `.g8e` tree, build images, start the gateway, enroll the CLI owner, start `bootstrapped` + `evaluation` workloads, auto-approve platform enrollments in order (data operator → dashboard → ensemble → inference operator), and wait for ensemble health. Requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT` set before running.
+`g8e docker init` runs the full bootstrap in one command: prepare the host `.g8e` tree, build images, start the unified stack, enroll the CLI owner, auto-approve platform enrollments in order (data operator → dashboard → ensemble → inference operator), and wait for ensemble health. Requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT` set before running.
 
 If a prior Docker start created `.g8e` as root, fix ownership once with `sudo chown -R $(id -u):$(id -g) .g8e` and rerun init.
 
@@ -309,13 +405,12 @@ Useful flags:
 - `--skip-approvals` — start workloads without auto-approving enrollments.
 - `--headless` — mTLS-only owner enrollment without the browser passkey ceremony (default runs passkey enrollment).
 
-For the bootstrapped profile with interactive enrollment prompts, use:
+For interactive stack startup with enrollment walkthrough prompts, use:
 
 ```bash
-./g8e docker start --full
+# Host CLI:
+./g8e docker start
 ```
-
-`g8e docker start` accepts one profile at a time. To start the full evaluation stack manually, use the Compose command in step 3; to run the complete automated workflow, use `./g8e docker init`.
 
 ## Provider-boundary Observer Operator (provider host; Windows example)
 
@@ -630,20 +725,18 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 
 ## CLI stack management
 
-| Command | Behavior |
-| --- | --- |
-| `./g8e docker init` | Build images, enroll owner, start full evaluation stack, auto-approve platform enrollments, and wait for readiness. |
-| `./g8e docker start` | Starts default profile (Gateway only). |
-| `./g8e docker start --full` | Starts `bootstrapped` profile with enrollment walkthrough. |
-| `docker compose --profile bootstrapped --profile evaluation up -d` | Starts the full evaluation stack after owner enrollment; approve the resulting platform enrollment requests manually. |
-| `./g8e docker start --profile <profile>` | Starts one selected Compose profile; the CLI flag is singular. |
-| `./g8e docker stop` | `docker compose down` — preserves volumes. |
-| `./g8e docker status` | `docker compose ps`. |
-| `./g8e docker build` | Build the selected stack images, export the Gateway image's target-platform runtime binary to `./g8e`, and report success only after publication succeeds. |
-| `./g8e docker rebuild [--full]` | Stop the selected scope, rebuild with the same provenance inputs, publish the Gateway runtime binary to `./g8e`, and restart only after publication succeeds. |
-| `./g8e docker clean` | Destructive wipe of containers, volumes, networks. |
+| Command | Pure Docker Equivalent | Make Equivalent | Behavior |
+| --- | --- | --- | --- |
+| `./g8e docker init` | `docker compose up -d` + exec enroll/approvals | `make up` (manual approvals) | Build images, enroll owner, start unified stack, auto-approve platform enrollments, and wait for readiness. |
+| `./g8e docker start` | `docker compose up -d` | `make up` | Starts default unified stack (all 5 core services) and offers enrollment walkthrough. |
+| `./g8e docker restart [service...]` | `docker compose restart g8e-operator g8e-inference-operator` | `make restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
+| `./g8e docker stop` | `docker compose down` | `make down` | Stops stack, preserves volumes. |
+| `./g8e docker status` | `docker compose ps` | — | Shows running containers and health status. |
+| `./g8e docker build` | `docker compose build && docker compose cp g8e-gateway:/g8e bin/g8e && cp bin/g8e ./g8e` | `make docker-build` | Build stack images in container via Makefile, export binary to `bin/g8e` and `./g8e`. |
+| `./g8e docker rebuild` | `docker compose down && docker compose build && docker compose up -d` | — | Stop stack, rebuild images with in-container Makefile, and restart. |
+| `./g8e docker clean` | `docker compose down -v --remove-orphans` | `make clean-docker` | Destructive wipe of containers, volumes, networks. |
 
-Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean`, repeat owner enrollment and platform approvals.
+Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean` or `docker compose down -v`, repeat owner enrollment and platform approvals.
 
 ## Health checks and resources
 
@@ -670,6 +763,11 @@ Workloads remain unhealthy while enrollment is pending.
 ### Workload stays unhealthy
 
 ```bash
+# Pure Docker:
+docker compose exec g8e-gateway /g8e auth enroll pending
+docker compose logs <service>
+
+# Host CLI:
 ./g8e auth enroll pending
 ./g8e docker logs <service>
 ```
@@ -680,7 +778,7 @@ Usually means the inference operator was started with a **stale startup campaign
 
 ```bash
 # .env: only G8E_OLLAMA_ENDPOINT required; leave campaign keys unset
-docker compose --profile evaluation up -d --force-recreate g8e-inference-operator
+docker compose up -d --force-recreate g8e-inference-operator
 ./g8e eval campaign start --queue next --publish --daemon
 ```
 
@@ -711,7 +809,7 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 
 ### Mirror empty after `docker init --clean` but host run artifacts remain
 
-`docker init --clean` wipes the standard bootstrapped/evaluation Docker containers, networks, and named volumes, including the gateway mirror and trust-domain state. Host campaign evidence under `.g8e/data/eval/runs/<run-id>/` and the rollout queue under `.g8e/eval/` are unchanged.
+`docker init --clean` (or `docker compose down -v`) wipes the standard Docker containers, networks, and named volumes, including the gateway mirror and trust-domain state. Host campaign evidence under `.g8e/data/eval/runs/<run-id>/` and the rollout queue under `.g8e/eval/` are unchanged.
 
 Restore every verified queue entry to the gateway-owned mirror:
 
@@ -743,11 +841,25 @@ Confirm `G8E_HOSTNAME` matches the browser URL, the gateway root CA is trusted, 
 
 ```bash
 # Stop execute: Ctrl-C or kill the execute daemon PID
-./g8e docker stop                         # preserves volumes and credentials
+
+# Pure Docker:
+docker compose down                       # preserves volumes and credentials
+
+# ./g8e docker CLI equivalent:
+./g8e docker stop
+
+# make equivalent:
+make down
 
 # For a cold reset, choose one destructive command, not both:
-./g8e docker clean                        # removes standard stack containers, volumes, and networks
-# or: docker compose --profile bootstrapped --profile evaluation down -v
+# Pure Docker:
+docker compose down -v                    # removes standard stack containers, volumes, and networks
+
+# ./g8e docker CLI equivalent:
+./g8e docker clean
+
+# make equivalent:
+make clean-docker
 ```
 
 Restarting the gateway with `docker compose up -d g8e-gateway` preserves the trust domain. A cold reset requires owner and workload re-enrollment.

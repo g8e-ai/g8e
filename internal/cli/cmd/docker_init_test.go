@@ -203,10 +203,7 @@ func TestDockerOwnerEnrollmentOptions(t *testing.T) {
 }
 
 func TestDockerFullStackProfiles(t *testing.T) {
-	assert.Equal(t, []string{
-		constants.DockerBootstrappedProfile,
-		constants.DockerEvaluationProfile,
-	}, dockerFullStackProfiles())
+	assert.Empty(t, dockerFullStackProfiles(), "unified stack now runs in default profile without requiring compose profiles")
 }
 
 func TestReportDockerPublicSpectatorReady_PrintsBootstrapSequence(t *testing.T) {
