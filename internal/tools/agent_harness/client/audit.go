@@ -301,24 +301,20 @@ func (c *Client) DiscoverOperator(ctx context.Context) (operatorID, operatorSess
 	if err != nil || !json.Valid(body) {
 		return "", ""
 	}
-	// Tolerate {"operators":[...]} or a bare array.
-	var wrap struct {
-		Operators []map[string]any `json:"operators"`
-	}
+	// Tolerate {"operators":[...]} or a bare array of operator documents.
+	var wrap models.OperatorSlotResponse
 	if json.Unmarshal(body, &wrap) == nil {
 		for _, o := range wrap.Operators {
-			if s, _ := o["operator_session_id"].(string); s != "" {
-				id, _ := o["id"].(string)
-				return id, s
+			if o.OperatorSessionID != "" {
+				return o.ID, o.OperatorSessionID
 			}
 		}
 	}
-	var arr []map[string]any
+	var arr []models.OperatorDocumentGo
 	if json.Unmarshal(body, &arr) == nil {
 		for _, o := range arr {
-			if s, _ := o["operator_session_id"].(string); s != "" {
-				id, _ := o["id"].(string)
-				return id, s
+			if o.OperatorSessionID != "" {
+				return o.ID, o.OperatorSessionID
 			}
 		}
 	}

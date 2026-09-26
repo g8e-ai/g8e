@@ -453,10 +453,65 @@ type SettingsDocument struct {
 	UpdatedAt time.Time         `json:"updated_at"`
 }
 
+// UserLLMSettings is the llm group of a user_settings document.
+// Authority: protocol/models/user_settings.json
+type UserLLMSettings struct {
+	PrimaryProvider   string `json:"llm_primary_provider,omitempty"`
+	AssistantProvider string `json:"llm_assistant_provider,omitempty"`
+	LiteProvider      string `json:"llm_lite_provider,omitempty"`
+	Model             string `json:"llm_model,omitempty"`
+	AssistantModel    string `json:"llm_assistant_model,omitempty"`
+	LiteModel         string `json:"llm_lite_model,omitempty"`
+	PrimaryAPIKey     string `json:"primary_api_key,omitempty"`
+	PrimaryEndpoint   string `json:"primary_endpoint,omitempty"`
+	AssistantAPIKey   string `json:"assistant_api_key,omitempty"`
+	AssistantEndpoint string `json:"assistant_endpoint,omitempty"`
+	LiteAPIKey        string `json:"lite_api_key,omitempty"`
+	LiteEndpoint      string `json:"lite_endpoint,omitempty"`
+}
+
+// UserSearchSettings is the search group of a user_settings document.
+type UserSearchSettings struct {
+	Enabled   bool   `json:"enabled,omitempty"`
+	ProjectID string `json:"project_id,omitempty"`
+	EngineID  string `json:"engine_id,omitempty"`
+	Location  string `json:"location,omitempty"`
+	APIKey    string `json:"api_key,omitempty"`
+}
+
+// UserEvalJudgeSettings is the eval_judge group of a user_settings document.
+type UserEvalJudgeSettings struct {
+	Model     string `json:"eval_judge_model,omitempty"`
+	MaxTokens int    `json:"eval_judge_max_tokens,omitempty"`
+}
+
+// UserCommandValidationSettings is the command_validation group of a user_settings document.
+type UserCommandValidationSettings struct {
+	EnableWhitelisting  bool   `json:"enable_whitelisting,omitempty"`
+	WhitelistedCommands string `json:"whitelisted_commands,omitempty"`
+	EnableBlacklisting  bool   `json:"enable_blacklisting,omitempty"`
+}
+
+// UserBatchExecutionSettings is the batch_execution group of a user_settings document.
+type UserBatchExecutionSettings struct {
+	MaxConcurrency int  `json:"max_concurrency,omitempty"`
+	FailFast       bool `json:"fail_fast,omitempty"`
+}
+
+// UserSettings is the settings object of a user_settings document.
+type UserSettings struct {
+	LLM               UserLLMSettings               `json:"llm"`
+	Search            UserSearchSettings            `json:"search,omitempty"`
+	EvalJudge         UserEvalJudgeSettings         `json:"eval_judge,omitempty"`
+	CommandValidation UserCommandValidationSettings `json:"command_validation,omitempty"`
+	BatchExecution    UserBatchExecutionSettings    `json:"batch_execution,omitempty"`
+}
+
 // UserSettingsDocument represents the user_settings document structure.
 // Authority: protocol/models/user_settings.json
 type UserSettingsDocument struct {
-	Settings  map[string]interface{} `json:"settings"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	UserID    string        `json:"user_id,omitempty"`
+	Settings  *UserSettings `json:"settings"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
 }

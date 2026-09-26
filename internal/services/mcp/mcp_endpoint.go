@@ -339,6 +339,14 @@ func (g *GatewayService) proxyListMethod(ctx context.Context, method string) (js
 	return g.proxyMCPMethod(ctx, method, nil)
 }
 
+// downstreamJSONRPCRequest is the JSON-RPC envelope sent to a downstream MCP server.
+type downstreamJSONRPCRequest struct {
+	JSONRPC string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
+}
+
 // proxyMCPMethod forwards a JSON-RPC method to the downstream MCP server.
 func (g *GatewayService) proxyMCPMethod(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
 	if g.downstreamURL == "" {
@@ -348,15 +356,12 @@ func (g *GatewayService) proxyMCPMethod(ctx context.Context, method string, para
 		return nil, fmt.Errorf("mcp_endpoint: downstream MCP server is temporarily unavailable (circuit open)")
 	}
 
-	rpcReq := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  method,
-	}
-	if params != nil {
-		rpcReq["params"] = params
-	}
-	reqBody, err := json.Marshal(rpcReq)
+	reqBody, err := json.Marshal(downstreamJSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  method,
+		Params:  params,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("mcp_endpoint: failed to encode downstream request: %w", err)
 	}

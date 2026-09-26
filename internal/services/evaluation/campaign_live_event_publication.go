@@ -354,20 +354,18 @@ func buildScoredModelRoleInvocationSignals(
 	return signals
 }
 
-func modelInferenceMetricDelta(record *evalv1.ModelInferenceRecord) map[string]any {
+func modelInferenceMetricDelta(record *evalv1.ModelInferenceRecord) PublicMetricDelta {
 	if record == nil || record.GetUsageAvailability() != evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED {
 		return nil
 	}
-	delta := map[string]any{
-		"input_tokens":  map[string]any{"value": record.GetPromptTokens()},
-		"output_tokens": map[string]any{"value": record.GetCompletionTokens()},
+	delta := PublicMetricDelta{
+		"input_tokens":  *publicMetricValue(float64(record.GetPromptTokens())),
+		"output_tokens": *publicMetricValue(float64(record.GetCompletionTokens())),
 	}
 	if generationNanos := record.GetGenerationDurationNanos(); generationNanos > 0 {
-		delta["latency_ms"] = map[string]any{"value": float64(generationNanos) / float64(time.Millisecond)}
+		delta["latency_ms"] = *publicMetricValue(float64(generationNanos) / float64(time.Millisecond))
 		if completionTokens := record.GetCompletionTokens(); completionTokens > 0 {
-			delta["tokens_per_second"] = map[string]any{
-				"value": float64(completionTokens) / (float64(generationNanos) / float64(time.Second)),
-			}
+			delta["tokens_per_second"] = *publicMetricValue(float64(completionTokens) / (float64(generationNanos) / float64(time.Second)))
 		}
 	}
 	return delta

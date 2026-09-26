@@ -29,7 +29,33 @@ type PublicModelRoleInvocationSignal struct {
 	EventID      string
 	Completed    int
 	Total        int
-	MetricDelta  map[string]any
+	MetricDelta  PublicMetricDelta
+}
+
+// PublicMetricDelta is the explorer live-event metric_delta object.
+// Keys are metric ids (pass_rate, input_tokens, latency_ms, tokens_per_second).
+// Values are the disclosure-safe MetricValue shape.
+type PublicMetricDelta map[string]PublicMetricValue
+
+// PublicLiveEvent is one disclosure-safe explorer live event body.
+type PublicLiveEvent struct {
+	SchemaVersion       string            `json:"schema_version"`
+	Kind                string            `json:"kind"`
+	DatasetID           string            `json:"dataset_id"`
+	QualityState        string            `json:"quality_state"`
+	ObservedAt          string            `json:"observed_at"`
+	SourceRevisionLabel string            `json:"source_revision_label,omitempty"`
+	EventID             string            `json:"event_id"`
+	RunID               string            `json:"run_id"`
+	AssignmentID        string            `json:"assignment_id,omitempty"`
+	VariantID           string            `json:"variant_id,omitempty"`
+	Role                string            `json:"role,omitempty"`
+	LifecycleStatus     string            `json:"lifecycle_status"`
+	Completed           int               `json:"completed"`
+	Total               int               `json:"total"`
+	StageLabel          string            `json:"stage_label,omitempty"`
+	TaskID              string            `json:"task_id,omitempty"`
+	MetricDelta         PublicMetricDelta `json:"metric_delta,omitempty"`
 }
 
 // PublicMetricAvailabilitySignal is the disclosure-safe input for projecting
@@ -61,89 +87,82 @@ func HeadlineMetricID(metricID string) bool {
 
 // ProjectModelRoleInvocationEvent maps a disclosure-safe invocation signal to
 // a stage_updated live event body for record_type "event" publication.
-func ProjectModelRoleInvocationEvent(signal PublicModelRoleInvocationSignal) (map[string]any, error) {
+func ProjectModelRoleInvocationEvent(signal PublicModelRoleInvocationSignal) (PublicLiveEvent, error) {
 	if signal.RunID == "" || signal.AssignmentID == "" || signal.VariantID == "" || signal.EventID == "" || signal.ObservedAt == "" {
-		return nil, fmt.Errorf("evaluation: project model role invocation event: missing required field")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: missing required field")
 	}
 	if signal.Role == "" {
-		return nil, fmt.Errorf("evaluation: project model role invocation event: missing role")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: missing role")
 	}
 	if signal.Completed < 0 || signal.Total < 0 || signal.Completed > signal.Total {
-		return nil, fmt.Errorf("evaluation: project model role invocation event: invalid progress")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project model role invocation event: invalid progress")
 	}
 	stageParts := []string{"model role invoked", string(signal.Role), signal.VariantID}
 	if signal.TaskID != "" {
 		stageParts = append(stageParts, signal.TaskID)
 	}
-	event := map[string]any{
-		"schema_version":        explorerViewSchemaVersion,
-		"kind":                  "stage_updated",
-		"dataset_id":            CampaignDatasetID(signal.RunID),
-		"quality_state":         "live_in_progress",
-		"observed_at":           signal.ObservedAt,
-		"source_revision_label": campaignSourceRevision,
-		"event_id":              signal.EventID,
-		"run_id":                signal.RunID,
-		"assignment_id":         signal.AssignmentID,
-		"variant_id":            signal.VariantID,
-		"role":                  string(signal.Role),
-		"lifecycle_status":      "running",
-		"completed":             signal.Completed,
-		"total":                 signal.Total,
-		"stage_label":           strings.Join(stageParts, " · "),
-	}
-	if signal.TaskID != "" {
-		event["task_id"] = signal.TaskID
-	}
-	if len(signal.MetricDelta) > 0 {
-		event["metric_delta"] = signal.MetricDelta
-	}
-	return event, nil
+	return PublicLiveEvent{
+		SchemaVersion:       explorerViewSchemaVersion,
+		Kind:                "stage_updated",
+		DatasetID:           CampaignDatasetID(signal.RunID),
+		QualityState:        "live_in_progress",
+		ObservedAt:          signal.ObservedAt,
+		SourceRevisionLabel: campaignSourceRevision,
+		EventID:             signal.EventID,
+		RunID:               signal.RunID,
+		AssignmentID:        signal.AssignmentID,
+		VariantID:           signal.VariantID,
+		Role:                string(signal.Role),
+		LifecycleStatus:     "running",
+		Completed:           signal.Completed,
+		Total:               signal.Total,
+		StageLabel:          strings.Join(stageParts, " · "),
+		TaskID:              signal.TaskID,
+		MetricDelta:         signal.MetricDelta,
+	}, nil
 }
 
 // ProjectMetricAvailabilityEvent maps a disclosure-safe metric availability
 // signal to a metric_updated live event body for record_type "event"
 // publication.
-func ProjectMetricAvailabilityEvent(signal PublicMetricAvailabilitySignal) (map[string]any, error) {
+func ProjectMetricAvailabilityEvent(signal PublicMetricAvailabilitySignal) (PublicLiveEvent, error) {
 	if signal.RunID == "" || signal.AssignmentID == "" || signal.VariantID == "" || signal.MetricID == "" || signal.EventID == "" || signal.ObservedAt == "" {
-		return nil, fmt.Errorf("evaluation: project metric availability event: missing required field")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project metric availability event: missing required field")
 	}
 	if signal.Completed < 0 || signal.Total < 0 || signal.Completed > signal.Total {
-		return nil, fmt.Errorf("evaluation: project metric availability event: invalid progress")
+		return PublicLiveEvent{}, fmt.Errorf("evaluation: project metric availability event: invalid progress")
 	}
-	metricValue := metricAvailabilityValue(signal.Numerator, signal.Denominator, signal.Rate)
-	event := map[string]any{
-		"schema_version":        explorerViewSchemaVersion,
-		"kind":                  "metric_updated",
-		"dataset_id":            CampaignDatasetID(signal.RunID),
-		"quality_state":         "live_in_progress",
-		"observed_at":           signal.ObservedAt,
-		"source_revision_label": campaignSourceRevision,
-		"event_id":              signal.EventID,
-		"run_id":                signal.RunID,
-		"assignment_id":         signal.AssignmentID,
-		"variant_id":            signal.VariantID,
-		"lifecycle_status":      "running",
-		"completed":             signal.Completed,
-		"total":                 signal.Total,
-		"metric_delta": map[string]any{
-			signal.MetricID: metricValue,
+	return PublicLiveEvent{
+		SchemaVersion:       explorerViewSchemaVersion,
+		Kind:                "metric_updated",
+		DatasetID:           CampaignDatasetID(signal.RunID),
+		QualityState:        "live_in_progress",
+		ObservedAt:          signal.ObservedAt,
+		SourceRevisionLabel: campaignSourceRevision,
+		EventID:             signal.EventID,
+		RunID:               signal.RunID,
+		AssignmentID:        signal.AssignmentID,
+		VariantID:           signal.VariantID,
+		LifecycleStatus:     "running",
+		Completed:           signal.Completed,
+		Total:               signal.Total,
+		MetricDelta: PublicMetricDelta{
+			signal.MetricID: metricAvailabilityValue(signal.Numerator, signal.Denominator, signal.Rate),
 		},
-	}
-	return event, nil
+	}, nil
 }
 
 // MarshalPublicLiveEvent serializes a projected live event for signed export.
-func MarshalPublicLiveEvent(event map[string]any) ([]byte, error) {
+func MarshalPublicLiveEvent(event PublicLiveEvent) ([]byte, error) {
 	return json.Marshal(event)
 }
 
-func metricAvailabilityValue(numerator, denominator int, rate *float64) map[string]any {
+func metricAvailabilityValue(numerator, denominator int, rate *float64) PublicMetricValue {
 	if denominator <= 0 {
-		return map[string]any{"unavailable_reason": "no_scored_calls"}
+		return PublicMetricValue{UnavailableReason: "no_scored_calls"}
 	}
 	if rate != nil {
-		return map[string]any{"value": *rate}
+		return *publicMetricValue(*rate)
 	}
-	return map[string]any{"value": float64(numerator) / float64(denominator)}
+	return *publicMetricValue(float64(numerator) / float64(denominator))
 }

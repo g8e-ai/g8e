@@ -170,8 +170,13 @@ func newTestEnsembleServer(traceFn func(assignmentID, attemptID string) map[stri
 				http.NotFound(w, r)
 				return
 			}
+			raw, err := json.Marshal(trace)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(harnessclient.EnsembleEvaluationTraceResponse{Trace: trace})
+			_ = json.NewEncoder(w).Encode(harnessclient.EnsembleEvaluationTraceResponse{Trace: raw})
 		default:
 			http.NotFound(w, r)
 		}

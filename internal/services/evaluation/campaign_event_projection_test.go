@@ -32,18 +32,16 @@ func TestProjectModelRoleInvocationEvent_ExcludesProviderBoundaryFields(t *testi
 		Total:        5,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "stage_updated", event["kind"])
-	assert.Equal(t, "ds-live-run-live-1", event["dataset_id"])
-	assert.NotContains(t, event, "served_model_tag")
-	assert.NotContains(t, event, "backend_name")
-	assert.NotContains(t, event, "quantization")
-	stageLabel, ok := event["stage_label"].(string)
-	require.True(t, ok)
-	assert.Contains(t, stageLabel, "model role invoked")
-	assert.Contains(t, stageLabel, "primary")
+	assert.Equal(t, "stage_updated", event.Kind)
+	assert.Equal(t, "ds-live-run-live-1", event.DatasetID)
+	assert.Contains(t, event.StageLabel, "model role invoked")
+	assert.Contains(t, event.StageLabel, "primary")
 
 	body, err := MarshalPublicLiveEvent(event)
 	require.NoError(t, err)
+	assert.NotContains(t, string(body), "served_model_tag")
+	assert.NotContains(t, string(body), "backend_name")
+	assert.NotContains(t, string(body), "quantization")
 	require.NoError(t, publicdisclosure.ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, body))
 }
 
@@ -62,12 +60,11 @@ func TestProjectMetricAvailabilityEvent_ProjectsPassRateDelta(t *testing.T) {
 		Total:        5,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "metric_updated", event["kind"])
-	delta, ok := event["metric_delta"].(map[string]any)
+	assert.Equal(t, "metric_updated", event.Kind)
+	passRate, ok := event.MetricDelta["pass_rate"]
 	require.True(t, ok)
-	passRate, ok := delta["pass_rate"].(map[string]any)
-	require.True(t, ok)
-	assert.InDelta(t, 0.75, passRate["value"], 0.0001)
+	require.NotNil(t, passRate.Value)
+	assert.InDelta(t, 0.75, *passRate.Value, 0.0001)
 
 	body, err := MarshalPublicLiveEvent(event)
 	require.NoError(t, err)
@@ -88,11 +85,10 @@ func TestProjectMetricAvailabilityEvent_ZeroDenominatorIsUnavailable(t *testing.
 		Total:        5,
 	})
 	require.NoError(t, err)
-	delta, ok := event["metric_delta"].(map[string]any)
+	passRate, ok := event.MetricDelta["pass_rate"]
 	require.True(t, ok)
-	passRate, ok := delta["pass_rate"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "no_scored_calls", passRate["unavailable_reason"])
+	assert.Equal(t, "no_scored_calls", passRate.UnavailableReason)
+	assert.Nil(t, passRate.Value)
 }
 
 func TestHeadlineMetricID_RecognizesExplorerHeadlineMetrics(t *testing.T) {

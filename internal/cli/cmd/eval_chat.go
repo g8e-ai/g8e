@@ -186,7 +186,7 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 						if err != nil {
 							return nil, err
 						}
-						return evaluation.EvaluationTrace(rawTrace), nil
+						return evaluation.DecodeEvaluationTrace(rawTrace)
 					}, reporter)
 				}
 				cancel()
@@ -571,11 +571,11 @@ func (w *campaignChatHarnessClient) EnsembleChat(ctx context.Context, persona ha
 }
 
 func (w *campaignChatHarnessClient) GetEvaluationTrace(ctx context.Context, persona harnessclient.Persona, assignmentID, evaluationAttemptID string) (evaluation.EvaluationTrace, error) {
-	trace, err := w.client.GetEvaluationTrace(ctx, persona, assignmentID, evaluationAttemptID)
+	raw, err := w.client.GetEvaluationTrace(ctx, persona, assignmentID, evaluationAttemptID)
 	if err != nil {
 		return nil, err
 	}
-	return evaluation.EvaluationTrace(trace), nil
+	return evaluation.DecodeEvaluationTrace(raw)
 }
 
 func chatEvalEnsembleClient(cfg *config.Config, authContext *auth.ClientAuthContext, ensembleURL string, deps chatEvalDeps) (*harnessclient.Client, error) {

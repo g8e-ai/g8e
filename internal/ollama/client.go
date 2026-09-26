@@ -38,11 +38,18 @@ func NewClient(base *url.URL, httpClient *http.Client) *Client {
 	return &Client{base: base, http: httpClient}
 }
 
+// pullRequest is the /api/pull body. Stream is explicit so a false value
+// is not dropped; Ollama defaults a missing stream flag to true.
+type pullRequest struct {
+	Model  string `json:"model"`
+	Stream bool   `json:"stream"`
+}
+
 // Pull downloads a model from the remote Ollama provider.
 func (c *Client) Pull(ctx context.Context, model string, fn func(ProgressResponse) error) error {
-	return c.stream(ctx, http.MethodPost, "/api/pull", map[string]interface{}{
-		"model":  model,
-		"stream": false,
+	return c.stream(ctx, http.MethodPost, "/api/pull", pullRequest{
+		Model:  model,
+		Stream: false,
 	}, func(line []byte) error {
 		var progress ProgressResponse
 		if err := json.Unmarshal(line, &progress); err != nil {
