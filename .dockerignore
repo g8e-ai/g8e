@@ -120,9 +120,10 @@ docs/*
 !README.md
 
 # CI/CD, scripts, third-party reference, generated site — not needed in any
-# container.
+# container except scripts/docker-entrypoint.sh which is the container entrypoint.
 .github/
-scripts/
+scripts/*
+!scripts/docker-entrypoint.sh
 third_party/
 .build/
 site/

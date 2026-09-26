@@ -144,6 +144,18 @@ func TestReaderAndManifestFiles_ValidateCataloguedArtifacts(t *testing.T) {
 	_, _, err = reader.Artifact("unsupported")
 	assert.ErrorIs(t, err, constants.ErrG8eBinaryArtifact)
 
+	// Existing directory without manifest should also succeed without error
+	existingEmptyDir := t.TempDir()
+	emptyReader, err := OpenReader(existingEmptyDir)
+	require.NoError(t, err)
+	assert.False(t, emptyReader.HasManifest())
+
+	// Existing directory with corrupt manifest should return an error
+	corruptDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(corruptDir, constants.G8eBinariesManifestFilename), []byte("invalid-json"), constants.PermFilePublic))
+	_, corruptErr := OpenReader(corruptDir)
+	assert.ErrorIs(t, corruptErr, constants.ErrG8eBinaryManifest)
+
 	manifest, err := NewPublisher(root).Publish(bytes.NewReader(validArchive(t, "build-1", false)))
 	require.NoError(t, err)
 	reader, err = OpenReader(root)
