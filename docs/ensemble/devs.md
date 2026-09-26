@@ -1,15 +1,15 @@
 # Development
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-25
+Version: v2.1.14
 
 ## Scope and architecture
 
 The g8e Agentic Ensemble (`g8ee`) is an optional Python 3.12+ FastAPI application in `ensemble/`. It owns conversational orchestration, model-provider integration, typed tool execution, investigation and case workflows, application settings, Operator workflow coordination, and application event publication. It is not the Gateway or an Operator and it does not create an execution authority outside the g8e governance paths.
 
-For host operations, g8ee sends a typed `CommandIntent` to the exact selected Operator session through Gateway pub/sub. The Gateway constructs the governed envelope for that relay path, and the target Operator independently performs the required verification and execution. For designated application-record writes, g8ee uses `GovernanceClient` to submit canonical protojson envelopes to the Gateway. Application approvals, Tribunal agreement, model output, memories, reputation, and SSE events do not replace protocol L2 or L3 evidence. See [Ensemble Architecture](architecture.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the complete boundary model.
+For host operations, g8ee calls `GatewayOperatorClient.dispatch()` against `POST /api/v1/operators/commands` with a registered request `event_type` and typed protobuf payload bytes. The Gateway derives `action_type` from the event registry, constructs the governed envelope, and the target Operator independently performs the required verification and execution. For designated application-record writes, g8ee uses `GovernanceClient` to submit canonical protojson envelopes to the Gateway. LFAA audit records use `GatewayOperatorClient.ingest_audit_record()` against `POST /api/v1/audit/records`. g8ee has no Gateway pub/sub client. Application approvals, Tribunal agreement, model output, memories, reputation, and SSE events do not replace protocol L2 or L3 evidence. See [Ensemble Architecture](architecture.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the complete boundary model.
 
-The FastAPI application is assembled in `ensemble/app/main.py`. Its lifespan loads bootstrap settings, resolves the enrolled g8ee application identity, connects the DB, KV, pub/sub, and blob clients, loads Gateway-backed platform settings, constructs `GovernanceClient` and the domain services, starts lifecycle services, and only then yields readiness. Shutdown stops services, clears provider state, closes transport clients, and closes the document service.
+The FastAPI application is assembled in `ensemble/app/main.py`. Its lifespan loads bootstrap settings, resolves the enrolled g8ee application identity, connects the DB, KV, and blob clients, loads Gateway-backed platform settings, constructs `GovernanceClient`, `GatewayOperatorClient`, and the domain services, starts lifecycle services, and only then yields readiness. Shutdown stops services, clears provider state, closes transport clients, and closes the document service.
 
 ## Repository and dependency ownership
 
@@ -100,7 +100,7 @@ Tests use the pytest configuration in `ensemble/pyproject.toml`: strict markers 
 - Return or raise the typed errors defined by `app.errors` and use the centralized error codes in `app.constants.errors` for machine-checked failures.
 - Route business-critical application-record mutations through `GovernanceClient`. Do not bypass the Gateway with direct storage writes or treat application approval as protocol authorization.
 - Preserve exact Operator/session binding when constructing command requests. Do not broadcast commands or trust caller-supplied identity headers without authenticated-context validation.
-- Add unit tests for isolated behavior and integration tests for real Gateway, Operator, pub/sub, or provider boundaries. Add a regression test before fixing a bug.
+- Add unit tests for isolated behavior and integration tests for real Gateway, Operator, HTTP dispatch, or provider boundaries. Add a regression test before fixing a bug.
 - Keep documentation under `docs/ensemble/` synchronized when interfaces, models, provider boundaries, lifecycle behavior, or test commands change.
 
 Pre-commit runs the configured Ruff and Pyright checks on staged files. It is an additional local check, not a replacement for the Make targets or the relevant integration tests.
@@ -113,9 +113,9 @@ The `g8e` provider sends governed inference through the Gateway-backed internal 
 
 ## Service and test wiring
 
-`ServiceFactory.create_all_services()` constructs the production graph in dependency order. It wires the DB, KV, and blob handlers; cache-aside and data services; investigations, memories, reputation, and SSH inventory; authentication and Operator-session services; heartbeat and stale-heartbeat monitoring; event and HTTP services; attachment and grounding services; approval and stream execution; and the typed tool service, agent, and chat pipeline. The chat pipeline creates its evaluation trace service unless one is injected. Production supplies the shared pub/sub client so command and heartbeat services can start with the application lifecycle.
+`ServiceFactory.create_all_services()` constructs the production graph in dependency order. It wires the DB, KV, and blob handlers; cache-aside and data services; investigations, memories, reputation, and SSH inventory; authentication and Operator-session services; `GatewayOperatorClient`; event and HTTP services; attachment and grounding services; approval and stream execution; and the typed tool service, agent, and chat pipeline. The chat pipeline creates its evaluation trace service unless one is injected. Operator heartbeat persistence and stale-heartbeat evaluation are Gateway-owned; g8ee does not subscribe to heartbeat channels.
 
-Tests can inject fakes through the service factory and the fixtures under `ensemble/tests/fakes/`. Unit tests should remain isolated from live infrastructure. Integration tests under `ensemble/tests/integration/` cover Gateway-backed cache and settings behavior, pub/sub command dispatch, mTLS inference, SSE event contracts, Operator workflows, and other cross-service paths. The `tests/e2e/` package contains end-to-end test support; its marker and fixture requirements determine whether a live deployment is needed.
+Tests can inject fakes through the service factory and the fixtures under `ensemble/tests/fakes/`. Unit tests should remain isolated from live infrastructure. Integration tests under `ensemble/tests/integration/` cover Gateway-backed cache and settings behavior, Gateway HTTP dispatch, mTLS inference, SSE event contracts, Operator workflows, and other cross-service paths. The `tests/e2e/` package contains end-to-end test support; its marker and fixture requirements determine whether a live deployment is needed.
 
 ## Protobuf and generated artifacts
 

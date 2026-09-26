@@ -74,17 +74,17 @@ Optional L2 and L3 evidence is verified when present and recorded when valid, bu
 
 The ingress path matters. A posture does not cause every transport to acquire missing proofs automatically. g8ee must use a path that coordinates the required proofs or submit an envelope that already contains them.
 
-## Host Operations Through `CommandIntent`
+## Host Operations Through Gateway Dispatch
 
-The ensemble uses `CommandIntent` for host commands, file operations, filesystem reads, log and history queries, and other outbound Operator work:
+The ensemble dispatches host commands, file operations, filesystem reads, log and history queries, port checks, and other outbound Operator work through `GatewayOperatorClient`:
 
-1. g8ee serializes the typed Operator protobuf payload and publishes a `CommandIntent` to the exact `cmd:<operator_id>:<operator_session_id>` channel.
-2. The Gateway authenticates the app publisher, enforces the channel ACL, checks that the intent targets the same Operator and session as the channel, and validates that the session is active.
+1. g8ee serializes the typed Operator protobuf payload and calls `POST /api/v1/operators/commands` with the registered request `event_type`, delegated Operator session, and application context.
+2. The Gateway authenticates the app caller over mTLS, validates the event against the registry, derives `action_type`, and checks that the Operator session is active.
 3. The Gateway adds the current state root, posture, nonce, expiry, transport-derived app identity, requestor identity, and application context, then computes the canonical transaction hash and publishes the resulting `GovernanceEnvelope` to the Operator.
 4. The Operator runs L1 and L4 verification locally. Accepted operations execute through L5, while rejected operations do not reach the action handler.
-5. The Operator publishes the command result to the result channel and relays its signed receipt to the Gateway. The local receipt is authoritative; the Gateway mirror is best-effort.
+5. The Gateway returns the correlated result envelope in the HTTP response. The Operator's signed receipt is authoritative; the Gateway mirror is best-effort.
 
-The `CommandIntent` relay does not perform protocol L2 deliberation or L3 suspension and does not attach L2 votes or an L3 proof. Consequently:
+The governed dispatch path does not perform protocol L2 deliberation or L3 suspension and does not attach L2 votes or an L3 proof. Consequently:
 
 - `doctrine` accepts otherwise valid read and mutation intents without L2 or L3.
 - `consensus` rejects ordinary relayed intents because they do not contain protocol L2 votes.

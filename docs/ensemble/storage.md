@@ -38,7 +38,7 @@ Cache reads are disabled by default through `gateway.enable_cache_read`. Documen
 
 Hash, list, counter, and pattern operations are client-side conveniences over string values. Hash, list, and counter updates use read-modify-write sequences rather than server-side atomic operations. Pattern matching uses Gateway glob semantics. A KV client that has not passed its health check returns cache misses or unsuccessful writes for many operations; its delete and lookup helpers also convert several transport failures into empty or zero results.
 
-The DB, KV, pub/sub, and blob clients each perform a startup health check, but g8ee does not fail startup solely because one of these checks returns false. Later document and blob failures propagate as storage or network errors, while many KV failures retain cache-miss or unsuccessful-write behavior. The pub/sub client is also required for command and event transport but is not a durable storage tier.
+The DB, KV, and blob clients each perform a startup health check, but g8ee does not fail startup solely because one of these checks returns false. Later document and blob failures propagate as storage or network errors, while many KV failures retain cache-miss or unsuccessful-write behavior. Governed command dispatch and SSE event delivery use Gateway HTTP rather than a g8ee pub/sub client.
 
 ## Attachments
 

@@ -2,7 +2,7 @@
 
 ## Scope and boundary
 
-g8ee is an optional application-layer client. Its personas, model reasoning, Tribunal agreement, Marshal analysis, memories, reputation, and application approvals express intent or telemetry; they do not authorize a host or platform mutation. Host-command requests are relayed as typed `CommandIntent` messages to the selected Operator, while designated application-record writes use the Gateway governance endpoint. The Gateway and executing Operator enforce the active five-layer protocol posture. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) and [Ensemble Architecture](../architecture/ensemble.md).
+g8ee is an optional application-layer client. Its personas, model reasoning, Tribunal agreement, Marshal analysis, memories, reputation, and application approvals express intent or telemetry; they do not authorize a host or platform mutation. Host-command requests dispatch through `GatewayOperatorClient` to `POST /api/v1/operators/commands` with a registered request `event_type`, while designated application-record writes use the Gateway governance endpoint. The Gateway and executing Operator enforce the active five-layer protocol posture. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) and [Ensemble Architecture](../architecture/ensemble.md).
 
 This page documents the registered persona models and the application pipeline that uses them. A registered persona is not necessarily invoked on every chat turn.
 
@@ -76,7 +76,7 @@ For a host-command tool call, the current pipeline is:
 3. `TribunalInvoker` resolves the selected Operator context and command-validation settings, then runs Tribunal generation, voting, and any second round.
 4. Marshal analyzes the voting winner. A high-risk block stops this attempt before Auditor review.
 5. Auditor review is performed when enabled. The final command is normalized and revalidated before it is placed in `ExecutorCommandArgs`.
-6. The operator tool executor sends the typed internal request through the g8ee command path. At the pub/sub boundary, g8ee serializes `CommandIntent` for the exact Operator and session; the Gateway constructs the canonical envelope and the target Operator independently performs L1-L4 and L5 execution.
+6. The operator tool executor sends the typed internal request through `OperatorExecutionService`, which calls `GatewayOperatorClient.dispatch()` with the registered request `event_type` and serialized protobuf payload. The Gateway validates the event, derives `action_type` from the registry, constructs the canonical envelope, and the target Operator independently performs L1-L4 and L5 execution. The HTTP response carries the correlated result envelope.
 7. The result returns to the sequential ReAct loop. The model can request another tool turn until it stops or reaches `AGENT_MAX_TOOL_TURNS` (currently `25`); continuing after the limit requires a separate g8ee application approval. That approval is not protocol L3.
 
 Application SSE events expose progress, candidate, risk, approval, and result telemetry. They do not authorize execution or replace the Operator's authoritative receipt and audit evidence. Application approvals and reputation outcomes have the same limitation.

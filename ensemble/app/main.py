@@ -12,7 +12,7 @@ Agentic Ensemble with LLM provider abstraction providing Zero-Trust AI for infra
 
 Bootstrap responsibilities (this file):
     1. SettingsService bootstrap + local settings
-    2. Raw operator client connections (5 core clients: DB, KV, PubSub, Blob, HTTP)
+    2. Raw Gateway client connections (DB, KV, Blob, HTTP)
     3. Handler services (sole users of each client): DBService, KVService, BlobService
     4. CacheAsideService (orchestrator over DB + KV handler services)
     5. Platform settings load from operator
