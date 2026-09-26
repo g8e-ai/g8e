@@ -205,6 +205,7 @@ Shared code that is not a command group:
 - `internal/cli/cmd/cmdtest/`: cross-package test helpers (temp chdir, mock API client, factories, campaign fixtures). Not a Cobra group.
 
 Files left at `internal/cli/cmd/` root are the root command, its tests, and the shared file-service and config-load tests. Factory-error tests live next to the group they cover (`factory_error_<group>_test.go`).
+
 - `internal/cli/api/`: Typed CLI HTTP client.
 - `internal/cli/auth/`: CLI enrollment, gateway enrollment transport, credential staging, key generation, passkey registration, trust bundles, and mTLS clients.
 - `internal/cli/browserorigin/`: Frontend-origin validation and normalization.
