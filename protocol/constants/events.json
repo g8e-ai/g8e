@@ -439,9 +439,8 @@
     },
     "AiLLMChatFilterEvent": {
       "_go_const": "EventAiLLMChatFilterEvent",
-      "value": "g8e.v1.ai.llm.chat.filter.event",
+      "value": "g8e.v1.ai.llm.chat.filter.updated",
       "kind": "outcome",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "cli",
         "ensemble"
@@ -1405,7 +1404,6 @@
       "_go_const": "EventAppInvestigationStatusUpdatedClosed",
       "value": "g8e.v1.app.investigation.status.updated.closed",
       "kind": "fact",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "ensemble"
       ],
@@ -1415,7 +1413,6 @@
       "_go_const": "EventAppInvestigationStatusUpdatedEscalated",
       "value": "g8e.v1.app.investigation.status.updated.escalated",
       "kind": "fact",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "ensemble"
       ],
@@ -1425,7 +1422,6 @@
       "_go_const": "EventAppInvestigationStatusUpdatedOpen",
       "value": "g8e.v1.app.investigation.status.updated.open",
       "kind": "fact",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "ensemble"
       ],
@@ -1435,7 +1431,6 @@
       "_go_const": "EventAppInvestigationStatusUpdatedResolved",
       "value": "g8e.v1.app.investigation.status.updated.resolved",
       "kind": "fact",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "ensemble"
       ],
@@ -2022,9 +2017,8 @@
     },
     "OperatorCommandExecution": {
       "_go_const": "EventOperatorCommandExecution",
-      "value": "g8e.v1.operator.command.execution",
+      "value": "g8e.v1.operator.command.execution.started",
       "kind": "outcome",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "cli",
         "dashboard",
@@ -2090,9 +2084,8 @@
     },
     "OperatorCommandResult": {
       "_go_const": "EventOperatorCommandResult",
-      "value": "g8e.v1.operator.command.result",
+      "value": "g8e.v1.operator.command.result.completed",
       "kind": "outcome",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "cli",
         "dashboard",
@@ -3077,6 +3070,38 @@
       ],
       "persistence": "ephemeral"
     },
+    "OperatorMcpPromptListRequested": {
+      "_go_const": "EventOperatorMcpPromptListRequested",
+      "value": "g8e.v1.operator.mcp.prompt.list.requested",
+      "kind": "request",
+      "transport": [
+        "governed"
+      ],
+      "governance": {
+        "action_type": "MCP_PROMPT_LIST",
+        "payload": "g8e.operator.v1.McpPromptListRequested"
+      },
+      "producers": [
+        "mcp"
+      ],
+      "persistence": "ephemeral"
+    },
+    "OperatorMcpResourceListRequested": {
+      "_go_const": "EventOperatorMcpResourceListRequested",
+      "value": "g8e.v1.operator.mcp.resource.list.requested",
+      "kind": "request",
+      "transport": [
+        "governed"
+      ],
+      "governance": {
+        "action_type": "MCP_RESOURCE_LIST",
+        "payload": "g8e.operator.v1.McpResourceListRequested"
+      },
+      "producers": [
+        "mcp"
+      ],
+      "persistence": "ephemeral"
+    },
     "OperatorMcpResourceReadRequested": {
       "_go_const": "EventOperatorMcpResourceReadRequested",
       "value": "g8e.v1.operator.mcp.resource.read.requested",
@@ -3752,9 +3777,8 @@
     },
     "PlatformAuthInfo": {
       "_go_const": "EventPlatformAuthInfo",
-      "value": "g8e.v1.platform.auth.info",
+      "value": "g8e.v1.platform.auth.info.updated",
       "kind": "outcome",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "cli",
         "gateway"
@@ -4021,9 +4045,8 @@
     },
     "PlatformNotification": {
       "_go_const": "EventPlatformNotification",
-      "value": "g8e.v1.platform.notification",
+      "value": "g8e.v1.platform.notification.sent",
       "kind": "outcome",
-      "grammar_allowlist_owner": "lead",
       "producers": [
         "cli",
         "gateway"

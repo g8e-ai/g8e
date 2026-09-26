@@ -12,7 +12,6 @@ flowchart TD
         Chat["Chat Pipeline / Agent Turn (g8eEnsemble)"]
         Tribunal["Tribunal Consensus (TribunalEmitter)"]
         Approval["Approval Service (OperatorApprovalService)"]
-        Heartbeat["Heartbeat & Monitors (HeartbeatSnapshotService)"]
         EventSvc["EventService"]
         HttpCli["InternalHttpClient (mTLS)"]
     end
@@ -31,7 +30,6 @@ flowchart TD
     Chat --> EventSvc
     Tribunal --> EventSvc
     Approval --> EventSvc
-    Heartbeat --> EventSvc
     EventSvc --> HttpCli
     HttpCli -- "mTLS HTTPS (Port 8443)" --> PushEndpoint
     PushEndpoint --> Broker
@@ -42,7 +40,7 @@ flowchart TD
 
 ## Gateway Delivery Contract
 
-The ensemble publishes to `POST /api/v1/sse/push` using the Gateway app workload mTLS certificate. The push body contains `user_id`, exactly one of `web_session_id` or `cli_session_id`, and an `event` envelope whose nested `type` identifies the application event. The Gateway accepts app SPIFFE identities under `/app/` except the reserved Gateway and Operator identities. The first-party `g8ee` app identity is authorized as an ensemble producer; other app identities must be authorized for the target Operator session.
+The ensemble publishes to `POST /api/v1/sse/push` using the Gateway app workload mTLS certificate. The push body contains `user_id`, exactly one of `web_session_id` or `cli_session_id`, and an `event` envelope whose nested `type` identifies the application event. That type must be a registered `events.json` entry with `transport` including `sse` and `producers` including `ensemble`; `SessionEvent`/`BackgroundEvent` additionally require a matching `SSE_PAYLOADS` class. The Gateway accepts app SPIFFE identities under `/app/` except the reserved Gateway and Operator identities. The first-party `g8ee` app identity is authorized as an ensemble producer; other app identities must be authorized for the target Operator session.
 
 The Gateway stores the complete push envelope before publishing a session-scoped pub/sub message. `GET /api/v1/sse/stream` emits replayed and live frames with the persisted row ID in `id` and the complete push envelope in `data`; it does not emit an SSE `event` field. Consumers read the application event type from `data.event.type`. `GET /api/v1/sse/events` returns the same retained rows as JSON. Consumers can resume with `Last-Event-ID` or `since_id`; stream connections receive a comment heartbeat every 30 seconds. History is retained for approximately one hour, and live queues are bounded, so SSE is not an audit record.
 

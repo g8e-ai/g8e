@@ -40,6 +40,30 @@ The domains are `operator`, `app`, `ai`, `platform`, and `public`. New
 governed requests must use a registered request event and a registry-provided
 governance action.
 
+The last wire segment is the terminal. `internal/tools/constgen` enforces the
+closed terminal list on every registry entry. Compound forms that remain
+legal without an allowlist:
+
+- `g8e.v1.<domain>.<terminal>` for entity-less facts (`operator.bound`,
+  `operator.unbound`)
+- `*.status.updated.<state>` (operator and investigation status facts)
+- stream fragments containing `.stream.`, `.chunk.`, `.delta.`, `.keepalive.`,
+  or `.thinking.`
+
+The grammar allowlist is empty. Historical names that used `event`,
+`execution`, `result`, `info`, or `notification` as a terminal were renamed:
+
+| Previous | Current |
+| --- | --- |
+| `g8e.v1.ai.llm.chat.filter.event` | `g8e.v1.ai.llm.chat.filter.updated` |
+| `g8e.v1.operator.command.execution` | `g8e.v1.operator.command.execution.started` |
+| `g8e.v1.operator.command.result` | `g8e.v1.operator.command.result.completed` |
+| `g8e.v1.platform.auth.info` | `g8e.v1.platform.auth.info.updated` |
+| `g8e.v1.platform.notification` | `g8e.v1.platform.notification.sent` |
+
+Callers send `event_type` only. Gateway derives `action_type` from the
+registry and rejects unknown or non-request events at ingress.
+
 ## Transport ownership
 
 - **SSE** is Gateway-to-client. The Gateway validates the registry entry and

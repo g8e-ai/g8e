@@ -392,65 +392,49 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, co
 func (rs *OperatorPubSubService) buildHandlers() {
 	rs.legacyEventHandlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
 		constants.Event.Operator.Heartbeat: rs.handleHeartbeatEvent,
-		constants.Event.Operator.Audit.UserMsg: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if err := rs.audit.HandleUserMsgRequest(ctx, msg); err != nil {
-				rs.logger.Error("failed to handle audit user message", "error", err)
-			}
-		},
-		constants.Event.Operator.Audit.AIMsg: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if err := rs.audit.HandleAIMsgRequest(ctx, msg); err != nil {
-				rs.logger.Error("failed to handle audit AI message", "error", err)
-			}
-		},
-		constants.Event.Operator.Audit.DirectCmd: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if err := rs.audit.HandleDirectCmdRequest(ctx, msg); err != nil {
-				rs.logger.Error("failed to handle direct command audit", "error", err)
-			}
-		},
-		constants.Event.Operator.Audit.DirectCmdResult: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if err := rs.audit.HandleDirectCmdResultRequest(ctx, msg); err != nil {
-				rs.logger.Error("failed to handle direct command result audit", "error", err)
-			}
-		},
 	}
 
 	rs.actionHandlers = map[constants.ActionType]verifiedActionHandler{
-		constants.ActionTypeHeartbeat: fireAndForgetActionHandler(rs.heartbeat.HandleRequest),
-		constants.ActionTypeExecuteBash: fireAndForgetActionHandler(rs.commands.HandleExecutionRequest),
-		constants.ActionTypeCancel: fireAndForgetActionHandler(rs.commands.HandleCancelRequest),
-		constants.ActionTypeFileEdit: fireAndForgetActionHandler(rs.fileOps.HandleFileEditRequest),
-		constants.ActionTypeFsList: fireAndForgetActionHandler(rs.fileOps.HandleFsListRequest),
-		constants.ActionTypeFsRead: fireAndForgetActionHandler(rs.fileOps.HandleFsReadRequest),
-		constants.ActionTypeFsGrep: fireAndForgetActionHandler(rs.fileOps.HandleFsGrepRequest),
-		constants.ActionTypePortCheck: fireAndForgetActionHandler(rs.ports.HandlePortCheckRequest),
-		constants.ActionTypeOllamaModelInventory: fireAndForgetActionHandler(rs.ollama.HandleInventoryRequest),
-		constants.ActionTypeOllamaModelResidency: fireAndForgetActionHandler(rs.ollama.HandleResidencyRequest),
-		constants.ActionTypeFetchLogs: fireAndForgetActionHandler(rs.history.HandleFetchLogsRequest),
-		constants.ActionTypeFetchHistory: fireAndForgetActionHandler(rs.history.HandleFetchHistoryRequest),
-		constants.ActionTypeFetchFileHistory: fireAndForgetActionHandler(rs.history.HandleFetchFileHistoryRequest),
-		constants.ActionTypeRestoreFile: fireAndForgetActionHandler(rs.history.HandleRestoreFileRequest),
-		constants.ActionTypeFetchFileDiff: fireAndForgetActionHandler(rs.history.HandleFetchFileDiffRequest),
-		constants.ActionTypeDocumentUpdate: rs.handleDocumentUpdateSync,
-		constants.ActionTypeDocumentDelete: rs.handleDocumentDeleteSync,
-		constants.ActionTypeEvalAnswer: rs.handleEvalAnswerRequestSync,
-		constants.ActionTypeInference: rs.handleInferenceRequestSync,
+		constants.ActionTypeHeartbeat:                   fireAndForgetActionHandler(rs.heartbeat.HandleRequest),
+		constants.ActionTypeExecuteBash:                 fireAndForgetActionHandler(rs.commands.HandleExecutionRequest),
+		constants.ActionTypeCancel:                      fireAndForgetActionHandler(rs.commands.HandleCancelRequest),
+		constants.ActionTypeFileEdit:                    fireAndForgetActionHandler(rs.fileOps.HandleFileEditRequest),
+		constants.ActionTypeFsList:                      fireAndForgetActionHandler(rs.fileOps.HandleFsListRequest),
+		constants.ActionTypeFsRead:                      fireAndForgetActionHandler(rs.fileOps.HandleFsReadRequest),
+		constants.ActionTypeFsGrep:                      fireAndForgetActionHandler(rs.fileOps.HandleFsGrepRequest),
+		constants.ActionTypePortCheck:                   fireAndForgetActionHandler(rs.ports.HandlePortCheckRequest),
+		constants.ActionTypeOllamaModelInventory:        fireAndForgetActionHandler(rs.ollama.HandleInventoryRequest),
+		constants.ActionTypeOllamaModelResidency:        fireAndForgetActionHandler(rs.ollama.HandleResidencyRequest),
+		constants.ActionTypeFetchLogs:                   fireAndForgetActionHandler(rs.history.HandleFetchLogsRequest),
+		constants.ActionTypeFetchHistory:                fireAndForgetActionHandler(rs.history.HandleFetchHistoryRequest),
+		constants.ActionTypeFetchFileHistory:            fireAndForgetActionHandler(rs.history.HandleFetchFileHistoryRequest),
+		constants.ActionTypeRestoreFile:                 fireAndForgetActionHandler(rs.history.HandleRestoreFileRequest),
+		constants.ActionTypeFetchFileDiff:               fireAndForgetActionHandler(rs.history.HandleFetchFileDiffRequest),
+		constants.ActionTypeDocumentUpdate:              rs.handleDocumentUpdateSync,
+		constants.ActionTypeDocumentDelete:              rs.handleDocumentDeleteSync,
+		constants.ActionTypeEvalAnswer:                  rs.handleEvalAnswerRequestSync,
+		constants.ActionTypeInference:                   rs.handleInferenceRequestSync,
 		constants.ActionTypeProviderBoundaryObservation: rs.handleProviderBoundaryObservationSync,
-		constants.ActionTypeModelProvenanceObservation: rs.handleModelProvenanceObservationSync,
+		constants.ActionTypeModelProvenanceObservation:  rs.handleModelProvenanceObservationSync,
 		constants.ActionTypeShutdown: func(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 			return rs.handleShutdownRequest(msg)
 		},
-		constants.ActionTypePlatformEnrollmentCreate: rs.platformEnrollment.HandleCreate,
-		constants.ActionTypePlatformEnrollmentDecide: rs.platformEnrollment.HandleDecide,
-		constants.ActionTypePlatformEnrollmentIssue: rs.platformEnrollment.HandleIssue,
+		constants.ActionTypePlatformEnrollmentCreate:        rs.platformEnrollment.HandleCreate,
+		constants.ActionTypePlatformEnrollmentDecide:        rs.platformEnrollment.HandleDecide,
+		constants.ActionTypePlatformEnrollmentIssue:         rs.platformEnrollment.HandleIssue,
 		constants.ActionTypePlatformEnrollmentPersistPolicy: rs.platformEnrollment.HandlePersistPolicy,
 		constants.ActionTypePlatformEnrollmentCreateSession: rs.platformEnrollment.HandleCreateSession,
-		constants.ActionTypePlatformEnrollmentRevoke: rs.platformEnrollment.HandleRevoke,
+		constants.ActionTypePlatformEnrollmentRevoke:        rs.platformEnrollment.HandleRevoke,
 	}
 }
 
 func (rs *OperatorPubSubService) buildGatewayHandlers() {
 	rs.actionHandlers[constants.ActionTypeMcpCall] = rs.handleMcpCallRequestSync
 	rs.actionHandlers[constants.ActionTypeA2aCall] = rs.handleA2aCallRequestSync
+	rs.actionHandlers[constants.ActionTypeMcpResourceRead] = rs.handleMcpResourceReadSync
+	rs.actionHandlers[constants.ActionTypeMcpPromptGet] = rs.handleMcpPromptGetSync
+	rs.actionHandlers[constants.ActionTypeMcpResourceList] = rs.handleMcpResourceListSync
+	rs.actionHandlers[constants.ActionTypeMcpPromptList] = rs.handleMcpPromptListSync
 }
 
 func (rs *OperatorPubSubService) Start(ctx context.Context) error {
@@ -1031,6 +1015,78 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 	}
 
 	return summary, nil
+}
+
+func mcpGatewayOrErr(rs *OperatorPubSubService) (*mcp.GatewayService, error) {
+	gw := rs.GetMCPGateway()
+	if gw == nil {
+		return nil, constants.ErrPubSubMCPGateway
+	}
+	return gw, nil
+}
+
+// handleMcpResourceReadSync is the Actuator egress for MCP_RESOURCE_READ.
+func (rs *OperatorPubSubService) handleMcpResourceReadSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	gw, err := mcpGatewayOrErr(rs)
+	if err != nil {
+		return "", err
+	}
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		return "", err
+	}
+	mcpReq, ok := req.(*operatorv1.McpResourceReadRequested)
+	if !ok {
+		return "", fmt.Errorf("invalid payload type for MCP resource read %T: %w", req, constants.ErrTxPayloadActionMismatch)
+	}
+	if mcpReq.Uri == "" {
+		return "", constants.ErrGatewayURIRequired
+	}
+	return gw.ExecuteResourceRead(ctx, mcpReq.Uri)
+}
+
+// handleMcpPromptGetSync is the Actuator egress for MCP_PROMPT_GET.
+func (rs *OperatorPubSubService) handleMcpPromptGetSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	gw, err := mcpGatewayOrErr(rs)
+	if err != nil {
+		return "", err
+	}
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		return "", err
+	}
+	mcpReq, ok := req.(*operatorv1.McpPromptGetRequested)
+	if !ok {
+		return "", fmt.Errorf("invalid payload type for MCP prompt get %T: %w", req, constants.ErrTxPayloadActionMismatch)
+	}
+	if mcpReq.Name == "" {
+		return "", constants.ErrGatewayNameRequired
+	}
+	return gw.ExecutePromptGet(ctx, mcpReq.Name)
+}
+
+// handleMcpResourceListSync is the Actuator egress for MCP_RESOURCE_LIST.
+func (rs *OperatorPubSubService) handleMcpResourceListSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	gw, err := mcpGatewayOrErr(rs)
+	if err != nil {
+		return "", err
+	}
+	if _, err := unmarshalPayload(msg.EventType, msg.Payload); err != nil {
+		return "", err
+	}
+	return gw.ExecuteResourceList(ctx)
+}
+
+// handleMcpPromptListSync is the Actuator egress for MCP_PROMPT_LIST.
+func (rs *OperatorPubSubService) handleMcpPromptListSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	gw, err := mcpGatewayOrErr(rs)
+	if err != nil {
+		return "", err
+	}
+	if _, err := unmarshalPayload(msg.EventType, msg.Payload); err != nil {
+		return "", err
+	}
+	return gw.ExecutePromptList(ctx)
 }
 
 // handleA2aCallRequestSync is the Actuator egress for A2A_CALL transactions:

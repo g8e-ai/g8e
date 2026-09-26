@@ -389,6 +389,25 @@ func (c *E2EClient) VerifyAuditChain(ctx context.Context, fromSeq int64) (models
 	return decodeJSON[models.AuditVerifyResponse](body, "audit verify")
 }
 
+// IngestAuditRecord posts an LFAA audit record to POST /api/v1/audit/records
+// and returns the operator chain acknowledgement.
+func (c *E2EClient) IngestAuditRecord(ctx context.Context, req models.AuditRecordIngestRequest) (models.AuditRecordIngestResponse, error) {
+	bodyBytes, err := json.Marshal(req)
+	if err != nil {
+		return models.AuditRecordIngestResponse{}, fmt.Errorf("marshal audit ingest body: %w", err)
+	}
+	httpReq, err := c.newAuthenticatedRequest(ctx, http.MethodPost, constants.APIPaths.AuditRecords, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return models.AuditRecordIngestResponse{}, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	body, _, err := doRequest(c.mtlsClient, httpReq, http.StatusOK)
+	if err != nil {
+		return models.AuditRecordIngestResponse{}, fmt.Errorf("ingest audit record: %w", err)
+	}
+	return decodeJSON[models.AuditRecordIngestResponse](body, "audit ingest")
+}
+
 // DispatchCommandExpectStatus posts a dispatch request and returns the HTTP status
 // and raw body without requiring success.
 func (c *E2EClient) DispatchCommandExpectStatus(ctx context.Context, body dispatchRequestJSON, expectedStatus int) (int, []byte, error) {

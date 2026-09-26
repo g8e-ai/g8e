@@ -18,9 +18,9 @@ import (
 )
 
 type generationOutputs struct {
-	EventsGo       string
-	ActionTypesGo  string
-	DashboardJS    string
+	EventsGo      string
+	ActionTypesGo string
+	DashboardJS   string
 }
 
 func generateAll(root string, reg registryFile, actionTypes map[string]actionTypeMeta) (generationOutputs, error) {
@@ -51,14 +51,17 @@ func generateAll(root string, reg registryFile, actionTypes map[string]actionTyp
 
 func writeGenerated(root string, out generationOutputs) error {
 	targets := map[string]string{
-		filepath.Join(root, "internal/constants/events_gen.go"):                 out.EventsGo,
-		filepath.Join(root, "internal/constants/action_types_gen.go"):           out.ActionTypesGo,
-		filepath.Join(root, "dashboard/public/js/constants/events.js"):          out.DashboardJS,
+		filepath.Join(root, "internal/constants/events_gen.go"):        out.EventsGo,
+		filepath.Join(root, "internal/constants/action_types_gen.go"):  out.ActionTypesGo,
+		filepath.Join(root, "dashboard/public/js/constants/events.js"): out.DashboardJS,
 	}
 	for path, content := range targets {
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
+	}
+	if err := syncBundledPythonEvents(root); err != nil {
+		return err
 	}
 	return nil
 }
@@ -67,7 +70,7 @@ func verifyGenerated(root string, out generationOutputs) error {
 	targets := map[string]string{
 		filepath.Join(root, "internal/constants/events_gen.go"):        out.EventsGo,
 		filepath.Join(root, "internal/constants/action_types_gen.go"):  out.ActionTypesGo,
-		filepath.Join(root, "dashboard/public/js/constants/events.js"):   out.DashboardJS,
+		filepath.Join(root, "dashboard/public/js/constants/events.js"): out.DashboardJS,
 	}
 	var diffs []string
 	for path, expected := range targets {
@@ -80,9 +83,44 @@ func verifyGenerated(root string, out generationOutputs) error {
 			diffs = append(diffs, fmt.Sprintf("%s: generated output differs from committed file (run make constants)", path))
 		}
 	}
+	if err := verifyBundledPythonEvents(root); err != nil {
+		diffs = append(diffs, err.Error())
+	}
 	if len(diffs) > 0 {
 		sort.Strings(diffs)
 		return fmt.Errorf("generated constants are stale:\n  %s", strings.Join(diffs, "\n  "))
+	}
+	return nil
+}
+
+func bundledPythonEventsPath(root string) string {
+	return filepath.Join(root, "protocol/python/g8e/_data/events.json")
+}
+
+func syncBundledPythonEvents(root string) error {
+	canonical, err := os.ReadFile(filepath.Join(root, "protocol/constants/events.json"))
+	if err != nil {
+		return fmt.Errorf("read canonical events.json: %w", err)
+	}
+	path := bundledPythonEventsPath(root)
+	if err := os.WriteFile(path, canonical, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func verifyBundledPythonEvents(root string) error {
+	canonical, err := os.ReadFile(filepath.Join(root, "protocol/constants/events.json"))
+	if err != nil {
+		return fmt.Errorf("read canonical events.json: %w", err)
+	}
+	path := bundledPythonEventsPath(root)
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("%s: %v", path, err)
+	}
+	if !bytes.Equal(actual, canonical) {
+		return fmt.Errorf("%s: bundled Python events.json differs from protocol/constants/events.json (run make constants)", path)
 	}
 	return nil
 }

@@ -46,7 +46,7 @@ const EventAiEvalPublicationCompleted EventType = "g8e.v1.ai.eval.publication.co
 const EventAiEvalRunCompleted EventType = "g8e.v1.ai.eval.run.completed"
 const EventAiEvalStopRequested EventType = "g8e.v1.ai.eval.stop.requested"
 const EventAiEvalVerifierCompleted EventType = "g8e.v1.ai.eval.verifier.completed"
-const EventAiLLMChatFilterEvent EventType = "g8e.v1.ai.llm.chat.filter.event"
+const EventAiLLMChatFilterEvent EventType = "g8e.v1.ai.llm.chat.filter.updated"
 const EventAiLLMChatIterationCitationsReceived EventType = "g8e.v1.ai.llm.chat.iteration.citations.received"
 const EventAiLLMChatIterationCompleted EventType = "g8e.v1.ai.llm.chat.iteration.completed"
 const EventAiLLMChatIterationFailed EventType = "g8e.v1.ai.llm.chat.iteration.failed"
@@ -177,11 +177,11 @@ const EventOperatorCommandCancelFailed EventType = "g8e.v1.operator.command.canc
 const EventOperatorCommandCancelRequested EventType = "g8e.v1.operator.command.cancel.requested"
 const EventOperatorCommandCancelled EventType = "g8e.v1.operator.command.cancelled"
 const EventOperatorCommandCompleted EventType = "g8e.v1.operator.command.completed"
-const EventOperatorCommandExecution EventType = "g8e.v1.operator.command.execution"
+const EventOperatorCommandExecution EventType = "g8e.v1.operator.command.execution.started"
 const EventOperatorCommandFailed EventType = "g8e.v1.operator.command.failed"
 const EventOperatorCommandOutputReceived EventType = "g8e.v1.operator.command.output.received"
 const EventOperatorCommandRequested EventType = "g8e.v1.operator.command.requested"
-const EventOperatorCommandResult EventType = "g8e.v1.operator.command.result"
+const EventOperatorCommandResult EventType = "g8e.v1.operator.command.result.completed"
 const EventOperatorCommandStarted EventType = "g8e.v1.operator.command.started"
 const EventOperatorCommandStatusUpdatedCancelled EventType = "g8e.v1.operator.command.status.updated.cancelled"
 const EventOperatorCommandStatusUpdatedCompleted EventType = "g8e.v1.operator.command.status.updated.completed"
@@ -258,6 +258,8 @@ const EventOperatorLogsFetchReceived EventType = "g8e.v1.operator.logs.fetch.rec
 const EventOperatorLogsFetchRequested EventType = "g8e.v1.operator.logs.fetch.requested"
 const EventOperatorMcpCallRequested EventType = "g8e.v1.operator.mcp.call.requested"
 const EventOperatorMcpPromptGetRequested EventType = "g8e.v1.operator.mcp.prompt.get.requested"
+const EventOperatorMcpPromptListRequested EventType = "g8e.v1.operator.mcp.prompt.list.requested"
+const EventOperatorMcpResourceListRequested EventType = "g8e.v1.operator.mcp.resource.list.requested"
 const EventOperatorMcpResourceReadRequested EventType = "g8e.v1.operator.mcp.resource.read.requested"
 const EventOperatorModelProvenanceObservationCompleted EventType = "g8e.v1.operator.model.provenance.observation.completed"
 const EventOperatorModelProvenanceObservationRequested EventType = "g8e.v1.operator.model.provenance.observation.requested"
@@ -311,7 +313,7 @@ const EventOperatorTerminalThinkingAppend EventType = "g8e.v1.operator.terminal.
 const EventOperatorTerminalThinkingComplete EventType = "g8e.v1.operator.terminal.thinking.complete"
 const EventOperatorUnbound EventType = "g8e.v1.operator.unbound"
 const EventPlatformAuditChainCheckpointed EventType = "g8e.v1.platform.audit.chain.checkpointed"
-const EventPlatformAuthInfo EventType = "g8e.v1.platform.auth.info"
+const EventPlatformAuthInfo EventType = "g8e.v1.platform.auth.info.updated"
 const EventPlatformAuthLoginFailed EventType = "g8e.v1.platform.auth.login.failed"
 const EventPlatformAuthLoginRequested EventType = "g8e.v1.platform.auth.login.requested"
 const EventPlatformAuthLoginSucceeded EventType = "g8e.v1.platform.auth.login.succeeded"
@@ -333,7 +335,7 @@ const EventPlatformEnrollmentIssueRequested EventType = "g8e.v1.platform.enrollm
 const EventPlatformEnrollmentPersistPolicyRequested EventType = "g8e.v1.platform.enrollment.persist_policy.requested"
 const EventPlatformEnrollmentRevokeRequested EventType = "g8e.v1.platform.enrollment.revoke.requested"
 const EventPlatformExternalServiceConfigured EventType = "g8e.v1.platform.external.service.configured"
-const EventPlatformNotification EventType = "g8e.v1.platform.notification"
+const EventPlatformNotification EventType = "g8e.v1.platform.notification.sent"
 const EventPlatformSseConnectionClosed EventType = "g8e.v1.platform.sse.connection.closed"
 const EventPlatformSseConnectionError EventType = "g8e.v1.platform.sse.connection.error"
 const EventPlatformSseConnectionEstablished EventType = "g8e.v1.platform.sse.connection.established"
@@ -2345,6 +2347,24 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		GovernanceAction: ActionTypeMcpPromptGet,
 		GovernancePayload: "g8e.operator.v1.McpPromptGetRequested",
 	},
+	EventOperatorMcpPromptListRequested: {
+		Key: "OperatorMcpPromptListRequested",
+		Kind: EventKindRequest,
+		Transport: []string{"governed"},
+		Producers: []string{"mcp"},
+		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeMcpPromptList,
+		GovernancePayload: "g8e.operator.v1.McpPromptListRequested",
+	},
+	EventOperatorMcpResourceListRequested: {
+		Key: "OperatorMcpResourceListRequested",
+		Kind: EventKindRequest,
+		Transport: []string{"governed"},
+		Producers: []string{"mcp"},
+		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeMcpResourceList,
+		GovernancePayload: "g8e.operator.v1.McpResourceListRequested",
+	},
 	EventOperatorMcpResourceReadRequested: {
 		Key: "OperatorMcpResourceReadRequested",
 		Kind: EventKindRequest,
@@ -3259,6 +3279,8 @@ type _EventOperatorIntent struct {
 type _EventOperatorMcp struct {
 	CallRequested EventType
 	PromptGetRequested EventType
+	PromptListRequested EventType
+	ResourceListRequested EventType
 	ResourceReadRequested EventType
 }
 
@@ -3465,6 +3487,8 @@ var Event = struct {
 		Mcp: _EventOperatorMcp{
 			CallRequested: EventOperatorMcpCallRequested,
 			PromptGetRequested: EventOperatorMcpPromptGetRequested,
+			PromptListRequested: EventOperatorMcpPromptListRequested,
+			ResourceListRequested: EventOperatorMcpResourceListRequested,
 			ResourceReadRequested: EventOperatorMcpResourceReadRequested,
 		},
 		ModelProvenanceObservation: _EventOperatorModelProvenanceObservation{

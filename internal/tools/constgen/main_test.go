@@ -28,7 +28,7 @@ func TestValidateCommittedEventRegistry(t *testing.T) {
 	actionTypeMeta, err := loadActionTypeMeta(statusPath)
 	require.NoError(t, err)
 
-	require.NoError(t, validateRegistry(events, actionTypeValues(actionTypeMeta), false))
+	require.NoError(t, validateRegistry(events, actionTypeValues(actionTypeMeta)))
 }
 
 func TestValidateRegistryRejectsDuplicateWireValues(t *testing.T) {
@@ -38,7 +38,7 @@ func TestValidateRegistryRejectsDuplicateWireValues(t *testing.T) {
 			"B": {GoConst: "EventB", Value: "g8e.v1.app.case.created"},
 		},
 	}
-	err := validateRegistry(reg, map[string]struct{}{"DOCUMENT_UPDATE": {}}, false)
+	err := validateRegistry(reg, map[string]struct{}{"DOCUMENT_UPDATE": {}})
 	require.Error(t, err)
 }
 
@@ -57,7 +57,7 @@ func TestValidateRegistryRejectsGovernanceOnNonRequest(t *testing.T) {
 			},
 		},
 	}
-	err := validateRegistry(reg, map[string]struct{}{"DOCUMENT_UPDATE": {}}, false)
+	err := validateRegistry(reg, map[string]struct{}{"DOCUMENT_UPDATE": {}})
 	require.Error(t, err)
 }
 
@@ -72,7 +72,7 @@ func TestValidateRegistryRejectsMissingProducers(t *testing.T) {
 			},
 		},
 	}
-	err := validateRegistry(reg, map[string]struct{}{}, false)
+	err := validateRegistry(reg, map[string]struct{}{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing producers")
 }
@@ -91,7 +91,7 @@ func TestValidateRegistryRejectsMissingOutcomeReference(t *testing.T) {
 			},
 		},
 	}
-	err := validateRegistry(reg, map[string]struct{}{}, false)
+	err := validateRegistry(reg, map[string]struct{}{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing event")
 }
@@ -116,7 +116,7 @@ func TestValidateRegistryRejectsActionTypeWithoutRequestEvent(t *testing.T) {
 	err := validateRegistry(reg, map[string]struct{}{
 		"EXECUTE_BASH": {},
 		"FS_READ":      {},
-	}, false)
+	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `action type "FS_READ" has no governed request event`)
 }

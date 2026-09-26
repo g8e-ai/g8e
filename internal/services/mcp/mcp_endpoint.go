@@ -336,12 +336,31 @@ func (g *GatewayService) listPromptsResult(ctx context.Context) (interface{}, er
 // proxyListMethod forwards a discovery method to the downstream MCP server and
 // returns the raw JSON-RPC result payload. It honours the circuit breaker.
 func (g *GatewayService) proxyListMethod(ctx context.Context, method string) (json.RawMessage, error) {
+	return g.proxyMCPMethod(ctx, method, nil)
+}
+
+// proxyMCPMethod forwards a JSON-RPC method to the downstream MCP server.
+func (g *GatewayService) proxyMCPMethod(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
+	if g.downstreamURL == "" {
+		return nil, constants.ErrGatewayNoDownstreamConfigured
+	}
 	if g.isCircuitOpen() {
 		return nil, fmt.Errorf("mcp_endpoint: downstream MCP server is temporarily unavailable (circuit open)")
 	}
 
-	reqBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":%q}`, method)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.downstreamURL, strings.NewReader(reqBody))
+	rpcReq := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  method,
+	}
+	if params != nil {
+		rpcReq["params"] = params
+	}
+	reqBody, err := json.Marshal(rpcReq)
+	if err != nil {
+		return nil, fmt.Errorf("mcp_endpoint: failed to encode downstream request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.downstreamURL, strings.NewReader(string(reqBody)))
 	if err != nil {
 		return nil, fmt.Errorf("mcp_endpoint: failed to build downstream request: %w", err)
 	}

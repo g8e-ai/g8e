@@ -99,6 +99,8 @@
   "EventOperatorLogsFetchRequested": "FetchLogs.Requested",
   "EventOperatorMcpCallRequested": "Mcp.CallRequested",
   "EventOperatorMcpPromptGetRequested": "Mcp.PromptGetRequested",
+  "EventOperatorMcpPromptListRequested": "Mcp.PromptListRequested",
+  "EventOperatorMcpResourceListRequested": "Mcp.ResourceListRequested",
   "EventOperatorMcpResourceReadRequested": "Mcp.ResourceReadRequested",
   "EventOperatorModelProvenanceObservationCompleted": "ModelProvenanceObservation.Completed",
   "EventOperatorModelProvenanceObservationRequested": "ModelProvenanceObservation.Requested",

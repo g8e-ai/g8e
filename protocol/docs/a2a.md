@@ -28,7 +28,7 @@ A2A requests follow an HTTP/JSON pattern:
 The g8e Gateway translates A2A skill invocations into governance envelopes:
 
 1. **Inbound**: A2A agent sends HTTP/JSON skill invocation to the gateway.
-2. **Envelope Construction**: Gateway wraps the payload in a `GovernanceEnvelope` with action type `A2A_CALL`.
+2. **Envelope Construction**: Gateway wraps the payload in a `GovernanceEnvelope` with request event `g8e.v1.operator.a2a.call.requested`. The registry derives action type `A2A_CALL`.
 3. **Verification**: The envelope passes through L1-L4 verification gates.
 4. **Dispatch**: Verified envelopes are forwarded to the L5 Actuator, which dispatches the call to a configured downstream A2A server via `DispatchToA2ADownstream`.
 
@@ -38,7 +38,7 @@ The g8e Gateway translates A2A skill invocations into governance envelopes:
 
 ### A2A_CALL
 
-The gateway maps A2A skill invocations to the `A2A_CALL` action type (defined in `internal/constants/action_types.go`). The `A2aCallRequested` protobuf payload is defined in `protocol/proto/g8e/operator/v1/operator.proto`, and the corresponding event type `g8e.v1.operator.a2a.call.requested` is registered in `protocol/constants/events.json`:
+The gateway maps A2A skill invocations to the `A2A_CALL` action type (generated from `protocol/constants/status.json` into `internal/constants/action_types_gen.go`). The `A2aCallRequested` protobuf payload is defined in `protocol/proto/g8e/operator/v1/operator.proto`, and the corresponding event type `g8e.v1.operator.a2a.call.requested` is registered in `protocol/constants/events.json`:
 
 | Field | Type | Description |
 |---|---|---|

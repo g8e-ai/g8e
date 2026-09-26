@@ -797,6 +797,70 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 	return mcpRes, nil
 }
 
+// ExecuteResourceRead is the L5 egress for a verified MCP_RESOURCE_READ.
+func (g *GatewayService) ExecuteResourceRead(ctx context.Context, uri string) (string, error) {
+	if uri == "" {
+		return "", constants.ErrGatewayURIRequired
+	}
+	raw, err := g.proxyMCPMethod(ctx, "resources/read", map[string]string{"uri": uri})
+	if err != nil {
+		return "", err
+	}
+	return mcpResultSummary(raw), nil
+}
+
+// ExecutePromptGet is the L5 egress for a verified MCP_PROMPT_GET.
+func (g *GatewayService) ExecutePromptGet(ctx context.Context, name string) (string, error) {
+	if name == "" {
+		return "", constants.ErrGatewayNameRequired
+	}
+	raw, err := g.proxyMCPMethod(ctx, "prompts/get", map[string]string{"name": name})
+	if err != nil {
+		return "", err
+	}
+	return mcpResultSummary(raw), nil
+}
+
+// ExecuteResourceList is the L5 egress for a verified MCP_RESOURCE_LIST.
+func (g *GatewayService) ExecuteResourceList(ctx context.Context) (string, error) {
+	res, err := g.listResourcesResult(ctx)
+	if err != nil {
+		return "", err
+	}
+	return marshalMCPCatalog(res)
+}
+
+// ExecutePromptList is the L5 egress for a verified MCP_PROMPT_LIST.
+func (g *GatewayService) ExecutePromptList(ctx context.Context) (string, error) {
+	res, err := g.listPromptsResult(ctx)
+	if err != nil {
+		return "", err
+	}
+	return marshalMCPCatalog(res)
+}
+
+func marshalMCPCatalog(res interface{}) (string, error) {
+	if raw, ok := res.(json.RawMessage); ok {
+		return mcpResultSummary(raw), nil
+	}
+	body, err := json.Marshal(res)
+	if err != nil {
+		return "", fmt.Errorf("gateway: %w", constants.ErrInternal)
+	}
+	return mcpResultSummary(body), nil
+}
+
+func mcpResultSummary(raw json.RawMessage) string {
+	summary := strings.TrimSpace(string(raw))
+	if summary == "" || summary == "null" {
+		return "completed"
+	}
+	if len(summary) > constants.ReceiptSummaryMaxBytes {
+		return summary[:constants.ReceiptSummaryMaxBytes]
+	}
+	return summary
+}
+
 type processGatewayOptions struct {
 	eventType       constants.EventType
 	targetResource  string

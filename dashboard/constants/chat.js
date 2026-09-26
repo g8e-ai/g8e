@@ -42,8 +42,8 @@ export const EventType = Object.freeze({
     OPERATOR_COMMAND_COMPLETED:    _EVENTS['operator']['command']['completed'],
     OPERATOR_COMMAND_FAILED:       _EVENTS['operator']['command']['failed'],
     OPERATOR_COMMAND_CANCELLED:    _EVENTS['operator']['command']['cancelled'],
-    OPERATOR_COMMAND_EXECUTION:    _EVENTS['operator']['command']['execution'],
-    OPERATOR_COMMAND_RESULT:       _EVENTS['operator']['command']['result'],
+    OPERATOR_COMMAND_EXECUTION:    _EVENTS['operator']['command']['execution']['started'],
+    OPERATOR_COMMAND_RESULT:       _EVENTS['operator']['command']['result']['completed'],
 
     // Approvals
     OPERATOR_APPROVAL_REQUEST:     _EVENTS['operator']['command']['approval']['requested'],
@@ -73,7 +73,7 @@ export const EventType = Object.freeze({
     LLM_CHAT_ITERATION_TEXT_CHUNK: _EVENTS['ai']['llm']['chat']['iteration']['text']['chunk']['received'],
 
     // Platform
-    SYSTEM_NOTIFICATION:           _EVENTS['platform']['notification'],
+    SYSTEM_NOTIFICATION:           _EVENTS['platform']['notification']['sent'],
 
     EVENT_SOURCE_USER_CHAT:     _MSG['message']['sender']['user']['chat'],
     EVENT_SOURCE_USER_TERMINAL: _MSG['message']['sender']['user']['terminal'],

@@ -59,9 +59,9 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. `make cons
 - AI LLM Config: requested, received, failed
 - AI LLM Lifecycle: requested, started, completed, failed, stopped, error occurred
 - AI LLM Tools: web search, investigation query, and command constraints event lifecycles
-- AI LLM Chat: submitted, filter event, message sent/replayed/processing failed/dead lettered, iteration lifecycle events (started, completed, failed, stopped, retry), thinking lifecycle events (`thinking_phase` in payloads), citations received, text received/chunk received/completed/truncated, stream lifecycle events. Dashboard-local stop signals live in `dashboard/public/js/constants/ui-events.js`, not the protocol registry.
-- Platform: usage updated, notification
-- Platform Auth: login requested/succeeded/failed, logout requested/succeeded/failed, session validation requested/succeeded/failed, session expired, user authenticated/unauthenticated, component initialized (authstate, chat, operator), auth info
+- AI LLM Chat: submitted, filter updated, message sent/replayed/processing failed/dead lettered, iteration lifecycle events (started, completed, failed, stopped, retry), thinking lifecycle events (`thinking_phase` in payloads), citations received, text received/chunk received/completed/truncated, stream lifecycle events. Dashboard-local stop signals live in `dashboard/public/js/constants/ui-events.js`, not the protocol registry.
+- Platform: usage updated, notification sent
+- Platform Auth: login requested/succeeded/failed, logout requested/succeeded/failed, session validation requested/succeeded/failed, session expired, user authenticated/unauthenticated, component initialized (authstate, chat, operator), auth info updated
 - Platform SSE: keepalive sent, connection established/opened/closed/failed/error
 - Platform Terminal: dashboard UI signals (`ui-events.js`); no `platform.terminal.*` wire events in the registry
 - Platform Vault: `EventPlatformVaultModeChanged` (`g8e.v1.platform.sentinel.mode.changed`)

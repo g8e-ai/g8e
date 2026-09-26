@@ -21,25 +21,7 @@ DOCUMENT_DELETE_GOV = {
     "payload": "g8e.operator.v1.DocumentDeleteRequested",
 }
 
-GRAMMAR_ALLOWLIST = {
-    "AiLLMChatFilterEvent": "lead",
-    "PlatformNotification": "lead",
-    "PlatformAuthInfo": "lead",
-    "OperatorCommandExecution": "lead",
-    "OperatorCommandResult": "lead",
-    "AiLLMChatStopShow": "lead",
-    "AiLLMChatStopHide": "lead",
-    "AppInvestigationStatusUpdatedOpen": "lead",
-    "AppInvestigationStatusUpdatedClosed": "lead",
-    "AppInvestigationStatusUpdatedEscalated": "lead",
-    "AppInvestigationStatusUpdatedResolved": "lead",
-    "SourceAiAssistant": "w3",
-    "SourceAiPrimary": "w3",
-    "SourceAiTriage": "w3",
-    "SourceSystem": "w3",
-    "SourceUserChat": "w3",
-    "SourceUserTerminal": "w3",
-}
+GRAMMAR_ALLOWLIST = {}
 
 OUTCOME_TERMINALS = {
     "completed",

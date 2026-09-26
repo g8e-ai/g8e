@@ -276,7 +276,7 @@ func TestSQLAuditStore_VerifyChain_AppendAndTamper(t *testing.T) {
 	require.NoError(t, err)
 	err = ass.VerifyChain(context.Background(), 0)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "hash mismatch")
+	assert.Contains(t, err.Error(), "hash mismatch at seq 1")
 }
 
 func TestSQLAuditStore_VerifyChain_BackfillLegacyRows(t *testing.T) {

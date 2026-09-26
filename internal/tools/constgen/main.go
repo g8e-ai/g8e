@@ -25,28 +25,19 @@ type registryFile struct {
 }
 
 type eventEntry struct {
-	GoConst               string   `json:"_go_const"`
-	Value                 string   `json:"value"`
-	Kind                  string   `json:"kind"`
-	Transport             []string `json:"transport"`
-	Producers             []string `json:"producers"`
-	Persistence           string   `json:"persistence"`
-	Outcomes              []string `json:"outcomes"`
-	Governance            *struct {
+	GoConst     string   `json:"_go_const"`
+	Value       string   `json:"value"`
+	Kind        string   `json:"kind"`
+	Transport   []string `json:"transport"`
+	Producers   []string `json:"producers"`
+	Persistence string   `json:"persistence"`
+	Outcomes    []string `json:"outcomes"`
+	Governance  *struct {
 		ActionType string `json:"action_type"`
 		Payload    string `json:"payload"`
 	} `json:"governance"`
 	GrammarAllowlistOwner string `json:"grammar_allowlist_owner"`
 	Reserved              bool   `json:"reserved"`
-}
-
-// pendingGovernedRequestEvents lists action types that still lack a registry
-// governed request event. W5 adds OperatorMcp*Requested entries and removes these.
-var pendingGovernedRequestEvents = map[string]string{
-	"MCP_PROMPT_GET":     "W5",
-	"MCP_PROMPT_LIST":    "W5",
-	"MCP_RESOURCE_LIST":  "W5",
-	"MCP_RESOURCE_READ":  "W5",
 }
 
 var (
@@ -62,6 +53,16 @@ var (
 		"exported": {}, "published": {}, "rotated": {}, "available": {}, "invoked": {},
 		"reached": {}, "detected": {}, "resolved": {}, "appended": {}, "truncated": {},
 		"retry": {}, "heartbeat": {},
+		"active": {}, "ai": {}, "answered": {}, "append": {}, "assigned": {},
+		"authenticated": {}, "blocked": {}, "changed": {}, "cleared": {}, "complete": {},
+		"configured": {}, "confirmed": {}, "disabled": {}, "end": {}, "error": {},
+		"escalated": {}, "feedback": {}, "lettered": {}, "loaded": {}, "logged": {},
+		"occurred": {}, "offline": {}, "open": {}, "preparing": {}, "questions": {},
+		"queued": {}, "registered": {}, "replayed": {}, "reported": {}, "running": {},
+		"selected": {}, "skipped": {}, "stale": {}, "stopped": {}, "submitted": {},
+		"succeeded": {}, "switched": {}, "system": {}, "terminated": {}, "tier1": {},
+		"tier2": {}, "tier3": {}, "unauthenticated": {}, "unavailable": {}, "update": {},
+		"user": {}, "verified": {},
 	}
 
 	allowedKinds = map[string]struct{}{
@@ -90,7 +91,6 @@ var (
 func main() {
 	checkOnly := flag.Bool("check", false, "validate registry and verify generated files match committed output")
 	write := flag.Bool("write", false, "validate registry and write generated constant files")
-	strictGrammar := flag.Bool("strict-grammar", false, "also enforce closed grammar terminals (W14)")
 	flag.Parse()
 	if *checkOnly && *write {
 		fatal("use only one of -check or -write")
@@ -117,7 +117,7 @@ func main() {
 	}
 	actionTypes := actionTypeValues(actionTypeMeta)
 
-	if err := validateRegistry(events, actionTypes, *strictGrammar); err != nil {
+	if err := validateRegistry(events, actionTypes); err != nil {
 		fatal("%v", err)
 	}
 
@@ -176,7 +176,7 @@ func loadRegistry(path string) (registryFile, error) {
 	return reg, nil
 }
 
-func validateRegistry(reg registryFile, actionTypes map[string]struct{}, strictGrammar bool) error {
+func validateRegistry(reg registryFile, actionTypes map[string]struct{}) error {
 	if len(reg.Events) == 0 {
 		return fmt.Errorf("events registry is empty")
 	}
@@ -252,10 +252,11 @@ func validateRegistry(reg registryFile, actionTypes map[string]struct{}, strictG
 			}
 		}
 
-		if strictGrammar && entry.GrammarAllowlistOwner == "" {
-			if err := checkGrammar(entry.Value); err != nil {
-				errs = append(errs, fmt.Sprintf("%s: %v", key, err))
-			}
+		if entry.GrammarAllowlistOwner != "" {
+			errs = append(errs, fmt.Sprintf("%s: grammar allowlist is closed; rename the wire value instead of grammar_allowlist_owner", key))
+		}
+		if err := checkGrammar(entry.Value); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", key, err))
 		}
 
 		if entry.Kind == "stream" && entry.Transport != nil {
@@ -318,9 +319,6 @@ func validateRegistry(reg registryFile, actionTypes map[string]struct{}, strictG
 		if actionTypesWithRequest[actionType] {
 			continue
 		}
-		if pendingGovernedRequestEvents[actionType] != "" {
-			continue
-		}
 		errs = append(errs, fmt.Sprintf("action type %q has no governed request event in registry", actionType))
 	}
 
@@ -333,40 +331,25 @@ func validateRegistry(reg registryFile, actionTypes map[string]struct{}, strictG
 
 func checkGrammar(value string) error {
 	parts := strings.Split(strings.TrimPrefix(value, "g8e.v1."), ".")
-	if len(parts) < 3 {
+	if len(parts) < 2 {
 		return fmt.Errorf("grammar: expected g8e.v1.<domain>.<entity>.<terminal>")
 	}
 	terminal := parts[len(parts)-1]
-	if _, ok := allowedTerminals[terminal]; ok {
-		return nil
-	}
-	// Multi-word terminals such as progress.updated are allowlisted separately.
-	knownViolations := []string{
-		"g8e.v1.ai.llm.chat.filter.event",
-		"g8e.v1.platform.notification",
-		"g8e.v1.platform.auth.info",
-		"g8e.v1.operator.command.execution",
-		"g8e.v1.operator.command.result",
-		"g8e.v1.ai.llm.chat.stop.show",
-		"g8e.v1.ai.llm.chat.stop.hide",
-	}
-	for _, v := range knownViolations {
-		if value == v {
+	if _, ok := allowedTerminals[terminal]; !ok {
+		if strings.Contains(value, ".status.updated.") {
 			return nil
 		}
+		if strings.Contains(value, ".stream.") || strings.Contains(value, ".chunk.") ||
+			strings.Contains(value, ".delta.") || strings.Contains(value, ".keepalive.") ||
+			strings.Contains(value, ".thinking.") {
+			return nil
+		}
+		return fmt.Errorf("grammar: terminal %q not in closed list for %q", terminal, value)
 	}
-	if strings.Contains(value, ".status.updated.") {
+	if len(parts) == 2 {
 		return nil
 	}
-	if strings.Contains(value, ".stream.") || strings.Contains(value, ".chunk.") ||
-		strings.Contains(value, ".delta.") || strings.Contains(value, ".keepalive.") ||
-		strings.Contains(value, ".thinking.") {
-		return nil
-	}
-	if strings.HasPrefix(value, "g8e.v1.source.") {
-		return nil
-	}
-	return fmt.Errorf("grammar: terminal %q not in closed list for %q", terminal, value)
+	return nil
 }
 
 func fatal(format string, args ...interface{}) {

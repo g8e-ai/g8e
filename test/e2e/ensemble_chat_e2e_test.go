@@ -22,6 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -106,6 +107,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 		Signature       string
 		RequestorUserID string
 		ActingAppID     string
+		ActionReceipt   *operatorv1.ActionReceipt
 	}
 
 	require.Eventually(t, func() bool {
@@ -138,6 +140,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 				Signature       string
 				RequestorUserID string
 				ActingAppID     string
+				ActionReceipt   *operatorv1.ActionReceipt
 			}{
 				TransactionID:   r.TransactionID,
 				EventType:       string(r.EventType),
@@ -146,6 +149,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 				Signature:       r.Signature,
 				RequestorUserID: r.RequestorUserID,
 				ActingAppID:     r.ActingAppID,
+				ActionReceipt:   r.ActionReceipt,
 			}
 			return true
 		}
@@ -161,8 +165,34 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	assert.GreaterOrEqual(t, len(foundReceipt.Signature), 64, "receipt signature must be valid hex Ed25519 signature")
 	assert.Equal(t, e2eClient.userID, foundReceipt.RequestorUserID, "receipt requestor_user_id must match authenticated user")
 	assert.NotEmpty(t, foundReceipt.ActingAppID, "receipt acting_app_id must not be empty")
+	if foundReceipt.ActionReceipt != nil {
+		canonical, err := governance.CanonicalizeActionReceipt(foundReceipt.ActionReceipt)
+		require.NoError(t, err, "receipt v2 canonicalization must succeed")
+		assert.Contains(t, string(canonical), `"event_type":"`+string(constants.EventOperatorFileEditRequested)+`"`)
+		assert.Contains(t, string(canonical), `"action_type":"`+string(constants.ActionTypeFileEdit)+`"`)
+	}
 	t.Logf("correlated receipt: tx=%s signature_len=%d requestor=%s app=%s",
 		foundReceipt.TransactionID, len(foundReceipt.Signature), foundReceipt.RequestorUserID, foundReceipt.ActingAppID)
+
+	require.Eventually(t, func() bool {
+		receiptsResp, err := e2eClient.GetAuditReceipts(ctx, "")
+		if err != nil {
+			return false
+		}
+		for _, r := range receiptsResp.Receipts {
+			if r.EventType != constants.EventAppCaseCreateRequested {
+				continue
+			}
+			if !r.ExecutedAt.IsZero() && r.ExecutedAt.Before(notBefore) {
+				continue
+			}
+			if r.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+				continue
+			}
+			return true
+		}
+		return false
+	}, 60*time.Second, 2*time.Second, "chat case creation receipt event_type must be %s", constants.EventAppCaseCreateRequested)
 
 	fsReadReq := &operatorv1.FsReadRequested{Path: filePath}
 	payload, err := proto.Marshal(fsReadReq)
