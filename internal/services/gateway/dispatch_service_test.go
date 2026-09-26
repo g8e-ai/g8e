@@ -719,7 +719,7 @@ func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.
 		completedEnv := &commonv1.GovernanceEnvelope{
 			Id:         cmdEnv.Id,
 			EventType:  string(constants.Event.Operator.Command.Completed),
-			ActionType: "EXECUTE_BASH_RESULT",
+			ActionType: string(constants.ActionTypeExecuteBash),
 			Payload:    resultPayload,
 			Timestamp:  timestamppb.Now(),
 		}

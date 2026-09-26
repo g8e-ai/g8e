@@ -382,6 +382,14 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			if isShellCommandDispatch(req.EventType) && !isOperatorCommandTerminalResult(resultEnv) {
 				return
 			}
+			if err := constants.ValidateGovernedResultEnvelope(
+				constants.EventType(req.EventType),
+				constants.EventType(resultEnv.GetEventType()),
+				constants.ActionType(resultEnv.GetActionType()),
+			); err != nil {
+				d.logger.Warn("dispatch: reject result envelope", "error", err, "transaction_id", txHash)
+				return
+			}
 			select {
 			case resultCh <- resultEnv:
 			default:

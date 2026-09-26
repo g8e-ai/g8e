@@ -368,6 +368,7 @@ type EventRegistryEntry struct {
 	Persistence       string
 	GovernanceAction  ActionType
 	GovernancePayload string
+	Outcomes          []string
 	Reserved          bool
 }
 
@@ -1059,6 +1060,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentUpdate,
 		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"AppAgentActivityRecorded"},
 		Reserved: true,
 	},
 	EventAppAgentActivityRecorded: {
@@ -1107,6 +1109,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentUpdate,
 		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"AppCaseCreated"},
 		Reserved: true,
 	},
 	EventAppCaseCreated: {
@@ -1124,6 +1127,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentDelete,
 		GovernancePayload: "g8e.operator.v1.DocumentDeleteRequested",
+		Outcomes: []string{"AppCaseDeleted"},
 		Reserved: true,
 	},
 	EventAppCaseDeleted: {
@@ -1172,6 +1176,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentUpdate,
 		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"AppCaseUpdated"},
 		Reserved: true,
 	},
 	EventAppCaseUpdated: {
@@ -1237,6 +1242,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentUpdate,
 		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"AppInvestigationCreated"},
 		Reserved: true,
 	},
 	EventAppInvestigationCreated: {
@@ -1254,6 +1260,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentDelete,
 		GovernancePayload: "g8e.operator.v1.DocumentDeleteRequested",
+		Outcomes: []string{"AppInvestigationDeleted"},
 		Reserved: true,
 	},
 	EventAppInvestigationDeleted: {
@@ -1363,6 +1370,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentUpdate,
 		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"AppInvestigationUpdated"},
 		Reserved: true,
 	},
 	EventAppInvestigationUpdated: {
@@ -1380,6 +1388,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentUpdate,
 		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"AppMemoryCreated"},
 		Reserved: true,
 	},
 	EventAppMemoryCreated: {
@@ -1397,6 +1406,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentUpdate,
 		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"AppMemoryUpdated"},
 		Reserved: true,
 	},
 	EventAppMemoryUpdated: {
@@ -1475,6 +1485,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Transport: []string{"pubsub"},
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
+		Outcomes: []string{"OperatorAuditAiRecorded"},
 		Reserved: true,
 	},
 	EventOperatorAuditAiRecorded: {
@@ -1491,6 +1502,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Transport: []string{"pubsub"},
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
+		Outcomes: []string{"OperatorAuditCommandRecorded"},
 		Reserved: true,
 	},
 	EventOperatorAuditCommandRecorded: {
@@ -1506,6 +1518,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Transport: []string{"pubsub"},
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
+		Outcomes: []string{"OperatorAuditDirectCommandRecorded"},
 		Reserved: true,
 	},
 	EventOperatorAuditDirectCommandRecorded: {
@@ -1521,6 +1534,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Transport: []string{"pubsub"},
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
+		Outcomes: []string{"OperatorAuditDirectCommandResultRecorded"},
 		Reserved: true,
 	},
 	EventOperatorAuditDirectCommandResultRecorded: {
@@ -1537,6 +1551,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Transport: []string{"pubsub"},
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
+		Outcomes: []string{"OperatorAuditMcpCallRecorded"},
 		Reserved: true,
 	},
 	EventOperatorAuditMcpCallRecorded: {
@@ -1553,6 +1568,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Transport: []string{"pubsub"},
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
+		Outcomes: []string{"OperatorAuditUserRecorded"},
 		Reserved: true,
 	},
 	EventOperatorAuditUserRecorded: {
@@ -1662,6 +1678,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeCancel,
 		GovernancePayload: "g8e.operator.v1.CommandCancelRequested",
+		Outcomes: []string{"OperatorCommandCancelled", "OperatorCommandCancelFailed"},
 	},
 	EventOperatorCommandCancelled: {
 		Key: "OperatorCommandCancelled",
@@ -1706,6 +1723,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeExecuteBash,
 		GovernancePayload: "g8e.operator.v1.CommandRequested",
+		Outcomes: []string{"OperatorCommandCompleted", "OperatorCommandFailed", "OperatorCommandCancelled", "OperatorCommandStatusUpdatedQueued", "OperatorCommandStatusUpdatedRunning", "OperatorCommandStatusUpdatedCompleted", "OperatorCommandStatusUpdatedFailed", "OperatorCommandStatusUpdatedCancelled"},
 	},
 	EventOperatorCommandResult: {
 		Key: "OperatorCommandResult",
@@ -1834,6 +1852,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeFetchFileDiff,
 		GovernancePayload: "g8e.operator.v1.FetchFileDiffRequested",
+		Outcomes: []string{"OperatorFileDiffFetchCompleted", "OperatorFileDiffFetchFailed"},
 	},
 	EventOperatorFileDiffFetchStarted: {
 		Key: "OperatorFileDiffFetchStarted",
@@ -1893,6 +1912,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeFileEdit,
 		GovernancePayload: "g8e.operator.v1.FileEditRequested",
+		Outcomes: []string{"OperatorFileEditCompleted", "OperatorFileEditFailed"},
 	},
 	EventOperatorFileEditStarted: {
 		Key: "OperatorFileEditStarted",
@@ -1939,6 +1959,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeFetchFileHistory,
 		GovernancePayload: "g8e.operator.v1.FetchFileHistoryRequested",
+		Outcomes: []string{"OperatorFileHistoryFetchCompleted", "OperatorFileHistoryFetchFailed"},
 	},
 	EventOperatorFileHistoryFetchStarted: {
 		Key: "OperatorFileHistoryFetchStarted",
@@ -1979,6 +2000,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeRestoreFile,
 		GovernancePayload: "g8e.operator.v1.RestoreFileRequested",
+		Outcomes: []string{"OperatorFileRestoreCompleted", "OperatorFileRestoreFailed"},
 	},
 	EventOperatorFilesystemGrepCompleted: {
 		Key: "OperatorFilesystemGrepCompleted",
@@ -2010,6 +2032,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeFsGrep,
 		GovernancePayload: "g8e.operator.v1.FsGrepRequested",
+		Outcomes: []string{"OperatorFilesystemGrepCompleted", "OperatorFilesystemGrepFailed"},
 	},
 	EventOperatorFilesystemGrepStarted: {
 		Key: "OperatorFilesystemGrepStarted",
@@ -2048,6 +2071,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeFsList,
 		GovernancePayload: "g8e.operator.v1.FsListRequested",
+		Outcomes: []string{"OperatorFilesystemListCompleted", "OperatorFilesystemListFailed"},
 	},
 	EventOperatorFilesystemListStarted: {
 		Key: "OperatorFilesystemListStarted",
@@ -2086,6 +2110,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeFsRead,
 		GovernancePayload: "g8e.operator.v1.FsReadRequested",
+		Outcomes: []string{"OperatorFilesystemReadCompleted", "OperatorFilesystemReadFailed"},
 	},
 	EventOperatorFilesystemReadStarted: {
 		Key: "OperatorFilesystemReadStarted",
@@ -2118,6 +2143,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "gateway.operator_docs",
 		GovernanceAction: ActionTypeHeartbeat,
 		GovernancePayload: "g8e.operator.v1.HeartbeatRequested",
+		Outcomes: []string{"OperatorHeartbeatSent"},
 	},
 	EventOperatorHeartbeatSent: {
 		Key: "OperatorHeartbeatSent",
@@ -2158,6 +2184,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeFetchHistory,
 		GovernancePayload: "g8e.operator.v1.FetchHistoryRequested",
+		Outcomes: []string{"OperatorHistoryFetchCompleted", "OperatorHistoryFetchFailed"},
 	},
 	EventOperatorInferenceCompleted: {
 		Key: "OperatorInferenceCompleted",
@@ -2191,6 +2218,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeInference,
 		GovernancePayload: "g8e.operator.v1.InferenceRequested",
+		Outcomes: []string{"OperatorInferenceCompleted", "OperatorInferenceFailed", "OperatorInferenceProgressUpdated"},
 		Reserved: true,
 	},
 	EventOperatorIntentApprovalGranted: {
@@ -2281,6 +2309,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeFetchLogs,
 		GovernancePayload: "g8e.operator.v1.FetchLogsRequested",
+		Outcomes: []string{"OperatorLogsFetchCompleted", "OperatorLogsFetchFailed"},
 	},
 	EventOperatorMcpCallRequested: {
 		Key: "OperatorMcpCallRequested",
@@ -2325,6 +2354,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeModelProvenanceObservation,
 		GovernancePayload: "g8e.eval.v1.ModelProvenanceObservationCommand",
+		Outcomes: []string{"OperatorModelProvenanceObservationCompleted"},
 		Reserved: true,
 	},
 	EventOperatorNetworkPingCompleted: {
@@ -2389,6 +2419,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypePortCheck,
 		GovernancePayload: "g8e.operator.v1.CheckPortRequested",
+		Outcomes: []string{"OperatorNetworkPortCheckCompleted", "OperatorNetworkPortCheckFailed"},
 	},
 	EventOperatorNetworkPortCheckStarted: {
 		Key: "OperatorNetworkPortCheckStarted",
@@ -2437,6 +2468,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeOllamaModelInventory,
 		GovernancePayload: "g8e.operator.v1.OllamaModelInventoryRequested",
+		Outcomes: []string{"OperatorOllamaModelInventoryCompleted", "OperatorOllamaModelInventoryFailed"},
 		Reserved: true,
 	},
 	EventOperatorOllamaModelResidencyCompleted: {
@@ -2463,6 +2495,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeOllamaModelResidency,
 		GovernancePayload: "g8e.operator.v1.OllamaModelResidencyRequested",
+		Outcomes: []string{"OperatorOllamaModelResidencyCompleted", "OperatorOllamaModelResidencyFailed"},
 		Reserved: true,
 	},
 	EventOperatorPanelListUpdated: {
@@ -2488,6 +2521,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeProviderBoundaryObservation,
 		GovernancePayload: "g8e.eval.v1.ProviderBoundaryObservationCommand",
+		Outcomes: []string{"OperatorProviderBoundaryObservationCompleted"},
 		Reserved: true,
 	},
 	EventOperatorReceiptRecorded: {
@@ -2559,6 +2593,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeDocumentUpdate,
 		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"OperatorReputationStateUpdated"},
 		Reserved: true,
 	},
 	EventOperatorReputationStateUpdated: {
@@ -2584,6 +2619,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		GovernanceAction: ActionTypeShutdown,
 		GovernancePayload: "g8e.operator.v1.ShutdownRequested",
+		Outcomes: []string{"OperatorShutdownAcknowledged"},
 	},
 	EventOperatorSlotInitializationFailed: {
 		Key: "OperatorSlotInitializationFailed",

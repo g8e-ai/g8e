@@ -84,7 +84,8 @@ func mapProtoToPayloadType(msg proto.Message) string {
 // It preserves the original command's MessageID for correlation.
 func BuildUniversalResultEnvelope(
 	cfg *config.Config,
-	eventType constants.EventType,
+	requestEvent constants.EventType,
+	outcomeEvent constants.EventType,
 	originatingActionType constants.ActionType,
 	payload proto.Message,
 	originalMessageID string,
@@ -95,8 +96,12 @@ func BuildUniversalResultEnvelope(
 	webSessionID string,
 	cliSessionID string,
 ) (*commonv1.GovernanceEnvelope, error) {
-	if originatingActionType == "" {
-		return nil, fmt.Errorf("originating action type required for outcome %q", eventType)
+	if requestEvent != "" {
+		if err := constants.ValidateGovernedResultEnvelope(requestEvent, outcomeEvent, originatingActionType); err != nil {
+			return nil, fmt.Errorf("validate governed result envelope: %w", err)
+		}
+	} else if originatingActionType == "" {
+		return nil, fmt.Errorf("originating action type required for outcome %q", outcomeEvent)
 	}
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
@@ -126,7 +131,7 @@ func BuildUniversalResultEnvelope(
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        senderID,
 		OperatorSessionId: cfg.OperatorSessionId,
-		EventType:         string(eventType),
+		EventType:         string(outcomeEvent),
 		ActionType:        string(originatingActionType),
 		Payload:           payloadBytes,
 		IntentData:        intentDataStruct,

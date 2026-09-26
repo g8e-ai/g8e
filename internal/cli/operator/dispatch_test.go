@@ -60,7 +60,7 @@ func TestParseCommandResult_Success(t *testing.T) {
 	result, err := ParseCommandResult(&DispatchResponse{
 		Success:       true,
 		EventType:     "g8e.v1.operator.command.completed",
-		ActionType:    "EXECUTE_BASH_RESULT",
+		ActionType:    string(constants.ActionTypeExecuteBash),
 		ResultPayload: payload,
 	})
 	require.NoError(t, err)

@@ -302,6 +302,8 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, constants.ErrTxEventNotRequest),
 		errors.Is(err, constants.ErrTxEventNotGoverned),
 		errors.Is(err, constants.ErrTxEventActionMismatch),
+		errors.Is(err, constants.ErrTxOutcomeNotRegistered),
+		errors.Is(err, constants.ErrTxOutcomeNotAllowed),
 		errors.Is(err, constants.ErrTxUnknownActionType),
 		errors.Is(err, constants.ErrTxPayloadMissing),
 		errors.Is(err, constants.ErrTxPayloadDecodeFailed),

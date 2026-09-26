@@ -163,7 +163,7 @@ func mustMarshalDispatchSuccess(t *testing.T, stdout string) []byte {
 		Success:       true,
 		TransactionID: "tx-1",
 		EventType:     "g8e.v1.operator.command.completed",
-		ActionType:    "EXECUTE_BASH_RESULT",
+		ActionType:    "EXECUTE_BASH",
 		ResultPayload: resultPayload,
 	})
 	require.NoError(t, err)

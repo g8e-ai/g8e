@@ -87,7 +87,7 @@ func publishLFAATypedResponseTo(
 		logger.Error("Failed to resolve originating action for LFAA response", string(constants.ConnectionStateError), err)
 		return
 	}
-	env, err := BuildUniversalResultEnvelope(cfg, eventType, originatingAction, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
+	env, err := BuildUniversalResultEnvelope(cfg, msg.EventType, eventType, originatingAction, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
 		logger.Error("Failed to build LFAA typed response Governance Envelope", string(constants.ConnectionStateError), err)
 		return
@@ -137,7 +137,7 @@ func publishLFAAErrorTo(
 		logger.Error("Failed to resolve originating action for LFAA response", string(constants.ConnectionStateError), err)
 		return
 	}
-	env, err := BuildUniversalResultEnvelope(cfg, eventType, originatingAction, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
+	env, err := BuildUniversalResultEnvelope(cfg, msg.EventType, eventType, originatingAction, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
 		logger.Error("Failed to build LFAA error Governance Envelope", string(constants.ConnectionStateError), err)
 		return

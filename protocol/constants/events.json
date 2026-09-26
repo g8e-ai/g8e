@@ -889,7 +889,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppAgentActivityRecorded"
+      ]
     },
     "AppAgentActivityRecorded": {
       "_go_const": "EventAppAgentActivityRecorded",
@@ -955,7 +958,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppCaseCreated"
+      ]
     },
     "AppCaseCreated": {
       "_go_const": "EventAppCaseCreated",
@@ -984,7 +990,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppCaseDeleted"
+      ]
     },
     "AppCaseDeleted": {
       "_go_const": "EventAppCaseDeleted",
@@ -1050,7 +1059,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppCaseUpdated"
+      ]
     },
     "AppCaseUpdated": {
       "_go_const": "EventAppCaseUpdated",
@@ -1151,7 +1163,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppInvestigationCreated"
+      ]
     },
     "AppInvestigationCreated": {
       "_go_const": "EventAppInvestigationCreated",
@@ -1178,7 +1193,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppInvestigationDeleted"
+      ]
     },
     "AppInvestigationDeleted": {
       "_go_const": "EventAppInvestigationDeleted",
@@ -1324,7 +1342,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppInvestigationUpdated"
+      ]
     },
     "AppInvestigationUpdated": {
       "_go_const": "EventAppInvestigationUpdated",
@@ -1351,7 +1372,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppMemoryCreated"
+      ]
     },
     "AppMemoryCreated": {
       "_go_const": "EventAppMemoryCreated",
@@ -1377,7 +1401,10 @@
         "ensemble"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "AppMemoryUpdated"
+      ]
     },
     "AppMemoryUpdated": {
       "_go_const": "EventAppMemoryUpdated",
@@ -1811,7 +1838,11 @@
         "ensemble",
         "mcp"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorCommandCancelled",
+        "OperatorCommandCancelFailed"
+      ]
     },
     "OperatorCommandCancelled": {
       "_go_const": "EventOperatorCommandCancelled",
@@ -1898,7 +1929,17 @@
         "ensemble",
         "mcp"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorCommandCompleted",
+        "OperatorCommandFailed",
+        "OperatorCommandCancelled",
+        "OperatorCommandStatusUpdatedQueued",
+        "OperatorCommandStatusUpdatedRunning",
+        "OperatorCommandStatusUpdatedCompleted",
+        "OperatorCommandStatusUpdatedFailed",
+        "OperatorCommandStatusUpdatedCancelled"
+      ]
     },
     "OperatorCommandResult": {
       "_go_const": "EventOperatorCommandResult",
@@ -2110,7 +2151,11 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorFileDiffFetchCompleted",
+        "OperatorFileDiffFetchFailed"
+      ]
     },
     "OperatorFileDiffFetchStarted": {
       "_go_const": "EventOperatorFileDiffFetchStarted",
@@ -2208,7 +2253,11 @@
         "ensemble",
         "mcp"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorFileEditCompleted",
+        "OperatorFileEditFailed"
+      ]
     },
     "OperatorFileEditStarted": {
       "_go_const": "EventOperatorFileEditStarted",
@@ -2277,7 +2326,11 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorFileHistoryFetchCompleted",
+        "OperatorFileHistoryFetchFailed"
+      ]
     },
     "OperatorFileHistoryFetchStarted": {
       "_go_const": "EventOperatorFileHistoryFetchStarted",
@@ -2335,7 +2388,11 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorFileRestoreCompleted",
+        "OperatorFileRestoreFailed"
+      ]
     },
     "OperatorFilesystemGrepCompleted": {
       "_go_const": "EventOperatorFilesystemGrepCompleted",
@@ -2383,7 +2440,11 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorFilesystemGrepCompleted",
+        "OperatorFilesystemGrepFailed"
+      ]
     },
     "OperatorFilesystemGrepStarted": {
       "_go_const": "EventOperatorFilesystemGrepStarted",
@@ -2441,7 +2502,11 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorFilesystemListCompleted",
+        "OperatorFilesystemListFailed"
+      ]
     },
     "OperatorFilesystemListStarted": {
       "_go_const": "EventOperatorFilesystemListStarted",
@@ -2499,7 +2564,11 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorFilesystemReadCompleted",
+        "OperatorFilesystemReadFailed"
+      ]
     },
     "OperatorFilesystemReadStarted": {
       "_go_const": "EventOperatorFilesystemReadStarted",
@@ -2553,7 +2622,10 @@
         "ensemble",
         "mcp"
       ],
-      "persistence": "gateway.operator_docs"
+      "persistence": "gateway.operator_docs",
+      "outcomes": [
+        "OperatorHeartbeatSent"
+      ]
     },
     "OperatorHeartbeatSent": {
       "_go_const": "EventOperatorHeartbeatSent",
@@ -2615,7 +2687,11 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorHistoryFetchCompleted",
+        "OperatorHistoryFetchFailed"
+      ]
     },
     "OperatorInferenceCompleted": {
       "_go_const": "EventOperatorInferenceCompleted",
@@ -2664,7 +2740,12 @@
         "mcp"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "OperatorInferenceCompleted",
+        "OperatorInferenceFailed",
+        "OperatorInferenceProgressUpdated"
+      ]
     },
     "OperatorIntentApprovalGranted": {
       "_go_const": "EventOperatorIntentApprovalGranted",
@@ -2807,7 +2888,11 @@
         "ensemble",
         "gateway"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorLogsFetchCompleted",
+        "OperatorLogsFetchFailed"
+      ]
     },
     "OperatorMcpCallRequested": {
       "_go_const": "EventOperatorMcpCallRequested",
@@ -2886,7 +2971,10 @@
         "mcp"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "OperatorModelProvenanceObservationCompleted"
+      ]
     },
     "OperatorNetworkPingCompleted": {
       "_go_const": "EventOperatorNetworkPingCompleted",
@@ -2980,7 +3068,11 @@
         "ensemble",
         "mcp"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorNetworkPortCheckCompleted",
+        "OperatorNetworkPortCheckFailed"
+      ]
     },
     "OperatorNetworkPortCheckStarted": {
       "_go_const": "EventOperatorNetworkPortCheckStarted",
@@ -3052,7 +3144,11 @@
         "mcp"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "OperatorOllamaModelInventoryCompleted",
+        "OperatorOllamaModelInventoryFailed"
+      ]
     },
     "OperatorOllamaModelResidencyCompleted": {
       "_go_const": "EventOperatorOllamaModelResidencyCompleted",
@@ -3091,7 +3187,11 @@
         "mcp"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "OperatorOllamaModelResidencyCompleted",
+        "OperatorOllamaModelResidencyFailed"
+      ]
     },
     "OperatorPanelListUpdated": {
       "_go_const": "EventOperatorPanelListUpdated",
@@ -3130,7 +3230,10 @@
         "mcp"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "OperatorProviderBoundaryObservationCompleted"
+      ]
     },
     "OperatorReceiptRecorded": {
       "_go_const": "EventOperatorReceiptRecorded",
@@ -3229,7 +3332,10 @@
         "mcp"
       ],
       "persistence": "ephemeral",
-      "reserved": true
+      "reserved": true,
+      "outcomes": [
+        "OperatorReputationStateUpdated"
+      ]
     },
     "OperatorReputationStateUpdated": {
       "_go_const": "EventOperatorReputationStateUpdated",
@@ -3267,7 +3373,10 @@
         "ensemble",
         "mcp"
       ],
-      "persistence": "ephemeral"
+      "persistence": "ephemeral",
+      "outcomes": [
+        "OperatorShutdownAcknowledged"
+      ]
     },
     "OperatorSlotInitializationFailed": {
       "_go_const": "EventOperatorSlotInitializationFailed",

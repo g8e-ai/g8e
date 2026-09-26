@@ -57,6 +57,7 @@ type EventRegistryEntry struct {
 	Persistence       string
 	GovernanceAction  ActionType
 	GovernancePayload string
+	Outcomes          []string
 	Reserved          bool
 }
 
@@ -102,6 +103,9 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 			}
 			b.WriteString(fmt.Sprintf("\t\tGovernanceAction: %s,\n", goConst))
 			b.WriteString(fmt.Sprintf("\t\tGovernancePayload: %q,\n", entry.Governance.Payload))
+		}
+		if len(entry.Outcomes) > 0 {
+			b.WriteString(fmt.Sprintf("\t\tOutcomes: %s,\n", goStringSlice(entry.Outcomes)))
 		}
 		if entry.Reserved {
 			b.WriteString("\t\tReserved: true,\n")
