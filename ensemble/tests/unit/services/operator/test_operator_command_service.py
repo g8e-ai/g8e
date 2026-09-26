@@ -34,7 +34,6 @@ from app.services.operator import OperatorCommandService
 from tests.fakes.builder import build_command_service
 from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from tests.fakes.fake_approval_service import FakeApprovalService
-from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.fake_execution_service import FakeExecutionService
 
 pytestmark = pytest.mark.unit
@@ -191,10 +190,9 @@ class TestExecuteCommandTargetSystems:
     async def test_single_operator_target_systems_populated(self):
         """With a single operator, target_systems must contain that operator."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -220,10 +218,9 @@ class TestExecuteCommandTargetSystems:
     async def test_target_operators_arg_populates_target_systems(self):
         """When target_operators is set, target_systems must reflect all resolved operators."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -254,10 +251,9 @@ class TestExecuteCommandTargetSystems:
     async def test_batch_fans_out_to_all_resolved_operators(self):
         """Batch execution dispatches one message per operator and aggregates per-host results."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -300,10 +296,9 @@ class TestExecuteCommandTargetSystems:
     async def test_target_operators_without_target_operator_does_not_raise(self):
         """Providing only target_operators (no singular target_operator) must resolve cleanly."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -335,10 +330,9 @@ class TestExecuteCommandTargetSystems:
         Auto-approval requires the explicit enable_auto_approve flag.
         """
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -368,10 +362,9 @@ class TestExecuteCommandTargetSystems:
     async def test_auto_approve_skips_human_gate(self):
         """enable_auto_approve + auto_approved_commands list bypasses human approval."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -399,10 +392,9 @@ class TestExecuteCommandTargetSystems:
     async def test_auto_approve_does_not_apply_to_unlisted_command(self):
         """A command whose base verb is NOT in auto_approved_commands still requires human approval."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -430,10 +422,9 @@ class TestExecuteCommandTargetSystems:
     async def test_auto_approve_disabled_with_list_still_requires_approval(self):
         """auto_approved_commands without enable_auto_approve is inert."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -462,10 +453,9 @@ class TestExecuteCommandTargetSystems:
         blocked by the L1Doctrine whitelist gate. Auto-approve only skips human approval
         for commands that have already passed every hard safety gate."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -498,10 +488,9 @@ class TestExecuteCommandTargetSystems:
     async def test_csv_whitelist_blocks_unlisted_command(self):
         """A command not present in the user CSV must be blocked by L1Doctrine safety."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service
@@ -531,10 +520,9 @@ class TestExecuteCommandTargetSystems:
     async def test_target_systems_never_empty_for_valid_operator(self):
         """target_systems must never be empty when a valid operator is resolved."""
         approval_service = FakeApprovalService()
-        event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            event_service=event_service, ai_response_analyzer=ai_analyzer
+            ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
             approval_service=approval_service, execution_service=execution_service

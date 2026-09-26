@@ -50,7 +50,7 @@ from app.models.agents.tribunal import (
     TribunalVotingCompletedPayload,
 )
 from app.models.base import G8eBaseModel, Field, model_validator
-from app.models.cases import CaseCreatedPayload
+from app.models.cases import CaseCreatedPayload, CaseEventPayload
 from app.models.operators import (
     AgentContinueApprovalEvent,
     CommandApprovalEvent,
@@ -130,6 +130,7 @@ SSE_PAYLOADS: dict[EventType, type[G8eBaseModel]] = {
     EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED: AIToolLifecyclePayload,
     EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS: TriageClarificationQuestionsPayload,
     EventType.APP_CASE_CREATED: CaseCreatedPayload,
+    EventType.APP_CASE_UPDATED: CaseEventPayload,
     EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED: CommandApprovalEvent,
     EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED: FileEditApprovalEvent,
     EventType.OPERATOR_INTENT_APPROVAL_REQUESTED: IntentApprovalEvent,

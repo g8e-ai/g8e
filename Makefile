@@ -723,6 +723,18 @@ dashboard-test:
 	@echo "Running dashboard (g8ed) vitest suite..."
 	@cd dashboard && npm test
 
+.PHONY: dashboard-boundary-check
+dashboard-boundary-check:
+	@echo "Checking g8ed gateway boundary invariants..."
+	@if rg -q 'ServiceName\.g8ed|/api/operators|cache_aside|operator_slot|VSE_INTERNAL' \
+		dashboard/public dashboard/server.js dashboard/services dashboard/entrypoint.sh; then \
+		echo "g8ed boundary violation: forbidden BFF patterns found in dashboard runtime paths"; \
+		rg 'ServiceName\.g8ed|/api/operators|cache_aside|operator_slot|VSE_INTERNAL' \
+			dashboard/public dashboard/server.js dashboard/services dashboard/entrypoint.sh; \
+		exit 1; \
+	fi
+	@echo "g8ed boundary grep clean."
+
 .PHONY: build-dashboard
 build-dashboard:
 	@echo "Building dashboard (g8ed) Docker image..."
@@ -880,7 +892,7 @@ ci-ensemble: ensemble-lint ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-dashboard
-ci-dashboard: dashboard-lint dashboard-test
+ci-dashboard: dashboard-lint dashboard-boundary-check dashboard-test
 	@echo "Dashboard CI complete."
 
 .PHONY: check-bsl-headers

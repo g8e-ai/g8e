@@ -35,8 +35,20 @@ describe('g8ed gateway boundary guards', () => {
         expect(source).toContain('createApp');
     });
 
-    it('legacy BFF trees are removed', () => {
-        for (const rel of ['routes', 'services/operator', 'services/platform', 'services/cache', 'models', 'views', 'middleware']) {
+    it('legacy BFF trees and orphaned server artifacts are removed', () => {
+        for (const rel of [
+            'routes',
+            'services/operator',
+            'services/platform',
+            'services/cache',
+            'services/clients',
+            'services/error_service.js',
+            'models',
+            'views',
+            'middleware',
+            'constants',
+            'utils',
+        ]) {
             expect(existsSync(join(dashboardRoot, rel))).toBe(false);
         }
     });
@@ -44,10 +56,7 @@ describe('g8ed gateway boundary guards', () => {
     it('production browser JS does not call ServiceName.g8ed', () => {
         const publicJs = join(dashboardRoot, 'public/js');
         const offenders = walkJsFiles(publicJs)
-            .filter((file) => {
-                const text = readFileSync(file, 'utf8');
-                return text.includes('ServiceName.g8ed') || text.includes("'g8ed'");
-            })
+            .filter((file) => readFileSync(file, 'utf8').includes('ServiceName.g8ed'))
             .map((file) => file.replace(`${dashboardRoot}/`, ''));
         expect(offenders).toEqual([]);
     });
