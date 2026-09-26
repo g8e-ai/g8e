@@ -11,7 +11,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -594,6 +593,3 @@ func validBundlePath(path string) bool {
 	}
 	return true
 }
-
-// ErrGraphInvalid is returned when ValidateAll detects failures.
-var ErrGraphInvalid = errors.New("compliance: evidence graph validation failed")

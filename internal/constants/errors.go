@@ -1264,6 +1264,8 @@ var (
 	ErrEvidenceImporterFailed       = errors.New("compliance: evidence importer failed")
 	ErrEvidenceProducerUnverified   = errors.New("compliance: evidence producer identity not verified")
 	ErrEvidenceVerifierUnverified   = errors.New("compliance: evidence verifier identity not verified")
+	// ErrGraphInvalid is returned when ValidateAll detects failures.
+	ErrGraphInvalid = errors.New("compliance: evidence graph validation failed")
 
 	// Compliance report bundle assembly errors
 	ErrBundleAssemblyFailed     = errors.New("compliance: report bundle assembly failed")
@@ -1305,6 +1307,7 @@ var (
 
 	// OSCAL validator errors
 	ErrOSCALSchemaDigestMismatch     = errors.New("oscal: embedded schema digest mismatch")
+	ErrOSCALProvenanceMismatch       = errors.New("oscal: provenance metadata does not match embedded schema")
 	ErrOSCALSchemaCompileFailed      = errors.New("oscal: schema compilation failed")
 	ErrOSCALValidationFailed         = errors.New("oscal: assessment-results validation failed")
 	ErrOSCALSemanticValidationFailed = errors.New("oscal: semantic validation failed")

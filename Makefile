@@ -310,11 +310,11 @@ proto-lockfiles:
 	@cd ensemble && uv lock --quiet
 	@echo "Ensemble uv.lock regenerated."
 
+# proto-force is an alias of proto. It previously ran only `buf generate`
+# for Go, which left the Python stubs, TypeScript stubs, and ensemble
+# lockfiles stale.
 .PHONY: proto-force
-proto-force: buf-install
-	@echo "Force generating Protobuf code..."
-	@$(BUF) generate protocol/proto
-	@echo "Protobuf generation complete."
+proto-force: proto
 
 # =============================================================================
 # TOOL INSTALLATION
