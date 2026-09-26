@@ -7,7 +7,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockAuthState, MockServiceClient } from '@test/mocks/mock-browser-env.js';
-import { EventType } from '@g8ed/public/js/constants/events.js';
 import { MessageSender } from '@g8ed/public/js/constants/message-senders.js';
 
 const INVESTIGATION_ID = 'inv-test-abc123';

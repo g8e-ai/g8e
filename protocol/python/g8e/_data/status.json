@@ -170,6 +170,16 @@
         "_python_const": "PORT_CHECK",
         "value": "PORT_CHECK"
       },
+      "OLLAMA_MODEL_INVENTORY": {
+        "_go_const": "ActionTypeOllamaModelInventory",
+        "_python_const": "OLLAMA_MODEL_INVENTORY",
+        "value": "OLLAMA_MODEL_INVENTORY"
+      },
+      "OLLAMA_MODEL_RESIDENCY": {
+        "_go_const": "ActionTypeOllamaModelResidency",
+        "_python_const": "OLLAMA_MODEL_RESIDENCY",
+        "value": "OLLAMA_MODEL_RESIDENCY"
+      },
       "RESTORE_FILE": {
         "_go_const": "ActionTypeRestoreFile",
         "_mutation": true,

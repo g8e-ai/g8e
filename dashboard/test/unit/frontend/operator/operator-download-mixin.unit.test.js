@@ -6,7 +6,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 let OperatorDownloadMixin;
-let operatorPanelService;
 
 const TEST_API_KEY = 'dak_abcdefghijklmnopqrstuvwxyz1234567890';
 
@@ -77,9 +76,6 @@ beforeEach(async () => {
 
     const mod = await import('@g8ed/public/js/components/operator-download-mixin.js');
     OperatorDownloadMixin = mod.OperatorDownloadMixin;
-
-    const opsMod = await import('@g8ed/public/js/utils/operator-panel-service.js');
-    operatorPanelService = opsMod.operatorPanelService;
 });
 
 afterEach(() => {

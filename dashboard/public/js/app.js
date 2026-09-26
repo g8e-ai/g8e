@@ -8,7 +8,6 @@ import { OperatorPanel } from './components/operator-panel.js';
 import { Header } from './components/header.js';
 import { Footer } from './components/footer.js';
 import { SSEConnectionManager } from './utils/sse-connection-manager.js';
-import { EventType } from './constants/events.js';
 import { UIEventType } from './constants/ui-events.js';
 import { notificationService } from './utils/notification-service.js';
 import { CssClass } from './constants/ui-constants.js';

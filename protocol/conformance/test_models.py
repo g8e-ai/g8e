@@ -809,9 +809,9 @@ class TestGovernanceEnvelopeConformance:
             state_merkle_root="root",
             nonce="n1",
         )
-        assert envelope.protocol_version == "1.0"
+        assert envelope.protocol_version == "2"
         data = envelope.model_dump(mode="json")
-        assert data["protocol_version"] == "1.0"
+        assert data["protocol_version"] == "2"
 
     def test_governance_envelope_protocol_version_non_default(self):
         from g8e.models import GovernanceEnvelope
@@ -827,8 +827,8 @@ class TestGovernanceEnvelopeConformance:
             target_resource="/tmp",
             state_merkle_root="root",
             nonce="n1",
-            protocol_version="2.0",
+            protocol_version="1.0",
         )
-        assert envelope.protocol_version == "2.0"
+        assert envelope.protocol_version == "1.0"
         data = envelope.model_dump(mode="json")
-        assert data["protocol_version"] == "2.0"
+        assert data["protocol_version"] == "1.0"

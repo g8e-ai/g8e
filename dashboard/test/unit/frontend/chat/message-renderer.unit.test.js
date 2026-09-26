@@ -5,7 +5,6 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MessageRenderer } from '@g8ed/public/js/components/message-renderer.js';
-import { EventType } from '@g8ed/public/js/constants/events.js';
 import { MessageSender } from '@g8ed/public/js/constants/message-senders.js';
 
 function makeMarkdownRenderer() {

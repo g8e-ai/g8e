@@ -3,7 +3,6 @@
 
 import { CitationsHandler } from './citations.js';
 import { decodeHtmlEntities } from '../utils/html.js';
-import { EventType } from '../constants/events.js';
 import { CopyText } from '../constants/ui-constants.js';
 import { MessageSender } from '../constants/message-senders.js';
 

@@ -5,7 +5,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MockEventBus, MockServiceClient } from '@test/mocks/mock-browser-env.js';
-import { EventType } from '@g8ed/public/js/constants/events.js';
 import { UIEventType } from '@g8ed/public/js/constants/ui-events.js';
 import { CssClass } from '@g8ed/public/js/constants/ui-constants.js';
 

@@ -33,6 +33,8 @@ paths = [
   '''docs/.*''',
   '''README\.md''',
   '''protocol/constants/.*''',
+  '''internal/constants/.*''',
+  '''dashboard/public/js/constants/.*''',
   '''scripts/.*''',
 ]
 
