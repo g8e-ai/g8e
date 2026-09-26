@@ -612,6 +612,12 @@ message ActionReceipt {
   // Typed classification of a FAILED receipt. UNSPECIFIED on non-failed
   // receipts. Bound into the signature via canonicalization.
   ReceiptFailureCode failure_code = 15;
+
+  // The semantic request event that produced this receipt.
+  string event_type = 16;
+
+  // The registry-derived governance class for the request event.
+  string action_type = 17;
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified

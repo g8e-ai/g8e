@@ -869,7 +869,7 @@ class ReceiptPersistenceAttestation(_message.Message):
     def __init__(self, transaction_id: _Optional[str] = ..., receipt_signature_digest: _Optional[str] = ..., persisted_at_unix_ms: _Optional[int] = ..., audit_record_id: _Optional[str] = ..., signer_key_id: _Optional[str] = ..., signature: _Optional[str] = ...) -> None: ...
 
 class ActionReceipt(_message.Message):
-    __slots__ = ("transaction_id", "transaction_hash", "status", "result_summary", "state_root_before", "state_root_after", "executed_at_unix_ms", "signer_key_id", "signature", "l2_status", "l3_status", "deterministic_stage_evidence", "final_persistence_attestation", "failure_code")
+    __slots__ = ("transaction_id", "transaction_hash", "status", "result_summary", "state_root_before", "state_root_after", "executed_at_unix_ms", "signer_key_id", "signature", "l2_status", "l3_status", "deterministic_stage_evidence", "final_persistence_attestation", "failure_code", "event_type", "action_type")
     TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
     TRANSACTION_HASH_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
@@ -884,6 +884,8 @@ class ActionReceipt(_message.Message):
     DETERMINISTIC_STAGE_EVIDENCE_FIELD_NUMBER: _ClassVar[int]
     FINAL_PERSISTENCE_ATTESTATION_FIELD_NUMBER: _ClassVar[int]
     FAILURE_CODE_FIELD_NUMBER: _ClassVar[int]
+    EVENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    ACTION_TYPE_FIELD_NUMBER: _ClassVar[int]
     transaction_id: str
     transaction_hash: str
     status: ExecutionStatus
@@ -898,7 +900,9 @@ class ActionReceipt(_message.Message):
     deterministic_stage_evidence: _containers.RepeatedCompositeFieldContainer[DeterministicStageEvidence]
     final_persistence_attestation: ReceiptPersistenceAttestation
     failure_code: ReceiptFailureCode
-    def __init__(self, transaction_id: _Optional[str] = ..., transaction_hash: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., result_summary: _Optional[str] = ..., state_root_before: _Optional[str] = ..., state_root_after: _Optional[str] = ..., executed_at_unix_ms: _Optional[int] = ..., signer_key_id: _Optional[str] = ..., signature: _Optional[str] = ..., l2_status: _Optional[_Union[L2Status, str]] = ..., l3_status: _Optional[_Union[L3Status, str]] = ..., deterministic_stage_evidence: _Optional[_Iterable[_Union[DeterministicStageEvidence, _Mapping]]] = ..., final_persistence_attestation: _Optional[_Union[ReceiptPersistenceAttestation, _Mapping]] = ..., failure_code: _Optional[_Union[ReceiptFailureCode, str]] = ...) -> None: ...
+    event_type: str
+    action_type: str
+    def __init__(self, transaction_id: _Optional[str] = ..., transaction_hash: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., result_summary: _Optional[str] = ..., state_root_before: _Optional[str] = ..., state_root_after: _Optional[str] = ..., executed_at_unix_ms: _Optional[int] = ..., signer_key_id: _Optional[str] = ..., signature: _Optional[str] = ..., l2_status: _Optional[_Union[L2Status, str]] = ..., l3_status: _Optional[_Union[L3Status, str]] = ..., deterministic_stage_evidence: _Optional[_Iterable[_Union[DeterministicStageEvidence, _Mapping]]] = ..., final_persistence_attestation: _Optional[_Union[ReceiptPersistenceAttestation, _Mapping]] = ..., failure_code: _Optional[_Union[ReceiptFailureCode, str]] = ..., event_type: _Optional[str] = ..., action_type: _Optional[str] = ...) -> None: ...
 
 class CommitmentAttestation(_message.Message):
     __slots__ = ("transaction_id", "transaction_hash", "prior_commitment_hash", "state_root_at_commit", "l2_signature_digest", "warden_intent_signature_digest", "human_signature_digest", "action_type", "target_resource", "committed_at_unix_ms", "auditor_key_id", "signature", "hash")

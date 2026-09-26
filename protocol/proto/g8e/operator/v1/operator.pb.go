@@ -4588,7 +4588,11 @@ type ActionReceipt struct {
 	FinalPersistenceAttestation *ReceiptPersistenceAttestation `protobuf:"bytes,14,opt,name=final_persistence_attestation,json=finalPersistenceAttestation,proto3" json:"final_persistence_attestation,omitempty"`
 	// Typed classification of a FAILED receipt. UNSPECIFIED on non-failed
 	// receipts. Bound into the signature via canonicalization.
-	FailureCode   ReceiptFailureCode `protobuf:"varint,15,opt,name=failure_code,json=failureCode,proto3,enum=g8e.operator.v1.ReceiptFailureCode" json:"failure_code,omitempty"`
+	FailureCode ReceiptFailureCode `protobuf:"varint,15,opt,name=failure_code,json=failureCode,proto3,enum=g8e.operator.v1.ReceiptFailureCode" json:"failure_code,omitempty"`
+	// The semantic request event that produced this receipt.
+	EventType string `protobuf:"bytes,16,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	// The registry-derived governance class for the request event.
+	ActionType    string `protobuf:"bytes,17,opt,name=action_type,json=actionType,proto3" json:"action_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4719,6 +4723,20 @@ func (x *ActionReceipt) GetFailureCode() ReceiptFailureCode {
 		return x.FailureCode
 	}
 	return ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED
+}
+
+func (x *ActionReceipt) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *ActionReceipt) GetActionType() string {
+	if x != nil {
+		return x.ActionType
+	}
+	return ""
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified
@@ -11988,7 +12006,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x14persisted_at_unix_ms\x18\x03 \x01(\x03R\x11persistedAtUnixMs\x12&\n" +
 	"\x0faudit_record_id\x18\x04 \x01(\tR\rauditRecordId\x12\"\n" +
 	"\rsigner_key_id\x18\x05 \x01(\tR\vsignerKeyId\x12\x1c\n" +
-	"\tsignature\x18\x06 \x01(\tR\tsignature\"\xa4\x06\n" +
+	"\tsignature\x18\x06 \x01(\tR\tsignature\"\xe4\x06\n" +
 	"\rActionReceipt\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12)\n" +
 	"\x10transaction_hash\x18\x02 \x01(\tR\x0ftransactionHash\x128\n" +
@@ -12003,7 +12021,11 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\tl3_status\x18\f \x01(\x0e2\x19.g8e.operator.v1.L3StatusR\bl3Status\x12m\n" +
 	"\x1cdeterministic_stage_evidence\x18\r \x03(\v2+.g8e.operator.v1.DeterministicStageEvidenceR\x1adeterministicStageEvidence\x12r\n" +
 	"\x1dfinal_persistence_attestation\x18\x0e \x01(\v2..g8e.operator.v1.ReceiptPersistenceAttestationR\x1bfinalPersistenceAttestation\x12F\n" +
-	"\ffailure_code\x18\x0f \x01(\x0e2#.g8e.operator.v1.ReceiptFailureCodeR\vfailureCode\"\xcc\x04\n" +
+	"\ffailure_code\x18\x0f \x01(\x0e2#.g8e.operator.v1.ReceiptFailureCodeR\vfailureCode\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x10 \x01(\tR\teventType\x12\x1f\n" +
+	"\vaction_type\x18\x11 \x01(\tR\n" +
+	"actionType\"\xcc\x04\n" +
 	"\x15CommitmentAttestation\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12)\n" +
 	"\x10transaction_hash\x18\x02 \x01(\tR\x0ftransactionHash\x122\n" +

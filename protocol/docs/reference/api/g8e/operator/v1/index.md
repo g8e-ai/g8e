@@ -205,6 +205,8 @@ ActionReceipt is the signed proof of an executing, completed, or failed mutation
 | deterministic_stage_evidence | [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence) | repeated |  |
 | final_persistence_attestation | [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation) |  |  |
 | failure_code | [ReceiptFailureCode](#g8e-operator-v1-ReceiptFailureCode) |  | Typed classification of a FAILED receipt. UNSPECIFIED on non-failed receipts. Bound into the signature via canonicalization. |
+| event_type | [string](#string) |  | The semantic request event that produced this receipt. |
+| action_type | [string](#string) |  | The registry-derived governance class for the request event. |
 
 
 

@@ -14,7 +14,7 @@ g8e separates platform coordination state from host-local execution evidence. Ea
 
 Additional stores have separate lifecycles. An outbound Operator maintains `.g8e/data/execution_vault.db`, `.g8e/data/replay_store.db`, and, when Git integration is enabled, Git-backed ledgers under `.g8e/data/ledger/`. Both Gateway and outbound Operator modes open `.g8e/data/suspended_transactions.db` for pending L3 approvals. Native and campaign evaluation artifacts persist under `.g8e/data/eval/` on the host that owns the evaluation CLI; model inventories and the rollout queue use the project-root `.g8e/eval/` paths. See [Evaluations](./evals.md) and the [Unified Docker Stack Guide](../guides/unified_stack.md). A remote Operator remains authoritative for its local execution evidence; its publication of signed receipts to the Gateway is a best-effort mirror.
 
-See [Encryption Architecture](./encryption.md) for vault and keystore protection, [Gateway Architecture](./gateway.md) for Gateway service assembly, and [Operator Architecture](./operator.md) for host-local execution.
+See [Encryption Architecture](./encryption.md) for vault and keystore protection, [Gateway Architecture](./gateway.md) for Gateway service assembly, [Operator Architecture](./operator.md) for host-local execution, and [Event and Action Protocol](./events.md) for the audit-chain and receipt-projection contract.
 
 ## Persistence Topology
 
