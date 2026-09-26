@@ -33,7 +33,7 @@ import type {
   TerminalStatus,
   VerifierState,
 } from '../contract/types';
-import { formatLatency, formatNumber, formatPercent, formatTokens } from '../utils/format';
+import { formatLatency, formatNumber, formatPercent, formatThroughput, formatTokens } from '../utils/format';
 
 const FAILURE_TERMINAL_STATUSES = new Set<TerminalStatus>([
   'model_failed',
@@ -86,6 +86,9 @@ function streamKindRank(kind: LiveEvent['kind']): number {
 function streamDedupeKey(event: LiveEvent): string {
   if (event.assignment_id && COLLAPSIBLE_ASSIGNMENT_KINDS.has(event.kind)) {
     return `${event.run_id}:${event.assignment_id}:${event.kind}`;
+  }
+  if (event.kind === 'stage_updated' && event.assignment_id && event.role) {
+    return `${event.run_id}:${event.assignment_id}:${event.role}:stage_updated`;
   }
   return event.event_id;
 }
@@ -358,8 +361,67 @@ export function publicGradeSummaries(assignment: AssignmentResult): PublicSemant
   return [...(assignment.semantic_grade_summaries ?? [])].sort((left, right) => left.criterion_id.localeCompare(right.criterion_id));
 }
 
+export interface AssignmentGradeChip {
+  criterion_id: string;
+  status: string;
+  explanation?: string;
+}
+
+function gradeChipSortRank(status: string): number {
+  return status === 'fail' ? 0 : 1;
+}
+
+/** Deterministic grade chips from benchmark observations (thin publication path). */
+export function deterministicGradeChips(assignment: AssignmentResult): AssignmentGradeChip[] {
+  const summaries = assignment.benchmark_observations?.grade_summaries ?? [];
+  return summaries
+    .map((grade) => ({
+      criterion_id: grade.criterion_id,
+      status: grade.status.toLowerCase(),
+    }))
+    .sort(
+      (left, right) =>
+        gradeChipSortRank(left.status) - gradeChipSortRank(right.status) ||
+        left.criterion_id.localeCompare(right.criterion_id),
+    );
+}
+
+/** Grade chips for the verdict strip: semantic summaries when present, else deterministic grades. */
+export function assignmentGradeChips(assignment: AssignmentResult): AssignmentGradeChip[] {
+  const semantic = publicGradeSummaries(assignment);
+  if (semantic.length > 0) {
+    return semantic
+      .map((grade) => ({
+        criterion_id: grade.criterion_id,
+        status: grade.status,
+        explanation: publicGradeExplanationLabel(grade.explanation_code),
+      }))
+      .sort(
+        (left, right) =>
+          gradeChipSortRank(left.status) - gradeChipSortRank(right.status) ||
+          left.criterion_id.localeCompare(right.criterion_id),
+      );
+  }
+  return deterministicGradeChips(assignment);
+}
+
+/** Combined terminal and verification label for the verdict strip. */
+export function assignmentVerdictLabel(
+  terminalStatus: AssignmentResult['terminal_status'],
+  verification: AssignmentResult['verification_disposition'],
+): string {
+  const terminal = terminalStatus.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+  if (verification === 'not_run') return `${terminal} · not verified`;
+  if (verification === 'passed') return `${terminal} · verified`;
+  if (verification === 'failed') return `${terminal} · verification failed`;
+  if (verification === 'not_applicable') return terminal;
+  return terminal;
+}
+
 /** Formatter for one assignment-level scoring metric card. */
 export function assignmentMetricFormatter(key: string): (value: number) => string {
+  if (key === 'tokens_per_second') return formatThroughput;
+  if (key.includes('throughput')) return formatThroughput;
   if (key.includes('latency')) return formatLatency;
   if (key.includes('token')) return formatTokens;
   if (key === 'deterministic_pass_rate' || key.endsWith('_rate')) return formatPercent;

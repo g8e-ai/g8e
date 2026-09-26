@@ -43,9 +43,9 @@ func TestSubmitDocumentUpdate_BuildsCanonicalEnvelope(t *testing.T) {
 		RequestorUserID:   "user-test-001",
 		Collection:        "investigations",
 		DocumentID:        "inv-doc-test-001",
-		Updates: map[string]any{
-			"case_title": "Test Investigation",
-			"status":     "open",
+		Updates: InvestigationUpdate{
+			CaseTitle: strPtr("Test Investigation"),
+			Status:    strPtr("open"),
 		},
 		Merge:     false,
 		StateRoot: "root-abc-123",
@@ -87,7 +87,7 @@ func TestSubmitDocumentUpdate_MergeTrueSetsMergeFlag(t *testing.T) {
 	req := DocumentUpdateRequest{
 		Collection: "investigations",
 		DocumentID: "inv-merge-001",
-		Updates:    map[string]any{"case_title": "Patched Title"},
+		Updates:    InvestigationUpdate{CaseTitle: strPtr("Patched Title")},
 		Merge:      true,
 		StateRoot:  "root-merge",
 	}
@@ -163,7 +163,7 @@ func TestSubmitDocumentUpdate_DeterministicHashForSameInputs(t *testing.T) {
 	req := DocumentUpdateRequest{
 		Collection: "investigations",
 		DocumentID: "inv-det-001",
-		Updates:    map[string]any{"case_title": "Deterministic Test"},
+		Updates:    InvestigationUpdate{CaseTitle: strPtr("Deterministic Test")},
 		StateRoot:  "root-det",
 	}
 
@@ -190,7 +190,7 @@ func TestSubmitDocumentUpdate_DefaultTTL(t *testing.T) {
 	req := DocumentUpdateRequest{
 		Collection: "investigations",
 		DocumentID: "inv-ttl-001",
-		Updates:    map[string]any{"status": "open"},
+		Updates:    InvestigationUpdate{Status: strPtr("open")},
 		StateRoot:  "root-ttl",
 		TTL:        0, // should default to 5 minutes
 	}
@@ -281,6 +281,20 @@ func TestActingAppG8ee_MatchesEnsembleConstant(t *testing.T) {
 	// The ensemble Python code defines G8EE_COMPONENT = "g8ee". The harness
 	// must use the same value so receipts attribute the action to g8ee.
 	assert.Equal(t, "g8ee", ActingAppG8ee)
+}
+
+func TestInvestigationUpdate_OmitsUnsetFields(t *testing.T) {
+	title := "Patched Title"
+	updates, err := documentUpdateStruct(InvestigationUpdate{CaseTitle: &title})
+	require.NoError(t, err)
+	require.NotNil(t, updates)
+	assert.Equal(t, "Patched Title", updates.Fields["case_title"].GetStringValue())
+	_, hasStatus := updates.Fields["status"]
+	assert.False(t, hasStatus)
+}
+
+func strPtr(value string) *string {
+	return &value
 }
 
 // assertJSONField unmarshals a JSON string field from the envelope map and

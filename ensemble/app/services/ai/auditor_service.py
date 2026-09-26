@@ -20,7 +20,7 @@ from app.models.agent import OperatorContext
 from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment
 from app.models.http_context import RequestContext
 from app.services.data.reputation_data_service import ReputationDataService
-from app.utils.merkle import leaf_bytes, merkle_root
+from app.utils.hashing.merkle import leaf_bytes, merkle_root
 from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
@@ -58,7 +58,7 @@ from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 if TYPE_CHECKING:
     from app.services.ai.generator import TribunalEmitter
 from app.utils.json_utils import extract_json_from_text
-from app.utils.safety import validate_command_safety
+from app.utils.validation.safety import validate_command_safety
 
 # Internal import for normalisation
 from app.utils.command import normalise_command

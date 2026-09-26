@@ -528,15 +528,6 @@ func (h *pubSubSessionHandler) handlePublish(msg *pubsubv1.PubSubMessage) {
 		return
 	}
 
-	// cmd: channels from app workloads are intercepted and transformed
-	// into governed GovernanceEnvelopes. The gateway owns envelope
-	// construction, state root, and governance proofs; the publisher
-	// supplies only the command intent.
-	if strings.HasPrefix(msg.Channel, constants.ChannelPrefixCmd+":") {
-		h.relayCommandIntent(msg.Channel, msg.Data)
-		return
-	}
-
 	// receipts: channels from operators are intercepted: the gateway
 	// verifies the ActionReceipt signature, records the receipt in its
 	// SQLAuditStore, and fans out the envelope to subscribers.
@@ -549,142 +540,6 @@ func (h *pubSubSessionHandler) handlePublish(msg *pubsubv1.PubSubMessage) {
 	// out verbatim. The broker does not transform operator-originated
 	// frames.
 	h.broker.Publish(msg.Channel, msg.Data)
-}
-
-// relayCommandIntent decodes a command intent payload published by an
-// authorized app workload to a cmd: channel, constructs a governed
-// GovernanceEnvelope with the gateway's current state root, and fans
-// out the protojson envelope to subscribers. Fail-closed on any error.
-func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
-	b := h.broker
-	b.mu.RLock()
-	stateRootProvider := b.stateRootProvider
-	sessionValidator := b.sessionValidator
-	posture := b.posture
-	doctrine := b.doctrine
-	b.mu.RUnlock()
-
-	if stateRootProvider == nil || sessionValidator == nil {
-		b.logger.Warn("PubSub cmd: relay disabled: state root provider or session validator not configured",
-			"channel", channel)
-		return
-	}
-	if doctrine == nil {
-		b.logger.Warn("PubSub cmd: relay disabled: L1 doctrine not configured",
-			"channel", channel)
-		return
-	}
-
-	// 1. Decode the command intent payload as protojson into the typed
-	// commonv1.CommandIntent. The ensemble publishes a CommandIntent
-	// protojson object; raw G8eMessage JSON or any other shape is
-	// rejected fail-closed by the unmarshaler.
-	intent := &commonv1.CommandIntent{}
-	if err := protojson.Unmarshal(data, intent); err != nil {
-		b.logger.Warn("PubSub cmd: relay: failed to decode command intent",
-			"channel", channel, "error", err.Error())
-		return
-	}
-	if intent.OperatorId == "" || intent.OperatorSessionId == "" {
-		b.logger.Warn("PubSub cmd: relay: command intent missing operator identifiers",
-			"channel", channel)
-		return
-	}
-	if intent.ActionType == "" {
-		b.logger.Warn("PubSub cmd: relay: command intent missing action_type",
-			"channel", channel)
-		return
-	}
-	if len(intent.Payload) == 0 {
-		b.logger.Warn("PubSub cmd: relay: command intent missing payload",
-			"channel", channel)
-		return
-	}
-
-	// 2. Validate the channel matches the intent's operator identifiers.
-	// The channel is cmd:<operator_id>:<operator_session_id>; the intent
-	// must target the same operator and session. This prevents an
-	// authorized app from publishing to one operator's channel while
-	// claiming to target another.
-	expectedChannel := pubsub.CmdChannel(intent.OperatorId, intent.OperatorSessionId)
-	if channel != expectedChannel {
-		b.logger.Warn("PubSub cmd: relay: channel does not match command intent operator identifiers",
-			"channel", channel,
-			"expected", expectedChannel,
-			"intent_operator_id", intent.OperatorId,
-			"intent_session_id", intent.OperatorSessionId)
-		return
-	}
-
-	// 3. Validate the target operator session.
-	op, err := sessionValidator.ValidateOperatorSession(intent.OperatorSessionId)
-	if err != nil {
-		b.logger.Warn("PubSub cmd: relay: operator session validation failed",
-			"channel", channel,
-			"operator_session_id", intent.OperatorSessionId,
-			"error", err.Error())
-		return
-	}
-
-	if err := validateWitnessCommandDispatch(op, intent.ActionType, intent.Payload); err != nil {
-		b.logger.Warn("PubSub cmd: relay: ollama service dispatch rejected",
-			"channel", channel,
-			"operator_session_id", intent.OperatorSessionId,
-			"error", err.Error())
-		return
-	}
-
-	// 4. Fetch the gateway's current state root.
-	stateRoot, err := stateRootProvider.GetCurrentStateRoot()
-	if err != nil {
-		b.logger.Warn("PubSub cmd: relay: failed to fetch state root",
-			"channel", channel, "error", err.Error())
-		return
-	}
-
-	// 5. Build the governed GovernanceEnvelope. The acting app identity
-	// is extracted from the mTLS certificate's SPIFFE ID; the requestor
-	// user identity and application context are supplied by the command
-	// intent.
-	actingAppID := h.sub.identitySPIFFEID
-	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
-		OperatorID:        op.ID,
-		OperatorSessionID: op.OperatorSessionID,
-		ActionType:        intent.ActionType,
-		Payload:           intent.Payload,
-		TargetResource:    intent.TargetResource,
-		RequestorUserID:   intent.RequestorUserId,
-		ActingAppID:       actingAppID,
-		StateMerkleRoot:   stateRoot,
-		CaseID:            intent.CaseId,
-		InvestigationID:   intent.InvestigationId,
-		TaskID:            intent.TaskId,
-		WebSessionID:      intent.WebSessionId,
-		CliSessionID:      intent.CliSessionId,
-		Posture:           posture,
-		Doctrine:          doctrine,
-	})
-	if err != nil {
-		b.logger.Warn("PubSub cmd: relay: failed to build governance envelope",
-			"channel", channel, "error", err.Error())
-		return
-	}
-
-	// 6. Marshal as protojson (the canonical wire format).
-	wire, err := protojson.Marshal(env)
-	if err != nil {
-		b.logger.Warn("PubSub cmd: relay: failed to marshal governance envelope",
-			"channel", channel, "error", err.Error())
-		return
-	}
-
-	// 7. Fan out the governed envelope to subscribers on the cmd: channel.
-	delivered := b.Publish(channel, wire)
-	b.logger.Info("PubSub cmd: relay: transformed and fanned out command intent",
-		"channel", channel,
-		"transaction_id", env.Id,
-		"action_type", env.ActionType,
-		"delivered", delivered)
 }
 
 // relayActionReceipt decodes a GovernanceEnvelope published by an authorized
@@ -1082,16 +937,14 @@ func verifyPatternACL(pattern, operatorID, identitySPIFFEID string) error {
 // verifyPublishACL enforces publish-time authorization for all PUBLISH
 // actions. The gateway is the relay and enforcement point for operator
 // command dispatch: operators may publish only to their own heartbeat:,
-// results:, and receipts: channels, and app workloads
-// (spiffe://g8e.local/app/...) may publish command intent to
-// cmd:<operator_id>:<session_id> channels. The ensemble (g8ee) is the
-// centralized event broker and is authorized to publish to any operator's
-// cmd: channel. All unauthorized publish attempts fail closed with
-// ErrPubSubPublishUnauthorized.
+// results:, and receipts: channels. cmd: dispatch is gateway-internal
+// only (HTTP POST /api/v1/operators/commands); WebSocket publishers must
+// not inject command intent on cmd: channels. All unauthorized publish
+// attempts fail closed with ErrPubSubPublishUnauthorized.
 //
 // Channel formats:
 //
-//	cmd:<operator_id>:<operator_session_id>       App -> Operator (intercepted)
+//	cmd:<operator_id>:<operator_session_id>       Gateway-internal dispatch only
 //	results:<operator_id>:<operator_session_id>   Operator -> App (verbatim)
 //	heartbeat:<operator_id>:<operator_session_id> Operator -> App (verbatim)
 //	receipts:<operator_id>:<operator_session_id>  Operator -> Gateway (intercepted)
@@ -1106,15 +959,12 @@ func verifyPublishACL(channel, publisherOperatorID, publisherSPIFFEID string) er
 
 	switch prefix {
 	case constants.ChannelPrefixCmd:
-		// Only app workloads may publish command intent to cmd: channels.
-		// Operators are explicitly prohibited from publishing to cmd:
-		// (they receive commands, they do not issue them to themselves).
-		// The ensemble (g8ee) is authorized as the centralized event
-		// broker for any operator.
-		if wid.IsAppSAN(publisherSPIFFEID) {
-			return nil
-		}
-		return fmt.Errorf("%w: operators cannot publish to cmd: channels", constants.ErrPubSubPublishUnauthorized)
+		// cmd: dispatch is gateway-internal only (HTTP POST /api/v1/operators/commands).
+		// WebSocket publishers must not inject command intent on cmd: channels.
+		return fmt.Errorf("%w: cmd: channel publish is gateway-internal only; use HTTP dispatch", constants.ErrPubSubPublishUnauthorized)
+
+	case constants.ChannelPrefixAudit:
+		return fmt.Errorf("%w: audit channel publish is gateway-internal only", constants.ErrPubSubPublishUnauthorized)
 
 	case constants.ChannelPrefixResults, constants.ChannelPrefixHeartbeat, constants.ChannelPrefixReceipts:
 		// Operators may publish only to their own heartbeat:, results:, and

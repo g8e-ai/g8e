@@ -8,6 +8,7 @@ import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockTemplateLoader } from '@test/mocks/mock-browser-env.js';
 import { seedTemplates } from '@test/fixtures/templates.fixture.js';
+import { EventType } from '@g8ed/public/js/constants/events.js';
 
 const WEB_SESSION_ID = 'session-output-abc';
 
@@ -788,7 +789,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             
             // First, simulate the PREPARING event
             terminal.handleCommandExecutionEvent({
-                eventType: 'operator.command.approval.preparing',
+                eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
                 execution_id: executionId,
                 command: command
             });
@@ -825,7 +826,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             
             // Create preparing indicator for execution 1
             terminal.handleCommandExecutionEvent({
-                eventType: 'operator.command.approval.preparing',
+                eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
                 execution_id: executionId1,
                 command: command
             });

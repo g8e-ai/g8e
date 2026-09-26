@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
+import { ServiceName } from '../constants/service-client-constants.js';
+
 /**
  * CasesManager - Handles case management functionality
  * 
@@ -119,15 +121,15 @@ export class CasesManager {
         window.addEventListener('popstate', this.boundHandlers.popstate);
 
         // EventBus listeners for investigation events from backend
-        this.eventBus.on(EventType.INVESTIGATION_LIST_COMPLETED, (data) => {
+        this.eventBus.on(EventType.APP_INVESTIGATION_LIST_COMPLETED, (data) => {
             this.handleInvestigationQuerySuccess(data);
         });
 
-        this.eventBus.on(EventType.CASE_CREATED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_CREATED, (data) => {
             this._applyCaseCreationResult(data);
         });
 
-        this.eventBus.on(EventType.CASE_UPDATED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_UPDATED, (data) => {
             this.handleCaseUpdated(data);
         });
     }
@@ -284,7 +286,7 @@ export class CasesManager {
                 throw new Error('Service client not initialized');
             }
 
-            const response = await window.serviceClient.get('g8ed', ApiPaths.chat.investigations());
+            const response = await window.serviceClient.get(ServiceName.GATEWAY, ApiPaths.chat.investigations());
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -475,7 +477,7 @@ export class CasesManager {
 
         this.setDropdownValue('');
         this.userCases = [];
-        this.eventBus.emit(EventType.CASE_CLEARED);
+        this.eventBus.emit(EventType.APP_CASE_CLEARED);
     }
 
     /**
@@ -540,11 +542,11 @@ export class CasesManager {
             this.currentCaseId = null;
             this.currentInvestigationId = null;
             this.updateUrlState(null);
-            this.eventBus.emit(EventType.CASE_CLEARED);
+            this.eventBus.emit(EventType.APP_CASE_CLEARED);
             return;
         }
 
-        const response = await window.serviceClient.get('g8ed', ApiPaths.chat.investigations() + `?case_id=${caseId}`);
+        const response = await window.serviceClient.get(ServiceName.GATEWAY, ApiPaths.chat.investigations() + `?case_id=${caseId}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -567,14 +569,14 @@ export class CasesManager {
         // Update URL to reflect current investigation (enables refresh/bookmarking)
         this.updateUrlState(caseId);
 
-        this.eventBus.emit(EventType.CASE_SELECTED, {
+        this.eventBus.emit(EventType.APP_CASE_SELECTED, {
             caseId: this.currentCaseId,
             investigationId: this.currentInvestigationId,
             caseData: investigationData,
             conversationHistory: investigationData.conversation_history
         });
         
-        this.eventBus.emit(EventType.CASE_SWITCHED, {
+        this.eventBus.emit(EventType.APP_CASE_SWITCHED, {
             caseId: this.currentCaseId,
             investigationId: this.currentInvestigationId,
             investigation: investigationData
@@ -592,7 +594,7 @@ export class CasesManager {
 
         this.setDropdownValue('');
         this.updateUrlState(null);
-        this.eventBus.emit(EventType.CASE_CLEARED);
+        this.eventBus.emit(EventType.APP_CASE_CLEARED);
     }
 
     _applyCaseCreationResult(caseData) {
@@ -664,10 +666,10 @@ export class CasesManager {
 
         this.authStateUnsubscribe = window.authState.subscribe((event, data) => {
             switch (event) {
-                case EventType.AUTH_USER_AUTHENTICATED:
+                case EventType.PLATFORM_AUTH_USER_AUTHENTICATED:
                     this.handleUserAuthenticated(data);
                     break;
-                case EventType.AUTH_USER_UNAUTHENTICATED:
+                case EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED:
                     this.handleUserUnauthenticated(data);
                     break;
             }

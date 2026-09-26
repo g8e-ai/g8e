@@ -7,15 +7,16 @@
 
 """Operator Filesystem Service
 
-Handles non-mutating filesystem operations (list, read) on Operators.
+Handles non-mutating filesystem operations (list, read, grep) on Operators.
 """
+
+from __future__ import annotations
 
 import logging
 
 from app.services.protocols import (
     ExecutionServiceProtocol,
     InvestigationServiceProtocol,
-    PubSubServiceProtocol,
 )
 from app.constants import EventType, G8EE_COMPONENT
 from app.constants.generated_status import AITaskId
@@ -26,7 +27,6 @@ from app.models.command_request_payloads import (
     FsReadRequestPayload,
     FsGrepRequestPayload,
 )
-from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FsListToolResult, FsReadToolResult, FsGrepToolResult
 from app.models.pubsub_messages import (
@@ -44,17 +44,11 @@ class OperatorFilesystemService:
 
     def __init__(
         self,
-        pubsub_service: PubSubServiceProtocol,
         execution_service: ExecutionServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self._pubsub_service = pubsub_service
         self._execution_service = execution_service
         self._investigation_service = investigation_service
-
-    @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        return self._pubsub_service
 
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
@@ -70,11 +64,7 @@ class OperatorFilesystemService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsListToolResult:
-        """List files on an operator.
-
-        ``execution_id`` is extracted from args.execution_id and
-        is used as the registry key and in UI lifecycle events.
-        """
+        """List files on an operator."""
         exec_id = args.execution_id
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operators = self.execution_service.resolve_operators(
@@ -98,54 +88,18 @@ class OperatorFilesystemService:
             payload=args,
         )
 
-        # Notify start
-        await self.execution_service.event_service.publish_command_event(
-            EventType.OPERATOR_FILESYSTEM_LIST_STARTED,
-            CommandExecutingBroadcastEvent(
-                command=f"ls {args.path}",
-                execution_id=exec_id,
-                operator_session_id=resolved_operator.operator_session_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.FS_LIST,
-        )
-
         internal_result, envelope = await self.execution_service.execute(
             g8e_message=g8e_message,
             g8e_context=g8e_context,
             timeout_seconds=60,
         )
 
-        # Extract typed payload data from envelope
         entries = []
         if envelope and isinstance(envelope.payload, FsListResultPayload):
             entries = envelope.payload.entries or []
 
-        # Notify completion/failure
         status = internal_result.status
-        output = internal_result.output
         error = internal_result.error
-
-        completion_event_type = (
-            EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED
-            if status == ExecutionStatus.COMPLETED
-            else EventType.OPERATOR_FILESYSTEM_LIST_FAILED
-        )
-
-        await self.execution_service.event_service.publish_command_event(
-            completion_event_type,
-            CommandResultBroadcastEvent(
-                execution_id=exec_id,
-                command=f"ls {args.path}",
-                status=status,
-                output=output,
-                error=error,
-                operator_id=resolved_operator.id,
-                operator_session_id=resolved_operator.operator_session_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.FS_LIST,
-        )
 
         return FsListToolResult(
             success=status == ExecutionStatus.COMPLETED,
@@ -160,11 +114,7 @@ class OperatorFilesystemService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsGrepToolResult:
-        """Search for a pattern on an operator.
-
-        ``execution_id`` is extracted from args.execution_id and
-        is used as the registry key and in UI lifecycle events.
-        """
+        """Search for a pattern on an operator."""
         exec_id = args.execution_id
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operators = self.execution_service.resolve_operators(
@@ -188,25 +138,12 @@ class OperatorFilesystemService:
             payload=args,
         )
 
-        # Notify start
-        await self.execution_service.event_service.publish_command_event(
-            EventType.OPERATOR_FILESYSTEM_GREP_STARTED,
-            CommandExecutingBroadcastEvent(
-                command=f"grep -r {args.pattern} {args.path}",
-                execution_id=exec_id,
-                operator_session_id=resolved_operator.operator_session_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.RECURSIVE_GREP,
-        )
-
         internal_result, envelope = await self.execution_service.execute(
             g8e_message=g8e_message,
             g8e_context=g8e_context,
             timeout_seconds=60,
         )
 
-        # Extract typed payload data from envelope
         matches = []
         total_matches = 0
         truncated = False
@@ -215,31 +152,8 @@ class OperatorFilesystemService:
             total_matches = envelope.payload.total_matches
             truncated = envelope.payload.truncated
 
-        # Notify completion/failure
         status = internal_result.status
-        output = internal_result.output
         error = internal_result.error
-
-        completion_event_type = (
-            EventType.OPERATOR_FILESYSTEM_GREP_COMPLETED
-            if status == ExecutionStatus.COMPLETED
-            else EventType.OPERATOR_FILESYSTEM_GREP_FAILED
-        )
-
-        await self.execution_service.event_service.publish_command_event(
-            completion_event_type,
-            CommandResultBroadcastEvent(
-                execution_id=exec_id,
-                command=f"grep -r {args.pattern} {args.path}",
-                status=status,
-                output=output,
-                error=error,
-                operator_id=resolved_operator.id,
-                operator_session_id=resolved_operator.operator_session_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.RECURSIVE_GREP,
-        )
 
         return FsGrepToolResult(
             success=status == ExecutionStatus.COMPLETED,
@@ -257,11 +171,7 @@ class OperatorFilesystemService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsReadToolResult:
-        """Read a file from an operator.
-
-        ``execution_id`` is extracted from args.execution_id and
-        is used as the registry key and in UI lifecycle events.
-        """
+        """Read a file from an operator."""
         exec_id = args.execution_id
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operators = self.execution_service.resolve_operators(
@@ -285,54 +195,18 @@ class OperatorFilesystemService:
             payload=args,
         )
 
-        # Notify start
-        await self.execution_service.event_service.publish_command_event(
-            EventType.OPERATOR_FILESYSTEM_READ_STARTED,
-            CommandExecutingBroadcastEvent(
-                command=f"cat {args.path}",
-                execution_id=exec_id,
-                operator_session_id=resolved_operator.operator_session_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.FS_READ,
-        )
-
         internal_result, envelope = await self.execution_service.execute(
             g8e_message=g8e_message,
             g8e_context=g8e_context,
             timeout_seconds=60,
         )
 
-        # Extract typed payload data from envelope
         content = None
         if envelope and isinstance(envelope.payload, FsReadResultPayload):
             content = envelope.payload.content
 
-        # Notify completion/failure
         status = internal_result.status
-        output = internal_result.output
         error = internal_result.error
-
-        completion_event_type = (
-            EventType.OPERATOR_FILESYSTEM_READ_COMPLETED
-            if status == ExecutionStatus.COMPLETED
-            else EventType.OPERATOR_FILESYSTEM_READ_FAILED
-        )
-
-        await self.execution_service.event_service.publish_command_event(
-            completion_event_type,
-            CommandResultBroadcastEvent(
-                execution_id=exec_id,
-                command=f"cat {args.path}",
-                status=status,
-                output=output,
-                error=error,
-                operator_id=resolved_operator.id,
-                operator_session_id=resolved_operator.operator_session_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.FS_READ,
-        )
 
         return FsReadToolResult(
             success=status == ExecutionStatus.COMPLETED,
@@ -340,3 +214,6 @@ class OperatorFilesystemService:
             content=content,
             error=error,
         )
+
+
+__all__ = ["OperatorFilesystemService"]

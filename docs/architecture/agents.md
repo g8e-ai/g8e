@@ -26,7 +26,7 @@ The Governance Gateway is the Policy Decision Point. It authenticates clients, c
 
 The Governed Operator is the Policy Execution Point for the runtime where that Operator process runs. A remote Operator opens an outbound mTLS connection to the Gateway, subscribes to its exact session-specific command channel, verifies each received envelope locally, and executes accepted operations through its L5 Actuator. It opens no inbound management port. The Gateway's embedded Operator executes only against the Gateway runtime; a remote Operator executes only against its own runtime.
 
-The Gateway also contains an in-process Operator substrate. MCP and A2A calls received by the Gateway execute through this local L4/L5 path, which can invoke built-in tools or configured downstream MCP and A2A services. Host commands sent by g8ee as `CommandIntent` use the outbound Operator path instead, so the Operator in the target runtime performs L4/L5 verification and execution.
+The Gateway also contains an in-process Operator substrate. MCP and A2A calls received by the Gateway execute through this local L4/L5 path, which can invoke built-in tools or configured downstream MCP and A2A services. Host commands sent by g8ee through `POST /api/v1/operators/commands` use the outbound Operator path instead, so the Operator in the target runtime performs L4/L5 verification and execution.
 
 This boundary governs only operations that traverse a g8e ingress. It does not sandbox an AI process or automatically govern native tools, network access, or other side channels that remain enabled in the client itself.
 
@@ -38,11 +38,11 @@ This boundary governs only operations that traverse a g8e ingress. It does not s
 | --- | --- | --- | --- |
 | **Gateway MCP** | JSON-RPC methods at `/mcp` | `tools/call`, `resources/read`, `prompts/get`, and `a2a/call` are translated into typed envelopes and processed through the Gateway's L1-L5 path. List and other discovery methods do not execute tools. | Gateway in-process Operator, built-in tool, or configured downstream MCP/A2A service |
 | **Gateway A2A** | JSON-RPC `a2a/call` at `/api/v1/a2a/call` | The Gateway constructs an `A2A_CALL` envelope, attempts configured L2 deliberation when the posture requires it, suspends supported L3 failures, and processes the request through L1-L5. | Configured downstream A2A service through the Gateway Actuator path |
-| **Operator command relay** | Typed `CommandIntent` protojson on the exact target Operator command channel | An authenticated app publisher must target the matching Operator and session. The Gateway validates the session, applies L1 screening, fetches the current state root, and constructs the envelope with identity, nonce, expiry, hash, and posture. The relay does not add missing L2 votes or suspend for L3. | Bound outbound Operator |
+| **Governed HTTP dispatch** | Registered request `event_type` and serialized payload at `POST /api/v1/operators/commands` | An authenticated enrolled app must name a valid request event and delegated Operator session. The Gateway derives `action_type` from the registry, validates the session, applies L1 screening, fetches the current state root, and constructs the envelope with identity, nonce, expiry, hash, and posture. The dispatch path does not add missing L2 votes or suspend for L3. | Bound outbound Operator |
 | **Direct envelope** | Complete canonical `GovernanceEnvelope` at `/api/v1/governance/envelopes` | The Gateway verifies the supplied envelope but does not add missing L2 or L3 proofs. This privileged route requires an authorized CLI or Operator transport identity and rejects app certificates. | Gateway in-process Operator |
 | **External MCP wrapper** | Stdio requests forwarded to an MCP subprocess or HTTP server | Only `tools/call` requests receive inline L1 threat screening. No `GovernanceEnvelope`, L2-L5 processing, signed receipt, or Gateway audit is added; accepted requests are forwarded directly. | Wrapped external MCP server |
 
-MCP and A2A are the normal client-facing surfaces when the Gateway must construct the envelope, coordinate configured L2 deliberation, or manage supported L3 approval. Under `consensus` or `notary`, MCP and A2A attempt L2 deliberation when a deliberator is configured; if no valid votes are attached, L4 rejects the transaction. `CommandIntent` is suitable only when its proof-free relay satisfies the active posture. Direct envelope submission is reserved for clients that already possess an authorized CLI or Operator transport identity and can supply every required proof.
+MCP and A2A are the normal client-facing surfaces when the Gateway must construct the envelope, coordinate configured L2 deliberation, or manage supported L3 approval. Under `consensus` or `notary`, MCP and A2A attempt L2 deliberation when a deliberator is configured; if no valid votes are attached, L4 rejects the transaction. Governed HTTP dispatch is suitable only when its proof-free envelope construction satisfies the active posture. Direct envelope submission is reserved for clients that already possess an authorized CLI or Operator transport identity and can supply every required proof.
 
 See [Build Apps](../guides/build_apps.md) for choosing among these integration paths.
 
@@ -99,7 +99,7 @@ L1 decodes the typed payload and applies protobuf field constraints, forbidden-p
 
 ### L2 Consensus
 
-L2 verifies Ed25519 votes over the transaction hash against an enabled consensus policy and its trusted member keys. Required postures enforce the configured quorum of distinct affirmative signers. The Gateway-owned MCP and A2A construction paths request deliberation under `consensus` and `notary`; direct envelopes and the `CommandIntent` relay do not receive missing votes automatically.
+L2 verifies Ed25519 votes over the transaction hash against an enabled consensus policy and its trusted member keys. Required postures enforce the configured quorum of distinct affirmative signers. The Gateway-owned MCP and A2A construction paths request deliberation under `consensus` and `notary`; direct envelopes and governed HTTP dispatch do not receive missing votes automatically.
 
 The protocol L2 service is separate from application-level multi-model voting. Internal model agreement is advisory unless enrolled consensus members emit valid Ed25519 votes that satisfy the Gateway policy. See [Consensus](./consensus.md).
 
@@ -135,7 +135,7 @@ g8ee is an optional first-party client, not part of the Gateway or Operator trus
 5. Reaching the configured tool-turn limit requires an explicit continuation decision before the loop can continue.
 6. The ensemble publishes typed progress and result events through the Gateway SSE event bridge.
 
-The Tribunal improves command generation but does not produce protocol L2 signatures. For host operations, g8ee publishes `CommandIntent` to the bound Operator channel. For governed platform records, it constructs direct envelopes and uses the dedicated Operator-credential transport available in the unified deployment. It does not use the Gateway MCP endpoint for these internal paths.
+The Tribunal improves command generation but does not produce protocol L2 signatures. For host operations, g8ee dispatches through `GatewayOperatorClient` at `POST /api/v1/operators/commands` with registered request events. For governed platform records, it constructs direct envelopes and uses the dedicated Operator-credential transport available in the unified deployment. LFAA audit records use `POST /api/v1/audit/records`. g8ee does not use Gateway pub/sub or the Gateway MCP endpoint for these internal paths.
 
 Conversation history, investigation context, generated memories, model telemetry, and retry state remain application-owned. g8e governs host and platform operations; the Gateway is not implicit agent memory. See [g8ee Agents](../ensemble/agents.md) for the persona roster and [Ensemble Architecture](./ensemble.md) for its connection model.
 

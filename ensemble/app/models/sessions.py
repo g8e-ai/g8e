@@ -15,7 +15,7 @@ from typing import Any
 
 from app.constants import SessionType
 from app.models.base import Field
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 from .base import G8eBaseModel, UTCDatetime
 

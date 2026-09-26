@@ -159,9 +159,9 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     assert len(thinking_events) > 0, "Expected at least one thinking event"
 
     # Verify thinking event structure and action types
-    thinking_start_events = [e for e in thinking_events if e.payload.action_type == "start"]
-    thinking_update_events = [e for e in thinking_events if e.payload.action_type == "update"]
-    thinking_end_events = [e for e in thinking_events if e.payload.action_type == "end"]
+    thinking_start_events = [e for e in thinking_events if e.payload.phase == "start"]
+    thinking_update_events = [e for e in thinking_events if e.payload.phase == "update"]
+    thinking_end_events = [e for e in thinking_events if e.payload.phase == "end"]
 
     # Should have at least one START and one END event
     assert len(thinking_start_events) >= 1, "Expected at least one thinking START event"
@@ -210,7 +210,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
                 i
                 for i, e in enumerate(events)
                 if e.event_type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
-                and e.payload.action_type == "end"
+                and e.payload.phase == "end"
             ]
         )
 

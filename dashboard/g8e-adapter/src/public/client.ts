@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-import { createPublicFetch, type PublicFetch } from './fetch';
+import { createPublicFetch, type PublicEndpoint, type PublicFetch } from './fetch';
 import type { PublicRuntimeConfig } from './runtime_config';
-import type { PublicBootstrap, PublicHistory, PublicItem, PublicSnapshot } from './state';
+import type { PublicBootstrap, PublicHistory, PublicItem, PublicProofCatalog, PublicSnapshot } from './state';
 
 export class PublicClientError extends Error {
   constructor(public readonly operation: string, public readonly status: number, message: string) {
@@ -17,6 +17,7 @@ export interface PublicClient {
   snapshot(sourceID?: string, signal?: AbortSignal): Promise<PublicSnapshot>;
   snapshotAt(sourceID: string, sequence: number, signal?: AbortSignal): Promise<PublicSnapshot>;
   history(sourceID?: string, cursor?: number, limit?: number, signal?: AbortSignal): Promise<PublicHistory>;
+  proofCatalog(sourceID?: string, signal?: AbortSignal): Promise<PublicProofCatalog>;
 }
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -80,6 +81,33 @@ function history(value: unknown): value is PublicHistory {
     && integer(candidate.limit);
 }
 
+function proofCatalogEntry(value: unknown): boolean {
+  const candidate = object(value);
+  return candidate !== null
+    && string(candidate.artifact_id)
+    && string(candidate.filename)
+    && string(candidate.media_type)
+    && typeof candidate.byte_size === 'number' && Number.isSafeInteger(candidate.byte_size) && candidate.byte_size >= 0
+    && string(candidate.sha256)
+    && /^[0-9a-f]{64}$/.test(candidate.sha256)
+    && string(candidate.classification)
+    && string(candidate.campaign_id)
+    && (candidate.source_run_id === undefined || string(candidate.source_run_id))
+    && string(candidate.generated_at)
+    && string(candidate.verification_command)
+    && string(candidate.immutable_url)
+    && candidate.immutable_url.startsWith('/proofs/');
+}
+
+function proofCatalog(value: unknown): value is PublicProofCatalog {
+  const candidate = object(value);
+  return candidate !== null
+    && string(candidate.schema_version)
+    && Array.isArray(candidate.entries)
+    && candidate.entries.every(proofCatalogEntry)
+    && string(candidate.generated_at);
+}
+
 function query(values: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [name, value] of Object.entries(values)) if (value !== undefined && value !== '') params.set(name, String(value));
@@ -87,7 +115,7 @@ function query(values: Record<string, string | number | undefined>): string {
   return encoded === '' ? '' : `?${encoded}`;
 }
 
-async function read<T>(fetchPublic: PublicFetch, operation: 'bootstrap' | 'snapshot' | 'history', suffix: string, validator: (value: unknown) => value is T, signal?: AbortSignal): Promise<T> {
+async function read<T>(fetchPublic: PublicFetch, operation: PublicEndpoint, suffix: string, validator: (value: unknown) => value is T, signal?: AbortSignal): Promise<T> {
   const response = await fetchPublic(operation, suffix, signal);
   if (!response.ok) throw new PublicClientError(operation, response.status, 'mirror request failed');
   if (!validator(response.body)) throw new PublicClientError(operation, response.status, 'invalid response');
@@ -101,5 +129,6 @@ export function createPublicClient(config: PublicRuntimeConfig, fetchImpl: typeo
     snapshot: (sourceID, signal) => read(fetchPublic, 'snapshot', query({ source: sourceID }), snapshot, signal),
     snapshotAt: (sourceID, sequence, signal) => read(fetchPublic, 'snapshot', query({ source: sourceID, sequence }), snapshot, signal),
     history: (sourceID, cursor, limit, signal) => read(fetchPublic, 'history', query({ source: sourceID, cursor, limit }), history, signal),
+    proofCatalog: (sourceID, signal) => read(fetchPublic, 'proofCatalog', query({ source: sourceID }), proofCatalog, signal),
   };
 }

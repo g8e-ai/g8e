@@ -5,14 +5,14 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-09-24
-Version: v2.1.13
+Last Updated: 2026-09-25
+Version: v2.1.14
 
 ---
 
 ## Overview
 
-This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) for governed AI-agent mutations, while the selected Operator independently verifies the envelope and owns L4/L5 execution. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and the document store API.
+This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) for governed AI-agent mutations, while the selected Operator independently verifies the envelope and owns L4/L5 execution. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), governed HTTP dispatch (`POST /api/v1/operators/commands`), audit ingest (`POST /api/v1/audit/records`), direct governance envelopes, WebSocket pub/sub for operator telemetry, and the document store API.
 
 This is a task guide for the reference Gateway. For the integration decision table and application-owned state model, see [Build g8e-Compatible Applications](./build_apps.md). For the trust boundary, ingress-path differences, and client-side bypass limits, see [AI Agents and the g8e Governance Boundary](../architecture/agents.md).
 
@@ -302,7 +302,7 @@ curl -X POST https://localhost:8443/api/v1/a2a/call \
 
 ### 3. Direct Governance Envelope
 
-Authenticated CLI, Operator, and policy-authorized app clients can submit canonical protojson `GovernanceEnvelope` transactions directly. This is the direct mutation API for clients that construct complete envelopes themselves. An app certificate must have an active `AppPolicy`, the envelope must use an app source component, and `acting_app_id` must match the app certificate's SPIFFE identity. The Gateway still verifies the complete envelope; it does not add missing L2 votes or L3 proofs. Use MCP or A2A when the Gateway must construct the envelope, request configured L2 deliberation, or suspend for L3 approval. `CommandIntent` remains the proof-free relay path for authorized `cmd:` channels and is transformed into an envelope by the Gateway.
+Authenticated CLI, Operator, and policy-authorized app clients can submit canonical protojson `GovernanceEnvelope` transactions directly. This is the direct mutation API for clients that construct complete envelopes themselves. An app certificate must have an active `AppPolicy`, the envelope must use an app source component, and `acting_app_id` must match the app certificate's SPIFFE identity. The Gateway still verifies the complete envelope; it does not add missing L2 votes or L3 proofs. Use MCP or A2A when the Gateway must construct the envelope, request configured L2 deliberation, or suspend for L3 approval. Enrolled apps that target a bound outbound Operator session use `POST /api/v1/operators/commands` instead; WebSocket `cmd:` publishing was removed in v2.1.14.
 
 #### Envelope Submission
 
@@ -318,7 +318,29 @@ Both envelope `id` and `transaction_hash` must equal the canonical transaction h
 
 ---
 
-### 4. WebSocket Pub/Sub
+### 4. Governed Operator HTTP Dispatch
+
+Enrolled applications dispatch host operations through `POST /api/v1/operators/commands` over mTLS. The request names a registered request `event_type`, supplies the delegated `target_operator_session_id`, and carries the typed Operator protobuf payload as base64-encoded bytes. The Gateway derives `action_type` from the event registry, validates the target session, constructs the governed envelope, and returns the correlated result in the HTTP response.
+
+```bash
+curl -X POST https://localhost:8443/api/v1/operators/commands \
+  --cert .g8e/pki/app.crt \
+  --key .g8e/pki/app.key \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_operator_session_id": "<operator-session-id>",
+    "event_type": "g8e.v1.operator.filesystem.read.requested",
+    "payload": "<base64-encoded-protobuf-payload>"
+  }'
+```
+
+Use the exact path `/api/v1/operators/commands`. Unknown `event_type` values fail closed at Gateway ingress. This is the path used by g8ee through `GatewayOperatorClient`; do not publish `CommandIntent` frames to `cmd:` channels.
+
+Audit records that must be acknowledged with `{seq, hash}` use `POST /api/v1/audit/records` instead of governed dispatch.
+
+---
+
+### 5. WebSocket Pub/Sub
 
 The Gateway provides mTLS-authenticated real-time pub/sub at `wss://<gateway>:8443/api/v1/pubsub/stream`. The WebSocket wire format is binary protobuf, not JSON: clients encode and decode `g8e.pubsub.v1.PubSubMessage` frames from the protocol library.
 
@@ -328,16 +350,17 @@ Clients send `subscribe`, `psubscribe`, `unsubscribe`, and `publish` actions. A 
 
 Canonical operator channels include:
 
-- `cmd:<operator_id>:<operator_session_id>` for app-to-Operator command intents. An authorized app publishes canonical protojson `CommandIntent` data; the Gateway validates the target session and constructs the governed envelope.
+- `cmd:<operator_id>:<operator_session_id>` for Gateway-to-Operator governed envelope delivery. Outbound Operators subscribe here; WebSocket publishers cannot inject `CommandIntent` on this channel. Enrolled apps dispatch through `POST /api/v1/operators/commands` instead.
 - `results:<operator_id>:<operator_session_id>` and `heartbeat:<operator_id>:<operator_session_id>` for Operator output and liveness.
 - `receipts:<operator_id>:<operator_session_id>` for signed Operator receipts. The Gateway verifies, persists, and relays valid receipts.
+- `audit:<operator_id>:<operator_session_id>` for acknowledged audit-record ingest from the Gateway.
 - Session-scoped `sse:` and `ws_session:` channels used by the Gateway event bridges.
 
 Use a protobuf-capable WebSocket client for application integration. A text-oriented client such as `wscat` can verify the TLS upgrade but cannot directly produce the required protobuf frames.
 
 ---
 
-### 5. Document Store API
+### 6. Document Store API
 
 The Gateway provides a JSON document store with CRUD operations and query support.
 

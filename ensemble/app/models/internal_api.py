@@ -158,14 +158,6 @@ class OperatorStoppedResponse(G8eBaseModel):
     subscribers: int
 
 
-class OperatorSessionRegisteredResponse(G8eBaseModel):
-    """Response for POST /operators/register-operator-session and deregister-operator-session."""
-
-    success: bool
-    operator_id: str
-    operator_session_id: str
-
-
 class OperatorApprovalResponse(G8eBaseModel):
     """Request model for operator command approval response.
 
@@ -466,23 +458,6 @@ class StopOperatorRequest(G8eBaseModel):
     """Request model for stopping an operator via pub/sub shutdown command.
 
     Identity and business context (user_id, organization_id, web_session_id) come from the
-    context field in the request body.
-    """
-
-    context: RequestContext = Field(
-        ..., description="Request context with session/user/organization identity"
-    )
-    operator_id: str = Field(..., description="Operator ID")
-    operator_session_id: str = Field(..., description="Operator session ID")
-
-
-class OperatorSessionRegistrationRequest(G8eBaseModel):
-    """Request model for registering or deregistering an operator session heartbeat subscription.
-
-    Called by client when an operator authenticates (register) or goes offline/stops (deregister).
-    Triggers g8ee to subscribe or unsubscribe from the heartbeat pub/sub channel for this session.
-
-    Identity and business context (user_id, organization_id) come from the
     context field in the request body.
     """
 

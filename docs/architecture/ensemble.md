@@ -5,8 +5,8 @@ parent: Architecture
 
 # Ensemble (g8ee)
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-25
+Version: v2.1.14
 
 ## Scope
 
@@ -16,7 +16,7 @@ g8ee is outside the trusted execution boundary. Model output, Tribunal agreement
 
 ## Runtime and interfaces
 
-The root Compose stack runs g8ee as the `ensemble` service in the `bootstrapped` profile. The image is built from `ensemble/Dockerfile`, exposes container port 8000, and publishes it as `${G8E_ENSEMBLE_PORT:-8000}`. Its persistent volume is `g8e-ensemble-data` mounted at `/root/.g8e`; the container also receives `/operator-state` read-only from `g8e-operator-data` for bootstrap secrets and shares the stack's `/tmp` volume. The container has no host execution boundary. Host operations target a separately enrolled Operator through Gateway pub/sub.
+The root Compose stack runs g8ee as the `ensemble` service in the `bootstrapped` profile. The image is built from `ensemble/Dockerfile`, exposes container port 8000, and publishes it as `${G8E_ENSEMBLE_PORT:-8000}`. Its persistent volume is `g8e-ensemble-data` mounted at `/root/.g8e`; the container also receives `/operator-state` read-only from `g8e-operator-data` for bootstrap secrets and shares the stack's `/tmp` volume. The container has no host execution boundary. Host operations target a separately enrolled Operator through Gateway HTTP dispatch.
 
 The FastAPI application registers three router groups:
 
@@ -33,7 +33,7 @@ The canonical route definitions are in `ensemble/app/constants/api_paths.json` a
 | Client to g8ee | Starts or resumes chat and investigations, submits turns and supported attachment references, answers triage or application approval prompts, and reads application state. | The request must carry a context that g8ee's `AuthService` authenticates and validates. Browser and CLI identity binding is mediated by the Gateway context used by the caller; g8ee does not treat arbitrary identity headers as authority. |
 | g8ee to Gateway data services | Reads platform settings, user settings, documents, key-value data, and blob objects. | g8ee uses its enrolled app certificate over mTLS through DB, KV, blob, and HTTP clients. Gateway-backed services own durable application data. |
 | g8ee to Gateway event bridge | Publishes typed chat, approval, command, reputation, and background events. | `EventService` sends session-targeted events through the Gateway SSE push API. Events are delivery telemetry, not governance state or durable execution evidence. Targetless events are skipped. |
-| g8ee to command pub/sub | Sends a command request to one selected Operator and receives its correlated result. | g8ee authenticates to Gateway pub/sub with its app workload certificate and publishes to the exact `cmd:<operator_id>:<operator_session_id>` channel. The Gateway authorizes the publisher and the target session. |
+| g8ee to governed dispatch | Dispatches a typed host-operation request to one selected Operator and receives its correlated result. | `GatewayOperatorClient.dispatch()` posts a registered request `event_type` and serialized protobuf payload to `POST /api/v1/operators/commands` over the enrolled app mTLS connection. The Gateway validates the event, derives `action_type`, and authorizes the target session. |
 | g8ee to governance endpoint | Writes protected application records such as cases, investigations, memories, activity, reputation, and stake resolutions. | `GovernanceClient` submits canonical envelopes over the Gateway HTTPS endpoint using the enrolled app mTLS certificate and the configured Operator session bearer value. The Gateway still applies identity binding and all required governance checks. |
 
 The Gateway is the Policy Decision Point. The target remote Operator is the Policy Execution Point for its own runtime and independently verifies the envelope before L5 execution. The Gateway's embedded Operator is a separate execution substrate for Gateway-local ingress paths; g8ee host commands use the selected remote Operator command channel instead.
@@ -44,10 +44,10 @@ g8ee's FastAPI lifespan performs startup in a fixed order:
 
 1. Load local bootstrap settings.
 2. Load a valid enrolled app identity or run owner-approved platform enrollment for component `g8ee` and kind `ensemble`.
-3. Create the app mTLS configuration and connect the DB, KV, pub/sub, and blob clients.
+3. Create the app mTLS configuration and connect the DB, KV, and blob clients.
 4. Build handler services, load platform settings through the Gateway-backed cache-aside service, and merge them with local settings.
-5. Construct `GovernanceClient`, domain services, Operator workflow services, the chat pipeline, and the LLM provider integration.
-6. Start certificate, command-pub/sub, HTTP, heartbeat, and stale-heartbeat services. Only then does the FastAPI lifespan yield readiness.
+5. Construct `GovernanceClient`, `GatewayOperatorClient`, application domain services, the chat pipeline, and the LLM provider integration.
+6. Start certificate and HTTP services. Only then does the FastAPI lifespan yield readiness; heartbeat and Operator lifecycle processing remain in the Gateway. g8ee does not connect to Gateway pub/sub.
 
 Enrollment uses the Gateway's plain-HTTP discovery surface to request, poll, and complete approval. The service generates a P-256 key and CSR, persists an atomic pending attempt with restrictive permissions, resumes an unexpired pending request after restart, verifies the issued chain, SANs, public key, and component kind, and atomically installs the certificate, key, and trust bundle. Existing credentials are renewed when they are within one day of expiry. Approval occurs in the Gateway console; g8ee does not become ready while enrollment is pending. The app certificate and pending state live in g8ee's own runtime volume.
 
@@ -61,9 +61,9 @@ A chat turn is authenticated and context-validated before g8ee loads user settin
 
 Host-command tools pass through the Tribunal's five independent members, candidate clustering, optional Auditor review, Marshal risk analysis, deterministic command validation, and the g8ee application approval service. Auto-approved commands skip only the g8ee prompt after passing the hard command gates; auto-approval is not protocol L3. A Tribunal result is application reasoning and does not create protocol L2 signatures.
 
-The command tool creates a typed internal `G8eMessage`. At the pub/sub boundary, g8ee serializes it as canonical protojson `CommandIntent`, including the exact Operator and session, action type, typed protobuf payload, and request context. g8ee does not construct the governed envelope for this path and does not fetch the Gateway state root.
+The command tool creates a typed internal `G8eMessage`. `OperatorExecutionService` serializes the typed payload to protobuf bytes and calls `GatewayOperatorClient.dispatch()` with the registered request `event_type`, delegated Operator session, and application context fields. g8ee does not construct the governed envelope or fetch the Gateway state root for this path.
 
-The Gateway's command relay rejects malformed intents, mismatched channels, invalid Operator sessions, and disallowed witness dispatches. It performs L1 screening, obtains the current state root, adds posture and identity data, constructs the canonical `GovernanceEnvelope`, and forwards it only to the matching Operator session. The Operator independently performs L1-L4 and L5 execution. Results return on the matching results channel and g8ee publishes the application result event.
+The Gateway dispatch endpoint rejects unknown events, invalid Operator sessions, and malformed payloads. It derives `action_type` from the event registry, performs L1 screening, obtains the current state root, adds posture and identity data, constructs the canonical `GovernanceEnvelope`, and forwards it only to the matching Operator session. The Operator independently performs L1-L4 and L5 execution. The HTTP response carries the correlated result envelope; g8ee decodes it and publishes the application result event.
 
 When the agent reaches `AGENT_MAX_TOOL_TURNS` (currently 25), the loop requests a separate g8ee continuation approval. Approval resets the loop counter; denial or timeout stops the loop. This approval concerns application execution flow and is not protocol L3. Triage clarification similarly pauses the application workflow until the caller answers, skips, or times out.
 
@@ -80,6 +80,8 @@ The current implementation uses the enrolled g8ee app certificate for this HTTPS
 ## Persistence and ownership
 
 g8ee has no local durable application database. The Gateway owns durable application documents, KV values, and blob objects in its own runtime storage. g8ee owns application service logic and uses those Gateway-backed stores for cases, investigations, conversation history, memories, settings, Operator workflow records, agent activity, reputation, and stake resolutions.
+
+The Gateway is the sole owner of the Operator domain: documents, auth/session state, binding, lifecycle, command dispatch, results, `latest_heartbeat_snapshot`, and denormalized `current_hostname`. It stores the canonical `operator.v1.HeartbeatResult` protojson snapshot. g8ee does not subscribe to heartbeat channels, persist Operator fields, or maintain an Operator service; it calls Gateway protocol endpoints when application features need Operator data or execution.
 
 The g8ee process owns only ephemeral coordination: active model turns, background task tracking, pending application approvals, and command-result correlations. These do not survive an ensemble restart. Its certificate, key, trust bundle, and resumable enrollment state persist in the separate ensemble runtime volume. The executing Operator owns authoritative receipts, audit, replay, execution-vault, command output, and file-mutation evidence in its own runtime; g8ee may copy selected results into application records or model context but does not replace that evidence.
 

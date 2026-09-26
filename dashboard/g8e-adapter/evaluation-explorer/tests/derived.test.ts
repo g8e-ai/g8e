@@ -43,6 +43,7 @@ describe('assignmentMetricFormatter', () => {
     expect(assignmentMetricFormatter('pass')(1)).toBe('Pass');
     expect(assignmentMetricFormatter('pass')(0)).toBe('Fail');
     expect(assignmentMetricFormatter('deterministic_pass_rate')(1)).toBe('100.0%');
+    expect(assignmentMetricFormatter('tokens_per_second')(3.33)).toBe('3.3 tok/s');
   });
 });
 
@@ -229,6 +230,35 @@ describe('visibleStreamEvents', () => {
     ];
     const visible = visibleStreamEvents(bootstrapOrder, { modelFilter: 'all', kindFilter: 'all' });
     expect(visible.map((event) => event.event_id)).toEqual(['evt-3', 'evt-2', 'evt-1']);
+  });
+
+  it('collapses planned and scored stage_updated rows for the same role', () => {
+    const twins = [
+      liveEvent({
+        event_id: 'run:a1:invocation:lite:event',
+        kind: 'stage_updated',
+        assignment_id: 'a1',
+        role: 'lite',
+        variant_id: 'qwen25-05b',
+        observed_at: '2026-09-17T19:24:40Z',
+      }),
+      liveEvent({
+        event_id: 'run:a1:invocation-scored:lite:event',
+        kind: 'stage_updated',
+        assignment_id: 'a1',
+        role: 'lite',
+        variant_id: 'qwen25-05b',
+        observed_at: '2026-09-17T19:24:47Z',
+        metric_delta: {
+          input_tokens: { value: 116 },
+          output_tokens: { value: 4 },
+          latency_ms: { value: 12 },
+        },
+      }),
+    ];
+    const visible = visibleStreamEvents(twins, { modelFilter: 'all', kindFilter: 'all' });
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.event_id).toBe('run:a1:invocation-scored:lite:event');
   });
 
   it('collapses bootstrap/history twins at the same observed_at into one result', () => {

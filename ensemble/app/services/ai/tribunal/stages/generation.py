@@ -41,7 +41,7 @@ from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.json_utils import extract_json_from_text
 from app.utils.command import normalise_command
-from app.utils.safety import validate_command_safety
+from app.utils.validation.safety import validate_command_safety
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.utils import is_system_error, member_for_pass
 
@@ -77,8 +77,8 @@ def _pass_model_call(
         input_artifact_hash=input_artifact_hash,
         input_tokens=usage.prompt_token_count if usage else 0,
         output_tokens=usage.candidates_token_count if usage else 0,
-        thinking_tokens=usage.thinking_token_count if usage else 0,
-        cache_tokens=usage.cache_token_count if usage else 0,
+        thinking_tokens=usage.thinking_token_count if usage else None,
+        cache_tokens=usage.cache_token_count if usage else None,
         total_tokens=usage.total_token_count if usage else 0,
         usage_reported=usage.usage_reported if usage else False,
         finish_reason=finish_reason if isinstance(finish_reason, str) else None,

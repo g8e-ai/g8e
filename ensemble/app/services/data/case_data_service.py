@@ -42,7 +42,7 @@ from app.models.db_queries import CaseHistoryQuery
 from app.models.http_context import RequestContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.event_service import EventService
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 from app.clients.governance_client import GovernanceClient
 
 logger = logging.getLogger(__name__)
@@ -150,7 +150,7 @@ class CaseDataService:
             message = G8eMessage(
                 id=case_id,
                 source_component=G8EE_COMPONENT,
-                event_type=EventType.APP_CASE_CREATED,
+                event_type=EventType.APP_CASE_CREATE_REQUESTED,
                 case_id=case_id,
                 task_id=AITaskId.CASE,
                 web_session_id=case_data.web_session_id,
@@ -250,7 +250,7 @@ class CaseDataService:
                     collection=self.cases_collection,
                     document_id=case_id,
                     updates=db_payload,
-                    event_type=EventType.APP_CASE_UPDATED,
+                    event_type=EventType.APP_CASE_UPDATE_REQUESTED,
                     case_id=case_id,
                     web_session_id=context.web_session_id,
                     user_id=context.user_id,
@@ -288,7 +288,7 @@ class CaseDataService:
             await self._governance_client.delete_governed_doc(
                 collection=self.cases_collection,
                 document_id=case_id,
-                event_type=EventType.APP_CASE_DELETED,
+                event_type=EventType.APP_CASE_DELETE_REQUESTED,
                 case_id=case_id,
                 web_session_id=context.web_session_id,
                 user_id=context.user_id,

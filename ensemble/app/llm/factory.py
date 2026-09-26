@@ -128,12 +128,15 @@ def _get_provider_cache_key(
 
 async def clear_provider_cache() -> None:
     """Close and clear all cached provider instances. Intended for shutdown/testing."""
+    from app.decision.factory import clear_decision_provider_cache
+
     for provider in _provider_cache.values():
         try:
             await provider.force_close()
         except Exception as exc:
             logger.info("Error closing provider during cache clear: %s", exc)
     _provider_cache.clear()
+    await clear_decision_provider_cache()
 
 
 def reset_settings() -> None:
@@ -143,6 +146,21 @@ def reset_settings() -> None:
     _llm_settings = None
     _search_settings = None
     _internal_http_client = None
+
+
+def get_generative_lite_provider(settings: LLMSettings) -> LLMProviderBase:
+    """Return an LLM provider for generative lite workloads.
+
+    When lite_provider is Jev, falls back to the assistant provider because Jev only
+    supports structured decision evaluation. Triage and eval judge should use
+    get_decision_provider() when lite_provider is jev.
+    """
+    if settings.lite_provider is LLMProvider.JEV:
+        logger.debug(
+            "Lite provider is jev; using assistant provider for generative lite call"
+        )
+        return get_llm_provider(settings, is_assistant=True)
+    return get_llm_provider(settings, is_lite=True)
 
 
 def get_llm_provider(
@@ -210,6 +228,13 @@ def get_llm_provider(
                 "at startup via set_internal_http_client()"
             )
         provider = G8EProvider(internal_http_client=_internal_http_client)
+    elif provider_type == LLMProvider.JEV:
+        from app.errors import ConfigurationError
+
+        raise ConfigurationError(
+            "Provider 'jev' does not support lite text generation; use jev only "
+            "for triage/eval_judge or select a generative lite provider."
+        )
     else:
         from app.errors import ConfigurationError
 

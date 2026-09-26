@@ -215,7 +215,7 @@ class TestGovernanceClientOperatorBinding:
         message = G8eMessage(
             id="test-doc-id",
             source_component=G8EE_COMPONENT_STR,
-            event_type=EventType.APP_CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATE_REQUESTED,
             case_id="test-case-id",
             user_id="test-user-id",
             payload=DocumentUpdateRequestPayload(
@@ -289,7 +289,7 @@ class TestGovernanceClientOperatorBinding:
         message = G8eMessage(
             id="test-doc-id",
             source_component=G8EE_COMPONENT_STR,
-            event_type=EventType.APP_CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATE_REQUESTED,
             case_id="test-case-id",
             user_id="test-user-id",
             operator_id="explicit-op-id",

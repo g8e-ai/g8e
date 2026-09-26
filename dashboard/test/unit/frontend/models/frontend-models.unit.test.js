@@ -12,6 +12,7 @@ import {
     EventType, // Import the augmented EventType from here
 } from '@g8ed/public/js/models/investigation-models.js';
 import { InvestigationStatus } from '@g8ed/public/js/constants/investigation-constants.js';
+import { MessageSender } from '@g8ed/public/js/constants/message-senders.js';
 
 describe('FrontendBaseModel — parse() [UNIT]', () => {
     class Item extends FrontendBaseModel {
@@ -208,8 +209,8 @@ describe('FrontendIdentifiableModel [UNIT]', () => {
 
 describe('InvestigationHistoryEntry [UNIT]', () => {
     const minimal = { 
-        event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER, 
-        actor: EventType.EVENT_SOURCE_USER_CHAT, 
+        event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER, 
+        actor: MessageSender.USER_CHAT, 
         summary: 'Created' 
     };
 
@@ -238,11 +239,11 @@ describe('InvestigationHistoryEntry [UNIT]', () => {
 
     it('backfills event_type from context if missing at root', () => {
         const m = InvestigationHistoryEntry.parse({
-            actor: EventType.EVENT_SOURCE_USER_CHAT,
+            actor: MessageSender.USER_CHAT,
             summary: 'hello',
-            context: { event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER }
+            context: { event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER }
         });
-        expect(m.event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_USER);
+        expect(m.event_type).toBe(EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER);
     });
 
     it('id defaults to a string', () => {
@@ -255,8 +256,8 @@ describe('InvestigationHistoryEntry [UNIT]', () => {
 
     it('isAIResponse() returns true for AI_PRIMARY actor', () => {
         const m = InvestigationHistoryEntry.parse({ 
-            event_type: EventType.INVESTIGATION_CHAT_MESSAGE_AI,
-            actor: EventType.EVENT_SOURCE_AI_PRIMARY,
+            event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI,
+            actor: MessageSender.AI_PRIMARY,
             summary: 'hi'
         });
         expect(m.isAIResponse()).toBe(true);
@@ -268,8 +269,8 @@ describe('InvestigationHistoryEntry [UNIT]', () => {
 
     it('getSenderDisplayName() returns "g8e" for AI', () => {
         const m = InvestigationHistoryEntry.parse({
-            event_type: EventType.INVESTIGATION_CHAT_MESSAGE_AI,
-            actor: EventType.EVENT_SOURCE_AI_PRIMARY,
+            event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI,
+            actor: MessageSender.AI_PRIMARY,
             summary: 'hi'
         });
         expect(m.getSenderDisplayName()).toBe('g8e');
@@ -310,7 +311,7 @@ describe('InvestigationModel [UNIT]', () => {
     it('history_trail entries are InvestigationHistoryEntry instances', () => {
         const m = InvestigationModel.parse({
             ...minimal,
-            history_trail: [{ event_type: EventType.CASE_CREATED, actor: 'g8ed', summary: 'Init' }],
+            history_trail: [{ event_type: EventType.APP_CASE_CREATED, actor: 'g8ed', summary: 'Init' }],
         });
         expect(m.history_trail[0]).toBeInstanceOf(InvestigationHistoryEntry);
     });
@@ -328,7 +329,7 @@ describe('InvestigationModel [UNIT]', () => {
         }
         const m = InvestigationModel.parse({
             ...minimal,
-            history_trail: [{ event_type: EventType.CASE_CREATED, actor: 'g8ed', summary: 'Init' }],
+            history_trail: [{ event_type: EventType.APP_CASE_CREATED, actor: 'g8ed', summary: 'Init' }],
         });
         expect(findDates(m.forWire())).toBe(false);
     });
@@ -362,15 +363,15 @@ describe('InvestigationHistoryEntry — VSE wire shape compat [UNIT]', () => {
     it('parses VSE ConversationHistoryMessage wire shape (user chat)', () => {
         const wire = {
             id: 'msg-1',
-            sender: EventType.EVENT_SOURCE_USER_CHAT,
+            sender: MessageSender.USER_CHAT,
             content: 'Help me with docker',
             timestamp: '2026-04-06T15:00:00.000Z',
             metadata: {},
         };
         const entry = InvestigationHistoryEntry.parse(wire);
         expect(entry).toBeInstanceOf(InvestigationHistoryEntry);
-        expect(entry.actor).toBe(EventType.EVENT_SOURCE_USER_CHAT);
-        expect(entry.event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_USER);
+        expect(entry.actor).toBe(MessageSender.USER_CHAT);
+        expect(entry.event_type).toBe(EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER);
         expect(entry.summary).toBe('Help me with docker');
         expect(entry.content).toBe('Help me with docker');
     });
@@ -378,33 +379,33 @@ describe('InvestigationHistoryEntry — VSE wire shape compat [UNIT]', () => {
     it('parses VSE ConversationHistoryMessage wire shape (AI response)', () => {
         const wire = {
             id: 'msg-2',
-            sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+            sender: MessageSender.AI_PRIMARY,
             content: 'Docker version is 24.0.7',
             timestamp: '2026-04-06T15:01:00.000Z',
             metadata: {},
         };
         const entry = InvestigationHistoryEntry.parse(wire);
-        expect(entry.actor).toBe(EventType.EVENT_SOURCE_AI_PRIMARY);
-        expect(entry.event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_AI);
+        expect(entry.actor).toBe(MessageSender.AI_PRIMARY);
+        expect(entry.event_type).toBe(EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI);
         expect(entry.summary).toBe('Docker version is 24.0.7');
     });
 
     it('parses VSE ConversationHistoryMessage wire shape (system message)', () => {
         const wire = {
             id: 'msg-3',
-            sender: EventType.EVENT_SOURCE_SYSTEM,
+            sender: MessageSender.SYSTEM,
             content: 'Approval requested',
             timestamp: '2026-04-06T15:02:00.000Z',
             metadata: { approval_id: 'appr-1' },
         };
         const entry = InvestigationHistoryEntry.parse(wire);
-        expect(entry.actor).toBe(EventType.EVENT_SOURCE_SYSTEM);
-        expect(entry.event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_SYSTEM);
+        expect(entry.actor).toBe(MessageSender.SYSTEM);
+        expect(entry.event_type).toBe(EventType.APP_INVESTIGATION_CHAT_MESSAGE_SYSTEM);
     });
 
     it('truncates summary to 500 chars when derived from content', () => {
         const wire = {
-            sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+            sender: MessageSender.AI_PRIMARY,
             content: 'x'.repeat(600),
             metadata: {},
         };
@@ -415,33 +416,33 @@ describe('InvestigationHistoryEntry — VSE wire shape compat [UNIT]', () => {
 
     it('derives event_type for ai.assistant sender', () => {
         const wire = {
-            sender: EventType.EVENT_SOURCE_AI_ASSISTANT,
+            sender: MessageSender.AI_ASSISTANT,
             content: 'Quick answer',
             metadata: {},
         };
         const entry = InvestigationHistoryEntry.parse(wire);
-        expect(entry.event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_AI);
+        expect(entry.event_type).toBe(EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI);
     });
 
     it('derives event_type for user.terminal sender', () => {
         const wire = {
-            sender: EventType.EVENT_SOURCE_USER_TERMINAL,
+            sender: MessageSender.USER_TERMINAL,
             content: 'ls -la',
             metadata: {},
         };
         const entry = InvestigationHistoryEntry.parse(wire);
-        expect(entry.event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_USER);
+        expect(entry.event_type).toBe(EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER);
     });
 
     it('parseConversationHistory handles array of VSE wire messages', () => {
         const history = [
-            { sender: EventType.EVENT_SOURCE_USER_CHAT, content: 'hello', metadata: {} },
-            { sender: EventType.EVENT_SOURCE_AI_PRIMARY, content: 'hi there', metadata: {} },
+            { sender: MessageSender.USER_CHAT, content: 'hello', metadata: {} },
+            { sender: MessageSender.AI_PRIMARY, content: 'hi there', metadata: {} },
         ];
         const result = InvestigationFactory.parseConversationHistory(history);
         expect(result).toHaveLength(2);
-        expect(result[0].event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_USER);
-        expect(result[1].event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_AI);
+        expect(result[0].event_type).toBe(EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER);
+        expect(result[1].event_type).toBe(EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI);
     });
 });
 
@@ -458,7 +459,7 @@ describe('InvestigationFactory [UNIT]', () => {
     });
 
     it('createConversationMessage() returns an InvestigationHistoryEntry', () => {
-        const m = InvestigationFactory.createConversationMessage('hello', EventType.INVESTIGATION_CHAT_MESSAGE_USER, 'inv-1');
+        const m = InvestigationFactory.createConversationMessage('hello', EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER, 'inv-1');
         expect(m).toBeInstanceOf(InvestigationHistoryEntry);
         expect(m.content).toBe('hello');
         expect(m.context.investigation_id).toBe('inv-1');
@@ -466,8 +467,8 @@ describe('InvestigationFactory [UNIT]', () => {
 
     it('parseConversationHistory() returns array of InvestigationHistoryEntry', () => {
         const history = [
-            { content: 'msg1', actor: EventType.EVENT_SOURCE_USER_CHAT, event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER },
-            { content: 'msg2', actor: EventType.EVENT_SOURCE_AI_PRIMARY, event_type: EventType.INVESTIGATION_CHAT_MESSAGE_AI },
+            { content: 'msg1', actor: MessageSender.USER_CHAT, event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER },
+            { content: 'msg2', actor: MessageSender.AI_PRIMARY, event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI },
         ];
         const result = InvestigationFactory.parseConversationHistory(history);
         expect(result).toHaveLength(2);
@@ -491,13 +492,13 @@ describe('Wire boundary discipline [UNIT]', () => {
     it('InvestigationModel with history_trail has no Date in forWire()', () => {
         const m = InvestigationModel.parse({
             case_id: 'c', case_title: 't', case_description: 'd',
-            history_trail: [{ event_type: EventType.CASE_CREATED, actor: 'g8ed', summary: 'Init' }],
+            history_trail: [{ event_type: EventType.APP_CASE_CREATED, actor: 'g8ed', summary: 'Init' }],
         });
         expect(findDates(m.forWire())).toBe(false);
     });
 
     it('InvestigationHistoryEntry has no Date in forWire()', () => {
-        const m = InvestigationHistoryEntry.parse({ event_type: EventType.INVESTIGATION_CHAT_MESSAGE_USER, actor: EventType.EVENT_SOURCE_USER_CHAT, summary: 's' });
+        const m = InvestigationHistoryEntry.parse({ event_type: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER, actor: MessageSender.USER_CHAT, summary: 's' });
         expect(findDates(m.forWire())).toBe(false);
     });
 });

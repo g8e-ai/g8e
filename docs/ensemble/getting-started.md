@@ -5,10 +5,7 @@ parent: g8ee
 
 # Getting Started
 
-Last Updated: 2026-09-23
-Version: v2.1.12
-
-g8ee is the optional first-party Python 3.12/FastAPI application for conversational interaction with g8e. It owns triage, model reasoning, tool loops, application state, and event publication. It is outside the Gateway and Operator trust boundaries: model output, Tribunal agreement, application approvals, and memory do not authorize host or platform mutation. Host commands use a typed `CommandIntent` relay to one selected Operator; protected application-record writes use the Gateway governance endpoint. The Gateway and executing Operator still enforce the active five-layer policy.
+g8ee is the optional first-party Python 3.12/FastAPI application for conversational interaction with g8e. It owns triage, model reasoning, tool loops, application state, and event publication. It is outside the Gateway and Operator trust boundaries: model output, Tribunal agreement, application approvals, and memory do not authorize host or platform mutation. Host commands dispatch through the Gateway `POST /api/v1/operators/commands` endpoint with a registered request `event_type`; protected application-record writes use the Gateway governance endpoint. g8ee does not publish to Gateway pub/sub. The Gateway and executing Operator still enforce the active five-layer policy.
 
 The unified Docker Compose stack is the supported deployment path. Use the local development path when changing or testing the ensemble source.
 
@@ -41,7 +38,7 @@ The ensemble submits its own platform enrollment request, generates an app key a
 # or: ./g8e auth enroll deny <ensemble-request-id> --yes
 ```
 
-When approving manually, approve the Data Operator before the ensemble. The ensemble uses its own enrolled app certificate for Gateway-backed DB, KV, blob, pub/sub, and HTTP services. Host-command execution is sent to the exact enrolled Operator session; it is not executed inside the ensemble container or on the Docker host.
+When approving manually, approve the Data Operator before the ensemble. The ensemble uses its own enrolled app certificate for Gateway-backed DB, KV, blob, and HTTP services. Host-command execution dispatches to the exact enrolled Operator session through Gateway HTTP; it is not executed inside the ensemble container or on the Docker host.
 
 Check readiness and the public health endpoint:
 
@@ -102,13 +99,14 @@ G8E_GATEWAY_HTTP_URL=http://localhost:8080
 G8E_GATEWAY_URL=https://localhost:8443
 G8E_OPERATOR_URL=https://localhost:8443
 G8E_OPERATOR_PUBSUB_URL=wss://localhost:8443
+G8E_G8EE_URL=https://localhost:8443
 ```
 
 `G8E_GATEWAY_HTTP_URL` is the plain-HTTP enrollment and discovery surface. If it is unset, enrollment derives it from `G8E_OPERATOR_URL` by changing `https` to `http` and port `8443` to `8080`; startup fails closed when neither value is available. `G8E_OPERATOR_URL` and `G8E_OPERATOR_PUBSUB_URL` identify the Gateway-hosted HTTPS and WebSocket services used by the ensemble transport clients. `G8E_GATEWAY_URL` is the HTTPS base URL used by the internal HTTP client for Gateway event and operator-link operations.
 
 The process loads `.env` without replacing variables already present in its environment. The enrollment service obtains the Gateway CA bundle during enrollment and stores the resulting app identity in the configured runtime tree. Do not put private keys, API keys, or copied operator credentials in documentation or source control. Governed application-record writes use the enrolled app certificate for transport and the configured Operator session binding as delegated authority; the Gateway validates both identities and still applies the active posture. An application approval or mTLS fingerprint is not a substitute for required protocol L2 or L3 evidence.
 
-The development entry point listens on HTTP at `0.0.0.0:8443` with reload enabled:
+The development entry point runs Uvicorn without TLS on `0.0.0.0:8443` with reload enabled:
 
 ```bash
 python -m app.main
@@ -120,7 +118,7 @@ Verify it from another terminal:
 curl -fsS http://localhost:8443/health
 ```
 
-Do not bind the local process to the same host port as a Gateway HTTPS listener. If the Gateway uses the default host port `8443`, run the local ensemble against a Gateway on another host or publish the Gateway HTTPS service on a different host port. On first startup, the process submits an ensemble enrollment request and waits for owner approval. After approval, it loads platform settings through the Gateway, connects the DB, KV, pub/sub, and blob transports, and starts its domain services. Startup fails if identity enrollment, transport connection, or required platform settings cannot complete.
+The default dev port matches the protocol HTTPS port constant (`8443`) but serves plain HTTP. Do not run the local ensemble on the same host port as a Gateway TLS listener. Set `G8E_G8EE_HTTPS_PORT` before startup when you need a different local port. On first startup, the process submits an ensemble enrollment request and waits for owner approval. After approval, it loads platform settings through the Gateway, connects the DB, KV, and blob transports, and starts its domain services. Startup fails if identity enrollment, transport connection, or required platform settings cannot complete.
 
 ## Validate Changes
 

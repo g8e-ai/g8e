@@ -10,13 +10,11 @@ g8e Security utilities.
 
 Security modules:
 - auth.py: Authentication utilities
-- operator_command_validator.py: Operator command validation
 - output_sanitizer.py: Output sanitization for security
 - request_timestamp.py: Request timestamp validation
 - sentinel_scrubber.py: Sentinel scrubbing for sensitive data
 """
 
-from .operator_command_validator import OperatorCommandValidator
 from .output_sanitizer import (
     SanitizationResult,
     sanitize_file_content,
@@ -48,7 +46,6 @@ __all__ = [
     "TIMESTAMP_WINDOW_SECONDS",
     "NonceCheckResult",
     "NonceErrorCode",
-    "OperatorCommandValidator",
     "RequestTimestampValidator",
     "RequestValidationResult",
     "SanitizationResult",

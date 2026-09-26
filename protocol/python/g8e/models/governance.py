@@ -134,7 +134,7 @@ class GovernanceEnvelope(G8eBaseModel):
 
     # Protocol
     transaction_hash: str | None = None
-    protocol_version: str = "1.0"
+    protocol_version: str = "2"
 
 
 class CommandIntent(G8eBaseModel):
@@ -276,6 +276,11 @@ def _canonicalize_intent_data(intent_data: dict[str, Any]) -> str:
     return _canonicalize_map(intent_data)
 
 
+GOVERNANCE_PROTOCOL_VERSION_V1 = "1.0"
+GOVERNANCE_PROTOCOL_VERSION_V2 = "2"
+_TX_HASH_V2_PREFIX = "g8e-tx-v2|"
+
+
 def compute_transaction_hash(
     *,
     action_type: str,
@@ -285,6 +290,8 @@ def compute_transaction_hash(
     nonce: str,
     expires_at: str,
     intent_data: dict[str, Any],
+    event_type: str | None = None,
+    protocol_version: str = GOVERNANCE_PROTOCOL_VERSION_V2,
     requestor_user_id: str | None = None,
     acting_app_id: str | None = None,
     operator_id: str | None = None,
@@ -334,41 +341,50 @@ def compute_transaction_hash(
     Returns:
         Hex-encoded SHA-256 digest string.
     """
-    parts: list[str] = []
+    v1_parts: list[str] = []
 
     if action_type:
-        parts.append(action_type + "|")
+        v1_parts.append(action_type + "|")
     if target_resource:
-        parts.append(target_resource + "|")
+        v1_parts.append(target_resource + "|")
     if payload:
-        parts.append(payload + "|")
+        v1_parts.append(payload + "|")
     if state_merkle_root:
-        parts.append(state_merkle_root + "|")
+        v1_parts.append(state_merkle_root + "|")
     if nonce:
-        parts.append(nonce + "|")
+        v1_parts.append(nonce + "|")
     if expires_at:
-        parts.append(_normalize_timestamp(expires_at) + "|")
+        v1_parts.append(_normalize_timestamp(expires_at) + "|")
     canonical_intent = _canonicalize_intent_data(intent_data)
     if canonical_intent:
-        parts.append(canonical_intent + "|")
+        v1_parts.append(canonical_intent + "|")
     if requestor_user_id:
-        parts.append(requestor_user_id + "|")
+        v1_parts.append(requestor_user_id + "|")
     if acting_app_id:
-        parts.append(acting_app_id + "|")
+        v1_parts.append(acting_app_id + "|")
     if operator_id:
-        parts.append(operator_id + "|")
+        v1_parts.append(operator_id + "|")
     if operator_session_id:
-        parts.append(operator_session_id + "|")
+        v1_parts.append(operator_session_id + "|")
     if case_id:
-        parts.append(case_id + "|")
+        v1_parts.append(case_id + "|")
     if investigation_id:
-        parts.append(investigation_id + "|")
+        v1_parts.append(investigation_id + "|")
     if task_id:
-        parts.append(task_id + "|")
+        v1_parts.append(task_id + "|")
     if web_session_id:
-        parts.append(web_session_id + "|")
+        v1_parts.append(web_session_id + "|")
     if cli_session_id:
-        parts.append(cli_session_id + "|")
+        v1_parts.append(cli_session_id + "|")
 
-    message = "".join(parts)
+    v1_message = "".join(v1_parts)
+    if protocol_version == GOVERNANCE_PROTOCOL_VERSION_V2:
+        if not event_type:
+            raise ValueError("event_type is required for protocol version 2")
+        message = f"{_TX_HASH_V2_PREFIX}{action_type}|{event_type}|{v1_message}"
+    elif protocol_version in {"", "1", GOVERNANCE_PROTOCOL_VERSION_V1}:
+        message = v1_message
+    else:
+        raise ValueError(f"unsupported protocol_version: {protocol_version}")
+
     return hashlib.sha256(message.encode("utf-8")).hexdigest()

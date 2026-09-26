@@ -147,7 +147,8 @@ func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testin
 			require.NoError(t, proto.Unmarshal(envelope.Payload, shutdown))
 			assert.Equal(t, "planned maintenance", shutdown.Reason)
 			wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
-				Id: envelope.Id, EventType: string(constants.Event.Operator.ShutdownAcknowledged), Timestamp: timestamppb.Now(),
+				Id: envelope.Id, EventType: string(constants.Event.Operator.ShutdownAcknowledged),
+				ActionType: envelope.ActionType, Timestamp: timestamppb.Now(),
 			})
 			require.NoError(t, err)
 			infra.Pubsub.Publish(resultsChannel, wire)

@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -138,7 +139,7 @@ func buildSignedReceiptEnvelope(t *testing.T, signerPriv ed25519.PrivateKey, key
 	require.NoError(t, err)
 
 	env := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        operatorID,
 		OperatorSessionId: operatorSessionID,
@@ -399,12 +400,12 @@ func TestRelayActionReceipt_MalformedPayloadRejected(t *testing.T) {
 	// Build an envelope with a valid identity but a malformed payload
 	// (not a valid ActionReceipt proto).
 	env := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        operatorID,
 		OperatorSessionId: sessionID,
-		ActionType:        string(constants.ActionTypeFileEdit),
 		EventType:         string(constants.Event.Operator.Receipt.Recorded),
+		ActionType:        string(constants.ActionTypeFileEdit),
 		Payload:           []byte("not-a-valid-protobuf"),
 	}
 	wire, err := protojson.Marshal(env)
@@ -437,12 +438,12 @@ func TestRelayActionReceipt_MissingPayloadRejected(t *testing.T) {
 
 	// Envelope with no payload bytes.
 	env := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        operatorID,
 		OperatorSessionId: sessionID,
-		ActionType:        string(constants.ActionTypeFileEdit),
 		EventType:         string(constants.Event.Operator.Receipt.Recorded),
+		ActionType:        string(constants.ActionTypeFileEdit),
 	}
 	wire, err := protojson.Marshal(env)
 	require.NoError(t, err)

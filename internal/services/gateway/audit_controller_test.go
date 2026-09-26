@@ -387,3 +387,58 @@ func TestAuditControllerHandleAuditReport(t *testing.T) {
 		assert.Equal(t, "op-session-123", resp.Report.OperatorSessionID)
 	})
 }
+
+func TestAuditControllerHandleAuditVerify(t *testing.T) {
+	auditController := setupTestAuditController(t)
+
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/verify", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditVerify(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Success - empty chain verifies", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/verify", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditVerify(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var resp models.AuditVerifyResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp.Success)
+		assert.True(t, resp.OK)
+		assert.Equal(t, int64(0), resp.HeadSeq)
+	})
+
+	t.Run("Success - receipt stage appends verify", func(t *testing.T) {
+		err := auditController.auditStore.RecordActionReceipt(&models.ActionReceiptRecord{
+			TransactionID:     "tx-verify-1",
+			TransactionHash:   "hash-verify",
+			OperatorID:        "operator-1",
+			OperatorSessionID: "verify-session",
+			ActionType:        constants.ActionTypeExecuteBash,
+			TargetResource:    "localhost",
+			Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary:     "done",
+			ExecutedAt:        time.Now().UTC(),
+			SignerKeyID:       "key-1",
+			Signature:         "sig-1",
+			Timestamp:         time.Now().UTC(),
+		})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/verify", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditVerify(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var resp models.AuditVerifyResponse
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp.OK)
+		assert.Equal(t, int64(1), resp.HeadSeq)
+		assert.NotEmpty(t, resp.HeadHash)
+	})
+}

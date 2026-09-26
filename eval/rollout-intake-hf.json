@@ -9,7 +9,8 @@
     "glm-5-3-flash",
     "qwen3-8-27b",
     "qwen3-6-35b-a3b",
-    "gpt-oss-20b"
+    "gpt-oss-20b",
+    "qwen25-1b-rlcd"
   ],
   "models": [
     {
@@ -92,6 +93,19 @@
         "hf_gguf_file": "gpt-oss-20b-Q4_0.gguf",
         "ollama_pull": "huggingface.co/unsloth/gpt-oss-20b-GGUF:Q4_0",
         "alias": "gpt-oss:20b"
+      }
+    },
+    {
+      "variant_id": "qwen25-1b-rlcd",
+      "served_model_tag": "qwen2.5:1b-rlcd",
+      "model_family": "qwen2.5",
+      "parameter_count": "1000000000",
+      "quantization": "unknown",
+      "notes": "Hugging Face Text Generation trend entry; verify artifact format and license before provider staging.",
+      "staging": {
+        "method": "pending",
+        "status": "awaiting_provider_adapter",
+        "hf_repo": "harshatheg/Qwen-2.5-1B-RLCD"
       }
     }
   ]

@@ -41,6 +41,10 @@ func mapProtoToPayloadType(msg proto.Message) string {
 		return "fs_read_result"
 	case *operatorv1.PortCheckResult:
 		return "port_check_result"
+	case *operatorv1.OllamaModelInventoryResult:
+		return "ollama_model_inventory_result"
+	case *operatorv1.OllamaModelResidencyResult:
+		return "ollama_model_residency_result"
 	case *operatorv1.FetchLogsResult:
 		if m.Error != "" {
 			return "fetch_logs_error"
@@ -80,7 +84,9 @@ func mapProtoToPayloadType(msg proto.Message) string {
 // It preserves the original command's MessageID for correlation.
 func BuildUniversalResultEnvelope(
 	cfg *config.Config,
-	eventType constants.EventType,
+	requestEvent constants.EventType,
+	outcomeEvent constants.EventType,
+	originatingActionType constants.ActionType,
 	payload proto.Message,
 	originalMessageID string,
 	senderID string,
@@ -90,6 +96,13 @@ func BuildUniversalResultEnvelope(
 	webSessionID string,
 	cliSessionID string,
 ) (*commonv1.GovernanceEnvelope, error) {
+	if requestEvent != "" {
+		if err := constants.ValidateGovernedResultEnvelope(requestEvent, outcomeEvent, originatingActionType); err != nil {
+			return nil, fmt.Errorf("validate governed result envelope: %w", err)
+		}
+	} else if originatingActionType == "" {
+		return nil, fmt.Errorf("originating action type required for outcome %q", outcomeEvent)
+	}
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
@@ -118,8 +131,8 @@ func BuildUniversalResultEnvelope(
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        senderID,
 		OperatorSessionId: cfg.OperatorSessionId,
-		EventType:         string(eventType),
-		ActionType:        string(constants.MapEventTypeToResultActionType(eventType)),
+		EventType:         string(outcomeEvent),
+		ActionType:        string(originatingActionType),
 		Payload:           payloadBytes,
 		IntentData:        intentDataStruct,
 		CaseId:            caseID,
@@ -167,6 +180,10 @@ func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Mess
 		m = &operatorv1.FsGrepRequested{}
 	case constants.Event.Operator.PortCheck.Requested:
 		m = &operatorv1.CheckPortRequested{}
+	case constants.Event.Operator.OllamaModelInventory.Requested:
+		m = &operatorv1.OllamaModelInventoryRequested{}
+	case constants.Event.Operator.OllamaModelResidency.Requested:
+		m = &operatorv1.OllamaModelResidencyRequested{}
 	case constants.Event.Operator.FetchLogs.Requested:
 		m = &operatorv1.FetchLogsRequested{}
 	case constants.Event.Operator.FetchHistory.Requested:

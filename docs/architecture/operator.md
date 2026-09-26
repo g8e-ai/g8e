@@ -55,7 +55,7 @@ The inference, Observer, Provenance, and Lattice behavior is specialized configu
 
 ## Command and receipt channels
 
-The Gateway's client-facing MCP, A2A, and CLI command paths are distinct ingress paths. For the ensemble `CommandIntent` relay, an authorized application publishes a typed `CommandIntent` protojson object to a `cmd:` channel. The Gateway validates that the channel and target identifiers match, validates the target session, obtains the current Gateway state root, applies L1 screening, sets identity and correlation fields, adds posture and transaction metadata, and publishes a canonical protojson `GovernanceEnvelope` to that exact session. The relay does not synthesize missing L2 votes or L3 proofs.
+The Gateway's client-facing MCP, A2A, CLI, and enrolled-app HTTP dispatch paths are distinct ingress paths. For governed operator dispatch, an enrolled application posts a registered request `event_type` and serialized protobuf payload to `POST /api/v1/operators/commands`. The Gateway validates the event against the registry, derives `action_type`, validates the target session, obtains the current Gateway state root, applies L1 screening, sets identity and correlation fields, adds posture and transaction metadata, and publishes a canonical protojson `GovernanceEnvelope` to the matching `cmd:<operator_id>:<operator_session_id>` session. WebSocket publishers cannot inject `CommandIntent` on `cmd:` channels; outbound Operators subscribe there and receive Gateway-constructed envelopes only. The dispatch path does not synthesize missing L2 votes or L3 proofs.
 
 The Operator decodes only the typed envelope format supported by the current protocol and rejects malformed JSON, unknown action types, missing payloads, and invalid identity or channel binding. Operator-originated heartbeat and result messages are not transformed by the Gateway broker. Receipt publications use a separate `receipts:<operator-id>:<operator-session-id>` channel. The Gateway verifies the signed `ActionReceipt` against the Operator's registered Actuator key and mirrors accepted receipts to its SQL audit store. That mirror is best effort; the Operator's local persisted receipt remains authoritative.
 
@@ -122,7 +122,7 @@ The protocol packages expose schemas and identity helpers, not a reusable refere
 - [Network Architecture](./network.md): PKI hierarchy, SPIFFE identities, mTLS, and channel transport.
 - [Authentication and Authorization](./auth.md): Enrollment, CLI sessions, revocation, and approval.
 - [Storage Architecture](./storage.md): Audit, vault, and ledger persistence.
-- [AI Agents and the g8e Governance Boundary](./agents.md): MCP, A2A, CommandIntent, direct-envelope, and external-wrapper limits.
+- [AI Agents and the g8e Governance Boundary](./agents.md): MCP, A2A, governed HTTP dispatch, direct-envelope, and external-wrapper limits.
 - [Connect Operator to Gateway](../guides/connect_operator_to_gateway.md): Enrollment and day-two operations.
 - [Build Operator](../guides/build_operator.md): Build instructions, startup options, runtime layout, and processing contract.
 - [Evaluations](./evals.md): Inference, Observer, and Provenance Operator roles.

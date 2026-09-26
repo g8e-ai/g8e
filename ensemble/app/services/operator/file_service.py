@@ -14,11 +14,9 @@ import logging
 
 from app.services.protocols import (
     ApprovalServiceProtocol,
-    EventServiceProtocol,
     ExecutionServiceProtocol,
     AIResponseAnalyzerProtocol,
     InvestigationServiceProtocol,
-    PubSubServiceProtocol,
 )
 from app.constants import EventType, FileOperation, G8EE_COMPONENT
 from app.constants.generated_status import (
@@ -40,13 +38,7 @@ from app.models.tool_results import (
     FetchFileHistoryToolResult,
     FetchFileDiffToolResult,
 )
-from app.models.operators import (
-    FileEditApprovalRequest,
-    CommandFailedBroadcastEvent,
-    FileEditBroadcastEvent,
-    CommandExecutingBroadcastEvent,
-    CommandResultBroadcastEvent,
-)
+from app.models.operators import FileEditApprovalRequest
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.pubsub_messages import (
     FetchFileDiffByIdSuccessPayload,
@@ -66,31 +58,19 @@ class OperatorFileService:
 
     def __init__(
         self,
-        pubsub_service: PubSubServiceProtocol,
         approval_service: ApprovalServiceProtocol,
-        event_service: EventServiceProtocol,
         execution_service: ExecutionServiceProtocol,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self._pubsub_service = pubsub_service
         self._approval_service = approval_service
-        self._event_service = event_service
         self._execution_service = execution_service
         self._ai_response_analyzer = ai_response_analyzer
         self._investigation_service = investigation_service
 
     @property
-    def pubsub_service(self) -> PubSubServiceProtocol:
-        return self._pubsub_service
-
-    @property
     def approval_service(self) -> ApprovalServiceProtocol:
         return self._approval_service
-
-    @property
-    def event_service(self) -> EventServiceProtocol:
-        return self._event_service
 
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
@@ -216,20 +196,6 @@ class OperatorFileService:
                         settings=request_settings or G8eeUserSettings(llm=LLMSettings()),
                     )
                     if risk_analysis and not risk_analysis.safe_to_proceed:
-                        # Broadcast Marshal block to UI
-                        await self.event_service.publish_command_event(
-                            EventType.OPERATOR_FILE_EDIT_FAILED,
-                            CommandFailedBroadcastEvent(
-                                command=f"file_edit {op_name} {file_path}",
-                                execution_id=exec_id,
-                                operator_session_id=operator_session_id,
-                                status=ExecutionStatus.FAILED,
-                                error=f"MARSHAL BLOCK: {risk_analysis.blocking_issues[0] if risk_analysis.blocking_issues else 'Operation deemed unsafe'}",
-                                error_type=CommandErrorType.RISK_ANALYSIS_BLOCKED,
-                            ),
-                            g8e_context,
-                            task_id=AITaskId.FILE_EDIT,
-                        )
                         return FileEditResult(
                             success=False,
                             error="Risk analysis blocked operation",
@@ -257,21 +223,6 @@ class OperatorFileService:
                 )
 
                 if not approval_result.approved:
-                    # Broadcast failure
-                    await self.event_service.publish_command_event(
-                        EventType.OPERATOR_FILE_EDIT_FAILED,
-                        CommandFailedBroadcastEvent(
-                            command=f"file_edit {op_name} {file_path}",
-                            execution_id=exec_id,
-                            operator_session_id=operator_session_id,
-                            status=ExecutionStatus.DENIED,
-                            error=approval_result.reason or "Denied by user",
-                            error_type=CommandErrorType.APPROVAL_DENIED,
-                            approval_id=approval_result.approval_id if approval_result else None,
-                        ),
-                        g8e_context,
-                        task_id=AITaskId.FILE_EDIT,
-                    )
                     return FileEditResult(
                         success=False,
                         approved=False,
@@ -297,21 +248,6 @@ class OperatorFileService:
                 payload=args,
             )
 
-            # Notify start
-            await self.event_service.publish_command_event(
-                EventType.OPERATOR_FILE_EDIT_STARTED,
-                CommandExecutingBroadcastEvent(
-                    command=f"file_edit {op_name} {file_path}",
-                    execution_id=exec_id,
-                    operator_session_id=operator_session_id,
-                    approval_id=getattr(approval_result, "approval_id", None)
-                    if "approval_result" in locals()
-                    else None,
-                ),
-                g8e_context,
-                task_id=AITaskId.FILE_EDIT,
-            )
-
             internal_result, envelope = await self.execution_service.execute(
                 g8e_message=g8e_message,
                 g8e_context=g8e_context,
@@ -323,33 +259,6 @@ class OperatorFileService:
             if operation == FileOperation.READ and envelope:
                 if isinstance(envelope.payload, FileEditResultPayload):
                     content = envelope.payload.content
-
-            # Notify completion/failure
-            completion_event_type = (
-                EventType.OPERATOR_FILE_EDIT_COMPLETED
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
-                else EventType.OPERATOR_FILE_EDIT_FAILED
-            )
-
-            await self.event_service.publish_command_event(
-                completion_event_type,
-                FileEditBroadcastEvent(
-                    command=f"file_edit {op_name} {file_path}",
-                    file_path=file_path,
-                    operation=op_name,
-                    execution_id=exec_id,
-                    operator_session_id=operator_session_id,
-                    status=internal_result.status if internal_result else ExecutionStatus.FAILED,
-                    error=internal_result.error if internal_result else "Execution result is None",
-                    stderr=internal_result.stderr if internal_result else None,
-                    content=content,
-                    approval_id=getattr(approval_result, "approval_id", None)
-                    if "approval_result" in locals()
-                    else None,
-                ),
-                g8e_context,
-                task_id=AITaskId.FILE_EDIT,
-            )
 
             return FileEditResult(
                 success=internal_result.status == ExecutionStatus.COMPLETED
@@ -422,44 +331,10 @@ class OperatorFileService:
                 payload=args,
             )
 
-            # Notify start
-            await self.event_service.publish_command_event(
-                EventType.OPERATOR_FILE_HISTORY_FETCH_STARTED,
-                CommandExecutingBroadcastEvent(
-                    command=f"file_history {file_path}",
-                    execution_id=exec_id,
-                    operator_session_id=operator_session_id,
-                ),
-                g8e_context,
-                task_id=AITaskId.FETCH_FILE_HISTORY,
-            )
-
             internal_result, envelope = await self.execution_service.execute(
                 g8e_message=g8e_message,
                 g8e_context=g8e_context,
                 timeout_seconds=60,
-            )
-
-            # Notify completion/failure
-            completion_event_type = (
-                EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
-                else EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED
-            )
-
-            await self.event_service.publish_command_event(
-                completion_event_type,
-                CommandResultBroadcastEvent(
-                    execution_id=exec_id,
-                    command=f"file_history {file_path}",
-                    status=internal_result.status if internal_result else ExecutionStatus.FAILED,
-                    output=internal_result.output if internal_result else None,
-                    error=internal_result.error if internal_result else "Execution result is None",
-                    operator_id=operator_id,
-                    operator_session_id=operator_session_id,
-                ),
-                g8e_context,
-                task_id=AITaskId.FETCH_FILE_HISTORY,
             )
 
             if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
@@ -548,44 +423,10 @@ class OperatorFileService:
                 payload=args,
             )
 
-            # Notify start
-            await self.event_service.publish_command_event(
-                EventType.OPERATOR_FILE_DIFF_FETCH_STARTED,
-                CommandExecutingBroadcastEvent(
-                    command=f"file_diff {file_path}",
-                    execution_id=exec_id,
-                    operator_session_id=operator_session_id,
-                ),
-                g8e_context,
-                task_id=AITaskId.FETCH_FILE_DIFF,
-            )
-
             internal_result, envelope = await self.execution_service.execute(
                 g8e_message=g8e_message,
                 g8e_context=g8e_context,
                 timeout_seconds=60,
-            )
-
-            # Notify completion/failure
-            completion_event_type = (
-                EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
-                else EventType.OPERATOR_FILE_DIFF_FETCH_FAILED
-            )
-
-            await self.event_service.publish_command_event(
-                completion_event_type,
-                CommandResultBroadcastEvent(
-                    execution_id=exec_id,
-                    command=f"file_diff {file_path}",
-                    status=internal_result.status if internal_result else ExecutionStatus.FAILED,
-                    output=internal_result.output if internal_result else None,
-                    error=internal_result.error if internal_result else "Execution result is None",
-                    operator_id=operator_id,
-                    operator_session_id=operator_session_id,
-                ),
-                g8e_context,
-                task_id=AITaskId.FETCH_FILE_DIFF,
             )
 
             if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):

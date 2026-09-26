@@ -36,12 +36,10 @@
 <a name="g8e-common-v1-CommandIntent"></a>
 
 ### CommandIntent
-CommandIntent is the pre-governance command intent published by an app
-workload (e.g. the ensemble) to a cmd:&lt;operator_id&gt;:&lt;operator_session_id&gt;
-channel. The gateway decodes it via protojson, validates the target
-operator session, fetches the current state Merkle root, and constructs
-the governed GovernanceEnvelope. Co-located with GovernanceEnvelope in
-commonv1 so all core transaction lifecycle models share one package.
+CommandIntent is deprecated. New callers must use the Gateway HTTP protocol
+and submit a semantic request event; the Gateway derives the governed action
+from the event registry. This message remains only while the W10 audit
+ingest migration removes the legacy cmd: transport.
 
 
 | Field | Type | Label | Description |

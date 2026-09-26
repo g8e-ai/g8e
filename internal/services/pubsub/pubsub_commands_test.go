@@ -101,18 +101,20 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 	payload, err := proto.Marshal(req)
 	require.NoError(t, err)
 	env := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
-		ActionType:        string(constants.ActionTypeFsList),
-		TargetResource:    "localhost",
-		Payload:           payload,
-		StateMerkleRoot:   "test-state-root",
-		Nonce:             "nonce-missing-signer",
-		Posture:           constants.PostureConsensus,
+		EventType:         string(constants.Event.Operator.FsList.Requested),
+
+		ActionType:      string(constants.ActionTypeFsList),
+		TargetResource:  "localhost",
+		Payload:         payload,
+		StateMerkleRoot: "test-state-root",
+		Nonce:           "nonce-missing-signer",
+		Posture:         constants.PostureConsensus,
 	}
 	hash, err := govpkg.GenerateMessageID(env)
 	require.NoError(t, err)
@@ -156,9 +158,11 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
 		env := &govpkg.GovernanceEnvelope{
-			ProtocolVersion: "1.0",
+			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:       string(constants.Event.Operator.FsList.Requested),
+
 			ActionType:      string(constants.ActionTypeFsList),
 			TargetResource:  "localhost",
 			Payload:         nil,
@@ -193,9 +197,11 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 		payload, _ := proto.Marshal(req)
 		env := &govpkg.GovernanceEnvelope{
-			ProtocolVersion: "1.0",
+			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:       string(constants.Event.Operator.FsList.Requested),
+
 			ActionType:      string(constants.ActionTypeFsList),
 			TargetResource:  "localhost",
 			Payload:         payload,
@@ -294,13 +300,15 @@ func TestOperatorPubSubService_handleGovernanceEnvelope_AcceptsPDPBoundRootDespi
 func buildGatewayDispatchedDoctrineEnvelope(t *testing.T, stateRoot, nonce string) *govpkg.GovernanceEnvelope {
 	t.Helper()
 	env := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
-		ActionType:        string(constants.ActionTypeFsList),
-		TargetResource:    "localhost",
+		EventType:         string(constants.Event.Operator.FsList.Requested),
+
+		ActionType:     string(constants.ActionTypeFsList),
+		TargetResource: "localhost",
 		Payload: mustMarshalProto(t, &operatorv1.FsListRequested{
 			Path:        ".",
 			ExecutionId: "exec-gateway-dispatch",
@@ -331,11 +339,13 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 		// Complex types (MCP_CALL, A2A_CALL) are tested in their own integration tests
 		testCases := []struct {
 			name       string
+			eventType  constants.EventType
 			actionType constants.ActionType
 			payload    []byte
 		}{
 			{
 				name:       "FS_LIST",
+				eventType:  constants.Event.Operator.FsList.Requested,
 				actionType: constants.ActionTypeFsList,
 				payload: mustMarshalProto(t, &operatorv1.FsListRequested{
 					Path:        ".",
@@ -344,6 +354,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 			},
 			{
 				name:       "FS_READ",
+				eventType:  constants.Event.Operator.FsRead.Requested,
 				actionType: constants.ActionTypeFsRead,
 				payload: mustMarshalProto(t, &operatorv1.FsReadRequested{
 					Path:        "test.txt",
@@ -352,6 +363,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 			},
 			{
 				name:       "FS_GREP",
+				eventType:  constants.Event.Operator.FsGrep.Requested,
 				actionType: constants.ActionTypeFsGrep,
 				payload: mustMarshalProto(t, &operatorv1.FsGrepRequested{
 					Pattern:     "test",
@@ -361,6 +373,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 			},
 			{
 				name:       "PORT_CHECK",
+				eventType:  constants.Event.Operator.PortCheck.Requested,
 				actionType: constants.ActionTypePortCheck,
 				payload: mustMarshalProto(t, &operatorv1.CheckPortRequested{
 					Host:        "localhost",
@@ -370,11 +383,13 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 			},
 			{
 				name:       "HEARTBEAT",
+				eventType:  constants.Event.Operator.HeartbeatRequested,
 				actionType: constants.ActionTypeHeartbeat,
 				payload:    mustMarshalProto(t, &operatorv1.HeartbeatRequested{}),
 			},
 			{
 				name:       "EVAL_ANSWER",
+				eventType:  constants.Event.Operator.Eval.AnswerRequested,
 				actionType: constants.ActionTypeEvalAnswer,
 				payload: mustMarshalProto(t, &operatorv1.EvalAnswerRequested{
 					PromptId:  "test-prompt",
@@ -392,9 +407,10 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 				env := &govpkg.GovernanceEnvelope{
 					Id:              "tx-" + tc.name,
 					TransactionHash: "hash-" + tc.name,
-					ProtocolVersion: "1.0",
+					ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 					Timestamp:       timestamppb.Now(),
 					ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+					EventType:       string(tc.eventType),
 					ActionType:      string(tc.actionType),
 					TargetResource:  "localhost",
 					Payload:         tc.payload,
@@ -455,9 +471,11 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 		env := &govpkg.GovernanceEnvelope{
 			Id:              "tx-cancel",
 			TransactionHash: "hash-cancel",
-			ProtocolVersion: "1.0",
+			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:       string(constants.Event.Operator.Command.CancelRequested),
+
 			ActionType:      string(constants.ActionTypeCancel),
 			TargetResource:  "localhost",
 			Payload:         payload,
@@ -542,7 +560,18 @@ func TestOperatorPubSubService_ExecuteVerifiedTransaction(t *testing.T) {
 		}
 		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), msg.EventType, msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no handler for event type")
+		assert.Contains(t, err.Error(), "no handler for")
+	})
+
+	t.Run("rejects LFAA recorded facts on the command map", func(t *testing.T) {
+		t.Parallel()
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Audit.UserMsg,
+			ID:        "msg-audit",
+		}
+		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), msg.EventType, msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no handler for")
 	})
 }
 
@@ -557,6 +586,54 @@ func TestOperatorPubSubService_handleMcpCallRequestSync(t *testing.T) {
 			Payload:   mustMarshalProto(t, &operatorv1.McpCallRequested{ToolName: "test"}),
 		}
 		_, err := f.Svc.handleMcpCallRequestSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "MCP gateway not configured")
+	})
+}
+
+func TestOperatorPubSubService_handleMcpResourceAndPromptSync(t *testing.T) {
+	f := newPubsubFixture(t)
+
+	t.Run("resource read rejects when MCP gateway not configured", func(t *testing.T) {
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Mcp.ResourceReadRequested,
+			ID:        "msg-read",
+			Payload:   mustMarshalProto(t, &operatorv1.McpResourceReadRequested{Uri: "file:///tmp/x"}),
+		}
+		_, err := f.Svc.handleMcpResourceReadSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "MCP gateway not configured")
+	})
+
+	t.Run("prompt get rejects when MCP gateway not configured", func(t *testing.T) {
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Mcp.PromptGetRequested,
+			ID:        "msg-get",
+			Payload:   mustMarshalProto(t, &operatorv1.McpPromptGetRequested{Name: "p"}),
+		}
+		_, err := f.Svc.handleMcpPromptGetSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "MCP gateway not configured")
+	})
+
+	t.Run("resource list rejects when MCP gateway not configured", func(t *testing.T) {
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Mcp.ResourceListRequested,
+			ID:        "msg-rlist",
+			Payload:   mustMarshalProto(t, &operatorv1.McpResourceListRequested{ExecutionId: "exec-1"}),
+		}
+		_, err := f.Svc.handleMcpResourceListSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "MCP gateway not configured")
+	})
+
+	t.Run("prompt list rejects when MCP gateway not configured", func(t *testing.T) {
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Mcp.PromptListRequested,
+			ID:        "msg-plist",
+			Payload:   mustMarshalProto(t, &operatorv1.McpPromptListRequested{ExecutionId: "exec-1"}),
+		}
+		_, err := f.Svc.handleMcpPromptListSync(context.Background(), msg)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "MCP gateway not configured")
 	})
@@ -961,9 +1038,11 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		env := &commonv1.GovernanceEnvelope{
 			Id:              "tx-sync",
 			TransactionHash: "hash-sync",
-			ProtocolVersion: "1.0",
+			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:       string(constants.Event.Operator.FsList.Requested),
+
 			ActionType:      string(constants.ActionTypeFsList),
 			TargetResource:  "localhost",
 			Payload:         payload,
@@ -1024,6 +1103,29 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	t.Run("rejects event and action_type mismatch before verification", func(t *testing.T) {
+		t.Parallel()
+		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-mismatch"}
+		payload, _ := proto.Marshal(req)
+		env := &govpkg.GovernanceEnvelope{
+			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
+			Timestamp:       timestamppb.Now(),
+			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:       string(constants.Event.Operator.FsList.Requested),
+			ActionType:      string(constants.ActionTypeExecuteBash),
+			TargetResource:  "localhost",
+			Payload:         payload,
+			StateMerkleRoot: "test-state-root",
+			Nonce:           "nonce-mismatch",
+			Posture:         constants.PostureDoctrine,
+		}
+		envelopeBytes, _ := protojson.Marshal(env)
+
+		_, err := f.Svc.ProcessEnvelope(context.Background(), envelopeBytes)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrTxEventActionMismatch)
+	})
+
 	t.Run("rejects when transaction verifier not configured", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
@@ -1046,9 +1148,11 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 		payload, _ := proto.Marshal(req)
 		env := &govpkg.GovernanceEnvelope{
-			ProtocolVersion: "1.0",
+			ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:       string(constants.Event.Operator.FsList.Requested),
+
 			ActionType:      string(constants.ActionTypeFsList),
 			TargetResource:  "localhost",
 			Payload:         payload,
@@ -1131,9 +1235,10 @@ func TestOperatorPubSubService_ProcessEnvelope_DocumentDispatchDeterminism(t *te
 				env := &commonv1.GovernanceEnvelope{
 					Id:              fmt.Sprintf("tx-det-%s-%d", tc.actionType, i),
 					TransactionHash: fmt.Sprintf("hash-det-%s-%d", tc.actionType, i),
-					ProtocolVersion: "1.0",
+					ProtocolVersion: govpkg.GovernanceProtocolVersionV2,
 					Timestamp:       timestamppb.Now(),
 					ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+					EventType:       string(tc.wantEvent),
 					ActionType:      string(tc.actionType),
 					TargetResource:  "localhost",
 					Payload:         payload,
@@ -1238,6 +1343,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			msg := &PubSubCommandMessage{
 				ID:                "msg-fslist",
+				EventType:         constants.Event.Operator.FsList.Requested,
 				OperatorSessionID: sessionID,
 			}
 
@@ -1306,6 +1412,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			msg := &PubSubCommandMessage{
 				ID:                "msg-port",
+				EventType:         constants.Event.Operator.PortCheck.Requested,
 				OperatorSessionID: sessionID,
 			}
 
@@ -1373,6 +1480,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			msg := &PubSubCommandMessage{
 				ID:                "msg-error",
+				EventType:         constants.Event.Operator.FsRead.Requested,
 				OperatorSessionID: sessionID,
 			}
 
@@ -1400,6 +1508,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-nonfatal",
+			EventType:         constants.Event.Operator.FsList.Requested,
 			OperatorSessionID: "session-1",
 		}
 
@@ -1467,6 +1576,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-scrub",
+			EventType:         constants.Event.Operator.FsRead.Requested,
 			OperatorSessionID: sessionID,
 		}
 
@@ -1792,21 +1902,14 @@ func TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite(t *testing.
 func newGatewayPubsubServiceForBindingTest(t *testing.T) *OperatorPubSubService {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
+	govDeps := validTestGatewayModeDeps(config.PostureDoctrine)
 	svc, err := NewGatewayOperatorPubSubService(GatewayCommandServiceConfig{
 		CommandServiceConfig: CommandServiceConfig{
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		},
-		GovDeps: &GatewayModeDeps{
-			GovernanceCoreDeps: GovernanceCoreDeps{
-				ReplayStore:       &testutil.MockReplayStore{},
-				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-				TransactionAudit:  &testutil.MockTransactionAudit{},
-				L3Notary:          &testutil.MockL3Notary{},
-				Doctrine:          governance.NewL1Doctrine(),
-			},
-		},
+		GovDeps: &govDeps,
 	})
 	require.NoError(t, err)
 	return svc
@@ -1865,8 +1968,8 @@ func TestOperatorPubSubService_StartOutboundModeDoesNotRequireMCPGatewayBinding(
 	require.NoError(t, svc.Start(context.Background()))
 	t.Cleanup(func() { require.NoError(t, svc.Stop()) })
 	assert.Nil(t, svc.GetMCPGateway())
-	_, hasMCPHandler := svc.handlers[constants.Event.Operator.Mcp.CallRequested]
-	_, hasA2AHandler := svc.handlers[constants.Event.Operator.A2a.CallRequested]
+	_, hasMCPHandler := svc.actionHandlers[constants.ActionTypeMcpCall]
+	_, hasA2AHandler := svc.actionHandlers[constants.ActionTypeA2aCall]
 	assert.False(t, hasMCPHandler)
 	assert.False(t, hasA2AHandler)
 }

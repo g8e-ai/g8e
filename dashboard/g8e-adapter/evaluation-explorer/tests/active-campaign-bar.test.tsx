@@ -123,10 +123,69 @@ describe('ActiveCampaignBar', () => {
 
     const link = screen.getByRole('link', { name: /Now evaluating ministral-3-8b on tool-selection-04/i });
     expect(link).toHaveAttribute('href', `/evaluations/${datasetId}/${evaluation.run_id}`);
-    expect(link).toHaveTextContent('Now evaluating');
-    expect(link).toHaveTextContent('ministral-3-8b · tool-selection-04');
+    expect(link).not.toHaveTextContent('Now evaluating');
+    expect(link).toHaveTextContent('tool-selection-04');
     expect(link).toHaveTextContent('Primary');
+    expect(link).toHaveTextContent('ministral-3-8b');
+    expect(link).toHaveTextContent('Assistant');
+    expect(link).toHaveTextContent('Lite');
     expect(link).toHaveTextContent('8%');
     expect(link).not.toHaveTextContent('Semantic grading');
+  });
+
+  it('shows heterogeneous formation models in each role slot', () => {
+    const heterogeneousEvaluation: EvaluationSummary = {
+      ...evaluation,
+      evaluation_unit: 'system',
+      model_role_mapping: {
+        primary: 'qwen3-8b',
+        assistant: 'ministral-3-8b',
+        lite: 'qwen3-4b',
+      },
+    };
+    const [startedEvent, stageEvent] = events;
+    if (!startedEvent || !stageEvent) throw new Error('missing fixture events');
+    const heterogeneousEvents: LiveEvent[] = [
+      {
+        ...startedEvent,
+        variant_id: 'qwen3-4b',
+        role: 'lite',
+        observed_at: '2026-09-22T12:04:50Z',
+        event_id: 'event-lite',
+      },
+      {
+        ...startedEvent,
+        variant_id: 'ministral-3-8b',
+        role: 'assistant',
+        observed_at: '2026-09-22T12:04:57Z',
+        event_id: 'event-assistant',
+      },
+      {
+        ...startedEvent,
+        variant_id: 'qwen3-8b',
+        role: 'primary',
+        observed_at: '2026-09-22T12:05:00Z',
+        event_id: 'event-primary',
+      },
+      stageEvent,
+    ];
+
+    evalStore.loadFixtures(
+      [catalog, suite, heterogeneousEvaluation] as SnapshotRecord[],
+      heterogeneousEvents,
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/?dataset=ds-verified-archive']}>
+        <ActiveCampaignBar />
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole('link', { name: /Now evaluating qwen3-8b on tool-selection-04/i });
+    expect(link).toHaveTextContent('qwen3-8b');
+    expect(link).toHaveTextContent('ministral-3-8b');
+    expect(link).toHaveTextContent('qwen3-4b');
+    expect(link).toHaveTextContent('Active');
+    expect(link).toHaveTextContent('8%');
   });
 });

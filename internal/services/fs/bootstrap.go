@@ -23,8 +23,10 @@ import (
 // behavior. SecretsDir and VaultDir use PermDirPrivate (0700) for sensitive
 // material.
 func (fs *localFS) CreateRuntimeTree(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 
 	pkiDir := filepath.Join(fs.runtimeDir, constants.PkiDirname)

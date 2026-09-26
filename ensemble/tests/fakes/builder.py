@@ -18,12 +18,11 @@ from app.models.cache import CacheOperationResult
 from app.models.settings import G8eeAppSettings
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.intent_service import OperatorIntentService
-from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import ExecutionServiceProtocol
-from app.utils.auto_approved_validator import CommandAutoApprovedValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.whitelist_validator import CommandWhitelistValidator
-from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient, FakePubSubClient
+from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.validation.blacklist_validator import CommandBlacklistValidator
+from app.utils.validation.whitelist_validator import CommandWhitelistValidator
+from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient
 
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService
@@ -121,10 +120,8 @@ def build_command_service(
     ai_response_analyzer: FakeAIResponseAnalyzer | None = None,
     internal_http_client: FakeG8eClient | None = None,
     investigation_service: FakeInvestigationService | None = None,
-    pubsub_client: FakePubSubClient | None = None,
     settings: G8eeAppSettings | None = None,
     approval_service: FakeApprovalService | None = None,
-    skip_pubsub_client: bool = False,
     whitelist_validator: CommandWhitelistValidator | None = None,
     blacklist_validator: CommandBlacklistValidator | None = None,
     auto_approved_validator: CommandAutoApprovedValidator | None = None,
@@ -135,7 +132,6 @@ def build_command_service(
     All parameters are optional - provide only the fakes you need to configure
     or assert on. Omitted deps default to a fresh fake with sensible defaults.
     """
-    cache_aside_service = create_mock_cache_aside_service()
     internal_http_client = internal_http_client or FakeG8eClient()
 
     # Ensure all required fakes are present
@@ -144,9 +140,9 @@ def build_command_service(
     investigation_service = investigation_service or FakeInvestigationService()
     settings = settings or G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
 
-    operator_data_service = OperatorDataService(
-        cache=cache_aside_service, internal_http_client=internal_http_client
-    )
+    from app.clients.gateway_operator_client import GatewayOperatorClient
+
+    gateway_operator_client = GatewayOperatorClient(internal_http_client)
 
     approval_service = approval_service or FakeApprovalService()
 
@@ -157,40 +153,31 @@ def build_command_service(
     from app.services.operator.intent_service import OperatorIntentService
     from app.services.operator.lfaa_service import OperatorLFAAService
     from app.services.operator.port_service import OperatorPortService
-    from app.services.operator.pubsub_service import OperatorPubSubService
-
-    pubsub_service = OperatorPubSubService()
 
     lfaa_service = OperatorLFAAService(
-        pubsub_service=pubsub_service,
+        gateway_operator_client=gateway_operator_client,
     )
 
     if execution_service is None:
         execution_service = OperatorExecutionService(
-            pubsub_service=pubsub_service,
             approval_service=approval_service,
-            event_service=event_service,
             settings=settings,
             ai_response_analyzer=ai_response_analyzer,
-            operator_data_service=operator_data_service,
             investigation_service=investigation_service,
+            gateway_operator_client=gateway_operator_client,
         )
 
     filesystem_service = OperatorFilesystemService(
-        pubsub_service=pubsub_service,
         execution_service=execution_service,
         investigation_service=investigation_service,
     )
 
     port_service = OperatorPortService(
-        pubsub_service=pubsub_service,
         execution_service=execution_service,
     )
 
     file_service = OperatorFileService(
-        pubsub_service=pubsub_service,
         approval_service=approval_service,
-        event_service=event_service,
         execution_service=execution_service,
         ai_response_analyzer=ai_response_analyzer,
         investigation_service=investigation_service,
@@ -199,13 +186,11 @@ def build_command_service(
     intent_service = OperatorIntentService(
         approval_service=approval_service,
         execution_service=execution_service,
-        event_service=event_service,
         investigation_service=investigation_service,
         internal_http_client=internal_http_client,
     )
 
     svc = OperatorCommandService(
-        pubsub_service=pubsub_service,
         approval_service=approval_service,
         execution_service=execution_service,
         filesystem_service=filesystem_service,
@@ -213,17 +198,12 @@ def build_command_service(
         file_service=file_service,
         intent_service=intent_service,
         lfaa_service=lfaa_service,
-        cache_aside_service=cache_aside_service,
-        operator_data_service=operator_data_service,
         investigation_service=investigation_service,
         settings=settings,
         whitelist_validator=whitelist_validator,
         blacklist_validator=blacklist_validator,
         auto_approved_validator=auto_approved_validator,
     )
-    if not skip_pubsub_client:
-        svc.set_pubsub_client(pubsub_client or FakePubSubClient())
-
     svc._store = {}
     return svc
 
@@ -232,7 +212,6 @@ def build_intent_service(
     *,
     approval_service: FakeApprovalService | None = None,
     execution_service: FakeExecutionService | None = None,
-    event_service: FakeEventService | None = None,
     investigation_service: FakeInvestigationService | None = None,
     internal_http_client: FakeG8eClient | None = None,
 ) -> OperatorIntentService:
@@ -240,7 +219,6 @@ def build_intent_service(
     return OperatorIntentService(
         approval_service=approval_service or FakeApprovalService(),
         execution_service=execution_service or FakeExecutionService(),
-        event_service=event_service or FakeEventService(),
         investigation_service=investigation_service or FakeInvestigationService(),
         internal_http_client=internal_http_client or FakeG8eClient(),
     )

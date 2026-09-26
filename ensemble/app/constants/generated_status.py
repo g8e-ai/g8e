@@ -53,7 +53,6 @@ from g8e.enums import (
     Environment,
     HistoryActor,
     ActionType,
-    ActionStatus,
     AISource,
     AuditEventSource,
     AuditEventType,
@@ -63,7 +62,6 @@ from g8e.enums import (
     AuthProvider,
     CitationLayout,
     DownloadAuditEventType,
-    G8eActionType,
     G8eAvailability,
     GatewayMode,
     LoginAuditEventType,
@@ -72,6 +70,7 @@ from g8e.enums import (
     UserStatus,
     HeartbeatType,
     LlmModels as LLMs,
+    ThinkingPhase,
 )
 
 

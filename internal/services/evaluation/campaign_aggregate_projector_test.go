@@ -106,6 +106,12 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 	assert.Equal(t, "primary", model.Role)
 	assert.Equal(t, "Qwen3 4b", model.DisplayName)
 	assert.Equal(t, "qwen3:4b", model.ServedModelTag)
+	require.NotNil(t, model.AgreementPairwise)
+	assert.Equal(t, "source_unavailable", model.AgreementPairwise.UnavailableReason)
+	require.NotNil(t, model.LatencyP50MS)
+	assert.Equal(t, "no_scored_calls", model.LatencyP50MS.UnavailableReason)
+	require.NotNil(t, model.OutputThroughputP50)
+	assert.Equal(t, "no_scored_calls", model.OutputThroughputP50.UnavailableReason)
 
 	var methodology methodologySnapshotRecord
 	require.NoError(t, json.Unmarshal(records[3].Body, &methodology))
@@ -626,6 +632,116 @@ func TestCollectRunHeadlineMetricsLatencyRejectsOutOfBoundSpan(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
 }
 
+func TestCollectVariantRoleMetricsPerformance(t *testing.T) {
+	span := uint64(200_000_000)
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	assignments[1].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", &span, scoredInferenceCall(20, 1_000_000_000)),
+		"assign-2": terminalResultWithEvidence("assign-2", nil, scoredInferenceCall(10, 1_000_000_000)),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+
+	primary := state.VariantRoles["qwen3-4b:primary"]
+	require.NotNil(t, primary)
+	require.NotNil(t, primary.LatencyP50MS.Value)
+	assert.Equal(t, 200.0, *primary.LatencyP50MS.Value)
+	require.NotNil(t, primary.OutputThroughputP50.Value)
+	assert.Equal(t, 20.0, *primary.OutputThroughputP50.Value)
+
+	assistant := state.VariantRoles["qwen3-4b:assistant"]
+	require.NotNil(t, assistant)
+	assert.Nil(t, assistant.LatencyP50MS.Value)
+	assert.Equal(t, "source_unavailable", assistant.LatencyP50MS.UnavailableReason)
+	require.NotNil(t, assistant.OutputThroughputP50.Value)
+	assert.Equal(t, 10.0, *assistant.OutputThroughputP50.Value)
+}
+
+func TestCollectVariantRoleMetricsPairwiseAgreement(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-3", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].ScenarioId = "scenario-a"
+	assignments[0].Repetition = 1
+	assignments[1].ScenarioId = "scenario-a"
+	assignments[1].Repetition = 2
+	assignments = append(assignments, homogeneousAssignment("assign-4", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY))
+	assignments[2].ScenarioId = "scenario-b"
+	assignments[2].Repetition = 1
+	assignments[3].ScenarioId = "scenario-b"
+	assignments[3].Repetition = 2
+	for _, assignment := range assignments {
+		assignment.LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	}
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", nil),
+		"assign-2": {
+			AssignmentId:    "assign-2",
+			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
+			}},
+		},
+		"assign-3": terminalResultWithEvidence("assign-3", nil),
+		"assign-4": terminalResultWithEvidence("assign-4", nil),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+
+	primary := state.VariantRoles["qwen3-4b:primary"]
+	require.NotNil(t, primary)
+	require.NotNil(t, primary.AgreementPairwise.Value)
+	assert.Equal(t, 0.5, *primary.AgreementPairwise.Value)
+}
+
+func TestBuildRunAggregateViewRecordsModelPerformanceMetrics(t *testing.T) {
+	span := uint64(300_000_000)
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].ScenarioId = "scenario-a"
+	assignments[0].Repetition = 1
+	assignments[1].ScenarioId = "scenario-a"
+	assignments[1].Repetition = 2
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	assignments[1].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": terminalResultWithEvidence("assign-1", &span, scoredInferenceCall(20, 1_000_000_000)),
+		"assign-2": terminalResultWithEvidence("assign-2", &span, scoredInferenceCall(20, 1_000_000_000)),
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	run := &evalv1.EvaluationRun{
+		RunId:     "run-1",
+		StartedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "eval-smoke-mini",
+		},
+	}
+	records, err := BuildRunAggregateViewRecords(run, state, nil, time.Unix(1_700_000_050, 0).UTC())
+	require.NoError(t, err)
+
+	var model modelSummaryRecord
+	require.NoError(t, json.Unmarshal(records[2].Body, &model))
+	require.NotNil(t, model.LatencyP50MS)
+	require.NotNil(t, model.LatencyP50MS.Value)
+	assert.Equal(t, 300.0, *model.LatencyP50MS.Value)
+	require.NotNil(t, model.OutputThroughputP50)
+	require.NotNil(t, model.OutputThroughputP50.Value)
+	assert.Equal(t, 20.0, *model.OutputThroughputP50.Value)
+	require.NotNil(t, model.AgreementPairwise)
+	require.NotNil(t, model.AgreementPairwise.Value)
+	assert.Equal(t, 1.0, *model.AgreementPairwise.Value)
+}
+
 func TestCollectRunHeadlineMetricsOutputThroughput(t *testing.T) {
 	// Two scored calls totaling 40 tokens over 2s of generation: 20 tok/s.
 	call := scoredInferenceCall(20, 1_000_000_000)
@@ -873,4 +989,71 @@ func homogeneousAssignment(assignmentID, variantID string, role evalv1.ModelCamp
 		},
 		QueuedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
 	}
+}
+
+func TestBuildPlannedModelRoleInvocationSignals_EmitsHeterogeneousRoles(t *testing.T) {
+	stack := mustHeterogeneousStack(t)
+	assignment := &evalv1.EvaluationAssignment{
+		AssignmentId: "assignment-hetero",
+		RunId:        "run-hetero",
+		ScenarioId:   "scenario-1",
+		Target: &evalv1.EvaluationAssignment_Heterogeneous{
+			Heterogeneous: &evalv1.HeterogeneousAssignmentTarget{Stack: stack},
+		},
+	}
+	signals := buildPlannedModelRoleInvocationSignals(assignment, "2026-09-25T00:00:00Z", 1, 5)
+	require.Len(t, signals, 3)
+	roles := make([]string, 0, len(signals))
+	for _, signal := range signals {
+		assert.NotEmpty(t, signal.VariantID)
+		roles = append(roles, string(signal.Role))
+	}
+	assert.ElementsMatch(t, []string{"primary", "assistant", "lite"}, roles)
+}
+
+func TestBuildRunVerificationApplicability_BindsHeterogeneousStackPopulation(t *testing.T) {
+	stack := mustHeterogeneousStack(t)
+	assignment := &evalv1.EvaluationAssignment{
+		AssignmentId:          "assignment-hetero",
+		DeterministicIdentity: "assignment-hetero",
+		RunId:                 "run-hetero",
+		ScenarioId:            "scenario-1",
+		LifecycleStatus:       evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		Target: &evalv1.EvaluationAssignment_Heterogeneous{
+			Heterogeneous: &evalv1.HeterogeneousAssignmentTarget{Stack: stack},
+		},
+	}
+	result := &evalv1.EvaluationAssignmentResult{
+		AssignmentId:    assignment.GetAssignmentId(),
+		ResultDigest:    "result-digest",
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	}
+	run := &evalv1.EvaluationRun{
+		RunId: "run-hetero",
+		Lane:  evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM,
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "eval-formations-smoke",
+		},
+	}
+	spec := &evalv1.EvaluationCampaignSpec{CampaignId: "eval-formations-smoke"}
+	catalog := &evalv1.EvaluationScenarioCatalog{CatalogDigest: "catalog-digest"}
+	report := &evalv1.EvaluationVerificationReport{
+		RunId:  run.GetRunId(),
+		Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+	}
+
+	applicability, err := BuildRunVerificationApplicability(
+		run,
+		spec,
+		catalog,
+		[]*evalv1.EvaluationAssignment{assignment},
+		map[string]*evalv1.EvaluationAssignmentResult{assignment.GetAssignmentId(): result},
+		report,
+	)
+	require.NoError(t, err)
+	require.Len(t, applicability.Population.GetEntries(), 1)
+	entry := applicability.Population.GetEntries()[0]
+	assert.Equal(t, stack.GetStackId(), entry.GetStackId())
+	assert.Empty(t, entry.GetVariantId())
+	require.Len(t, applicability.EligibleModelBuckets, 3)
 }

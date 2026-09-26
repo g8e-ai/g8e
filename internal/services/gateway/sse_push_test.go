@@ -105,10 +105,12 @@ func TestHandleInternalSSEPush_MissingEventField(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), "event field is required")
 }
 
+const testSSEPushEventType = string(constants.EventAiLLMChatIterationStarted)
+
 func TestHandleInternalSSEPush_NoRoutingTarget(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/op1"})
-	body := `{"event":{"type":"test"}}`
+	body := fmt.Sprintf(`{"event":{"type":"%s"}}`, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
@@ -126,9 +128,8 @@ func TestHandleInternalSSEPush_CLISessionSuccess(t *testing.T) {
 	seedOperatorDoc(t, h, opID, userID, opSessID)
 	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
 
-	appSpiffe := protocol.NewWorkloadIdentity().AppSPIFFEID(opSessID)
-	cert := makeTestAppCert(t, []string{appSpiffe})
-	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"type":"message","data":"hello"}}`, userID, cliSessionID)
+	cert := makeTestAppCert(t, []string{protocol.EnsembleAppID})
+	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"type":"%s","data":"hello"}}`, userID, cliSessionID, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
@@ -140,34 +141,27 @@ func TestHandleInternalSSEPush_CLISessionSuccess(t *testing.T) {
 	assert.Equal(t, 1, resp.Delivered)
 }
 
-func TestHandleInternalSSEPush_CLISessionNotFound(t *testing.T) {
+func TestHandleInternalSSEPush_EnsembleAllowsUnknownCLISessionRoute(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	opID := "op-push-cli-notfound"
-	opSessID := "opsess-push-cli-notfound"
-	seedOperatorDoc(t, h, opID, "user-x", opSessID)
-
-	appSpiffe := protocol.NewWorkloadIdentity().AppSPIFFEID(opSessID)
-	cert := makeTestAppCert(t, []string{appSpiffe})
-	body := `{"user_id":"user-x","cli_session_id":"nonexistent-session","event":{"type":"test"}}`
+	cert := makeTestAppCert(t, []string{protocol.EnsembleAppID})
+	body := fmt.Sprintf(`{"user_id":"user-x","cli_session_id":"nonexistent-session","event":{"type":"%s"}}`, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
-	assert.Equal(t, http.StatusForbidden, rr.Code)
-	assert.Contains(t, rr.Body.String(), "target session not found")
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestHandleInternalSSEPush_CLISessionOperatorNotFound(t *testing.T) {
+func TestHandleInternalSSEPush_EnsembleBypassesOperatorBinding(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	cliSessionID := "cli-orphan"
 	seedCLISessionDoc(t, h, cliSessionID, "user-orphan", "nonexistent-opsess")
 
-	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/op-orphan"})
-	body := fmt.Sprintf(`{"user_id":"user-orphan","cli_session_id":"%s","event":{"type":"test"}}`, cliSessionID)
+	cert := makeTestAppCert(t, []string{protocol.EnsembleAppID})
+	body := fmt.Sprintf(`{"user_id":"user-orphan","cli_session_id":"%s","event":{"type":"%s"}}`, cliSessionID, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
-	assert.Equal(t, http.StatusForbidden, rr.Code)
-	assert.Contains(t, rr.Body.String(), "operator session not found")
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestHandleInternalSSEPush_CLISessionAppNotAuthorized(t *testing.T) {
@@ -180,14 +174,14 @@ func TestHandleInternalSSEPush_CLISessionAppNotAuthorized(t *testing.T) {
 	seedOperatorDoc(t, h, opID, userID, opSessID)
 	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
 
-	// Use a different app identity that doesn't match the operator session
+	// Only the ensemble app identity may push SSE events.
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/different-opsess"})
-	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"type":"test"}}`, userID, cliSessionID)
+	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"type":"%s"}}`, userID, cliSessionID, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
-	assert.Contains(t, rr.Body.String(), "unauthorized for target session")
+	assert.Contains(t, rr.Body.String(), "unauthorized client identity")
 }
 
 func TestHandleInternalSSEPush_WebSessionSuccess(t *testing.T) {
@@ -199,9 +193,8 @@ func TestHandleInternalSSEPush_WebSessionSuccess(t *testing.T) {
 	seedOperatorDoc(t, h, opID, "user-push-web", opSessID)
 	bindWebSessionToOperators(t, h, webSessionID, []string{opSessID})
 
-	appSpiffe := protocol.NewWorkloadIdentity().AppSPIFFEID(opSessID)
-	cert := makeTestAppCert(t, []string{appSpiffe})
-	body := fmt.Sprintf(`{"user_id":"user-push-web","web_session_id":"%s","event":{"type":"update"}}`, webSessionID)
+	cert := makeTestAppCert(t, []string{protocol.EnsembleAppID})
+	body := fmt.Sprintf(`{"user_id":"user-push-web","web_session_id":"%s","event":{"type":"%s"}}`, webSessionID, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
@@ -212,15 +205,14 @@ func TestHandleInternalSSEPush_WebSessionSuccess(t *testing.T) {
 	assert.True(t, resp.Success)
 }
 
-func TestHandleInternalSSEPush_WebSessionNoBindings(t *testing.T) {
+func TestHandleInternalSSEPush_EnsembleBypassesWebSessionBinding(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
-	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/op1"})
-	body := `{"user_id":"user-web-nobind","web_session_id":"unbound-session","event":{"type":"test"}}`
+	cert := makeTestAppCert(t, []string{protocol.EnsembleAppID})
+	body := fmt.Sprintf(`{"user_id":"user-web-nobind","web_session_id":"unbound-session","event":{"type":"%s"}}`, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
-	assert.Equal(t, http.StatusForbidden, rr.Code)
-	assert.Contains(t, rr.Body.String(), "target session not found or not bound")
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestHandleInternalSSEPush_WebSessionAppNotAuthorized(t *testing.T) {
@@ -232,17 +224,16 @@ func TestHandleInternalSSEPush_WebSessionAppNotAuthorized(t *testing.T) {
 	seedOperatorDoc(t, h, opID, "user-web-auth", opSessID)
 	bindWebSessionToOperators(t, h, webSessionID, []string{opSessID})
 
-	// Different app identity
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/wrong-op"})
-	body := fmt.Sprintf(`{"user_id":"user-web-auth","web_session_id":"%s","event":{"type":"test"}}`, webSessionID)
+	body := fmt.Sprintf(`{"user_id":"user-web-auth","web_session_id":"%s","event":{"type":"%s"}}`, webSessionID, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
-	assert.Contains(t, rr.Body.String(), "unauthorized for target session")
+	assert.Contains(t, rr.Body.String(), "unauthorized client identity")
 }
 
-func TestHandleInternalSSEPush_EventWithoutTypeDefaultsToUnknown(t *testing.T) {
+func TestHandleInternalSSEPush_EventWithoutTypeRejected(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-notype"
 	opSessID := "opsess-notype"
@@ -252,21 +243,55 @@ func TestHandleInternalSSEPush_EventWithoutTypeDefaultsToUnknown(t *testing.T) {
 	seedOperatorDoc(t, h, opID, userID, opSessID)
 	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
 
-	appSpiffe := protocol.NewWorkloadIdentity().AppSPIFFEID(opSessID)
-	cert := makeTestAppCert(t, []string{appSpiffe})
-	// Event without "type" field — should default to "unknown"
+	cert := makeTestAppCert(t, []string{protocol.EnsembleAppID})
 	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"data":"no type here"}}`, userID, cliSessionID)
+	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
+	rr := httptest.NewRecorder()
+	h.sseController.handleInternalSSEPush(rr, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, rr.Code)
+	assert.Contains(t, rr.Body.String(), "event.type is required")
+}
+
+func TestHandleInternalSSEPush_UnregisteredEventRejected(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	opID := "op-unreg"
+	opSessID := "opsess-unreg"
+	userID := "user-unreg"
+	cliSessionID := "cli-unreg"
+
+	seedOperatorDoc(t, h, opID, userID, opSessID)
+	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
+
+	cert := makeTestAppCert(t, []string{protocol.EnsembleAppID})
+	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"type":"g8e.v1.not.registered"}}`, userID, cliSessionID)
+	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
+	rr := httptest.NewRecorder()
+	h.sseController.handleInternalSSEPush(rr, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, rr.Code)
+	assert.Contains(t, rr.Body.String(), "SSE_EVENT_NOT_REGISTERED")
+}
+
+func TestHandleInternalSSEPush_EphemeralEventNotPersisted(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	opID := "op-ephemeral"
+	opSessID := "opsess-ephemeral"
+	userID := "user-ephemeral"
+	cliSessionID := "cli-ephemeral"
+
+	seedOperatorDoc(t, h, opID, userID, opSessID)
+	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
+
+	cert := makeTestAppCert(t, []string{protocol.EnsembleAppID})
+	eventType := string(constants.EventAiLLMChatIterationTextChunkReceived)
+	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"type":"%s","data":{"content":"hi"}}}`, userID, cliSessionID, eventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	// Verify the event was stored with type "unknown"
-	route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
-	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 10)
+	count, err := h.dataController.sseStore.SSEEventsCount()
 	require.NoError(t, err)
-	require.Len(t, rows, 1)
-	assert.Equal(t, string(constants.SystemHealthUnknown), rows[0].EventType)
+	assert.Equal(t, int64(0), count)
 }
 
 // ---------------------------------------------------------------------------
@@ -320,7 +345,7 @@ func TestHandleInternalSSEPush_AuthFailureDoesNotPersistEvent(t *testing.T) {
 
 	// Use a mismatched app identity so authorization fails with 403.
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/wrong-opsess"})
-	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"type":"should_not_persist"}}`, userID, cliSessionID)
+	body := fmt.Sprintf(`{"user_id":"%s","cli_session_id":"%s","event":{"type":"%s"}}`, userID, cliSessionID, testSSEPushEventType)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEPush(rr, req)

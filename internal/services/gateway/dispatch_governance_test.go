@@ -16,12 +16,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -86,11 +88,11 @@ func maliciousCommandPayload(t *testing.T) []byte {
 // baseEnvelopeParams returns a BuildEnvelopeParams populated with valid
 // identifiers and the given action/payload/posture, ready for posture-table
 // subtests to override individual fields.
-func baseEnvelopeParams(action constants.ActionType, payload []byte, posture string, doctrine *governance.L1Doctrine) BuildEnvelopeParams {
+func baseEnvelopeParams(event constants.EventType, payload []byte, posture string, doctrine *governance.L1Doctrine) BuildEnvelopeParams {
 	return BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		ActionType:        string(action),
+		EventType:         string(event),
 		Payload:           payload,
 		TargetResource:    "localhost",
 		RequestorUserID:   "user-001",
@@ -111,7 +113,7 @@ func testDoctrine() *governance.L1Doctrine {
 // validated it (not because the builder asserted it).
 func TestBuildGovernanceEnvelope_DoctrineScreeningPassesForCleanPayload(t *testing.T) {
 	env, err := BuildGovernanceEnvelope(baseEnvelopeParams(
-		constants.ActionTypeFsRead, fsReadPayload(t), constants.PostureDoctrine, testDoctrine(),
+		constants.Event.Operator.FsRead.Requested, fsReadPayload(t), constants.PostureDoctrine, testDoctrine(),
 	))
 	require.NoError(t, err)
 	require.NotNil(t, env.Governance)
@@ -123,7 +125,7 @@ func TestBuildGovernanceEnvelope_DoctrineScreeningPassesForCleanPayload(t *testi
 // doctrine fails closed: the builder cannot assert L1.Validated=true without a
 // doctrine to run screening against.
 func TestBuildGovernanceEnvelope_NilDoctrineFailsClosed(t *testing.T) {
-	params := baseEnvelopeParams(constants.ActionTypeFsRead, fsReadPayload(t), constants.PostureDoctrine, nil)
+	params := baseEnvelopeParams(constants.Event.Operator.FsRead.Requested, fsReadPayload(t), constants.PostureDoctrine, nil)
 	_, err := BuildGovernanceEnvelope(params)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrTxDoctrineMissing)
@@ -133,7 +135,7 @@ func TestBuildGovernanceEnvelope_NilDoctrineFailsClosed(t *testing.T) {
 // that cannot be decoded into the typed proto for its action type fails closed
 // with ErrTxPayloadDecodeFailed rather than skipping L1.
 func TestBuildGovernanceEnvelope_DecodeFailureFailsClosed(t *testing.T) {
-	params := baseEnvelopeParams(constants.ActionTypeFsRead, []byte{0xFF, 0xFF, 0xFF}, constants.PostureDoctrine, testDoctrine())
+	params := baseEnvelopeParams(constants.Event.Operator.FsRead.Requested, []byte{0xFF, 0xFF, 0xFF}, constants.PostureDoctrine, testDoctrine())
 	_, err := BuildGovernanceEnvelope(params)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrTxPayloadDecodeFailed)
@@ -143,7 +145,7 @@ func TestBuildGovernanceEnvelope_DecodeFailureFailsClosed(t *testing.T) {
 // whose content triggers a doctrine forbidden-pattern violation fails closed
 // with ErrTxL1ValidationFailed rather than reaching the operator.
 func TestBuildGovernanceEnvelope_L1ViolationFailsClosed(t *testing.T) {
-	params := baseEnvelopeParams(constants.ActionTypeExecuteBash, maliciousCommandPayload(t), constants.PostureDoctrine, testDoctrine())
+	params := baseEnvelopeParams(constants.Event.Operator.Command.Requested, maliciousCommandPayload(t), constants.PostureDoctrine, testDoctrine())
 	_, err := BuildGovernanceEnvelope(params)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrTxL1ValidationFailed)
@@ -154,7 +156,7 @@ func TestBuildGovernanceEnvelope_L1ViolationFailsClosed(t *testing.T) {
 // payload passes, and the envelope carries L1.Validated=true.
 func TestBuildGovernanceEnvelope_InferenceDecodesAndScreens(t *testing.T) {
 	env, err := BuildGovernanceEnvelope(baseEnvelopeParams(
-		constants.ActionTypeInference, inferencePayload(t), constants.PostureDoctrine, testDoctrine(),
+		constants.Event.Operator.Inference.Requested, inferencePayload(t), constants.PostureDoctrine, testDoctrine(),
 	))
 	require.NoError(t, err)
 	require.NotNil(t, env.Governance.L1)
@@ -165,7 +167,7 @@ func TestBuildGovernanceEnvelope_InferenceDecodesAndScreens(t *testing.T) {
 // posture, a mutation-classified action (inference) is rejected early because
 // the gateway dispatch path cannot mint L3 human proofs.
 func TestBuildGovernanceEnvelope_RatifyRejectsMutation(t *testing.T) {
-	params := baseEnvelopeParams(constants.ActionTypeInference, inferencePayload(t), constants.PostureRatify, testDoctrine())
+	params := baseEnvelopeParams(constants.Event.Operator.Inference.Requested, inferencePayload(t), constants.PostureRatify, testDoctrine())
 	_, err := BuildGovernanceEnvelope(params)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrTxL3ProofUnmintable)
@@ -174,7 +176,7 @@ func TestBuildGovernanceEnvelope_RatifyRejectsMutation(t *testing.T) {
 // TestBuildGovernanceEnvelope_NotaryRejectsMutation proves that under notary
 // posture, a mutation-classified action is rejected early for the same reason.
 func TestBuildGovernanceEnvelope_NotaryRejectsMutation(t *testing.T) {
-	params := baseEnvelopeParams(constants.ActionTypeInference, inferencePayload(t), constants.PostureNotary, testDoctrine())
+	params := baseEnvelopeParams(constants.Event.Operator.Inference.Requested, inferencePayload(t), constants.PostureNotary, testDoctrine())
 	_, err := BuildGovernanceEnvelope(params)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrTxL3ProofUnmintable)
@@ -185,7 +187,7 @@ func TestBuildGovernanceEnvelope_NotaryRejectsMutation(t *testing.T) {
 // required for reads.
 func TestBuildGovernanceEnvelope_RatifyAllowsReadOnly(t *testing.T) {
 	env, err := BuildGovernanceEnvelope(baseEnvelopeParams(
-		constants.ActionTypeFsRead, fsReadPayload(t), constants.PostureRatify, testDoctrine(),
+		constants.Event.Operator.FsRead.Requested, fsReadPayload(t), constants.PostureRatify, testDoctrine(),
 	))
 	require.NoError(t, err)
 	assert.True(t, env.Governance.L1.Validated)
@@ -203,7 +205,7 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 	cases := []struct {
 		name            string
 		posture         string
-		action          constants.ActionType
+		event           constants.EventType
 		payload         func(t *testing.T) []byte
 		wantDeliberated bool
 		wantErr         error
@@ -211,26 +213,26 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 		{
 			name:    "doctrine read does not deliberate",
 			posture: constants.PostureDoctrine,
-			action:  constants.ActionTypeFsRead,
+			event:   constants.Event.Operator.FsRead.Requested,
 			payload: fsReadPayload,
 		},
 		{
 			name:    "ratify read does not deliberate",
 			posture: constants.PostureRatify,
-			action:  constants.ActionTypeFsRead,
+			event:   constants.Event.Operator.FsRead.Requested,
 			payload: fsReadPayload,
 		},
 		{
 			name:            "consensus read deliberates",
 			posture:         constants.PostureConsensus,
-			action:          constants.ActionTypeFsRead,
+			event:           constants.Event.Operator.FsRead.Requested,
 			payload:         fsReadPayload,
 			wantDeliberated: true,
 		},
 		{
 			name:    "notary mutation rejected before deliberation",
 			posture: constants.PostureNotary,
-			action:  constants.ActionTypeInference,
+			event:   constants.Event.Operator.Inference.Requested,
 			payload: inferencePayload,
 			wantErr: constants.ErrTxL3ProofUnmintable,
 		},
@@ -254,14 +256,21 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 			cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
 			resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
 			unreg := broker.RegisterHandler(cmdChannel, func(_ string, data []byte) {
-				// Echo a minimal result envelope with the same Id.
-				broker.Publish(resultsChannel, data)
+				cmdEnv := &commonv1.GovernanceEnvelope{}
+				if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
+					return
+				}
+				resultWire, err := protojson.Marshal(dispatchTestResultEnvelope(cmdEnv, nil))
+				if err != nil {
+					return
+				}
+				broker.Publish(resultsChannel, resultWire)
 			})
 			defer unreg()
 
 			_, err := svc.Dispatch(context.Background(), DispatchRequest{
 				TargetOperatorSessionID: op.OperatorSessionID,
-				ActionType:              string(tc.action),
+				EventType:               string(tc.event),
 				Payload:                 tc.payload(t),
 				RequestorUserID:         "user-001",
 			})
@@ -303,7 +312,7 @@ func TestDispatchService_L2DeliberationFailureFailsClosed(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayload(t),
 		RequestorUserID:         "user-001",
 	})

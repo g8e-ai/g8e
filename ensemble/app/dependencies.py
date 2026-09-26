@@ -11,7 +11,6 @@ from typing import cast
 from fastapi import Depends, Request
 
 from app.clients.kv_cache_client import KVCacheClient
-from app.clients.pubsub_client import PubSubClient
 from app.clients.blob_client import BlobClient
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.models.state import G8eeAppState
@@ -51,12 +50,8 @@ from .services.infra.event_service import EventService
 from .services.infra.internal_http_client import InternalHttpClient
 from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
-from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from .services.operator.operator_data_service import OperatorDataService
-from .services.operator.operator_lifecycle_service import OperatorLifecycleService
-from .services.operator.operator_session_service import OperatorSessionService
-from .services.operator.operator_auth_service import OperatorAuthService
-from .services.operator.session_auth_listener import SessionAuthListener
+from .clients.gateway_operator_client import GatewayOperatorClient
 from .services.auth.api_key_service import APIKeyService
 from .services.auth.auth_service import AuthService
 from .services.auth.certificate_service import CertificateService
@@ -99,16 +94,6 @@ async def get_g8ee_app_settings(request: Request) -> G8eeAppSettings:
         raise ConfigurationError("Settings not available")
 
     return state.settings
-
-
-async def get_g8ee_pubsub_client(request: Request) -> PubSubClient:
-    state = cast(G8eeAppState, request.app.state)
-    client = state.pubsub_client
-    if not client:
-        logger.error("PubSubClient not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("PubSubClient not available")
-
-    return client
 
 
 async def get_g8ee_kv_cache_client(request: Request) -> KVCacheClient:
@@ -277,17 +262,6 @@ async def get_g8ee_operator_command_service(request: Request) -> OperatorCommand
     return service
 
 
-async def get_g8ee_heartbeat_service(request: Request) -> HeartbeatSnapshotService:
-    state = cast(G8eeAppState, request.app.state)
-    service = state.services.heartbeat_service
-    if not service:
-        logger.error(
-            "Heartbeat service not found in app state - g8ee initialization may have failed"
-        )
-        raise ServiceUnavailableError("Heartbeat service not available")
-    return cast(HeartbeatSnapshotService, service)
-
-
 async def get_g8ee_operator_data_service(request: Request) -> OperatorDataService:
     state = cast(G8eeAppState, request.app.state)
     service = state.services.operator_data_service
@@ -299,48 +273,15 @@ async def get_g8ee_operator_data_service(request: Request) -> OperatorDataServic
     return cast(OperatorDataService, service)
 
 
-async def get_g8ee_operator_lifecycle_service(request: Request) -> OperatorLifecycleService:
+async def get_g8ee_gateway_operator_client(request: Request) -> GatewayOperatorClient:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.operator_lifecycle_service
-    if not service:
+    client = state.services.gateway_operator_client
+    if not client:
         logger.error(
-            "Operator Lifecycle Service not found in app state - g8ee initialization may have failed"
+            "Gateway Operator Client not found in app state - g8ee initialization may have failed"
         )
-        raise ServiceUnavailableError("Operator Lifecycle Service not available")
-    return cast(OperatorLifecycleService, service)
-
-
-async def get_g8ee_operator_session_service(request: Request) -> OperatorSessionService:
-    state = cast(G8eeAppState, request.app.state)
-    service = state.services.operator_session_service
-    if not service:
-        logger.error(
-            "Operator Session Service not found in app state - g8ee initialization may have failed"
-        )
-        raise ServiceUnavailableError("Operator Session Service not available")
-    return service
-
-
-async def get_g8ee_operator_auth_service(request: Request) -> OperatorAuthService:
-    state = cast(G8eeAppState, request.app.state)
-    service = state.services.operator_auth_service
-    if not service:
-        logger.error(
-            "Operator Auth Service not found in app state - g8ee initialization may have failed"
-        )
-        raise ServiceUnavailableError("Operator Auth Service not available")
-    return service
-
-
-async def get_g8ee_session_auth_listener(request: Request) -> SessionAuthListener:
-    state = cast(G8eeAppState, request.app.state)
-    service = state.services.session_auth_listener
-    if not service:
-        logger.error(
-            "Session Auth Listener not found in app state - g8ee initialization may have failed"
-        )
-        raise ServiceUnavailableError("Session Auth Listener not available")
-    return service
+        raise ServiceUnavailableError("Gateway Operator Client not available")
+    return client
 
 
 async def get_g8ee_auth_service(request: Request) -> AuthService:
@@ -525,21 +466,16 @@ __all__ = [
     "get_g8ee_client_http_client",
     "get_g8ee_current_active_user",
     "get_g8ee_event_service",
+    "get_g8ee_gateway_operator_client",
     "get_g8ee_grounding_service",
-    "get_g8ee_heartbeat_service",
     "get_g8ee_investigation_data_service",
     "get_g8ee_investigation_service",
     "get_g8ee_kv_cache_client",
     "get_g8ee_memory_generation_service",
     "get_g8ee_memory_service",
-    "get_g8ee_operator_auth_service",
     "get_g8ee_operator_cache",
     "get_g8ee_operator_command_service",
     "get_g8ee_operator_data_service",
-    "get_g8ee_operator_lifecycle_service",
-    "get_g8ee_operator_session_service",
-    "get_g8ee_pubsub_client",
-    "get_g8ee_session_auth_listener",
     "get_g8ee_settings_service",
     "get_g8ee_settings_service_write",
     "get_g8ee_user_settings",

@@ -199,18 +199,20 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 	require.NoError(t, err)
 
 	envelope := &govpkg.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govpkg.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-inference-int",
 		OperatorSessionId: "session-inference-int",
-		ActionType:        string(constants.ActionTypeInference),
-		TargetResource:    "ollama",
-		Payload:           payloadBytes,
-		StateMerkleRoot:   "test-state-root",
-		Nonce:             fmt.Sprintf("nonce-inference-int-%d", inferenceEnvelopeNonce.Add(1)),
-		Posture:           constants.PostureDoctrine,
+		EventType:         string(constants.Event.Operator.Inference.Requested),
+
+		ActionType:      string(constants.ActionTypeInference),
+		TargetResource:  "ollama",
+		Payload:         payloadBytes,
+		StateMerkleRoot: "test-state-root",
+		Nonce:           fmt.Sprintf("nonce-inference-int-%d", inferenceEnvelopeNonce.Add(1)),
+		Posture:         constants.PostureDoctrine,
 	}
 
 	txHash, err := govpkg.GenerateMessageID(envelope)

@@ -7,6 +7,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+
 from app.services.operator.lfaa_service import OperatorLFAAService
 from app.constants import G8EE_COMPONENT
 from app.models.pubsub_messages import G8eMessage
@@ -17,16 +18,15 @@ from app.constants.generated_status import AITaskId
 
 
 @pytest.fixture
-def mock_pubsub_service():
-    service = MagicMock()
-    service.pubsub_client = MagicMock()
-    service.publish_command = AsyncMock()
-    return service
+def mock_gateway_client():
+    client = MagicMock()
+    client.ingest_audit_record = AsyncMock(return_value={"seq": 1, "hash": "abc"})
+    return client
 
 
 @pytest.fixture
-def lfaa_service(mock_pubsub_service):
-    return OperatorLFAAService(pubsub_service=mock_pubsub_service)
+def lfaa_service(mock_gateway_client):
+    return OperatorLFAAService(gateway_operator_client=mock_gateway_client)
 
 
 @pytest.fixture
@@ -50,33 +50,33 @@ def valid_g8e_message():
 class TestOperatorLFAAService:
     @pytest.mark.asyncio
     async def test_send_audit_event_success(
-        self, lfaa_service, mock_pubsub_service, valid_g8e_message
+        self, lfaa_service, mock_gateway_client, valid_g8e_message
     ):
-        # Setup: publish_command returns > 0 subscribers
-        mock_pubsub_service.publish_command.return_value = 1
-
         result = await lfaa_service.send_audit_event(valid_g8e_message)
 
         assert result is True
-        mock_pubsub_service.publish_command.assert_called_once_with(
-            operator_id="op_1", operator_session_id="sess_1", command_data=valid_g8e_message
-        )
+        mock_gateway_client.ingest_audit_record.assert_awaited_once()
+        kwargs = mock_gateway_client.ingest_audit_record.await_args.kwargs
+        assert kwargs["operator_id"] == "op_1"
+        assert kwargs["operator_session_id"] == "sess_1"
+        assert kwargs["event_type"] == EventType.OPERATOR_AUDIT_COMMAND_RECORD_REQUESTED
+        assert kwargs["idempotency_key"] == "test_id"
 
     @pytest.mark.asyncio
-    async def test_send_audit_event_no_subscribers(
-        self, lfaa_service, mock_pubsub_service, valid_g8e_message
+    async def test_send_audit_event_ingest_failure(
+        self, lfaa_service, mock_gateway_client, valid_g8e_message
     ):
-        # Setup: publish_command returns 0 subscribers
-        mock_pubsub_service.publish_command.return_value = 0
+        from app.errors import NetworkError
+
+        mock_gateway_client.ingest_audit_record.side_effect = NetworkError("gateway down")
 
         result = await lfaa_service.send_audit_event(valid_g8e_message)
 
         assert result is False
-        mock_pubsub_service.publish_command.assert_called_once()
+        assert mock_gateway_client.ingest_audit_record.await_count == 3
 
     @pytest.mark.asyncio
-    async def test_send_audit_event_missing_fields(self, lfaa_service, mock_pubsub_service):
-        # Case 1: Missing payload
+    async def test_send_audit_event_missing_fields(self, lfaa_service, mock_gateway_client):
         msg_no_payload = G8eMessage(
             id="test_id",
             source_component=G8EE_COMPONENT,
@@ -90,70 +90,10 @@ class TestOperatorLFAAService:
             payload=None,
         )
         assert await lfaa_service.send_audit_event(msg_no_payload) is False
-
-        # Case 2: Missing operator_id
-        msg_no_op = G8eMessage(
-            id="test_id",
-            source_component=G8EE_COMPONENT,
-            event_type=EventType.OPERATOR_AUDIT_COMMAND_RECORDED,
-            operator_id=None,
-            operator_session_id="sess_1",
-            case_id="case_123",
-            task_id=AITaskId.DIRECT_COMMAND,
-            investigation_id="inv_456",
-            web_session_id="web_789",
-            payload=DirectCommandAuditRequestPayload(
-                command="ls", execution_id="exec_1", operator_session_id="sess_1"
-            ),
-        )
-        assert await lfaa_service.send_audit_event(msg_no_op) is False
-
-        # Case 3: Missing operator_session_id
-        msg_no_sess = G8eMessage(
-            id="test_id",
-            source_component=G8EE_COMPONENT,
-            event_type=EventType.OPERATOR_AUDIT_COMMAND_RECORDED,
-            operator_id="op_1",
-            operator_session_id=None,
-            case_id="case_123",
-            task_id=AITaskId.DIRECT_COMMAND,
-            investigation_id="inv_456",
-            web_session_id="web_789",
-            payload=DirectCommandAuditRequestPayload(
-                command="ls", execution_id="exec_1", operator_session_id="sess_1"
-            ),
-        )
-        assert await lfaa_service.send_audit_event(msg_no_sess) is False
-
-        mock_pubsub_service.publish_command.assert_not_called()
+        mock_gateway_client.ingest_audit_record.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_send_audit_event_pubsub_not_initialized(
-        self, lfaa_service, mock_pubsub_service, valid_g8e_message
-    ):
-        # Case 1: pubsub_service is None
-        lfaa_service.pubsub_service = None
-        assert await lfaa_service.send_audit_event(valid_g8e_message) is False
-
-        # Case 2: pubsub_client is None
-        lfaa_service.pubsub_service = mock_pubsub_service
-        mock_pubsub_service.pubsub_client = None
-        assert await lfaa_service.send_audit_event(valid_g8e_message) is False
-
-    @pytest.mark.asyncio
-    async def test_send_audit_event_exception_handling(
-        self, lfaa_service, mock_pubsub_service, valid_g8e_message
-    ):
-        mock_pubsub_service.publish_command.side_effect = Exception("Pubsub error")
-
-        result = await lfaa_service.send_audit_event(valid_g8e_message)
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_send_direct_exec_audit_event_success(self, lfaa_service, mock_pubsub_service):
-        mock_pubsub_service.publish_command.return_value = 1
-
+    async def test_send_direct_exec_audit_event_success(self, lfaa_service, mock_gateway_client):
         g8e_context = G8eHttpContext(
             case_id="case_123",
             investigation_id="inv_456",
@@ -168,19 +108,11 @@ class TestOperatorLFAAService:
         )
 
         assert result is True
-        mock_pubsub_service.publish_command.assert_called_once()
-        called_args = mock_pubsub_service.publish_command.call_args[1]
-        assert called_args["operator_id"] == "op_1"
-        assert called_args["operator_session_id"] == "sess_1"
-
-        msg = called_args["command_data"]
-        assert msg.id == "audit_exec_999"
-        assert msg.event_type == EventType.OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED
-        assert msg.case_id == "case_123"
-        assert msg.task_id == AITaskId.DIRECT_COMMAND
-        assert isinstance(msg.payload, DirectCommandAuditRequestPayload)
-        assert msg.payload.command == "ls -la"
-        assert msg.payload.execution_id == "exec_999"
+        kwargs = mock_gateway_client.ingest_audit_record.await_args.kwargs
+        assert kwargs["operator_id"] == "op_1"
+        assert kwargs["operator_session_id"] == "sess_1"
+        assert kwargs["event_type"] == EventType.OPERATOR_AUDIT_DIRECT_COMMAND_RECORD_REQUESTED
+        assert kwargs["idempotency_key"] == "audit_exec_999"
 
     @pytest.mark.asyncio
     async def test_send_direct_exec_audit_event_no_bound_operators(self, lfaa_service):
@@ -192,20 +124,6 @@ class TestOperatorLFAAService:
             user_id="user_1",
         )
         g8e_context.bound_operators = []
-
-        result = await lfaa_service.send_direct_exec_audit_event("ls", "exec_1", g8e_context)
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_send_direct_exec_audit_event_missing_session_id(self, lfaa_service):
-        g8e_context = G8eHttpContext(
-            case_id="case_123",
-            investigation_id="inv_456",
-            source_component=G8EE_COMPONENT,
-            web_session_id="web_789",
-            user_id="user_1",
-        )
-        g8e_context.bound_operators = [MagicMock(operator_id="op_1", operator_session_id=None)]
 
         result = await lfaa_service.send_direct_exec_audit_event("ls", "exec_1", g8e_context)
         assert result is False

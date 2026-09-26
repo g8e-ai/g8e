@@ -120,11 +120,10 @@ COVERAGE_EXCLUDE_PKGS := $(TEST_EXCLUDE_PKGS) $(COVERAGE_ONLY_EXCLUDE_PKGS)
 
 # Files excluded from coverage only (belong to otherwise-tested packages).
 EXCLUDE_FILES := \
-	internal/cli/cmd/demos.go \
-	internal/cli/cmd/demo_dhs.go \
-	internal/cli/cmd/demo_finance.go \
-	internal/cli/cmd/demo_healthcare.go \
-	internal/cli/cmd/mcp_backup.go
+	internal/cli/cmd/demos/demos.go \
+	internal/cli/cmd/demos/demo_dhs.go \
+	internal/cli/cmd/demos/demo_finance.go \
+	internal/cli/cmd/demos/demo_healthcare.go
 
 # Grep chains derived from the lists above — do not edit directly.
 _TEST_PKG_GREP := $(foreach p,$(TEST_EXCLUDE_PKGS),| grep -v "$(p)")
@@ -206,12 +205,14 @@ help:
 	@echo "  website-test    Test the g8e.ai generator and Worker"
 	@echo ""
 	@echo "Cleanup:"
-	@echo "  clean         Remove build artifacts (bin/, test/coverage outputs, Go caches)"
-	@echo "  clean-docker  Stop all profile containers and remove volumes (--profile bootstrapped down -v --remove-orphans)"
+	@echo "  clean             Remove build artifacts (bin/, test/coverage outputs, Go caches)"
+	@echo "  clean-docker      Stop all containers and remove volumes (docker compose down -v --remove-orphans)"
 	@echo ""
 	@echo "Docker Compose:"
-	@echo "  up            Build and start the full stack (docker compose up -d --build)"
-	@echo "  down          Stop all profile containers, keep volumes (--profile bootstrapped down --remove-orphans)"
+	@echo "  up                Build and start the full stack (docker compose up -d --build)"
+	@echo "  down              Stop all containers, keep volumes (docker compose down --remove-orphans)"
+	@echo "  restart-operators Restart Data and Inference Operators to pick up newly built binary"
+	@echo "  docker-build      Build Docker images in container and export binary to ./g8e"
 	@echo ""
 	@echo "Demos:"
 	@echo "  demo-verify         Build and run all 5 demo environments (requires Docker)"
@@ -238,6 +239,15 @@ python-build:
 	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
 	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
+
+.PHONY: constants constants-check
+constants:
+	@echo "Regenerating protocol constants from protocol/constants/events.json..."
+	@go run ./internal/tools/constgen -write
+
+constants-check:
+	@echo "Checking protocol/constants/events.json registry and generated constants..."
+	@go run ./internal/tools/constgen -check
 
 .PHONY: website-build
 website-build:
@@ -299,11 +309,11 @@ proto-lockfiles:
 	@cd ensemble && uv lock --quiet
 	@echo "Ensemble uv.lock regenerated."
 
+# proto-force is an alias of proto. It previously ran only `buf generate`
+# for Go, which left the Python stubs, TypeScript stubs, and ensemble
+# lockfiles stale.
 .PHONY: proto-force
-proto-force: buf-install
-	@echo "Force generating Protobuf code..."
-	@$(BUF) generate protocol/proto
-	@echo "Protobuf generation complete."
+proto-force: proto
 
 # =============================================================================
 # TOOL INSTALLATION
@@ -398,7 +408,8 @@ build: embed-explorer
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$G8E_BINARY..."; \
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$G8E_BINARY $(MAIN_PKG); \
 	sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256; \
-	INSTALL_SRC=$$G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
+	INSTALL_SRC=$$G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE); \
+	INSTALL_SRC=$$G8E_BINARY INSTALL_DST=$(BIN_DIR)/$$ROOT_COPY; $(INSTALL_EXECUTABLE)
 	@echo "Build complete. Binary: $(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH)$(if $(filter windows,$(HOST_OS)),.exe,)"
 
 .PHONY: build-compressed
@@ -467,7 +478,8 @@ build-all:
 	else \
 		ROOT_COPY=g8e; \
 	fi; \
-	INSTALL_SRC=$$HOST_G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
+	INSTALL_SRC=$$HOST_G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE); \
+	INSTALL_SRC=$$HOST_G8E_BINARY INSTALL_DST=$(BIN_DIR)/$$ROOT_COPY; $(INSTALL_EXECUTABLE)
 	@go run ./internal/tools/g8ebinaries --root $(BIN_DIR) --version "$(VERSION)" --build-id "$(BUILD_ID)" --build-time "$(BUILD_TIME)" --source-revision "$(SOURCE_REVISION)" --source-tree-hash "$(SOURCE_TREE_HASH)"
 	@echo "Multi-platform build complete. Manifest and checksums: $(BIN_DIR)/g8e-binaries.json"
 	@echo "Host binary copied: ./g8e ($(HOST_OS)/$(HOST_ARCH))"
@@ -562,7 +574,7 @@ test: test-unit test-integration
 
 # Unit Tests: Run immediately without any build tags (excludes integration and e2e)
 .PHONY: test-unit
-test-unit:
+test-unit: constants-check
 	@echo "Running Tier 1 (Unit) tests..."
 	@go test -tags=!integration $(TEST_UNIT_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
@@ -590,7 +602,7 @@ test-integration:
 #   ./g8e test e2e --run TestPlatformEnrollment_Headless
 #
 # Cross-enrollment scenarios (require --profile cross-enrollment):
-#   docker compose --profile bootstrapped --profile cross-enrollment up -d
+#   docker compose --profile cross-enrollment up -d
 #   ./g8e auth enroll user --headless
 #   ./g8e test e2e --run TestCrossEnrollment_GatewayAsOperator_PendingDiscovery
 #   ./g8e test e2e --run TestCrossEnrollment_GatewayAsOperator_ApproveAndActivate
@@ -683,7 +695,7 @@ ensemble-test:
 .PHONY: test-external
 test-external:
 	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
-	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_typesafe"
 
 .PHONY: ensemble-lint
 ensemble-lint:
@@ -713,6 +725,18 @@ dashboard-lint:
 dashboard-test:
 	@echo "Running dashboard (g8ed) vitest suite..."
 	@cd dashboard && npm test
+
+.PHONY: dashboard-boundary-check
+dashboard-boundary-check:
+	@echo "Checking g8ed gateway boundary invariants..."
+	@if rg -q 'ServiceName\.g8ed|/api/operators|cache_aside|operator_slot|VSE_INTERNAL' \
+		dashboard/public dashboard/server.js dashboard/services dashboard/entrypoint.sh; then \
+		echo "g8ed boundary violation: forbidden BFF patterns found in dashboard runtime paths"; \
+		rg 'ServiceName\.g8ed|/api/operators|cache_aside|operator_slot|VSE_INTERNAL' \
+			dashboard/public dashboard/server.js dashboard/services dashboard/entrypoint.sh; \
+		exit 1; \
+	fi
+	@echo "g8ed boundary grep clean."
 
 .PHONY: build-dashboard
 build-dashboard:
@@ -769,7 +793,7 @@ validate-doctrines:
 .PHONY: validate-cosais
 validate-cosais:
 	@echo "Validating COSAiS overlay coverage..."
-	@bash scripts/validate-cosais-overlays.sh
+	@go run ./internal/tools/cosais_validator
 
 .PHONY: swagger-generate
 swagger-generate:
@@ -831,23 +855,39 @@ clean-harness:
 # up -d --build` works standalone; these targets are not prerequisites.
 .PHONY: up
 up:
-	@echo "Building and starting the full stack..."
+	@echo "Building and starting the unified stack..."
 	@docker compose up -d --build
-	@echo "Stack started. The gateway is healthy; workloads remain not-ready until bootstrapped."
+	@echo "Stack started. Gateway is healthy; workloads await owner approval."
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
-	@echo "Then: ./g8e auth enroll pending && ./g8e auth enroll approve <id> --yes"
+	@echo "Then approve workloads: ./g8e auth enroll pending && ./g8e auth enroll approve <id> --yes"
 
 .PHONY: down
 down:
-	@echo "Stopping the full stack including bootstrapped workloads (volumes preserved)..."
-	@docker compose --profile bootstrapped down --remove-orphans
+	@echo "Stopping the unified stack (volumes preserved)..."
+	@docker compose down --remove-orphans
 	@echo "Stack stopped. Volumes preserved; rerun 'make up' to resume."
 
 .PHONY: clean-docker
 clean-docker:
-	@echo "Stopping the full stack (all profiles) and removing volumes..."
-	@docker compose --profile bootstrapped down -v --remove-orphans
+	@echo "Stopping the unified stack and removing volumes..."
+	@docker compose down -v --remove-orphans
 	@echo "Stack stopped and volumes removed. The next 'make up' re-bootstraps the CA and requires re-enrollment."
+
+.PHONY: restart-operators
+restart-operators:
+	@echo "Restarting Data and Inference Operators to align with current binary..."
+	@docker compose restart g8e-operator g8e-inference-operator
+	@echo "Operators restarted."
+
+.PHONY: docker-build
+docker-build:
+	@echo "Building Docker images using in-container Makefile..."
+	@docker compose build
+	@mkdir -p $(BIN_DIR)
+	@echo "Exporting runtime binary to $(BIN_DIR)/g8e and ./g8e..."
+	@docker run --rm --entrypoint cp -v $(CURDIR):/out g8e-gateway /g8e /out/$(BIN_DIR)/g8e
+	@cp -f $(BIN_DIR)/g8e ./g8e
+	@echo "Build complete. Host ./g8e and container images are aligned."
 
 
 # =============================================================================
@@ -871,7 +911,7 @@ ci-ensemble: ensemble-lint ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-dashboard
-ci-dashboard: dashboard-lint dashboard-test
+ci-dashboard: dashboard-lint dashboard-boundary-check dashboard-test
 	@echo "Dashboard CI complete."
 
 .PHONY: check-bsl-headers

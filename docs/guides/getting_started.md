@@ -153,7 +153,7 @@ The Docker build runs the Go compiler and build dependencies inside the builder 
 | Python | 3.10+, optional, required only for protocol library development |
 | Node.js and npm | Node.js 22+, required to build the embedded evaluation explorer before a local `make build` |
 
-> **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically (see [scripts.md](../architecture/scripts.md) for details):
+> **Don't have the local build toolchain installed?** Run the setup script for your platform to detect and install `git`, `make`, Go (from `go.mod`), and Node.js 22+, build the evaluation explorer, and compile `g8e` (see [scripts.md](../architecture/scripts.md) for details):
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`
@@ -240,7 +240,7 @@ cd ../../..
 make build
 ```
 
-The build produces the `g8e` binary in the repository root and a platform-specific binary in `bin/`. The compiled Go binary is statically linked and has zero runtime dependencies; the Node.js toolchain is needed only to build the embedded explorer. If you're not sure whether the local tools are installed, run the [setup script](#local-path-build-and-run-natively) for the Go and Make prerequisites, then see [Build a g8e-Compatible Frontend](build_frontend.md) for frontend tooling.
+The build produces the `g8e` binary in the repository root and a platform-specific binary in `bin/`. The compiled Go binary is statically linked and has zero runtime dependencies; the Node.js toolchain is needed only to build the embedded explorer. If you're not sure whether the local tools are installed, run the [setup script](#local-path-build-and-run-natively) for the full native build path, or see [Build a g8e-Compatible Frontend](build_frontend.md) for frontend-only tooling.
 
 Additional build targets:
 

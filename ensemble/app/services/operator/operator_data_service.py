@@ -6,65 +6,60 @@
 # released under the Apache License, Version 2.0.
 
 import logging
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from app.clients.http_client import HTTPClient
-    from app.services.cache.cache_aside import CacheAsideService
-from app.constants.collections import (
-    DB_COLLECTION_OPERATORS,
-    DB_COLLECTION_CLI_SESSIONS,
-)
-from app.constants.config import (
-    MAX_COMMAND_RESULTS_HISTORY,
-    MAX_HEARTBEAT_HISTORY,
-)
-from app.constants import EventType
-from app.constants.generated_status import (
-    OperatorHistoryEventType,
-    OperatorStatus,
-)
-from app.constants import HistoryActor
-from app.errors import ExternalServiceError, ValidationError
-from app.models.investigations import ConversationHistoryMessage, ConversationMessageMetadata
+from app.clients.gateway_operator_client import GatewayOperatorClient
+from app.constants.collections import DB_COLLECTION_CLI_SESSIONS, DB_COLLECTION_OPERATORS
+from app.errors import ValidationError
 from app.models.sessions import CliSessionDocument
-from app.models.operators import (
-    CommandResultRecord,
-    OperatorDocument,
-    OperatorHistoryEntry,
-    HeartbeatSnapshot,
-)
-from app.models.cache import ArrayUnion
+from app.models.operators import OperatorDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
-from app.utils.keyed_lock import KeyedAsyncLock
-from app.utils.ledger_hash import genesis_hash
-from app.utils.timestamp import now
-
-from app.clients.http_client import HTTPClient
+from app.utils.gateway_decoding.gateway_operator_document import operator_document_from_gateway
 
 logger = logging.getLogger(__name__)
 
 
 class OperatorDataService(OperatorDataServiceProtocol):
-    """Domain service for Operator data management using CacheAsideService."""
+    """Gateway-backed operator reads and local CLI session cache access."""
 
-    def __init__(self, cache: CacheAsideService, internal_http_client: HTTPClient):
+    def __init__(
+        self,
+        cache: CacheAsideService,
+        gateway_operator_client: GatewayOperatorClient,
+    ) -> None:
         self.cache = cache
-        self.internal_http_client = internal_http_client
+        self._gateway_operator_client = gateway_operator_client
         self.collection = DB_COLLECTION_OPERATORS
-        self._history_lock = KeyedAsyncLock()
 
-    async def get_operator(self, operator_id: str) -> OperatorDocument | None:
-        """Get Operator document using cache-aside pattern."""
+    async def get_operator(
+        self, operator_id: str, *, user_id: str | None = None
+    ) -> OperatorDocument | None:
+        """Get an operator document from the Gateway operator registry."""
         if not operator_id:
             raise ValidationError("operator_id is required")
+        if not user_id:
+            raise ValidationError("user_id is required for Gateway operator reads")
 
-        data = await self.cache.get_document_with_cache(self.collection, operator_id)
-        if not data:
+        operators = await self._gateway_operator_client.list(user_id=user_id)
+        for operator_doc in operators:
+            if not isinstance(operator_doc, dict):
+                continue
+            doc_id = operator_doc.get("id") or operator_doc.get("operator_id")
+            if str(doc_id) == operator_id:
+                return operator_document_from_gateway(operator_doc)
+        return None
+
+    async def get_operator_by_session(self, session_id: str) -> OperatorDocument | None:
+        """Get an operator document by active operator session ID."""
+        if not session_id:
+            raise ValidationError("session_id is required")
+
+        operator_doc = await self._gateway_operator_client.get_by_session(session_id=session_id)
+        if not operator_doc:
             return None
-
-        return OperatorDocument.model_validate(data)
+        if not isinstance(operator_doc, dict):
+            return None
+        return operator_document_from_gateway(operator_doc)
 
     async def get_cli_session(self, cli_session_id: str) -> CliSessionDocument | None:
         """Get CLI session document using cache-aside pattern."""
@@ -80,11 +75,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
     async def validate_cli_session_ownership(
         self, cli_session_id: str, operator_session_id: str
     ) -> bool:
-        """Verify that the given cli_session_id is owned by the given operator_session_id.
-
-        This prevents a malicious client with a valid operator session from draining
-        or publishing to someone else's CLI session.
-        """
+        """Verify that the given cli_session_id is owned by the given operator_session_id."""
         if not cli_session_id or not operator_session_id:
             return False
 
@@ -109,285 +100,35 @@ class OperatorDataService(OperatorDataServiceProtocol):
         field_filters: list[dict[str, object]] | None = None,
         limit: int = 1000,
         bypass_cache: bool = False,
+        *,
+        user_id: str,
     ) -> list[OperatorDocument]:
-        """Query Operator documents.
+        """List operator documents from the Gateway registry for a user."""
+        if not user_id:
+            raise ValidationError("user_id is required for Gateway operator reads")
 
-        ``bypass_cache=True`` mirrors client's ``queryOperatorsFresh`` and is used
-        by reconcilers (e.g. HeartbeatStaleMonitorService) where stale query
-        cache results would produce false STALE/OFFLINE transitions.
-        """
-        rows = await self.cache.query_documents(
-            collection=self.collection,
-            field_filters=field_filters or [],
-            limit=limit,
-            bypass_cache=bypass_cache,
-        )
-        return [OperatorDocument.model_validate(row) for row in rows]
+        operators = await self._gateway_operator_client.list(user_id=user_id)
+        docs = [
+            operator_document_from_gateway(operator_doc)
+            for operator_doc in operators
+            if isinstance(operator_doc, dict)
+        ]
 
-    async def create_operator(self, operator: OperatorDocument) -> bool:
-        """Create a new Operator document in the database."""
-        if not operator.id:
-            raise ValidationError("id is required")
+        if field_filters:
+            docs = [doc for doc in docs if self._matches_filters(doc, field_filters)]
 
-        # Convert to dict for storage
-        operator_data = operator.model_dump(mode="json")
+        return docs[:limit]
 
-        result = await self.cache.create_document(
-            collection=self.collection, document_id=operator.id, data=operator_data
-        )
-
-        if not result.success:
-            raise ExternalServiceError(
-                f"Failed to create Operator {operator.id}: {result.error}",
-                service_name="operator_service",
-            )
-
+    @staticmethod
+    def _matches_filters(
+        doc: OperatorDocument, field_filters: list[dict[str, object]]
+    ) -> bool:
+        payload = doc.model_dump(mode="json")
+        for field_filter in field_filters:
+            field = field_filter.get("field")
+            if not isinstance(field, str):
+                continue
+            expected = field_filter.get("value")
+            if payload.get(field) != expected:
+                return False
         return True
-
-    async def update_operator(self, operator: OperatorDocument) -> bool:
-        """Update an existing Operator document in the database."""
-        if not operator.id:
-            raise ValidationError("id is required")
-
-        # Convert to dict for storage
-        operator_data = operator.model_dump(mode="json")
-
-        result = await self.cache.update_document(
-            collection=self.collection, document_id=operator.id, data=operator_data, merge=True
-        )
-
-        if not result.success:
-            raise ExternalServiceError(
-                f"Failed to update Operator {operator.id}: {result.error}",
-                service_name="operator_service",
-            )
-
-        return True
-
-    async def add_history_entry(
-        self,
-        operator_id: str,
-        event_type: OperatorHistoryEventType,
-        actor: HistoryActor,
-        summary: str,
-        details: dict[str, object] | None = None,
-        additional_updates: dict[str, object] | None = None,
-        status_check: tuple[OperatorStatus, ...] | None = None,
-    ) -> OperatorDocument:
-        """Atomic status + history update under a keyed lock.
-
-        This is the single authoritative path for state transitions that require
-        an audit trail entry.
-
-        Args:
-            operator_id: Operator document ID
-            event_type: History event type
-            actor: Component performing the action
-            summary: Human-readable summary
-            details: Optional event details
-            additional_updates: Additional fields to update atomically
-            status_check: Optional tuple of allowed statuses. If provided, the
-                operation will only proceed if the current status is in this tuple.
-        """
-        async with self._history_lock.acquire(operator_id):
-            operator = await self.get_operator(operator_id)
-            if not operator:
-                raise ValidationError(f"Operator {operator_id} not found")
-
-            # Perform atomic status check if requested
-            if status_check and operator.status not in status_check:
-                raise ValidationError(
-                    f"Operator {operator_id} has status {operator.status}, "
-                    f"expected one of {status_check}"
-                )
-
-            # Determine prev_hash
-            prev_hash = "0" * 64
-            if operator.history_trail:
-                last_entry = operator.history_trail[-1]
-                if last_entry.entry_hash:
-                    prev_hash = last_entry.entry_hash
-
-            # Create entry
-            entry = OperatorHistoryEntry(
-                event_type=event_type,
-                actor=actor,
-                summary=summary,
-                prev_hash=prev_hash,
-                details=details or {},
-            )
-
-            # Build full update payload
-            updates: dict[str, object] = {
-                "history_trail": ArrayUnion([entry.model_dump(mode="json")]),
-                "updated_at": now(),
-            }
-            if additional_updates:
-                updates.update(additional_updates)
-
-            result = await self.cache.update_document(
-                collection=self.collection,
-                document_id=operator_id,
-                data=updates,
-                merge=True,
-            )
-
-            if not result.success:
-                raise ExternalServiceError(
-                    f"Failed to append history to operator {operator_id}: {result.error}",
-                    service_name="operator_service",
-                )
-
-            # Return refreshed doc
-            refreshed = await self.get_operator(operator_id)
-            if not refreshed:
-                raise ExternalServiceError(f"Operator {operator_id} vanished after update")
-            return refreshed
-
-    async def update_operator_heartbeat(
-        self,
-        operator_id: str,
-        heartbeat: HeartbeatSnapshot,
-        investigation_id: str | None,
-        case_id: str | None,
-    ) -> bool:
-        """Update Operator heartbeat and session status.
-
-        investigation_id/case_id are None when the heartbeat arrives outside an
-        investigation context; callers MUST NOT coerce absence to sentinel strings.
-        """
-        now_timestamp = now()
-        heartbeat_record = heartbeat.model_dump(mode="json")
-
-        update_data: dict[str, object] = {
-            "updated_at": now_timestamp,
-            "current_hostname": heartbeat.system_identity.hostname,
-            "latest_heartbeat_snapshot": heartbeat_record,
-            "heartbeat_history": ArrayUnion([heartbeat_record], max_length=MAX_HEARTBEAT_HISTORY),
-        }
-        if investigation_id is not None:
-            update_data["investigation_id"] = investigation_id
-        if case_id is not None:
-            update_data["case_id"] = case_id
-
-        result = await self.cache.update_document(
-            collection=self.collection,
-            document_id=operator_id,
-            data=update_data,
-            merge=True,
-        )
-
-        if result.success:
-            logger.info("Updated Operator %s heartbeat", operator_id)
-            return True
-
-        raise ExternalServiceError(
-            f"Failed to update Operator {operator_id} heartbeat: {result.error}",
-            service_name="operator_service",
-        )
-
-    async def append_command_result(
-        self, operator_id: str, command_result: CommandResultRecord
-    ) -> bool:
-        """Append command execution result to operator history."""
-        now_timestamp = now()
-        result_record = command_result.model_dump(mode="json")
-
-        update_data: dict[str, object] = {
-            "updated_at": now_timestamp,
-            "command_results_history": ArrayUnion(
-                [result_record], max_length=MAX_COMMAND_RESULTS_HISTORY
-            ),
-        }
-
-        result = await self.cache.update_document(
-            collection=self.collection, document_id=operator_id, data=update_data, merge=True
-        )
-
-        if result.success:
-            logger.info("Appended command result to Operator %s", operator_id)
-            return True
-
-        raise ExternalServiceError(
-            f"Failed to append command result to Operator {operator_id}: {result.error}",
-            service_name="operator_service",
-        )
-
-    async def add_operator_activity(
-        self,
-        operator_id: str,
-        sender: str,
-        content: str,
-        metadata: ConversationMessageMetadata,
-    ) -> bool:
-        """Add activity entry to operator log."""
-
-        activity_entry = ConversationHistoryMessage(
-            sender=sender,
-            content=content,
-            metadata=metadata or ConversationMessageMetadata(),
-            prev_hash="0" * 64,
-            entry_hash=genesis_hash(operator_id, now().isoformat()),
-        )
-
-        result = await self.cache.append_to_array(
-            collection=self.collection,
-            document_id=operator_id,
-            array_field="activity_log",
-            items_to_add=[activity_entry.model_dump(mode="json")],
-            additional_updates={"updated_at": now()},
-        )
-
-        if result.success:
-            logger.info("Added activity to Operator %s", operator_id)
-            return True
-
-        raise ExternalServiceError(
-            f"Failed to add activity to Operator {operator_id}: {result.error}",
-            service_name="operator_service",
-        )
-
-    async def add_operator_approval(
-        self,
-        operator_id: str,
-        event_type: EventType,
-        metadata: ConversationMessageMetadata,
-    ) -> bool:
-        """Record an approval lifecycle event in the operator activity log."""
-        return await self.add_operator_activity(
-            operator_id=operator_id,
-            sender=EventType.SOURCE_SYSTEM,
-            content=f"{event_type.value} ({metadata.approval_id})",
-            metadata=metadata,
-        )
-
-    async def update_operator_status(
-        self,
-        operator_id: str,
-        status: OperatorStatus,
-    ) -> bool:
-        """Update operator status."""
-        if not operator_id:
-            raise ValidationError("operator_id is required")
-
-        now_timestamp = now()
-        updates: dict[str, object] = {
-            "status": status,
-            "updated_at": now_timestamp,
-        }
-
-        result = await self.cache.update_document(
-            collection=self.collection,
-            document_id=operator_id,
-            data=updates,
-            merge=True,
-        )
-
-        if result.success:
-            logger.info("Updated Operator %s status to %s", operator_id, status)
-            return True
-
-        raise ExternalServiceError(
-            f"Failed to update Operator {operator_id} status: {result.error}",
-            service_name="operator_service",
-        )

@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -167,12 +166,7 @@ func TestDispatchController_HandleDispatch_RoundTrip(t *testing.T) {
 		assert.Equal(t, requestorUserID, cmdEnv.RequestorUserId, "envelope must carry the requestor user ID from mTLS context")
 
 		// Publish a correlated result envelope on the results channel.
-		resultEnv := &commonv1.GovernanceEnvelope{
-			Id:         cmdEnv.Id,
-			EventType:  cmdEnv.EventType,
-			ActionType: cmdEnv.ActionType,
-			Timestamp:  timestamppb.Now(),
-		}
+		resultEnv := dispatchTestResultEnvelope(cmdEnv, nil)
 		resultWire, err := protojson.Marshal(resultEnv)
 		require.NoError(t, err)
 		broker.Publish(resultsChannel, resultWire)
@@ -186,7 +180,7 @@ func TestDispatchController_HandleDispatch_RoundTrip(t *testing.T) {
 
 	reqBody := OperatorCommandRequest{
 		TargetOperatorSessionID: operatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 payload,
 		TargetResource:          "/etc/hostname",
 	}
@@ -302,7 +296,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
 	result, err := dispatch.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: sessionID,
-		ActionType:              string(constants.ActionTypeShutdown),
+		EventType:               string(constants.Event.Operator.ShutdownRequested),
 		Payload:                 payload,
 		TargetResource:          operatorID,
 		RequestorUserID:         userID,
@@ -335,7 +329,7 @@ func TestDispatchController_HandleDispatch_UnknownSession(t *testing.T) {
 
 	reqBody := OperatorCommandRequest{
 		TargetOperatorSessionID: "nonexistent-session-int",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType:               string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 payload,
 	}
 	bodyBytes, err := json.Marshal(reqBody)
@@ -673,7 +667,7 @@ func TestDispatch_FileMutationExecutesOnceAndReplayProducesSignedRejection(t *te
 	dispatchSvc := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
 	result, err := dispatchSvc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: sessionID,
-		ActionType:              string(constants.ActionTypeFileEdit),
+		EventType:               string(constants.Event.Operator.FileEdit.Requested),
 		Payload:                 payload,
 		TargetResource:          targetPath,
 		RequestorUserID:         userID,
@@ -794,7 +788,7 @@ func TestDispatchController_HandleDispatch_DoctrineProhibitedRequestRejectedBefo
 	require.NoError(t, err)
 	body, err := json.Marshal(OperatorCommandRequest{
 		TargetOperatorSessionID: operatorSessionID,
-		ActionType:              string(constants.ActionTypeFileEdit),
+		EventType:               string(constants.Event.Operator.FileEdit.Requested),
 		Payload:                 payload,
 		TargetResource:          targetPath,
 		CaseID:                  runID,

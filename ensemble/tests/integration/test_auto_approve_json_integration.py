@@ -40,7 +40,7 @@ from app.models.settings import (
     G8eeUserSettings,
     LLMSettings,
 )
-from app.utils.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
 from tests.fakes.builder import build_command_service
 from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from tests.fakes.fake_approval_service import FakeApprovalService
@@ -112,11 +112,11 @@ def _build_service(
     approval_service = FakeApprovalService()
     event_service = FakeEventService()
     execution_service = FakeExecutionService(
-        event_service=event_service,
         ai_response_analyzer=FakeAIResponseAnalyzer(),
     )
     validator = CommandAutoApprovedValidator(auto_approved_path=str(auto_approved_path))
     service = build_command_service(
+        event_service=event_service,
         approval_service=approval_service,
         execution_service=execution_service,
         auto_approved_validator=validator,
@@ -223,4 +223,3 @@ class TestAutoApproveJsonIntegration:
         assert len(approval_service.command_approval_calls) == 1, (
             "Verb missing from JSON and CSV must still go through human approval"
         )
-        assert len(_approval_preparing_events(event_service)) == 1

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.constants.collections import DB_COLLECTION_REVOKED_CERTS
 from app.errors import ExternalServiceError
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 
 if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService

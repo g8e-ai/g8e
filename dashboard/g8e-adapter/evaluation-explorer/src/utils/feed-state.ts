@@ -157,7 +157,7 @@ export function classifyFreshness(freshness: FreshnessState | 'unknown'): {
     case 'safety_stopped':
       return { label: 'Safety stopped', tone: 'critical', description: 'The feed was stopped for a safety reason.' };
     case 'source_offline':
-      return { label: 'Source offline', tone: 'critical', description: 'The mirror source is unreachable.' };
+      return { label: 'Offline', tone: 'critical', description: 'The mirror source is unreachable.' };
     case 'unknown':
       return { label: 'Connecting', tone: 'warn', description: 'Connecting to the public mirror.' };
   }
@@ -188,6 +188,53 @@ export function qualityStateLabel(state: QualityState): string {
     case 'unavailable':
       return 'Unavailable';
   }
+}
+
+export interface QualityFilterOption {
+  value: QualityState;
+  label: string;
+}
+
+/** Quality states exposed by the Models view filter, in preferred display order. */
+export const MODEL_QUALITY_FILTER_STATES: readonly QualityState[] = [
+  'verified_public',
+  'exploratory_verified',
+  'exploratory_partial',
+  'legacy_unverified',
+  'live_in_progress',
+  'not_evaluated',
+];
+
+/** Quality states exposed by the Evaluations view filter, in preferred display order. */
+export const EVALUATION_QUALITY_FILTER_STATES: readonly QualityState[] = [
+  'verified_public',
+  'exploratory_verified',
+  'exploratory_partial',
+  'legacy_unverified',
+  'live_in_progress',
+  'terminal_failed',
+  'dead_evidence',
+  'not_evaluated',
+  'unavailable',
+];
+
+/** Returns filter options for quality states that appear in the current records. */
+export function availableQualityFilterOptions(
+  records: Array<{ quality_state: QualityState }>,
+  candidates: readonly QualityState[],
+): QualityFilterOption[] {
+  const present = new Set(records.map((record) => record.quality_state));
+  const rank = (state: QualityState) => QUALITY_STATE_RANK[state] ?? 0;
+  return candidates
+    .filter((state) => present.has(state))
+    .sort((left, right) => rank(right) - rank(left))
+    .map((state) => ({ value: state, label: qualityStateLabel(state) }));
+}
+
+/** Drops a stale quality selection when the current dataset no longer contains it. */
+export function normalizeQualityFilter(selected: string, options: QualityFilterOption[]): string {
+  if (selected === 'all') return 'all';
+  return options.some((option) => option.value === selected) ? selected : 'all';
 }
 
 export function qualityStateTone(state: QualityState): 'ok' | 'info' | 'warn' | 'critical' | 'neutral' {

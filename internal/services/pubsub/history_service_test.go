@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
@@ -102,7 +103,8 @@ func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
-			Payload: []byte("invalid protobuf"),
+			EventType: constants.Event.Operator.FetchLogs.Requested,
+			Payload:   []byte("invalid protobuf"),
 		}
 		svc.HandleFetchLogsRequest(context.Background(), msg)
 
@@ -123,7 +125,8 @@ func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchLogs.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchLogsRequest(context.Background(), msg)
 
@@ -144,7 +147,8 @@ func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchLogs.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchLogsRequest(context.Background(), msg)
 
@@ -163,7 +167,8 @@ func TestHistoryService_HandleFetchHistoryRequest(t *testing.T) {
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
-			Payload: []byte("{}"),
+			EventType: constants.Event.Operator.FetchHistory.Requested,
+			Payload:   []byte("{}"),
 		}
 		svc.HandleFetchHistoryRequest(context.Background(), msg)
 
@@ -182,7 +187,8 @@ func TestHistoryService_HandleFetchFileHistoryRequest(t *testing.T) {
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
-			Payload: []byte("invalid protobuf"),
+			EventType: constants.Event.Operator.FetchFileHistory.Requested,
+			Payload:   []byte("invalid protobuf"),
 		}
 		svc.HandleFetchFileHistoryRequest(context.Background(), msg)
 
@@ -203,7 +209,8 @@ func TestHistoryService_HandleFetchFileHistoryRequest(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchFileHistory.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchFileHistoryRequest(context.Background(), msg)
 
@@ -222,7 +229,8 @@ func TestHistoryService_HandleRestoreFileRequest(t *testing.T) {
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
-			Payload: []byte("invalid protobuf"),
+			EventType: constants.Event.Operator.RestoreFile.Requested,
+			Payload:   []byte("invalid protobuf"),
 		}
 		svc.HandleRestoreFileRequest(context.Background(), msg)
 
@@ -246,7 +254,8 @@ func TestHistoryService_HandleRestoreFileRequest(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.RestoreFile.Requested,
+			Payload:   payload,
 		}
 		svc.HandleRestoreFileRequest(context.Background(), msg)
 
@@ -267,7 +276,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		req := &operatorv1.FetchFileDiffRequested{DiffId: "diff-1"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchFileDiff.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 
@@ -286,7 +296,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		svc.executionVault = &mockExecutionVault{}
 
 		msg := &PubSubCommandMessage{
-			Payload: []byte("invalid protobuf"),
+			EventType: constants.Event.Operator.FetchFileDiff.Requested,
+			Payload:   []byte("invalid protobuf"),
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 
@@ -307,7 +318,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		req := &operatorv1.FetchFileDiffRequested{}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchFileDiff.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 
@@ -342,7 +354,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		req := &operatorv1.FetchFileDiffRequested{DiffId: "diff-123"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchFileDiff.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 
@@ -393,7 +406,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		req := &operatorv1.FetchFileDiffRequested{OperatorSessionId: "session-1"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchFileDiff.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 
@@ -453,7 +467,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchFileDiff.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 
@@ -477,7 +492,8 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		req := &operatorv1.FetchFileDiffRequested{DiffId: "nonexistent"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
-			Payload: payload,
+			EventType: constants.Event.Operator.FetchFileDiff.Requested,
+			Payload:   payload,
 		}
 		svc.HandleFetchFileDiffRequest(context.Background(), msg)
 
@@ -507,7 +523,10 @@ func TestHistoryService_publishFetchLogsResult(t *testing.T) {
 			TimestampUTC:     time.Now().UTC(),
 		}
 
-		msg := &PubSubCommandMessage{ID: "msg-1"}
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.FetchLogs.Requested,
+		}
 		svc.publishFetchLogsResult(context.Background(), msg, record)
 
 		published := client.LastPublished()

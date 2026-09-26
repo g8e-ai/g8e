@@ -58,8 +58,11 @@ type CampaignStore interface {
 	LoadAssignment(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignment, error)
 	ListAssignments(ctx context.Context, runID string) ([]*evalv1.EvaluationAssignment, error)
 	AssignmentResultExists(ctx context.Context, runID, assignmentID string) (bool, error)
+	LoadAssignmentResults(ctx context.Context, runID string, assignments []*evalv1.EvaluationAssignment) (map[string]*evalv1.EvaluationAssignmentResult, error)
 	SaveAssignmentTrace(ctx context.Context, runID, assignmentID string, body []byte) error
 	LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (EvaluationTrace, error)
+	SaveAssignmentFormationRun(ctx context.Context, runID, assignmentID string, body []byte) error
+	LoadAssignmentFormationRun(ctx context.Context, runID, assignmentID string) (*FormationRunEvidence, error)
 	SaveAssignmentResult(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error
 	LoadAssignmentResult(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignmentResult, error)
 	SaveHeterogeneousStackSet(ctx context.Context, campaignID string, stackSet *HeterogeneousStackSet) error
@@ -199,6 +202,30 @@ func (c *CampaignController) ScheduleHomogeneousRun(ctx context.Context, runID s
 		return 0, err
 	}
 	return len(assignments), nil
+}
+
+// GenerateFormationCatalogStackSet materializes and persists one heterogeneous
+// stack per checked-in ExecutionTopologies formation.
+func (c *CampaignController) GenerateFormationCatalogStackSet(ctx context.Context, campaignID string, seed uint64) (*HeterogeneousStackSet, error) {
+	if c == nil || c.store == nil {
+		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: %w", constants.ErrMissingRequiredField)
+	}
+	spec, err := c.store.LoadCampaignSpec(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	stackSet, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
+		CampaignID: campaignID,
+		Seed:       seed,
+		Variants:   spec.GetModelRegistry(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := c.store.SaveHeterogeneousStackSet(ctx, campaignID, stackSet); err != nil {
+		return nil, err
+	}
+	return stackSet, nil
 }
 
 // GenerateHeterogeneousStackSet materializes and persists the preregistered
@@ -398,6 +425,11 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	if err := c.publishAssignmentLifecycle(ctx, assignment); err != nil {
 		return nil, false, err
 	}
+	if !IsHeterogeneousAssignment(assignment) {
+		if err := c.publishAssignmentInvocationLiveEvents(ctx, assignment); err != nil {
+			return nil, false, err
+		}
+	}
 	artifact, found := artifacts[assignment.GetScenarioId()]
 	if !found {
 		return nil, false, fmt.Errorf("evaluation: execute next assignment: missing scenario artifacts for %s", assignment.GetScenarioId())
@@ -432,14 +464,17 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	}
 	attemptID := c.newID("attempt")
 	execReq := AssignmentExecutionRequest{
-		Assignment:       assignment,
-		AttemptID:        attemptID,
-		ScenarioInput:    scenarioInput,
-		ScenarioGold:     scenarioGold,
-		ScenarioTools:    scenarioTools,
-		RequiredConcepts: requiredConcepts,
-		GradingMethod:    gradingMethod,
-		Binding:          binding,
+		Assignment:              assignment,
+		AttemptID:               attemptID,
+		ScenarioInput:           scenarioInput,
+		ScenarioGold:            scenarioGold,
+		ScenarioTools:           scenarioTools,
+		RequiredConcepts:        requiredConcepts,
+		GradingMethod:           gradingMethod,
+		Binding:                 binding,
+		OnTraceProgress:         c.assignmentTraceProgressHook(assignment, attemptID),
+		OnFormationRoleStarting: c.assignmentFormationRoleStartingHook(assignment),
+		OnFormationRoleProgress: c.assignmentFormationProgressHook(assignment, attemptID),
 	}
 	result, err := c.executor.ExecuteAssignment(ctx, execReq)
 	if err != nil {
@@ -528,6 +563,57 @@ func (c *CampaignController) publishQueuedAssignments(ctx context.Context, runID
 	return err
 }
 
+func (c *CampaignController) publishAssignmentInvocationLiveEvents(ctx context.Context, assignment *evalv1.EvaluationAssignment) error {
+	if c == nil || c.publication == nil || assignment == nil {
+		return nil
+	}
+	return c.publication.PublishAssignmentInvocationLiveEvents(ctx, assignment)
+}
+
+func (c *CampaignController) assignmentTraceProgressHook(assignment *evalv1.EvaluationAssignment, attemptID string) func(context.Context, EvaluationTrace) error {
+	if c == nil || c.publication == nil || assignment == nil || attemptID == "" {
+		return nil
+	}
+	return func(ctx context.Context, trace EvaluationTrace) error {
+		req := AssignmentExecutionRequest{Assignment: assignment, AttemptID: attemptID}
+		partial, ok, err := PartialAssignmentResultFromScoredTrace(req, trace, c.newID)
+		if err != nil || !ok {
+			return err
+		}
+		return c.publication.PublishAssignmentScoredInferenceLiveEvents(ctx, assignment, partial)
+	}
+}
+
+func (c *CampaignController) assignmentFormationRoleStartingHook(assignment *evalv1.EvaluationAssignment) func(context.Context, FormationRole) error {
+	if c == nil || c.publication == nil || assignment == nil {
+		return nil
+	}
+	return func(ctx context.Context, role FormationRole) error {
+		return c.publication.PublishFormationRoleInvocationLiveEvent(ctx, assignment, role)
+	}
+}
+
+func (c *CampaignController) assignmentFormationProgressHook(assignment *evalv1.EvaluationAssignment, attemptID string) func(context.Context, *FormationRunResult) error {
+	if c == nil || c.publication == nil || assignment == nil || attemptID == "" {
+		return nil
+	}
+	return func(ctx context.Context, formationResult *FormationRunResult) error {
+		partial, err := ImportAssignmentResultFromFormationRun(
+			AssignmentExecutionRequest{
+				Assignment: assignment,
+				AttemptID:  attemptID,
+			},
+			formationResult,
+			c.now().UTC(),
+			c.newID,
+		)
+		if err != nil {
+			return err
+		}
+		return c.publication.PublishAssignmentScoredInferenceLiveEvents(ctx, assignment, partial)
+	}
+}
+
 func (c *CampaignController) publishAssignmentLifecycle(ctx context.Context, assignment *evalv1.EvaluationAssignment) error {
 	if c == nil || c.publication == nil || assignment == nil {
 		return nil
@@ -550,6 +636,9 @@ func (c *CampaignController) publishAssignmentLifecycle(ctx context.Context, ass
 func (c *CampaignController) publishAssignmentTerminal(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) error {
 	if c == nil || c.publication == nil || assignment == nil || result == nil {
 		return nil
+	}
+	if err := c.publication.PublishAssignmentLiveEvents(ctx, assignment, result); err != nil {
+		return err
 	}
 	if err := c.publishAssignmentLifecycle(ctx, assignment); err != nil {
 		return err

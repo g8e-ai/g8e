@@ -1048,6 +1048,8 @@ var (
 	ErrTxInFlight                     = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
 	ErrTxProviderMisconfigured        = errors.New("PROVIDER_MISCONFIGURED: state root is empty")
 	ErrTxCanonicalizeFailed           = errors.New("TX_CANONICALIZE_FAILED: unsupported type in intent_data canonicalization")
+	ErrTxProtocolVersionUnsupported   = errors.New("TX_PROTOCOL_VERSION_UNSUPPORTED: protocol_version must be 2 for ingress")
+	ErrTxEventTypeMissing             = errors.New("TX_EVENT_TYPE_MISSING: event_type required for protocol version 2")
 
 	// MCP container status errors
 	ErrMCPContainerNameRequired = errors.New("container_name required")
@@ -1262,6 +1264,8 @@ var (
 	ErrEvidenceImporterFailed       = errors.New("compliance: evidence importer failed")
 	ErrEvidenceProducerUnverified   = errors.New("compliance: evidence producer identity not verified")
 	ErrEvidenceVerifierUnverified   = errors.New("compliance: evidence verifier identity not verified")
+	// ErrGraphInvalid is returned when ValidateAll detects failures.
+	ErrGraphInvalid = errors.New("compliance: evidence graph validation failed")
 
 	// Compliance report bundle assembly errors
 	ErrBundleAssemblyFailed     = errors.New("compliance: report bundle assembly failed")
@@ -1303,6 +1307,7 @@ var (
 
 	// OSCAL validator errors
 	ErrOSCALSchemaDigestMismatch     = errors.New("oscal: embedded schema digest mismatch")
+	ErrOSCALProvenanceMismatch       = errors.New("oscal: provenance metadata does not match embedded schema")
 	ErrOSCALSchemaCompileFailed      = errors.New("oscal: schema compilation failed")
 	ErrOSCALValidationFailed         = errors.New("oscal: assessment-results validation failed")
 	ErrOSCALSemanticValidationFailed = errors.New("oscal: semantic validation failed")
@@ -1508,6 +1513,8 @@ var (
 	ErrFormationPolicyValidation        = errors.New("formation: state mutation failed L1-L5 validation")
 	ErrFormationWitnessUnavailable      = errors.New("formation: observer or provenance witness unavailable")
 	ErrFormationRunnerDependency        = errors.New("formation: runner dependency is missing")
+	ErrFormationRegistryBinding         = errors.New("formation: frozen registry binding failed")
+	ErrFormationStackMismatch           = errors.New("formation: stack binding does not match catalog")
 	ErrInferenceModelRegistryInvalid    = errors.New("inference: model registry invalid")
 	ErrInferenceCampaignBindingInvalid  = errors.New("inference: campaign binding invalid")
 	ErrInferenceProviderAttemptConflict = errors.New("inference: provider attempt already recorded")
@@ -1525,16 +1532,17 @@ var (
 
 // Native evaluation errors.
 var (
-	ErrEvaluationSuiteUnsupported       = errors.New("evaluation: suite is unsupported")
-	ErrEvaluationTargetUnavailable      = errors.New("evaluation: target operator is unavailable")
-	ErrEvaluationPostureUnsupported     = errors.New("evaluation: governance posture is unsupported")
-	ErrEvaluationObservationUnavailable = errors.New("evaluation: independent observation is unavailable")
-	ErrEvaluationReportPersistFailed    = errors.New("evaluation: report persistence failed")
-	ErrEvaluationTargetAmbiguous        = errors.New("evaluation: target operator selection is ambiguous")
-	ErrEvaluationDispatchFailed         = errors.New("evaluation: governed dispatch failed")
-	ErrEvaluationReceiptUnavailable     = errors.New("evaluation: canonical receipt is unavailable")
-	ErrEvaluationAssignmentUnresolved   = errors.New("evaluation: assignment has an unresolved running execution")
-	ErrEvaluationProviderModelsResident = errors.New("evaluation: provider has resident models")
-	ErrEvaluationRecoveredResultMissing = errors.New("evaluation: recovered terminal assignment has no persisted result")
-	ErrImmutableInventoryConflict       = errors.New("evaluation: immutable inventory content conflict")
+	ErrEvaluationSuiteUnsupported          = errors.New("evaluation: suite is unsupported")
+	ErrEvaluationTargetUnavailable         = errors.New("evaluation: target operator is unavailable")
+	ErrEvaluationPostureUnsupported        = errors.New("evaluation: governance posture is unsupported")
+	ErrEvaluationObservationUnavailable    = errors.New("evaluation: independent observation is unavailable")
+	ErrEvaluationReportPersistFailed       = errors.New("evaluation: report persistence failed")
+	ErrEvaluationTargetAmbiguous           = errors.New("evaluation: target operator selection is ambiguous")
+	ErrEvaluationDispatchFailed            = errors.New("evaluation: governed dispatch failed")
+	ErrEvaluationReceiptUnavailable        = errors.New("evaluation: canonical receipt is unavailable")
+	ErrEvaluationAssignmentUnresolved      = errors.New("evaluation: assignment has an unresolved running execution")
+	ErrEvaluationAssignmentExecutionFailed = errors.New("evaluation: assignment execution failed")
+	ErrEvaluationProviderModelsResident    = errors.New("evaluation: provider has resident models")
+	ErrEvaluationRecoveredResultMissing    = errors.New("evaluation: recovered terminal assignment has no persisted result")
+	ErrImmutableInventoryConflict          = errors.New("evaluation: immutable inventory content conflict")
 )

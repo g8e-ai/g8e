@@ -616,8 +616,8 @@ class TokenUsage(G8eBaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
-    thinking_tokens: int = 0
-    cache_tokens: int = 0
+    thinking_tokens: int | None = None
+    cache_tokens: int | None = None
     usage_reported: bool = False
     estimated: bool | None = None
     error: str | None = None

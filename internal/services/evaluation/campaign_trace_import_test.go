@@ -159,6 +159,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")
+	trace["schema_version"] = "2"
 	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
 	call["usage_reported"] = true
 	call["input_tokens"] = float64(0)
@@ -186,7 +187,9 @@ func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testi
 	assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED, inference.GetUsageAvailability())
 	assert.Equal(t, uint32(0), inference.GetPromptTokens())
 	assert.Equal(t, uint32(12), inference.GetCompletionTokens())
+	require.NotNil(t, inference.ThinkingTokens)
 	assert.Equal(t, uint32(0), inference.GetThinkingTokens())
+	require.NotNil(t, inference.CacheTokens)
 	assert.Equal(t, uint32(3), inference.GetCacheTokens())
 	require.NotNil(t, inference.RetryCount)
 	assert.Equal(t, uint32(0), inference.GetRetryCount())
@@ -234,6 +237,45 @@ func TestDurationSecondsToNanosChecked_RoundsProviderTelemetryFloats(t *testing.
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestImportAssignmentResultFromTrace_SchemaV1IgnoresOptionalUsageCounters(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace(t, "primary")
+	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
+	call["usage_reported"] = true
+	call["input_tokens"] = float64(1)
+	call["output_tokens"] = float64(2)
+	call["thinking_tokens"] = float64(0)
+	call["cache_tokens"] = float64(3)
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+
+	result, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	inference := result.GetModelInferences()[0]
+	assert.Nil(t, inference.ThinkingTokens)
+	assert.Nil(t, inference.CacheTokens)
+}
+
+func TestImportAssignmentResultFromTrace_SchemaV2AllowsAbsentOptionalUsageCounters(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace(t, "primary")
+	trace["schema_version"] = "2"
+	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
+	call["usage_reported"] = true
+	call["input_tokens"] = float64(5)
+	call["output_tokens"] = float64(6)
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+
+	result, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	inference := result.GetModelInferences()[0]
+	assert.Nil(t, inference.ThinkingTokens)
+	assert.Nil(t, inference.CacheTokens)
 }
 
 func completedHomogeneousTrace(t *testing.T, role string) EvaluationTrace {

@@ -205,6 +205,43 @@ func TestGovernanceEnvelope_GenerateMessageID_DeterministicCanonicalization(t *t
 	}
 }
 
+func TestGenerateMessageID_V2RequiresEventType(t *testing.T) {
+	env := &GovernanceEnvelope{
+		ProtocolVersion: GovernanceProtocolVersionV2,
+		ActionType:      "EXECUTE_BASH",
+		TargetResource:  "localhost",
+		Nonce:           "nonce-v2",
+	}
+	_, err := GenerateMessageID(env)
+	if !errors.Is(err, constants.ErrTxEventTypeMissing) {
+		t.Fatalf("expected ErrTxEventTypeMissing, got %v", err)
+	}
+}
+
+func TestVerifyTransactionHash_V2Parity(t *testing.T) {
+	expiresAt := timestamppb.New(time.Now().Add(5 * time.Minute))
+	env := &GovernanceEnvelope{
+		ProtocolVersion: GovernanceProtocolVersionV2,
+		EventType:       string(constants.EventOperatorCommandRequested),
+		ActionType:      "EXECUTE_BASH",
+		TargetResource:  "localhost",
+		Payload:         []byte("echo test"),
+		ExpiresAt:       expiresAt,
+		Nonce:           "nonce-v2-verify",
+		StateMerkleRoot: "root-v2",
+	}
+	hash, err := GenerateMessageID(env)
+	if err != nil {
+		t.Fatalf("GenerateMessageID failed: %v", err)
+	}
+	if err := VerifyTransactionHash(env, hash); err != nil {
+		t.Fatalf("VerifyTransactionHash failed: %v", err)
+	}
+	if err := VerifyTransactionHash(env, "deadbeef"); !errors.Is(err, constants.ErrTxTransactionHashMismatch) {
+		t.Fatalf("expected hash mismatch, got %v", err)
+	}
+}
+
 func TestGovernanceEnvelope_GenerateMessageID_NilEnvelope(t *testing.T) {
 	_, err := GenerateMessageID(nil)
 	if err == nil {

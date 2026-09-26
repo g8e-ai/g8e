@@ -52,7 +52,7 @@ def mock_provider():
     provider.input_artifact_hash = ""
     provider.model_boundary_privacy = None
     provider.governed_dispatch_evidence = None
-    with patch("app.services.ai.title_generator.get_llm_provider", return_value=provider):
+    with patch("app.services.ai.title_generator.get_generative_lite_provider", return_value=provider):
         yield provider
 
 

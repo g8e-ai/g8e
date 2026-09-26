@@ -259,7 +259,7 @@ class StreamChunkData(G8eBaseModel):
 
     content: str | None = None
     thinking: str | None = None
-    action_type: str | None = None
+    phase: str | None = None
     tool_name: str | None = None
     execution_id: str | None = None
     command: str | None = None
@@ -305,8 +305,8 @@ class TurnResult(G8eBaseModel):
     input_tokens: int
     output_tokens: int
     total_tokens: int
-    thinking_tokens: int = 0
-    cache_tokens: int = 0
+    thinking_tokens: int | None = None
+    cache_tokens: int | None = None
     usage_reported: bool = False
     time_to_first_token_seconds: float | None = None
     prompt_eval_duration_seconds: float | None = None

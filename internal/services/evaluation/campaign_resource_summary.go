@@ -76,59 +76,58 @@ func BuildPublicResourceSummary(result *evalv1.EvaluationAssignmentResult) (*Pub
 		}, nil
 	}
 
-	var input, output, thinking, cache, retries uint64
-	allUsageReported := true
+	input, inputReason, err := aggregateRequiredUsageTokens(calls, func(call *evalv1.ModelInferenceRecord) uint32 {
+		return call.GetPromptTokens()
+	}, "input tokens")
+	if err != nil {
+		return nil, err
+	}
+	output, outputReason, err := aggregateRequiredUsageTokens(calls, func(call *evalv1.ModelInferenceRecord) uint32 {
+		return call.GetCompletionTokens()
+	}, "output tokens")
+	if err != nil {
+		return nil, err
+	}
+	thinking, thinkingReason, err := aggregateOptionalUsageTokens(calls, func(call *evalv1.ModelInferenceRecord) (uint32, bool) {
+		if call.ThinkingTokens == nil {
+			return 0, false
+		}
+		return *call.ThinkingTokens, true
+	}, "thinking tokens")
+	if err != nil {
+		return nil, err
+	}
+	cache, cacheReason, err := aggregateOptionalUsageTokens(calls, func(call *evalv1.ModelInferenceRecord) (uint32, bool) {
+		if call.CacheTokens == nil {
+			return 0, false
+		}
+		return *call.CacheTokens, true
+	}, "cache tokens")
+	if err != nil {
+		return nil, err
+	}
+
+	var retries uint64
 	allRetriesPresent := true
 	for _, call := range calls {
 		if call == nil {
 			return nil, fmt.Errorf("evaluation: build public resource summary: nil inference record: %w", constants.ErrEvidenceArtifactMalformed)
 		}
-		if call.GetUsageAvailability() != evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED {
-			allUsageReported = false
-		}
-		var err error
-		input, err = addResourceValue(input, uint64(call.GetPromptTokens()), "input tokens")
-		if err != nil {
-			return nil, err
-		}
-		output, err = addResourceValue(output, uint64(call.GetCompletionTokens()), "output tokens")
-		if err != nil {
-			return nil, err
-		}
-		thinking, err = addResourceValue(thinking, uint64(call.GetThinkingTokens()), "thinking tokens")
-		if err != nil {
-			return nil, err
-		}
-		cache, err = addResourceValue(cache, uint64(call.GetCacheTokens()), "cache tokens")
-		if err != nil {
-			return nil, err
-		}
 		if call.RetryCount == nil {
 			allRetriesPresent = false
-		} else {
-			retries, err = addResourceValue(retries, uint64(call.GetRetryCount()), "retries")
-			if err != nil {
-				return nil, err
-			}
+			continue
+		}
+		retries, err = addResourceValue(retries, uint64(call.GetRetryCount()), "retries")
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	metricReason := evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE
-	if !allUsageReported {
-		metricReason = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE
-	}
 	resources := &PublicResourceSummary{}
-	if allUsageReported {
-		resources.InputTokens.Value = resourceFloat(input)
-		resources.OutputTokens.Value = resourceFloat(output)
-		resources.ThinkingTokens.Value = resourceFloat(thinking)
-		resources.CacheTokens.Value = resourceFloat(cache)
-	} else {
-		resources.InputTokens.UnavailableReason = metricReason
-		resources.OutputTokens.UnavailableReason = metricReason
-		resources.ThinkingTokens.UnavailableReason = metricReason
-		resources.CacheTokens.UnavailableReason = metricReason
-	}
+	applyResourceMetric(&resources.InputTokens, input, inputReason)
+	applyResourceMetric(&resources.OutputTokens, output, outputReason)
+	applyResourceMetric(&resources.ThinkingTokens, thinking, thinkingReason)
+	applyResourceMetric(&resources.CacheTokens, cache, cacheReason)
 	if !allRetriesPresent {
 		resources.Retries.UnavailableReason = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE
 	} else if retries > maxPublicRetryCount {
@@ -147,6 +146,61 @@ func BuildPublicResourceSummary(result *evalv1.EvaluationAssignmentResult) (*Pub
 		resources.LatencyMS.Value = resourceFloat(span / 1_000_000)
 	}
 	return resources, nil
+}
+
+func aggregateRequiredUsageTokens(calls []*evalv1.ModelInferenceRecord, getter func(*evalv1.ModelInferenceRecord) uint32, name string) (uint64, evalv1.PublicUnavailableReason, error) {
+	for _, call := range calls {
+		if call == nil {
+			return 0, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED, fmt.Errorf("evaluation: build public resource summary: nil inference record: %w", constants.ErrEvidenceArtifactMalformed)
+		}
+		if call.GetUsageAvailability() != evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED {
+			return 0, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE, nil
+		}
+	}
+	var sum uint64
+	var err error
+	for _, call := range calls {
+		sum, err = addResourceValue(sum, uint64(getter(call)), name)
+		if err != nil {
+			return 0, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED, err
+		}
+	}
+	return sum, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED, nil
+}
+
+func aggregateOptionalUsageTokens(calls []*evalv1.ModelInferenceRecord, present func(*evalv1.ModelInferenceRecord) (uint32, bool), name string) (uint64, evalv1.PublicUnavailableReason, error) {
+	presentCount := 0
+	var sum uint64
+	for _, call := range calls {
+		if call == nil {
+			return 0, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED, fmt.Errorf("evaluation: build public resource summary: nil inference record: %w", constants.ErrEvidenceArtifactMalformed)
+		}
+		value, ok := present(call)
+		if !ok {
+			continue
+		}
+		presentCount++
+		var err error
+		sum, err = addResourceValue(sum, uint64(value), name)
+		if err != nil {
+			return 0, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED, err
+		}
+	}
+	if presentCount == 0 {
+		return 0, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE, nil
+	}
+	if presentCount < len(calls) {
+		return 0, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE, nil
+	}
+	return sum, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED, nil
+}
+
+func applyResourceMetric(metric *PublicResourceMetric, sum uint64, reason evalv1.PublicUnavailableReason) {
+	if reason == evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED {
+		metric.Value = resourceFloat(sum)
+		return
+	}
+	metric.UnavailableReason = reason
 }
 
 func addResourceValue(current, value uint64, name string) (uint64, error) {

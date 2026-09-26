@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-09-24
-Version: v2.1.13
+Last Updated: 2026-09-25
+Version: v2.1.14
 
 ---
 
@@ -14,13 +14,14 @@ Version: v2.1.13
 
 A g8e-compatible application is an untrusted client of the g8e Gateway. It submits typed intent through an authenticated Gateway ingress, receives governed results, and never sends mutations directly to a target host. The Gateway and the bound Governed Operator enforce the five-layer governance pipeline: L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator.
 
-The current Gateway supports three application integration patterns:
+The current Gateway supports four application integration patterns:
 
 | Pattern | Client sends | Gateway responsibility | Credential |
 | --- | --- | --- | --- |
 | **MCP or A2A** | JSON-RPC tool or skill intent | Builds the `GovernanceEnvelope`, binds current state, runs configured L2 deliberation, manages supported L3 suspension, and dispatches the action | Enrolled app or CLI mTLS certificate; JWT when JWKS is configured |
-| **CommandIntent over pub/sub** | Typed `CommandIntent` on `cmd:<operator_id>:<operator_session_id>` | Validates the target session, builds the envelope, binds current state and posture, and forwards the governed command | Enrolled app mTLS certificate and app policy |
+| **Gateway HTTP dispatch** | Registered request `event_type` and base64-encoded protobuf payload at `POST /api/v1/operators/commands` | Validates the event against the registry, derives `action_type`, validates the target session, builds the envelope, binds current state and posture, and dispatches the governed command | Enrolled app mTLS certificate and app policy |
 | **Direct envelope** | Complete canonical protojson `GovernanceEnvelope` | Verifies the supplied envelope and executes it synchronously; it does not add missing L2 votes | CLI or Operator mTLS certificate; app certificates are denied |
+| **Audit ingest** | Registered audit request `event_type` and payload at `POST /api/v1/audit/records` | Validates session binding, publishes to the operator `audit:` channel, waits for chained append acknowledgement | Enrolled app mTLS certificate |
 
 MCP and A2A are the normal application-facing surfaces. Direct envelope submission is a privileged integration for clients that already possess an authorized CLI or Operator transport identity and can construct every posture-required proof correctly.
 
@@ -30,7 +31,7 @@ Application working memory remains application-owned. g8e governs mutations to p
 
 1. Start a Gateway and choose its posture. The default is `doctrine`; `consensus`, `ratify`, and `notary` require the corresponding signer, deliberation, or notary configuration before gated mutations can succeed.
 2. Enroll a CLI identity with `./g8e auth enroll user` when using CLI-authenticated examples or when delegating an application credential.
-3. Decide where execution occurs. MCP and A2A calls execute through the Gateway's embedded Operator or configured downstream service; `CommandIntent` targets a specific outbound Operator session.
+3. Decide where execution occurs. MCP and A2A calls execute through the Gateway's embedded Operator or configured downstream service; Gateway HTTP dispatch targets a specific outbound Operator session.
 4. Obtain the Gateway trust bundle and validate the TLS server identity. Do not disable certificate verification in an application.
 
 ---
@@ -65,11 +66,25 @@ curl -X POST https://localhost:8443/api/v1/a2a/call \
 
 Start the Gateway with `--a2a-downstream-url <url>` so it can reach the A2A server, and ensure the named skill exists there. A2A applies the same posture-aware governance flow as MCP.
 
-### CommandIntent over Pub/Sub
+### Gateway HTTP Dispatch
 
-An enrolled app can publish a canonical `CommandIntent` to a bound Operator channel. `CommandIntent` contains target identity, event and action classification, serialized protobuf payload bytes, and application context. It does not contain a nonce, expiry, state root, transaction hash, posture, or governance proofs. The Gateway supplies the envelope fields, current state root, posture, nonce, expiry, and hash when it transforms the intent into a `GovernanceEnvelope`; the current pub/sub relay does not run L2 deliberation or L3 suspension.
+An enrolled app can dispatch host operations through `POST /api/v1/operators/commands`. The request names a registered request `event_type`, supplies the delegated `target_operator_session_id`, and carries the typed Operator protobuf payload as base64-encoded bytes. The Gateway derives `action_type` from `protocol/constants/events.json`; callers do not choose it independently. The request does not contain a nonce, expiry, state root, transaction hash, posture, or governance proofs. The Gateway supplies those envelope fields, binds the current state root and posture, constructs the `GovernanceEnvelope`, and waits for the correlated operator result in the HTTP response.
 
-This is the host-command path used by g8ee under the default `doctrine` posture. Under a posture that requires L2 or L3 for the requested action, an unproved relayed envelope fails closed at Operator verification. Use MCP or A2A when the Gateway must attach L2 votes or manage L3 approval. The Python protocol package provides `g8e.models.governance.CommandIntent` and `CommandIntent.from_payload_bytes()`.
+This is the host-command path used by g8ee and the supported integration for enrolled applications that target a bound outbound Operator session. Under a posture that requires L2 or L3 for the requested action, an unproved dispatched envelope fails closed at Operator verification. Use MCP or A2A when the Gateway must attach L2 votes or manage L3 approval.
+
+```bash
+curl -X POST https://localhost:8443/api/v1/operators/commands \
+  --cert .g8e/pki/app.crt \
+  --key .g8e/pki/app.key \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_operator_session_id": "<operator-session-id>",
+    "event_type": "g8e.v1.operator.filesystem.read.requested",
+    "payload": "<base64-encoded-protobuf-payload>"
+  }'
+```
+
+WebSocket publishers can no longer inject `CommandIntent` on `cmd:` channels. That pub/sub relay was removed in v2.1.14; use this HTTP endpoint instead.
 
 ### Direct GovernanceEnvelope
 
@@ -149,10 +164,10 @@ An app certificate is accepted only while its `AppPolicy` exists. The current au
 The Go protocol packages are part of the platform module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.13
+go get github.com/g8e-ai/g8e/v2@v2.1.14
 ```
 
-Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `CommandIntent`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers.
+Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers. Host-operation dispatch uses registered request `event_type` values at `POST /api/v1/operators/commands`; the historical `CommandIntent` pub/sub shape was removed in v2.1.14.
 
 ### Python
 
@@ -350,10 +365,11 @@ The app enrollment endpoint deliberately grants no L2 authority. See [Consensus]
 
 An agentic application can add any internal reasoning, generation, voting, risk analysis, and memory architecture above the Gateway contract. Those application-level decisions are not protocol L2 evidence unless enrolled Ed25519 members sign the transaction hash and their votes satisfy the Gateway consensus policy.
 
-The in-tree g8ee application currently uses two dispatch paths:
+The in-tree g8ee application currently uses three Gateway HTTP paths and no pub/sub:
 
-- For host operations, its five-member Tribunal generates candidate commands, requires two matching candidates, uses deterministic tie breaking, performs a second anonymized peer-review round when needed, runs Marshal risk analysis, and sends the audited result as `CommandIntent` over pub/sub. The Gateway constructs the `GovernanceEnvelope`, but this pub/sub relay does not synthesize protocol L2 votes or L3 approval.
+- For host operations, its five-member Tribunal generates candidate commands, requires two matching candidates, uses deterministic tie breaking, performs a second anonymized peer-review round when needed, runs Marshal risk analysis, and dispatches the audited result through `GatewayOperatorClient` at `POST /api/v1/operators/commands` with a registered request `event_type`. The Gateway constructs the `GovernanceEnvelope`, but this dispatch path does not synthesize protocol L2 votes or L3 approval.
 - For governed platform records such as cases, investigations, memories, and reputation state, `GovernanceClient` builds direct envelopes. Because app certificates cannot access the direct endpoint, the unified stack mounts the Operator certificate read-only for this dedicated governance transport. Normal g8ee traffic continues to use its enrolled `spiffe://g8e.local/app/g8ee` identity.
+- For LFAA audit records, `GatewayOperatorClient.ingest_audit_record()` posts to `POST /api/v1/audit/records` and waits for chained append acknowledgement.
 
 This distinction is security-critical: g8ee’s Tribunal consensus improves command generation, but it does not currently emit protocol L2 signatures. The Gateway’s enrolled consensus service produces and verifies those votes according to posture.
 
@@ -361,7 +377,7 @@ When building a similar system:
 
 1. Keep user intent separate from executable syntax.
 2. Serialize every operation with its canonical protobuf payload type.
-3. Prefer MCP or A2A when the Gateway must own state binding, L2 deliberation, and L3 suspension; use `CommandIntent` only when its proof-free relay is valid for the active posture.
+3. Prefer MCP or A2A when the Gateway must own state binding, L2 deliberation, and L3 suspension; use Gateway HTTP dispatch only when its proof-free envelope construction is valid for the active posture.
 4. Treat internal model voting as advisory unless it is cryptographically enrolled as protocol L2.
 5. Stop on ambiguous intent and request clarification before dispatch.
 6. Fail closed on missing credentials, malformed results, receipt verification failure, or required governance rejection.
@@ -377,7 +393,7 @@ Test the exact surface and posture the application uses:
 
 - Confirm the certificate chain and expected SPIFFE URI SAN.
 - Confirm app-policy authorization separately from TLS authentication.
-- Exercise MCP/A2A or `CommandIntent` under each supported posture.
+- Exercise MCP/A2A or Gateway HTTP dispatch under each supported posture.
 - For direct envelopes, test hash mismatch, expired envelopes, nonce replay, stale state roots, transport identity mismatch, and missing or invalid L2/L3 proofs.
 - Verify successful and failed-execution receipts, including deterministic stage evidence and final persistence attestations.
 - Test multiple actuator keys when actions can execute on more than one host.

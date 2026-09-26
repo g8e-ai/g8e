@@ -18,18 +18,13 @@ Note: g8eo Operator commands still use PubSub (external agent communication).
 
 import asyncio
 import logging
-import uuid
-import secrets
-from typing import TYPE_CHECKING
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, status
 from app.models.http_context import G8eHttpContext, RequestContext
 
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.constants import (
     DB_COLLECTION_MEMORIES,
     EventType,
-    G8EE_COMPONENT,
-    HistoryActor,
     InternalAPIPaths,
     OperatorStatus,
     Priority,
@@ -48,7 +43,6 @@ from app.models.cases import (
     CaseDeleteRequest,
 )
 from app.models.cache import FieldFilter
-from app.models.pubsub_messages import G8eMessage
 from app.models.internal_api import (
     APIKeyGenerationRequest,
     APIKeyGenerationResponse,
@@ -69,8 +63,6 @@ from app.models.internal_api import (
     OperatorCertificateRevokeRequest,
     OperatorCertificateRevokeResponse,
     OperatorListenSessionAuthRequest,
-    OperatorSessionRegisteredResponse,
-    OperatorSessionRegistrationRequest,
     OperatorSessionRefreshRequest,
     OperatorSessionRefreshResponse,
     OperatorSessionValidateRequest,
@@ -111,14 +103,12 @@ InvestigationUpdateRequest.model_rebuild()
 InvestigationQueryRequest.model_rebuild()
 InvestigationGetRequest.model_rebuild()
 from app.models.events import SessionEvent
-from app.models.operators import OperatorDocument, OperatorStatusUpdatedPayload
-from app.services.operator.session_auth_listener import SessionAuthListener
-from app.services.operator.operator_data_service import OperatorDataService
-from app.services.operator.heartbeat_service import HeartbeatSnapshotService
-from app.services.operator.approval_service import OperatorApprovalService
-from app.services.operator.command_service import OperatorCommandService
-from app.services.operator.operator_session_service import OperatorSessionService
-from app.services.operator.operator_auth_service import OperatorAuthService
+from app.models.operators import (
+    HeartbeatSnapshot,
+    OperatorStatusUpdatedPayload,
+)
+from app.clients.gateway_operator_client import GatewayOperatorClient
+from app.errors import NetworkError
 from app.services.data.case_data_service import CaseDataService
 from app.services.data.attachment_store_service import AttachmentService
 from app.services.investigation.investigation_service import InvestigationService
@@ -130,11 +120,12 @@ from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.infra.settings_service import SettingsService
-from app.utils.timestamp import now
 from app.constants.message_sender import MessageSender
 
-if TYPE_CHECKING:
-    from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
+_GATEWAY_OPERATOR_AUTHORITY_ERROR = (
+    "Operator auth and session authority are Gateway-owned; use gateway enrollment "
+    "and POST /api/v1/operators/reauth instead of g8ee local services."
+)
 
 from app.services.evaluation.trace_service import EvaluationTraceService, validated_trace_ids
 from app.dependencies import (
@@ -146,14 +137,9 @@ from app.dependencies import (
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_event_service,
-    get_g8ee_heartbeat_service,
     get_g8ee_investigation_service,
     get_g8ee_operator_command_service,
-    get_g8ee_operator_data_service,
-    get_g8ee_operator_lifecycle_service,
-    get_g8ee_operator_session_service,
-    get_g8ee_operator_auth_service,
-    get_g8ee_session_auth_listener,
+    get_g8ee_gateway_operator_client,
     get_g8ee_api_key_service,
     get_g8ee_certificate_service,
     get_g8ee_settings_service,
@@ -167,6 +153,69 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["internal"])
 _background_tasks: set[asyncio.Task] = set()
+
+
+def _status_payload_from_gateway_doc(
+    operator_doc: dict[str, object], status: OperatorStatus
+) -> OperatorStatusUpdatedPayload:
+    snapshot_raw = operator_doc.get("latest_heartbeat_snapshot")
+    snapshot: HeartbeatSnapshot | None = None
+    hostname = operator_doc.get("current_hostname")
+    if isinstance(snapshot_raw, dict):
+        try:
+            snapshot = HeartbeatSnapshot.model_validate(snapshot_raw)
+            if snapshot.system_identity and snapshot.system_identity.hostname:
+                hostname = snapshot.system_identity.hostname
+        except Exception:
+            snapshot = None
+    return OperatorStatusUpdatedPayload(
+        operator_id=str(operator_doc.get("id", "")),
+        status=status,
+        name=operator_doc.get("name") if isinstance(operator_doc.get("name"), str) else None,
+        hostname=hostname if isinstance(hostname, str) else None,
+        system_fingerprint=snapshot.system_fingerprint if snapshot else None,
+        metrics=snapshot,
+    )
+
+
+async def _publish_gateway_operator_status_events(
+    gateway_operator_client: GatewayOperatorClient,
+    event_service: EventService,
+    g8e_context: G8eHttpContext,
+    operator_ids: list[str],
+    status: OperatorStatus,
+    event_type: EventType,
+) -> None:
+    if not operator_ids:
+        return
+    try:
+        operators = await gateway_operator_client.list(user_id=g8e_context.user_id)
+        by_id = {
+            str(op.get("id")): op for op in operators if isinstance(op, dict) and op.get("id")
+        }
+        for operator_id in operator_ids:
+            operator_doc = by_id.get(operator_id)
+            if not operator_doc:
+                continue
+            await event_service.publish(
+                SessionEvent.from_context(
+                    context=g8e_context,
+                    event_type=event_type,
+                    payload=_status_payload_from_gateway_doc(operator_doc, status),
+                )
+            )
+    except Exception as exc:
+        logger.warning(
+            "[INTERNAL-HTTP] Failed to publish operator status events from gateway docs: %s",
+            exc,
+        )
+
+
+def _per_operator_errors(
+    failed_operator_ids: list[str], message: str | None
+) -> list[dict[str, str]]:
+    error_message = message or "Gateway operator request failed"
+    return [{"operator_id": operator_id, "error": error_message} for operator_id in failed_operator_ids]
 
 
 async def _generate_and_update_title(
@@ -905,64 +954,45 @@ async def delete_case(
 @router.post(InternalAPIPaths.G8EE_OPERATORS_TERMINATE, response_model=OperatorTerminateResponse)
 async def terminate_operator(
     request: OperatorTerminateRequest,
-    operator_lifecycle_service: OperatorLifecycleService = Depends(
-        get_g8ee_operator_lifecycle_service
-    ),
+    gateway_operator_client: GatewayOperatorClient = Depends(get_g8ee_gateway_operator_client),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """
-    Terminate an operator slot.
-
-    Atomically marks operator status TERMINATED and appends a TERMINATED audit
-    history entry under a single per-operator lock so concurrent writes cannot
-    interleave a partial termination.
+    Terminate an operator slot via the Gateway-owned lifecycle API.
 
     Called by client during API key refresh and manual termination.
     SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
     """
-    operator = await operator_lifecycle_service.operator_data_service.get_operator(
-        request.operator_id
-    )
-    if not operator:
-        return OperatorTerminateResponse(success=False, error="Operator not found")
-
-    await operator_lifecycle_service.terminate_operator(
-        operator_id=request.operator_id,
-        actor=HistoryActor.USER,
-        summary="Operator terminated via client relay",
-    )
+    try:
+        result = await gateway_operator_client.terminate(
+            context=g8e_context,
+            operator_id=request.operator_id,
+        )
+    except NetworkError as exc:
+        logger.error(
+            "[INTERNAL-HTTP] Gateway terminate operator failed",
+            extra={"operator_id": request.operator_id, "error": str(exc)},
+        )
+        return OperatorTerminateResponse(success=False, error=str(exc))
 
     logger.info(
-        "[INTERNAL-HTTP] Operator terminated",
-        extra={"operator_id": request.operator_id, "user_id": operator.user_id},
+        "[INTERNAL-HTTP] Operator terminated via gateway",
+        extra={"operator_id": request.operator_id, "user_id": g8e_context.user_id},
     )
-
-    return OperatorTerminateResponse(success=True)
+    return OperatorTerminateResponse(success=bool(result.get("success", True)))
 
 
 @router.post(InternalAPIPaths.G8EE_OPERATORS_GATEWAY_SESSION_AUTH)
 async def listen_session_auth(
     request: OperatorListenSessionAuthRequest,
-    session_auth_listener: SessionAuthListener = Depends(get_g8ee_session_auth_listener),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Start a session auth gateway on PubSub.
-    """
-    try:
-        await session_auth_listener.gateway(
-            operator_session_id=request.operator_session_id,
-            operator_id=request.operator_id,
-            user_id=request.user_id,
-            organization_id=request.organization_id,
-        )
-        return {"success": True}
-    except Exception as e:
-        logger.error("[INTERNAL-HTTP] Failed to start session auth gateway: %s", e)
-        return {"success": False, "error": "Failed to start session auth gateway"}
+    """Removed: operators bootstrap via Gateway POST /api/v1/operators/reauth."""
+    logger.warning(
+        "[INTERNAL-HTTP] Rejected legacy session auth gateway request",
+        extra={"operator_id": request.operator_id, "user_id": request.user_id},
+    )
+    return {"success": False, "error": _GATEWAY_OPERATOR_AUTHORITY_ERROR}
 
 
 @router.post(
@@ -970,93 +1000,18 @@ async def listen_session_auth(
 )
 async def create_operator_slot(
     request: OperatorSlotCreationRequest,
-    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
-    api_key_service: APIKeyService = Depends(get_g8ee_api_key_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Create an operator slot.
-
-    Called by client during user initialization and device link creation.
-    g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, client has no business writing to operators.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    try:
-        operator_id = str(uuid.uuid4())
-
-        # Generate API key (authority: g8ee for operator bootstrap)
-        operator_suffix = operator_id.rsplit("-", maxsplit=1)[-1][:8]
-        random_token = secrets.token_hex(32)
-        api_key = f"g8e_{operator_suffix}_{random_token}"
-
-        # Create operator document
-        operator_doc = OperatorDocument(
-            id=operator_id,
-            user_id=g8e_context.user_id,
-            organization_id=g8e_context.organization_id,
-            name=f"{request.name_prefix}-{request.slot_number}",
-            slot_number=request.slot_number,
-            operator_type=request.operator_type,
-            status=OperatorStatus.OFFLINE,
-            api_key=api_key,
-            created_at=now(),
-            updated_at=now(),
-        )
-
-        await operator_data_service.create_operator(operator_doc)
-
-        # Issue API key to api_keys collection (canonical)
-        key_issued = await api_key_service.issue_operator_key(
-            api_key=api_key,
-            user_id=g8e_context.user_id,
-            organization_id=g8e_context.organization_id,
-            operator_id=operator_id,
-            settings_service=settings_service,
-            client_name="operator",
-            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
-        )
-
-        if not key_issued:
-            logger.error(
-                "[INTERNAL-HTTP] Failed to issue API key to api_keys collection",
-                extra={"operator_id": operator_id, "user_id": g8e_context.user_id},
-            )
-            return OperatorSlotCreationResponse(
-                success=False,
-                operator_id=None,
-                error="Failed to issue API key",
-            )
-
-        logger.info(
-            "[INTERNAL-HTTP] Operator slot created",
-            extra={
-                "operator_id": operator_id,
-                "user_id": g8e_context.user_id,
-                "slot_number": request.slot_number,
-            },
-        )
-
-        return OperatorSlotCreationResponse(
-            success=True,
-            operator_id=operator_id,
-            api_key=api_key,
-        )
-
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to create operator slot",
-            extra={"error": str(e), "user_id": g8e_context.user_id},
-        )
-        return OperatorSlotCreationResponse(
-            success=False,
-            operator_id=None,
-            error=str(e),
-        )
+    """Removed: operator slots are Gateway-owned during enrollment and registration."""
+    logger.warning(
+        "[INTERNAL-HTTP] Rejected legacy operator slot creation",
+        extra={"user_id": g8e_context.user_id, "slot_number": request.slot_number},
+    )
+    return OperatorSlotCreationResponse(
+        success=False,
+        operator_id=None,
+        error=_GATEWAY_OPERATOR_AUTHORITY_ERROR,
+    )
 
 
 @router.post(
@@ -1064,72 +1019,14 @@ async def create_operator_slot(
 )
 async def update_operator_api_key(
     request: OperatorUpdateAPIKeyRequest,
-    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
-    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
-    api_key_service: APIKeyService = Depends(get_g8ee_api_key_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Update an operator's API key.
-
-    Called by client during initialization to issue API keys for existing slots
-    that were created without keys during setup.
-    g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, client has no business writing to operators.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    try:
-        operator = await operator_data_service.get_operator(request.operator_id)
-        if not operator:
-            logger.error(
-                "[INTERNAL-HTTP] Operator not found for API key update",
-                extra={"operator_id": request.operator_id},
-            )
-            return OperatorUpdateAPIKeyResponse(success=False, error="Operator not found")
-
-        # Rotate the API key in the canonical store BEFORE updating the operator doc.
-        # Failure here means the operator doc is left untouched and the old key remains
-        # authoritative - no phantom keys, no split-brain.
-        rotated = await api_key_service.rotate_operator_key(
-            old_api_key=operator.api_key,
-            new_api_key=request.api_key,
-            user_id=g8e_context.user_id,
-            organization_id=g8e_context.organization_id,
-            operator_id=operator.id,
-            settings_service=settings_service,
-            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
-        )
-        if not rotated:
-            logger.error(
-                "[INTERNAL-HTTP] Failed to rotate operator API key",
-                extra={"operator_id": request.operator_id},
-            )
-            return OperatorUpdateAPIKeyResponse(success=False, error="Failed to rotate API key")
-
-        updated_operator = operator.model_copy(
-            update={
-                "api_key": request.api_key,
-                "updated_at": now(),
-            }
-        )
-
-        await operator_data_service.update_operator(updated_operator)
-
-        logger.info(
-            "[INTERNAL-HTTP] Operator API key updated", extra={"operator_id": request.operator_id}
-        )
-
-        return OperatorUpdateAPIKeyResponse(success=True)
-
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to update operator API key",
-            extra={"error": str(e), "operator_id": request.operator_id},
-        )
-        return OperatorUpdateAPIKeyResponse(success=False, error=str(e))
+    """Removed: operator API keys are Gateway-owned during enrollment and reauth."""
+    logger.warning(
+        "[INTERNAL-HTTP] Rejected legacy operator API key update",
+        extra={"operator_id": request.operator_id, "user_id": g8e_context.user_id},
+    )
+    return OperatorUpdateAPIKeyResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
 
 
 @router.post(InternalAPIPaths.G8EE_AUTH_GENERATE_KEY, response_model=APIKeyGenerationResponse)
@@ -1177,274 +1074,137 @@ async def revoke_operator_certificate(
 @router.post(InternalAPIPaths.G8EE_OPERATORS_CLAIM_SLOT, response_model=OperatorSlotClaimResponse)
 async def claim_operator_slot(
     request: OperatorSlotClaimRequest,
-    operator_lifecycle_service: OperatorLifecycleService = Depends(
-        get_g8ee_operator_lifecycle_service
-    ),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Claim an operator slot for device registration.
-
-    Called by client during device registration.
-    g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, client has no business writing to operators.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    try:
-        success = await operator_lifecycle_service.claim_operator_slot(
-            operator_id=request.operator_id,
-            operator_session_id=request.operator_session_id,
-            bound_web_session_id=request.bound_web_session_id,
-            operator_type=request.operator_type,
-        )
-
-        if not success:
-            return OperatorSlotClaimResponse(
-                success=False,
-                error="Failed to claim operator slot",
-            )
-
-        logger.info(
-            "[INTERNAL-HTTP] Operator slot claimed",
-            extra={
-                "operator_id": request.operator_id,
-                "operator_session_id": request.operator_session_id[:12] + "...",
-            },
-        )
-
-        return OperatorSlotClaimResponse(success=True)
-
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to claim operator slot",
-            extra={"error": str(e), "operator_id": request.operator_id},
-        )
-        return OperatorSlotClaimResponse(
-            success=False,
-            error=str(e),
-        )
+    """Removed: slot claims are Gateway-owned during enrollment/reauth."""
+    logger.warning(
+        "[INTERNAL-HTTP] Rejected legacy operator slot claim",
+        extra={"operator_id": request.operator_id},
+    )
+    return OperatorSlotClaimResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
 
 
 @router.post(InternalAPIPaths.G8EE_OPERATORS_BIND, response_model=OperatorBindResponse)
 async def bind_operators(
     request: OperatorBindRequest,
-    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
+    gateway_operator_client: GatewayOperatorClient = Depends(get_g8ee_gateway_operator_client),
     event_service: EventService = Depends(get_g8ee_event_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """
-    Bind operators to a web session.
+    Bind operators to a web session via the Gateway-owned binding API.
 
     Called by client during operator bind operations.
-    g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, client has no business writing to operators.
     SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
     """
-    bound = []
-    failed = []
-    errors = []
+    try:
+        result = await gateway_operator_client.bind(
+            context=g8e_context,
+            operator_ids=request.operator_ids,
+        )
+    except NetworkError as exc:
+        logger.error("[INTERNAL-HTTP] Gateway bind operators failed: %s", exc)
+        return OperatorBindResponse(
+            success=False,
+            failed_count=len(request.operator_ids),
+            failed_operator_ids=request.operator_ids,
+            errors=[{"error": str(exc)}],
+        )
 
-    for operator_id in request.operator_ids:
-        try:
-            operator = await operator_data_service.get_operator(operator_id)
-            if not operator:
-                failed.append(operator_id)
-                errors.append({"operator_id": operator_id, "error": "Operator not found"})
-                continue
+    bound_ids = result.get("bound_operator_ids") or []
+    failed_ids = result.get("failed_operator_ids") or []
+    if not isinstance(bound_ids, list):
+        bound_ids = []
+    if not isinstance(failed_ids, list):
+        failed_ids = []
 
-            if operator.user_id != g8e_context.user_id:
-                failed.append(operator_id)
-                errors.append({"operator_id": operator_id, "error": "Unauthorized"})
-                continue
-
-            # Update operator status to BOUND
-            update_data = {
-                "status": OperatorStatus.BOUND,
-                "bound_web_session_id": g8e_context.web_session_id,
-                "updated_at": now(),
-            }
-
-            result = await operator_data_service.cache.update_document(
-                collection=operator_data_service.collection,
-                document_id=operator_id,
-                data=update_data,
-                merge=True,
-            )
-
-            if result.success:
-                bound.append(operator_id)
-
-                # Publish status update event to SSE stream
-                try:
-                    heartbeat_snapshot = operator.latest_heartbeat_snapshot
-                    system_identity = (
-                        heartbeat_snapshot.system_identity if heartbeat_snapshot else None
-                    )
-                    await event_service.publish(
-                        SessionEvent.from_context(
-                            context=g8e_context,
-                            event_type=EventType.OPERATOR_STATUS_UPDATED_BOUND,
-                            payload=OperatorStatusUpdatedPayload(
-                                operator_id=operator_id,
-                                status=OperatorStatus.BOUND,
-                                name=operator.name,
-                                hostname=system_identity.hostname if system_identity else None,
-                                system_fingerprint=heartbeat_snapshot.system_fingerprint
-                                if heartbeat_snapshot
-                                else None,
-                                metrics=heartbeat_snapshot,
-                            ),
-                        )
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "[INTERNAL-HTTP] Failed to publish bind event for %s: %s", operator_id, e
-                    )
-            else:
-                failed.append(operator_id)
-                errors.append(
-                    {
-                        "operator_id": operator_id,
-                        "error": result.error or "Failed to update operator",
-                    }
-                )
-
-        except Exception as e:
-            failed.append(operator_id)
-            errors.append({"operator_id": operator_id, "error": str(e)})
+    await _publish_gateway_operator_status_events(
+        gateway_operator_client,
+        event_service,
+        g8e_context,
+        bound_ids,
+        OperatorStatus.BOUND,
+        EventType.OPERATOR_STATUS_UPDATED_BOUND,
+    )
 
     logger.info(
-        "[INTERNAL-HTTP] Operators bound",
+        "[INTERNAL-HTTP] Operators bound via gateway",
         extra={
-            "bound_count": len(bound),
-            "failed_count": len(failed),
+            "bound_count": len(bound_ids),
+            "failed_count": len(failed_ids),
             "user_id": g8e_context.user_id,
         },
     )
 
     return OperatorBindResponse(
-        success=len(bound) > 0,
-        bound_count=len(bound),
-        failed_count=len(failed),
-        bound_operator_ids=bound,
-        failed_operator_ids=failed,
-        errors=errors,
+        success=bool(result.get("success")),
+        bound_count=int(result.get("bound_count", len(bound_ids))),
+        failed_count=int(result.get("failed_count", len(failed_ids))),
+        bound_operator_ids=bound_ids,
+        failed_operator_ids=failed_ids,
+        errors=_per_operator_errors(failed_ids, result.get("error")),
     )
 
 
 @router.post(InternalAPIPaths.G8EE_OPERATORS_UNBIND, response_model=OperatorUnbindResponse)
 async def unbind_operators(
     request: OperatorUnbindRequest,
-    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
+    gateway_operator_client: GatewayOperatorClient = Depends(get_g8ee_gateway_operator_client),
     event_service: EventService = Depends(get_g8ee_event_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """
-    Unbind operators from a web session.
+    Unbind operators from a web session via the Gateway-owned binding API.
 
     Called by client during operator unbind operations.
-    g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, client has no business writing to operators.
     SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
     """
-    unbound = []
-    failed = []
-    errors = []
+    try:
+        result = await gateway_operator_client.unbind(
+            context=g8e_context,
+            operator_ids=request.operator_ids,
+        )
+    except NetworkError as exc:
+        logger.error("[INTERNAL-HTTP] Gateway unbind operators failed: %s", exc)
+        return OperatorUnbindResponse(
+            success=False,
+            failed_count=len(request.operator_ids),
+            failed_operator_ids=request.operator_ids,
+            errors=[{"error": str(exc)}],
+        )
 
-    for operator_id in request.operator_ids:
-        try:
-            operator = await operator_data_service.get_operator(operator_id)
-            if not operator:
-                failed.append(operator_id)
-                errors.append({"operator_id": operator_id, "error": "Operator not found"})
-                continue
+    unbound_ids = result.get("unbound_operator_ids") or []
+    failed_ids = result.get("failed_operator_ids") or []
+    if not isinstance(unbound_ids, list):
+        unbound_ids = []
+    if not isinstance(failed_ids, list):
+        failed_ids = []
 
-            if operator.user_id != g8e_context.user_id:
-                failed.append(operator_id)
-                errors.append({"operator_id": operator_id, "error": "Unauthorized"})
-                continue
-
-            # Update operator status to ACTIVE
-            update_data = {
-                "status": OperatorStatus.ACTIVE,
-                "bound_web_session_id": None,
-                "updated_at": now(),
-            }
-
-            result = await operator_data_service.cache.update_document(
-                collection=operator_data_service.collection,
-                document_id=operator_id,
-                data=update_data,
-                merge=True,
-            )
-
-            if result.success:
-                unbound.append(operator_id)
-
-                # Publish status update event to SSE stream
-                try:
-                    heartbeat_snapshot = operator.latest_heartbeat_snapshot
-                    system_identity = (
-                        heartbeat_snapshot.system_identity if heartbeat_snapshot else None
-                    )
-                    await event_service.publish(
-                        SessionEvent.from_context(
-                            context=g8e_context,
-                            event_type=EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
-                            payload=OperatorStatusUpdatedPayload(
-                                operator_id=operator_id,
-                                status=OperatorStatus.ACTIVE,
-                                name=operator.name,
-                                hostname=system_identity.hostname if system_identity else None,
-                                system_fingerprint=heartbeat_snapshot.system_fingerprint
-                                if heartbeat_snapshot
-                                else None,
-                                metrics=heartbeat_snapshot,
-                            ),
-                        )
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "[INTERNAL-HTTP] Failed to publish unbind event for %s: %s", operator_id, e
-                    )
-            else:
-                failed.append(operator_id)
-                errors.append(
-                    {
-                        "operator_id": operator_id,
-                        "error": result.error or "Failed to update operator",
-                    }
-                )
-
-        except Exception as e:
-            failed.append(operator_id)
-            errors.append({"operator_id": operator_id, "error": str(e)})
+    await _publish_gateway_operator_status_events(
+        gateway_operator_client,
+        event_service,
+        g8e_context,
+        unbound_ids,
+        OperatorStatus.ACTIVE,
+        EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
+    )
 
     logger.info(
-        "[INTERNAL-HTTP] Operators unbound",
+        "[INTERNAL-HTTP] Operators unbound via gateway",
         extra={
-            "unbound_count": len(unbound),
-            "failed_count": len(failed),
+            "unbound_count": len(unbound_ids),
+            "failed_count": len(failed_ids),
             "user_id": g8e_context.user_id,
         },
     )
 
     return OperatorUnbindResponse(
-        success=len(unbound) > 0,
-        unbound_count=len(unbound),
-        failed_count=len(failed),
-        unbound_operator_ids=unbound,
-        failed_operator_ids=failed,
-        errors=errors,
+        success=bool(result.get("success")),
+        unbound_count=int(result.get("unbound_count", len(unbound_ids))),
+        failed_count=int(result.get("failed_count", len(failed_ids))),
+        unbound_operator_ids=unbound_ids,
+        failed_operator_ids=failed_ids,
+        errors=_per_operator_errors(failed_ids, result.get("error")),
     )
 
 
@@ -1453,33 +1213,11 @@ async def unbind_operators(
 )
 async def authenticate_operator(
     request: InternalOperatorAuthCall,
-    operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
-    http_request: Request = None,
 ):
-    """
-    Authenticate an operator via API key (Bearer).
-    Called by client (as proxy) or directly via internal API.
-
-    Identity and business context (including system_fingerprint) come from
-    the typed RequestContext in the request body. Only transport-level
-    metadata (IP, user-agent) is read from the HTTP request.
-    """
-    request_metadata = {
-        "ip": http_request.client.host if http_request and http_request.client else None,
-        "user_agent": http_request.headers.get("user-agent") if http_request else None,
-    }
-
-    result = await operator_auth_service.authenticate_operator(
-        authorization_header=request.authorization,
-        body=request.model_dump(),
-        request_context=request_metadata,
-        system_fingerprint=g8e_context.system_fingerprint,
-    )
-
-    if result.get("success"):
-        return OperatorAuthenticateResponse(**result)
-    return OperatorAuthenticateResponse(success=False, error=result.get("error"))
+    """Removed: operator authentication is Gateway-owned via enrollment/reauth."""
+    logger.warning("[INTERNAL-HTTP] Rejected legacy operator authenticate request")
+    return OperatorAuthenticateResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
 
 
 @router.post(
@@ -1488,38 +1226,14 @@ async def authenticate_operator(
 )
 async def register_device_link_operator(
     request: OperatorDeviceLinkRegisterRequest,
-    operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
-    http_request: Request = None,
 ) -> OperatorDeviceLinkRegisterResponse:
-    """Bootstrap an operator after device-link consumption (client-internal).
-
-    Identity and business context (user_id, organization_id, system_fingerprint)
-    come from the typed RequestContext in the request body. Only transport-level
-    metadata (IP, user-agent) is read from the HTTP request.
-    """
-    if not g8e_context.user_id:
-        return OperatorDeviceLinkRegisterResponse(
-            success=False,
-            error="user_id is required in request context",
-        )
-
-    result = await operator_auth_service.register_device_link_operator(
-        operator_id=request.operator_id,
-        user_id=g8e_context.user_id,
-        organization_id=g8e_context.organization_id,
-        operator_type=request.operator_type,
-        device_link_token=request.device_link_token,
-        system_fingerprint=g8e_context.system_fingerprint,
-        request_context={
-            "ip": http_request.client.host if http_request and http_request.client else None,
-            "user_agent": http_request.headers.get("user-agent") if http_request else None,
-        },
-        operator_session_id=request.operator_session_id,
+    """Removed: device-link operator bootstrap is Gateway-owned."""
+    logger.warning(
+        "[INTERNAL-HTTP] Rejected legacy device-link operator registration",
+        extra={"operator_id": request.operator_id},
     )
-    if result.get("success"):
-        return OperatorDeviceLinkRegisterResponse(**result)
-    return OperatorDeviceLinkRegisterResponse(success=False, error=result.get("error"))
+    return OperatorDeviceLinkRegisterResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
 
 
 @router.post(
@@ -1527,26 +1241,26 @@ async def register_device_link_operator(
 )
 async def validate_operator_session(
     request: OperatorSessionValidateRequest,
-    session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
+    gateway_operator_client: GatewayOperatorClient = Depends(get_g8ee_gateway_operator_client),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Validate an operator session.
-    """
+    """Validate an operator session via the Gateway-owned binding API."""
     try:
-        session = await session_service.validate_operator_session(request.operator_session_id)
-        if session:
-            return OperatorSessionValidateResponse(
-                success=True,
-                valid=True,
-                user_id=session.user_id,
-                operator_id=session.operator_id,
-                session_type=session.session_type.value,
-            )
-        return OperatorSessionValidateResponse(success=True, valid=False)
-    except Exception as e:
-        logger.error("[INTERNAL-HTTP] Session validation failed: %s", e)
-        return OperatorSessionValidateResponse(success=False, valid=False, error=str(e))
+        result = await gateway_operator_client.validate_session(
+            context=g8e_context,
+            operator_session_id=request.operator_session_id,
+            cli_session_id=g8e_context.cli_session_id or "",
+        )
+    except NetworkError as exc:
+        logger.error("[INTERNAL-HTTP] Gateway session validation failed: %s", exc)
+        return OperatorSessionValidateResponse(success=False, valid=False, error=str(exc))
+
+    return OperatorSessionValidateResponse(
+        success=True,
+        valid=bool(result.get("valid")),
+        user_id=result.get("user_id"),
+        operator_id=result.get("operator_id"),
+    )
 
 
 @router.post(
@@ -1554,171 +1268,61 @@ async def validate_operator_session(
 )
 async def refresh_operator_session(
     request: OperatorSessionRefreshRequest,
-    session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
-    """
-    Refresh an operator session.
-    """
-    try:
-        success = await session_service.refresh_operator_session(request.operator_session_id)
-        if success:
-            operator_session = await session_service.validate_operator_session(
-                request.operator_session_id
-            )
-            return OperatorSessionRefreshResponse(
-                success=True,
-                operator_id=operator_session.operator_id if operator_session else None,
-                operator_session={
-                    "id": request.operator_session_id,
-                    "expires_at": operator_session.absolute_expires_at
-                    if operator_session
-                    else None,
-                },
-            )
-        return OperatorSessionRefreshResponse(success=False, error="Session not found or expired")
-    except Exception as e:
-        logger.error("[INTERNAL-HTTP] Session refresh failed: %s", e)
-        return OperatorSessionRefreshResponse(success=False, error=str(e))
-
-
-@router.post(
-    InternalAPIPaths.G8EE_OPERATORS_REGISTER_SESSION,
-    response_model=OperatorSessionRegisteredResponse,
-)
-async def register_operator_session(
-    request: OperatorSessionRegistrationRequest,
-    heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
-    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
-):
-    """
-    Subscribe g8ee to the heartbeat pub/sub channel for an operator session.
-
-    Called by client immediately after operator authentication succeeds so g8ee
-    is listening before the first heartbeat arrives.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    await heartbeat_service.register_operator_session(
-        operator_id=request.operator_id,
-        operator_session_id=request.operator_session_id,
+    """Removed: operator session refresh is Gateway-owned."""
+    logger.warning(
+        "[INTERNAL-HTTP] Rejected legacy operator session refresh",
+        extra={"operator_session_id": request.operator_session_id[:12] + "..."},
     )
-
-    logger.info(
-        "[INTERNAL-HTTP] Operator session registered for heartbeat subscription",
-        extra={
-            "operator_id": request.operator_id,
-            "operator_session_id": request.operator_session_id[:12] + "...",
-            "user_id": g8e_context.user_id,
-        },
-    )
-
-    return OperatorSessionRegisteredResponse(
-        success=True,
-        operator_id=request.operator_id,
-        operator_session_id=request.operator_session_id,
-    )
-
-
-@router.post(
-    InternalAPIPaths.G8EE_OPERATORS_DEREGISTER_SESSION,
-    response_model=OperatorSessionRegisteredResponse,
-)
-async def deregister_operator_session(
-    request: OperatorSessionRegistrationRequest,
-    heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
-    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
-):
-    """
-    Unsubscribe g8ee from the heartbeat pub/sub channel for an operator session.
-
-    Called by client when an operator goes offline, is stopped, or is terminated.
-    SECURITY: Internal only - client component.
-
-    Context is extracted from request body (RequestContext) instead of headers,
-    eliminating the fragile header-as-state pattern.
-    """
-    await heartbeat_service.deregister_operator_session(
-        operator_id=request.operator_id,
-        operator_session_id=request.operator_session_id,
-    )
-
-    logger.info(
-        "[INTERNAL-HTTP] Operator session deregistered from heartbeat subscription",
-        extra={
-            "operator_id": request.operator_id,
-            "operator_session_id": request.operator_session_id[:12] + "...",
-            "user_id": g8e_context.user_id,
-        },
-    )
-
-    return OperatorSessionRegisteredResponse(
-        success=True,
-        operator_id=request.operator_id,
-        operator_session_id=request.operator_session_id,
-    )
+    return OperatorSessionRefreshResponse(success=False, error=_GATEWAY_OPERATOR_AUTHORITY_ERROR)
 
 
 @router.post(InternalAPIPaths.G8EE_OPERATORS_STOP, response_model=OperatorStoppedResponse)
 async def stop_operator(
     request: StopOperatorRequest,
-    operator_command_service: OperatorCommandService = Depends(get_g8ee_operator_command_service),
+    gateway_operator_client: GatewayOperatorClient = Depends(get_g8ee_gateway_operator_client),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """
-    Stop an Operator by sending shutdown command via operator pub/sub.
-    The Operator will receive the shutdown command and exit.
+    Stop a remote operator via the Gateway-owned dispatch API.
 
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    operator_id = request.operator_id
-    operator_session_id = request.operator_session_id
-    user_id = g8e_context.user_id
-
     logger.info(
-        "[OPERATOR-STOP] Publishing shutdown command to operator",
+        "[OPERATOR-STOP] Requesting gateway stop for operator",
         extra={
-            "operator_id": operator_id,
-            "operator_session_id": operator_session_id,
-            "user_id": user_id,
+            "operator_id": request.operator_id,
+            "operator_session_id": request.operator_session_id,
+            "user_id": g8e_context.user_id,
             "web_session_id": g8e_context.web_session_id[:12] + "..."
             if g8e_context.web_session_id
             else None,
-            "validated_user": g8e_context.user_id,
         },
     )
 
-    if operator_command_service.pubsub_client is None:
-        raise ServiceUnavailableError("pub/sub client not initialized", component="g8ee")
-
-    command_data = G8eMessage(
-        id=str(uuid.uuid4()),
-        source_component=G8EE_COMPONENT,
-        event_type=EventType.OPERATOR_SHUTDOWN_REQUESTED,
-        operator_id=operator_id,
-        operator_session_id=operator_session_id,
-        user_id=user_id,
-        web_session_id=g8e_context.web_session_id,
-        cli_session_id=g8e_context.cli_session_id,
-        payload=None,
-    )
-
-    subscribers = await operator_command_service.pubsub_client.publish_command(
-        operator_id=operator_id, operator_session_id=operator_session_id, command_data=command_data
-    )
+    try:
+        result = await gateway_operator_client.stop(
+            context=g8e_context,
+            operator_session_id=request.operator_session_id,
+        )
+    except NetworkError as exc:
+        logger.error("[OPERATOR-STOP] Gateway stop failed: %s", exc)
+        raise ServiceUnavailableError(str(exc), component="g8ee") from exc
 
     logger.info(
-        "[OPERATOR-STOP] Shutdown command published successfully",
-        extra={"operator_id": operator_id, "subscribers": subscribers},
+        "[OPERATOR-STOP] Gateway stop dispatched successfully",
+        extra={
+            "operator_id": result.get("operator_id", request.operator_id),
+            "transaction_id": result.get("transaction_id"),
+        },
     )
 
     return OperatorStoppedResponse(
-        success=True,
-        operator_id=operator_id,
-        subscribers=subscribers,
+        success=bool(result.get("success", True)),
+        operator_id=str(result.get("operator_id", request.operator_id)),
+        subscribers=1 if result.get("transaction_id") else 0,
     )
 
 

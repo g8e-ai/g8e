@@ -347,6 +347,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
+    from app.constants.env_vars import EnvVar
     from app.llm.factory import get_llm_settings, get_search_settings, get_settings
 
     get_settings()
@@ -384,6 +385,9 @@ def pytest_collection_modifyitems(config, items):
         if search_settings
         else False
     )
+    has_typesafe_key = bool(
+        os.environ.get(EnvVar.LLM_JEV_API_KEY) or os.environ.get(EnvVar.TYPESAFE_API_KEY)
+    )
 
     for item in items:
         if item.get_closest_marker("ai_integration") and not has_llm_credentials:
@@ -392,6 +396,8 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.skip(reason="no vertex search"))
         elif item.get_closest_marker("requires_web_search") and not has_web_search:
             item.add_marker(pytest.mark.skip(reason="no web search"))
+        elif item.get_closest_marker("requires_typesafe") and not has_typesafe_key:
+            item.add_marker(pytest.mark.skip(reason="no typesafe api key"))
 
         # Dynamically add markers based on scenario data for accuracy tests
         if "test_agent_accuracy" in item.name or "test_gemini_accuracy" in item.name:
@@ -842,33 +848,6 @@ async def kv_cache_client(cache_aside_service):
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def db_client(cache_aside_service):
     yield cache_aside_service.db_client
-
-
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def pubsub_service(test_settings):
-    from app.clients.pubsub_client import PubSubClient
-
-
-    settings = test_settings
-
-    client = PubSubClient(
-        pubsub_url=settings.gateway.pubsub_url,
-        component_name=G8EE_COMPONENT,
-    )
-    await client.connect()
-
-    class FakeService:
-        def __init__(self, c):
-            self.pubsub_client = c
-
-    yield FakeService(client)
-    await client.close()
-
-
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def pubsub_client(pubsub_service):
-    """Returns the protocol PubSubClient instance from pubsub_service."""
-    yield pubsub_service.pubsub_client
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")

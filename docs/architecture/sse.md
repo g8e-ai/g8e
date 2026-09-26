@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-25
+Version: v2.1.14
 
 The Governance Gateway provides a Server-Sent Events (SSE) bridge for session-targeted application telemetry and platform workflow notifications. App workloads publish events over authenticated HTTPS, and browser, CLI, Operator, and test clients consume a session-scoped event history by polling or by opening a live stream. The Gateway also publishes completion events for passkey enrollment and L3 approval without calling its public push endpoint.
 
@@ -60,7 +60,7 @@ The producer supplies `user_id` as part of the route. The push path requires it 
 
 ### Event envelope and acknowledgement
 
-A push contains the route and an `event` JSON value. Typed producers place a string `type` inside `event`; the Gateway indexes that value as the event type and stores the complete push envelope as the payload delivered to consumers. If the inner type is absent or unreadable, the Gateway accepts the non-empty event value and indexes it as `unknown`.
+A push contains the route and an `event` JSON value. Typed producers place a string `type` inside `event`. The Gateway validates that type against `protocol/constants/events.json`: the event must be registered, `transport` must include `sse`, and the caller must be a listed producer. Unregistered, non-SSE, or wrong-producer events are rejected with 422. Ephemeral events are delivered but not persisted to the SSE store. If the inner type is absent or unreadable, the Gateway rejects the push.
 
 A successful push returns `success: true` and `delivered: 1`. This count acknowledges one accepted, persisted, and published event. It is not a count of active listeners, and a push succeeds when no consumer is connected because the stored event remains available for replay.
 

@@ -12,9 +12,9 @@ describe('AssignmentActivitySummary', () => {
     render(<AssignmentActivitySummary activity={{
       model_activity: emptyFamily,
       tool_decisions: emptyFamily,
-      tool_calls: { availability: 'not_applicable', records: [] },
-      policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured', records: [] },
-      governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured', records: [] },
+      tool_calls: { availability: 'not_applicable' },
+      policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured' },
+      governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured' },
     }} />);
     expect(screen.queryByText('0 observed')).not.toBeInTheDocument();
     expect(screen.queryByText('Not applicable to this scenario')).not.toBeInTheDocument();

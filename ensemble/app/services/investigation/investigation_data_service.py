@@ -9,7 +9,7 @@ import logging
 
 from app.models.base import TypeAdapter
 
-from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+from app.utils.hashing.ledger_hash import compute_entry_hash, genesis_hash
 
 from app.constants import (
     ComponentStatus,
@@ -40,7 +40,7 @@ from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
 from app.utils.keyed_lock import KeyedAsyncLock
-from app.utils.timestamp import now
+from app.utils.time_ids.timestamp import now
 from app.clients.governance_client import GovernanceClient
 
 
@@ -95,7 +95,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         message = G8eMessage(
             id=investigation.id,
             source_component=G8EE_COMPONENT,
-            event_type=EventType.APP_INVESTIGATION_CREATED,
+            event_type=EventType.APP_INVESTIGATION_CREATE_REQUESTED,
             case_id=request.case_id,
             task_id=AITaskId.CHAT,
             investigation_id=investigation.id,
@@ -144,7 +144,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             collection=self.collection,
             document_id=investigation_id,
             updates=updates,
-            event_type=EventType.APP_INVESTIGATION_UPDATED,
+            event_type=EventType.APP_INVESTIGATION_UPDATE_REQUESTED,
             case_id=context.case_id,
             investigation_id=investigation_id,
             web_session_id=context.web_session_id,
@@ -204,7 +204,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         await self._governance_client.delete_governed_doc(
             collection=self.collection,
             document_id=investigation_id,
-            event_type=EventType.APP_INVESTIGATION_DELETED,
+            event_type=EventType.APP_INVESTIGATION_DELETE_REQUESTED,
             case_id=context.case_id,
             investigation_id=investigation_id,
             web_session_id=context.web_session_id,
@@ -276,7 +276,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
                     collection=self.collection,
                     document_id=investigation_id,
                     updates=updates,
-                    event_type=EventType.APP_INVESTIGATION_UPDATED,
+                    event_type=EventType.APP_INVESTIGATION_UPDATE_REQUESTED,
                     case_id=context.case_id,
                     investigation_id=investigation_id,
                     web_session_id=context.web_session_id,
@@ -291,7 +291,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
                     collection=self.collection,
                     document_id=investigation_id,
                     updates=updates,
-                    event_type=EventType.APP_INVESTIGATION_UPDATED,
+                    event_type=EventType.APP_INVESTIGATION_UPDATE_REQUESTED,
                     case_id=investigation.case_id,
                     investigation_id=investigation_id,
                     web_session_id=investigation.web_session_id,

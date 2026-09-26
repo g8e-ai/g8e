@@ -12,6 +12,8 @@ Checked-in evaluation program data and templates live here. **Runtime** campaign
 
 The base inventory is the canonical 45-model genesis program set. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code. The rollout queue places the current Granite 4.2 and Qwen 3.5 small-model intake ahead of the alphabetical backlog.
 
+The optional Hugging Face rollout intake (`eval/rollout-intake-hf.json`) also tracks the small text-generation trend candidate Qwen 2.5 1B RLCD. Larger trend entries are intentionally excluded from this 16 GiB-provider intake; classification, image, audio, and image-text-to-text repositories from the same trend snapshot are also not added to the text-generation queue.
+
 ### 45-model program set
 
 | Family | Models |
@@ -45,17 +47,24 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 ## Typical workflow
 
 ```bash
-# 0. (Optional) Stage trending Hugging Face GGUF models through Ollama deep HF pulls.
+# Resolve the exact governed maintenance sessions.
+INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
+
+# 0. (Optional) Stage trending Hugging Face GGUF models through governed Operator dispatch.
 #    Catalog: eval/rollout-intake-hf.json. Applies canonical served-model aliases
 #    (for example qwen3.8:27b, glm-5.3-flash) after pull/copy.
-./g8e eval models stage --ollama-endpoint "$G8E_OLLAMA_ENDPOINT"
-# Manual-create entries (sharded GGUF, pending single-file) are skipped — create on the
-# provider host with `ollama create <alias>` first, then continue with freeze below.
+./g8e eval models stage \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION"
+# Manual-create entries (sharded GGUF, pending single-file) are skipped until a
+# governed provider-side alias-creation workflow is available.
 
 # 1. Freeze provider inventory (recommended before scored runs on release code)
 ./g8e eval models freeze \
   --campaign-id eval-genesis-homogeneous \
-  --ollama-endpoint "$G8E_OLLAMA_ENDPOINT" \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
   --output .g8e/eval/model-inventory.json
 
 ./g8e eval models list
@@ -86,9 +95,9 @@ go run ./.local.dev/tools/gen-base-model-inventory
 
 | Command | Purpose |
 | --- | --- |
-| `g8e eval models freeze` | Discover and freeze all models from the provider |
+| `g8e eval models freeze` | Discover and freeze provider models through an exact Inference Operator session |
 | `g8e eval models list` | List variants in a frozen inventory file |
-| `g8e eval models stage` | Pull rollout-intake HF models via Ollama and apply served-model aliases |
+| `g8e eval models stage` | Dispatch governed pull/copy maintenance to the exact Inference Operator session |
 | `g8e eval models materialize` | Write per-model or combined campaign inventory files |
 | `g8e eval rollout init` | Build `.g8e/eval/init-campaign-queue.json` |
 | `g8e eval rollout run` | Unattended rollout: start → strict-witness verify for every queued model (`--require-witness`, `--verify`, `--publish`, `--daemon`, and `--skip-verified` default true) |
@@ -96,7 +105,7 @@ go run ./.local.dev/tools/gen-base-model-inventory
 | `g8e eval rollout next` | Show the next pending model |
 | `g8e eval rollout mark` | Manually record verify progress for one entry |
 | `g8e eval campaign export` | Export one run to a directory you choose (`--output-dir`) |
-| `g8e eval campaign mirror restore` | Republish verified runs to the gateway-owned public mirror |
+| `g8e public restore` | Republish verified runs to the gateway-owned public mirror |
 
 See [Unified Docker Stack Guide](../../docs/guides/unified_stack.md) and [Evaluations architecture](../../docs/architecture/evals.md) for full campaign operations.
 
@@ -116,13 +125,13 @@ Host evidence and queue remain. Restore the public mirror from verified queue en
 ```bash
 curl -sf http://127.0.0.1:8082/bootstrap | jq '{freshness: .source_freshness, high_water: .snapshot.high_water_sequence}'
 
-./g8e eval campaign mirror restore --queue
+./g8e public restore --queue
 ```
 
 `docker init` runs this automatically when the queue and run artifacts are present. For one run:
 
 ```bash
-./g8e eval campaign mirror restore --run-id eval-init-granite3-3-2b-1789754079
+./g8e public restore --run-id eval-init-granite3-3-2b-1789754079
 ```
 
 If `campaign publish` exports zero records after a mirror wipe (host `public-projection-state.json` still lists old idempotency keys), use `--force` on publish instead — see [Unified Docker Stack Guide](../../docs/guides/unified_stack.md#mirror-empty-after-docker-init---clean-but-host-run-artifacts-remain).

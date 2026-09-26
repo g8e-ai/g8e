@@ -14,7 +14,7 @@ No aiohttp.ClientSession(...) calls anywhere else in the codebase.
 Roles
 -----
 create_kv_http_session        - KV/REST HTTP to the Operator listen port (kv_cache_client)
-create_pubsub_ws_session      - WebSocket carrier session for pub/sub (pubsub_client)
+create_pubsub_ws_session      - WebSocket carrier session for pub/sub clients
 create_component_http_session - inter-service HTTP with retry/circuit-breaker (HTTPClient , CacheAsideService)
 
 SSL
@@ -121,9 +121,8 @@ def create_pubsub_ws_session(
     *,
     timeout: aiohttp.ClientTimeout,
 ) -> aiohttp.ClientSession:
-    """Carrier session for the WebSocket pub/sub connection.
+    """Carrier session for WebSocket pub/sub connections.
 
-    Used by PubSubClient.
     No default headers - WebSocket frames are not HTTP requests.
     SSL is NOT wired into the connector here; pass resolve_pubsub_ssl_context()
     to ws_connect() directly so the scheme check happens at connect time.

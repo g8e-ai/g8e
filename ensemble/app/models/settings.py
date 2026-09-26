@@ -28,6 +28,8 @@ from app.constants import (
     OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
     LLAMACPP_DEFAULT_ENDPOINT,
+    JEV_DEFAULT_ENDPOINT,
+    JEV_DEFAULT_MODEL,
     LLMProvider,
     LogLevel,
 )
@@ -331,6 +333,10 @@ class LLMSettings(_ProtocolLLMSettings):
     llamacpp_api_key: str | None = Field(default=None, repr=False)
     llamacpp_assistant_model: str | None = Field(default=None)
 
+    jev_model: str | None = Field(default=JEV_DEFAULT_MODEL)
+    jev_endpoint: str | None = Field(default=JEV_DEFAULT_ENDPOINT)
+    jev_api_key: str | None = Field(default=None, repr=False)
+
     llm_max_tokens: int | None = Field(default=None)
     llm_command_gen_enabled: bool = Field(default=True)
     llm_command_gen_auditor: bool = Field(default=True)
@@ -351,6 +357,7 @@ class LLMSettings(_ProtocolLLMSettings):
                 LLMProvider.OLLAMA: self.ollama_model,
                 LLMProvider.LLAMACPP: self.llamacpp_model,
                 LLMProvider.G8E: self.ollama_model,
+                LLMProvider.JEV: self.jev_model,
             }
             return provider_models.get(self.primary_provider)
         return None
@@ -369,6 +376,7 @@ class LLMSettings(_ProtocolLLMSettings):
                 LLMProvider.OLLAMA: self.ollama_model,
                 LLMProvider.LLAMACPP: self.llamacpp_model,
                 LLMProvider.G8E: self.ollama_model,
+                LLMProvider.JEV: self.jev_model,
             }
             return provider_models.get(self.assistant_provider)
         return None
@@ -394,6 +402,7 @@ class LLMSettings(_ProtocolLLMSettings):
                 LLMProvider.OLLAMA: self.ollama_model,
                 LLMProvider.LLAMACPP: self.llamacpp_model,
                 LLMProvider.G8E: self.ollama_model,
+                LLMProvider.JEV: self.jev_model,
             }
             provider_default = provider_models.get(self.lite_provider)
             if provider_default:
@@ -401,6 +410,17 @@ class LLMSettings(_ProtocolLLMSettings):
 
         # Fall back to assistant model, then primary model (best available model for lite tasks)
         return self.resolved_assistant_model or self.resolved_primary_model
+
+    @property
+    def resolved_generative_lite_model(self) -> str | None:
+        """Return the model for generative lite workloads (title, memory, marshal analysis).
+
+        When lite_provider is Jev, returns the assistant (then primary) model because Jev
+        does not support text generation. Triage and eval judge use resolved_lite_model.
+        """
+        if self.lite_provider is LLMProvider.JEV:
+            return self.resolved_assistant_model or self.resolved_primary_model
+        return self.resolved_lite_model
 
     def resolve(
         self,
@@ -476,6 +496,11 @@ class LLMSettings(_ProtocolLLMSettings):
                     self.llamacpp_model,
                 ),
                 LLMProvider.G8E.value: (None, None, self.ollama_model),
+                LLMProvider.JEV.value: (
+                    self.jev_api_key,
+                    self.jev_endpoint,
+                    self.jev_model,
+                ),
             }
 
             p_key, p_endpoint, p_model = provider_defaults.get(

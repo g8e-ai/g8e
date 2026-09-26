@@ -1,7 +1,7 @@
 # g8e Scripts
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-26
+Version: v2.1.13
 
 This document catalogs the executable automation under `scripts/`, the deploy-script templates embedded in the Gateway, and the script-backed `g8e demos` image-transfer workflow. The root `Makefile` owns build and validation orchestration.
 
@@ -9,15 +9,13 @@ This document catalogs the executable automation under `scripts/`, the deploy-sc
 
 | Category | Entry point | Purpose |
 | --- | --- | --- |
-| Development bootstrap | `scripts/linux-setup.sh` | Checks Linux build prerequisites, runs the host build, and adds the repository root to the user’s shell profile |
-| Development bootstrap | `scripts/macos-setup.sh` | Checks macOS build prerequisites, runs the host build, and adds the repository root to the user’s shell profile |
-| Development bootstrap | `scripts/windows-setup.ps1` | Checks Windows build prerequisites, runs the host build, and adds the repository root to the user PATH |
+| Development bootstrap | `scripts/linux-setup.sh` | Checks Linux build prerequisites, builds evaluation-explorer when needed, runs `make build`, and adds the repository root to the user’s shell profile |
+| Development bootstrap | `scripts/macos-setup.sh` | Checks macOS build prerequisites, builds evaluation-explorer when needed, runs `make build`, and adds the repository root to the user’s shell profile |
+| Development bootstrap | `scripts/windows-setup.ps1` | Checks Windows build prerequisites (PowerShell 7+), builds evaluation-explorer when needed, runs `make build`, and adds the repository root to the user PATH |
 | Package smoke test | `scripts/smoke-test-go.sh` | Builds a clean temporary Go module against the local g8e module |
 | Package smoke test | `scripts/smoke-test-python.sh` | Installs the local Python protocol package in a virtual environment and runs its public imports and examples |
-| Data validation | `scripts/validate-cosais-overlays.sh` | Checks detector references for overlays marked finalized in the checked-in COSAiS catalog |
-| Make target audit | `scripts/validate-make-targets.sh` | Runs selected groups of root Makefile targets and summarizes their results |
+| Data validation | `make validate-cosais` (`go run ./internal/tools/cosais_validator`) | Checks detector references for overlays marked finalized in the checked-in COSAiS catalog |
 | Developer-guideline audit | `scripts/audit-dev-guidelines.py` | Ranks files by statically detectable violations of `docs/devs/devs.md` |
-| Repository administration | `scripts/github-sponsors-setup.sh` | Reads or changes the repository’s GitHub Sponsors setting through the GitHub GraphQL API |
 | Remote Operator bootstrap | `/g8e-deploy.sh` and `/g8e-deploy.ps1` | Public Gateway HTTP routes that render embedded scripts for binary download and Operator startup |
 | Air-gap image transfer | `g8e demos pull`, `export`, `import`, and `images` | Transfers the digest-pinned external images declared in `demos/images.json` |
 
@@ -31,15 +29,16 @@ bash scripts/macos-setup.sh
 pwsh scripts/windows-setup.ps1
 ```
 
-Each script performs three steps:
+Each script performs four steps:
 
-1. It checks for `make` and `go`. Its version check accepts Go 1.26 or any later major or minor release; the root `go.mod` is the authoritative build requirement and currently declares Go 1.26.6.
-2. If a checked dependency is missing or too old, it asks before invoking a supported package manager. Linux supports `apt-get`, `dnf`, `pacman`, or `zypper`; macOS uses Homebrew; Windows prefers `winget` and otherwise uses Chocolatey. The package manager is necessary only when the script must install a dependency.
-3. It runs `make build`, which first requires the built evaluation-explorer asset at `dashboard/g8e-adapter/evaluation-explorer/dist/index.html`, then writes the platform binary and SHA-256 file under `bin/` and copies the host executable to the repository root. Build that asset with `cd dashboard/g8e-adapter/evaluation-explorer && npm run build` when it is not already present; the setup scripts do not install Node dependencies or build it.
+1. It checks for `git`, `make`, `go`, `node`, and `npm`. The required Go version is read from the root `go.mod` (currently Go 1.26.6). Node.js 22+ is required because `make build` embeds the evaluation-explorer frontend.
+2. If a checked dependency is missing or too old, it asks before invoking a supported package manager. Linux prefers `snap` for Go and Node when available because distro packages are often too old; macOS uses Homebrew; Windows prefers `winget` and otherwise uses Chocolatey. Pass `-y` or set `G8E_SETUP_YES=1` for non-interactive installs.
+3. It builds the evaluation-explorer asset when `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` is absent (`npm ci` or `npm install`, then `npm run build`), then runs `make build`. The build writes the platform binary and SHA-256 file under `bin/` and copies the host executable to the repository root.
+4. It appends the repository root to the user PATH. Linux and macOS update `~/.zshrc`, `~/.bashrc`, or `~/.profile` based on the current shell. Windows updates the user-level `Path`. These are persistent user-environment mutations. The scripts also update their own process environment, but that child-process update does not alter the invoking shell.
 
-The Linux and macOS scripts append the repository root to `~/.zshrc`, `~/.bashrc`, or `~/.profile`, based on the current shell. The Windows script updates the user-level `Path`. These are persistent user-environment mutations. The scripts also update their own process environment, but that child-process update does not alter the invoking shell. Open a new terminal or source the selected profile, then run `g8e --version`.
+After setup, the scripts print the recommended next steps from the current getting-started flow: `./g8e --version`, `g8e docker start --full`, `g8e gw start`, and `g8e auth enroll user -e localhost`. Open a new terminal or source the selected profile before using `g8e` from other shells.
 
-The scripts check only Go and Make before building. The root Makefile and host environment can impose additional command requirements. PowerShell 7 is the documented Windows entry point, but `windows-setup.ps1` does not enforce the PowerShell version and still invokes `make build`; it is not a standalone native Windows compiler workflow.
+`windows-setup.ps1` requires PowerShell 7+ (`pwsh`). It is not a substitute for WSL when native Windows build tooling is incomplete; use the Docker quick-start path when a local compiler toolchain is unavailable.
 
 ## Package Smoke Tests
 
@@ -66,35 +65,13 @@ Run the COSAiS guard through its owning Make target:
 make validate-cosais
 ```
 
-`validate-cosais-overlays.sh` requires `python3`, `docs/reference/cosais-overlays.json`, and at least one `demos/*/doctrine/` directory. It reads overlays whose checked-in `status` is exactly `finalized`, collects `overlay_ids` from the top-level `doctrines` arrays in every JSON file directly under each demo doctrine directory, and fails when a finalized overlay ID is absent from that collected set. If the catalog contains no finalized overlays, it exits successfully and reports that no coverage check is active. The script does not query NIST or determine finalization independently.
+`go run ./internal/tools/cosais_validator` requires `docs/reference/cosais-overlays.json` and at least one `demos/*/doctrine/` directory. It reads overlays whose checked-in `status` is exactly `finalized`, collects `overlay_ids` from the top-level `doctrines` arrays in every JSON file directly under each demo doctrine directory, and fails when a finalized overlay ID is absent from that collected set. If the catalog contains no finalized overlays, it exits successfully and reports that no coverage check is active. The validator does not query NIST or determine finalization independently.
 
 `make lint` includes `make validate-cosais`, and the primary CI workflow also invokes the target directly. Schema and broader doctrine-reference validation remain owned by `make validate-doctrines`.
-
-### Make Target Audit
-
-`validate-make-targets.sh` is a manually invoked broad audit of root Makefile targets. Run every configured phase with `bash scripts/validate-make-targets.sh`, or select one phase through the `PHASE` environment variable:
-
-```bash
-PHASE=lint bash scripts/validate-make-targets.sh
-```
-
-The configured phases are `help`, `build`, `proto`, `lint`, `test`, `python`, `dashboard`, `docker`, `ci`, `doctrine`, and `clean`. The script suppresses each target’s output, continues after failures, and exits nonzero after printing the aggregate summary when any target failed. It always skips `release`, but an unfiltered run still invokes targets that require local services, Docker, external credentials, or network access, and its final cleanup phase runs state-removing Make targets. Review the phase definitions before using the unfiltered mode. This audit is not wired into the primary CI workflow.
 
 ### Developer-Guideline Triage
 
 Run `python3 scripts/audit-dev-guidelines.py` from the repository root to rank files by statically detectable patterns associated with the rules in `docs/devs/devs.md`. The default output shows the 25 files with the most findings and includes each matching line and rule identifier. Use `--limit 0` to print every matching file, `--min-violations N` to focus on higher-count files, `--include-generated` to include generated and Swagger/OpenAPI paths, or `--json` for machine-readable output. The audit is intentionally heuristic: it identifies review candidates and does not prove that a line violates a guideline or replace the repository’s semantic lint and test commands.
-
-## Repository Administration
-
-`scripts/github-sponsors-setup.sh` uses the GitHub CLI (`gh`) and requires an authenticated account with permission to read or update the repository. The default repository is `g8e-ai/g8e`; override it with `GITHUB_REPO`, and override the GraphQL repository ID with `GITHUB_REPO_ID` when operating on a different repository. The script does not create or approve a GitHub Sponsors profile. Complete the profile and GitHub approval through the GitHub web interface first.
-
-```bash
-./scripts/github-sponsors-setup.sh status
-./scripts/github-sponsors-setup.sh enable
-./scripts/github-sponsors-setup.sh disable
-```
-
-`status` queries the repository’s sponsorship setting and checks the configured sponsor accounts `Badoot`, `opendevops`, and `g8e-ai`. `enable` and `disable` mutate the repository’s `hasSponsorshipsEnabled` setting through GitHub. Treat those commands as external administrative changes, not local validation.
 
 ## Gateway-Served Operator Bootstrap
 

@@ -65,6 +65,14 @@ globalThis.EventSource = MockEventSource;
 
 const { SSEConnectionManager } = await import('@g8ed/public/js/utils/sse-connection-manager.js');
 
+beforeEach(() => {
+    window.G8E_GATEWAY_URL = 'https://localhost:8443';
+});
+
+afterEach(() => {
+    delete window.G8E_GATEWAY_URL;
+});
+
 function makeManager() {
     const eventBus = new MockEventBus();
     const manager = new SSEConnectionManager(eventBus);
@@ -152,7 +160,7 @@ describe('SSEConnectionManager.handleSSEEvent — non-infrastructure without dat
         const { manager, eventBus } = makeManager();
 
         const result = manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
         });
 
         expect(result.handled).toBe(false);
@@ -163,7 +171,7 @@ describe('SSEConnectionManager.handleSSEEvent — non-infrastructure without dat
         const { manager, eventBus } = makeManager();
 
         const result = manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
         });
 
         expect(result.handled).toBe(false);
@@ -185,12 +193,12 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         const result = manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
             data: payload,
         });
 
-        expect(result).toEqual({ handled: true, eventType: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED });
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
+        expect(result).toEqual({ handled: true, eventType: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED });
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload).toEqual(payload);
     });
@@ -204,11 +212,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload).toEqual(payload);
     });
@@ -222,11 +230,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_COMPLETED,
+            type: EventType.AI_LLM_CHAT_ITERATION_COMPLETED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_COMPLETED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_COMPLETED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload).toEqual(payload);
     });
@@ -240,11 +248,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_FAILED,
+            type: EventType.AI_LLM_CHAT_ITERATION_FAILED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_FAILED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_FAILED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload).toEqual(payload);
     });
@@ -257,11 +265,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_STOPPED,
+            type: EventType.AI_LLM_CHAT_ITERATION_STOPPED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_STOPPED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_STOPPED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload).toEqual(payload);
     });
@@ -278,11 +286,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
+            type: EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.grounding_metadata.sources).toHaveLength(1);
         expect(emitted[0].payload.grounding_metadata.sources[0].citation_num).toBe(1);
@@ -299,11 +307,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
+            type: EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.query).toBe('disk usage');
         expect(emitted[0].payload.execution_id).toBe('exec_001');
@@ -320,11 +328,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
+            type: EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.execution_id).toBe('exec_001');
     });
@@ -339,11 +347,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED,
+            type: EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.execution_id).toBe('exec_fail_001');
     });
@@ -580,11 +588,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.CASE_CREATED,
+            type: EventType.APP_CASE_CREATED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.CASE_CREATED);
+        const emitted = eventBus.getEmittedEvents(EventType.APP_CASE_CREATED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.case_id).toBe('case_new_001');
     });
@@ -622,11 +630,11 @@ describe('SSEConnectionManager.handleSSEEvent — payload fidelity [FRONTEND - j
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
         expect(emitted[0].payload).toBe(payload);
     });
 
@@ -639,11 +647,11 @@ describe('SSEConnectionManager.handleSSEEvent — payload fidelity [FRONTEND - j
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
         expect(emitted[0].payload).not.toHaveProperty('type');
     });
 
@@ -664,20 +672,20 @@ describe('SSEConnectionManager.handleSSEEvent — payload fidelity [FRONTEND - j
         const { manager, eventBus } = makeManager();
 
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
             data: { content: 'chunk 1', web_session_id: 'session_abc', investigation_id: 'inv_001' },
         });
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
             data: { content: 'chunk 2', web_session_id: 'session_abc', investigation_id: 'inv_001' },
         });
         manager.handleSSEEvent({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
             data: { investigation_id: 'inv_001', web_session_id: 'session_abc' },
         });
 
-        expect(eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED)).toHaveLength(2);
-        expect(eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED)).toHaveLength(1);
+        expect(eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED)).toHaveLength(2);
+        expect(eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED)).toHaveLength(1);
     });
 });
 
@@ -690,9 +698,14 @@ describe('SSEConnectionManager.handleSSEEvent — payload fidelity [FRONTEND - j
 // ---------------------------------------------------------------------------
 
 describe('SSEConnectionManager.connect — EventSource construction [FRONTEND - jsdom]', () => {
+    beforeEach(() => {
+        window.G8E_GATEWAY_URL = 'https://localhost:8443';
+    });
+
     afterEach(() => {
         vi.restoreAllMocks();
         MockEventSource._lastInstance = null;
+        delete window.G8E_GATEWAY_URL;
     });
 
     it('creates an EventSource instance when connect() is called', () => {
@@ -702,7 +715,7 @@ describe('SSEConnectionManager.connect — EventSource construction [FRONTEND - 
 
         const es = MockEventSource._lastInstance;
         expect(es).toBeInstanceOf(MockEventSource);
-        expect(es.url).toBe('/api/v1/sse/events');
+        expect(es.url).toBe('https://localhost:8443/api/v1/sse/stream');
         expect(es.withCredentials).toBe(true);
     });
 
@@ -736,11 +749,11 @@ describe('SSEConnectionManager.connect — EventSource construction [FRONTEND - 
         const es = MockEventSource._lastInstance;
         es._simulateOpen();
         es._simulateMessage({
-            type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            type: EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
             data: { content: 'hello', web_session_id: 'session_abc', investigation_id: 'inv_1' },
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
+        const emitted = eventBus.getEmittedEvents(EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.content).toBe('hello');
     });
@@ -837,7 +850,7 @@ describe('SSEConnectionManager.getConnectionStatus [FRONTEND - jsdom]', () => {
         const status = manager.getConnectionStatus();
         expect(status.isConnected).toBe(true);
         expect(status.readyState).toBe(EventSource.OPEN);
-        expect(status.url).toBe('/api/v1/sse/events');
+        expect(status.url).toBe('https://localhost:8443/api/v1/sse/stream');
     });
 
     it('returns CLOSED readyState when no connection exists', () => {

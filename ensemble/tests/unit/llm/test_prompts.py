@@ -1,3 +1,4 @@
+from app.constants.message_sender import MessageSender
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -10,7 +11,6 @@ from unittest.mock import patch
 import pytest
 
 from app.constants import (
-    EventType,
     InvestigationStatus,
     OperatorType,
     Priority,
@@ -62,7 +62,7 @@ def operator_context():
 @pytest.fixture
 def enriched_investigation():
     msg = ConversationHistoryMessage(
-        sender=EventType.SOURCE_USER_CHAT,
+        sender=MessageSender.USER_CHAT,
         content="Help me with my server",
         metadata=ConversationMessageMetadata(),
         prev_hash="0" * 64,

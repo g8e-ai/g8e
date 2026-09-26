@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants import AgentMode
+from app.constants import AgentMode, EventType
 from app.errors import DatabaseError, ValidationError
 from app.models.agent_activity import AgentActivityMetadata
 from app.models.command_request_payloads import DocumentUpdateRequestPayload
@@ -61,7 +61,7 @@ class TestAgentActivityDataService:
         assert result == metadata
         governance_client.submit_envelope.assert_awaited_once()
         message = governance_client.submit_envelope.await_args.args[0]
-        assert message.event_type == "g8e.v1.app.agent.activity.recorded"
+        assert message.event_type == EventType.APP_AGENT_ACTIVITY_RECORD_REQUESTED
         assert message.case_id == context.case_id
         assert message.investigation_id == context.investigation_id
         assert message.task_id == context.task_id

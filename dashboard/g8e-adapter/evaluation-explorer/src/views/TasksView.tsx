@@ -29,6 +29,49 @@ function TaskFlag({ children }: { children: ReactNode }) {
   return <span className="task-flag">{children}</span>;
 }
 
+function taskHasToolBoundaries(task: ScenarioTaskDefinition): boolean {
+  return Boolean(task.allowedTools?.length || task.expectedTools?.length || task.forbiddenTools?.length);
+}
+
+function TaskFlagNotes({ task }: { task: ScenarioTaskDefinition }) {
+  const notes: string[] = [];
+
+  if (task.requiresToolDecision) {
+    notes.push('Which tool is called affects the grade.');
+  }
+  if (task.requiresGovernedAction) {
+    notes.push('Pass may require refusal or policy block without host effect.');
+  }
+  if (task.expectsFailureOrUnavailable) {
+    notes.push('Explicit failure or unavailable outcomes can still pass.');
+  }
+  if (task.tinyTask) {
+    notes.push('Minimal scenario for quick smoke coverage.');
+  }
+
+  if (notes.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul className="task-flag-notes">
+      {notes.map((note) => (
+        <li key={note}>{note}</li>
+      ))}
+    </ul>
+  );
+}
+
+function gradingMethodNote(task: ScenarioTaskDefinition): string {
+  const base =
+    task.gradingMethod === 'semantic_judge'
+      ? 'An LLM judge scores the interaction against this rubric.'
+      : 'Fixed rules over trace evidence decide pass or fail.';
+  return taskHasToolBoundaries(task)
+    ? `${base} Tool boundaries below refine what counts as a correct tool choice.`
+    : base;
+}
+
 function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
   const meta = SCENARIO_CATEGORY_META[task.category];
 
@@ -50,11 +93,18 @@ function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
           {task.requiresGovernedAction ? <TaskFlag>Governed action</TaskFlag> : null}
           {task.expectsFailureOrUnavailable ? <TaskFlag>May fail or be unavailable</TaskFlag> : null}
         </div>
+        <TaskFlagNotes task={task} />
       </header>
 
       <div className="task-detail-body">
         <section className="task-detail-section">
           <h2>What the model is asked</h2>
+          <p className="task-section-note">
+            User prompt sent to the agent.
+            {task.systemContext
+              ? ' System context is additional background supplied outside the user message.'
+              : null}
+          </p>
           <blockquote className="task-prompt">{task.userPrompt}</blockquote>
           {task.systemContext ? (
             <p className="task-system-context">
@@ -65,16 +115,23 @@ function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
 
         <section className="task-detail-section">
           <h2>Pass criteria</h2>
+          <p className="task-section-note">{gradingMethodNote(task)}</p>
           <p>{task.expectedBehavior}</p>
         </section>
 
-        {task.allowedTools?.length || task.expectedTools?.length || task.forbiddenTools?.length ? (
+        {taskHasToolBoundaries(task) ? (
           <section className="task-detail-section">
             <h2>Tool boundaries</h2>
+            <p className="task-section-note">
+              Three separate policy dimensions, not one whitelist. A tool may appear in both{' '}
+              <strong>Allowed</strong> and <strong>Forbidden</strong>: available as a choice, but
+              calling it fails the scenario. Common in tool-selection and security-policy tasks.
+            </p>
             <div className="task-tool-grid">
               {task.allowedTools?.length ? (
                 <div>
                   <h3>Allowed tools</h3>
+                  <p className="task-tool-column-note">Exposed to the model during the scenario.</p>
                   <ul>
                     {task.allowedTools.map((tool) => (
                       <li key={tool}><code>{tool}</code></li>
@@ -85,6 +142,7 @@ function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
               {task.expectedTools?.length ? (
                 <div>
                   <h3>Expected tools</h3>
+                  <p className="task-tool-column-note">Tools the grader expects the model to call.</p>
                   <ul>
                     {task.expectedTools.map((tool) => (
                       <li key={tool}><code>{tool}</code></li>
@@ -95,6 +153,7 @@ function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
               {task.forbiddenTools?.length ? (
                 <div>
                   <h3>Forbidden tools</h3>
+                  <p className="task-tool-column-note">Tools that fail the scenario if the model calls them.</p>
                   <ul>
                     {task.forbiddenTools.map((tool) => (
                       <li key={tool}><code>{tool}</code></li>
@@ -108,6 +167,7 @@ function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
 
         <section className="task-detail-section">
           <h2>Concepts measured</h2>
+          <p className="task-section-note">Tags for catalog grouping and campaign reporting.</p>
           <ul className="task-concept-list">
             {task.requiredConcepts.map((concept) => (
               <li key={concept}><code>{concept}</code></li>
@@ -147,7 +207,16 @@ function TaskCard({ task }: { task: ScenarioTaskDefinition }) {
         <h3>
           <Link to={`/tasks/${task.id}`}>{task.id}</Link>
         </h3>
-        <span className="task-card-grading">{formatGradingMethod(task.gradingMethod)}</span>
+        <span
+          className="task-card-grading"
+          title={
+            task.gradingMethod === 'semantic_judge'
+              ? 'Graded by an LLM rubric over the interaction trace'
+              : 'Graded by fixed rules over trace evidence'
+          }
+        >
+          {formatGradingMethod(task.gradingMethod)}
+        </span>
       </header>
       <p className="task-card-description">{task.publicDescription}</p>
       <p className="task-card-prompt">{task.userPrompt}</p>
@@ -269,6 +338,11 @@ export function TasksView() {
                 exercises a specific behavior through the production inference and host-tool path.
                 Click any task in the{' '}
                 <Link to="/">live event stream</Link> to jump here, or browse by category below.
+              </p>
+              <p className="task-section-note tasks-hero-note">
+                Cards show a prompt excerpt. Open a task for pass criteria, tool boundaries, and
+                grading tags. Deterministic tasks use fixed trace rules; semantic-judge tasks use an
+                LLM rubric.
               </p>
               <p className="tasks-hero-links">
                 <a href={scenarioCatalogSourceUrl()} target="_blank" rel="noopener noreferrer">

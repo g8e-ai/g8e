@@ -30,7 +30,7 @@ describe('OperatorPanelService [UNIT - jsdom]', () => {
     describe('dependency injection', () => {
         it('uses the injected client instead of window.serviceClient', async () => {
             const injected = new MockServiceClient();
-            injected.setResponse('g8ed', '/api/operators/bind', makeOkResponse());
+            injected.setResponse('gateway', '/api/v1/operators/bind', makeOkResponse());
             operatorPanelService.setClient(injected);
 
             await operatorPanelService.bindOperator('op-di');
@@ -40,7 +40,7 @@ describe('OperatorPanelService [UNIT - jsdom]', () => {
 
         it('falls back to window.serviceClient when no client is injected', async () => {
             const windowClient = new MockServiceClient();
-            windowClient.setResponse('g8ed', '/api/operators/bind', makeOkResponse());
+            windowClient.setResponse('gateway', '/api/v1/operators/bind', makeOkResponse());
             window.serviceClient = windowClient;
 
             await operatorPanelService.bindOperator('op-fallback');
@@ -58,18 +58,18 @@ describe('OperatorPanelService [UNIT - jsdom]', () => {
         });
 
         describe('bindOperator', () => {
-            it('POSTs to /api/operators/bind with operator_id', async () => {
-                client.setResponse('g8ed', '/api/operators/bind', makeOkResponse({ success: true, operator: {} }));
+            it('POSTs to /api/v1/operators/bind with operator_id', async () => {
+                client.setResponse('gateway', '/api/v1/operators/bind', makeOkResponse({ success: true, operator: {} }));
 
                 const resp = await operatorPanelService.bindOperator('op-123');
 
                 expect(resp.ok).toBe(true);
                 const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', service: 'g8ed', path: '/api/operators/bind', body: { operator_id: 'op-123' } });
+                expect(req).toMatchObject({ method: 'POST', service: 'gateway', path: '/api/v1/operators/bind', body: { operator_id: 'op-123' } });
             });
 
             it('returns the raw Response so callers can inspect ok/status', async () => {
-                client.setResponse('g8ed', '/api/operators/bind', makeErrorResponse(403, { error: 'Slot limit reached' }));
+                client.setResponse('gateway', '/api/v1/operators/bind', makeErrorResponse(403, { error: 'Slot limit reached' }));
 
                 const resp = await operatorPanelService.bindOperator('op-full');
 
@@ -79,17 +79,17 @@ describe('OperatorPanelService [UNIT - jsdom]', () => {
         });
 
         describe('unbindOperator', () => {
-            it('POSTs to /api/operators/unbind with empty body by default', async () => {
-                client.setResponse('g8ed', '/api/operators/unbind', makeOkResponse());
+            it('POSTs to /api/v1/operators/unbind with empty body by default', async () => {
+                client.setResponse('gateway', '/api/v1/operators/unbind', makeOkResponse());
 
                 await operatorPanelService.unbindOperator();
 
                 const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', path: '/api/operators/unbind', body: {} });
+                expect(req).toMatchObject({ method: 'POST', path: '/api/v1/operators/unbind', body: {} });
             });
 
             it('forwards the body when operator_id is provided for force-unbind', async () => {
-                client.setResponse('g8ed', '/api/operators/unbind', makeOkResponse());
+                client.setResponse('gateway', '/api/v1/operators/unbind', makeOkResponse());
 
                 await operatorPanelService.unbindOperator({ operator_id: 'op-456' });
 
@@ -99,47 +99,47 @@ describe('OperatorPanelService [UNIT - jsdom]', () => {
         });
 
         describe('bindAllOperators', () => {
-            it('POSTs to /api/operators/bind-all with operator_ids array', async () => {
-                client.setResponse('g8ed', '/api/operators/bind-all', makeOkResponse());
+            it('POSTs to /api/v1/operators/bind with operator_ids array', async () => {
+                client.setResponse('gateway', '/api/v1/operators/bind', makeOkResponse());
 
                 await operatorPanelService.bindAllOperators(['op-1', 'op-2']);
 
                 const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', path: '/api/operators/bind-all', body: { operator_ids: ['op-1', 'op-2'] } });
+                expect(req).toMatchObject({ method: 'POST', path: '/api/v1/operators/bind', body: { operator_ids: ['op-1', 'op-2'] } });
             });
         });
 
         describe('unbindAllOperators', () => {
-            it('POSTs to /api/operators/unbind-all with operator_ids array', async () => {
-                client.setResponse('g8ed', '/api/operators/unbind-all', makeOkResponse());
+            it('POSTs to /api/v1/operators/unbind with operator_ids array', async () => {
+                client.setResponse('gateway', '/api/v1/operators/unbind', makeOkResponse());
 
                 await operatorPanelService.unbindAllOperators(['op-1', 'op-2']);
 
                 const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', path: '/api/operators/unbind-all', body: { operator_ids: ['op-1', 'op-2'] } });
+                expect(req).toMatchObject({ method: 'POST', path: '/api/v1/operators/unbind', body: { operator_ids: ['op-1', 'op-2'] } });
             });
         });
 
         describe('stopOperator', () => {
-            it('POSTs to /api/operators/:id/stop', async () => {
-                client.setResponse('g8ed', '/api/operators/op-789/stop', makeOkResponse());
+            it('POSTs to /api/v1/operators/:id/stop', async () => {
+                client.setResponse('gateway', '/api/v1/operators/op-789/stop', makeOkResponse());
 
                 await operatorPanelService.stopOperator('op-789');
 
                 const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', path: '/api/operators/op-789/stop' });
+                expect(req).toMatchObject({ method: 'POST', path: '/api/v1/operators/op-789/stop' });
             });
 
             it('builds path correctly for different operator IDs', async () => {
                 await operatorPanelService.stopOperator('abc-def-ghi');
 
                 const [req] = client.getRequestLog();
-                expect(req.path).toBe('/api/operators/abc-def-ghi/stop');
+                expect(req.path).toBe('/api/v1/operators/abc-def-ghi/stop');
             });
         });
     });
 
-    describe('operator details & API keys', () => {
+    describe('operator details', () => {
         let client;
 
         beforeEach(() => {
@@ -147,180 +147,37 @@ describe('OperatorPanelService [UNIT - jsdom]', () => {
             operatorPanelService.setClient(client);
         });
 
-        describe('getOperatorDetails', () => {
-            it('GETs /api/operators/:id/details', async () => {
-                client.setResponse('g8ed', '/api/operators/op-abc/details', makeOkResponse({ data: { operator_id: 'op-abc' } }));
+        it('GETs /api/v1/operators/:id', async () => {
+            client.setResponse('gateway', '/api/v1/operators/op-abc', makeOkResponse({ id: 'op-abc' }));
 
-                const resp = await operatorPanelService.getOperatorDetails('op-abc');
+            const resp = await operatorPanelService.getOperatorDetails('op-abc');
 
-                expect(resp.ok).toBe(true);
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'GET', service: 'g8ed', path: '/api/operators/op-abc/details' });
-            });
-
-            it('returns 404 response when operator not found', async () => {
-                const resp = await operatorPanelService.getOperatorDetails('op-missing');
-
-                expect(resp.ok).toBe(false);
-                expect(resp.status).toBe(404);
-            });
-        });
-
-        describe('getOperatorApiKey', () => {
-            it('GETs /api/operators/:id/api-key', async () => {
-                client.setResponse('g8ed', '/api/operators/op-abc/api-key', makeOkResponse({ api_key: 'key-xyz' }));
-
-                const resp = await operatorPanelService.getOperatorApiKey('op-abc');
-
-                expect(resp.ok).toBe(true);
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'GET', path: '/api/operators/op-abc/api-key' });
-            });
-        });
-
-        describe('refreshOperatorApiKey', () => {
-            it('POSTs to /api/operators/:id/refresh-api-key', async () => {
-                client.setResponse('g8ed', '/api/operators/op-abc/refresh-api-key', makeOkResponse({ new_api_key: 'new-key', slot_number: 1 }));
-
-                const resp = await operatorPanelService.refreshOperatorApiKey('op-abc');
-
-                expect(resp.ok).toBe(true);
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', path: '/api/operators/op-abc/refresh-api-key' });
-            });
+            expect(resp.ok).toBe(true);
+            const [req] = client.getRequestLog();
+            expect(req).toMatchObject({ method: 'GET', service: 'gateway', path: '/api/v1/operators/op-abc' });
         });
     });
 
-    describe('device links', () => {
-        let client;
-
-        beforeEach(() => {
-            client = new MockServiceClient();
+    describe('listOperators', () => {
+        it('normalizes gateway operator documents for the panel', async () => {
+            const client = new MockServiceClient();
+            client.setResponse('gateway', '/api/v1/operators', makeOkResponse({
+                success: true,
+                operators: [{ id: 'op-1', status: 'active', bound_web_session_id: 'sess-1' }],
+            }));
             operatorPanelService.setClient(client);
-        });
 
-        describe('generateDeviceLink', () => {
-            it('POSTs to /api/v1/auth/link/generate with operator_id', async () => {
-                client.setResponse('g8ed', '/api/v1/auth/link/generate', makeOkResponse({ token: 'tok-123', expires_at: '2026-01-01T00:00:00Z' }));
+            const data = await operatorPanelService.listOperators();
 
-                await operatorPanelService.generateDeviceLink('op-abc');
-
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', path: '/api/v1/auth/link/generate', body: { operator_id: 'op-abc' } });
-            });
-        });
-
-        describe('createDeviceLink', () => {
-            it('POSTs to /api/device-links with max_uses, expires_in_hours, and name', async () => {
-                client.setResponse('g8ed', '/api/device-links', makeOkResponse({ success: true }));
-
-                await operatorPanelService.createDeviceLink({ maxUses: 5, expiresInHours: 24, name: 'fleet-link' });
-
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({
-                    method: 'POST',
-                    path: '/api/device-links',
-                    body: { max_uses: 5, expires_in_hours: 24, name: 'fleet-link' }
-                });
-            });
-
-            it('omits name from body when name is not provided', async () => {
-                client.setResponse('g8ed', '/api/device-links', makeOkResponse());
-
-                await operatorPanelService.createDeviceLink({ maxUses: 1, expiresInHours: 1 });
-
-                const [req] = client.getRequestLog();
-                expect(req.body.name).toBeUndefined();
-            });
-
-            it('omits name from body when name is empty string', async () => {
-                client.setResponse('g8ed', '/api/device-links', makeOkResponse());
-
-                await operatorPanelService.createDeviceLink({ maxUses: 1, expiresInHours: 1, name: '' });
-
-                const [req] = client.getRequestLog();
-                expect(req.body.name).toBeUndefined();
-            });
-        });
-
-        describe('listDeviceLinks', () => {
-            it('GETs /api/device-links', async () => {
-                client.setResponse('g8ed', '/api/device-links', makeOkResponse({ links: [] }));
-
-                await operatorPanelService.listDeviceLinks();
-
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'GET', service: 'g8ed', path: '/api/device-links' });
-            });
-        });
-
-        describe('revokeDeviceLink', () => {
-            it('DELETEs /api/device-links/:tokenId without query string', async () => {
-                client.setResponse('g8ed', '/api/device-links/token-abc', makeOkResponse());
-
-                await operatorPanelService.revokeDeviceLink('token-abc');
-
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'DELETE', service: 'g8ed', path: '/api/device-links/token-abc' });
-            });
-
-            it('uses the exact tokenId in the path', async () => {
-                await operatorPanelService.revokeDeviceLink('tok-xyz-999');
-
-                const [req] = client.getRequestLog();
-                expect(req.path).toBe('/api/device-links/tok-xyz-999');
-            });
-        });
-
-        describe('deleteDeviceLink', () => {
-            it('DELETEs /api/device-links/:tokenId?action=delete', async () => {
-                client.setResponse('g8ed', '/api/device-links/token-abc?action=delete', makeOkResponse());
-
-                await operatorPanelService.deleteDeviceLink('token-abc');
-
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'DELETE', service: 'g8ed', path: '/api/device-links/token-abc?action=delete' });
-            });
+            expect(data.operators[0].operator_id).toBe('op-1');
+            expect(data.operators[0].web_session_id).toBe('sess-1');
         });
     });
 
-    describe('device authorization', () => {
-        let client;
-
-        beforeEach(() => {
-            client = new MockServiceClient();
-            operatorPanelService.setClient(client);
-        });
-
-        describe('authorizeDevice', () => {
-            it('POSTs to /api/v1/auth/link/:token/authorize', async () => {
-                client.setResponse('g8ed', '/api/v1/auth/link/tok-xyz/authorize', makeOkResponse());
-
-                await operatorPanelService.authorizeDevice('tok-xyz');
-
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', service: 'g8ed', path: '/api/v1/auth/link/tok-xyz/authorize' });
-            });
-
-            it('returns error response for unknown token', async () => {
-                client.setResponse('g8ed', '/api/v1/auth/link/bad-tok/authorize', makeErrorResponse(404, { error: 'Token not found' }));
-
-                const resp = await operatorPanelService.authorizeDevice('bad-tok');
-
-                expect(resp.ok).toBe(false);
-                expect(resp.status).toBe(404);
-            });
-        });
-
-        describe('rejectDevice', () => {
-            it('POSTs to /api/v1/auth/link/:token/reject', async () => {
-                client.setResponse('g8ed', '/api/v1/auth/link/tok-xyz/reject', makeOkResponse());
-
-                await operatorPanelService.rejectDevice('tok-xyz');
-
-                const [req] = client.getRequestLog();
-                expect(req).toMatchObject({ method: 'POST', service: 'g8ed', path: '/api/v1/auth/link/tok-xyz/reject' });
-            });
+    describe('removed browser surfaces', () => {
+        it('rejects API key and device-link calls', async () => {
+            await expect(operatorPanelService.getOperatorApiKey('op-1')).rejects.toThrow(/not available/i);
+            await expect(operatorPanelService.generateDeviceLink('op-1')).rejects.toThrow(/not available/i);
         });
     });
 });

@@ -111,11 +111,9 @@ class SettingsService:
         else:
             self._logger.info("Auditor HMAC key not available from bootstrap service")
 
-        # operator_session_id is discovered dynamically via the session-auth
-        # listener (ensemble/app/services/operator/session_auth_listener.py),
-        # not from a host env var. The ensemble authenticates to the gateway
-        # exclusively via its mTLS app cert — no host state crosses the
-        # container boundary (per docs/g8e/guides/build_apps.md § Identity
+        # Operator session identity is Gateway-owned. The ensemble authenticates
+        # to the Gateway exclusively via its mTLS app cert — no host state crosses
+        # the container boundary (per docs/g8e/guides/build_apps.md § Identity
         # and Authentication).
 
         # Apply LLM env-var bootstrap defaults (lowest priority). A fresh
@@ -187,6 +185,14 @@ class SettingsService:
             llm.llamacpp_api_key = env(EnvVar.LLM_LLAMACPP_API_KEY)
         if env(EnvVar.LLM_LLAMACPP_ENDPOINT):
             llm.llamacpp_endpoint = env(EnvVar.LLM_LLAMACPP_ENDPOINT)
+        if env(EnvVar.LLM_JEV_MODEL):
+            llm.jev_model = env(EnvVar.LLM_JEV_MODEL)
+        if env(EnvVar.LLM_JEV_API_KEY):
+            llm.jev_api_key = env(EnvVar.LLM_JEV_API_KEY)
+        elif env(EnvVar.TYPESAFE_API_KEY):
+            llm.jev_api_key = env(EnvVar.TYPESAFE_API_KEY)
+        if env(EnvVar.LLM_JEV_ENDPOINT):
+            llm.jev_endpoint = env(EnvVar.LLM_JEV_ENDPOINT)
 
     def overlay_platform_data(
         self, settings: G8eeAppSettings, app_settings: G8eeAppSettings

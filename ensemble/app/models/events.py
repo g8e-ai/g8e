@@ -32,7 +32,38 @@ accept g8ee's internal SessionEvent/BackgroundEvent routing wrappers.
 from typing import Any
 
 from app.constants import EventType
+from app.models.agents.tribunal import (
+    TribunalAuditorCompletedPayload,
+    TribunalAuditorFailedPayload,
+    TribunalAuditorStartedPayload,
+    TribunalConsensusFailedPayload,
+    TribunalDissentRecordedPayload,
+    TribunalMarshalBlockedPayload,
+    TribunalPassCompletedPayload,
+    TribunalSessionCompletedPayload,
+    TribunalSessionDisabledPayload,
+    TribunalSessionGenerationFailedPayload,
+    TribunalSessionModelNotConfiguredPayload,
+    TribunalSessionProviderUnavailablePayload,
+    TribunalSessionStartedPayload,
+    TribunalSessionSystemErrorPayload,
+    TribunalVotingCompletedPayload,
+)
 from app.models.base import G8eBaseModel, Field, model_validator
+from app.models.cases import CaseCreatedPayload, CaseEventPayload
+from app.models.operators import (
+    AgentContinueApprovalEvent,
+    CommandApprovalEvent,
+    FileEditApprovalEvent,
+    IntentApprovalEvent,
+    OperatorStatusUpdatedPayload,
+    StreamApprovalEvent,
+)
+from app.models.reputation import (
+    ReputationCommitmentCreatedPayload,
+    ReputationCommitmentFailedPayload,
+    StakeResolutionPayload,
+)
 
 from g8e.models.events import (
     _SSEEventBody,
@@ -55,6 +86,74 @@ from g8e.models.events import (
 from g8e.models.events import (
     BackgroundEventWire as _G8eBackgroundEventWire,
 )
+
+# Registry-backed SSE payload types for every ensemble-produced event on the
+# sse transport. SessionEvent and BackgroundEvent reject unknown pairs.
+SSE_PAYLOADS: dict[EventType, type[G8eBaseModel]] = {
+    EventType.AI_AGENT_CONFLICT_DETECTED: TribunalMarshalBlockedPayload,
+    EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED: AgentContinueApprovalEvent,
+    EventType.AI_CONSENSUS_SESSION_AUDITOR_FAILED: TribunalAuditorFailedPayload,
+    EventType.AI_CONSENSUS_SESSION_COMPLETED: TribunalSessionCompletedPayload,
+    EventType.AI_CONSENSUS_SESSION_DISABLED: TribunalSessionDisabledPayload,
+    EventType.AI_CONSENSUS_SESSION_GENERATION_FAILED: TribunalSessionGenerationFailedPayload,
+    EventType.AI_CONSENSUS_SESSION_MARSHAL_BLOCKED: TribunalMarshalBlockedPayload,
+    EventType.AI_CONSENSUS_SESSION_MODEL_NOT_CONFIGURED: TribunalSessionModelNotConfiguredPayload,
+    EventType.AI_CONSENSUS_SESSION_PROVIDER_UNAVAILABLE: TribunalSessionProviderUnavailablePayload,
+    EventType.AI_CONSENSUS_SESSION_STARTED: TribunalSessionStartedPayload,
+    EventType.AI_CONSENSUS_SESSION_SYSTEM_ERROR: TribunalSessionSystemErrorPayload,
+    EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED: TribunalAuditorCompletedPayload,
+    EventType.AI_CONSENSUS_VOTING_AUDIT_STARTED: TribunalAuditorStartedPayload,
+    EventType.AI_CONSENSUS_VOTING_CONSENSUS_FAILED: TribunalConsensusFailedPayload,
+    EventType.AI_CONSENSUS_VOTING_CONSENSUS_NOT_REACHED: TribunalConsensusFailedPayload,
+    EventType.AI_CONSENSUS_VOTING_CONSENSUS_REACHED: TribunalVotingCompletedPayload,
+    EventType.AI_CONSENSUS_VOTING_DISSENT_RECORDED: TribunalDissentRecordedPayload,
+    EventType.AI_CONSENSUS_VOTING_PASS_COMPLETED: TribunalPassCompletedPayload,
+    EventType.AI_CONSENSUS_VOTING_ROUND_2_CONSENSUS_FAILED: TribunalConsensusFailedPayload,
+    EventType.AI_CONSENSUS_VOTING_ROUND_2_CONSENSUS_REACHED: TribunalVotingCompletedPayload,
+    EventType.AI_CONSENSUS_VOTING_ROUND_2_STARTED: TribunalSessionStartedPayload,
+    EventType.AI_CONSENSUS_VOTING_ROUND_COMPLETED: TribunalSessionCompletedPayload,
+    EventType.AI_CONSENSUS_VOTING_ROUND_STARTED: TribunalSessionStartedPayload,
+    EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED: ChatCitationsReadyPayload,
+    EventType.AI_LLM_CHAT_ITERATION_COMPLETED: ChatTurnCompletePayload,
+    EventType.AI_LLM_CHAT_ITERATION_FAILED: ChatErrorPayload,
+    EventType.AI_LLM_CHAT_ITERATION_RETRY: ChatRetryPayload,
+    EventType.AI_LLM_CHAT_ITERATION_STARTED: ChatProcessingStartedPayload,
+    EventType.AI_LLM_CHAT_ITERATION_STOPPED: AiProcessingStoppedPayload,
+    EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED: ChatResponseChunkPayload,
+    EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED: ChatResponseCompletePayload,
+    EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED: ChatThinkingPayload,
+    EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED: AIToolLifecyclePayload,
+    EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED: AIToolLifecyclePayload,
+    EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED: AIToolLifecyclePayload,
+    EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED: AIToolLifecyclePayload,
+    EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED: AIToolLifecyclePayload,
+    EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED: AIToolLifecyclePayload,
+    EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS: TriageClarificationQuestionsPayload,
+    EventType.APP_CASE_CREATED: CaseCreatedPayload,
+    EventType.APP_CASE_UPDATED: CaseEventPayload,
+    EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED: CommandApprovalEvent,
+    EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED: FileEditApprovalEvent,
+    EventType.OPERATOR_INTENT_APPROVAL_REQUESTED: IntentApprovalEvent,
+    EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED: ReputationCommitmentCreatedPayload,
+    EventType.OPERATOR_REPUTATION_COMMITMENT_FAILED: ReputationCommitmentFailedPayload,
+    EventType.OPERATOR_REPUTATION_SLASH_TIER_1: StakeResolutionPayload,
+    EventType.OPERATOR_REPUTATION_SLASH_TIER_2: StakeResolutionPayload,
+    EventType.OPERATOR_REPUTATION_SLASH_TIER_3: StakeResolutionPayload,
+    EventType.OPERATOR_REPUTATION_STATE_UPDATED: StakeResolutionPayload,
+    EventType.OPERATOR_STATUS_UPDATED_ACTIVE: OperatorStatusUpdatedPayload,
+    EventType.OPERATOR_STATUS_UPDATED_BOUND: OperatorStatusUpdatedPayload,
+    EventType.OPERATOR_STREAM_APPROVAL_REQUESTED: StreamApprovalEvent,
+}
+
+
+def _validate_sse_payload(event_type: EventType, payload: G8eBaseModel) -> None:
+    expected = SSE_PAYLOADS.get(event_type)
+    if expected is None:
+        raise ValueError(f"event_type {event_type!r} is not registered for ensemble SSE push")
+    if type(payload) is not expected:
+        raise ValueError(
+            f"payload for {event_type!r} must be {expected.__name__}, got {type(payload).__name__}"
+        )
 
 
 class SessionEvent(G8eBaseModel):
@@ -111,7 +210,7 @@ class SessionEvent(G8eBaseModel):
         )
 
     @model_validator(mode="after")
-    def _exactly_one_session_id(self) -> SessionEvent:
+    def _validate_session_event(self) -> SessionEvent:
         if self.web_session_id and self.cli_session_id:
             raise ValueError(
                 "SessionEvent cannot set both web_session_id and cli_session_id; "
@@ -122,6 +221,7 @@ class SessionEvent(G8eBaseModel):
                 "SessionEvent requires exactly one of web_session_id or cli_session_id; "
                 "use BackgroundEvent for user-fanout events"
             )
+        _validate_sse_payload(self.event_type, self.payload)
         return self
 
 
@@ -139,6 +239,11 @@ class BackgroundEvent(G8eBaseModel):
     investigation_id: str | None = Field(default=None, description="Investigation correlation ID")
     case_id: str | None = Field(default=None, description="Case correlation ID")
     task_id: str | None = Field(default=None, description="AI task ID for routing")
+
+    @model_validator(mode="after")
+    def _validate_background_event(self) -> BackgroundEvent:
+        _validate_sse_payload(self.event_type, self.payload)
+        return self
 
 
 class SessionEventWire(_G8eSessionEventWire):

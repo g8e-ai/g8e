@@ -66,6 +66,12 @@ func BuildAssignmentLifecycleProjection(assignment *evalv1.EvaluationAssignment,
 		if stack := heterogeneous.Heterogeneous.GetStack(); stack != nil {
 			record.StackId = stack.GetStackId()
 		}
+		variantID, err := primaryVariantIDForAssignment(assignment)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: build assignment lifecycle projection: %w", err)
+		}
+		record.VariantId = variantID
+		record.DesignatedRole = evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY
 	}
 	return record, nil
 }
@@ -100,6 +106,14 @@ func BuildAssignmentResultProjection(assignment *evalv1.EvaluationAssignment, re
 		if variant := homogeneous.Homogeneous.GetCandidateVariant(); variant != nil {
 			projection.VariantId = variant.GetVariantId()
 		}
+	}
+	if heterogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Heterogeneous); ok && heterogeneous.Heterogeneous != nil {
+		variantID, err := primaryVariantIDForAssignment(assignment)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: build assignment result projection: %w", err)
+		}
+		projection.VariantId = variantID
+		projection.DesignatedRole = evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY
 	}
 	projection.UnavailableMetricReasons = collectUnavailableMetricReasons(result)
 	return projection, nil

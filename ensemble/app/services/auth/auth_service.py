@@ -16,6 +16,8 @@ from app.constants import (
     AUTHORIZATION,
     AuthMethod,
     CLI_SESSION_ID,
+    GATEWAY_BROWSER_PROXY_HEADER,
+    GATEWAY_BROWSER_PROXY_VALUE,
     G8EE_COMPONENT,
     WEB_SESSION_ID,
     X_PROXY_CLI_SESSION_ID,
@@ -83,6 +85,12 @@ class AuthService:
                     )
 
         if user is None and proxy_user_id and proxy_user_email:
+            gateway_proxy = request.headers.get(GATEWAY_BROWSER_PROXY_HEADER)
+            if gateway_proxy != GATEWAY_BROWSER_PROXY_VALUE:
+                raise AuthenticationError(
+                    "Proxy identity requires Gateway browser proxy stamp",
+                    component=G8EE_COMPONENT,
+                )
             proxy_cli_session_id = request.headers.get(X_PROXY_CLI_SESSION_ID) or request.headers.get(CLI_SESSION_ID)
             proxy_web_session_id = request.headers.get(X_PROXY_WEB_SESSION_ID) or request.headers.get(WEB_SESSION_ID)
             g8e_context = getattr(request.state, "g8e_context", None)

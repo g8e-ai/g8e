@@ -4,6 +4,7 @@
 import { InvestigationStatus } from '../constants/investigation-constants.js';
 import { FrontendIdentifiableModel, F } from './base.js';
 import { EventType as AutoEventType } from '../constants/events.js';
+import { MessageSender } from '../constants/message-senders.js';
 
 export const EventType = AutoEventType;
 
@@ -78,11 +79,11 @@ export class InvestigationHistoryEntry extends FrontendIdentifiableModel {
      * This is the ONLY place where normalization from external sources happens.
      */
     static _senderToEventType = Object.freeze({
-        [EventType.EVENT_SOURCE_USER_CHAT]:     EventType.INVESTIGATION_CHAT_MESSAGE_USER,
-        [EventType.EVENT_SOURCE_AI_PRIMARY]:    EventType.INVESTIGATION_CHAT_MESSAGE_AI,
-        [EventType.EVENT_SOURCE_AI_ASSISTANT]:  EventType.INVESTIGATION_CHAT_MESSAGE_AI,
-        [EventType.EVENT_SOURCE_USER_TERMINAL]: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
-        [EventType.EVENT_SOURCE_SYSTEM]:        EventType.INVESTIGATION_CHAT_MESSAGE_SYSTEM,
+        [MessageSender.USER_CHAT]:     EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
+        [MessageSender.AI_PRIMARY]:    EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI,
+        [MessageSender.AI_ASSISTANT]:  EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI,
+        [MessageSender.USER_TERMINAL]: EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER,
+        [MessageSender.SYSTEM]:        EventType.APP_INVESTIGATION_CHAT_MESSAGE_SYSTEM,
     });
 
     static parse(raw = {}) {
@@ -126,20 +127,20 @@ export class InvestigationHistoryEntry extends FrontendIdentifiableModel {
     }
 
     isUserMessage() {
-        return this.event_type === EventType.INVESTIGATION_CHAT_MESSAGE_USER ||
-               this.actor === EventType.EVENT_SOURCE_USER_CHAT ||
-               this.actor === EventType.EVENT_SOURCE_USER_TERMINAL;
+        return this.event_type === EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER ||
+               this.actor === MessageSender.USER_CHAT ||
+               this.actor === MessageSender.USER_TERMINAL;
     }
 
     isAIResponse() {
-        return this.event_type === EventType.INVESTIGATION_CHAT_MESSAGE_AI ||
-               this.actor === EventType.EVENT_SOURCE_AI_PRIMARY ||
-               this.actor === EventType.EVENT_SOURCE_AI_ASSISTANT;
+        return this.event_type === EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI ||
+               this.actor === MessageSender.AI_PRIMARY ||
+               this.actor === MessageSender.AI_ASSISTANT;
     }
 
     isSystemMessage() {
-        return this.event_type === EventType.INVESTIGATION_CHAT_MESSAGE_SYSTEM ||
-               this.actor === EventType.EVENT_SOURCE_SYSTEM;
+        return this.event_type === EventType.APP_INVESTIGATION_CHAT_MESSAGE_SYSTEM ||
+               this.actor === MessageSender.SYSTEM;
     }
 
     getSenderDisplayName() {
@@ -237,11 +238,11 @@ export class InvestigationModel extends FrontendIdentifiableModel {
     }
 
     getUserMessages() {
-        return this.getMessagesBySender(EventType.EVENT_SOURCE_USER_CHAT);
+        return this.getMessagesBySender(MessageSender.USER_CHAT);
     }
 
     getAIMessages() {
-        return this.getMessagesBySender(EventType.EVENT_SOURCE_AI_PRIMARY);
+        return this.getMessagesBySender(MessageSender.AI_PRIMARY);
     }
 
     hasConversationHistory() {
@@ -254,7 +255,7 @@ export class InvestigationFactory {
         return InvestigationModel.parse(data);
     }
 
-    static createConversationMessage(content, eventType, investigationId, webSessionId = null, caseId = null, sender = EventType.EVENT_SOURCE_USER_CHAT) {
+    static createConversationMessage(content, eventType, investigationId, webSessionId = null, caseId = null, sender = MessageSender.USER_CHAT) {
         return InvestigationHistoryEntry.parse({
             content,
             summary: content,

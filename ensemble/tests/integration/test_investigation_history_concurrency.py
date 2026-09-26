@@ -16,7 +16,7 @@ from app.models.investigations import (
     InvestigationModel,
 )
 from app.services.investigation.investigation_data_service import InvestigationDataService
-from app.utils.ledger_hash import verify_chain
+from app.utils.hashing.ledger_hash import verify_chain
 
 
 @pytest.fixture

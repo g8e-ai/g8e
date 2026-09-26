@@ -36,21 +36,19 @@ from app.constants import (
     CommandErrorType,
     ExecutionStatus,
     FileOperation,
-    HeartbeatType,
     HistoryActor,
     OperatorHistoryEventType,
     OperatorStatus,
     OperatorType,
     VersionStability,
 )
-from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,
     FileOperationRiskAnalysis,
 )
-from app.utils.timestamp import now
-from app.utils.ledger_hash import compute_entry_hash
+from app.utils.time_ids.timestamp import now
+from app.utils.hashing.ledger_hash import compute_entry_hash
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
@@ -133,12 +131,11 @@ class OperatorHistoryEntry(G8eBaseModel):
 
 
 class OperatorDocument(G8eIdentifiableModel):
-    """g8ee read-side projection of the client OperatorDocument.
+    """g8ee read-side projection of the Gateway OperatorDocument.
 
-    Maps to operator_status_info in protocol/models/operator_document.json.
-    Populated from operator KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
-    GET /api/internal/operators/:id/status.
-    client is the authority - g8ee only reads this document.
+    Populated from Gateway GET /api/v1/operators and session lookups via
+    GatewayOperatorClient. The Gateway owns operator persistence, heartbeat
+    fields, and lifecycle state; g8ee never writes operator documents.
     """
 
     user_id: str = Field(description="User ID who owns this operator (always set by client)")
@@ -168,7 +165,7 @@ class OperatorDocument(G8eIdentifiableModel):
     )
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
     case_id: str | None = Field(default=None, description="Current case ID")
-    api_key: str | None = Field(default=None, description="Operator API key (authority: g8ee)")
+    api_key: str | None = Field(default=None, description="Operator API key (Gateway-owned)")
     is_active: bool = Field(default=False, description="Whether Operator is in active status")
     operator_type: OperatorType = Field(
         default=OperatorType.REMOTE, description="Operator deployment type"
@@ -196,7 +193,7 @@ class OperatorDocument(G8eIdentifiableModel):
     )
     history_trail: list[OperatorHistoryEntry] = Field(
         default_factory=list,
-        description="Operator lifecycle audit trail (append-only). Authority: g8ee.",
+        description="Operator lifecycle audit trail (Gateway-owned append-only history).",
     )
 
     @property
@@ -210,11 +207,28 @@ class OperatorDocument(G8eIdentifiableModel):
         """Ensure current_hostname stays in sync with latest_heartbeat_snapshot.system_identity.hostname."""
         if v is not None:
             return v
-        if info.data.get("latest_heartbeat_snapshot") and isinstance(
-            info.data["latest_heartbeat_snapshot"], HeartbeatSnapshot
-        ):
-            return info.data["latest_heartbeat_snapshot"].system_identity.hostname
+        snapshot = info.data.get("latest_heartbeat_snapshot")
+        if isinstance(snapshot, HeartbeatSnapshot):
+            return snapshot.system_identity.hostname
+        if isinstance(snapshot, dict):
+            identity = snapshot.get("system_identity")
+            if isinstance(identity, dict):
+                hostname = identity.get("hostname")
+                if isinstance(hostname, str) and hostname:
+                    return hostname
         return None
+
+    @model_validator(mode="after")
+    def populate_current_hostname_from_snapshot(self) -> OperatorDocument:
+        # Pydantic may invoke this validator on test doubles (e.g. MagicMock(spec=...))
+        # when EnrichedInvestigationContext uses arbitrary_types_allowed.
+        if type(self) is not OperatorDocument:
+            return self
+        if self.current_hostname is None and self.latest_heartbeat_snapshot:
+            identity = self.latest_heartbeat_snapshot.system_identity
+            if identity and identity.hostname:
+                object.__setattr__(self, "current_hostname", identity.hostname)
+        return self
 
     @field_validator("latest_heartbeat_snapshot", mode="before")
     @classmethod
@@ -240,8 +254,8 @@ class OperatorDocument(G8eIdentifiableModel):
 # HEARTBEAT DATA MODELS
 # =============================================================================
 # Clean, normalized heartbeat data structure for Operator telemetry.
-# Heartbeats are stored in database (operator document) and sent via SSE to client.
-# Last 10 heartbeats are retained in a rolling buffer for historical context.
+# The Gateway owns heartbeat persistence. g8ee may retain this model only as a
+# read-only DTO for Gateway responses.
 # =============================================================================
 
 
@@ -361,14 +375,6 @@ class HeartbeatFingerprintDetails(G8eBaseModel):
     machine_id: str | None = Field(default=None, description="Machine ID")
 
 
-def _coerce_heartbeat_type(value: object) -> HeartbeatType:
-    try:
-        return HeartbeatType(value)
-    except (ValueError, KeyError):
-        logger.warning("Unknown HeartbeatType value %r - defaulting to AUTOMATIC", value)
-        return HeartbeatType.AUTOMATIC
-
-
 class HeartbeatVersionInfo(G8eBaseModel):
     """Operator version metadata from heartbeat."""
 
@@ -383,10 +389,11 @@ class HeartbeatSnapshot(G8eBaseModel):
     This is the canonical representation of Operator heartbeat data.
     g8eo sends heartbeats every 30 seconds with system telemetry.
 
-    Storage:
-    - Stored in database Operator document (heartbeat_history array, max 10)
-    - Sent to client via SSE for real-time UI updates
-    - NOT stored in operator cache
+    Ownership:
+    - The Gateway stores the canonical HeartbeatResult protojson snapshot in the
+      operator document.
+    - g8ee uses this normalized model only as a read-only Gateway DTO.
+    - g8ee never subscribes to heartbeat channels or writes heartbeat fields.
 
     Usage:
     - AI context for understanding Operator system state
@@ -396,9 +403,7 @@ class HeartbeatSnapshot(G8eBaseModel):
 
     # Timestamp and type
     timestamp: UTCDatetime = Field(default_factory=now, description="When heartbeat was received")
-    heartbeat_type: HeartbeatType = Field(
-        default=HeartbeatType.AUTOMATIC, description="Heartbeat type"
-    )
+    status: str | None = Field(default=None, description="Canonical heartbeat status")
 
     # System identity (static info about the machine)
     system_identity: HeartbeatSystemIdentity = Field(
@@ -406,17 +411,17 @@ class HeartbeatSnapshot(G8eBaseModel):
     )
 
     # Performance metrics (dynamic resource usage)
-    performance: HeartbeatPerformanceMetrics = Field(
+    performance_metrics: HeartbeatPerformanceMetrics = Field(
         default_factory=HeartbeatPerformanceMetrics, description="Current performance metrics"
     )
 
     # Network info
-    network: HeartbeatNetworkInfo = Field(
+    network_info: HeartbeatNetworkInfo = Field(
         default_factory=HeartbeatNetworkInfo, description="Network information"
     )
 
     # Uptime
-    uptime: HeartbeatUptimeInfo = Field(
+    uptime_info: HeartbeatUptimeInfo = Field(
         default_factory=HeartbeatUptimeInfo, description="Uptime information"
     )
 
@@ -469,110 +474,6 @@ class HeartbeatSnapshot(G8eBaseModel):
     ledger_enabled: bool = Field(
         default=False, description="True when LFAA ledger mirroring is active"
     )
-
-    @classmethod
-    def from_wire(cls, payload: G8eoHeartbeatPayload) -> HeartbeatSnapshot:
-        """Create HeartbeatSnapshot from the typed g8eo wire payload.
-
-        Canonical shape defined in protocol/proto/operator.proto (HeartbeatSnapshot message).
-        Validation happens once at the pub/sub boundary in heartbeat_service.py
-        before this is called.
-        """
-        return cls(
-            timestamp=now(),
-            heartbeat_type=_coerce_heartbeat_type(payload.heartbeat_type),
-            system_identity=HeartbeatSystemIdentity(
-                hostname=payload.system_identity.hostname,
-                os=payload.system_identity.os,
-                architecture=payload.system_identity.architecture,
-                pwd=payload.system_identity.pwd,
-                current_user=payload.system_identity.current_user,
-                cpu_count=payload.system_identity.cpu_count,
-                memory_mb=payload.system_identity.memory_mb,
-            ),
-            performance=HeartbeatPerformanceMetrics(
-                cpu_percent=payload.performance_metrics.cpu_percent,
-                memory_percent=payload.performance_metrics.memory_percent,
-                disk_percent=payload.performance_metrics.disk_percent,
-                network_latency=payload.performance_metrics.network_latency,
-                memory_used_mb=payload.performance_metrics.memory_used_mb,
-                memory_total_mb=payload.performance_metrics.memory_total_mb,
-                disk_used_gb=payload.performance_metrics.disk_used_gb,
-                disk_total_gb=payload.performance_metrics.disk_total_gb,
-            ),
-            network=HeartbeatNetworkInfo(
-                public_ip=payload.network_info.public_ip,
-                internal_ip=payload.network_info.internal_ip,
-                interfaces=payload.network_info.interfaces,
-                connectivity_status=[
-                    HeartbeatNetworkInterface(name=s.name, ip=s.ip, mtu=s.mtu)
-                    for s in (payload.network_info.connectivity_status or [])
-                ],
-            ),
-            uptime=HeartbeatUptimeInfo(
-                uptime_display=payload.uptime_info.uptime,
-                uptime_seconds=payload.uptime_info.uptime_seconds,
-            ),
-            os_details=HeartbeatOSDetails(
-                kernel=payload.os_details.kernel,
-                distro=payload.os_details.distro,
-                version=payload.os_details.version,
-            ),
-            user_details=HeartbeatUserDetails(
-                username=payload.user_details.username,
-                uid=payload.user_details.uid,
-                gid=payload.user_details.gid,
-                home=payload.user_details.home,
-                name=payload.user_details.name,
-                shell=payload.user_details.shell,
-            ),
-            environment=HeartbeatEnvironment(
-                pwd=payload.environment.pwd,
-                lang=payload.environment.lang,
-                timezone=payload.environment.timezone,
-                term=payload.environment.term,
-                is_container=payload.environment.is_container,
-                container_runtime=payload.environment.container_runtime,
-                container_signals=payload.environment.container_signals,
-                init_system=payload.environment.init_system,
-            ),
-            version_info=HeartbeatVersionInfo(
-                operator_version=payload.version_info.operator_version,
-                status=payload.version_info.status,
-            ),
-            disk_details=HeartbeatDiskDetails(
-                total_gb=payload.disk_details.total_gb,
-                used_gb=payload.disk_details.used_gb,
-                free_gb=payload.disk_details.free_gb,
-                percent=payload.disk_details.percent,
-            ),
-            memory_details=HeartbeatMemoryDetails(
-                total_mb=payload.memory_details.total_mb,
-                available_mb=payload.memory_details.available_mb,
-                used_mb=payload.memory_details.used_mb,
-                percent=payload.memory_details.percent,
-            ),
-            fingerprint_details=HeartbeatFingerprintDetails(
-                os=payload.fingerprint_details.os if payload.fingerprint_details else None,
-                architecture=payload.fingerprint_details.architecture
-                if payload.fingerprint_details
-                else None,
-                cpu_count=payload.fingerprint_details.cpu_count
-                if payload.fingerprint_details
-                else None,
-                machine_id=payload.fingerprint_details.machine_id
-                if payload.fingerprint_details
-                else None,
-            )
-            if payload.fingerprint_details
-            else None,
-            system_fingerprint=payload.system_fingerprint,
-            cloud_provider=None,
-            local_storage_enabled=payload.capability_flags.local_storage_enabled,
-            git_available=payload.capability_flags.git_available,
-            ledger_enabled=payload.capability_flags.ledger_enabled,
-        )
-
 
 class PendingApproval(G8eBaseModel):
     """
@@ -928,45 +829,11 @@ class TruncatedOutput(G8eBaseModel):
         return result
 
 
-class HeartbeatSSEEnvelope(G8eBaseModel):
-    """Wire envelope for OPERATOR_HEARTBEAT_RECEIVED SSE events.
-
-    Authorship boundary: g8ee owns `operator_id` and `status` (the authoritative value from
-    OperatorDocument); `metrics` carries the g8eo-authored HeartbeatSnapshot
-    snapshot verbatim (defined in protocol/proto/operator.proto) -
-    the same instance persisted as `latest_heartbeat_snapshot` on the operator
-    document. There is no flat projection: wire, persistence, and browser
-    all see the identical nested shape. Callers must never mutate fields
-    after construction.
-    """
-
-    operator_id: str = Field(description="Operator ID")
-    status: OperatorStatus = Field(
-        description="Authoritative operator status from OperatorDocument"
-    )
-    metrics: HeartbeatSnapshot = Field(description="Full HeartbeatSnapshot snapshot (nested)")
-
-    @classmethod
-    def from_heartbeat(
-        cls,
-        operator_id: str,
-        status: OperatorStatus,
-        heartbeat: HeartbeatSnapshot,
-    ) -> HeartbeatSSEEnvelope:
-        """Build the envelope from an authoritative operator_id+status plus the
-        full HeartbeatSnapshot. `metrics` holds the heartbeat instance as-is."""
-        return cls(
-            operator_id=operator_id,
-            status=status,
-            metrics=heartbeat,
-        )
-
-
 class OperatorStatusUpdatedPayload(G8eBaseModel):
     """Wire payload for OPERATOR_STATUS_UPDATED_* SSE events.
 
     Mirrors services/client/models/sse_models.js OperatorStatusUpdatedData.
-    Emitted by HeartbeatStaleMonitorService when an operator transitions
+    Emitted by the Gateway when an operator transitions
     between BOUND/STALE or ACTIVE/OFFLINE due to heartbeat freshness.
     """
 

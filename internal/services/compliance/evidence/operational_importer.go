@@ -19,6 +19,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -70,8 +71,14 @@ func (i *OperationalExportImporter) Import(ctx context.Context) ([]EvidenceNode,
 	seenArtifactIDs := make(map[string]struct{}, len(artifacts))
 	for _, artifact := range artifacts {
 		artifactType := ArtifactType(artifact.ArtifactType)
-		if !ValidRelativePath(artifact.RelativePath) || artifact.SHA256 == "" || artifact.ArtifactID == "" || artifact.TransactionID == "" || artifact.ProducedAtUTC == "" || artifactType != ArtifactTypeActionReceipt && artifactType != ArtifactTypeReceiptPersistence && artifactType != ArtifactTypeCommitment {
+		if !ValidRelativePath(artifact.RelativePath) || artifact.SHA256 == "" || artifact.ArtifactID == "" || artifact.ProducedAtUTC == "" || artifactType != ArtifactTypeActionReceipt && artifactType != ArtifactTypeReceiptPersistence && artifactType != ArtifactTypeCommitment && artifactType != ArtifactTypeAuditChainEntry {
 			return nil, fmt.Errorf("%w: operational artifact inventory entry is incomplete", constants.ErrEvidenceArtifactMalformed)
+		}
+		if artifactType != ArtifactTypeAuditChainEntry && artifact.TransactionID == "" {
+			return nil, fmt.Errorf("%w: operational artifact inventory entry is incomplete", constants.ErrEvidenceArtifactMalformed)
+		}
+		if artifactType == ArtifactTypeAuditChainEntry && artifact.Sequence <= 0 {
+			return nil, fmt.Errorf("%w: operational audit chain entry sequence is missing", constants.ErrEvidenceArtifactMalformed)
 		}
 		if _, duplicate := seenPaths[artifact.RelativePath]; duplicate {
 			return nil, fmt.Errorf("%w: duplicate operational artifact path %s", constants.ErrEvidenceDuplicateID, artifact.RelativePath)
@@ -91,7 +98,7 @@ func (i *OperationalExportImporter) Import(ctx context.Context) ([]EvidenceNode,
 		}
 		entriesByType[artifactType] = append(entriesByType[artifactType], artifact)
 	}
-	if inventory.ReceiptCount != len(entriesByType[ArtifactTypeActionReceipt]) || inventory.PersistenceCount != len(entriesByType[ArtifactTypeReceiptPersistence]) || inventory.CommitmentCount != len(entriesByType[ArtifactTypeCommitment]) {
+	if inventory.ReceiptCount != len(entriesByType[ArtifactTypeActionReceipt]) || inventory.PersistenceCount != len(entriesByType[ArtifactTypeReceiptPersistence]) || inventory.CommitmentCount != len(entriesByType[ArtifactTypeCommitment]) || inventory.AuditChainCount != len(entriesByType[ArtifactTypeAuditChainEntry]) {
 		return nil, fmt.Errorf("%w: operational artifact counts do not match inventory", constants.ErrEvidenceArtifactMalformed)
 	}
 
@@ -198,6 +205,12 @@ func (i *OperationalExportImporter) Import(ctx context.Context) ([]EvidenceNode,
 	if err := validateOperationalCommitmentSegment(inventory, commitmentRecords); err != nil {
 		return nil, err
 	}
+	chainNodesByTransaction, chainSegment, err := importOperationalAuditChainEntries(ctx, i, entriesByType[ArtifactTypeAuditChainEntry], inventory)
+	if err != nil {
+		return nil, err
+	}
+	nodes = append(nodes, chainNodesByTransaction...)
+
 	for _, record := range commitmentRecords {
 		receipt := receiptsByTransaction[record.attestation.GetTransactionId()]
 		if receipt == nil {
@@ -216,6 +229,28 @@ func (i *OperationalExportImporter) Import(ctx context.Context) ([]EvidenceNode,
 				}
 			}
 		}
+	}
+	for transactionID, receiptNode := range receiptNodesByTransaction {
+		receipt := receiptsByTransaction[transactionID]
+		for _, chainNode := range chainNodesByTransaction {
+			if chainNode.TransactionID != transactionID {
+				continue
+			}
+			if !operationalReceiptMatchesChainEntry(receipt, chainNode.CanonicalBytes) {
+				continue
+			}
+			for index := range nodes {
+				if nodes[index].ArtifactID == receiptNode.ArtifactID {
+					nodes[index].References = append(nodes[index].References, chainNode.ArtifactID)
+				}
+				if nodes[index].ArtifactID == chainNode.ArtifactID {
+					nodes[index].References = append(nodes[index].References, receiptNode.ArtifactID)
+				}
+			}
+		}
+	}
+	if err := validateOperationalAuditChainInventory(inventory, chainSegment); err != nil {
+		return nil, err
 	}
 	return nodes, nil
 }
@@ -352,4 +387,100 @@ func matchesOperationalArtifact(artifact OperationalExportArtifact, body []byte)
 	digest := sha256.Sum256(body)
 	digestHex := hex.EncodeToString(digest[:])
 	return digestHex == artifact.SHA256 && ContentAddress(ArtifactType(artifact.ArtifactType), body) == artifact.ArtifactID
+}
+
+func importOperationalAuditChainEntries(ctx context.Context, importer *OperationalExportImporter, entries []OperationalExportArtifact, inventory *OperationalSourceInventory) ([]EvidenceNode, []storage.AuditChainSegmentEntry, error) {
+	if len(entries) == 0 {
+		return nil, nil, nil
+	}
+	segment := make([]storage.AuditChainSegmentEntry, 0, len(entries))
+	nodes := make([]EvidenceNode, 0, len(entries))
+	for _, entry := range entries {
+		entryPath := importer.sourceArtifactPath(entry.RelativePath)
+		body, err := importer.reader.ReadFile(ctx, entryPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !matchesOperationalArtifact(entry, body) {
+			return nil, nil, fmt.Errorf("%w: operational audit chain entry %s does not match its inventory digest", constants.ErrChecksumMismatch, entry.RelativePath)
+		}
+		chainEntry, err := storage.UnmarshalAuditChainSegmentEntry(body)
+		if err != nil {
+			return nil, nil, err
+		}
+		if chainEntry.Seq != entry.Sequence {
+			return nil, nil, fmt.Errorf("%w: operational audit chain sequence does not match inventory", constants.ErrEvidenceScopeMismatch)
+		}
+		if entry.TransactionID != "" && chainEntry.TransactionID != entry.TransactionID {
+			return nil, nil, fmt.Errorf("%w: operational audit chain transaction does not match inventory", constants.ErrEvidenceScopeMismatch)
+		}
+		segment = append(segment, chainEntry)
+		producedAt, err := time.Parse(time.RFC3339Nano, chainEntry.Timestamp)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: parse audit chain timestamp: %w", constants.ErrEvidenceArtifactMalformed, err)
+		}
+		nodes = append(nodes, EvidenceNode{
+			ArtifactID:         entry.ArtifactID,
+			ArtifactType:       ArtifactTypeAuditChainEntry,
+			SHA256:             entry.SHA256,
+			MediaType:          constants.MediaTypeJSON,
+			SchemaRef:          "g8e.storage.AuditChainSegmentEntry",
+			ProducerIdentity:   chainEntry.OperatorSessionID,
+			ProducedAt:         producedAt.UTC(),
+			ScopeID:            importer.scopeID,
+			RunID:              importer.admission.GetRunId(),
+			TransactionID:      chainEntry.TransactionID,
+			VerificationStatus: VerificationStatusVerified,
+			VerifierID:         constants.AuditChainEvidenceVerifierID,
+			VerifierVersion:    constants.AuditChainEvidenceVerifierVersion,
+			VerifiedAt:         importer.verifiedAt,
+			BundlePath:         entryPath,
+			CanonicalBytes:     body,
+		})
+	}
+	if err := storage.VerifyAuditChainSegment(segment, inventory.AuditChainBoundaryPriorHash, inventory.AuditChainHeadHash); err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrInvalidEvidenceGraph, err)
+	}
+	return nodes, segment, nil
+}
+
+func validateOperationalAuditChainInventory(inventory *OperationalSourceInventory, segment []storage.AuditChainSegmentEntry) error {
+	if len(segment) == 0 {
+		if inventory.AuditChainCount != 0 {
+			return fmt.Errorf("%w: operational audit chain inventory is non-empty without artifacts", constants.ErrEvidenceArtifactMalformed)
+		}
+		return nil
+	}
+	sorted := append([]storage.AuditChainSegmentEntry(nil), segment...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Seq < sorted[j].Seq })
+	if inventory.AuditChainFirstSeq != sorted[0].Seq || inventory.AuditChainLastSeq != sorted[len(sorted)-1].Seq {
+		return fmt.Errorf("%w: operational audit chain segment bounds do not match inventory", constants.ErrEvidenceScopeMismatch)
+	}
+	if !inventory.AuditChainSequenceContiguous || sorted[len(sorted)-1].Seq-sorted[0].Seq+1 != int64(len(sorted)) {
+		return fmt.Errorf("%w: operational audit chain segment sequence has a gap", constants.ErrInvalidEvidenceGraph)
+	}
+	for index := 1; index < len(sorted); index++ {
+		if sorted[index].Seq != sorted[index-1].Seq+1 || sorted[index].PrevHash != sorted[index-1].Hash {
+			return fmt.Errorf("%w: operational audit chain segment predecessor link is invalid", constants.ErrInvalidEvidenceGraph)
+		}
+	}
+	return nil
+}
+
+func operationalReceiptMatchesChainEntry(receipt *operatorv1.ActionReceipt, chainBody []byte) bool {
+	if receipt == nil {
+		return false
+	}
+	chainEntry, err := storage.UnmarshalAuditChainSegmentEntry(chainBody)
+	if err != nil {
+		return false
+	}
+	if chainEntry.TransactionID != "" && chainEntry.TransactionID != receipt.GetTransactionId() {
+		return false
+	}
+	equal, err := CanonicalProtoBodyEqual([]byte(chainEntry.ContentText), receipt)
+	if err != nil {
+		return false
+	}
+	return equal
 }

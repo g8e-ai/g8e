@@ -40,33 +40,6 @@ class FakeEventService:
             self.published.append(event)
         return "fake-publish-id"
 
-    async def publish_command_event(
-        self,
-        event_type: EventType,
-        data: G8eBaseModel,
-        g8e_context: G8eHttpContext,
-        *,
-        task_id: str,
-    ) -> None:
-        self.command_events.append(
-            {
-                "event_type": event_type,
-                "data": data,
-                "g8e_context": g8e_context,
-                "task_id": task_id,
-            }
-        )
-        # Converge command events into the main published list as SessionEvents
-        from app.models.events import SessionEvent
-
-        event = SessionEvent.from_context(
-            context=g8e_context,
-            event_type=event_type,
-            payload=data,
-        )
-        # CRITICAL: We MUST call self.publish() which is an AsyncMock.
-        # The AsyncMock's side_effect is _record_publish, which appends to self.published.
-        await self.publish(event)
 
     async def publish_reputation_event(
         self,

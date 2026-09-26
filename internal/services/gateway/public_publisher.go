@@ -20,6 +20,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,11 +79,12 @@ var prohibitedRecordFields = []string{
 // artifact is public_safe by construction — the builder does not accept
 // restricted artifacts.
 type ProofArtifactInput struct {
-	Filename    string
-	MediaType   string
-	Content     []byte
-	CampaignID  string
-	SourceRunID string
+	Filename            string
+	MediaType           string
+	Content             []byte
+	CampaignID          string
+	SourceRunID         string
+	VerificationCommand string
 }
 
 type PublicOutboxStore interface {
@@ -1204,67 +1206,169 @@ func (s *PublicPublisherService) RotateKeyTo(ctx context.Context, newPriv ed2551
 }
 
 func (s *PublicPublisherService) PushProofPackage(ctx context.Context) error {
-	manifestExists, err := s.fileSvc.FileExists(ctx, constants.PublicProofManifestFilename)
+	manifest, err := s.loadProofManifest(ctx)
 	if err != nil {
-		return fmt.Errorf("public-feed: inspect proof manifest: %w", err)
+		return err
 	}
-	catalogExists, err := s.fileSvc.FileExists(ctx, constants.PublicProofCatalogFilename)
-	if err != nil {
-		return fmt.Errorf("public-feed: inspect proof catalog: %w", err)
-	}
-	if !manifestExists && !catalogExists {
+	if manifest == nil {
 		return nil
 	}
-	if !manifestExists || !catalogExists {
-		return constants.ErrPublicFeedProofManifestInvalid
+	catalog := proofCatalogFromManifest(*manifest)
+	syncState, err := s.loadProofMirrorSyncState(ctx)
+	if err != nil {
+		return err
+	}
+	if syncState != nil && syncState.ProofRootSHA256 == manifest.ProofRootSHA256 {
+		return nil
+	}
+	mirrorArtifactIDs, mirrorRoot, mirrorErr := s.fetchMirrorProofManifestArtifactSet(ctx)
+	if mirrorErr == nil && mirrorRoot == manifest.ProofRootSHA256 {
+		return s.saveProofMirrorSyncState(ctx, models.PublicProofMirrorSyncState{
+			SchemaVersion:     constants.PublicProofMirrorSyncSchemaVersion,
+			SourceID:          s.cfg.SourceID,
+			ProofRootSHA256:   manifest.ProofRootSHA256,
+			SyncedArtifactIDs: catalogArtifactIDs(catalog),
+			SyncedAt:          time.Now().UTC(),
+		})
+	}
+	pendingIDs := proofMirrorPendingArtifactIDs(manifest, mirrorArtifactIDs)
+	if len(pendingIDs) == 0 {
+		if len(manifest.Artifacts) == 0 {
+			return s.saveProofMirrorSyncState(ctx, models.PublicProofMirrorSyncState{
+				SchemaVersion:     constants.PublicProofMirrorSyncSchemaVersion,
+				SourceID:          s.cfg.SourceID,
+				ProofRootSHA256:   manifest.ProofRootSHA256,
+				SyncedArtifactIDs: catalogArtifactIDs(catalog),
+				SyncedAt:          time.Now().UTC(),
+			})
+		}
+		return s.pushProofPackageFull(ctx, manifest)
+	}
+	if err := s.pushProofArtifactIDs(ctx, manifest, pendingIDs); err != nil {
+		return err
+	}
+	return s.saveProofMirrorSyncState(ctx, models.PublicProofMirrorSyncState{
+		SchemaVersion:     constants.PublicProofMirrorSyncSchemaVersion,
+		SourceID:          s.cfg.SourceID,
+		ProofRootSHA256:   manifest.ProofRootSHA256,
+		SyncedArtifactIDs: catalogArtifactIDs(catalog),
+		SyncedAt:          time.Now().UTC(),
+	})
+}
+
+func proofMirrorPendingArtifactIDs(manifest *models.PublicProofManifest, mirrorArtifactIDs map[string]struct{}) []string {
+	if manifest == nil || len(manifest.Artifacts) == 0 {
+		return nil
+	}
+	pendingIDs := make([]string, 0, len(manifest.Artifacts))
+	for _, entry := range manifest.Artifacts {
+		if _, ok := mirrorArtifactIDs[entry.ArtifactID]; !ok {
+			pendingIDs = append(pendingIDs, entry.ArtifactID)
+		}
+	}
+	return pendingIDs
+}
+
+func (s *PublicPublisherService) pushProofArtifactIDs(ctx context.Context, manifest *models.PublicProofManifest, artifactIDs []string) error {
+	if len(artifactIDs) == 0 {
+		return nil
+	}
+	// Mirror proof ingest validates the full signed manifest on every request.
+	// Only artifact IDs missing from mirror state may be omitted from the body;
+	// chunking pending IDs would leave later catalog entries unresolved.
+	return s.postProofIngest(ctx, manifest, artifactIDs, 0)
+}
+
+func (s *PublicPublisherService) fetchMirrorProofManifestArtifactSet(ctx context.Context) (map[string]struct{}, string, error) {
+	s.mu.Lock()
+	origin := s.mirrorOrigin
+	s.mu.Unlock()
+	if origin == "" {
+		return nil, "", constants.ErrPublicFeedMirrorOriginRequired
+	}
+	requestURL := strings.TrimRight(origin, "/") + "/proof-manifest?source=" + url.QueryEscape(s.cfg.SourceID)
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
+	}
+	response, err := (&http.Client{Timeout: 2 * time.Minute}).Do(httpRequest)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusNotFound {
+		return map[string]struct{}{}, "", nil
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("%w: status %d", constants.ErrPublicFeedMirrorUnreachable, response.StatusCode)
+	}
+	var manifest models.PublicProofManifest
+	if err := json.NewDecoder(response.Body).Decode(&manifest); err != nil {
+		return nil, "", fmt.Errorf("%w: decode mirror manifest: %v", constants.ErrPublicFeedMirrorUnreachable, err)
+	}
+	artifactIDs := make(map[string]struct{}, len(manifest.Artifacts))
+	for _, entry := range manifest.Artifacts {
+		if entry.ArtifactID != "" {
+			artifactIDs[entry.ArtifactID] = struct{}{}
+		}
+	}
+	return artifactIDs, manifest.ProofRootSHA256, nil
+}
+
+func proofCatalogFromManifest(manifest models.PublicProofManifest) models.PublicProofCatalog {
+	return models.PublicProofCatalog{
+		SchemaVersion: constants.PublicProofCatalogSchemaVersion,
+		Entries:       manifest.Artifacts,
+		GeneratedAt:   manifest.GeneratedAt,
+	}
+}
+
+func (s *PublicPublisherService) loadProofManifest(ctx context.Context) (*models.PublicProofManifest, error) {
+	manifestExists, err := s.fileSvc.FileExists(ctx, constants.PublicProofManifestFilename)
+	if err != nil {
+		return nil, fmt.Errorf("public-feed: inspect proof manifest: %w", err)
+	}
+	if !manifestExists {
+		return nil, nil
 	}
 	manifestBytes, err := s.fileSvc.ReadFile(ctx, constants.PublicProofManifestFilename)
 	if err != nil {
-		return fmt.Errorf("public-feed: read proof manifest: %w", err)
+		return nil, fmt.Errorf("public-feed: read proof manifest: %w", err)
 	}
 	manifestDecoder := json.NewDecoder(bytes.NewReader(manifestBytes))
 	manifestDecoder.DisallowUnknownFields()
 	var manifest models.PublicProofManifest
 	if err := manifestDecoder.Decode(&manifest); err != nil {
-		return fmt.Errorf("%w: decode manifest: %v", constants.ErrPublicFeedProofManifestInvalid, err)
+		return nil, fmt.Errorf("%w: decode manifest: %w", constants.ErrPublicFeedProofManifestInvalid, err)
 	}
 	var trailing json.RawMessage
 	if err := manifestDecoder.Decode(&trailing); err != io.EOF {
-		return fmt.Errorf("%w: trailing manifest JSON", constants.ErrPublicFeedProofManifestInvalid)
+		return nil, fmt.Errorf("%w: trailing manifest JSON", constants.ErrPublicFeedProofManifestInvalid)
 	}
-	catalogBytes, err := s.fileSvc.ReadFile(ctx, constants.PublicProofCatalogFilename)
+	return &manifest, nil
+}
+
+func (s *PublicPublisherService) pushProofPackageFull(ctx context.Context, manifest *models.PublicProofManifest) error {
+	allIDs := catalogArtifactIDs(proofCatalogFromManifest(*manifest))
+	if err := s.pushProofArtifactIDs(ctx, manifest, allIDs); err != nil {
+		return err
+	}
+	return s.saveProofMirrorSyncState(ctx, models.PublicProofMirrorSyncState{
+		SchemaVersion:     constants.PublicProofMirrorSyncSchemaVersion,
+		SourceID:          s.cfg.SourceID,
+		ProofRootSHA256:   manifest.ProofRootSHA256,
+		SyncedArtifactIDs: allIDs,
+		SyncedAt:          time.Now().UTC(),
+	})
+}
+
+func (s *PublicPublisherService) postProofIngest(ctx context.Context, manifest *models.PublicProofManifest, artifactIDs []string, chunkIndex int) error {
+	artifacts, err := s.readProofArtifacts(ctx, artifactIDs)
 	if err != nil {
-		return fmt.Errorf("public-feed: read proof catalog: %w", err)
+		return err
 	}
-	catalogDecoder := json.NewDecoder(bytes.NewReader(catalogBytes))
-	catalogDecoder.DisallowUnknownFields()
-	var catalog models.PublicProofCatalog
-	if err := catalogDecoder.Decode(&catalog); err != nil {
-		return fmt.Errorf("%w: decode catalog: %v", constants.ErrPublicFeedProofCatalogMismatch, err)
-	}
-	if err := catalogDecoder.Decode(&trailing); err != io.EOF {
-		return fmt.Errorf("%w: trailing catalog JSON", constants.ErrPublicFeedProofCatalogMismatch)
-	}
-	artifacts := make([]models.PublicProofIngestArtifact, 0, len(catalog.Entries))
-	for _, entry := range catalog.Entries {
-		if !safePublicProofFilename(entry.Filename) || entry.ArtifactID == "" {
-			return constants.ErrPublicFeedProofPathTraversal
-		}
-		relPath := filepath.Join(constants.PublicProofsDirname, entry.ArtifactID)
-		info, err := s.fileSvc.Lstat(ctx, relPath)
-		if err != nil {
-			return fmt.Errorf("public-feed: inspect proof artifact: %w", err)
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return constants.ErrPublicFeedProofSymlinkRejected
-		}
-		content, err := s.fileSvc.ReadFile(ctx, relPath)
-		if err != nil {
-			return fmt.Errorf("public-feed: read proof artifact: %w", err)
-		}
-		artifacts = append(artifacts, models.PublicProofIngestArtifact{ArtifactID: entry.ArtifactID, Content: content})
-	}
-	request := models.PublicProofIngestRequest{SourceID: s.cfg.SourceID, Manifest: manifest, Catalog: catalog, Artifacts: artifacts}
+	catalog := proofCatalogFromManifest(*manifest)
+	request := models.PublicProofIngestRequest{SourceID: s.cfg.SourceID, Manifest: *manifest, Catalog: catalog, Artifacts: artifacts}
 	body, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("public-feed: encode proof ingest: %w", err)
@@ -1276,6 +1380,12 @@ func (s *PublicPublisherService) PushProofPackage(ctx context.Context) error {
 	if origin == "" {
 		return constants.ErrPublicFeedMirrorOriginRequired
 	}
+	s.logger.Info("public-feed: pushing proof package to mirror",
+		"artifact_count", len(artifacts),
+		"catalog_count", len(catalog.Entries),
+		"chunk_index", chunkIndex,
+		"request_bytes", len(body),
+	)
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(origin, "/")+"/proof-ingest", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
@@ -1284,7 +1394,7 @@ func (s *PublicPublisherService) PushProofPackage(ctx context.Context) error {
 	if token != "" {
 		httpRequest.Header.Set("Authorization", "Bearer "+token)
 	}
-	response, err := (&http.Client{Timeout: 30 * time.Second}).Do(httpRequest)
+	response, err := (&http.Client{Timeout: 10 * time.Minute}).Do(httpRequest)
 	if err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
 	}
@@ -1302,44 +1412,92 @@ func (s *PublicPublisherService) PushProofPackage(ctx context.Context) error {
 	return nil
 }
 
-// BuildProofPackage creates a complete public proof package from a passing
-// verification report. It writes artifacts to disk under the public-proofs
-// directory, builds a signed root manifest, and updates the proof catalog.
-func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaignID, campaignRevision, verifiedIndexGenHash string, verificationOK bool, artifacts []ProofArtifactInput) (models.PublicProofManifest, error) {
-	if !verificationOK {
-		return models.PublicProofManifest{}, constants.ErrPublicFeedProofNotVerified
+func (s *PublicPublisherService) readProofArtifacts(ctx context.Context, artifactIDs []string) ([]models.PublicProofIngestArtifact, error) {
+	artifacts := make([]models.PublicProofIngestArtifact, 0, len(artifactIDs))
+	for _, artifactID := range artifactIDs {
+		if artifactID == "" {
+			return nil, constants.ErrPublicFeedProofPathTraversal
+		}
+		relPath := filepath.Join(constants.PublicProofsDirname, artifactID)
+		info, err := s.fileSvc.Lstat(ctx, relPath)
+		if err != nil {
+			return nil, fmt.Errorf("public-feed: inspect proof artifact: %w", err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return nil, constants.ErrPublicFeedProofSymlinkRejected
+		}
+		content, err := s.fileSvc.ReadFile(ctx, relPath)
+		if err != nil {
+			return nil, fmt.Errorf("public-feed: read proof artifact: %w", err)
+		}
+		artifacts = append(artifacts, models.PublicProofIngestArtifact{ArtifactID: artifactID, Content: content})
 	}
+	return artifacts, nil
+}
+
+func (s *PublicPublisherService) loadProofMirrorSyncState(ctx context.Context) (*models.PublicProofMirrorSyncState, error) {
+	exists, err := s.fileSvc.FileExists(ctx, constants.PublicProofMirrorSyncFilename)
+	if err != nil {
+		return nil, fmt.Errorf("public-feed: inspect proof mirror sync state: %w", err)
+	}
+	if !exists {
+		return nil, nil
+	}
+	data, err := s.fileSvc.ReadFile(ctx, constants.PublicProofMirrorSyncFilename)
+	if err != nil {
+		return nil, fmt.Errorf("public-feed: read proof mirror sync state: %w", err)
+	}
+	var state models.PublicProofMirrorSyncState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("public-feed: decode proof mirror sync state: %w", err)
+	}
+	if state.SourceID != "" && state.SourceID != s.cfg.SourceID {
+		return nil, nil
+	}
+	return &state, nil
+}
+
+func (s *PublicPublisherService) saveProofMirrorSyncState(ctx context.Context, state models.PublicProofMirrorSyncState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("public-feed: marshal proof mirror sync state: %w", err)
+	}
+	return s.fileSvc.WriteFile(ctx, constants.PublicProofMirrorSyncFilename, data, constants.PermFilePrivate)
+}
+
+func catalogArtifactIDs(catalog models.PublicProofCatalog) []string {
+	ids := make([]string, 0, len(catalog.Entries))
+	for _, entry := range catalog.Entries {
+		ids = append(ids, entry.ArtifactID)
+	}
+	return ids
+}
+
+func (s *PublicPublisherService) writeProofArtifacts(ctx context.Context, campaignID string, artifacts []ProofArtifactInput) ([]models.PublicProofCatalogEntry, error) {
 	if len(artifacts) == 0 {
-		return models.PublicProofManifest{}, constants.ErrPublicFeedBatchEmpty
+		return nil, constants.ErrPublicFeedBatchEmpty
 	}
-
-	// Check for symlinks in the proofs directory before writing.
 	if err := checkNoSymlinks(ctx, s.fileSvc, constants.PublicProofsDirname); err != nil {
-		return models.PublicProofManifest{}, err
+		return nil, err
 	}
-
-	// Ensure proofs directory exists.
 	if err := s.fileSvc.MkdirAll(ctx, constants.PublicProofsDirname, constants.PermDirPrivate); err != nil {
-		return models.PublicProofManifest{}, fmt.Errorf("public-feed: build proof: mkdir: %w", err)
+		return nil, fmt.Errorf("public-feed: build proof: mkdir: %w", err)
 	}
-
 	entries := make([]models.PublicProofCatalogEntry, 0, len(artifacts))
 	for _, art := range artifacts {
 		if !safePublicProofFilename(art.Filename) {
-			return models.PublicProofManifest{}, constants.ErrPublicFeedProofPathTraversal
+			return nil, constants.ErrPublicFeedProofPathTraversal
 		}
 		if int64(len(art.Content)) > int64(constants.PublicFeedMaxArtifactBytes) {
-			return models.PublicProofManifest{}, constants.ErrPublicFeedProofOversized
+			return nil, constants.ErrPublicFeedProofOversized
 		}
 		if strings.Contains(art.MediaType, "json") {
 			if err := checkProhibitedFields(string(art.Content)); err != nil {
-				return models.PublicProofManifest{}, fmt.Errorf("%w: %w", constants.ErrPublicFeedProofRestricted, err)
+				return nil, fmt.Errorf("%w: %w", constants.ErrPublicFeedProofRestricted, err)
 			}
 		}
-
 		h := sha256.Sum256(art.Content)
 		artifactID := hex.EncodeToString(h[:])
-
 		entry := models.PublicProofCatalogEntry{
 			ArtifactID:          artifactID,
 			Filename:            art.Filename,
@@ -1350,20 +1508,33 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 			CampaignID:          campaignID,
 			SourceRunID:         art.SourceRunID,
 			GeneratedAt:         time.Now().UTC(),
-			VerificationCommand: fmt.Sprintf("sha256sum %s", art.Filename),
+			VerificationCommand: art.VerificationCommand,
 			ImmutableURL:        fmt.Sprintf("/proofs/%s", artifactID),
 		}
-
-		// Write artifact to disk.
-		relPath := filepath.Join(constants.PublicProofsDirname, artifactID)
-		if err := s.fileSvc.WriteFile(ctx, relPath, art.Content, constants.PermFilePrivate); err != nil {
-			return models.PublicProofManifest{}, fmt.Errorf("public-feed: build proof: write artifact: %w", err)
+		if entry.VerificationCommand == "" {
+			entry.VerificationCommand = fmt.Sprintf("sha256sum %s", art.Filename)
 		}
-
+		relPath := filepath.Join(constants.PublicProofsDirname, artifactID)
+		existing, readErr := s.fileSvc.ReadFile(ctx, relPath)
+		if readErr == nil {
+			existingHash := sha256.Sum256(existing)
+			if hex.EncodeToString(existingHash[:]) == artifactID && len(existing) == len(art.Content) {
+				entries = append(entries, entry)
+				continue
+			}
+		}
+		if err := s.fileSvc.WriteFile(ctx, relPath, art.Content, constants.PermFilePrivate); err != nil {
+			return nil, fmt.Errorf("public-feed: build proof: write artifact: %w", err)
+		}
 		entries = append(entries, entry)
 	}
+	return entries, nil
+}
 
-	// Compute proof root hash.
+func (s *PublicPublisherService) finalizeProofManifest(ctx context.Context, campaignID, campaignRevision, verifiedIndexGenHash string, verificationOK bool, newEntries []models.PublicProofCatalogEntry) (models.PublicProofManifest, error) {
+	if !verificationOK {
+		return models.PublicProofManifest{}, constants.ErrPublicFeedProofNotVerified
+	}
 	catalog, err := s.GetProofCatalog(ctx)
 	if err != nil {
 		return models.PublicProofManifest{}, err
@@ -1373,12 +1544,15 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 	for _, entry := range manifestEntries {
 		existingArtifactIDs[entry.ArtifactID] = struct{}{}
 	}
-	for _, entry := range entries {
+	for _, entry := range newEntries {
 		if _, exists := existingArtifactIDs[entry.ArtifactID]; exists {
 			continue
 		}
 		manifestEntries = append(manifestEntries, entry)
 		existingArtifactIDs[entry.ArtifactID] = struct{}{}
+	}
+	if len(manifestEntries) > constants.PublicFeedProofMaxArtifacts {
+		return models.PublicProofManifest{}, constants.ErrPublicFeedProofCatalogMismatch
 	}
 	manifest := models.PublicProofManifest{
 		SchemaVersion:               constants.PublicProofManifestSchemaVersion,
@@ -1392,19 +1566,14 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 		GeneratedAt:                 time.Now().UTC(),
 		SigningKeyID:                s.signingKeyID,
 	}
-
 	rootHash := s.computeProofRootHash(manifest)
 	manifest.ProofRootSHA256 = rootHash
-
-	// Sign the decoded proof root hash bytes with Ed25519.
 	rootHashBytes, err := hex.DecodeString(rootHash)
 	if err != nil {
 		return models.PublicProofManifest{}, fmt.Errorf("public-feed: build proof: decode root hash: %w", err)
 	}
 	sig := ed25519.Sign(s.signingPrivKey, rootHashBytes)
 	manifest.Signature = hex.EncodeToString(sig)
-
-	// Write manifest to disk.
 	manifestBytes, err := json.Marshal(manifest)
 	if err != nil {
 		return models.PublicProofManifest{}, fmt.Errorf("public-feed: build proof: marshal manifest: %w", err)
@@ -1412,12 +1581,224 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 	if err := s.fileSvc.WriteFile(ctx, constants.PublicProofManifestFilename, manifestBytes, constants.PermFilePrivate); err != nil {
 		return models.PublicProofManifest{}, fmt.Errorf("public-feed: build proof: write manifest: %w", err)
 	}
-
-	// Update the proof catalog.
-	if err := s.updateProofCatalog(ctx, entries); err != nil {
-		s.logger.Warn("public-feed: failed to update proof catalog", "error", err)
+	catalogOut := proofCatalogFromManifest(manifest)
+	catalogBytes, err := json.Marshal(catalogOut)
+	if err != nil {
+		return models.PublicProofManifest{}, fmt.Errorf("public-feed: build proof: marshal catalog: %w", err)
 	}
+	if err := s.fileSvc.WriteFile(ctx, constants.PublicProofCatalogFilename, catalogBytes, constants.PermFilePrivate); err != nil {
+		return models.PublicProofManifest{}, fmt.Errorf("public-feed: build proof: write catalog: %w", err)
+	}
+	return manifest, nil
+}
 
+// BuildProofPackage creates a complete public proof package from a passing
+// verification report. It writes artifacts to disk under the public-proofs
+// directory, builds a signed root manifest, and updates the proof catalog.
+func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaignID, campaignRevision, verifiedIndexGenHash string, verificationOK bool, artifacts []ProofArtifactInput) (models.PublicProofManifest, error) {
+	if !verificationOK {
+		return models.PublicProofManifest{}, constants.ErrPublicFeedProofNotVerified
+	}
+	entries, err := s.writeProofArtifacts(ctx, campaignID, artifacts)
+	if err != nil {
+		return models.PublicProofManifest{}, err
+	}
+	return s.finalizeProofManifest(ctx, campaignID, campaignRevision, verifiedIndexGenHash, verificationOK, entries)
+}
+
+func assignmentAuditProofArtifacts(request models.PublicAssignmentAuditProofPublishRequest) ([]ProofArtifactInput, string, string, string, error) {
+	if request.CampaignID == "" || request.RunID == "" || request.AssignmentID == "" || len(request.Database) == 0 || len(request.VaultKey) == 0 {
+		return nil, "", "", "", fmt.Errorf("public-feed: publish assignment audit proof: %w", constants.ErrMissingRequiredField)
+	}
+	revision := request.CampaignRevision
+	if revision == "" {
+		revision = request.CampaignID
+	}
+	indexDigest := request.IndexDigest
+	if indexDigest == "" {
+		indexDigest = request.AssignmentID
+	}
+	dbFilename := fmt.Sprintf("assignment-%s.db", request.AssignmentID)
+	keyFilename := fmt.Sprintf("assignment-%s.vault.key", request.AssignmentID)
+	verifyCommand := fmt.Sprintf("g8e public verify-assignment --db %s --vault-key %s", dbFilename, keyFilename)
+	return []ProofArtifactInput{
+		{
+			Filename:            dbFilename,
+			MediaType:           "application/vnd.sqlite3",
+			Content:             request.Database,
+			CampaignID:          request.CampaignID,
+			SourceRunID:         request.RunID,
+			VerificationCommand: verifyCommand,
+		},
+		{
+			Filename:            keyFilename,
+			MediaType:           "text/plain",
+			Content:             request.VaultKey,
+			CampaignID:          request.CampaignID,
+			SourceRunID:         request.RunID,
+			VerificationCommand: verifyCommand,
+		},
+	}, request.CampaignID, revision, indexDigest, nil
+}
+
+// PublishAssignmentAuditProof ingests one assignment audit export package into
+// the public proof catalog and mirror.
+func (s *PublicPublisherService) PublishAssignmentAuditProof(ctx context.Context, request models.PublicAssignmentAuditProofPublishRequest) (models.PublicProofManifest, error) {
+	return s.PublishAssignmentAuditProofBatch(ctx, models.PublicAssignmentAuditProofBatchPublishRequest{
+		Proofs:          []models.PublicAssignmentAuditProofPublishRequest{request},
+		DeferMirrorPush: request.DeferMirrorPush,
+	})
+}
+
+// PublishAssignmentAuditProofBatch ingests many assignment audit export
+// packages in one catalog update and one signed manifest rebuild.
+func (s *PublicPublisherService) PublishAssignmentAuditProofBatch(ctx context.Context, request models.PublicAssignmentAuditProofBatchPublishRequest) (models.PublicProofManifest, error) {
+	if len(request.Proofs) == 0 {
+		return models.PublicProofManifest{}, nil
+	}
+	artifacts := make([]ProofArtifactInput, 0, len(request.Proofs)*2)
+	campaignID := ""
+	campaignRevision := ""
+	verifiedIndexGenHash := ""
+	for _, proof := range request.Proofs {
+		proofArtifacts, proofCampaignID, revision, indexDigest, err := assignmentAuditProofArtifacts(proof)
+		if err != nil {
+			return models.PublicProofManifest{}, err
+		}
+		if campaignID == "" {
+			campaignID = proofCampaignID
+			campaignRevision = revision
+		}
+		verifiedIndexGenHash = indexDigest
+		artifacts = append(artifacts, proofArtifacts...)
+	}
+	entries, err := s.writeProofArtifacts(ctx, campaignID, artifacts)
+	if err != nil {
+		return models.PublicProofManifest{}, err
+	}
+	manifest, err := s.finalizeProofManifest(ctx, campaignID, campaignRevision, verifiedIndexGenHash, true, entries)
+	if err != nil {
+		return models.PublicProofManifest{}, err
+	}
+	if !request.DeferMirrorPush {
+		if err := s.PushProofPackage(ctx); err != nil {
+			return models.PublicProofManifest{}, err
+		}
+	}
+	return manifest, nil
+}
+
+// PruneProofCatalogForRun removes prior proof artifacts for one run so force
+// restore can republish without growing the catalog or mirror payload.
+func (s *PublicPublisherService) PruneProofCatalogForRun(ctx context.Context, runID string) (int, error) {
+	if runID == "" {
+		return 0, constants.ErrMissingRequiredField
+	}
+	catalog, err := s.GetProofCatalog(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if len(catalog.Entries) == 0 {
+		return 0, nil
+	}
+	kept := make([]models.PublicProofCatalogEntry, 0, len(catalog.Entries))
+	removedIDs := make([]string, 0)
+	for _, entry := range catalog.Entries {
+		if entry.SourceRunID == runID {
+			removedIDs = append(removedIDs, entry.ArtifactID)
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	if len(removedIDs) == 0 {
+		return 0, nil
+	}
+	for _, artifactID := range removedIDs {
+		if err := s.fileSvc.Remove(ctx, filepath.Join(constants.PublicProofsDirname, artifactID)); err != nil {
+			return 0, fmt.Errorf("public-feed: prune proof artifact: %w", err)
+		}
+	}
+	catalog.Entries = kept
+	catalog.GeneratedAt = time.Now().UTC()
+	catalogBytes, err := json.Marshal(catalog)
+	if err != nil {
+		return 0, fmt.Errorf("public-feed: prune proof catalog: %w", err)
+	}
+	if err := s.fileSvc.WriteFile(ctx, constants.PublicProofCatalogFilename, catalogBytes, constants.PermFilePrivate); err != nil {
+		return 0, fmt.Errorf("public-feed: prune proof catalog: %w", err)
+	}
+	if len(kept) == 0 {
+		_ = s.fileSvc.Remove(ctx, constants.PublicProofManifestFilename)
+	} else {
+		campaignID := kept[0].CampaignID
+		revision := campaignID
+		indexDigest := kept[0].SourceRunID
+		if manifest, err := s.loadProofManifest(ctx); err == nil && manifest != nil {
+			if manifest.CampaignID != "" {
+				campaignID = manifest.CampaignID
+			}
+			if manifest.CampaignRevision != "" {
+				revision = manifest.CampaignRevision
+			}
+			if manifest.VerifiedIndexGenerationHash != "" {
+				indexDigest = manifest.VerifiedIndexGenerationHash
+			}
+		}
+		if _, err := s.finalizeProofManifest(ctx, campaignID, revision, indexDigest, true, nil); err != nil {
+			return 0, err
+		}
+	}
+	if err := s.removeProofMirrorSyncArtifacts(ctx, removedIDs); err != nil {
+		return 0, err
+	}
+	s.logger.Info("public-feed: pruned proof catalog for run", "run_id", runID, "removed_count", len(removedIDs), "remaining_count", len(kept))
+	return len(removedIDs), nil
+}
+
+func (s *PublicPublisherService) removeProofMirrorSyncArtifacts(ctx context.Context, artifactIDs []string) error {
+	if len(artifactIDs) == 0 {
+		return nil
+	}
+	syncState, err := s.loadProofMirrorSyncState(ctx)
+	if err != nil || syncState == nil {
+		return err
+	}
+	remove := make(map[string]struct{}, len(artifactIDs))
+	for _, artifactID := range artifactIDs {
+		remove[artifactID] = struct{}{}
+	}
+	remaining := make([]string, 0, len(syncState.SyncedArtifactIDs))
+	for _, artifactID := range syncState.SyncedArtifactIDs {
+		if _, drop := remove[artifactID]; !drop {
+			remaining = append(remaining, artifactID)
+		}
+	}
+	syncState.SyncedArtifactIDs = remaining
+	syncState.SyncedAt = time.Now().UTC()
+	syncState.ProofRootSHA256 = ""
+	return s.saveProofMirrorSyncState(ctx, *syncState)
+}
+
+// FlushProofPackage pushes the current proof catalog and manifest to the mirror.
+func (s *PublicPublisherService) FlushProofPackage(ctx context.Context) (models.PublicProofManifest, error) {
+	manifestExists, err := s.fileSvc.FileExists(ctx, constants.PublicProofManifestFilename)
+	if err != nil {
+		return models.PublicProofManifest{}, fmt.Errorf("public-feed: inspect proof manifest: %w", err)
+	}
+	if !manifestExists {
+		return models.PublicProofManifest{}, nil
+	}
+	if err := s.PushProofPackage(ctx); err != nil {
+		return models.PublicProofManifest{}, err
+	}
+	manifestBytes, err := s.fileSvc.ReadFile(ctx, constants.PublicProofManifestFilename)
+	if err != nil {
+		return models.PublicProofManifest{}, fmt.Errorf("public-feed: read proof manifest: %w", err)
+	}
+	var manifest models.PublicProofManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return models.PublicProofManifest{}, fmt.Errorf("public-feed: read proof manifest: %w", err)
+	}
 	return manifest, nil
 }
 
@@ -1451,34 +1832,6 @@ func computePublicProofRootHash(manifest models.PublicProofManifest) string {
 // from a manifest. This allows offline verification.
 func (s *PublicPublisherService) ComputeProofRootHash(manifest models.PublicProofManifest) (string, error) {
 	return s.computeProofRootHash(manifest), nil
-}
-
-// updateProofCatalog reads the existing catalog, appends new entries, and
-// writes it back.
-func (s *PublicPublisherService) updateProofCatalog(ctx context.Context, newEntries []models.PublicProofCatalogEntry) error {
-	catalog, err := s.GetProofCatalog(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Deduplicate by artifact ID.
-	existing := make(map[string]bool)
-	for _, e := range catalog.Entries {
-		existing[e.ArtifactID] = true
-	}
-	for _, e := range newEntries {
-		if !existing[e.ArtifactID] {
-			catalog.Entries = append(catalog.Entries, e)
-			existing[e.ArtifactID] = true
-		}
-	}
-
-	catalog.GeneratedAt = time.Now().UTC()
-	catalogBytes, err := json.Marshal(catalog)
-	if err != nil {
-		return fmt.Errorf("marshal catalog: %w", err)
-	}
-	return s.fileSvc.WriteFile(ctx, constants.PublicProofCatalogFilename, catalogBytes, constants.PermFilePrivate)
 }
 
 // GetProofCatalog returns the full public proof catalog.

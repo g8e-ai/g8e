@@ -12,7 +12,7 @@ Agentic Ensemble with LLM provider abstraction providing Zero-Trust AI for infra
 
 Bootstrap responsibilities (this file):
     1. SettingsService bootstrap + local settings
-    2. Raw operator client connections (5 core clients: DB, KV, PubSub, Blob, HTTP)
+    2. Raw Gateway client connections (DB, KV, Blob, HTTP)
     3. Handler services (sole users of each client): DBService, KVService, BlobService
     4. CacheAsideService (orchestrator over DB + KV handler services)
     5. Platform settings load from operator
@@ -37,7 +37,6 @@ from .clients.blob_client import BlobClient
 from .clients.db_client import DBClient
 from .clients.governance_client import GovernanceClient
 from .clients.kv_cache_client import KVCacheClient
-from .clients.pubsub_client import PubSubClient
 from .constants import (
     AUTHORIZATION,
     CORS_ALLOWED_ORIGIN_G8EE,
@@ -98,13 +97,11 @@ logger = logging.getLogger(__name__)
 
 
 async def _connect_clients(settings, tls_config):
-    """Create and connect the 5 core operator transport clients.
+    """Create and connect the core operator transport clients.
 
-    Returns (db_client, kv_cache_client, pubsub_client, blob_client).
+    Returns (db_client, kv_cache_client, blob_client).
     HTTP client is created by ServiceFactory (InternalHttpClient).
     """
-    auditor_hmac_key = settings.auth.auditor_hmac_key
-
     db_client = DBClient(tls_config=tls_config)
     await db_client.connect()
 
@@ -114,17 +111,10 @@ async def _connect_clients(settings, tls_config):
     )
     await kv_cache_client.connect()
 
-    pubsub_client = PubSubClient(
-        component_name=G8EE_COMPONENT,
-        tls_config=tls_config,
-        auditor_hmac_key=auditor_hmac_key,
-    )
-    await pubsub_client.connect()
-
     blob_client = BlobClient(tls_config=tls_config)
     await blob_client.connect()
 
-    return db_client, kv_cache_client, pubsub_client, blob_client
+    return db_client, kv_cache_client, blob_client
 
 
 async def _close_client(client, label: str) -> None:
@@ -182,14 +172,13 @@ async def lifespan(app: FastAPI):
             client_key_path=app_identity.key_path,
         )
 
-        # -- Phase 1: Core operator clients (db, kv, pubsub, blob) --
+        # -- Phase 1: Core operator clients (db, kv, blob) --
         (
             state.db_client,
             state.kv_cache_client,
-            state.pubsub_client,
             state.blob_client,
         ) = await _connect_clients(settings, tls_config)
-        logger.info("operator transport clients connected (db, kv, pubsub, blob)")
+        logger.info("operator transport clients connected (db, kv, blob)")
 
         # -- Phase 2: Handler services (sole users of each client) --
         db_service = DBService(state.db_client)
@@ -212,6 +201,19 @@ async def lifespan(app: FastAPI):
         set_settings(settings)
         logger.info("Platform settings merged: port=%s", settings.port)
 
+        from app.decision.validation import (
+            log_jev_generative_lite_warning,
+            validate_jev_lite_coexistence,
+        )
+
+        log_jev_generative_lite_warning(logger, settings.llm)
+        jev_startup_errors = validate_jev_lite_coexistence(settings.llm)
+        if jev_startup_errors:
+            raise ConfigurationError(
+                "Jev lite provider configuration is incompatible with enabled features: "
+                + " ".join(jev_startup_errors)
+            )
+
         # -- Phase 4.5: GovernanceClient for governed collection writes --
         governance_client = GovernanceClient(
             tls_config=tls_config,
@@ -226,7 +228,6 @@ async def lifespan(app: FastAPI):
             db_service=db_service,
             kv_service=kv_service,
             blob_service=blob_service,
-            pubsub_client=state.pubsub_client,
             blob_service_client=state.blob_client,
             governance_client=governance_client,
         )
@@ -259,7 +260,6 @@ async def lifespan(app: FastAPI):
         if all_services:
             await ServiceFactory.stop_services(all_services)
 
-        await _close_client(getattr(state, "pubsub_client", None), "PubSub client")
         await _close_client(getattr(state, "kv_cache_client", None), "KV cache client")
         await _close_client(getattr(state, "blob_client", None), "Blob client")
         await _close_client(

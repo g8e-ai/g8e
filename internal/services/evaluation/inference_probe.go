@@ -34,6 +34,7 @@ type InferenceProbeRequest struct {
 	ModelRegistry           []*operatorv1.InferenceModelVariant
 	Seed                    *int32
 	Stream                  bool
+	Thinking                *operatorv1.InferenceThinkingControl
 }
 
 // BuildInferenceProbeDispatchRequest constructs the canonical governed dispatch
@@ -72,6 +73,7 @@ func BuildInferenceProbeDispatchRequest(req InferenceProbeRequest) (*operatorv1.
 		ModelRegistry:           req.ModelRegistry,
 		ModelDigest:             req.ModelDigest,
 		Stream:                  req.Stream,
+		Thinking:                req.Thinking,
 	}
 	if req.Seed != nil {
 		dispatch.Seed = req.Seed

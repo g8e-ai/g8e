@@ -1,8 +1,5 @@
 # Governance
 
-Last Updated: 2026-09-23
-Version: v2.1.12
-
 ## Scope
 
 The g8e Agentic Ensemble (`g8ee`) is an optional first-party client of the g8e governance platform. It generates and evaluates operational intent, but it remains outside the trusted execution boundary. Tribunal agreement, Auditor review, application risk classification, and user approval inside g8ee do not authorize a platform transaction by themselves.
@@ -74,17 +71,17 @@ Optional L2 and L3 evidence is verified when present and recorded when valid, bu
 
 The ingress path matters. A posture does not cause every transport to acquire missing proofs automatically. g8ee must use a path that coordinates the required proofs or submit an envelope that already contains them.
 
-## Host Operations Through `CommandIntent`
+## Host Operations Through Gateway Dispatch
 
-The ensemble uses `CommandIntent` for host commands, file operations, filesystem reads, log and history queries, and other outbound Operator work:
+The ensemble dispatches host commands, file operations, filesystem reads, log and history queries, port checks, and other outbound Operator work through `GatewayOperatorClient`:
 
-1. g8ee serializes the typed Operator protobuf payload and publishes a `CommandIntent` to the exact `cmd:<operator_id>:<operator_session_id>` channel.
-2. The Gateway authenticates the app publisher, enforces the channel ACL, checks that the intent targets the same Operator and session as the channel, and validates that the session is active.
+1. g8ee serializes the typed Operator protobuf payload and calls `POST /api/v1/operators/commands` with the registered request `event_type`, delegated Operator session, and application context.
+2. The Gateway authenticates the app caller over mTLS, validates the event against the registry, derives `action_type`, and checks that the Operator session is active.
 3. The Gateway adds the current state root, posture, nonce, expiry, transport-derived app identity, requestor identity, and application context, then computes the canonical transaction hash and publishes the resulting `GovernanceEnvelope` to the Operator.
 4. The Operator runs L1 and L4 verification locally. Accepted operations execute through L5, while rejected operations do not reach the action handler.
-5. The Operator publishes the command result to the result channel and relays its signed receipt to the Gateway. The local receipt is authoritative; the Gateway mirror is best-effort.
+5. The Gateway returns the correlated result envelope in the HTTP response. The Operator's signed receipt is authoritative; the Gateway mirror is best-effort.
 
-The `CommandIntent` relay does not perform protocol L2 deliberation or L3 suspension and does not attach L2 votes or an L3 proof. Consequently:
+The governed dispatch path does not perform protocol L2 deliberation or L3 suspension and does not attach L2 votes or an L3 proof. Consequently:
 
 - `doctrine` accepts otherwise valid read and mutation intents without L2 or L3.
 - `consensus` rejects ordinary relayed intents because they do not contain protocol L2 votes.
@@ -95,13 +92,13 @@ Use Gateway MCP or A2A when the Gateway must coordinate protocol consensus or hu
 
 ## Direct Governance Envelopes
 
-For governed platform records such as cases, investigations, memories, and agent activity, g8ee uses its `GovernanceClient` to submit a complete envelope to the synchronous governance endpoint. This is a privileged, Operator-credential path in the unified deployment, not the normal public app ingress.
+For governed platform records such as cases, investigations, memories, and agent activity, g8ee uses its `GovernanceClient` to submit a complete envelope to `POST /api/v1/governance/envelopes` over the enrolled g8ee app mTLS identity. The Gateway binds transport identity to envelope fields and applies the active posture.
 
 The client obtains the current state root when the caller does not provide one, serializes the typed payload, generates replay and expiry fields, binds requestor, acting-app, Operator, session, and application identifiers into the transaction hash, and submits canonical JSON over mTLS. The Gateway binds the envelope identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process L4 Warden and L5 Actuator.
 
 The client serializes submissions to reduce state-root races. If the Gateway rejects a submission because another transaction changed the state root, the client fetches the new root, rebuilds the envelope, and retries up to three times after the initial attempt.
 
-This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. The optional `agent_ids` argument only populates the envelope's `consensus_set_id`; it does not turn Tribunal members into enrolled protocol signers or attach votes. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path therefore succeeds only when the active posture does not require proofs absent from the envelope, which is normally `doctrine` for g8ee's current platform-record submissions.
+This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. The optional `agent_ids` argument only populates the envelope's `consensus_set_id`; it does not turn Tribunal members into enrolled protocol signers or attach votes. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path succeeds only when the active posture does not require proofs absent from the envelope. Platform-record submissions run under `doctrine` in the default unified deployment.
 
 A successful submission returns a signed `ActionReceipt`. `GovernanceClient` exposes receipt-signature verification using the configured Actuator public key, but submission does not invoke that verification automatically.
 

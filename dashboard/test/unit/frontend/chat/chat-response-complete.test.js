@@ -95,7 +95,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
         authState.getwebSessionId = () => WEB_SESSION_ID;
 
         serviceClient = new MockServiceClient();
-        serviceClient.setResponse('g8ed', '/js/components/templates/streaming-message.html', {
+        serviceClient.setResponse('gateway', '/js/components/templates/streaming-message.html', {
             ok: true, status: 200, text: async () => ''
         });
 
@@ -343,7 +343,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
             chat.streamingContent.set(WEB_SESSION_ID, 'content');
             chat.streamingActive = true;
 
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: INVESTIGATION_ID,
             });
@@ -357,7 +357,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
             chat.streamingContent.set(WEB_SESSION_ID, 'content');
             chat.streamingActive = true;
 
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: 'wrong-id',
             });
@@ -372,7 +372,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
             chat.streamingContent.set(WEB_SESSION_ID, 'content');
             chat.streamingActive = true;
 
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_TEXT_TRUNCATED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_TEXT_TRUNCATED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: INVESTIGATION_ID,
                 finish_reason: 'MAX_TOKENS',
@@ -447,7 +447,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
         it('seals the current bubble with rendered markdown when TURN_COMPLETE fires with matching investigation_id', () => {
             chat.streamingContent.set(WEB_SESSION_ID, 'pre-tool text');
 
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_COMPLETED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_COMPLETED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: INVESTIGATION_ID,
                 turn: 1,
@@ -462,7 +462,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
         it('does not seal the bubble when TURN_COMPLETE investigation_id mismatches', () => {
             chat.streamingContent.set(WEB_SESSION_ID, 'content');
 
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_COMPLETED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_COMPLETED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: 'wrong-investigation',
                 turn: 1,
@@ -475,7 +475,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
         it('does nothing when TURN_COMPLETE has no web_session_id', () => {
             chat.streamingContent.set(WEB_SESSION_ID, 'content');
 
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_COMPLETED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_COMPLETED, {
                 investigation_id: INVESTIGATION_ID,
                 turn: 1,
             });
@@ -484,7 +484,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
         });
 
         it('does not call finalizeAIResponseChunk when there is no pre-tool streamed content', () => {
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_COMPLETED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_COMPLETED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: INVESTIGATION_ID,
                 turn: 1,
@@ -496,7 +496,7 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
         it('post-turn text chunks open a fresh bubble after TURN_COMPLETE seals the previous one', () => {
             chat.streamingContent.set(WEB_SESSION_ID, 'turn one text');
 
-            eventBus.emit(EventType.LLM_CHAT_ITERATION_COMPLETED, {
+            eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_COMPLETED, {
                 web_session_id: WEB_SESSION_ID,
                 investigation_id: INVESTIGATION_ID,
                 turn: 1,

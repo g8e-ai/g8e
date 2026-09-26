@@ -61,6 +61,8 @@ func TestActionTypeIsMutation_ReadTypesReturnFalse(t *testing.T) {
 		ActionTypeMcpResourceRead,
 		ActionTypePlatformEnrollmentCreate,
 		ActionTypePortCheck,
+		ActionTypeOllamaModelInventory,
+		ActionTypeOllamaModelResidency,
 		ActionTypeProviderBoundaryObservation,
 		ActionTypeModelProvenanceObservation,
 	}
@@ -118,6 +120,8 @@ func TestAllActionTypes_ContainsAllConstants(t *testing.T) {
 		ActionTypePlatformEnrollmentCreateSession,
 		ActionTypePlatformEnrollmentRevoke,
 		ActionTypePortCheck,
+		ActionTypeOllamaModelInventory,
+		ActionTypeOllamaModelResidency,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown,
 		ActionTypeInference,

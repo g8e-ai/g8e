@@ -11,22 +11,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 const capabilityProbeAttemptPrefix = "capability-probe"
-
-// CapabilityProbeBackend executes bounded non-scored provider probes.
-type CapabilityProbeBackend interface {
-	Generate(ctx context.Context, req models.GenerateRequest) (*models.GenerateResponse, error)
-}
 
 // RequiredModelCapabilityKinds returns the bounded probe set for Phase 3 inventory freeze.
 func RequiredModelCapabilityKinds() []evalv1.ModelCapabilityKind {
@@ -39,14 +32,29 @@ func RequiredModelCapabilityKinds() []evalv1.ModelCapabilityKind {
 	}
 }
 
-// RunModelCapabilityProbes executes descriptive non-scored probes for one variant.
-func RunModelCapabilityProbes(ctx context.Context, backend CapabilityProbeBackend, variant *evalv1.ModelVariant) ([]*evalv1.ModelCapabilityObservation, error) {
-	if backend == nil || variant == nil || variant.GetServedModelTag() == "" || variant.GetModelDigest() == "" {
+type governedCapabilityProbeRunner struct {
+	dispatcher FormationInferenceDispatcher
+	sessionID  string
+	newID      func(string) string
+}
+
+// NewGovernedCapabilityProbeRunner executes bounded inventory capability probes
+// through the exact Inference Operator session.
+func NewGovernedCapabilityProbeRunner(dispatcher FormationInferenceDispatcher, inferenceSessionID string, newID func(string) string) GovernedCapabilityProbeRunner {
+	return &governedCapabilityProbeRunner{
+		dispatcher: dispatcher,
+		sessionID:  inferenceSessionID,
+		newID:      newID,
+	}
+}
+
+func (r *governedCapabilityProbeRunner) RunCapabilityProbes(ctx context.Context, variant *evalv1.ModelVariant) ([]*evalv1.ModelCapabilityObservation, error) {
+	if r == nil || r.dispatcher == nil || r.sessionID == "" || r.newID == nil || variant == nil || variant.GetServedModelTag() == "" || variant.GetModelDigest() == "" {
 		return nil, fmt.Errorf("evaluation: run model capability probes: %w", constants.ErrMissingRequiredField)
 	}
 	observations := make([]*evalv1.ModelCapabilityObservation, 0, len(RequiredModelCapabilityKinds()))
 	for _, kind := range RequiredModelCapabilityKinds() {
-		observation, err := probeModelCapability(ctx, backend, variant, kind)
+		observation, err := r.probeModelCapability(ctx, variant, kind)
 		if err != nil {
 			return nil, fmt.Errorf("evaluation: run model capability probes: variant %s capability %s: %w", variant.GetVariantId(), kind.String(), err)
 		}
@@ -55,16 +63,16 @@ func RunModelCapabilityProbes(ctx context.Context, backend CapabilityProbeBacken
 	return observations, nil
 }
 
-func probeModelCapability(ctx context.Context, backend CapabilityProbeBackend, variant *evalv1.ModelVariant, kind evalv1.ModelCapabilityKind) (*evalv1.ModelCapabilityObservation, error) {
+func (r *governedCapabilityProbeRunner) probeModelCapability(ctx context.Context, variant *evalv1.ModelVariant, kind evalv1.ModelCapabilityKind) (*evalv1.ModelCapabilityObservation, error) {
 	switch kind {
 	case evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_COMPLETION:
-		return probeCompletionCapability(ctx, backend, variant)
+		return r.probeCompletionCapability(ctx, variant)
 	case evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_TOOL_CALLING:
-		return probeToolCallingCapability(ctx, backend, variant)
+		return r.probeToolCallingCapability(ctx, variant)
 	case evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT:
-		return probeStructuredOutputCapability(ctx, backend, variant)
+		return r.probeStructuredOutputCapability(ctx, variant)
 	case evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_THINKING:
-		return probeThinkingCapability(ctx, backend, variant)
+		return r.probeThinkingCapability(ctx, variant)
 	case evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_CONTEXT_LIMIT:
 		return probeContextLimitCapability(variant), nil
 	default:
@@ -72,49 +80,68 @@ func probeModelCapability(ctx context.Context, backend CapabilityProbeBackend, v
 	}
 }
 
-func probeCompletionCapability(ctx context.Context, backend CapabilityProbeBackend, variant *evalv1.ModelVariant) (*evalv1.ModelCapabilityObservation, error) {
-	response, err := backend.Generate(ctx, capabilityProbeRequest(variant, capabilityProbeAttemptPrefix+"-completion", nil, nil, nil, "Reply with exactly: capability-probe-ok"))
+func (r *governedCapabilityProbeRunner) dispatchCapabilityProbe(ctx context.Context, req InferenceProbeRequest) (*operatorv1.InferenceDispatchResponse, error) {
+	dispatchReq, err := BuildInferenceProbeDispatchRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := r.dispatcher.DispatchInference(ctx, dispatchReq)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateInferenceProbeResponse(req, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (r *governedCapabilityProbeRunner) baseProbeRequest(variant *evalv1.ModelVariant, attemptSuffix string) InferenceProbeRequest {
+	return InferenceProbeRequest{
+		ProviderAttemptID:       r.newID(capabilityProbeAttemptPrefix + "-" + attemptSuffix),
+		Role:                    models.InferenceModelRolePrimary,
+		Model:                   variant.GetServedModelTag(),
+		ModelDigest:             variant.GetModelDigest(),
+		TargetOperatorSessionID: r.sessionID,
+	}
+}
+
+func (r *governedCapabilityProbeRunner) probeCompletionCapability(ctx context.Context, variant *evalv1.ModelVariant) (*evalv1.ModelCapabilityObservation, error) {
+	req := r.baseProbeRequest(variant, "completion")
+	req.Prompt = "Reply with exactly: capability-probe-ok"
+	resp, err := r.dispatchCapabilityProbe(ctx, req)
 	if err != nil {
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_COMPLETION, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "provider completion probe failed"), nil
 	}
-	if responseHasText(response, "capability-probe-ok") {
+	if inferenceResultHasText(resp.GetResult(), "capability-probe-ok") {
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_COMPLETION, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "completion probe returned expected text"), nil
 	}
 	return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_COMPLETION, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "completion probe returned unexpected output"), nil
 }
 
-func probeToolCallingCapability(ctx context.Context, backend CapabilityProbeBackend, variant *evalv1.ModelVariant) (*evalv1.ModelCapabilityObservation, error) {
-	toolChoiceRequired := operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_REQUIRED
-	response, err := backend.Generate(ctx, capabilityProbeRequest(
-		variant,
-		capabilityProbeAttemptPrefix+"-tools",
-		[]*operatorv1.InferenceToolDeclaration{ProbeEchoToolDeclaration()},
-		&operatorv1.InferenceToolChoice{Mode: toolChoiceRequired},
-		nil,
-		"Call probe_echo with message capability-probe-tool",
-	))
+func (r *governedCapabilityProbeRunner) probeToolCallingCapability(ctx context.Context, variant *evalv1.ModelVariant) (*evalv1.ModelCapabilityObservation, error) {
+	req := r.baseProbeRequest(variant, "tools")
+	req.Prompt = "Call probe_echo with message capability-probe-tool"
+	req.Tools = []*operatorv1.InferenceToolDeclaration{ProbeEchoToolDeclaration()}
+	req.ToolChoice = &operatorv1.InferenceToolChoice{Mode: operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_REQUIRED}
+	resp, err := r.dispatchCapabilityProbe(ctx, req)
 	if err != nil {
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_TOOL_CALLING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSUPPORTED, "provider rejected tool-call probe"), nil
 	}
-	if responseHasToolCall(response, "probe_echo") {
+	if inferenceResultHasToolCall(resp.GetResult(), "probe_echo") {
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_TOOL_CALLING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "tool-call probe returned probe_echo"), nil
 	}
 	return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_TOOL_CALLING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "tool-call probe did not return probe_echo"), nil
 }
 
-func probeStructuredOutputCapability(ctx context.Context, backend CapabilityProbeBackend, variant *evalv1.ModelVariant) (*evalv1.ModelCapabilityObservation, error) {
-	response, err := backend.Generate(ctx, capabilityProbeRequest(
-		variant,
-		capabilityProbeAttemptPrefix+"-structured",
-		nil,
-		nil,
-		ProbeStructuredResponseFormat(),
-		`Return JSON with answer set to "capability-probe-json".`,
-	))
+func (r *governedCapabilityProbeRunner) probeStructuredOutputCapability(ctx context.Context, variant *evalv1.ModelVariant) (*evalv1.ModelCapabilityObservation, error) {
+	req := r.baseProbeRequest(variant, "structured")
+	req.Prompt = `Return JSON with answer set to "capability-probe-json".`
+	req.ResponseFormat = ProbeStructuredResponseFormat()
+	resp, err := r.dispatchCapabilityProbe(ctx, req)
 	if err != nil {
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSUPPORTED, "provider rejected structured-output probe"), nil
 	}
-	payload, ok := responseStructuredJSON(response)
+	payload, ok := inferenceResultStructuredJSON(resp.GetResult())
 	if !ok {
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "structured-output probe returned non-JSON text"), nil
 	}
@@ -127,22 +154,16 @@ func probeStructuredOutputCapability(ctx context.Context, backend CapabilityProb
 	return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "structured-output probe returned valid JSON"), nil
 }
 
-func probeThinkingCapability(ctx context.Context, backend CapabilityProbeBackend, variant *evalv1.ModelVariant) (*evalv1.ModelCapabilityObservation, error) {
-	response, err := backend.Generate(ctx, capabilityProbeRequest(
-		variant,
-		capabilityProbeAttemptPrefix+"-thinking",
-		nil,
-		nil,
-		nil,
-		"Think briefly, then reply with exactly: capability-probe-thinking",
-		withThinking(&operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}}),
-	))
+func (r *governedCapabilityProbeRunner) probeThinkingCapability(ctx context.Context, variant *evalv1.ModelVariant) (*evalv1.ModelCapabilityObservation, error) {
+	req := r.baseProbeRequest(variant, "thinking")
+	req.Prompt = "Think briefly, then reply with exactly: capability-probe-thinking"
+	req.Thinking = &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}}
+	resp, err := r.dispatchCapabilityProbe(ctx, req)
 	if err != nil {
 		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_THINKING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSUPPORTED, "provider rejected thinking probe"), nil
 	}
-	if responseHasThinking(response) || responseHasText(response, "capability-probe-thinking") {
-		detail := "thinking probe returned visible thinking or expected answer text"
-		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_THINKING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, detail), nil
+	if inferenceResultHasThinking(resp.GetResult()) || inferenceResultHasText(resp.GetResult(), "capability-probe-thinking") {
+		return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_THINKING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "thinking probe returned visible thinking or expected answer text"), nil
 	}
 	return capabilityObservation(evalv1.ModelCapabilityKind_MODEL_CAPABILITY_KIND_THINKING, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "thinking probe returned neither thinking nor expected answer"), nil
 }
@@ -162,36 +183,6 @@ func probeContextLimitCapability(variant *evalv1.ModelVariant) *evalv1.ModelCapa
 	)
 }
 
-type capabilityProbeOption func(*models.GenerateRequest)
-
-func withThinking(control *operatorv1.InferenceThinkingControl) capabilityProbeOption {
-	return func(req *models.GenerateRequest) {
-		req.Thinking = control
-	}
-}
-
-func capabilityProbeRequest(variant *evalv1.ModelVariant, attemptID string, tools []*operatorv1.InferenceToolDeclaration, toolChoice *operatorv1.InferenceToolChoice, responseFormat *operatorv1.InferenceResponseFormat, prompt string, opts ...capabilityProbeOption) models.GenerateRequest {
-	req := models.GenerateRequest{
-		Role:  models.InferenceModelRolePrimary,
-		Model: variant.GetServedModelTag(),
-		Messages: []*operatorv1.InferenceMessage{{
-			Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
-			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: prompt}}},
-		}},
-		Tools:                tools,
-		ToolChoice:           toolChoice,
-		ResponseFormat:       responseFormat,
-		MaxTokens:            128,
-		ProviderAttemptID:    attemptID,
-		ModelDigest:          variant.GetModelDigest(),
-		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
-	}
-	for _, opt := range opts {
-		opt(&req)
-	}
-	return req
-}
-
 func capabilityObservation(kind evalv1.ModelCapabilityKind, outcome evalv1.EvaluationVerdictStatus, detail string) *evalv1.ModelCapabilityObservation {
 	return &evalv1.ModelCapabilityObservation{
 		Capability:        kind,
@@ -200,23 +191,19 @@ func capabilityObservation(kind evalv1.ModelCapabilityKind, outcome evalv1.Evalu
 	}
 }
 
-func responseHasText(response *models.GenerateResponse, expected string) bool {
-	if response == nil {
+func inferenceResultHasText(result *operatorv1.InferenceResult, expected string) bool {
+	if result == nil {
 		return false
 	}
-	for _, part := range response.Parts {
-		if strings.Contains(part.GetText(), expected) {
-			return true
-		}
-	}
-	return false
+	text := strings.ToLower(collectResponseText(result))
+	return strings.Contains(text, strings.ToLower(expected))
 }
 
-func responseHasToolCall(response *models.GenerateResponse, name string) bool {
-	if response == nil {
+func inferenceResultHasToolCall(result *operatorv1.InferenceResult, name string) bool {
+	if result == nil {
 		return false
 	}
-	for _, part := range response.Parts {
+	for _, part := range result.GetParts() {
 		if part.GetToolCall() != nil && part.GetToolCall().GetName() == name {
 			return true
 		}
@@ -224,11 +211,11 @@ func responseHasToolCall(response *models.GenerateResponse, name string) bool {
 	return false
 }
 
-func responseHasThinking(response *models.GenerateResponse) bool {
-	if response == nil {
+func inferenceResultHasThinking(result *operatorv1.InferenceResult) bool {
+	if result == nil {
 		return false
 	}
-	for _, part := range response.Parts {
+	for _, part := range result.GetParts() {
 		if part.GetThinking() != "" {
 			return true
 		}
@@ -236,21 +223,16 @@ func responseHasThinking(response *models.GenerateResponse) bool {
 	return false
 }
 
-func responseStructuredJSON(response *models.GenerateResponse) (string, bool) {
-	if response == nil {
+func inferenceResultStructuredJSON(result *operatorv1.InferenceResult) (string, bool) {
+	if result == nil {
 		return "", false
 	}
-	for _, part := range response.Parts {
-		if text := strings.TrimSpace(part.GetText()); text != "" {
-			if json.Valid([]byte(text)) {
-				return text, true
-			}
-		}
+	text := extractStructuredJSONPayload(collectResponseText(result))
+	if text == "" {
+		return "", false
+	}
+	if json.Valid([]byte(text)) {
+		return text, true
 	}
 	return "", false
-}
-
-// NewOllamaCapabilityProbeBackend wraps an Ollama endpoint for inventory probes.
-func NewOllamaCapabilityProbeBackend(endpoint string, logger *slog.Logger) (CapabilityProbeBackend, error) {
-	return inference.NewOllamaBackend(endpoint, logger)
 }

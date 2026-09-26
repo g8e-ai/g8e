@@ -171,7 +171,7 @@ class TestEvalJudgeConstruction:
             EvalJudge(provider=provider, model=None)
 
     def test_none_provider_rejected(self):
-        with pytest.raises(EvalJudgeError, match="configured LLM provider"):
+        with pytest.raises(EvalJudgeError, match="LLM provider or decision provider"):
             EvalJudge(provider=None, model="some-model")
 
     def test_valid_construction(self):

@@ -14,3 +14,12 @@ import "encoding/json"
 type ModelProvenanceResponse struct {
 	Window json.RawMessage `json:"window"`
 }
+
+// ModelProvenanceAttestResponse bundles one synchronous storage attestation
+// preflight result for campaign execute and formation smoke paths.
+type ModelProvenanceAttestResponse struct {
+	Status              string          `json:"status"`
+	ServedModelTag      string          `json:"served_model_tag"`
+	ExpectedModelDigest string          `json:"expected_model_digest"`
+	Window              json.RawMessage `json:"window"`
+}

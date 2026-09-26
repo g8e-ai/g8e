@@ -20,7 +20,7 @@ Assistant and lite call shapes do not carry thinking configuration. Triage, Trib
 
 - An empty list means the model has no registered thinking capability and resolves every request to `off`.
 - A list containing `off` describes a model whose reasoning can be disabled.
-- A list without `off` describes an always-on reasoning model. No built-in model profile currently uses this form.
+- A list without `off` describes an always-on reasoning model. No built-in model profile uses this form.
 
 `clamp_thinking_level` resolves a requested level to the highest supported intensity at or below it. If the request is lower than every supported intensity, it returns the model's lowest supported intensity. An `off` request returns `off` when the model supports it; for an always-on profile it returns the lowest supported intensity.
 
@@ -82,19 +82,19 @@ Anthropic signatures remain attached to their corresponding thinking blocks when
 
 ## Streaming Events
 
-The stream processor emits internal `THINKING` chunks for thought text and a `THINKING_END` chunk when a phase ends. The SSE layer publishes all three lifecycle actions under the single event identifier `g8e.v1.ai.llm.chat.iteration.thinking.started` using `ChatThinkingPayload.action_type`:
+The stream processor emits internal `THINKING` chunks for thought text and a `THINKING_END` chunk when a phase ends. The SSE layer publishes all thinking lifecycle actions as `g8e.v1.ai.llm.chat.iteration.thinking.started` with `ChatThinkingPayload.phase`:
 
-- `start` carries the first thought chunk in a phase.
-- `update` carries each later thought chunk in that phase.
-- `end` carries no thought text and marks the transition to visible text, tool execution, or stream completion.
+- `start` — first thought chunk in a phase.
+- `update` — each later thought chunk in that phase.
+- `end` — phase transition to visible text, tool execution, or stream completion.
 
-The protocol registry also defines `thinking.update` and `thinking.end` identifiers, but the current ensemble runtime does not publish those identifiers. These events are session-targeted delivery telemetry; they are not governance state, authorization, or durable execution evidence.
+These events are session-targeted delivery telemetry. They are not governance state, authorization, or durable execution evidence.
 
 ## Memory and Telemetry
 
 Durable memory generation skips conversation messages marked `is_thinking`. This prevents a thinking-only message from becoming a user preference or investigation summary. The filter does not remove thought parts from the turn-local provider history, where they can be required for multi-turn tool calling.
 
-The agent accumulates provider-reported input, output, cache, total, and thinking token counts in turn results and includes them in model-call telemetry and completed response metadata. Gemini supplies a separate thought-token count, and the governed `g8e` provider can propagate one from the inference response. The Anthropic, OpenAI-compatible, and Ollama adapters currently do not populate a separate thinking-token field, so `thinking_tokens` remains zero for those calls even when their responses contain reasoning. A provider that omits usage leaves the usage fields at zero with `usage_reported=false`.
+The agent accumulates provider-reported input, output, cache, total, and thinking token counts in turn results and includes them in model-call telemetry and completed response metadata. Gemini supplies a separate thought-token count, and the governed `g8e` provider can propagate one from the inference response. The Anthropic, OpenAI-compatible, and Ollama adapters do not populate a separate thinking-token field, so `thinking_tokens` remains zero for those calls even when their responses contain reasoning. A provider that omits usage leaves the usage fields at zero with `usage_reported=false`.
 
 ## Related
 

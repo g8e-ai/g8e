@@ -60,14 +60,18 @@ func TestEvalAnswerVerification(t *testing.T) {
 	payloadBytes, err := proto.Marshal(payload)
 	require.NoError(t, err, "Failed to marshal payload")
 
+	eventType, err := constants.RequestEventForAction(constants.ActionTypeEvalAnswer)
+	require.NoError(t, err, "Failed to resolve request event")
+
 	// Create envelope with proper structure
 	envelope := &govtypes.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
+		ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "operator-session-1",
+		EventType:         string(eventType),
 		ActionType:        string(constants.ActionTypeEvalAnswer),
 		TargetResource:    "localhost",
 		Payload:           payloadBytes,

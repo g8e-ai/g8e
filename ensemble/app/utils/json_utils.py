@@ -19,7 +19,7 @@ from decimal import Decimal
 from functools import partial
 from typing import Any
 
-from app.utils.timestamp import parse_iso
+from app.utils.time_ids.timestamp import parse_iso
 
 logger = logging.getLogger(__name__)
 

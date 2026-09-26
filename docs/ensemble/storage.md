@@ -26,7 +26,7 @@ Authenticated reads retrieve individual records or filter a collection with comp
 
 Protected application collections include cases, investigations, tasks, memories, agent activity metadata, reputation state, reputation commitments, and stake resolutions. The Gateway rejects direct document mutations for these collections with a governance-envelope redirect. g8ee submits their writes as typed document operations in a `GovernanceEnvelope`; reads continue to use the document service.
 
-The Gateway permits direct mutations for a fixed set of platform support collections, including settings, users, Operators, Operator sessions, bound sessions, passkey challenges, revoked certificates, trusted signers, and console audit records. The current g8ee API-key service targets an application-specific `api_keys` collection through direct document methods, but that collection is not on the Gateway allowlist, so its create and update requests are rejected rather than persisted.
+The Gateway permits direct mutations for a fixed set of platform support collections, including settings, users, Operators, Operator sessions, bound sessions, passkey challenges, revoked certificates, trusted signers, and console audit records. The g8ee API-key service targets an application-specific `api_keys` collection through direct document methods, but that collection is not on the Gateway allowlist, so its create and update requests are rejected rather than persisted.
 
 The client-side array helpers use read-modify-write cycles, and the batch helper sends operations one at a time. These operations are not atomic across concurrent writers or across a batch. The cache-aside write methods also do not automatically invalidate existing document or query cache entries; explicit invalidation helpers exist, but callers must invoke them.
 
@@ -34,11 +34,11 @@ The client-side array helpers use read-modify-write cycles, and the batch helper
 
 The key-value service stores string values with optional expiration. g8ee serializes document and query cache entries as JSON and assigns collection-specific TTLs. The default TTL is 3,600 seconds; document cache TTLs are 3,600 seconds for users and settings, 86,400 seconds for API keys and reputation state, 1,800 seconds for cases, investigations, memories, and Operators, 7,200 seconds for organizations, and 300 seconds for reputation commitments. Web-session and Operator-session entries have no collection TTL in the cache strategy. Query cache entries default to 300 seconds. Cache-management keys use the `g8e:cache:` prefix and are excluded from the Gateway's bound state root.
 
-Cache reads are disabled by default through `gateway.enable_cache_read`. Document and query reads still warm the cache after a Gateway read, but subsequent reads bypass those entries while the setting remains disabled. When cache reads are enabled, stale warmed document or query entries remain available until expiration or explicit invalidation because the current document mutation paths do not clear them automatically.
+Cache reads are disabled by default through `gateway.enable_cache_read`. Document and query reads still warm the cache after a Gateway read, but subsequent reads bypass those entries while the setting remains disabled. When cache reads are enabled, stale warmed document or query entries remain available until expiration or explicit invalidation because document mutation paths do not clear them automatically.
 
 Hash, list, counter, and pattern operations are client-side conveniences over string values. Hash, list, and counter updates use read-modify-write sequences rather than server-side atomic operations. Pattern matching uses Gateway glob semantics. A KV client that has not passed its health check returns cache misses or unsuccessful writes for many operations; its delete and lookup helpers also convert several transport failures into empty or zero results.
 
-The DB, KV, pub/sub, and blob clients each perform a startup health check, but g8ee does not fail startup solely because one of these checks returns false. Later document and blob failures propagate as storage or network errors, while many KV failures retain cache-miss or unsuccessful-write behavior. The pub/sub client is also required for command and event transport but is not a durable storage tier.
+The DB, KV, and blob clients each perform a startup health check, but g8ee does not fail startup solely because one of these checks returns false. Later document and blob failures propagate as storage or network errors, while many KV failures retain cache-miss or unsuccessful-write behavior. Governed command dispatch and SSE event delivery use Gateway HTTP rather than a g8ee pub/sub client.
 
 ## Attachments
 
@@ -46,7 +46,7 @@ g8ee receives attachment metadata containing a blob reference in the form `att:{
 
 The Gateway limits one blob request body to 50 MiB. Blob reads return only active, unexpired objects. The g8ee attachment flow does not assign a TTL and has no attachment cleanup task, so attachment expiration or deletion depends on the writer and Gateway blob lifecycle. The underlying g8ee blob client does expose put and delete operations for other application workflows, but they are not used by the attachment service.
 
-The Gateway allows direct blob mutation only in the `temp`, `uploads`, `cache`, and `scratch` namespaces, plus caller-owned application or user namespaces under its identity rules. The `att:` namespace used by g8ee references is not on that direct-mutation allowlist. The current g8ee application flow therefore documents attachment retrieval only, not a g8ee-managed upload or deletion path.
+The Gateway allows direct blob mutation only in the `temp`, `uploads`, `cache`, and `scratch` namespaces, plus caller-owned application or user namespaces under its identity rules. The `att:` namespace used by g8ee references is not on that direct-mutation allowlist. The g8ee attachment service retrieves referenced objects only; it does not upload or delete attachments.
 
 ## State Roots and Governance
 
@@ -60,7 +60,7 @@ A protected application-record mutation follows the platform five-layer interloc
 4. **L4 Warden** verifies signatures, expiry, nonce replay protection, the transaction hash, the current state root, target identity, and required L2 and L3 evidence.
 5. **L5 Actuator** dispatches the accepted document operation with a transaction-bound capability and produces signed receipt evidence.
 
-g8ee serializes direct-envelope submissions with a submission lock and retries a state-root mismatch with a fresh root up to three times. The client supplies the envelope over the Gateway HTTPS endpoint using its configured mTLS certificate; normal g8ee startup configures the enrolled g8ee app certificate, while operator identity fields and delegated session context are carried in the envelope or supplied by the configured session. The route verifies supplied evidence but does not create missing L2 votes or suspend for L3, so a mutation fails when the active posture requires evidence that g8ee did not supply.
+g8ee serializes direct-envelope submissions with a submission lock and retries a state-root mismatch with a fresh root up to three times. The client submits over the Gateway HTTPS endpoint using the enrolled g8ee app mTLS certificate. Delegated Operator and session identity fields are carried in the envelope. The route verifies supplied evidence but does not create missing L2 votes or suspend for L3, so a mutation fails when the active posture requires evidence that g8ee did not supply.
 
 ## Authentication and Data Protection
 

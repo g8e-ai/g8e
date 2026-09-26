@@ -138,6 +138,54 @@ func TestHashParity_TimestampNormalization(t *testing.T) {
 	}
 }
 
+type hashVectorV2 struct {
+	hashVector
+	ProtocolVersion string `json:"protocol_version"`
+	EventType       string `json:"event_type"`
+}
+
+type hashVectorsV2File struct {
+	Description string         `json:"description"`
+	Vectors     []hashVectorV2 `json:"vectors"`
+}
+
+func loadHashVectorsV2(t *testing.T) []hashVectorV2 {
+	t.Helper()
+	path := filepath.Join("..", "..", "protocol", "conformance", "hash_vectors_v2.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("Failed to read hash_vectors_v2.json: %v", err)
+	}
+	var file hashVectorsV2File
+	if err := json.Unmarshal(data, &file); err != nil {
+		t.Fatalf("Failed to parse hash_vectors_v2.json: %v", err)
+	}
+	if len(file.Vectors) == 0 {
+		t.Fatal("hash_vectors_v2.json contains no vectors")
+	}
+	return file.Vectors
+}
+
+func TestHashParity_V2VectorFile(t *testing.T) {
+	vectors := loadHashVectorsV2(t)
+
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			env := buildEnvelopeFromVector(t, v.hashVector)
+			env.ProtocolVersion = v.ProtocolVersion
+			env.EventType = v.EventType
+			hash, err := GenerateMessageID(env)
+			if err != nil {
+				t.Fatalf("GenerateMessageID failed: %v", err)
+			}
+			if hash != v.ExpectedHash {
+				t.Errorf("Hash mismatch for vector %q:\n  expected: %s\n  got:      %s",
+					v.Name, v.ExpectedHash, hash)
+			}
+		})
+	}
+}
+
 func buildEnvelopeFromVector(t *testing.T, v hashVector) *GovernanceEnvelope {
 	t.Helper()
 

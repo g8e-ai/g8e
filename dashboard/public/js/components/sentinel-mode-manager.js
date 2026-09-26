@@ -41,15 +41,15 @@ export class SentinelModeManager {
             });
         }
 
-        this.eventBus.on(EventType.CASE_SWITCHED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_SWITCHED, (data) => {
             this.handleCaseSwitched(data);
         });
 
-        this.eventBus.on(EventType.CASE_CLEARED, () => {
+        this.eventBus.on(EventType.APP_CASE_CLEARED, () => {
             this.handleCaseCleared();
         });
 
-        this.eventBus.on(EventType.INVESTIGATION_LOADED, (data) => {
+        this.eventBus.on(EventType.APP_INVESTIGATION_LOADED, (data) => {
             this.handleInvestigationLoaded(data);
         });
 

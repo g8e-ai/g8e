@@ -38,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
+	"github.com/g8e-ai/g8e/v2/internal/services/gateway/embedded"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
@@ -80,6 +81,7 @@ type GatewayModeService struct {
 	userSvc                  *UserService
 	cliSessionSvc            *CLISessionService
 	operatorSessionSvc       *OperatorSessionService
+	embeddedOperator         *embedded.Service
 	webSessionSvc            *WebSessionService
 	suspendedTxService       *storage.SuspendedTransactionService
 	mcpGateway               *mcp.GatewayService
@@ -216,11 +218,11 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	operatorSessionSvc := NewOperatorSessionService(docStore, logger)
 	webSessionSvc := NewWebSessionService(docStore, logger)
 
-	// Register the pending embedded-operator document. The gateway's
-	// in-process operator substrate is enrolled and bound only by the
-	// explicit first-user enrollment act; until then it exists as an
-	// unclaimed pending record. Idempotent across restarts.
-	if err := registerPendingEmbeddedOperator(docStore, logger); err != nil {
+	// The in-process embedded Operator substrate is enrolled and bound
+	// only by the explicit first-user enrollment act; until then it exists
+	// as an unclaimed pending record. Idempotent across restarts.
+	embeddedOperator := embedded.New(docStore, operatorSessionSvc)
+	if err := embeddedOperator.RegisterPending(); err != nil {
 		return nil, err
 	}
 
@@ -435,7 +437,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		WebSessionSvc:      webSessionSvc,
 		EnrollmentTokenSvc: enrollmentTokenSvc,
 		OperatorBinder:     reg,
-		OperatorClaimer:    newEmbeddedOperatorService(docStore, operatorSessionSvc),
+		OperatorClaimer:    embeddedOperator,
 		Responder:          res,
 		MaxPayload:         cfg.Gateway.MaxPayloadBytes,
 		Orchestrator:       passkeyOrchestrator,
@@ -496,6 +498,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		userSvc:                  userSvc,
 		cliSessionSvc:            cliSessionSvc,
 		operatorSessionSvc:       operatorSessionSvc,
+		embeddedOperator:         embeddedOperator,
 		webSessionSvc:            webSessionSvc,
 		suspendedTxService:       suspendedTxService,
 		extraIPs:                 extraIPs,
@@ -703,10 +706,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			G8eReader:     g8eReader,
 		},
 		AuditControllerDeps: AuditControllerDeps{
-			Cfg:        cfg,
-			Logger:     logger,
-			AuditStore: ls.auditStore,
-			Responder:  ls.responder,
+			Cfg:            cfg,
+			Logger:         logger,
+			AuditStore:     ls.auditStore,
+			AuditIngestSvc: NewAuditIngestService(auth, pubsub, logger),
+			Responder:      ls.responder,
 		},
 		DataControllerDeps: DataControllerDeps{
 			Cfg:       cfg,
@@ -733,6 +737,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			PKI:                pki,
 			CLISessionSvc:      cliSessionSvc,
 			OperatorSessionSvc: operatorSessionSvc,
+			EmbeddedOperator:   ls.embeddedOperator,
 			Responder:          ls.responder,
 		},
 		CLIRecoveryControllerDeps: CLIRecoveryControllerDeps{
@@ -887,6 +892,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		},
 		ProviderObservationControllerDeps: providerObservationDeps,
 		ModelProvenanceControllerDeps:     modelProvenanceDeps,
+		EnsembleBrowserProxyControllerDeps: EnsembleBrowserProxyControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: ls.responder,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
@@ -1426,6 +1436,7 @@ func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) 
 // heartbeatUpdate is the typed patch payload for operator document heartbeat updates.
 type heartbeatUpdate struct {
 	LatestHeartbeatSnapshot json.RawMessage `json:"latest_heartbeat_snapshot"`
+	CurrentHostname         string          `json:"current_hostname,omitempty"`
 	UpdatedAt               time.Time       `json:"updated_at"`
 }
 
@@ -1442,20 +1453,21 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	var snapshot json.RawMessage
-	if env.IntentData != nil {
-		snapshotBytes, err := protojson.Marshal(env.IntentData)
-		if err != nil {
-			ls.logger.Warn("heartbeat: failed to marshal intent data", "operator_id", env.GetOperatorId(), "error", err)
-			return
-		}
-		snapshot = snapshotBytes
-	} else {
-		snapshot = json.RawMessage(data)
+	heartbeat, err := heartbeatResultFromEnvelope(&env)
+	if err != nil {
+		ls.logger.Warn("heartbeat: failed to decode result", "operator_id", env.GetOperatorId(), "error", err)
+		return
+	}
+
+	snapshot, err := marshalHeartbeatSnapshot(heartbeat)
+	if err != nil {
+		ls.logger.Warn("heartbeat: failed to marshal snapshot", "operator_id", env.GetOperatorId(), "error", err)
+		return
 	}
 
 	update, err := json.Marshal(heartbeatUpdate{
 		LatestHeartbeatSnapshot: snapshot,
+		CurrentHostname:         currentHostnameFromHeartbeat(heartbeat),
 		UpdatedAt:               time.Now().UTC(),
 	})
 	if err != nil {

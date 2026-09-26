@@ -9,6 +9,7 @@ package governance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -358,6 +359,11 @@ func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
 func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (proto.Message, string, error) {
+	if envelope.ProtocolVersion != govtypes.GovernanceProtocolVersionV2 {
+		tv.logger.Error("Transaction rejected: unsupported protocol version",
+			"protocol_version", envelope.ProtocolVersion)
+		return nil, "", constants.ErrTxProtocolVersionUnsupported
+	}
 	if tv.doctrine == nil {
 		tv.logger.Error("L1Doctrine not configured")
 		return nil, "", constants.ErrTxDoctrineMissing
@@ -365,6 +371,13 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 
 	if envelope.Id == "" {
 		return nil, "", constants.ErrTxTransactionIDMissing
+	}
+
+	eventType := constants.EventType(envelope.EventType)
+	if _, err := constants.ValidateGovernedRequest(eventType); err == nil {
+		if err := constants.ValidateGovernedEnvelopeFields(eventType, constants.ActionType(envelope.ActionType)); err != nil {
+			return nil, "", err
+		}
 	}
 
 	actionType := constants.ActionType(envelope.ActionType)
@@ -382,19 +395,18 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 	decodedPayload, err := tv.decodePayloadForAction(actionType, envelope.Payload)
 	if err != nil {
 		tv.logger.Error("Failed to decode typed payload", "action_type", envelope.ActionType, string(constants.ConnectionStateError), err)
+		if errors.Is(err, constants.ErrTxPayloadDecoderMissing) {
+			return nil, "", err
+		}
 		return nil, "", constants.ErrTxPayloadDecodeFailed
 	}
+	if decodedPayload == nil {
+		return nil, "", constants.ErrTxPayloadDecoderMissing
+	}
 
-	// All governed document mutations (DOCUMENT_UPDATE, DOCUMENT_DELETE) and
-	// every other known action type carry a typed protobuf payload that goes
-	// through L1 doctrine validation. Only adapter-specific action types that
-	// fall through to the default case in decodePayloadForAction return nil
-	// and skip L1 validation.
-	if decodedPayload != nil {
-		if violations := tv.doctrine.ValidatePayload(decodedPayload); len(violations) > 0 {
-			tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
-			return nil, "", fmt.Errorf("%w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
-		}
+	if violations := tv.doctrine.ValidatePayload(decodedPayload); len(violations) > 0 {
+		tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
+		return nil, "", fmt.Errorf("%w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
 	}
 
 	computedHash, err := tv.computeTransactionHash(envelope)

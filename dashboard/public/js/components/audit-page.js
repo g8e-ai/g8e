@@ -147,7 +147,7 @@ export class AuditPage {
         this.tableContainer.appendChild(this.loadingIndicator);
 
         try {
-            const response = await window.serviceClient.get(ServiceName.g8ed, url);
+            const response = await window.serviceClient.get(ServiceName.GATEWAY, url);
             const data = await response.json();
             if (!data.success) {
                 throw new Error(data.error || 'Failed to load audit log');
@@ -166,7 +166,7 @@ export class AuditPage {
         params.append('format', format);
         if (this.fromDateInput.value) params.append('from_date', new Date(this.fromDateInput.value).toISOString());
         if (this.toDateInput.value) params.append('to_date', new Date(this.toDateInput.value + 'T23:59:59').toISOString());
-        window.location.href = `${ApiPaths.audit.download()}?${params.toString()}`;
+        window.location.href = `${window.G8E_GATEWAY_URL}${ApiPaths.audit.events()}?${params.toString()}`;
     }
 
     _handleCopyClick(e) {

@@ -8,7 +8,7 @@
 """
 Operator Services
 
-Operator cache, heartbeat, operator service, and user cache warmer.
+Application-level operator tool orchestration wired to Gateway protocol clients.
 """
 
 from .approval_service import OperatorApprovalService
@@ -16,15 +16,12 @@ from .command_service import OperatorCommandService
 from .execution_service import OperatorExecutionService
 from .file_service import OperatorFileService
 from .filesystem_service import OperatorFilesystemService
-from .heartbeat_service import HeartbeatSnapshotService
 from .intent_service import OperatorIntentService
 from .lfaa_service import OperatorLFAAService
 from .operator_data_service import OperatorDataService
 from .port_service import OperatorPortService
-from .pubsub_service import OperatorPubSubService
 
 __all__ = [
-    "HeartbeatSnapshotService",
     "OperatorApprovalService",
     "OperatorCommandService",
     "OperatorDataService",
@@ -34,5 +31,4 @@ __all__ = [
     "OperatorIntentService",
     "OperatorLFAAService",
     "OperatorPortService",
-    "OperatorPubSubService",
 ]

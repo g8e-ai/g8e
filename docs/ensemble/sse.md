@@ -12,7 +12,6 @@ flowchart TD
         Chat["Chat Pipeline / Agent Turn (g8eEnsemble)"]
         Tribunal["Tribunal Consensus (TribunalEmitter)"]
         Approval["Approval Service (OperatorApprovalService)"]
-        Heartbeat["Heartbeat & Monitors (HeartbeatSnapshotService)"]
         EventSvc["EventService"]
         HttpCli["InternalHttpClient (mTLS)"]
     end
@@ -31,7 +30,6 @@ flowchart TD
     Chat --> EventSvc
     Tribunal --> EventSvc
     Approval --> EventSvc
-    Heartbeat --> EventSvc
     EventSvc --> HttpCli
     HttpCli -- "mTLS HTTPS (Port 8443)" --> PushEndpoint
     PushEndpoint --> Broker
@@ -42,7 +40,7 @@ flowchart TD
 
 ## Gateway Delivery Contract
 
-The ensemble publishes to `POST /api/v1/sse/push` using the Gateway app workload mTLS certificate. The push body contains `user_id`, exactly one of `web_session_id` or `cli_session_id`, and an `event` envelope whose nested `type` identifies the application event. The Gateway accepts app SPIFFE identities under `/app/` except the reserved Gateway and Operator identities. The first-party `g8ee` app identity is authorized as an ensemble producer; other app identities must be authorized for the target Operator session.
+The ensemble publishes to `POST /api/v1/sse/push` using the Gateway app workload mTLS certificate. The push body contains `user_id`, exactly one of `web_session_id` or `cli_session_id`, and an `event` envelope whose nested `type` identifies the application event. That type must be a registered `events.json` entry with `transport` including `sse` and `producers` including `ensemble`; `SessionEvent`/`BackgroundEvent` additionally require a matching `SSE_PAYLOADS` class. The Gateway accepts app SPIFFE identities under `/app/` except the reserved Gateway and Operator identities. The first-party `g8ee` app identity is authorized as an ensemble producer; other app identities must be authorized for the target Operator session.
 
 The Gateway stores the complete push envelope before publishing a session-scoped pub/sub message. `GET /api/v1/sse/stream` emits replayed and live frames with the persisted row ID in `id` and the complete push envelope in `data`; it does not emit an SSE `event` field. Consumers read the application event type from `data.event.type`. `GET /api/v1/sse/events` returns the same retained rows as JSON. Consumers can resume with `Last-Event-ID` or `since_id`; stream connections receive a comment heartbeat every 30 seconds. History is retained for approximately one hour, and live queues are bounded, so SSE is not an audit record.
 
@@ -54,10 +52,10 @@ Every event emitted by `g8ee` is structured as a typed envelope defined in `app.
 
 ### SessionEvent vs. BackgroundEvent
 
-The ensemble has two internal event envelope types, but the current Gateway transport accepts only session-targeted routes:
+The ensemble has two internal event envelope types. The Gateway transport accepts only session-targeted routes:
 
 - **`SessionEvent` (`app.models.events.SessionEvent`)** — Used for a specific client session. It requires `user_id` and exactly one delivery target: either `web_session_id` (browser clients) or `cli_session_id` (CLI/BYO clients). Setting neither or both session identifiers raises a validation error during model instantiation.
-- **`BackgroundEvent` (`app.models.events.BackgroundEvent`)** — Represents a system-initiated event with `user_id` and optional correlation hints (`investigation_id`, `case_id`, `task_id`), but no delivery target. Its wire form cannot satisfy the Gateway route contract. `EventService.publish()` therefore skips targetless events, and the Gateway would reject a direct targetless push with HTTP 400. It is not a user-wide fan-out mechanism in the current implementation.
+- **`BackgroundEvent` (`app.models.events.BackgroundEvent`)** — Internal envelope for system-initiated events with `user_id` and optional correlation hints (`investigation_id`, `case_id`, `task_id`). `EventService.publish()` skips events without `web_session_id` or `cli_session_id` because the Gateway push endpoint requires exactly one session target and returns HTTP 400 for targetless pushes.
 
 ### Target Validation Guard
 
@@ -70,7 +68,7 @@ Internal `SessionEvent` and `BackgroundEvent` objects are converted into protoco
 | Routing Model | Required Identifiers | Target Delivery | Primary Use Cases |
 | --- | --- | --- | --- |
 | `SessionEvent` | `user_id`, and exactly one of `web_session_id` or `cli_session_id` | Single targeted client session | AI chat token streaming, thinking progress, tool executions, approval challenges, clarification questions |
-| `BackgroundEvent` | `user_id` plus optional correlation IDs | Not delivered by the current Gateway route; `EventService` skips it without a session target | Internal representation for unbound/background work; not user-wide fan-out |
+| `BackgroundEvent` | `user_id` plus optional correlation IDs | Not delivered; skipped without a session target | Internal envelope only; add a session target to deliver via SSE |
 
 ### Reputation Updates
 
@@ -87,7 +85,6 @@ The SSE subsystem in `g8ee` is built on two primary infrastructure layers: `Even
 The `EventService` class (`app/services/infra/event_service.py`) implements `EventServiceProtocol` and provides the high-level publishing interface consumed across the ensemble. Its publishing methods are:
 
 - **`publish(event)`** — Validates routing targets and delegates the wire model transmission to `InternalHttpClient.push_sse_event()`.
-- **`publish_command_event(event_type, data, g8e_context, *, task_id)`** — Packages command execution telemetry into a targetless `BackgroundEvent`. `EventService.publish()` skips this event because the Gateway requires a session target; it is not delivered over SSE.
 - **`publish_investigation_event(investigation_id, event_type, payload, web_session_id, case_id, user_id, *, cli_session_id)`** — Constructs a `RequestContext` and publishes a targeted `SessionEvent` containing investigation and case correlation metadata.
 - **`publish_reputation_event(event_type, payload, g8e_context)`** — Converts the application context into a targeted `SessionEvent` and publishes reputation updates through the same route.
 - **`publish_agent_state(request)` / `publish_run_state(request)`** — Sends typed observe projections to the Gateway's separate mTLS producer endpoints. These calls are best-effort, skip targetless requests, swallow transport failures, and preserve cancellation.
@@ -268,7 +265,7 @@ Display name is derived from `investigation.case_title` (disclosure-safe). No ca
 
 ### Task Lifecycle
 
-The protocol designates the ensemble as the authority for task documents, but no ensemble code creates task documents, emits `APP_TASK_*` events, or defines a `TaskModel`/`TaskService`. The `tasks` collection is read by `get_case_tasks` but nothing writes to it. Task fields are left at truthful zero defaults and task lifecycle is documented as unsupported. The Go gateway computes `tasks_in_queue = total_tasks - completed_tasks` from projection fields, not SSE event subtraction.
+Task documents and `APP_TASK_*` events are not implemented in g8ee. Observe run projections report zero task counts. The Gateway computes `tasks_in_queue` from projection fields.
 
 ### Operator Dispatch
 
@@ -294,12 +291,14 @@ To eliminate race conditions in fast or automated test environments (where an au
 
 ## Operator Lifecycle and Telemetry Events
 
-The ensemble surfaces host operator connectivity, status changes, and execution results through SSE telemetry:
+g8ee publishes operator-related SSE events when the request context includes a web or CLI session target:
 
-- **Heartbeat Reception (`HeartbeatSnapshotService`)** — Ingests periodic operator heartbeats from pub/sub channels (`heartbeat:*`) and emits `OPERATOR_HEARTBEAT_RECEIVED` (`g8e.v1.operator.heartbeat.received`). If the operator is bound to an active web session, it emits a targeted `SessionEvent`; if unbound, SSE push is skipped because targetless events cannot route to a client.
-- **Status Transitions (`HeartbeatStaleMonitorService`)** — Scans operator liveness and heartbeat recency. It constructs `OPERATOR_STATUS_UPDATED_ACTIVE`, `OPERATOR_STATUS_UPDATED_BOUND`, `OPERATOR_STATUS_UPDATED_STALE`, `OPERATOR_STATUS_UPDATED_OFFLINE`, `OPERATOR_STATUS_UPDATED_STOPPED`, `OPERATOR_STATUS_UPDATED_TERMINATED`, or `OPERATOR_STATUS_UPDATED_UNAVAILABLE` events for the user's routing context, but the current implementation uses `BackgroundEvent` without a session target, so `EventService` skips these pushes. They do not currently reach the Gateway SSE stream.
-- **Direct Command and File Execution** — Status updates (`OPERATOR_COMMAND_STATUS_UPDATED_QUEUED`, `...RUNNING`, `...COMPLETED`, `...FAILED`, `...CANCELLED`), lifecycle status updates (`OPERATOR_COMMAND_STARTED`, `OPERATOR_COMMAND_COMPLETED`, `OPERATOR_COMMAND_FAILED`, `OPERATOR_COMMAND_CANCELLED`), file operations (`OPERATOR_FILE_EDIT_*`, `OPERATOR_FILE_HISTORY_FETCH_*`, `OPERATOR_FILE_DIFF_FETCH_*`, `OPERATOR_FILE_RESTORE_*`), filesystem operations (`OPERATOR_FILESYSTEM_LIST_*`, `OPERATOR_FILESYSTEM_GREP_*`, `OPERATOR_FILESYSTEM_READ_*`), and network port checks (`OPERATOR_NETWORK_PORT_CHECK_*`) are emitted through targeted event paths when their request context contains a session target; targetless events are skipped.
-- **Case and Investigation Updates (`CaseDataService` / `InvestigationDataService`)** — Publishes `APP_CASE_CREATED`, `APP_CASE_UPDATED`, `APP_CASE_DELETED`, `APP_INVESTIGATION_CREATED`, `APP_INVESTIGATION_UPDATED`, and `APP_INVESTIGATION_DELETED` through the case or investigation request context. These events are session-targeted when the context contains a web or CLI session; targetless events are skipped.
+- **Heartbeat reception (Gateway-owned)** — The Gateway ingests operator heartbeats and emits `OPERATOR_HEARTBEAT_RECEIVED` (`g8e.v1.operator.heartbeat.received`). g8ee does not subscribe to heartbeat channels.
+- **Bind and unbind** — `internal_router` publishes `OPERATOR_STATUS_UPDATED_BOUND` after a successful bind and `OPERATOR_STATUS_UPDATED_ACTIVE` after a successful unbind.
+- **Command and file execution** — Command status and lifecycle events (`OPERATOR_COMMAND_*`), file operations (`OPERATOR_FILE_*`), filesystem operations (`OPERATOR_FILESYSTEM_*`), and port checks (`OPERATOR_NETWORK_PORT_CHECK_*`) publish when the originating request context has a session target.
+- **Case and investigation updates** — `CaseDataService` and `InvestigationDataService` publish `APP_CASE_*` and `APP_INVESTIGATION_*` events through the request context when a session target is present.
+
+`EventService.publish()` skips any event without `web_session_id` or `cli_session_id`.
 
 ## Resiliency and Concurrency Patterns
 

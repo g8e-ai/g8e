@@ -16,18 +16,33 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/audit"
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
+	compliancecmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/compliance"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/demos"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/docker"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/eval"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gw"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/mcp"
+	operatorcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/operator"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/public"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/report"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/swagger"
+	testcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/test"
+	tuicmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/tui"
+	vaultcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/vault"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/version"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 )
 
 var osExit = os.Exit
 
-type versionInfoKey struct{}
-
-func NewRootCmd(version string, vi serve.VersionInfo) *cobra.Command {
+func NewRootCmd(cliVersion string, vi serve.VersionInfo) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     "g8e",
-		Version: version,
+		Version: cliVersion,
 		Short:   "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
 		Long: `g8e is a zero-trust execution platform for agentic infrastructure.
 The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
@@ -72,39 +87,32 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	rootCmd.SetContext(context.WithValue(ctx, versionInfoKey{}, vi))
+	rootCmd.SetContext(shared.ContextWithVersionInfo(ctx, vi))
 
 	rootCmd.PersistentFlags().StringP("endpoint", "e", "", "Gateway HTTP discovery endpoint (host or host:port) for remote enrollment")
 	rootCmd.PersistentFlags().IntP("port", "p", 0, "Gateway HTTPS/mTLS port (overrides default 8443; use with --endpoint)")
 	rootCmd.PersistentFlags().Bool("json", false, "Emit machine-readable JSON output (pretty-printed)")
 
 	rootCmd.AddCommand(
-		gatewayCmd(),
-		authCmd(),
-		mcpCmd(),
-		operatorCmd(),
-		vaultCmd(),
-		testCmd(),
-		demosCmd(),
-		dockerCmd(),
-		auditCmd(),
-		reportCmd(),
-		publicCmd(),
-		swaggerCmd(),
-		tuiCmd(),
-		versionCmd(),
-		complianceCmd(),
-		evalCmd(),
+		gw.Cmd(),
+		authcmd.Cmd(),
+		mcp.Cmd(),
+		operatorcmd.Cmd(),
+		vaultcmd.Cmd(),
+		testcmd.Cmd(),
+		demos.Cmd(),
+		docker.Cmd(),
+		audit.Cmd(),
+		report.Cmd(),
+		public.Cmd(),
+		swagger.Cmd(),
+		tuicmd.Cmd(),
+		version.Cmd(),
+		compliancecmd.Cmd(),
+		eval.Cmd(),
 	)
 
 	return rootCmd
-}
-
-func versionInfoFromCmd(cmd *cobra.Command) serve.VersionInfo {
-	if vi, ok := cmd.Context().Value(versionInfoKey{}).(serve.VersionInfo); ok {
-		return vi
-	}
-	return serve.VersionInfo{}
 }
 
 func ExecuteWithVersionInfo(vi serve.VersionInfo) {

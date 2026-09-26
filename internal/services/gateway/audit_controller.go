@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
@@ -24,29 +25,68 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
-// AuditController handles audit receipt, event, summary, and report endpoints.
+// AuditController handles audit receipt, event, summary, report, and ingest endpoints.
 type AuditController struct {
-	cfg        *config.Config
-	logger     *slog.Logger
-	auditStore *storage.SQLAuditStore
-	responder  *response.Writer
+	cfg            *config.Config
+	logger         *slog.Logger
+	auditStore     *storage.SQLAuditStore
+	auditIngestSvc *AuditIngestService
+	responder      *response.Writer
 }
 
 // AuditControllerDeps groups all dependencies for AuditController.
 type AuditControllerDeps struct {
-	Cfg        *config.Config
-	Logger     *slog.Logger
-	AuditStore *storage.SQLAuditStore
-	Responder  *response.Writer
+	Cfg            *config.Config
+	Logger         *slog.Logger
+	AuditStore     *storage.SQLAuditStore
+	AuditIngestSvc *AuditIngestService
+	Responder      *response.Writer
 }
 
 func newAuditController(d AuditControllerDeps) *AuditController {
 	return &AuditController{
-		cfg:        d.Cfg,
-		logger:     d.Logger,
-		auditStore: d.AuditStore,
-		responder:  d.Responder,
+		cfg:            d.Cfg,
+		logger:         d.Logger,
+		auditStore:     d.AuditStore,
+		auditIngestSvc: d.AuditIngestSvc,
+		responder:      d.Responder,
 	}
+}
+
+// handleAuditRecords ingests an LFAA audit record and returns operator chain metadata.
+func (c *AuditController) handleAuditRecords(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.auditIngestSvc == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrInternal.Error())
+		return
+	}
+
+	var req models.AuditRecordIngestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+
+	requestorUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	result, err := c.auditIngestSvc.Ingest(r.Context(), req, requestorUserID)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, constants.ErrAuditIngestTimeout),
+			errors.Is(err, constants.ErrAuditIngestNoDelivery):
+			status = http.StatusGatewayTimeout
+		case errors.Is(err, constants.ErrRegistrationOperatorNotBelongToUser):
+			status = http.StatusForbidden
+		}
+		c.logger.Error("audit ingest failed", "error", err)
+		c.responder.Error(w, status, err.Error())
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, result)
 }
 
 // @Summary		Get or list audit receipts
@@ -370,4 +410,47 @@ func (c *AuditController) handleAuditReport(w http.ResponseWriter, r *http.Reque
 		Success: true,
 		Report:  report,
 	})
+}
+
+func (c *AuditController) handleAuditVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.auditStore == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrAuditStoreDisabled.Error())
+		return
+	}
+
+	fromSeq := int64(0)
+	if raw := strings.TrimSpace(r.URL.Query().Get("from_seq")); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed < 0 {
+			c.responder.Error(w, http.StatusBadRequest, "from_seq must be a non-negative integer")
+			return
+		}
+		fromSeq = parsed
+	}
+
+	headSeq, headHash, err := c.auditStore.GetAuditChainHead(r.Context())
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditVerify: %w", err).Error())
+		return
+	}
+
+	verifyErr := c.auditStore.VerifyChain(r.Context(), fromSeq)
+	resp := models.AuditVerifyResponse{
+		Success:         true,
+		OK:              verifyErr == nil,
+		VerifiedFromSeq: fromSeq,
+		HeadSeq:         headSeq,
+		HeadHash:        headHash,
+	}
+	if verifyErr != nil {
+		resp.Error = verifyErr.Error()
+		c.responder.JSON(w, http.StatusOK, resp)
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, resp)
 }

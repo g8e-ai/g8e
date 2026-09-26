@@ -37,7 +37,7 @@ export function ProportionBar({
       >
         <div style={{ width: `${pct}%`, height: '100%', background: color }} />
       </div>
-      <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--text-md)', whiteSpace: 'nowrap' }}>{label}</span>
     </div>
   );
 }
@@ -86,7 +86,7 @@ export function StackedBar({ segments }: { segments: StackedSegment[] }) {
         style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'flex', gap: '14px', flexWrap: 'wrap' }}
       >
         {segments.map((s) => (
-          <li key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+          <li key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-md)' }}>
             <span
               aria-hidden="true"
               style={{ width: '10px', height: '10px', borderRadius: '2px', background: s.color, display: 'inline-block' }}

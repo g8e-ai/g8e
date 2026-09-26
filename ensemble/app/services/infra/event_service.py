@@ -52,28 +52,6 @@ class EventService(EventServiceProtocol):
         await self._internal_http_client.push_sse_event(event)
         return getattr(event, "id", "event-id")
 
-    async def publish_command_event(
-        self,
-        event_type: EventType,
-        data: object,
-        g8e_context: object,
-        *,
-        task_id: str,
-    ) -> None:
-        """Publish a command-related event."""
-        # For now, wrap in a BackgroundEvent and publish
-        from app.models.events import BackgroundEvent
-
-        event = BackgroundEvent(
-            event_type=event_type,
-            payload=data,
-            task_id=task_id,
-            user_id=getattr(g8e_context, "user_id", "") or "",
-            investigation_id=getattr(g8e_context, "investigation_id", None),
-            case_id=getattr(g8e_context, "case_id", None),
-        )
-        await self.publish(event)
-
     async def publish_reputation_event(
         self,
         event_type: EventType,

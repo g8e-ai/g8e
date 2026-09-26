@@ -87,7 +87,7 @@ describe('CasesManager URL State [UNIT]', () => {
     }
 
     function triggerSSEInvestigationList(investigations) {
-        eventBus.emit(EventType.INVESTIGATION_LIST_COMPLETED, {
+        eventBus.emit(EventType.APP_INVESTIGATION_LIST_COMPLETED, {
             investigations,
             count: investigations.length,
             timestamp: now()
@@ -194,7 +194,7 @@ describe('CasesManager URL State [UNIT]', () => {
             vi.spyOn(dom.window.history, 'pushState').mockImplementation(() => {});
             vi.spyOn(dom.window.history, 'replaceState').mockImplementation(() => {});
 
-            serviceClient.setResponse(ServiceName.g8ed, '/api/chat/investigations?case_id=case_url_1', makeSwitchToCaseResponse('case_url_1'));
+            serviceClient.setResponse(ServiceName.GATEWAY, '/api/v1/investigations?case_id=case_url_1', makeSwitchToCaseResponse('case_url_1'));
 
             makeManager();
 
@@ -238,7 +238,7 @@ describe('CasesManager URL State [UNIT]', () => {
             ]);
 
             expect(manager.currentCaseId).toBeNull();
-            expect(eventBus.emitted(EventType.CASE_CLEARED)).toHaveLength(1);
+            expect(eventBus.emitted(EventType.APP_CASE_CLEARED)).toHaveLength(1);
         });
 
         it('does not call resetForNewCase when cases list is empty', () => {
@@ -262,7 +262,7 @@ describe('CasesManager URL State [UNIT]', () => {
             vi.spyOn(dom.window.history, 'pushState').mockImplementation(() => {});
             vi.spyOn(dom.window.history, 'replaceState').mockImplementation(() => {});
 
-            serviceClient.setResponse(ServiceName.g8ed, '/api/chat/investigations?case_id=case_url_1', makeSwitchToCaseResponse('case_url_1'));
+            serviceClient.setResponse(ServiceName.GATEWAY, '/api/v1/investigations?case_id=case_url_1', makeSwitchToCaseResponse('case_url_1'));
 
             makeManager();
 
@@ -368,7 +368,7 @@ describe('CasesManager URL State [UNIT]', () => {
 
     describe('switchToCase — URL updates', () => {
         it('pushes URL with investigation param after switching to a case', async () => {
-            serviceClient.setResponse(ServiceName.g8ed, '/api/chat/investigations?case_id=case_abc', makeSwitchToCaseResponse('case_abc'));
+            serviceClient.setResponse(ServiceName.GATEWAY, '/api/v1/investigations?case_id=case_abc', makeSwitchToCaseResponse('case_abc'));
 
             const manager = makeManager();
             await manager.switchToCase('case_abc');

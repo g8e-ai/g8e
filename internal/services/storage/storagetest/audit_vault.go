@@ -321,6 +321,10 @@ func (avs *TestSQLAuditStore) initDatabase() error {
 		db.Close()
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
+	if err := storage.MigrateEventChainColumns(db, avs.logger, avs.encryptionVault); err != nil {
+		db.Close()
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
+	}
 
 	avs.db = db
 
@@ -349,7 +353,7 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		existing[name] = true
 	}
 
-	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json"} {
+	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json", "event_type"} {
 		if existing[col] {
 			continue
 		}
@@ -376,6 +380,11 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE TABLE IF NOT EXISTS events (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	seq INTEGER UNIQUE,
+	prev_hash TEXT,
+	content_digest TEXT,
+	hash TEXT,
+	transaction_id TEXT,
 	operator_session_id TEXT,
 	timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
 	type TEXT NOT NULL,
@@ -411,6 +420,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 	operator_session_id TEXT,
 	requestor_user_id TEXT,
 	acting_app_id TEXT,
+	event_type TEXT,
 	action_type TEXT NOT NULL,
 	target_resource TEXT,
 	status TEXT NOT NULL,
@@ -528,16 +538,19 @@ func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSe
 	return &session, nil
 }
 
-func (avs *TestSQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *storage.Event) error {
+func (avs *TestSQLAuditStore) requireExistingSessionConn(conn *sql.Conn, event *storage.Event) error {
 	if event == nil {
 		return constants.ErrAuditEventNil
+	}
+	if event.Type == constants.EventPlatformAuditChainCheckpointed {
+		return nil
 	}
 	if event.OperatorSessionID == "" || strings.TrimSpace(event.OperatorSessionID) != event.OperatorSessionID {
 		return constants.ErrAuditSessionMissing
 	}
 
 	var exists int
-	err := tx.QueryRow(`SELECT 1 FROM sessions WHERE id = ?`, event.OperatorSessionID).Scan(&exists)
+	err := conn.QueryRowContext(context.Background(), `SELECT 1 FROM sessions WHERE id = ?`, event.OperatorSessionID).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("%w: %s", constants.ErrAuditSessionUnknown, event.OperatorSessionID)
 	}
@@ -545,6 +558,44 @@ func (avs *TestSQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *storag
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreVerifySessionFailed, err)
 	}
 	return nil
+}
+
+func (avs *TestSQLAuditStore) prepareAuditEventInsert(event *storage.Event) (storage.PreparedAuditEventInsert, error) {
+	stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
+	stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
+
+	contentTextBytes, err := avs.encryptContent(event.ContentText)
+	if err != nil {
+		return storage.PreparedAuditEventInsert{}, fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptContentFailed, err)
+	}
+
+	stdoutBytes, err := avs.encryptContent(stdout)
+	if err != nil {
+		return storage.PreparedAuditEventInsert{}, fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStdoutFailed, err)
+	}
+
+	stderrBytes, err := avs.encryptContent(stderr)
+	if err != nil {
+		return storage.PreparedAuditEventInsert{}, fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStderrFailed, err)
+	}
+
+	encryptedFlag := 0
+	if avs.encryptionVault.IsUnlocked() {
+		encryptedFlag = 1
+	}
+
+	return storage.PreparedAuditEventInsert{
+		Event:            event,
+		TimestampStr:     timesvc.FormatTimestamp(event.Timestamp),
+		ContentTextBytes: contentTextBytes,
+		StdoutBytes:      stdoutBytes,
+		StderrBytes:      stderrBytes,
+		StdoutTruncated:  stdoutTruncated,
+		StderrTruncated:  stderrTruncated,
+		EncryptedFlag:    encryptedFlag,
+		StdoutPlaintext:  stdout,
+		StderrPlaintext:  stderr,
+	}, nil
 }
 
 // RecordEvents records multiple events in a single database transaction.
@@ -556,65 +607,16 @@ func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 	avs.muWrites.Add(1)
 	defer avs.muWrites.Done()
 
-	return avs.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
-		query := `
-		INSERT INTO events (
-			operator_session_id, timestamp, type, content_text,
-			command_raw, command_exit_code, command_stdout, command_stderr,
-			execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`
-
-		stmt, err := tx.Prepare(query)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStorePrepareBatchFailed, err)
-		}
-		defer stmt.Close()
-
+	return avs.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
 		for _, event := range events {
-			if err := avs.requireExistingSessionTx(tx, event); err != nil {
+			if err := avs.requireExistingSessionConn(conn, event); err != nil {
 				return err
 			}
-
-			stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
-			stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
-
-			encryptedFlag := 0
-			if avs.encryptionVault.IsUnlocked() {
-				encryptedFlag = 1
-			}
-
-			contentTextBytes, err := avs.encryptContent(event.ContentText)
+			prepared, err := avs.prepareAuditEventInsert(event)
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptContentFailed, err)
+				return err
 			}
-
-			stdoutBytes, err := avs.encryptContent(stdout)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStdoutFailed, err)
-			}
-
-			stderrBytes, err := avs.encryptContent(stderr)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStderrFailed, err)
-			}
-
-			_, err = stmt.Exec(
-				event.OperatorSessionID,
-				timesvc.FormatTimestamp(event.Timestamp),
-				event.Type,
-				contentTextBytes,
-				event.CommandRaw,
-				event.CommandExitCode,
-				stdoutBytes,
-				stderrBytes,
-				event.ExecutionDurationMs,
-				true, // stored_locally
-				stdoutTruncated,
-				stderrTruncated,
-				encryptedFlag,
-			)
-			if err != nil {
+			if _, _, _, err := storage.AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrAuditStoreExecuteBatchFailed, err)
 			}
 		}
@@ -714,71 +716,29 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 	defer avs.muWrites.Done()
 
 	var eventID int64
-	err := avs.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
-		if err := avs.requireExistingSessionTx(tx, event); err != nil {
+	err := avs.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		if err := avs.requireExistingSessionConn(conn, event); err != nil {
 			return err
 		}
 
-		stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
-		stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
-
-		contentTextBytes, err := avs.encryptContent(event.ContentText)
+		prepared, err := avs.prepareAuditEventInsert(event)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptContentFailed, err)
+			return err
 		}
 
-		stdoutBytes, err := avs.encryptContent(stdout)
+		id, _, _, err := storage.AppendPreparedAuditEvent(context.Background(), conn, prepared)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStdoutFailed, err)
+			return err
 		}
-
-		stderrBytes, err := avs.encryptContent(stderr)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStderrFailed, err)
-		}
-
-		query := `
-		INSERT INTO events (
-			operator_session_id, timestamp, type, content_text,
-			command_raw, command_exit_code, command_stdout, command_stderr,
-			execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`
-
-		encryptedFlag := 0
-		if avs.encryptionVault.IsUnlocked() {
-			encryptedFlag = 1
-		}
-
-		result, err := tx.Exec(query,
-			event.OperatorSessionID,
-			timesvc.FormatTimestamp(event.Timestamp),
-			event.Type,
-			contentTextBytes,
-			event.CommandRaw,
-			event.CommandExitCode,
-			stdoutBytes,
-			stderrBytes,
-			event.ExecutionDurationMs,
-			true, // stored_locally
-			stdoutTruncated,
-			stderrTruncated,
-			encryptedFlag,
-		)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordEventFailed, err)
-		}
-
-		id, _ := result.LastInsertId()
 		eventID = id
 
 		avs.logger.Info("Event recorded",
 			"event_id", eventID,
 			"type", event.Type,
 			"operator_session_id", event.OperatorSessionID,
-			"stdout_truncated", stdoutTruncated,
-			"stderr_truncated", stderrTruncated,
-			"encrypted", encryptedFlag)
+			"stdout_truncated", prepared.StdoutTruncated,
+			"stderr_truncated", prepared.StderrTruncated,
+			"encrypted", prepared.EncryptedFlag)
 
 		return nil
 	})
@@ -800,27 +760,18 @@ func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionRec
 	return receipt, nil
 }
 
-// RecordActionReceipt records a signed ActionReceipt in the audit vault.
-// This is the authoritative transaction-native audit record.
+// RecordActionReceipt upserts the latest-stage receipt projection and appends a
+// chained operator.receipt.recorded fact for every stage write.
 func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}
+	if record == nil {
+		return constants.ErrAuditStoreRecordReceiptFailed
+	}
 
 	avs.muWrites.Add(1)
 	defer avs.muWrites.Done()
-
-	// Auto-create session row for FK satisfaction (matches production behavior).
-	// When OperatorSessionID is empty, insert NULL (matches production behavior
-	// for platform enrollment governance actions with no operator session).
-	var sessionID sql.NullString
-	if record.OperatorSessionID != "" {
-		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
-		_, _ = avs.db.ExecWithRetry(
-			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
-			record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
-		)
-	}
 
 	receiptJSON := []byte(nil)
 	if record.ActionReceipt != nil {
@@ -831,45 +782,44 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		}
 	}
 
-	query := `
-	INSERT INTO receipts (
-		transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
-		action_type, target_resource, status, result_summary,
-		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, receipt_json, timestamp
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	ON CONFLICT(transaction_id) DO UPDATE SET
-		investigation_id = excluded.investigation_id,
-		status = excluded.status,
-		result_summary = excluded.result_summary,
-		state_root_after = excluded.state_root_after,
-		executed_at_ms = excluded.executed_at_ms,
-		signature = excluded.signature,
-		receipt_json = excluded.receipt_json,
-		timestamp = excluded.timestamp
-	`
+	timestamp := record.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now().UTC()
+	}
 
-	_, err := avs.db.ExecWithRetry(query,
-		record.TransactionID,
-		record.TransactionHash,
-		record.InvestigationID,
-		record.OperatorID,
-		sessionID,
-		record.RequestorUserID,
-		record.ActingAppID,
-		record.ActionType,
-		record.TargetResource,
-		record.Status,
-		record.ResultSummary,
-		record.StateRootBefore,
-		record.StateRootAfter,
-		record.ExecutedAt.UnixMilli(),
-		record.SignerKeyID,
-		record.Signature,
-		receiptJSON,
-		timesvc.FormatTimestamp(record.Timestamp),
-	)
+	err := avs.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		if record.OperatorSessionID != "" {
+			if _, err := conn.ExecContext(context.Background(),
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+				record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
+			); err != nil {
+				return fmt.Errorf("audit vault: create operator session: %w", err)
+			}
+		}
+
+		if err := avs.upsertActionReceiptConn(conn, record, receiptJSON, timestamp); err != nil {
+			return err
+		}
+
+		chainEvent := &storage.Event{
+			OperatorSessionID: record.OperatorSessionID,
+			Timestamp:         timestamp,
+			Type:              constants.EventOperatorReceiptRecorded,
+			ContentText:       string(receiptJSON),
+			TransactionID:     record.TransactionID,
+		}
+		if chainEvent.OperatorSessionID != "" {
+			if err := avs.requireExistingSessionConn(conn, chainEvent); err != nil {
+				return err
+			}
+		}
+		prepared, err := avs.prepareAuditEventInsert(chainEvent)
+		if err != nil {
+			return err
+		}
+		_, _, _, err = storage.AppendPreparedAuditEvent(context.Background(), conn, prepared)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
 	}
@@ -881,6 +831,58 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 	return nil
 }
 
+func (avs *TestSQLAuditStore) upsertActionReceiptConn(conn *sql.Conn, record *models.ActionReceiptRecord, receiptJSON []byte, timestamp time.Time) error {
+	var sessionID sql.NullString
+	if record.OperatorSessionID != "" {
+		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
+	}
+
+	query := `
+	INSERT INTO receipts (
+		transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
+		requestor_user_id, acting_app_id, event_type,
+		action_type, target_resource, status, result_summary,
+		state_root_before, state_root_after, executed_at_ms,
+		signer_key_id, signature, receipt_json, timestamp
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(transaction_id) DO UPDATE SET
+		investigation_id = excluded.investigation_id,
+		status = excluded.status,
+		result_summary = excluded.result_summary,
+		state_root_after = excluded.state_root_after,
+		executed_at_ms = excluded.executed_at_ms,
+		signature = excluded.signature,
+		receipt_json = excluded.receipt_json,
+		timestamp = excluded.timestamp
+	`
+
+	_, err := conn.ExecContext(context.Background(), query,
+		record.TransactionID,
+		record.TransactionHash,
+		record.InvestigationID,
+		record.OperatorID,
+		sessionID,
+		record.RequestorUserID,
+		record.ActingAppID,
+		record.EventType,
+		record.ActionType,
+		record.TargetResource,
+		record.Status,
+		record.ResultSummary,
+		record.StateRootBefore,
+		record.StateRootAfter,
+		record.ExecutedAt.UnixMilli(),
+		record.SignerKeyID,
+		record.Signature,
+		receiptJSON,
+		timesvc.FormatTimestamp(timestamp),
+	)
+	if err != nil {
+		return fmt.Errorf("audit vault: upsert receipt projection: %w", err)
+	}
+	return nil
+}
+
 // GetActionReceipt retrieves a single action receipt by transaction ID.
 func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
@@ -889,7 +891,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 
 	query := `
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -905,7 +907,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	var receiptJSON sql.NullString
 	err := avs.db.QueryRowWithRetry(query, transactionID).Scan(
 		&r.TransactionID, &r.TransactionHash, &investigationID, &r.OperatorID, &sessionID,
-		&r.RequestorUserID, &r.ActingAppID,
+		&r.RequestorUserID, &r.ActingAppID, &r.EventType,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
 		&r.SignerKeyID, &r.Signature, &receiptJSON, &timestampStr,
@@ -974,7 +976,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 	var query strings.Builder
 	query.WriteString(`
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -1003,7 +1005,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
-			&row.record.RequestorUserID, &row.record.ActingAppID,
+			&row.record.RequestorUserID, &row.record.ActingAppID, &row.record.EventType,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
@@ -1042,7 +1044,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 
 	query := `
 	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
-		requestor_user_id, acting_app_id,
+		requestor_user_id, acting_app_id, event_type,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, receipt_json, timestamp
@@ -1065,7 +1067,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
-			&row.record.RequestorUserID, &row.record.ActingAppID,
+			&row.record.RequestorUserID, &row.record.ActingAppID, &row.record.EventType,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
@@ -1511,25 +1513,19 @@ func auditVaultPrune(config *TestSQLAuditStoreConfig) sqliteutil.PruneFunc {
 			return err
 		}
 
-		// 2. Delete events older than retention period
-		result, err := db.ExecWithRetry("DELETE FROM events WHERE timestamp < ?", cutoff)
-		if err != nil {
-			logger.Error("Failed to prune old events", string(constants.ConnectionStateError), err)
+		// 2. Checkpoint and delete chained events older than retention period
+		if err := storage.PruneChainedAuditEvents(ctx, db, logger, cutoff); err != nil {
+			logger.Error("Failed to prune chained audit events", string(constants.ConnectionStateError), err)
 			return err
 		}
 
-		rowsDeleted, _ := result.RowsAffected()
-		if rowsDeleted > 0 {
-			logger.Info("Pruned old events", "rows_deleted", rowsDeleted)
-		}
-
 		// 3. Delete receipts older than retention period
-		result, err = db.ExecWithRetry("DELETE FROM receipts WHERE timestamp < ?", cutoff)
+		result, err := db.ExecWithRetry("DELETE FROM receipts WHERE timestamp < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old receipts", string(constants.ConnectionStateError), err)
 			return err
 		}
-		rowsDeleted, _ = result.RowsAffected()
+		rowsDeleted, _ := result.RowsAffected()
 		if rowsDeleted > 0 {
 			logger.Info("Pruned old receipts", "rows_deleted", rowsDeleted)
 		}
@@ -1594,6 +1590,14 @@ func (avs *TestSQLAuditStore) GetDataDir() string {
 		return ""
 	}
 	return avs.fileSvc.Resolve(constants.DataDirname)
+}
+
+// VerifyChain delegates to the production chain verifier using the test vault DB.
+func (avs *TestSQLAuditStore) VerifyChain(ctx context.Context, fromSeq int64) error {
+	if avs == nil || avs.db == nil {
+		return constants.ErrAuditStoreDisabled
+	}
+	return storage.VerifyAuditChainOnDB(ctx, avs.db, fromSeq)
 }
 
 // GetLedgerPath returns the ledger directory path

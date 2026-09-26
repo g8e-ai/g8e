@@ -172,7 +172,26 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 	}
 	_ = json.Unmarshal(p.Event, &inner)
 	if inner.Type == "" {
-		inner.Type = string(constants.SystemHealthUnknown)
+		c.responder.Error(w, http.StatusUnprocessableEntity, "event.type is required")
+		return
+	}
+
+	producer, ok := constants.SSEProducerFromAppID(appID)
+	if !ok {
+		c.logger.Warn("SSE push: unrecognized app producer identity", "app_id", appID)
+		c.responder.Error(w, http.StatusForbidden, "unauthorized client identity")
+		return
+	}
+	sseValidation, err := constants.ValidateSSEPush(constants.EventType(inner.Type), producer)
+	if err != nil {
+		c.logger.Warn(
+			"SSE push: registry rejected event",
+			"event_type", inner.Type,
+			"producer", producer,
+			"error", err,
+		)
+		c.responder.Error(w, http.StatusUnprocessableEntity, err.Error())
+		return
 	}
 
 	// Authorization: Enforce producer-to-target ownership.
@@ -264,15 +283,18 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 	}
 
 authorized:
-	// Persist the event AFTER authorization (R15) and wrap the payload in a
-	// models.SSEPublishedEvent envelope stamped with the DB row ID (R1). The
-	// stream handler unmarshals this envelope to deduplicate live events
-	// against replayed rows and to emit an `id:` field on the live path (R2).
-	rowID, err := c.sseStore.SSEEventsAppend(route, inner.Type, string(body), appID)
-	if err != nil {
-		c.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
+	var rowID int64
+	if sseValidation.Persist {
+		// Persist the event AFTER authorization (R15) and wrap the payload in a
+		// models.SSEPublishedEvent envelope stamped with the DB row ID (R1). The
+		// stream handler unmarshals this envelope to deduplicate live events
+		// against replayed rows and to emit an `id:` field on the live path (R2).
+		rowID, err = c.sseStore.SSEEventsAppend(route, inner.Type, string(body), appID)
+		if err != nil {
+			c.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
+			c.responder.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	// Publish to pub/sub for real-time streaming.

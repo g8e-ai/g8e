@@ -27,6 +27,14 @@ import (
 // a single schema for both directions.
 type GovernanceEnvelope = commonv1.GovernanceEnvelope
 
+const (
+	// GovernanceProtocolVersionV1 is retained for historical record verification only.
+	GovernanceProtocolVersionV1 = "1.0"
+	// GovernanceProtocolVersionV2 is required for all new ingress.
+	GovernanceProtocolVersionV2 = "2"
+	txHashV2Prefix              = "g8e-tx-v2|"
+)
+
 // GenerateMessageID creates a deterministic hash of the critical envelope fields.
 // Canonicalization rules (from docs/architecture/governance.md):
 //   - Fields appended in the documented spec order: action_type,
@@ -44,48 +52,100 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 	if env == nil {
 		return "", constants.ErrTxInvalidEnvelope
 	}
+	switch envelopeProtocolVersion(env) {
+	case GovernanceProtocolVersionV2:
+		return generateMessageIDV2(env)
+	case GovernanceProtocolVersionV1, "":
+		return generateMessageIDV1(env)
+	default:
+		return "", constants.ErrTxProtocolVersionUnsupported
+	}
+}
 
-	// Build canonical string representation in proto field order
+// VerifyTransactionHash recomputes the canonical transaction hash for an envelope
+// and compares it to the provided hash. Dispatches on protocol_version.
+func VerifyTransactionHash(env *GovernanceEnvelope, expectedHash string) error {
+	if env == nil {
+		return constants.ErrTxInvalidEnvelope
+	}
+	computed, err := GenerateMessageID(env)
+	if err != nil {
+		return err
+	}
+	if expectedHash == "" {
+		return constants.ErrTxTransactionHashMissing
+	}
+	if expectedHash != computed {
+		return constants.ErrTxTransactionHashMismatch
+	}
+	return nil
+}
+
+func envelopeProtocolVersion(env *GovernanceEnvelope) string {
+	if env == nil {
+		return ""
+	}
+	return env.ProtocolVersion
+}
+
+func generateMessageIDV1(env *GovernanceEnvelope) (string, error) {
+	canonicalStr, err := canonicalEnvelopeFieldsV1(env)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256([]byte(canonicalStr))
+	return hex.EncodeToString(hash[:]), nil
+}
+
+func generateMessageIDV2(env *GovernanceEnvelope) (string, error) {
+	if env.EventType == "" {
+		return "", constants.ErrTxEventTypeMissing
+	}
+	v1Canonical, err := canonicalEnvelopeFieldsV1(env)
+	if err != nil {
+		return "", err
+	}
+	var canonical strings.Builder
+	canonical.WriteString(txHashV2Prefix)
+	if env.ActionType != "" {
+		canonical.WriteString(env.ActionType)
+	}
+	canonical.WriteByte('|')
+	canonical.WriteString(env.EventType)
+	canonical.WriteByte('|')
+	canonical.WriteString(v1Canonical)
+	hash := sha256.Sum256([]byte(canonical.String()))
+	return hex.EncodeToString(hash[:]), nil
+}
+
+func canonicalEnvelopeFieldsV1(env *GovernanceEnvelope) (string, error) {
 	var canonical strings.Builder
 
-	// 1. action_type (string)
 	if env.ActionType != "" {
 		canonical.WriteString(env.ActionType)
 		canonical.WriteByte('|')
 	}
-
-	// 2. target_resource (string)
 	if env.TargetResource != "" {
 		canonical.WriteString(env.TargetResource)
 		canonical.WriteByte('|')
 	}
-
-	// 3. payload (bytes) - base64 encoded
 	if len(env.Payload) > 0 {
 		canonical.WriteString(base64.StdEncoding.EncodeToString(env.Payload))
 		canonical.WriteByte('|')
 	}
-
-	// 4. state_merkle_root (string)
 	if env.StateMerkleRoot != "" {
 		canonical.WriteString(env.StateMerkleRoot)
 		canonical.WriteByte('|')
 	}
-
-	// 5. nonce (string)
 	if env.Nonce != "" {
 		canonical.WriteString(env.Nonce)
 		canonical.WriteByte('|')
 	}
-
-	// 6. expires_at (timestamp) - UTC RFC3339 format
 	if env.ExpiresAt != nil {
 		expiresAt := env.ExpiresAt.AsTime()
 		canonical.WriteString(timesvc.FormatTimestamp(expiresAt))
 		canonical.WriteByte('|')
 	}
-
-	// 7. intent_data (struct) - canonicalized recursively
 	if env.IntentData != nil {
 		intentStr, err := canonicalizeStruct(env.IntentData)
 		if err != nil {
@@ -94,73 +154,44 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 		canonical.WriteString(intentStr)
 		canonical.WriteByte('|')
 	}
-
-	// 8. requestor_user_id (string) - the human user who authorized the action
 	if env.RequestorUserId != "" {
 		canonical.WriteString(env.RequestorUserId)
 		canonical.WriteByte('|')
 	}
-
-	// 9. acting_app_id (string) - the app/tool acting on behalf of the user
 	if env.ActingAppId != "" {
 		canonical.WriteString(env.ActingAppId)
 		canonical.WriteByte('|')
 	}
-
-	// 10. operator_id (string) - the operator identity the transaction targets
 	if env.OperatorId != "" {
 		canonical.WriteString(env.OperatorId)
 		canonical.WriteByte('|')
 	}
-
-	// 11. operator_session_id (string) - the bound operator session
 	if env.OperatorSessionId != "" {
 		canonical.WriteString(env.OperatorSessionId)
 		canonical.WriteByte('|')
 	}
-
-	// 12. case_id (string) - the owning case
 	if env.CaseId != "" {
 		canonical.WriteString(env.CaseId)
 		canonical.WriteByte('|')
 	}
-
-	// 13. investigation_id (string) - the owning investigation
 	if env.InvestigationId != "" {
 		canonical.WriteString(env.InvestigationId)
 		canonical.WriteByte('|')
 	}
-
-	// 14. task_id (string) - the owning task
 	if env.TaskId != "" {
 		canonical.WriteString(env.TaskId)
 		canonical.WriteByte('|')
 	}
-
-	// 15. web_session_id (string) - the bound web session
 	if env.WebSessionId != "" {
 		canonical.WriteString(env.WebSessionId)
 		canonical.WriteByte('|')
 	}
-
-	// 16. cli_session_id (string) - the bound CLI session
 	if env.CliSessionId != "" {
 		canonical.WriteString(env.CliSessionId)
 		canonical.WriteByte('|')
 	}
 
-	// NOTE: L3 proof is intentionally NOT included in the transaction hash.
-	// The protocol ordering is L1 → L2 → L3 → L4: L2 (machine consensus) signs
-	// the transaction hash before L3 (human notary) is asked. Including L3 in
-	// the hash would create a circular dependency — L2 couldn't sign until the
-	// human had already acted, violating the invariant that the human is never
-	// bothered until all machine-checkable layers pass.
-	// Tamper-evidence for L3 is provided by verifyL3Posture, which checks the
-	// proof against envelope.TransactionHash at verification time.
-
-	canonicalStr := canonical.String()
-	hash := sha256.Sum256([]byte(canonicalStr))
-	return hex.EncodeToString(hash[:]), nil
+	return canonical.String(), nil
 }
 
 // canonicalizeStruct recursively converts a structpb.Struct to a deterministic

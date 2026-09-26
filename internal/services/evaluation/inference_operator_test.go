@@ -31,7 +31,7 @@ func TestSelectInferenceOperator_RequiresExactSessionWhenPinned(t *testing.T) {
 	require.ErrorIs(t, err, constants.ErrInferenceOperatorNotCapable)
 }
 
-func TestResolveInferenceOllamaEndpoint_PrefersInferenceOperatorRuntimeConfig(t *testing.T) {
+func TestGovernedInferenceOllamaEndpoint_UsesExactOperatorRuntimeConfig(t *testing.T) {
 	t.Parallel()
 	operators := []models.OperatorDocumentGo{
 		{
@@ -45,12 +45,12 @@ func TestResolveInferenceOllamaEndpoint_PrefersInferenceOperatorRuntimeConfig(t 
 			},
 		},
 	}
-	endpoint, err := ResolveInferenceOllamaEndpoint("", operators, "sess-inf-1")
+	endpoint, err := GovernedInferenceOllamaEndpoint(operators, "sess-inf-1")
 	require.NoError(t, err)
 	assert.Equal(t, "http://192.168.1.2:11434", endpoint)
 }
 
-func TestResolveInferenceOllamaEndpoint_UsesLoopbackWhenOperatorEndpointMissing(t *testing.T) {
+func TestGovernedInferenceOllamaEndpoint_RejectsMissingOperatorEndpoint(t *testing.T) {
 	t.Parallel()
 	operators := []models.OperatorDocumentGo{
 		{
@@ -61,9 +61,8 @@ func TestResolveInferenceOllamaEndpoint_UsesLoopbackWhenOperatorEndpointMissing(
 			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
 		},
 	}
-	endpoint, err := ResolveInferenceOllamaEndpoint("", operators, "sess-inf-1")
-	require.NoError(t, err)
-	assert.Equal(t, "http://127.0.0.1:11434", endpoint)
+	_, err := GovernedInferenceOllamaEndpoint(operators, "sess-inf-1")
+	require.ErrorIs(t, err, constants.ErrInferenceEndpointInvalid)
 }
 
 func TestSelectInferenceOperator_FailsClosedOnAmbiguity(t *testing.T) {

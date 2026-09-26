@@ -102,16 +102,25 @@ A public origin additionally requires `--allow-public`, and running it remains a
 go run ./test/capacity --target https://opendevops.ai --allow-public --mode stream --clients 300 --hold 5m
 ```
 
-The harness emits JSON status, outcome, latency, stream-survival, and optional Docker resource samples, and exits nonzero unless every requested lifecycle completes and every stream survives. `--synthetic-client-ips` is accepted only with a loopback target and exercises distinct forwarded identities through the configured Docker trusted peer. One generator host remains one Cloudflare client identity and correctly shares one anonymous request window. A 300-distinct-visitor cold-load claim therefore requires distributed generators with distinct public client addresses; callers never spoof `CF-Connecting-IP` against a public target to manufacture identity cardinality.
+For 300 distinct external cold visitors, run coordinated shards from separate generator hosts (distinct egress / Cloudflare client identity per host). Each host runs one shard:
+
+```bash
+go run ./test/capacity --target https://opendevops.ai --allow-public --mode cold \
+  --clients 100 --shard-index 0 --shard-count 3
+# repeat on other hosts with --shard-index 1 and --shard-index 2
+```
+
+The harness emits JSON status, outcome, latency, stream-survival, shard metadata, and optional Docker resource samples, and exits nonzero unless every requested lifecycle completes and every stream survives. `--synthetic-client-ips` is accepted only with a loopback target and exercises distinct forwarded identities through the configured Docker trusted peer. One generator host remains one Cloudflare client identity and correctly shares one anonymous request window. Callers never spoof `CF-Connecting-IP` against a public target to manufacture identity cardinality.
 
 ## Manual record publish (advanced)
 
-`g8e public publish`, `g8e public push`, `g8e public status`, and `g8e public repair-outbox` remain available for manually managed host publisher state. Publication and retry use a **configured remote mirror origin**; repair compacts the local host outbox and snapshot. These commands do not start a local mirror process. Evaluation campaigns use gateway-mediated publication instead.
+`g8e public publish`, `g8e public push`, `g8e public status`, `g8e public repair-outbox`, and `g8e public restore` cover host publisher state and gateway-owned mirror reconciliation. Publication and retry use a **configured remote mirror origin**; repair compacts the local host outbox and snapshot; restore republishes verified campaign runs to the gateway-owned public mirror after a volume wipe. These commands do not start a local mirror process. Evaluation campaigns use gateway-mediated publication instead.
 
 ```bash
 ./g8e public publish <public-records.jsonl>
 ./g8e public push
 ./g8e public status
+./g8e public restore --queue
 ```
 
 `public publish` durably appends before transmission. `public push` retries ordered outbox and proof delivery without running inference. `public repair-outbox` compacts a host publisher outbox against its local snapshot; when the Gateway owns the public mirror, it reports that the Gateway manages the outbox instead of requiring host export configuration. A failed transmission remains retryable.

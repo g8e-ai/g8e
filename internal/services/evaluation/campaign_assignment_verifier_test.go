@@ -76,6 +76,47 @@ func TestCampaignAssignmentVerifier_FailsWhenStoredGradesDrift(t *testing.T) {
 	assert.NotZero(t, report.GetFailureCount())
 }
 
+func TestCampaignAssignmentVerifier_PassesHeterogeneousFormationResult(t *testing.T) {
+	t.Parallel()
+	variants := testHeterogeneousVariants()
+	stack := mustHeterogeneousStack(t)
+	req := heterogeneousAssignmentExecutionRequest(t, stack, variants)
+	harness, err := NewFormationHarness(
+		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
+		func(prefix string) string { return prefix + "-attempt" },
+	)
+	require.NoError(t, err)
+	formation, err := BindHeterogeneousStack(FormationBindingRequest{Stack: stack, Variants: variants})
+	require.NoError(t, err)
+	initialState, err := BuildFormationInitialState(req.ScenarioInput)
+	require.NoError(t, err)
+	formationResult, err := harness.RunBoundFormation(context.Background(), formation, initialState)
+	require.NoError(t, err)
+	result, err := ImportAssignmentResultFromFormationRun(req, formationResult, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	body, evidence, err := BuildFormationRunEvidence(req, FormationRunContext{
+		CampaignID:          req.Assignment.GetCampaignId(),
+		RunID:               req.Assignment.GetRunId(),
+		AssignmentID:        req.Assignment.GetAssignmentId(),
+		EvaluationAttemptID: req.AttemptID,
+		ScenarioID:          req.Assignment.GetScenarioId(),
+		ModelRegistryDigest: req.Binding.ModelRegistryDigest,
+		InferenceSessionID:  req.Binding.InferenceOperatorSessionID,
+		DataSessionID:       req.Binding.DataOperatorSessionID,
+	}, formationResult)
+	require.NoError(t, err)
+	require.NotEmpty(t, body)
+	verifier := NewCampaignAssignmentVerifier(func() time.Time { return time.Unix(1_700_000_100, 0).UTC() })
+	report, err := verifier.Verify(context.Background(), CampaignAssignmentVerificationRequest{
+		Assignment:           req.Assignment,
+		Result:               result,
+		FormationRunEvidence: evidence,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, report.GetStatus())
+	assert.Zero(t, report.GetFailureCount())
+}
+
 func TestCampaignAssignmentVerifier_FailsWhenCapturedTelemetryDriftsFromTrace(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")

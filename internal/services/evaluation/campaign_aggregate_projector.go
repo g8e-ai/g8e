@@ -50,23 +50,33 @@ type modelPassRateRecord struct {
 	Denominator uint32  `json:"denominator"`
 }
 
+// modelMetricValueRecord is the explorer MetricValue wire shape for
+// model_summary performance and agreement fields.
+type modelMetricValueRecord struct {
+	Value             *float64 `json:"value,omitempty"`
+	UnavailableReason string   `json:"unavailable_reason,omitempty"`
+}
+
 type modelSummaryRecord struct {
-	SchemaVersion        string               `json:"schema_version"`
-	Kind                 string               `json:"kind"`
-	DatasetID            string               `json:"dataset_id"`
-	QualityState         string               `json:"quality_state"`
-	ObservedAt           string               `json:"observed_at"`
-	SourceRevisionLabel  string               `json:"source_revision_label"`
-	VariantID            string               `json:"variant_id"`
-	DisplayName          string               `json:"display_name"`
-	ServedModelTag       string               `json:"served_model_tag"`
-	Role                 string               `json:"role"`
-	BackendProviderClass string               `json:"backend_provider_class"`
-	InventoryOnly        bool                 `json:"inventory_only"`
-	EvaluationCoverage   float64              `json:"evaluation_coverage"`
-	PassRate             *modelPassRateRecord `json:"pass_rate,omitempty"`
-	TerminalOutcomes     map[string]uint32    `json:"terminal_outcomes,omitempty"`
-	UnavailableReasons   []string             `json:"unavailable_reasons,omitempty"`
+	SchemaVersion        string                  `json:"schema_version"`
+	Kind                 string                  `json:"kind"`
+	DatasetID            string                  `json:"dataset_id"`
+	QualityState         string                  `json:"quality_state"`
+	ObservedAt           string                  `json:"observed_at"`
+	SourceRevisionLabel  string                  `json:"source_revision_label"`
+	VariantID            string                  `json:"variant_id"`
+	DisplayName          string                  `json:"display_name"`
+	ServedModelTag       string                  `json:"served_model_tag"`
+	Role                 string                  `json:"role"`
+	BackendProviderClass string                  `json:"backend_provider_class"`
+	InventoryOnly        bool                    `json:"inventory_only"`
+	EvaluationCoverage   float64                 `json:"evaluation_coverage"`
+	PassRate             *modelPassRateRecord    `json:"pass_rate,omitempty"`
+	AgreementPairwise    *modelMetricValueRecord `json:"agreement_pairwise,omitempty"`
+	LatencyP50MS         *modelMetricValueRecord `json:"latency_p50_ms,omitempty"`
+	OutputThroughputP50  *modelMetricValueRecord `json:"output_throughput_p50,omitempty"`
+	TerminalOutcomes     map[string]uint32       `json:"terminal_outcomes,omitempty"`
+	UnavailableReasons   []string                `json:"unavailable_reasons,omitempty"`
 }
 
 type methodologySuiteRecord struct {
@@ -144,13 +154,16 @@ type runMetricValue struct {
 }
 
 type variantRoleAggregate struct {
-	VariantID string
-	Role      string
-	Scheduled uint32
-	Terminal  uint32
-	Passed    uint32
-	Failed    uint32
-	Outcomes  map[string]uint32
+	VariantID           string
+	Role                string
+	Scheduled           uint32
+	Terminal            uint32
+	Passed              uint32
+	Failed              uint32
+	Outcomes            map[string]uint32
+	AgreementPairwise   modelMetricValueRecord
+	LatencyP50MS        modelMetricValueRecord
+	OutputThroughputP50 modelMetricValueRecord
 }
 
 // CampaignDatasetID returns the explorer dataset id for one live campaign run.
@@ -251,13 +264,20 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 	scheduledVariants := make(map[string]struct{})
 	evaluatedVariants := make(map[string]struct{})
 	for _, assignment := range assignments {
-		variantID, role, err := homogeneousVariantRole(assignment)
+		if assignment == nil {
+			continue
+		}
+		variantRoles, err := assignmentVariantRolePairs(assignment)
 		if err != nil {
 			return nil, err
 		}
-		scheduledVariants[variantID] = struct{}{}
-		bucket := variantRoleAggregateFor(state, variantID, role)
-		bucket.Scheduled++
+		buckets := make([]*variantRoleAggregate, 0, len(variantRoles))
+		for _, pair := range variantRoles {
+			scheduledVariants[pair.variantID] = struct{}{}
+			bucket := variantRoleAggregateFor(state, pair.variantID, pair.role)
+			bucket.Scheduled++
+			buckets = append(buckets, bucket)
+		}
 		result := results[assignment.GetAssignmentId()]
 		if result == nil {
 			if !assignmentLifecycleIsTerminal(assignment.GetLifecycleStatus()) {
@@ -268,14 +288,21 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 			passed := terminalStatus == "completed"
 			if passed {
 				state.Passed++
-				bucket.Passed++
 			} else {
 				state.Failed++
-				bucket.Failed++
 			}
-			bucket.Terminal++
-			bucket.Outcomes[terminalStatus]++
-			evaluatedVariants[variantID] = struct{}{}
+			for _, bucket := range buckets {
+				if passed {
+					bucket.Passed++
+				} else {
+					bucket.Failed++
+				}
+				bucket.Terminal++
+				bucket.Outcomes[terminalStatus]++
+			}
+			for _, pair := range variantRoles {
+				evaluatedVariants[pair.variantID] = struct{}{}
+			}
 			continue
 		}
 		state.Terminal++
@@ -283,14 +310,21 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 		passed := terminalStatus == "completed"
 		if passed {
 			state.Passed++
-			bucket.Passed++
 		} else {
 			state.Failed++
-			bucket.Failed++
 		}
-		bucket.Terminal++
-		bucket.Outcomes[terminalStatus]++
-		evaluatedVariants[variantID] = struct{}{}
+		for _, bucket := range buckets {
+			if passed {
+				bucket.Passed++
+			} else {
+				bucket.Failed++
+			}
+			bucket.Terminal++
+			bucket.Outcomes[terminalStatus]++
+		}
+		for _, pair := range variantRoles {
+			evaluatedVariants[pair.variantID] = struct{}{}
+		}
 	}
 	state.ModelCount = uint32(len(scheduledVariants))
 	state.EvaluatedCount = uint32(len(evaluatedVariants))
@@ -299,6 +333,9 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 		return nil, err
 	}
 	state.Headline = headline
+	if err := populateVariantRoleMetrics(state, assignments, results); err != nil {
+		return nil, err
+	}
 	return state, nil
 }
 
@@ -325,6 +362,52 @@ func collectRunHeadlineMetrics(assignments []*evalv1.EvaluationAssignment, resul
 	} else {
 		metrics.PassRate.UnavailableReason = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE
 	}
+	latency, throughput, err := collectPerformanceMetrics(assignments, results)
+	if err != nil {
+		return nil, err
+	}
+	metrics.LatencyP50MS = latency
+	metrics.OutputThroughputP50 = throughput
+	return metrics, nil
+}
+
+func populateVariantRoleMetrics(state *runAggregateState, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) error {
+	byBucket := make(map[string][]*evalv1.EvaluationAssignment)
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		variantRoles, err := assignmentVariantRolePairs(assignment)
+		if err != nil {
+			return err
+		}
+		for _, pair := range variantRoles {
+			key := pair.variantID + ":" + pair.role
+			byBucket[key] = append(byBucket[key], assignment)
+		}
+	}
+	for key, bucket := range state.VariantRoles {
+		if bucket == nil {
+			continue
+		}
+		bucketAssignments := byBucket[key]
+		latency, throughput, err := collectPerformanceMetrics(bucketAssignments, results)
+		if err != nil {
+			return err
+		}
+		bucket.LatencyP50MS = modelMetricFromRunMetric(latency)
+		bucket.OutputThroughputP50 = modelMetricFromRunMetric(throughput)
+		bucket.AgreementPairwise = collectPairwiseAgreement(bucketAssignments, results)
+	}
+	return nil
+}
+
+// collectPerformanceMetrics derives latency p50 and output-throughput p50 for
+// one assignment population. The run-level and per-model summaries share this
+// collector so contributor eligibility stays aligned.
+func collectPerformanceMetrics(assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) (runMetricValue, runMetricValue, error) {
+	latency := runMetricValue{Unit: runMetricUnitMilliseconds}
+	throughput := runMetricValue{Unit: runMetricUnitTokensPerSecond}
 	latencies := make([]float64, 0, len(results))
 	throughputs := make([]float64, 0, len(results))
 	for _, assignment := range assignments {
@@ -339,42 +422,100 @@ func collectRunHeadlineMetrics(assignments []*evalv1.EvaluationAssignment, resul
 		if len(calls) == 0 {
 			continue
 		}
-		metrics.LatencyP50MS.Eligible++
-		metrics.OutputThroughputP50.Eligible++
+		latency.Eligible++
+		throughput.Eligible++
 		if result.ScoredInferenceSpanNanos == nil {
-			metrics.LatencyP50MS.Unavailable++
+			latency.Unavailable++
 		} else {
 			span := result.GetScoredInferenceSpanNanos()
 			if span/1_000_000 > maxPublicDurationMS {
-				return nil, fmt.Errorf("evaluation: collect run headline metrics: scored inference span exceeds public bound: %w", constants.ErrEvidenceArtifactMalformed)
+				return latency, throughput, fmt.Errorf("evaluation: collect performance metrics: scored inference span exceeds public bound: %w", constants.ErrEvidenceArtifactMalformed)
 			}
 			latencies = append(latencies, float64(span/1_000_000))
 		}
 		rate, complete, err := scoredAssignmentOutputThroughput(calls)
 		if err != nil {
-			return nil, err
+			return latency, throughput, err
 		}
 		if !complete {
-			metrics.OutputThroughputP50.Unavailable++
+			throughput.Unavailable++
 		} else {
 			throughputs = append(throughputs, rate)
 		}
 	}
-	metrics.LatencyP50MS.Observed = uint32(len(latencies))
-	metrics.OutputThroughputP50.Observed = uint32(len(throughputs))
+	latency.Observed = uint32(len(latencies))
+	throughput.Observed = uint32(len(throughputs))
 	if len(latencies) > 0 {
 		value := medianFloat64(latencies)
-		metrics.LatencyP50MS.Value = &value
+		latency.Value = &value
 	} else {
-		metrics.LatencyP50MS.UnavailableReason = contributorUnavailableReason(metrics.LatencyP50MS.Eligible, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE)
+		latency.UnavailableReason = contributorUnavailableReason(latency.Eligible, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE)
 	}
 	if len(throughputs) > 0 {
 		value := medianFloat64(throughputs)
-		metrics.OutputThroughputP50.Value = &value
+		throughput.Value = &value
 	} else {
-		metrics.OutputThroughputP50.UnavailableReason = contributorUnavailableReason(metrics.OutputThroughputP50.Eligible, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE)
+		throughput.UnavailableReason = contributorUnavailableReason(throughput.Eligible, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE)
 	}
-	return metrics, nil
+	return latency, throughput, nil
+}
+
+func modelMetricFromRunMetric(metric runMetricValue) modelMetricValueRecord {
+	record := modelMetricValueRecord{Value: metric.Value}
+	if metric.Value == nil && metric.UnavailableReason != evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED {
+		record.UnavailableReason = publicUnavailableReasonString(metric.UnavailableReason)
+	}
+	return record
+}
+
+func collectPairwiseAgreement(assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) modelMetricValueRecord {
+	byScenario := make(map[string][]bool)
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		eligible, passed := assignmentOutcome(assignment, results)
+		if !eligible {
+			continue
+		}
+		byScenario[assignment.GetScenarioId()] = append(byScenario[assignment.GetScenarioId()], passed)
+	}
+	var totalPairs uint64
+	var agreeingPairs uint64
+	for _, outcomes := range byScenario {
+		if len(outcomes) < 2 {
+			continue
+		}
+		for left := 0; left < len(outcomes)-1; left++ {
+			for right := left + 1; right < len(outcomes); right++ {
+				totalPairs++
+				if outcomes[left] == outcomes[right] {
+					agreeingPairs++
+				}
+			}
+		}
+	}
+	if totalPairs == 0 {
+		return modelMetricValueRecord{
+			UnavailableReason: publicUnavailableReasonString(evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE),
+		}
+	}
+	value := float64(agreeingPairs) / float64(totalPairs)
+	return modelMetricValueRecord{Value: &value}
+}
+
+func assignmentOutcome(assignment *evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) (bool, bool) {
+	result := results[assignment.GetAssignmentId()]
+	if result != nil {
+		if !assignmentLifecycleIsTerminal(result.GetLifecycleStatus()) {
+			return false, false
+		}
+		return true, deriveExplorerTerminalStatus(result) == "completed"
+	}
+	if !assignmentLifecycleIsTerminal(assignment.GetLifecycleStatus()) {
+		return false, false
+	}
+	return true, lifecycleTerminalOutcome(assignment.GetLifecycleStatus()) == "completed"
 }
 
 // contributorUnavailableReason selects the run-metric unavailable reason when
@@ -613,10 +754,20 @@ func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAg
 		passEstimate := float64(bucket.Passed) / float64(terminal)
 		record.PassRate = &modelPassRateRecord{Estimate: passEstimate, Lower: passEstimate, Upper: passEstimate, Denominator: terminal}
 		record.TerminalOutcomes = terminalOutcomesRecord(bucket.Outcomes)
+		record.AgreementPairwise = modelMetricRecordOrNil(bucket.AgreementPairwise)
+		record.LatencyP50MS = modelMetricRecordOrNil(bucket.LatencyP50MS)
+		record.OutputThroughputP50 = modelMetricRecordOrNil(bucket.OutputThroughputP50)
 	} else {
 		record.UnavailableReasons = []string{"awaiting terminal assignments"}
 	}
 	return record
+}
+
+func modelMetricRecordOrNil(metric modelMetricValueRecord) *modelMetricValueRecord {
+	if metric.Value == nil && metric.UnavailableReason == "" {
+		return nil
+	}
+	return &metric
 }
 
 func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) catalogSnapshotRecord {
@@ -744,7 +895,32 @@ func BuildRunVerificationApplicability(run *evalv1.EvaluationRun, spec *evalv1.E
 		if ref := assignment.GetScenarioRef(); ref != nil {
 			entry.ScenarioVersion = ref.GetVersion()
 		}
-		if homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous); ok && homogeneous.Homogeneous != nil && homogeneous.Homogeneous.GetCandidateVariant() != nil {
+		if IsHeterogeneousAssignment(assignment) {
+			stack, err := HeterogeneousStackFromAssignment(assignment)
+			if err != nil {
+				return nil, err
+			}
+			entry.StackId = stack.GetStackId()
+			for _, slot := range []struct {
+				role evalv1.ModelCampaignRole
+				bind *evalv1.RoleAssignment
+			}{
+				{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, stack.GetPrimarySlot()},
+				{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT, stack.GetAssistantSlot()},
+				{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE, stack.GetLiteSlot()},
+			} {
+				if slot.bind == nil || slot.bind.GetVariantId() == "" {
+					continue
+				}
+				key := slot.bind.GetVariantId() + ":" + strings.ToLower(strings.TrimPrefix(slot.role.String(), "MODEL_CAMPAIGN_ROLE_"))
+				bucket := buckets[key]
+				if bucket == nil {
+					bucket = &VerifiedModelSummaryBucket{VariantID: slot.bind.GetVariantId(), Role: slot.role}
+					buckets[key] = bucket
+				}
+				bucket.AssignmentIDs = append(bucket.AssignmentIDs, entry.GetAssignmentId())
+			}
+		} else if homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous); ok && homogeneous.Homogeneous != nil && homogeneous.Homogeneous.GetCandidateVariant() != nil {
 			entry.VariantId = homogeneous.Homogeneous.GetCandidateVariant().GetVariantId()
 			entry.DesignatedRole = homogeneous.Homogeneous.GetDesignatedRole()
 			key := entry.GetVariantId() + ":" + strings.ToLower(strings.TrimPrefix(entry.GetDesignatedRole().String(), "MODEL_CAMPAIGN_ROLE_"))
@@ -1086,6 +1262,9 @@ func methodologyMetricDefinitions() []methodologyMetricRecord {
 	return []methodologyMetricRecord{
 		{Key: "pass_rate", Name: "Pass rate", Unit: "proportion", Direction: "higher_is_better", Denominator: "terminal homogeneous model-role assignments for the variant and designated role", MissingValueBehavior: "excluded until a terminal assignment exists; never rendered as zero", Aggregation: "mean over terminal assignments within the active live dataset", UncertaintyMethod: "point estimate while the smoke campaign is in progress", Explanation: "The fraction of terminal assignments that passed for one frozen model variant acting in one designated role through the production chat pipeline."},
 		{Key: "evaluation_coverage", Name: "Evaluation coverage", Unit: "proportion", Direction: "higher_is_better", Denominator: "scheduled assignments for the variant and designated role", MissingValueBehavior: "rendered as zero only when no assignments are scheduled", Aggregation: "terminal assignments divided by scheduled assignments", UncertaintyMethod: "none (descriptive)", Explanation: "How much of the scheduled smoke matrix has reached a terminal public result for this variant and role."},
+		{Key: "agreement_pairwise", Name: "Pairwise agreement", Unit: "proportion", Direction: "higher_is_better", Denominator: "repetition pairs within the same scenario for the variant and designated role", MissingValueBehavior: "unavailable until at least one scenario has two eligible terminal repetitions", Aggregation: "agreeing repetition pairs divided by all eligible repetition pairs", UncertaintyMethod: "none (descriptive)", Explanation: "How often two repetitions of the same scenario produce the same pass or fail outcome for one model acting in one designated role."},
+		{Key: "latency_p50_ms", Name: "Latency p50", Unit: "milliseconds", Direction: "lower_is_better", Denominator: "terminal assignments with scored inference activity for the variant and designated role", MissingValueBehavior: "unavailable when no scored inference span is observed; never rendered as zero", Aggregation: "median scored inference span across eligible assignments", UncertaintyMethod: "none (descriptive)", Explanation: "The median elapsed scored inference time for one model acting in one designated role."},
+		{Key: "output_throughput_p50", Name: "Output throughput p50", Unit: "tokens_per_second", Direction: "higher_is_better", Denominator: "terminal assignments with complete scored inference usage for the variant and designated role", MissingValueBehavior: "unavailable when no assignment reports complete generation usage; never rendered as zero", Aggregation: "median generated output tokens per second across eligible assignments", UncertaintyMethod: "none (descriptive)", Explanation: "The median generated output throughput for one model acting in one designated role."},
 	}
 }
 
@@ -1265,6 +1444,68 @@ func homogeneousVariantRole(assignment *evalv1.EvaluationAssignment) (string, st
 		return "", "", err
 	}
 	return homogeneous.Homogeneous.GetCandidateVariant().GetVariantId(), role, nil
+}
+
+type assignmentVariantRolePair struct {
+	variantID string
+	role      string
+}
+
+func assignmentVariantRolePairs(assignment *evalv1.EvaluationAssignment) ([]assignmentVariantRolePair, error) {
+	if IsHeterogeneousAssignment(assignment) {
+		stack, err := HeterogeneousStackFromAssignment(assignment)
+		if err != nil {
+			return nil, err
+		}
+		pairs := make([]assignmentVariantRolePair, 0, 3)
+		for _, slot := range []struct {
+			role evalv1.ModelCampaignRole
+			bind *evalv1.RoleAssignment
+		}{
+			{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, stack.GetPrimarySlot()},
+			{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT, stack.GetAssistantSlot()},
+			{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE, stack.GetLiteSlot()},
+		} {
+			if slot.bind == nil || slot.bind.GetVariantId() == "" {
+				continue
+			}
+			roleLabel, err := modelCampaignRoleLabel(slot.role)
+			if err != nil {
+				return nil, err
+			}
+			pairs = append(pairs, assignmentVariantRolePair{variantID: slot.bind.GetVariantId(), role: roleLabel})
+		}
+		if len(pairs) == 0 {
+			return nil, fmt.Errorf("evaluation: heterogeneous variant role lookup: %w", constants.ErrMissingRequiredField)
+		}
+		return pairs, nil
+	}
+	variantID, role, err := homogeneousVariantRole(assignment)
+	if err != nil {
+		return nil, err
+	}
+	return []assignmentVariantRolePair{{variantID: variantID, role: role}}, nil
+}
+
+func variantIDForAssignmentModelRole(assignment *evalv1.EvaluationAssignment, role evalv1.ModelCampaignRole) (string, error) {
+	roleLabel, err := modelCampaignRoleLabel(role)
+	if err != nil {
+		return "", err
+	}
+	pairs, err := assignmentVariantRolePairs(assignment)
+	if err != nil {
+		return "", err
+	}
+	for _, pair := range pairs {
+		if pair.role == roleLabel {
+			return pair.variantID, nil
+		}
+	}
+	return "", fmt.Errorf("evaluation: assignment model role lookup: %w", constants.ErrMissingRequiredField)
+}
+
+func primaryVariantIDForAssignment(assignment *evalv1.EvaluationAssignment) (string, error) {
+	return variantIDForAssignmentModelRole(assignment, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY)
 }
 
 func variantRoleAggregateFor(state *runAggregateState, variantID, role string) *variantRoleAggregate {

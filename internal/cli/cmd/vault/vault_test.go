@@ -1,0 +1,626 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+package vaultcmd
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/vault"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+)
+
+func TestVaultCmd(t *testing.T) {
+	t.Parallel()
+
+	t.Run("metadata", func(t *testing.T) {
+		cmd := Cmd()
+		assert.Equal(t, "vault", cmd.Use)
+		assert.NotEmpty(t, cmd.Short)
+		assert.NotEmpty(t, cmd.Long)
+	})
+
+	t.Run("subcommands registration", func(t *testing.T) {
+		cmd := Cmd()
+		expected := []string{"init", "unlock", "rekey", "status", "reset", "export", "import"}
+		for _, name := range expected {
+			found := false
+			for _, sub := range cmd.Commands() {
+				if sub.Name() == name {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "missing subcommand: %s", name)
+		}
+	})
+}
+
+// TestVaultTestFileSvc_RootsAtTempDirNotCWD guards against regressions where
+// the vault test file service roots at CWD instead of an isolated temp dir.
+// newCmdTestEnv returns a temp-rooted fileSvc; if a future change reverts to
+// a CWD-rooted helper, this test fails.
+func TestVaultTestFileSvc_RootsAtTempDirNotCWD(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+	root := fileSvc.Resolve("")
+
+	cwdRuntimeRoot := filepath.Join(cwd, constants.RuntimeDirname)
+	assert.NotEqual(t, cwdRuntimeRoot, root, "vault test fileSvc roots at CWD (%s); it must root at an isolated temp dir", cwdRuntimeRoot)
+}
+
+func TestReadKeyFile(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid key", func(t *testing.T) {
+		t.Parallel()
+		baseDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(baseDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
+		key := make([]byte, vault.KeySize)
+		_, err = rand.Read(key)
+		require.NoError(t, err)
+
+		relPath := filepath.Join(constants.VaultDirname, "test.key")
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, []byte(hex.EncodeToString(key)+"\n"), constants.PermFilePrivate))
+
+		read, err := readKeyFile(fileSvc, relPath)
+		require.NoError(t, err)
+		assert.Equal(t, key, read)
+	})
+
+	t.Run("invalid hex", func(t *testing.T) {
+		t.Parallel()
+		baseDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(baseDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
+		relPath := filepath.Join(constants.VaultDirname, "test.key")
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, []byte("invalid hex"), constants.PermFilePrivate))
+
+		_, err = readKeyFile(fileSvc, relPath)
+		require.Error(t, err)
+	})
+
+	t.Run("wrong size", func(t *testing.T) {
+		t.Parallel()
+		baseDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(baseDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
+		relPath := filepath.Join(constants.VaultDirname, "test.key")
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, []byte(hex.EncodeToString(make([]byte, 16))), constants.PermFilePrivate))
+
+		_, err = readKeyFile(fileSvc, relPath)
+		require.Error(t, err)
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		t.Parallel()
+		baseDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(baseDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
+		_, err = readKeyFile(fileSvc, filepath.Join(constants.VaultDirname, "missing.key"))
+		require.Error(t, err)
+	})
+}
+
+func TestVaultInitCmd(t *testing.T) {
+
+	t.Run("successful init", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		headerExists, err := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, err)
+		assert.True(t, headerExists)
+		exists, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, err)
+		assert.True(t, exists)
+		assert.Contains(t, out.String(), "Vault initialized")
+	})
+
+	t.Run("custom paths", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", "custom-vault")
+		cmd.Flags().Set("key-path", "custom.key")
+
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		headerExists, err := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, err)
+		assert.True(t, headerExists)
+		exists, err := fileSvc.FileExists(context.Background(), "custom.key")
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	t.Run("already initialized", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, cmd.RunE(cmd, []string{}))
+		require.Error(t, cmd.RunE(cmd, []string{}))
+	})
+}
+
+func TestVaultUnlockCmd(t *testing.T) {
+
+	t.Run("successful unlock", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultUnlockCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Vault unlocked successfully")
+	})
+
+	t.Run("wrong key", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		require.NoError(t, fileSvc.WriteFile(context.Background(),
+			filepath.Join(constants.VaultDirname, constants.VaultKeyFilename),
+			[]byte(hex.EncodeToString(make([]byte, vault.KeySize))+"\n"),
+			constants.PermFilePrivate))
+
+		cmd := vaultUnlockCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.Error(t, cmd.RunE(cmd, []string{}))
+	})
+}
+
+func TestVaultRekeyCmd(t *testing.T) {
+
+	t.Run("successful rekey", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultRekeyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Vault rekeyed successfully")
+
+		newKeyRelPath := filepath.Join(constants.VaultDirname, constants.VaultNewKeyFilename)
+		exists, err := fileSvc.FileExists(context.Background(), newKeyRelPath)
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+}
+
+func TestVaultStatusCmd(t *testing.T) {
+
+	t.Run("not initialized", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultStatusCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		require.NoError(t, cmd.RunE(cmd, []string{}))
+		assert.Contains(t, out.String(), "Status: not initialized")
+	})
+
+	t.Run("initialized", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultStatusCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		require.NoError(t, cmd.RunE(cmd, []string{}))
+		assert.Contains(t, out.String(), "Status: initialized")
+	})
+}
+
+func TestVaultResetCmd(t *testing.T) {
+
+	t.Run("successful reset with confirm flag", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultResetCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("confirm", "true")
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Vault reset complete")
+		headerExists, headerErr := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, headerErr)
+		assert.False(t, headerExists)
+	})
+
+	t.Run("interactive cancellation", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultResetCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.SetIn(strings.NewReader("no\n"))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Reset cancelled")
+		headerExists, headerErr := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, headerErr)
+		assert.True(t, headerExists)
+	})
+}
+
+func TestVaultUnlockCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("unlock not initialized", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultUnlockCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultNotInitialized)
+	})
+
+	t.Run("unlock missing key file", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultUnlockCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, "nonexistent.key"))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+
+	t.Run("unlock corrupt key file", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		require.NoError(t, fileSvc.WriteFile(context.Background(),
+			filepath.Join(constants.VaultDirname, constants.VaultKeyFilename),
+			[]byte("corrupt-key-data"),
+			constants.PermFilePrivate))
+
+		cmd := vaultUnlockCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+}
+
+func TestVaultRekeyCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("rekey not initialized", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultRekeyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultNotInitialized)
+	})
+
+	t.Run("rekey wrong old key", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		wrongKey := make([]byte, vault.KeySize)
+		_, _ = rand.Read(wrongKey)
+		require.NoError(t, fileSvc.WriteFile(context.Background(),
+			filepath.Join(constants.VaultDirname, constants.VaultKeyFilename),
+			[]byte(hex.EncodeToString(wrongKey)+"\n"),
+			constants.PermFilePrivate))
+
+		cmd := vaultRekeyCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		newKeyPath := filepath.Join(constants.VaultDirname, "new.key")
+		cmd.Flags().Set("new-key-path", newKeyPath)
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+}
+
+func TestVaultResetCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("reset not initialized", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultResetCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.Flags().Set("confirm", "true")
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultNotInitialized)
+	})
+
+	t.Run("interactive confirm with 'destroy' text", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultResetCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.SetIn(strings.NewReader("destroy\n"))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Vault reset complete")
+		headerExists, headerErr := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, headerErr)
+		assert.False(t, headerExists)
+	})
+
+	t.Run("interactive confirm with wrong text", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultResetCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("vault-dir", constants.VaultDirname)
+		cmd.SetIn(strings.NewReader("yes\n"))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Reset cancelled")
+		headerExists, headerErr := vault.VaultHeaderExists(fileSvc)
+		require.NoError(t, headerErr)
+		assert.True(t, headerExists)
+	})
+}
+
+func TestVaultExportCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("export missing key file", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultExportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, "nonexistent.key"))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+
+	t.Run("export corrupt key file", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		require.NoError(t, fileSvc.WriteFile(context.Background(),
+			filepath.Join(constants.VaultDirname, constants.VaultKeyFilename),
+			[]byte("not-hex"),
+			constants.PermFilePrivate))
+
+		cmd := vaultExportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+}
+
+func TestVaultImportCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("import invalid hex", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultImportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		cmd.Flags().Set("key-hex", "invalid-hex-string")
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultKeyDecodeFailed)
+	})
+
+	t.Run("import wrong key size", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		shortKey := hex.EncodeToString(make([]byte, 16))
+		cmd := vaultImportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		cmd.Flags().Set("key-hex", shortKey)
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultKeyInvalidSize)
+	})
+
+	t.Run("import from stdin", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		key := make([]byte, vault.KeySize)
+		_, _ = rand.Read(key)
+		keyHex := hex.EncodeToString(key)
+
+		cmd := vaultImportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		cmd.SetIn(strings.NewReader(keyHex + "\n"))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Key imported")
+
+		read, err := readKeyFile(fileSvc, filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, err)
+		assert.Equal(t, key, read)
+	})
+
+	t.Run("import from stdin invalid hex", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		cmd := vaultImportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		cmd.SetIn(strings.NewReader("not-valid-hex\n"))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultKeyDecodeFailed)
+	})
+}
+
+func TestVaultExportImport(t *testing.T) {
+
+	t.Run("export success", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultExportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		require.NoError(t, cmd.RunE(cmd, []string{}))
+
+		keyHex := strings.TrimSpace(out.String())
+		_, err := hex.DecodeString(keyHex)
+		require.NoError(t, err)
+		assert.Len(t, keyHex, vault.KeySize*2)
+	})
+
+	t.Run("import success", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		key := make([]byte, vault.KeySize)
+		_, _ = rand.Read(key)
+		keyHex := hex.EncodeToString(key)
+
+		cmd := vaultImportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		cmd.Flags().Set("key-hex", keyHex)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		require.NoError(t, cmd.RunE(cmd, []string{}))
+		assert.Contains(t, out.String(), "Key imported")
+
+		read, err := readKeyFile(fileSvc, filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, err)
+		assert.Equal(t, key, read)
+	})
+
+	t.Run("export-import round-trip", func(t *testing.T) {
+		fileSvc, _ := cmdtest.NewCmdTestEnv(t)
+
+		initCmd := vaultInitCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		initCmd.Flags().Set("vault-dir", constants.VaultDirname)
+		initCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		exportCmd := vaultExportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		exportCmd.Flags().Set("key-path", filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		var exportBuf bytes.Buffer
+		exportCmd.SetOut(&exportBuf)
+		require.NoError(t, exportCmd.RunE(exportCmd, []string{}))
+		exportedHex := strings.TrimSpace(exportBuf.String())
+
+		importKeyRelPath := filepath.Join(constants.VaultDirname, "imported.key")
+		importCmd := vaultImportCmdWithConfig(cmdtest.FileSvcFactoryFor(fileSvc))
+		importCmd.Flags().Set("key-path", importKeyRelPath)
+		importCmd.Flags().Set("key-hex", exportedHex)
+		var importBuf bytes.Buffer
+		importCmd.SetOut(&importBuf)
+		require.NoError(t, importCmd.RunE(importCmd, []string{}))
+		assert.Contains(t, importBuf.String(), "Key imported")
+
+		original, err := readKeyFile(fileSvc, filepath.Join(constants.VaultDirname, constants.VaultKeyFilename))
+		require.NoError(t, err)
+		imported, err := readKeyFile(fileSvc, importKeyRelPath)
+		require.NoError(t, err)
+		assert.Equal(t, original, imported)
+	})
+}

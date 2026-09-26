@@ -8,7 +8,7 @@ import { OperatorPanel } from './components/operator-panel.js';
 import { Header } from './components/header.js';
 import { Footer } from './components/footer.js';
 import { SSEConnectionManager } from './utils/sse-connection-manager.js';
-import { EventType } from './constants/events.js';
+import { UIEventType } from './constants/ui-events.js';
 import { notificationService } from './utils/notification-service.js';
 import { CssClass } from './constants/ui-constants.js';
 import { webSessionService } from './utils/web-session-service.js';
@@ -77,14 +77,14 @@ class G8eDashboardApp {
     }
 
     setupEventListeners() {
-        this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, (data) => {
+        this.eventBus.once(UIEventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, (data) => {
             this.setupUI();
             if (data.isAuthenticated && data.webSessionId) {
                 this.sseConnectionManager.initializeConnection(data.webSessionId);
             }
         });
 
-        this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_CHAT, () => {
+        this.eventBus.once(UIEventType.AUTH_COMPONENT_INITIALIZED_CHAT, () => {
             if (this.operatorPanel) {
                 this.operatorPanel.init().catch(error => {
                     console.error('[G8eDashboardApp] Failed to initialize OperatorPanel:', error);
@@ -92,21 +92,21 @@ class G8eDashboardApp {
             }
         });
 
-        this.eventBus.on(EventType.PLATFORM_TERMINAL_OPENED, () => {
+        this.eventBus.on(UIEventType.TERMINAL_OPENED, () => {
             const terminal = document.querySelector('[data-component="terminal"]');
             if (terminal) {
                 terminal.classList.remove(CssClass.INITIALLY_HIDDEN);
             }
         });
 
-        this.eventBus.on(EventType.PLATFORM_TERMINAL_MINIMIZED, () => {
+        this.eventBus.on(UIEventType.TERMINAL_MINIMIZED, () => {
             const terminal = document.querySelector('[data-component="terminal"]');
             if (terminal) {
                 terminal.classList.add(CssClass.INITIALLY_HIDDEN);
             }
         });
 
-        this.eventBus.on(EventType.PLATFORM_TERMINAL_MAXIMIZED, () => {
+        this.eventBus.on(UIEventType.TERMINAL_MAXIMIZED, () => {
             const terminal = document.querySelector('[data-component="terminal"]');
             if (terminal) {
                 terminal.classList.remove(CssClass.INITIALLY_HIDDEN);

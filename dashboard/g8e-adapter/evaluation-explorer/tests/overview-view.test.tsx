@@ -129,7 +129,7 @@ describe('OverviewView', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('region', { name: 'Live event stream' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Events' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'System overview' })).not.toBeInTheDocument();
     expect(screen.queryByText('Active campaign')).not.toBeInTheDocument();
     expect(screen.queryByText(/live deployment of the g8e AI governance suite/i)).not.toBeInTheDocument();

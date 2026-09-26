@@ -131,7 +131,7 @@ func TestSQLAuditStore_EndToEnd_AuditTrail(t *testing.T) {
 	// 1. Retrieve all events
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)
-	assert.Len(t, events, 3) // user msg, AI msg, command
+	assert.Len(t, events, 4) // user msg, AI msg, command, receipt recorded
 
 	// 2. Verify event types
 	eventTypes := make(map[constants.EventType]bool)
@@ -141,6 +141,7 @@ func TestSQLAuditStore_EndToEnd_AuditTrail(t *testing.T) {
 	assert.True(t, eventTypes[constants.Event.Operator.Audit.UserMsg])
 	assert.True(t, eventTypes[constants.Event.Operator.Audit.AIMsg])
 	assert.True(t, eventTypes[constants.Event.Operator.Audit.Command])
+	assert.True(t, eventTypes[constants.EventOperatorReceiptRecorded])
 
 	// 3. Retrieve file mutations
 	mutations, err := avs.GetFileMutations(cmdEventID)
@@ -262,7 +263,7 @@ func TestSQLAuditStore_EndToEnd_MultipleTransactions(t *testing.T) {
 	// Verify events
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)
-	assert.Len(t, events, 3)
+	assert.Len(t, events, 6) // command event and receipt-recorded fact per transaction
 
 	// Verify action types
 	actionTypes := make(map[constants.ActionType]bool)
@@ -337,7 +338,7 @@ func TestSQLAuditStore_Consistency_EventReceiptLinkage(t *testing.T) {
 	// Verify both are linked to the same session
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)
-	assert.Len(t, events, 1)
+	assert.Len(t, events, 2) // command event and receipt-recorded fact
 	assert.Equal(t, operatorSessionID, events[0].OperatorSessionID)
 
 	receipts, err := avs.ListActionReceipts(operatorSessionID, 10, 0)

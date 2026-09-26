@@ -50,7 +50,7 @@ The five layers are not equivalent to model reasoning or application approval: L
 | `ratify` | Required | Audited only | Required |
 | `notary` | Required | Required | Required |
 
-Gateway MCP and A2A paths can coordinate L2 deliberation and supported L3 approval. Direct envelope submission and the Operator `CommandIntent` relay do not synthesize missing L2 votes or L3 proofs. External MCP wrappers and client-native tools remain outside L2-L5 governance, signed receipts, and Gateway audit. Do not combine evidence from these paths as if it represented one uniform control.
+Gateway MCP and A2A paths can coordinate L2 deliberation and supported L3 approval. Direct envelope submission and governed HTTP dispatch to an outbound Operator do not synthesize missing L2 votes or L3 proofs. External MCP wrappers and client-native tools remain outside L2-L5 governance, signed receipts, and Gateway audit. Do not combine evidence from these paths as if it represented one uniform control.
 
 ## Validated rehearsal
 

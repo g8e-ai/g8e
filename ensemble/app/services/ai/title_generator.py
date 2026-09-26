@@ -17,7 +17,7 @@ import time
 
 from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.errors import OllamaEmptyResponseError
-from app.llm import get_llm_provider, Role
+from app.llm import get_generative_lite_provider, Role
 from app.llm.llm_types import Content, Part, LiteLLMSettings
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.model_evidence import model_boundary_hash
@@ -58,8 +58,8 @@ async def generate_case_title(
         )
 
     try:
-        provider = get_llm_provider(settings.llm, is_lite=True)
-        model = settings.llm.resolved_lite_model
+        provider = get_generative_lite_provider(settings.llm)
+        model = settings.llm.resolved_generative_lite_model
         if not model:
             logger.warning(
                 "[TITLE-GEN] No lite_model or assistant_model configured, using fallback title"
