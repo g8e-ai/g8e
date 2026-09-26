@@ -64,7 +64,7 @@ type CommandDispatcher interface {
 // gateway.DispatchRequest before calling DispatchService.Dispatch.
 type CommandDispatchRequest struct {
 	TargetOperatorSessionID string
-	ActionType              string
+	EventType               string
 	Payload                 []byte
 	TargetResource          string
 	RequestorUserID         string
@@ -347,7 +347,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	// clean timeout.
 	result, err := s.dispatcher.Dispatch(ctx, CommandDispatchRequest{
 		TargetOperatorSessionID: operatorSessionID,
-		ActionType:              string(constants.ActionTypeInference),
+		EventType:               string(constants.Event.Operator.Inference.Requested),
 		Payload:                 payload,
 		RequestorUserID:         req.RequestorUserID,
 		ActingAppID:             req.ActingAppID,

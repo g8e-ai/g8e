@@ -102,6 +102,8 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
+		EventType:         string(constants.Event.Operator.Command.Requested),
+
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 		Payload:           payloadBytes,
@@ -240,6 +242,8 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
+		EventType:         string(constants.Event.Operator.Command.Requested),
+
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 		Payload:           payloadBytes,
@@ -373,6 +377,8 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
+		EventType:         string(constants.Event.Operator.Command.Requested),
+
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 		Payload:           payloadBytes,

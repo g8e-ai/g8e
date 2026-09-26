@@ -705,7 +705,7 @@ func fireOne(
 
 	cmdMsg := pubsub.PubSubCommandMessage{
 		ID:                env.Id,
-		EventType:         constants.MapActionTypeToEventType(constants.ActionType(env.ActionType)),
+		EventType:         constants.EventType(env.EventType),
 		OperatorSessionID: env.OperatorSessionId,
 		Payload:           env.Payload,
 		Timestamp:         env.Timestamp.AsTime(),
@@ -715,7 +715,7 @@ func fireOne(
 	// so we use a custom execution flow that still hits the handler but batches the audit log.
 
 	// Execute through the handler
-	eventType := constants.MapActionTypeToEventType(constants.ActionType(env.ActionType))
+	eventType := constants.EventType(env.EventType)
 	_, err := actuator.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, &cmdMsg)
 
 	if err != nil {

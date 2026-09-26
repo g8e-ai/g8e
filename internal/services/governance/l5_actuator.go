@@ -124,7 +124,10 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		}
 	}
 
-	eventType := constants.MapActionTypeToEventType(vt.ActionType)
+	eventType := constants.EventType(vt.Envelope.EventType)
+	if eventType == "" {
+		return nil, constants.ErrTxUnknownEventType
+	}
 
 	w.Logger.Info("L5Actuator preparing to execute transaction",
 		"message_id", vt.Envelope.Id,

@@ -520,7 +520,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	}
 
 	hash, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:      constants.ActionTypeMcpCall,
+		eventType:       constants.Event.Operator.Mcp.CallRequested,
 		targetResource:  callParams.Name,
 		payloadBytes:    payloadBytes,
 		investigationID: investigationID,
@@ -709,7 +709,7 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 	}
 
 	_, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:     constants.ActionTypeMcpResourceRead,
+		eventType:      constants.EventType(constants.ActionTypeMcpResourceRead),
 		targetResource: readParams.URI,
 		payloadBytes:   payloadBytes,
 	})
@@ -762,7 +762,7 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 	}
 
 	_, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:     constants.ActionTypeMcpPromptGet,
+		eventType:      constants.EventType(constants.ActionTypeMcpPromptGet),
 		targetResource: getParams.Name,
 		payloadBytes:   payloadBytes,
 	})
@@ -798,7 +798,7 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 }
 
 type processGatewayOptions struct {
-	actionType      constants.ActionType
+	eventType       constants.EventType
 	targetResource  string
 	payloadBytes    []byte
 	investigationID string
@@ -827,12 +827,18 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		}
 	}
 
+	actionType, err := constants.ResolveGovernedAction(opts.eventType)
+	if err != nil {
+		return "", nil, "", fmt.Errorf("gateway: %w", err)
+	}
+
 	now := time.Now().UTC()
 	env := &commonv1.GovernanceEnvelope{
 		Timestamp:       timestamppb.New(now),
 		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
 		SourceComponent: commonv1.Component_COMPONENT_CLIENT,
-		ActionType:      string(opts.actionType),
+		EventType:       string(opts.eventType),
+		ActionType:      string(actionType),
 		TargetResource:  opts.targetResource,
 		Payload:         opts.payloadBytes,
 		ProtocolVersion: "1.0",
@@ -945,7 +951,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 	}
 
 	hash, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:     constants.ActionTypeA2aCall,
+		eventType:      constants.Event.Operator.A2a.CallRequested,
 		targetResource: req.SkillName,
 		payloadBytes:   payloadBytes,
 	})

@@ -186,7 +186,7 @@ func TestDispatchController_HandleDispatch_RoundTrip(t *testing.T) {
 
 	reqBody := OperatorCommandRequest{
 		TargetOperatorSessionID: operatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 payload,
 		TargetResource:          "/etc/hostname",
 	}
@@ -302,7 +302,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
 	result, err := dispatch.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: sessionID,
-		ActionType:              string(constants.ActionTypeShutdown),
+		EventType: string(constants.Event.Operator.ShutdownRequested),
 		Payload:                 payload,
 		TargetResource:          operatorID,
 		RequestorUserID:         userID,
@@ -335,7 +335,7 @@ func TestDispatchController_HandleDispatch_UnknownSession(t *testing.T) {
 
 	reqBody := OperatorCommandRequest{
 		TargetOperatorSessionID: "nonexistent-session-int",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 payload,
 	}
 	bodyBytes, err := json.Marshal(reqBody)
@@ -673,7 +673,7 @@ func TestDispatch_FileMutationExecutesOnceAndReplayProducesSignedRejection(t *te
 	dispatchSvc := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
 	result, err := dispatchSvc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: sessionID,
-		ActionType:              string(constants.ActionTypeFileEdit),
+		EventType: string(constants.Event.Operator.FileEdit.Requested),
 		Payload:                 payload,
 		TargetResource:          targetPath,
 		RequestorUserID:         userID,
@@ -794,7 +794,7 @@ func TestDispatchController_HandleDispatch_DoctrineProhibitedRequestRejectedBefo
 	require.NoError(t, err)
 	body, err := json.Marshal(OperatorCommandRequest{
 		TargetOperatorSessionID: operatorSessionID,
-		ActionType:              string(constants.ActionTypeFileEdit),
+		EventType: string(constants.Event.Operator.FileEdit.Requested),
 		Payload:                 payload,
 		TargetResource:          targetPath,
 		CaseID:                  runID,

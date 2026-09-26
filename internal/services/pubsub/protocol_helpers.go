@@ -85,6 +85,7 @@ func mapProtoToPayloadType(msg proto.Message) string {
 func BuildUniversalResultEnvelope(
 	cfg *config.Config,
 	eventType constants.EventType,
+	originatingActionType constants.ActionType,
 	payload proto.Message,
 	originalMessageID string,
 	senderID string,
@@ -94,6 +95,9 @@ func BuildUniversalResultEnvelope(
 	webSessionID string,
 	cliSessionID string,
 ) (*commonv1.GovernanceEnvelope, error) {
+	if originatingActionType == "" {
+		return nil, fmt.Errorf("originating action type required for outcome %q", eventType)
+	}
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
@@ -123,7 +127,7 @@ func BuildUniversalResultEnvelope(
 		OperatorId:        senderID,
 		OperatorSessionId: cfg.OperatorSessionId,
 		EventType:         string(eventType),
-		ActionType:        string(constants.MapEventTypeToResultActionType(eventType)),
+		ActionType:        string(originatingActionType),
 		Payload:           payloadBytes,
 		IntentData:        intentDataStruct,
 		CaseId:            caseID,

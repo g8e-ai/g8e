@@ -745,7 +745,10 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, constants.ErrPubSubActuator
 	}
 
-	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	eventType := constants.EventType(verified.Envelope.EventType)
+	if eventType == "" {
+		return nil, constants.ErrTxUnknownEventType
+	}
 	cmdMsg := &PubSubCommandMessage{
 		ID:                envelope.Id,
 		EventType:         eventType,
@@ -821,9 +824,12 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 		return
 	}
 
-	// Convert GovernanceEnvelope to PubSubCommandMessage for execution through Actuator
-	// Map GovernanceEnvelope action types back to protobuf event types for handler dispatch
-	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	// Convert GovernanceEnvelope to PubSubCommandMessage for execution through Actuator.
+	eventType := constants.EventType(env.EventType)
+	if eventType == "" {
+		rs.logger.Error("GovernanceEnvelope missing event_type - request rejected", "message_id", env.Id)
+		return
+	}
 
 	payload := env.Payload
 	if len(payload) == 0 {

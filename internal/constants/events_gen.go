@@ -1827,9 +1827,11 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorFileDiffFetchRequested: {
 		Key: "OperatorFileDiffFetchRequested",
 		Kind: EventKindRequest,
-		Transport: []string{"pubsub"},
+		Transport: []string{"governed", "pubsub"},
 		Producers: []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeFetchFileDiff,
+		GovernancePayload: "g8e.operator.v1.FetchFileDiffRequested",
 	},
 	EventOperatorFileDiffFetchStarted: {
 		Key: "OperatorFileDiffFetchStarted",
@@ -1930,9 +1932,11 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorFileHistoryFetchRequested: {
 		Key: "OperatorFileHistoryFetchRequested",
 		Kind: EventKindRequest,
-		Transport: []string{"pubsub"},
+		Transport: []string{"governed", "pubsub"},
 		Producers: []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeFetchFileHistory,
+		GovernancePayload: "g8e.operator.v1.FetchFileHistoryRequested",
 	},
 	EventOperatorFileHistoryFetchStarted: {
 		Key: "OperatorFileHistoryFetchStarted",
@@ -1968,9 +1972,11 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorFileRestoreRequested: {
 		Key: "OperatorFileRestoreRequested",
 		Kind: EventKindRequest,
-		Transport: []string{"pubsub"},
+		Transport: []string{"governed", "pubsub"},
 		Producers: []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeRestoreFile,
+		GovernancePayload: "g8e.operator.v1.RestoreFileRequested",
 	},
 	EventOperatorFilesystemGrepCompleted: {
 		Key: "OperatorFilesystemGrepCompleted",
@@ -1997,9 +2003,11 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorFilesystemGrepRequested: {
 		Key: "OperatorFilesystemGrepRequested",
 		Kind: EventKindRequest,
-		Transport: []string{"pubsub"},
+		Transport: []string{"governed", "pubsub"},
 		Producers: []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeFsGrep,
+		GovernancePayload: "g8e.operator.v1.FsGrepRequested",
 	},
 	EventOperatorFilesystemGrepStarted: {
 		Key: "OperatorFilesystemGrepStarted",
@@ -2033,9 +2041,11 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorFilesystemListRequested: {
 		Key: "OperatorFilesystemListRequested",
 		Kind: EventKindRequest,
-		Transport: []string{"pubsub"},
+		Transport: []string{"governed", "pubsub"},
 		Producers: []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeFsList,
+		GovernancePayload: "g8e.operator.v1.FsListRequested",
 	},
 	EventOperatorFilesystemListStarted: {
 		Key: "OperatorFilesystemListStarted",
@@ -2069,9 +2079,11 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorFilesystemReadRequested: {
 		Key: "OperatorFilesystemReadRequested",
 		Kind: EventKindRequest,
-		Transport: []string{"pubsub"},
+		Transport: []string{"governed", "pubsub"},
 		Producers: []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeFsRead,
+		GovernancePayload: "g8e.operator.v1.FsReadRequested",
 	},
 	EventOperatorFilesystemReadStarted: {
 		Key: "OperatorFilesystemReadStarted",
@@ -2139,9 +2151,11 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorHistoryFetchRequested: {
 		Key: "OperatorHistoryFetchRequested",
 		Kind: EventKindRequest,
-		Transport: []string{"pubsub"},
+		Transport: []string{"governed", "pubsub"},
 		Producers: []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeFetchHistory,
+		GovernancePayload: "g8e.operator.v1.FetchHistoryRequested",
 	},
 	EventOperatorInferenceCompleted: {
 		Key: "OperatorInferenceCompleted",
@@ -2260,9 +2274,11 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventOperatorLogsFetchRequested: {
 		Key: "OperatorLogsFetchRequested",
 		Kind: EventKindRequest,
-		Transport: []string{"pubsub"},
+		Transport: []string{"governed", "pubsub"},
 		Producers: []string{"ensemble", "gateway"},
 		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeFetchLogs,
+		GovernancePayload: "g8e.operator.v1.FetchLogsRequested",
 	},
 	EventOperatorMcpCallRequested: {
 		Key: "OperatorMcpCallRequested",

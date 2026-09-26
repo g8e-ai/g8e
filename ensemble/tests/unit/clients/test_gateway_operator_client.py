@@ -55,13 +55,14 @@ async def test_dispatch_sends_base64_typed_payload(gateway_client, internal_http
     result = await gateway_client.dispatch(
         context=context,
         operator_session_id="sess-1",
-        action_type="COMMAND_REQUESTED",
+        event_type="g8e.v1.operator.command.requested",
         payload=b"typed-payload",
     )
 
     assert result == {"transaction_id": "tx-1"}
     body = internal_http_client.client.post.await_args.kwargs["json_data"]
     assert body["target_operator_session_id"] == "sess-1"
+    assert body["event_type"] == "g8e.v1.operator.command.requested"
     assert body["payload"] == "dHlwZWQtcGF5bG9hZA=="
     assert body["cli_session_id"] == "cli-1"
     assert body["case_id"] == "case-1"

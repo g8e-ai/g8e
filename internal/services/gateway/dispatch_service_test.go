@@ -68,7 +68,7 @@ func TestOperatorCommandRequest_Validate(t *testing.T) {
 			name: "valid request",
 			req: OperatorCommandRequest{
 				TargetOperatorSessionID: "session-123",
-				ActionType:              string(constants.ActionTypeFsRead),
+				EventType: string(constants.Event.Operator.FsRead.Requested),
 				Payload:                 []byte("payload"),
 			},
 			wantErr: nil,
@@ -76,7 +76,7 @@ func TestOperatorCommandRequest_Validate(t *testing.T) {
 		{
 			name: "missing operator session id",
 			req: OperatorCommandRequest{
-				ActionType: string(constants.ActionTypeFsRead),
+				EventType: string(constants.Event.Operator.FsRead.Requested),
 				Payload:    []byte("payload"),
 			},
 			wantErr: constants.ErrGatewayOperatorSessionIDRequired,
@@ -87,13 +87,13 @@ func TestOperatorCommandRequest_Validate(t *testing.T) {
 				TargetOperatorSessionID: "session-123",
 				Payload:                 []byte("payload"),
 			},
-			wantErr: constants.ErrTxUnknownActionType,
+			wantErr: constants.ErrTxUnknownEventType,
 		},
 		{
 			name: "missing payload",
 			req: OperatorCommandRequest{
 				TargetOperatorSessionID: "session-123",
-				ActionType:              string(constants.ActionTypeFsRead),
+				EventType: string(constants.Event.Operator.FsRead.Requested),
 			},
 			wantErr: constants.ErrTxPayloadMissing,
 		},
@@ -117,7 +117,7 @@ func TestOperatorCommandRequest_Validate(t *testing.T) {
 func TestDispatchResult_ToResponse(t *testing.T) {
 	t.Run("with result envelope", func(t *testing.T) {
 		env := &commonv1.GovernanceEnvelope{
-			EventType:  "FS_READ",
+			EventType:  string(constants.Event.Operator.FsRead.Completed),
 			ActionType: string(constants.ActionTypeFsRead),
 			Payload:    []byte("result-payload-bytes"),
 		}
@@ -128,7 +128,7 @@ func TestDispatchResult_ToResponse(t *testing.T) {
 		resp := result.ToResponse()
 		assert.True(t, resp.Success)
 		assert.Equal(t, "tx-abc-123", resp.TransactionID)
-		assert.Equal(t, "FS_READ", resp.EventType)
+		assert.Equal(t, string(constants.Event.Operator.FsRead.Completed), resp.EventType)
 		assert.Equal(t, string(constants.ActionTypeFsRead), resp.ActionType)
 		assert.Equal(t, []byte("result-payload-bytes"), resp.ResultPayload)
 		assert.Empty(t, resp.Error)
@@ -222,7 +222,7 @@ func TestDispatchService_Dispatch_Success(t *testing.T) {
 
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		TargetResource:          "/etc/hostname",
 		RequestorUserID:         "user-001",
@@ -242,7 +242,7 @@ func TestDispatchService_Dispatch_InvalidOperatorSession(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "invalid-session",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 []byte("payload"),
 	})
 	require.Error(t, err)
@@ -266,7 +266,7 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 []byte("payload"),
 	})
 	require.Error(t, err)
@@ -281,7 +281,7 @@ func TestDispatchService_Dispatch_ZeroDeliveryFailsClosed(t *testing.T) {
 	// subscribers, which is a terminal transport failure.
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 	})
 	require.Error(t, err)
@@ -303,7 +303,7 @@ func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
 
 	_, err := svc.Dispatch(ctx, DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 	})
 	require.Error(t, err)
@@ -320,7 +320,7 @@ func TestDispatchService_Dispatch_RequestTimeoutOverridesDefault(t *testing.T) {
 	start := time.Now()
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 100 * time.Millisecond,
 	})
@@ -344,7 +344,7 @@ func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
 
 	_, err := svc.Dispatch(ctx, DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 30 * time.Second,
 	})
@@ -391,7 +391,7 @@ func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testin
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeInference),
+		EventType: string(constants.Event.Operator.Inference.Requested),
 		Payload:                 inferencePayload(t),
 		Timeout:                 2 * time.Second,
 		OnInferenceProgress:     func(*operatorv1.InferenceProgressEvent) error { return nil },
@@ -437,7 +437,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionID,
-			ActionType:              string(constants.ActionTypeFsRead),
+			EventType: string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
 		require.NoError(t, err)
@@ -452,7 +452,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionID,
-			ActionType:              string(constants.ActionTypeFsRead),
+			EventType: string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 			Timeout:                 50 * time.Millisecond,
 		})
@@ -473,7 +473,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 		}()
 		_, err := svc.Dispatch(ctx, DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionID,
-			ActionType:              string(constants.ActionTypeFsRead),
+			EventType: string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
 		require.Error(t, err)
@@ -486,7 +486,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 
 		_, err := svc.Dispatch(context.Background(), DispatchRequest{
 			TargetOperatorSessionID: op.OperatorSessionID,
-			ActionType:              string(constants.ActionTypeFsRead),
+			EventType: string(constants.Event.Operator.FsRead.Requested),
 			Payload:                 fsReadPayloadBytes(t),
 		})
 		require.Error(t, err)
@@ -509,7 +509,7 @@ func TestDispatchService_Dispatch_LateResultDiscarded(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 50 * time.Millisecond,
 	})
@@ -555,7 +555,7 @@ func TestDispatchService_Dispatch_DuplicateResultDropped(t *testing.T) {
 
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:                 fsReadPayloadBytes(t),
 		Timeout:                 5 * time.Second,
 	})
@@ -638,7 +638,7 @@ func TestDispatchController_HandleDispatch_WitnessCommandRejectedAsUnprocessable
 	require.NoError(t, err)
 	body, err := json.Marshal(OperatorCommandRequest{
 		TargetOperatorSessionID: observer.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeExecuteBash),
+		EventType: string(constants.Event.Operator.Command.Requested),
 		Payload:                 payload,
 	})
 	require.NoError(t, err)
@@ -676,7 +676,7 @@ func TestOperatorCommandResultHelpers(t *testing.T) {
 			TransactionID: "tx-1",
 			ResultEnvelope: &commonv1.GovernanceEnvelope{
 				EventType:  string(constants.Event.Operator.Command.Completed),
-				ActionType: "EXECUTE_BASH_RESULT",
+				ActionType: string(constants.ActionTypeExecuteBash),
 				Payload:    wire,
 			},
 		}).ToResponse()
@@ -704,7 +704,7 @@ func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.
 		statusEnv := &commonv1.GovernanceEnvelope{
 			Id:         cmdEnv.Id,
 			EventType:  string(constants.Event.Operator.Command.StatusUpdated.Running),
-			ActionType: "EXECUTE_STATUS_UPDATE",
+			ActionType: string(constants.ActionTypeExecuteBash),
 			Timestamp:  timestamppb.Now(),
 		}
 		statusWire, err := protojson.Marshal(statusEnv)
@@ -737,7 +737,7 @@ func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.
 
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
-		ActionType:              string(constants.ActionTypeExecuteBash),
+		EventType: string(constants.Event.Operator.Command.Requested),
 		Payload:                 execPayload,
 		TargetResource:          "cli",
 		RequestorUserID:         "user-001",

@@ -107,6 +107,8 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
+		EventType:         string(constants.Event.Operator.FsList.Requested),
+
 		ActionType:        string(constants.ActionTypeFsList),
 		TargetResource:    "localhost",
 		Payload:           payload,
@@ -159,6 +161,8 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			ProtocolVersion: "1.0",
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:         string(constants.Event.Operator.FsList.Requested),
+
 			ActionType:      string(constants.ActionTypeFsList),
 			TargetResource:  "localhost",
 			Payload:         nil,
@@ -196,6 +200,8 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			ProtocolVersion: "1.0",
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:         string(constants.Event.Operator.FsList.Requested),
+
 			ActionType:      string(constants.ActionTypeFsList),
 			TargetResource:  "localhost",
 			Payload:         payload,
@@ -299,6 +305,8 @@ func buildGatewayDispatchedDoctrineEnvelope(t *testing.T, stateRoot, nonce strin
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
+		EventType:         string(constants.Event.Operator.FsList.Requested),
+
 		ActionType:        string(constants.ActionTypeFsList),
 		TargetResource:    "localhost",
 		Payload: mustMarshalProto(t, &operatorv1.FsListRequested{
@@ -331,11 +339,13 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 		// Complex types (MCP_CALL, A2A_CALL) are tested in their own integration tests
 		testCases := []struct {
 			name       string
+			eventType  constants.EventType
 			actionType constants.ActionType
 			payload    []byte
 		}{
 			{
 				name:       "FS_LIST",
+				eventType:  constants.Event.Operator.FsList.Requested,
 				actionType: constants.ActionTypeFsList,
 				payload: mustMarshalProto(t, &operatorv1.FsListRequested{
 					Path:        ".",
@@ -344,6 +354,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 			},
 			{
 				name:       "FS_READ",
+				eventType:  constants.Event.Operator.FsRead.Requested,
 				actionType: constants.ActionTypeFsRead,
 				payload: mustMarshalProto(t, &operatorv1.FsReadRequested{
 					Path:        "test.txt",
@@ -352,6 +363,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 			},
 			{
 				name:       "FS_GREP",
+				eventType:  constants.Event.Operator.FsGrep.Requested,
 				actionType: constants.ActionTypeFsGrep,
 				payload: mustMarshalProto(t, &operatorv1.FsGrepRequested{
 					Pattern:     "test",
@@ -361,6 +373,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 			},
 			{
 				name:       "PORT_CHECK",
+				eventType:  constants.Event.Operator.PortCheck.Requested,
 				actionType: constants.ActionTypePortCheck,
 				payload: mustMarshalProto(t, &operatorv1.CheckPortRequested{
 					Host:        "localhost",
@@ -370,11 +383,13 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 			},
 			{
 				name:       "HEARTBEAT",
+				eventType:  constants.Event.Operator.HeartbeatRequested,
 				actionType: constants.ActionTypeHeartbeat,
 				payload:    mustMarshalProto(t, &operatorv1.HeartbeatRequested{}),
 			},
 			{
 				name:       "EVAL_ANSWER",
+				eventType:  constants.Event.Operator.Eval.AnswerRequested,
 				actionType: constants.ActionTypeEvalAnswer,
 				payload: mustMarshalProto(t, &operatorv1.EvalAnswerRequested{
 					PromptId:  "test-prompt",
@@ -395,6 +410,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 					ProtocolVersion: "1.0",
 					Timestamp:       timestamppb.Now(),
 					ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+					EventType:       string(tc.eventType),
 					ActionType:      string(tc.actionType),
 					TargetResource:  "localhost",
 					Payload:         tc.payload,
@@ -458,6 +474,8 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 			ProtocolVersion: "1.0",
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:         string(constants.Event.Operator.Command.CancelRequested),
+
 			ActionType:      string(constants.ActionTypeCancel),
 			TargetResource:  "localhost",
 			Payload:         payload,
@@ -964,6 +982,8 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			ProtocolVersion: "1.0",
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:         string(constants.Event.Operator.FsList.Requested),
+
 			ActionType:      string(constants.ActionTypeFsList),
 			TargetResource:  "localhost",
 			Payload:         payload,
@@ -1049,6 +1069,8 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			ProtocolVersion: "1.0",
 			Timestamp:       timestamppb.Now(),
 			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:         string(constants.Event.Operator.FsList.Requested),
+
 			ActionType:      string(constants.ActionTypeFsList),
 			TargetResource:  "localhost",
 			Payload:         payload,
@@ -1134,6 +1156,7 @@ func TestOperatorPubSubService_ProcessEnvelope_DocumentDispatchDeterminism(t *te
 					ProtocolVersion: "1.0",
 					Timestamp:       timestamppb.Now(),
 					ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+					EventType:       string(tc.wantEvent),
 					ActionType:      string(tc.actionType),
 					TargetResource:  "localhost",
 					Payload:         payload,
@@ -1238,7 +1261,8 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			msg := &PubSubCommandMessage{
 				ID:                "msg-fslist",
-				OperatorSessionID: sessionID,
+			EventType:         constants.Event.Operator.FsList.Requested,
+			OperatorSessionID: sessionID,
 			}
 
 			payload := &operatorv1.FsListResult{
@@ -1306,7 +1330,8 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			msg := &PubSubCommandMessage{
 				ID:                "msg-port",
-				OperatorSessionID: sessionID,
+			EventType:         constants.Event.Operator.PortCheck.Requested,
+			OperatorSessionID: sessionID,
 			}
 
 			payload := &operatorv1.PortCheckResult{
@@ -1373,6 +1398,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 			msg := &PubSubCommandMessage{
 				ID:                "msg-error",
+				EventType:         constants.Event.Operator.FsRead.Requested,
 				OperatorSessionID: sessionID,
 			}
 
@@ -1400,6 +1426,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-nonfatal",
+			EventType:         constants.Event.Operator.FsList.Requested,
 			OperatorSessionID: "session-1",
 		}
 
@@ -1467,6 +1494,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-scrub",
+			EventType:         constants.Event.Operator.FsRead.Requested,
 			OperatorSessionID: sessionID,
 		}
 

@@ -590,8 +590,8 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 			"channel", channel)
 		return
 	}
-	if intent.ActionType == "" {
-		b.logger.Warn("PubSub cmd: relay: command intent missing action_type",
+	if intent.EventType == "" {
+		b.logger.Warn("PubSub cmd: relay: command intent missing event_type",
 			"channel", channel)
 		return
 	}
@@ -626,7 +626,15 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 		return
 	}
 
-	if err := validateWitnessCommandDispatch(op, intent.ActionType, intent.Payload); err != nil {
+	actionType, err := constants.ValidateGovernedRequest(constants.EventType(intent.EventType))
+	if err != nil {
+		b.logger.Warn("PubSub cmd: relay: invalid governed request event",
+			"channel", channel,
+			"event_type", intent.EventType,
+			"error", err.Error())
+		return
+	}
+	if err := validateWitnessCommandDispatch(op, string(actionType), intent.Payload); err != nil {
 		b.logger.Warn("PubSub cmd: relay: ollama service dispatch rejected",
 			"channel", channel,
 			"operator_session_id", intent.OperatorSessionId,
@@ -650,7 +658,7 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        op.ID,
 		OperatorSessionID: op.OperatorSessionID,
-		ActionType:        intent.ActionType,
+		EventType:         intent.EventType,
 		Payload:           intent.Payload,
 		TargetResource:    intent.TargetResource,
 		RequestorUserID:   intent.RequestorUserId,

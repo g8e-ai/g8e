@@ -334,7 +334,7 @@ func (c *ModelProvenanceObservationCoordinator) publishCommand(ctx context.Conte
 	}
 	txID, err := c.dispatch.PublishCommand(ctx, PublishCommandRequest{
 		TargetOperatorSessionID: operator.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeModelProvenanceObservation),
+		EventType:               string(constants.Event.Operator.ModelProvenanceObservation.Requested),
 		Payload:                 payload,
 	})
 	if err != nil {

@@ -2099,8 +2099,13 @@
       "value": "g8e.v1.operator.file.diff.fetch.requested",
       "kind": "request",
       "transport": [
+        "governed",
         "pubsub"
       ],
+      "governance": {
+        "action_type": "FETCH_FILE_DIFF",
+        "payload": "g8e.operator.v1.FetchFileDiffRequested"
+      },
       "producers": [
         "ensemble",
         "gateway"
@@ -2261,8 +2266,13 @@
       "value": "g8e.v1.operator.file.history.fetch.requested",
       "kind": "request",
       "transport": [
+        "governed",
         "pubsub"
       ],
+      "governance": {
+        "action_type": "FETCH_FILE_HISTORY",
+        "payload": "g8e.operator.v1.FetchFileHistoryRequested"
+      },
       "producers": [
         "ensemble",
         "gateway"
@@ -2314,8 +2324,13 @@
       "value": "g8e.v1.operator.file.restore.requested",
       "kind": "request",
       "transport": [
+        "governed",
         "pubsub"
       ],
+      "governance": {
+        "action_type": "RESTORE_FILE",
+        "payload": "g8e.operator.v1.RestoreFileRequested"
+      },
       "producers": [
         "ensemble",
         "gateway"
@@ -2357,8 +2372,13 @@
       "value": "g8e.v1.operator.filesystem.grep.requested",
       "kind": "request",
       "transport": [
+        "governed",
         "pubsub"
       ],
+      "governance": {
+        "action_type": "FS_GREP",
+        "payload": "g8e.operator.v1.FsGrepRequested"
+      },
       "producers": [
         "ensemble",
         "gateway"
@@ -2410,8 +2430,13 @@
       "value": "g8e.v1.operator.filesystem.list.requested",
       "kind": "request",
       "transport": [
+        "governed",
         "pubsub"
       ],
+      "governance": {
+        "action_type": "FS_LIST",
+        "payload": "g8e.operator.v1.FsListRequested"
+      },
       "producers": [
         "ensemble",
         "gateway"
@@ -2463,8 +2488,13 @@
       "value": "g8e.v1.operator.filesystem.read.requested",
       "kind": "request",
       "transport": [
+        "governed",
         "pubsub"
       ],
+      "governance": {
+        "action_type": "FS_READ",
+        "payload": "g8e.operator.v1.FsReadRequested"
+      },
       "producers": [
         "ensemble",
         "gateway"
@@ -2574,8 +2604,13 @@
       "value": "g8e.v1.operator.history.fetch.requested",
       "kind": "request",
       "transport": [
+        "governed",
         "pubsub"
       ],
+      "governance": {
+        "action_type": "FETCH_HISTORY",
+        "payload": "g8e.operator.v1.FetchHistoryRequested"
+      },
       "producers": [
         "ensemble",
         "gateway"
@@ -2761,8 +2796,13 @@
       "value": "g8e.v1.operator.logs.fetch.requested",
       "kind": "request",
       "transport": [
+        "governed",
         "pubsub"
       ],
+      "governance": {
+        "action_type": "FETCH_LOGS",
+        "payload": "g8e.operator.v1.FetchLogsRequested"
+      },
       "producers": [
         "ensemble",
         "gateway"

@@ -187,7 +187,7 @@ func TestBuildGovernanceEnvelope_Success(t *testing.T) {
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		ActionType:        string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserID:   "user-001",
@@ -227,7 +227,7 @@ func TestBuildGovernanceEnvelope_DeterministicTxHash(t *testing.T) {
 	params := BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		ActionType:        string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserID:   "user-001",
@@ -263,7 +263,7 @@ func TestBuildGovernanceEnvelope_MissingPostureFailsClosed(t *testing.T) {
 	_, err = BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		ActionType:        string(constants.ActionTypeFsRead),
+		EventType: string(constants.Event.Operator.FsRead.Requested),
 		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		StateMerkleRoot:   "root-abc",
@@ -303,11 +303,11 @@ func fileEditPayload(t *testing.T) []byte {
 }
 
 // newCommandIntent builds a commonv1.CommandIntent with the supplied fields.
-func newCommandIntent(operatorID, operatorSessionID, actionType string, payload []byte) *commonv1.CommandIntent {
+func newCommandIntent(operatorID, operatorSessionID, eventType string, payload []byte) *commonv1.CommandIntent {
 	return &commonv1.CommandIntent{
 		OperatorId:        operatorID,
 		OperatorSessionId: operatorSessionID,
-		ActionType:        actionType,
+		EventType:         eventType,
 		Payload:           payload,
 	}
 }
@@ -374,7 +374,7 @@ func TestHandlePublish_AppCommandIntentTransformedToGovernanceEnvelope(t *testin
 	intent := &commonv1.CommandIntent{
 		OperatorId:        op.ID,
 		OperatorSessionId: op.OperatorSessionID,
-		ActionType:        string(constants.ActionTypeFileEdit),
+		EventType: string(constants.Event.Operator.FileEdit.Requested),
 		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserId:   "user-001",
@@ -403,6 +403,7 @@ func TestHandlePublish_AppCommandIntentTransformedToGovernanceEnvelope(t *testin
 	assert.Equal(t, "root-abc", env.StateMerkleRoot, "envelope must carry the gateway's state root")
 	assert.Equal(t, op.ID, env.OperatorId)
 	assert.Equal(t, op.OperatorSessionID, env.OperatorSessionId)
+	assert.Equal(t, string(constants.Event.Operator.FileEdit.Requested), env.EventType)
 	assert.Equal(t, string(constants.ActionTypeFileEdit), env.ActionType)
 	assert.Equal(t, "/etc/hostname", env.TargetResource)
 	assert.Equal(t, payload, env.Payload)
@@ -602,7 +603,7 @@ func TestHandlePublish_InvalidOperatorSessionDroppedFailClosed(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
+	intent := newCommandIntent("op-001", "sess-001", string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
 	intent.TargetResource = "/etc/hostname"
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
@@ -639,7 +640,7 @@ func TestHandlePublish_StateRootErrorDroppedFailClosed(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent(op.ID, op.OperatorSessionID, string(constants.ActionTypeFileEdit), fileEditPayload(t))
+	intent := newCommandIntent(op.ID, op.OperatorSessionID, string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
 	intent.TargetResource = "/etc/hostname"
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
@@ -670,7 +671,7 @@ func TestHandlePublish_CommandIntentMissingOperatorIDDropped(t *testing.T) {
 	defer unregister()
 
 	// Intent with missing operator_id.
-	intent := newCommandIntent("", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
+	intent := newCommandIntent("", "sess-001", string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 
@@ -700,7 +701,7 @@ func TestHandlePublish_CommandIntentChannelMismatchDropped(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-002", "sess-002", string(constants.ActionTypeFileEdit), fileEditPayload(t))
+	intent := newCommandIntent("op-002", "sess-002", string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 
@@ -727,7 +728,7 @@ func TestHandlePublish_RelayDisabledWhenDepsNotConfigured(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
+	intent := newCommandIntent("op-001", "sess-001", string(constants.Event.Operator.FileEdit.Requested), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 

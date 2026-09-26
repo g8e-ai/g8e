@@ -20,7 +20,6 @@ from app.constants.generated_status import (
     CommandErrorType,
 )
 from app.constants.config import ExecutionStatus
-from app.constants.action_type_mappings import map_event_type_to_action_type
 from app.errors import BusinessLogicError, NetworkError, ValidationError
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
@@ -33,7 +32,6 @@ from app.services.protocols import (
 )
 
 from app.models.tool_results import CommandExecutionResult
-from app.constants.action_type_mappings import map_event_type_to_action_type
 from app.models.command_request_payloads import CommandCancelRequestPayload, CommandRequestPayload
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
@@ -309,7 +307,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 error_type=CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY,
             ), None
 
-        action_type = map_event_type_to_action_type(g8e_message.event_type)
         payload_bytes = payload.to_protobuf().SerializeToString()
         target_resource = getattr(payload, "file_path", None) or getattr(payload, "path", None)
 
@@ -318,7 +315,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 self._gateway_operator_client.dispatch(
                     context=g8e_context,
                     operator_session_id=operator_session_id,
-                    action_type=action_type,
+                    event_type=g8e_message.event_type,
                     payload=payload_bytes,
                     target_resource=target_resource,
                 ),
@@ -396,9 +393,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             dispatch_result = await self._gateway_operator_client.dispatch(
                 context=g8e_context,
                 operator_session_id=operator_session_id,
-                action_type=map_event_type_to_action_type(
-                    EventType.OPERATOR_COMMAND_CANCEL_REQUESTED
-                ),
+                event_type=EventType.OPERATOR_COMMAND_CANCEL_REQUESTED,
                 payload=cancel_payload.to_protobuf().SerializeToString(),
             )
         except NetworkError as exc:
@@ -478,9 +473,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 self._gateway_operator_client.dispatch(
                     context=g8e_context,
                     operator_session_id=operator_session_id,
-                    action_type=map_event_type_to_action_type(
-                        EventType.OPERATOR_COMMAND_REQUESTED
-                    ),
+                    event_type=EventType.OPERATOR_COMMAND_REQUESTED,
                     payload=request_payload.to_protobuf().SerializeToString(),
                 ),
                 timeout=timeout_seconds,

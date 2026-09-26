@@ -38,7 +38,7 @@ type gatewayDispatcherAdapter struct {
 func (a *gatewayDispatcherAdapter) Dispatch(ctx context.Context, req dispatch.CommandDispatchRequest) (*dispatch.CommandDispatchResult, error) {
 	result, err := a.svc.Dispatch(ctx, DispatchRequest{
 		TargetOperatorSessionID: req.TargetOperatorSessionID,
-		ActionType:              req.ActionType,
+		EventType:               req.EventType,
 		Payload:                 req.Payload,
 		TargetResource:          req.TargetResource,
 		RequestorUserID:         req.RequestorUserID,

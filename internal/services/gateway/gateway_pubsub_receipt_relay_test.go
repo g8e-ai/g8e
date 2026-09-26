@@ -403,8 +403,8 @@ func TestRelayActionReceipt_MalformedPayloadRejected(t *testing.T) {
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        operatorID,
 		OperatorSessionId: sessionID,
-		ActionType:        string(constants.ActionTypeFileEdit),
 		EventType:         string(constants.Event.Operator.Receipt.Recorded),
+		ActionType:        string(constants.ActionTypeFileEdit),
 		Payload:           []byte("not-a-valid-protobuf"),
 	}
 	wire, err := protojson.Marshal(env)
@@ -441,8 +441,8 @@ func TestRelayActionReceipt_MissingPayloadRejected(t *testing.T) {
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        operatorID,
 		OperatorSessionId: sessionID,
-		ActionType:        string(constants.ActionTypeFileEdit),
 		EventType:         string(constants.Event.Operator.Receipt.Recorded),
+		ActionType:        string(constants.ActionTypeFileEdit),
 	}
 	wire, err := protojson.Marshal(env)
 	require.NoError(t, err)

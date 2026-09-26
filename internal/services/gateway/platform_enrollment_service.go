@@ -935,6 +935,25 @@ func (s *PlatformEnrollmentService) checkQuota(kind models.PlatformComponentKind
 // and transaction hash.
 const platformEnrollmentStateRootMaxRetries = 3
 
+func platformEnrollmentRequestEvent(action constants.PlatformEnrollmentGovernanceAction) constants.EventType {
+	switch action {
+	case constants.PlatformEnrollmentActionCreate:
+		return constants.EventPlatformEnrollmentCreateRequested
+	case constants.PlatformEnrollmentActionDecide:
+		return constants.EventPlatformEnrollmentDecideRequested
+	case constants.PlatformEnrollmentActionIssue:
+		return constants.EventPlatformEnrollmentIssueRequested
+	case constants.PlatformEnrollmentActionPersistPolicy:
+		return constants.EventPlatformEnrollmentPersistPolicyRequested
+	case constants.PlatformEnrollmentActionCreateSession:
+		return constants.EventPlatformEnrollmentCreateSessionRequested
+	case constants.PlatformEnrollmentActionRevoke:
+		return constants.EventPlatformEnrollmentRevokeRequested
+	default:
+		return ""
+	}
+}
+
 // submitEnvelope builds a GovernanceEnvelope with the given action type
 // and PlatformEnrollmentGovernancePayload, marshals it as protojson,
 // and calls the injected EnvelopeProcessor. The envelope carries the
@@ -965,7 +984,7 @@ func (s *PlatformEnrollmentService) submitEnvelope(ctx context.Context, action c
 			ExpiresAt:       timestamppb.New(time.Now().Add(5 * time.Minute)),
 			SourceComponent: commonv1.Component_COMPONENT_G8EO,
 			ActionType:      string(action),
-			EventType:       string(constants.MapActionTypeToEventType(constants.ActionType(action))),
+			EventType:       string(platformEnrollmentRequestEvent(action)),
 			Payload:         payloadBytes,
 			StateMerkleRoot: stateRoot,
 			Nonce:           nonce,

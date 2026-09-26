@@ -118,14 +118,14 @@ class GatewayOperatorClient:
         *,
         context: G8eHttpContext,
         operator_session_id: str,
-        action_type: str,
+        event_type: str,
         payload: bytes,
         target_resource: str | None = None,
     ) -> dict[str, Any]:
-        """Dispatch a typed operator payload through Gateway governance."""
+        """Dispatch a typed operator request event through Gateway governance."""
         body: dict[str, Any] = {
             "target_operator_session_id": operator_session_id,
-            "action_type": action_type,
+            "event_type": event_type,
             "payload": base64.b64encode(payload).decode("ascii"),
         }
         if target_resource:

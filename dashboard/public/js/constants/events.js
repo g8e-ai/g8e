@@ -1453,9 +1453,11 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILE_DIFF_FETCH_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['governed', 'pubsub'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
+        actionType: 'FETCH_FILE_DIFF',
+        payload: 'g8e.operator.v1.FetchFileDiffRequested',
     }),
     OPERATOR_FILE_DIFF_FETCH_STARTED: Object.freeze({
         kind: 'outcome',
@@ -1531,9 +1533,11 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILE_HISTORY_FETCH_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['governed', 'pubsub'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
+        actionType: 'FETCH_FILE_HISTORY',
+        payload: 'g8e.operator.v1.FetchFileHistoryRequested',
     }),
     OPERATOR_FILE_HISTORY_FETCH_STARTED: Object.freeze({
         kind: 'outcome',
@@ -1560,9 +1564,11 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILE_RESTORE_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['governed', 'pubsub'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
+        actionType: 'RESTORE_FILE',
+        payload: 'g8e.operator.v1.RestoreFileRequested',
     }),
     OPERATOR_FILESYSTEM_GREP_COMPLETED: Object.freeze({
         kind: 'outcome',
@@ -1582,9 +1588,11 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILESYSTEM_GREP_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['governed', 'pubsub'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
+        actionType: 'FS_GREP',
+        payload: 'g8e.operator.v1.FsGrepRequested',
     }),
     OPERATOR_FILESYSTEM_GREP_STARTED: Object.freeze({
         kind: 'outcome',
@@ -1609,9 +1617,11 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILESYSTEM_LIST_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['governed', 'pubsub'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
+        actionType: 'FS_LIST',
+        payload: 'g8e.operator.v1.FsListRequested',
     }),
     OPERATOR_FILESYSTEM_LIST_STARTED: Object.freeze({
         kind: 'outcome',
@@ -1636,9 +1646,11 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_FILESYSTEM_READ_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['governed', 'pubsub'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
+        actionType: 'FS_READ',
+        payload: 'g8e.operator.v1.FsReadRequested',
     }),
     OPERATOR_FILESYSTEM_READ_STARTED: Object.freeze({
         kind: 'outcome',
@@ -1693,9 +1705,11 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_HISTORY_FETCH_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['governed', 'pubsub'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
+        actionType: 'FETCH_HISTORY',
+        payload: 'g8e.operator.v1.FetchHistoryRequested',
     }),
     OPERATOR_INFERENCE_COMPLETED: Object.freeze({
         kind: 'outcome',
@@ -1787,9 +1801,11 @@ export const EventRegistry = Object.freeze({
     }),
     OPERATOR_LOGS_FETCH_REQUESTED: Object.freeze({
         kind: 'request',
-        transport: ['pubsub'],
+        transport: ['governed', 'pubsub'],
         producers: ['ensemble', 'gateway'],
         persistence: 'ephemeral',
+        actionType: 'FETCH_LOGS',
+        payload: 'g8e.operator.v1.FetchLogsRequested',
     }),
     OPERATOR_MCP_CALL_REQUESTED: Object.freeze({
         kind: 'request',

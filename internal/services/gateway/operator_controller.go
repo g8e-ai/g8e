@@ -181,7 +181,7 @@ func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.R
 	}
 	result, err := c.dispatch.Dispatch(r.Context(), DispatchRequest{
 		TargetOperatorSessionID: req.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeShutdown),
+		EventType:               string(constants.Event.Operator.ShutdownRequested),
 		Payload:                 payload,
 		TargetResource:          op.ID,
 		RequestorUserID:         userID,

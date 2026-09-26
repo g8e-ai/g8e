@@ -40,7 +40,7 @@ from app.constants import (
     PubSubAction,
     PubSubWireEventType,
 )
-from app.constants.action_type_mappings import map_event_type_to_action_type
+from g8e.registry import action_for
 from app.models.pubsub_messages import G8eMessage
 from g8e.models.governance import CommandIntent
 
@@ -591,7 +591,7 @@ class PubSubClient:
             if command_data.payload is None:
                 raise ValueError("G8eMessage.payload is required to build CommandIntent")
 
-            action_type = map_event_type_to_action_type(command_data.event_type)
+            action_type = action_for(command_data.event_type)
             payload_bytes = command_data.payload.to_protobuf().SerializeToString()
             target_resource = (
                 getattr(command_data.payload, "file_path", None)

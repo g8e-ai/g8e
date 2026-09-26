@@ -263,7 +263,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
 
 		assert.Equal(t, string(constants.Event.Operator.Command.Completed), env.EventType)
-		assert.Equal(t, "EXECUTE_BASH_RESULT", env.ActionType)
+		assert.Equal(t, string(constants.ActionTypeExecuteBash), env.ActionType)
 		assert.Equal(t, "case-456", env.CaseId)
 		assert.Equal(t, "msg-123", env.Id)
 
@@ -622,6 +622,8 @@ func TestPubSubResultsService_PublishActionReceipt(t *testing.T) {
 			ProtocolVersion:   "1.0",
 			OperatorId:        "op-001",
 			OperatorSessionId: "sess-001",
+			EventType:         string(constants.Event.Operator.FileEdit.Requested),
+
 			ActionType:        string(constants.ActionTypeFileEdit),
 			TargetResource:    "/tmp/test.txt",
 			RequestorUserId:   "user-001",

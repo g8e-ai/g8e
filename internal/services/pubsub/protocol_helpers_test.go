@@ -169,6 +169,7 @@ func TestBuildUniversalResultEnvelope(t *testing.T) {
 		env, err := BuildUniversalResultEnvelope(
 			cfg,
 			constants.Event.Operator.Command.Completed,
+			constants.ActionTypeExecuteBash,
 			payload,
 			"msg-1",
 			"operator-1",
@@ -198,6 +199,7 @@ func TestBuildUniversalResultEnvelope(t *testing.T) {
 		env, err := BuildUniversalResultEnvelope(
 			cfg,
 			constants.Event.Operator.Command.Completed,
+			constants.ActionTypeExecuteBash,
 			payload,
 			"",
 			"operator-1",
@@ -223,6 +225,7 @@ func TestBuildUniversalResultEnvelope(t *testing.T) {
 		env, err := BuildUniversalResultEnvelope(
 			cfg,
 			constants.Event.Operator.Command.Completed,
+			constants.ActionTypeExecuteBash,
 			payload,
 			"msg-1",
 			"operator-1",
@@ -246,6 +249,7 @@ func TestBuildUniversalResultEnvelope(t *testing.T) {
 		env, err := BuildUniversalResultEnvelope(
 			cfg,
 			constants.Event.Operator.Command.Completed,
+			constants.ActionTypeExecuteBash,
 			payload,
 			"msg-1",
 			"operator-1",

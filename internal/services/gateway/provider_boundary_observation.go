@@ -302,7 +302,7 @@ func (c *ProviderBoundaryObservationCoordinator) tryPublishCommand(ctx context.C
 	}
 	txID, err := c.dispatch.PublishCommand(ctx, PublishCommandRequest{
 		TargetOperatorSessionID: observer.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeProviderBoundaryObservation),
+		EventType:               string(constants.Event.Operator.ProviderBoundaryObservation.Requested),
 		Payload:                 payload,
 	})
 	if err != nil {
@@ -358,7 +358,7 @@ func (c *ProviderBoundaryObservationCoordinator) ingestResult(ctx context.Contex
 // PublishCommandRequest is a fire-and-forget governed command publish.
 type PublishCommandRequest struct {
 	TargetOperatorSessionID string
-	ActionType              string
+	EventType               string
 	Payload                 []byte
 	RequestorUserID         string
 	ActingAppID             string
@@ -378,7 +378,7 @@ func (d *DispatchService) PublishCommand(ctx context.Context, req PublishCommand
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        op.ID,
 		OperatorSessionID: op.OperatorSessionID,
-		ActionType:        req.ActionType,
+		EventType:         req.EventType,
 		Payload:           req.Payload,
 		RequestorUserID:   req.RequestorUserID,
 		ActingAppID:       req.ActingAppID,

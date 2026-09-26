@@ -322,7 +322,7 @@ func TestVerifyEnvelopeIdentityBinding_MatchingCLISessionWithOperatorClaims_Retu
 		}},
 	}
 	envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
-		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		EventType: string(constants.EventAppDocumentUpdateRequested),
 		OperatorId:        "op-1",
 		OperatorSessionId: "operator-sess-1",
 		CliSessionId:      "cli-sess-1",
@@ -342,7 +342,7 @@ func TestVerifyEnvelopeIdentityBinding_MismatchedCLISessionWithOperatorClaims_Re
 		}},
 	}
 	envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
-		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		EventType: string(constants.EventAppDocumentUpdateRequested),
 		OperatorId:        "op-1",
 		OperatorSessionId: "operator-sess-1",
 		CliSessionId:      "cli-sess-1",
@@ -392,7 +392,7 @@ func TestVerifyEnvelopeIdentityBinding_AppCertificateAllowsDelegatedEmbeddedOper
 		}},
 	}
 	envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
-		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		EventType: string(constants.EventAppDocumentUpdateRequested),
 		OperatorId:        string(constants.DocIDEmbeddedOperator),
 		OperatorSessionId: "embedded-operator-session",
 		ActingAppId:       "g8ee",
@@ -412,7 +412,7 @@ func TestVerifyEnvelopeIdentityBinding_AppCertificateRejectsMismatchedActingApp(
 		}},
 	}
 	envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
-		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		EventType: string(constants.EventAppDocumentUpdateRequested),
 		OperatorId:        string(constants.DocIDEmbeddedOperator),
 		OperatorSessionId: "embedded-operator-session",
 		ActingAppId:       "different-app",

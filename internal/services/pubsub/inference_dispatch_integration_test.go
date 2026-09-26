@@ -205,6 +205,8 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "operator-inference-int",
 		OperatorSessionId: "session-inference-int",
+		EventType:         string(constants.Event.Operator.Inference.Requested),
+
 		ActionType:        string(constants.ActionTypeInference),
 		TargetResource:    "ollama",
 		Payload:           payloadBytes,
