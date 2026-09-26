@@ -1185,7 +1185,10 @@
         "ensemble",
         "operator"
       ],
-      "persistence": "gateway.docstore"
+      "persistence": "gateway.docstore",
+      "transport": [
+        "sse"
+      ]
     },
     "AppDocumentDeleteRequested": {
       "_go_const": "EventAppDocumentDeleteRequested",

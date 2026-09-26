@@ -38,7 +38,7 @@ cd ../../..
 
 The resulting `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` is required by `make build` and `make build-all`. If the asset is already present, do not rebuild it unless its source changed.
 
-> **Don't have `make`, `go`, or the Explorer prerequisites installed?** Run the setup script for your platform to detect and install Go and Make automatically:
+> **Don't have the local build toolchain installed?** Run the setup script for your platform to install prerequisites, build the evaluation explorer, and compile `g8e`:
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`

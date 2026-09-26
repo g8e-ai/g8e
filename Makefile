@@ -206,12 +206,14 @@ help:
 	@echo "  website-test    Test the g8e.ai generator and Worker"
 	@echo ""
 	@echo "Cleanup:"
-	@echo "  clean         Remove build artifacts (bin/, test/coverage outputs, Go caches)"
-	@echo "  clean-docker  Stop all profile containers and remove volumes (--profile bootstrapped down -v --remove-orphans)"
+	@echo "  clean             Remove build artifacts (bin/, test/coverage outputs, Go caches)"
+	@echo "  clean-docker      Stop all containers and remove volumes (docker compose down -v --remove-orphans)"
 	@echo ""
 	@echo "Docker Compose:"
-	@echo "  up            Build and start the full stack (docker compose up -d --build)"
-	@echo "  down          Stop all profile containers, keep volumes (--profile bootstrapped down --remove-orphans)"
+	@echo "  up                Build and start the full stack (docker compose up -d --build)"
+	@echo "  down              Stop all containers, keep volumes (docker compose down --remove-orphans)"
+	@echo "  restart-operators Restart Data and Inference Operators to pick up newly built binary"
+	@echo "  docker-build      Build Docker images in container and export binary to ./g8e"
 	@echo ""
 	@echo "Demos:"
 	@echo "  demo-verify         Build and run all 5 demo environments (requires Docker)"
@@ -407,7 +409,8 @@ build: embed-explorer
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$G8E_BINARY..."; \
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$G8E_BINARY $(MAIN_PKG); \
 	sha256sum $$G8E_BINARY > $$G8E_BINARY.sha256; \
-	INSTALL_SRC=$$G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
+	INSTALL_SRC=$$G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE); \
+	INSTALL_SRC=$$G8E_BINARY INSTALL_DST=$(BIN_DIR)/$$ROOT_COPY; $(INSTALL_EXECUTABLE)
 	@echo "Build complete. Binary: $(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH)$(if $(filter windows,$(HOST_OS)),.exe,)"
 
 .PHONY: build-compressed
@@ -476,7 +479,8 @@ build-all:
 	else \
 		ROOT_COPY=g8e; \
 	fi; \
-	INSTALL_SRC=$$HOST_G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
+	INSTALL_SRC=$$HOST_G8E_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE); \
+	INSTALL_SRC=$$HOST_G8E_BINARY INSTALL_DST=$(BIN_DIR)/$$ROOT_COPY; $(INSTALL_EXECUTABLE)
 	@go run ./internal/tools/g8ebinaries --root $(BIN_DIR) --version "$(VERSION)" --build-id "$(BUILD_ID)" --build-time "$(BUILD_TIME)" --source-revision "$(SOURCE_REVISION)" --source-tree-hash "$(SOURCE_TREE_HASH)"
 	@echo "Multi-platform build complete. Manifest and checksums: $(BIN_DIR)/g8e-binaries.json"
 	@echo "Host binary copied: ./g8e ($(HOST_OS)/$(HOST_ARCH))"
@@ -790,7 +794,7 @@ validate-doctrines:
 .PHONY: validate-cosais
 validate-cosais:
 	@echo "Validating COSAiS overlay coverage..."
-	@bash scripts/validate-cosais-overlays.sh
+	@go run ./internal/tools/cosais_validator
 
 .PHONY: swagger-generate
 swagger-generate:
@@ -852,23 +856,39 @@ clean-harness:
 # up -d --build` works standalone; these targets are not prerequisites.
 .PHONY: up
 up:
-	@echo "Building and starting the full stack..."
+	@echo "Building and starting the unified stack..."
 	@docker compose up -d --build
-	@echo "Stack started. The gateway is healthy; workloads remain not-ready until bootstrapped."
+	@echo "Stack started. Gateway is healthy; workloads await owner approval."
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
-	@echo "Then: ./g8e auth enroll pending && ./g8e auth enroll approve <id> --yes"
+	@echo "Then approve workloads: ./g8e auth enroll pending && ./g8e auth enroll approve <id> --yes"
 
 .PHONY: down
 down:
-	@echo "Stopping the full stack including bootstrapped workloads (volumes preserved)..."
-	@docker compose --profile bootstrapped down --remove-orphans
+	@echo "Stopping the unified stack (volumes preserved)..."
+	@docker compose down --remove-orphans
 	@echo "Stack stopped. Volumes preserved; rerun 'make up' to resume."
 
 .PHONY: clean-docker
 clean-docker:
-	@echo "Stopping the full stack (all profiles) and removing volumes..."
-	@docker compose --profile bootstrapped down -v --remove-orphans
+	@echo "Stopping the unified stack and removing volumes..."
+	@docker compose down -v --remove-orphans
 	@echo "Stack stopped and volumes removed. The next 'make up' re-bootstraps the CA and requires re-enrollment."
+
+.PHONY: restart-operators
+restart-operators:
+	@echo "Restarting Data and Inference Operators to align with current binary..."
+	@docker compose restart g8e-operator g8e-inference-operator
+	@echo "Operators restarted."
+
+.PHONY: docker-build
+docker-build:
+	@echo "Building Docker images using in-container Makefile..."
+	@docker compose build
+	@mkdir -p $(BIN_DIR)
+	@echo "Exporting runtime binary to $(BIN_DIR)/g8e and ./g8e..."
+	@docker run --rm --entrypoint cp -v $(CURDIR):/out g8e-gateway /g8e /out/$(BIN_DIR)/g8e
+	@cp -f $(BIN_DIR)/g8e ./g8e
+	@echo "Build complete. Host ./g8e and container images are aligned."
 
 
 # =============================================================================

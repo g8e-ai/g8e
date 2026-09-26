@@ -5,12 +5,18 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-# Two-phase startup: only the gateway starts by default (no profile). The
-# operator, dashboard, and ensemble are in the `bootstrapped` profile and require
-# a human to enroll the first owner before they can start. After enrolling,
-# run `docker compose --profile bootstrapped up -d` to bring up the workloads.
-# See docs/guides/unified_stack.md for the full bootstrap flow and
-# docs/guides/docker_gateway.md for the per-service details.
+# Unified stack: gateway, data operator, inference operator, ensemble, and
+# dashboard start together in the default profile (`docker compose up -d`).
+# Workloads submit platform enrollment requests and become ready once approved
+# by the owner.
+#
+# Binary precedence:
+# Host binaries in ./bin are mounted read-only at /opt/g8e/bin. When present,
+# a local `make build` takes immediate precedence across all internal services.
+# Restarting the operators (`docker compose restart g8e-operator g8e-inference-operator`)
+# aligns operator versions immediately without rebuilding images. If no host
+# binary is present, the image baked-in binary (/g8e) is used automatically.
+# See docs/guides/unified_stack.md.
 
 networks:
   g8e-net:
@@ -56,6 +62,7 @@ services:
       - g8e-gateway-data:/root/.g8e
       - ./dashboard/g8e-adapter/evaluation-explorer/dist:/eval-explorer:ro
       - g8e-shared-tmp:/tmp
+      - ./bin:/opt/g8e/bin:ro
       - /etc/hosts:/etc/hosts.host:ro
       - /etc/hostname:/etc/hostname.host:ro
     ports:
@@ -113,8 +120,7 @@ services:
 
   g8e-operator:
     # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
-    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
-    profiles: [bootstrapped]
+    # Data Operator for governed tool/filesystem/process boundaries.
     image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-operator
     working_dir: /root
@@ -123,6 +129,7 @@ services:
     volumes:
       - g8e-operator-data:/root/.g8e
       - g8e-shared-tmp:/tmp
+      - ./bin:/opt/g8e/bin:ro
     depends_on:
       g8e-gateway:
         condition: service_healthy
@@ -146,13 +153,8 @@ services:
   g8e-inference-operator:
     # Campaign Inference Operator: enrolls to the primary campaign Gateway
     # (g8e.local) as a distinct inference-capable remote Operator with its own
-    # runtime volume and session identity. This satisfies the single-PDP,
-    # exact-two-Operator evaluation topology without reusing the Data Operator
-    # or the separate g8e-gateway-user / g8ellama profile.
-    # Activate with:
-    #   G8E_OLLAMA_ENDPOINT=http://<approved-remote>:11434 \
-    #     docker compose --profile bootstrapped --profile evaluation up -d
-    profiles: [evaluation]
+    # runtime volume and session identity. Satisfies the exact-two-Operator
+    # evaluation topology.
     image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-inference-operator
     hostname: inference-operator
@@ -164,6 +166,7 @@ services:
     volumes:
       - g8e-inference-data:/root/.g8e
       - g8e-shared-tmp:/tmp
+      - ./bin:/opt/g8e/bin:ro
     depends_on:
       g8e-gateway:
         condition: service_healthy
@@ -180,7 +183,7 @@ services:
       - "g8e.local"
       - "--inference-enabled"
       - "--inference-ollama-endpoint"
-      - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
+      - "${G8E_OLLAMA_ENDPOINT:-http://127.0.0.1:11434}"
       - "--inference-primary-model"
       - "${G8E_INFERENCE_PRIMARY_MODEL:-gemm4:e4b}"
       - "--inference-assistant-model"
@@ -206,12 +209,7 @@ services:
   g8e-gateway-secondary:
     # Cross-enrollment secondary gateway: runs the same image in operator mode
     # (-e g8e.local) so its in-process operator substrate enrolls against the
-    # primary gateway. This exercises the gateway-as-operator path: a gateway
-    # binary enrolling as an operator of another gateway. Activated via the
-    # `cross-enrollment` profile — use
-    # `docker compose --profile bootstrapped --profile cross-enrollment up -d`.
-    # The container opens no inbound ports (operator mode is outbound-only
-    # mTLS to the primary gateway), so no port mapping is needed.
+    # primary gateway. Activated via the `cross-enrollment` profile.
     profiles: [cross-enrollment]
     image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-gateway-secondary
@@ -224,6 +222,7 @@ services:
     volumes:
       - g8e-gateway-secondary-data:/root/.g8e
       - g8e-shared-tmp:/tmp
+      - ./bin:/opt/g8e/bin:ro
     depends_on:
       g8e-gateway:
         condition: service_healthy
@@ -246,8 +245,6 @@ services:
 
   ensemble:
     # First-party agentic ensemble (g8ee): Python/FastAPI. Submits governed intents via MCP.
-    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
-    profiles: [bootstrapped]
     build:
       context: .
       dockerfile: ensemble/Dockerfile
@@ -263,9 +260,6 @@ services:
       - "${G8E_ENSEMBLE_PORT:-8000}:8000"
     volumes:
       - g8e-ensemble-data:/root/.g8e
-      # Read-only operator state supplies bootstrap secrets without colliding
-      # with the ensemble's own /root/.g8e runtime tree. Governed envelopes use
-      # the ensemble's enrolled app identity and never the Operator certificate.
       - g8e-operator-data:/operator-state:ro
       - g8e-shared-tmp:/tmp
     environment:
@@ -293,8 +287,6 @@ services:
 
   dashboard:
     # Operator dashboard (g8ed): Node.js/Express browser UI. Runs as non-root g8e user (UID 1001).
-    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
-    profiles: [bootstrapped]
     build:
       context: .
       dockerfile: dashboard/Dockerfile
@@ -336,22 +328,14 @@ services:
   # Two services under the `g8ellama` profile: a User Gateway (where the user
   # or IDE connects) and an Inference Node (operator mode) that enrolls as an
   # outbound operator of the User Gateway via the existing cross-enrollment
-  # path (`operator start -e <user-gateway>`). No Ollama daemon runs in this
-  # topology: the Inference Node is an HTTP client of the approved remote
-  # Ollama provider at ${G8E_OLLAMA_ENDPOINT}. Remote concurrency, model
-  # inventory, and provider hardware are external deployment authorities and
-  # are not configured or mutated here.
+  # path (`operator start -e <user-gateway>`).
   # Activate with:
   #   G8E_OLLAMA_ENDPOINT=http://<approved-remote>:11434 \
   #     docker compose --profile g8ellama up -d
   # ===========================================================================
 
   g8e-gateway-user:
-    # User Gateway: owns the state Merkle root, governance posture, and
-    # dispatch. Routes governed envelopes to the Inference Node or the Data
-    # Operator by operator session via DispatchService.Dispatch. Same image
-    # as the default gateway, running `gw start` under the g8ellama profile
-    # so it can run alongside the default `g8e-gateway` on distinct ports.
+    # User Gateway: owns the state Merkle root, governance posture, and dispatch.
     profiles: [g8ellama]
     image: g8e-gateway
     build:
@@ -367,6 +351,7 @@ services:
     volumes:
       - g8e-gateway-user-data:/root/.g8e
       - g8e-shared-tmp:/tmp
+      - ./bin:/opt/g8e/bin:ro
     ports:
       - "${G8E_USER_HTTP_PORT:-8090}:8080"
       - "${G8E_USER_HTTPS_PORT:-8453}:8443"
@@ -403,15 +388,7 @@ services:
           memory: 256M
 
   g8e-inference:
-    # Inference Node: gateway binary in operator mode (`operator start -e
-    # g8e-user`) so its operator substrate enrolls against the User Gateway.
-    # It executes governed inference requests through the L4/L5 verification
-    # and execution boundary on-host and calls the approved remote Ollama
-    # provider at G8E_OLLAMA_ENDPOINT over HTTP. Inference is enabled via the
-    # `--inference-enabled` flag. The remote provider owns process lifecycle,
-    # VRAM, model inventory, and concurrency; this node never pulls, creates,
-    # or deletes remote models. Operator mode is outbound-only mTLS to the
-    # User Gateway, so no inbound port mapping is needed.
+    # Inference Node: gateway binary in operator mode (`operator start -e g8e-user`).
     profiles: [g8ellama]
     image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-inference
@@ -424,6 +401,7 @@ services:
     volumes:
       - g8e-inference-data:/root/.g8e
       - g8e-shared-tmp:/tmp
+      - ./bin:/opt/g8e/bin:ro
     depends_on:
       g8e-gateway-user:
         condition: service_healthy

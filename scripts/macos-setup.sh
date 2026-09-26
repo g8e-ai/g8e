@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Use of this source code is governed by the Business Source License
 # included in the LICENSE file.
@@ -5,109 +6,84 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-#!/bin/bash
-# ----------------------------------------------------------
-# g8e macOS Dev Setup Script
-# Bootstraps a developer workspace from fresh clone to working binary.
-# Validates dependencies, installs missing tooling, builds, and adds to PATH.
-# See: docs/architecture/scripts.md and docs/guides/getting_started.md
-# ==========================================================
+# g8e macOS dev setup: validate toolchain, build evaluation-explorer, make build,
+# and add the repository root to PATH.
+# See docs/architecture/scripts.md and docs/guides/getting_started.md
 
-set -e  # Exit on error
+set -euo pipefail
 
-G8E_GO_MIN="1.26"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/dev-setup-common.sh
+source "${SCRIPT_DIR}/lib/dev-setup-common.sh"
 
-echo -e "\n[SETUP] Starting g8e Dev Environment Setup...\n"
+g8e_macos_brew_install() {
+    local packages=("$@")
+    if ! command -v brew >/dev/null 2>&1; then
+        echo "FATAL: Homebrew is required on macOS. Install it from https://brew.sh"
+        exit 1
+    fi
+    brew install "${packages[@]}"
+}
 
-# --- SECTION 1: Dependency Validation & Installation ---
-echo "[STEP 1/3] Validating required dependencies (make, go >= $G8E_GO_MIN)..."
+g8e_macos_install_missing() {
+    local missing=("$@")
+    local brew_packages=()
+
+    for item in "${missing[@]}"; do
+        case "$item" in
+            git) brew_packages+=("git") ;;
+            make) brew_packages+=("make") ;;
+            go) brew_packages+=("go") ;;
+            node) brew_packages+=("node") ;;
+        esac
+    done
+
+    if [[ ${#brew_packages[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    echo "They can be installed via: brew install ${brew_packages[*]}"
+    if g8e_setup_confirm "Install with Homebrew now? [y/N] "; then
+        g8e_macos_brew_install "${brew_packages[@]}"
+    fi
+}
+
+g8e_setup_init "$@"
+
+echo -e "\n[SETUP] g8e macOS dev environment setup\n"
+echo "[STEP 1/4] Checking prerequisites (git, make, go >= ${G8E_GO_MIN}, node >= ${G8E_NODE_MIN_MAJOR})..."
 
 MISSING=()
+g8e_check_git || MISSING+=("git")
+g8e_check_make || MISSING+=("make")
+g8e_check_go || MISSING+=("go")
+g8e_check_node || MISSING+=("node")
 
-if ! command -v make &> /dev/null; then
-    MISSING+=("make")
-else
-    echo "  make: detected"
-fi
-
-if command -v go &> /dev/null; then
-    GO_VERSION=$(go version 2>/dev/null | grep -oE 'go[0-9]+\.[0-9]+' | head -1 | sed 's/go//')
-    if [ -n "$GO_VERSION" ]; then
-        GO_MAJOR=$(echo "$GO_VERSION" | cut -d. -f1)
-        GO_MINOR=$(echo "$GO_VERSION" | cut -d. -f2)
-        MIN_MAJOR=$(echo "$G8E_GO_MIN" | cut -d. -f1)
-        MIN_MINOR=$(echo "$G8E_GO_MIN" | cut -d. -f2)
-        if [ "$GO_MAJOR" -gt "$MIN_MAJOR" ] || { [ "$GO_MAJOR" -eq "$MIN_MAJOR" ] && [ "$GO_MINOR" -ge "$MIN_MINOR" ]; }; then
-            echo "  go: detected (v$GO_VERSION)"
-        else
-            echo "  go: detected (v$GO_VERSION) but v$G8E_GO_MIN+ is required"
-            MISSING+=("go")
-        fi
-    else
-        echo "  go: detected but version unknown"
-        MISSING+=("go")
-    fi
-else
-    MISSING+=("go")
-fi
-
-if [ ${#MISSING[@]} -gt 0 ]; then
-    echo -e "\nThe following dependencies are missing or outdated: ${MISSING[*]}"
-    echo "They can be installed via: brew install ${MISSING[*]}"
-
-    # Check if Homebrew is installed
-    if ! command -v brew &> /dev/null; then
-        echo "FATAL: Homebrew is not installed, which is required to install dependencies on macOS."
-        echo "Install Homebrew first: https://brew.sh"
-        echo "Then run: brew install ${MISSING[*]}"
-        exit 1
-    fi
-
-    read -p "Would you like to install them now? [y/N] " response
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        echo "Installing: ${MISSING[*]}"
-        brew install "${MISSING[@]}"
-        echo "Installation complete."
-    else
-        echo "FATAL: Required dependencies not installed. Please install them manually: brew install ${MISSING[*]}"
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    echo
+    echo "Missing or outdated tooling: ${MISSING[*]}"
+    g8e_macos_install_missing "${MISSING[@]}"
+    echo
+    echo "Re-checking prerequisites..."
+    MISSING=()
+    g8e_check_git || MISSING+=("git")
+    g8e_check_make || MISSING+=("make")
+    g8e_check_go || MISSING+=("go")
+    g8e_check_node || MISSING+=("node")
+    if [[ ${#MISSING[@]} -gt 0 ]]; then
+        echo "FATAL: still missing: ${MISSING[*]}"
+        echo "Install the remaining tools, then rerun: bash scripts/macos-setup.sh"
         exit 1
     fi
 fi
 
-# --- SECTION 2: Build ---
-echo -e "\n[STEP 2/3] Building g8e..."
-make build
+echo -e "\n[STEP 2/4] Building evaluation-explorer assets..."
+g8e_build_evaluation_explorer
+
+echo -e "\n[STEP 3/4] Building g8e..."
+g8e_run_make_build
 echo "Build successful."
 
-# --- SECTION 3: Add g8e to PATH ---
-echo -e "\n[STEP 3/3] Adding g8e to PATH..."
-G8E_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PATH_LINE="export PATH=\"\$PATH:$G8E_DIR\""
-
-# Detect shell profile (macOS defaults to zsh)
-if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "/bin/zsh" ]; then
-    PROFILE_FILE="$HOME/.zshrc"
-elif [ -n "$BASH_VERSION" ] || [ "$SHELL" = "/bin/bash" ]; then
-    PROFILE_FILE="$HOME/.bashrc"
-else
-    PROFILE_FILE="$HOME/.profile"
-fi
-
-if grep -qF "$G8E_DIR" "$PROFILE_FILE" 2>/dev/null; then
-    echo "  g8e directory already in $PROFILE_FILE — skipping."
-else
-    echo "" >> "$PROFILE_FILE"
-    echo "# g8e: add binary to PATH" >> "$PROFILE_FILE"
-    echo "$PATH_LINE" >> "$PROFILE_FILE"
-    echo "  Added $G8E_DIR to PATH in $PROFILE_FILE."
-fi
-
-# Also export for the current session
-export PATH="$PATH:$G8E_DIR"
-
-# --- SECTION 4: Complete ---
-echo -e "\n[SETUP COMPLETE]"
-echo "---------------------------------------------------------------"
-echo "Binary available at: g8e (in PATH)"
-echo "Start the gateway with: g8e gw start"
-echo "Note: Open a new terminal or run 'source $PROFILE_FILE' to use g8e in other shells."
+echo -e "\n[STEP 4/4] Adding repository root to PATH..."
+g8e_configure_path_unix
+g8e_print_next_steps_unix

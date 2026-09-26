@@ -13,7 +13,7 @@ The governance guarantee applies only to operations that traverse a g8e ingress.
 
 ## Development Environment
 
-The Go module declares Go 1.26.6, and the platform setup scripts accept Go 1.26 or newer. The scripts check for `make` and Go, install missing prerequisites interactively, run the repository build, and add the repository binary to the user path. Before `make build` or a setup script, build the required evaluation-explorer asset when it is absent: `cd dashboard/g8e-adapter/evaluation-explorer && npm run build`. The setup scripts do not install Node dependencies or build that asset. See [Scripts](../architecture/scripts.md) for platform-specific behavior.
+The Go module declares Go 1.26.6, and the platform setup scripts read that version from `go.mod`. They check for `git`, `make`, Go, Node.js 22+, and `npm`, offer to install missing prerequisites interactively, build the evaluation-explorer asset when `dist/index.html` is absent, run `make build`, and add the repository root to the user path. See [Scripts](../architecture/scripts.md) for platform-specific behavior.
 
 Run commands from the repository root unless the owning component guide says otherwise:
 

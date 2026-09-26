@@ -10,7 +10,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 from app.services.ai.tool_service import AIToolService
-from app.services.protocols import MemoryDataServiceProtocol, OperatorDataServiceProtocol
 
 from .fake_web_search_provider import FakeWebSearchProvider
 
@@ -58,23 +57,14 @@ def create_tool_service_fake(
 
         operator_command_service._approval_service.set_on_approval_requested(_auto_approve_callback)
 
-    memory_data_service = MagicMock(spec=MemoryDataServiceProtocol)
+    from typing import cast
 
-    # We use a real InvestigationService wired to the same fakes if possible
-    # This acts as our domain-layer service
-    investigation_service_domain = InvestigationService(
-        investigation_data_service=operator_command_service.investigation_service,
-        operator_data_service=MagicMock(spec=OperatorDataServiceProtocol),
-        memory_data_service=memory_data_service,
-    )
-
-    # Default investigation_service to a fake if not provided
     if investigation_service is None:
         investigation_service = operator_command_service.investigation_service
 
     return AIToolService(
         operator_command_service=operator_command_service,
-        investigation_service=investigation_service_domain,
+        investigation_service=cast(InvestigationService, investigation_service),
         reputation_data_service=AsyncMock(),
         reputation_service=AsyncMock(),
         chat_task_manager=MagicMock(),

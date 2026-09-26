@@ -149,6 +149,10 @@ func buildDockerImagesAndExport(ctx context.Context, buildArgs []string, profile
 	if err := exportDockerRuntimeBinary(ctx, execDockerBinaryRunner{}, defaultDockerGatewayImage, filepath.Join(constants.PathCurrentDir, "g8e")); err != nil {
 		return fmt.Errorf("%w: export runtime binary: %w", constants.ErrG8eBinaryExport, err)
 	}
+	_ = os.MkdirAll(constants.BinDirname, 0o755)
+	if err := exportDockerRuntimeBinary(ctx, execDockerBinaryRunner{}, defaultDockerGatewayImage, filepath.Join(constants.BinDirname, "g8e")); err != nil {
+		return fmt.Errorf("%w: export runtime binary to bin/g8e: %w", constants.ErrG8eBinaryExport, err)
+	}
 	return nil
 }
 

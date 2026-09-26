@@ -1186,7 +1186,7 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 	EventAppCaseUpdated: {
 		Key: "AppCaseUpdated",
 		Kind: EventKindOutcome,
-		Transport: nil,
+		Transport: []string{"sse"},
 		Producers: []string{"ensemble", "operator"},
 		Persistence: "gateway.docstore",
 	},

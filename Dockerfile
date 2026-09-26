@@ -139,8 +139,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the binary matching the image target as the entrypoint.
+# Copy the binary matching the image target.
 COPY --from=builder /build/bin/g8e-${TARGETOS}-${TARGETARCH} /g8e
+
+# Copy the entrypoint script which implements strict binary precedence:
+# 1. G8E_BIN override
+# 2. Host-mounted binary from /opt/g8e/bin/g8e (local 'make build' gospel)
+# 3. Host-mounted arch binary from /opt/g8e/bin/g8e-linux-${ARCH}
+# 4. Image baked-in binary (/g8e)
+COPY scripts/docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Copy protocol constants (required for doctrine mode)
 COPY --from=builder /build/protocol/constants /protocol/constants
@@ -157,7 +165,5 @@ EXPOSE 8080 8443
 # Healthchecks are declared per-service in docker-compose.yml, where each
 # service can express its own liveness signal.
 
-# Set entrypoint
-# The same binary can run in gateway mode (doctrine) or operator mode (standard)
-# Mode is selected via command-line flags in docker-compose.yml
-ENTRYPOINT ["/g8e"]
+# Set entrypoint to the dispatcher script
+ENTRYPOINT ["/entrypoint.sh"]

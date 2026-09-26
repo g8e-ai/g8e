@@ -972,6 +972,7 @@ export const EventRegistry = Object.freeze({
     }),
     APP_CASE_UPDATED: Object.freeze({
         kind: 'outcome',
+        transport: ['sse'],
         producers: ['ensemble', 'operator'],
         persistence: 'gateway.docstore',
     }),
