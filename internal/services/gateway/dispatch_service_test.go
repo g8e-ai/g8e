@@ -147,6 +147,31 @@ func TestDispatchResult_ToResponse(t *testing.T) {
 	})
 }
 
+// dispatchTestCompletedOutcome returns the terminal completed outcome for a
+// governed request event used by dispatch unit-test operator stubs.
+func dispatchTestCompletedOutcome(requestEvent constants.EventType) constants.EventType {
+	switch requestEvent {
+	case constants.Event.Operator.FsRead.Requested:
+		return constants.Event.Operator.FsRead.Completed
+	case constants.Event.Operator.Command.Requested:
+		return constants.Event.Operator.Command.Completed
+	case constants.Event.Operator.Inference.Requested:
+		return constants.Event.Operator.Inference.Completed
+	default:
+		return ""
+	}
+}
+
+func dispatchTestResultEnvelope(cmdEnv *commonv1.GovernanceEnvelope, payload []byte) *commonv1.GovernanceEnvelope {
+	return &commonv1.GovernanceEnvelope{
+		Id:         cmdEnv.Id,
+		EventType:  string(dispatchTestCompletedOutcome(constants.EventType(cmdEnv.GetEventType()))),
+		ActionType: cmdEnv.ActionType,
+		Payload:    payload,
+		Timestamp:  timestamppb.Now(),
+	}
+}
+
 // fsReadPayloadBytes builds a valid proto-marshaled FsReadRequested payload
 // for dispatch tests that need a typed payload the builder can decode.
 func fsReadPayloadBytes(t *testing.T) []byte {
@@ -208,12 +233,7 @@ func TestDispatchService_Dispatch_Success(t *testing.T) {
 		assert.Equal(t, cmdEnv.Id, cmdEnv.TransactionHash, "Id must equal TransactionHash")
 
 		// Build and publish the result envelope.
-		resultEnv := &commonv1.GovernanceEnvelope{
-			Id:         cmdEnv.Id,
-			EventType:  cmdEnv.EventType,
-			ActionType: cmdEnv.ActionType,
-			Timestamp:  timestamppb.Now(),
-		}
+		resultEnv := dispatchTestResultEnvelope(cmdEnv, nil)
 		resultWire, err := protojson.Marshal(resultEnv)
 		require.NoError(t, err)
 		broker.Publish(resultsChannel, resultWire)
@@ -377,9 +397,10 @@ func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testin
 				return
 			}
 			wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
-				Id:        cmdEnv.Id,
-				EventType: string(constants.Event.Operator.Inference.ProgressUpdated),
-				Payload:   progress,
+				Id:         cmdEnv.Id,
+				EventType:  string(constants.Event.Operator.Inference.ProgressUpdated),
+				ActionType: cmdEnv.ActionType,
+				Payload:    progress,
 			})
 			if err != nil {
 				return
@@ -420,7 +441,7 @@ func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) 
 			if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
 				return
 			}
-			resultEnv := &commonv1.GovernanceEnvelope{Id: cmdEnv.Id, EventType: cmdEnv.EventType, ActionType: cmdEnv.ActionType}
+			resultEnv := dispatchTestResultEnvelope(cmdEnv, nil)
 			wire, err := protojson.Marshal(resultEnv)
 			if err != nil {
 				return
@@ -538,12 +559,7 @@ func TestDispatchService_Dispatch_DuplicateResultDropped(t *testing.T) {
 		// handler invocation: the first fills the buffered result channel,
 		// the second must be dropped, not block or corrupt the outcome.
 		for i := 0; i < 2; i++ {
-			resultEnv := &commonv1.GovernanceEnvelope{
-				Id:         cmdEnv.Id,
-				EventType:  cmdEnv.EventType,
-				ActionType: cmdEnv.ActionType,
-				Payload:    []byte{byte('a' + i)},
-			}
+			resultEnv := dispatchTestResultEnvelope(cmdEnv, []byte{byte('a' + i)})
 			wire, err := protojson.Marshal(resultEnv)
 			if err != nil {
 				return

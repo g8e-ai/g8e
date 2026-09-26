@@ -37,6 +37,7 @@ func TestGovernanceFlow(t *testing.T) {
 		ProtocolVersion:   govtypes.GovernanceProtocolVersionV2,
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
+		EventType:       string(constants.Event.Operator.FetchLogs.Requested),
 		ActionType:      string(constants.ActionTypeFetchLogs),
 		TargetResource:  "localhost",
 		Payload:         []byte("fetch logs"),

@@ -48,6 +48,7 @@ func buildTestEnvelope(
 	require.NoError(t, err)
 
 	env := &commonv1.GovernanceEnvelope{
+		ProtocolVersion: governance.GovernanceProtocolVersionV2,
 		Timestamp:       timestamppb.Now(),
 		EventType:       eventType,
 		ActionType:      actionType,
@@ -135,7 +136,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 
 	createWire := buildTestEnvelope(
 		t,
-		string(constants.EventAppInvestigationCreated),
+		string(constants.EventAppInvestigationCreateRequested),
 		string(constants.ActionTypeDocumentUpdate),
 		targetRes,
 		createPayload,
@@ -177,7 +178,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 
 	mergeWire := buildTestEnvelope(
 		t,
-		string(constants.EventAppInvestigationUpdated),
+		string(constants.EventAppInvestigationUpdateRequested),
 		string(constants.ActionTypeDocumentUpdate),
 		targetRes,
 		mergePayload,
@@ -212,7 +213,7 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 
 	deleteWire := buildTestEnvelope(
 		t,
-		string(constants.EventAppInvestigationDeleted),
+		string(constants.EventAppInvestigationDeleteRequested),
 		string(constants.ActionTypeDocumentDelete),
 		targetRes,
 		deletePayload,

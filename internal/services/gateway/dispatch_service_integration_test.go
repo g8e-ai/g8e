@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -167,12 +166,7 @@ func TestDispatchController_HandleDispatch_RoundTrip(t *testing.T) {
 		assert.Equal(t, requestorUserID, cmdEnv.RequestorUserId, "envelope must carry the requestor user ID from mTLS context")
 
 		// Publish a correlated result envelope on the results channel.
-		resultEnv := &commonv1.GovernanceEnvelope{
-			Id:         cmdEnv.Id,
-			EventType:  cmdEnv.EventType,
-			ActionType: cmdEnv.ActionType,
-			Timestamp:  timestamppb.Now(),
-		}
+		resultEnv := dispatchTestResultEnvelope(cmdEnv, nil)
 		resultWire, err := protojson.Marshal(resultEnv)
 		require.NoError(t, err)
 		broker.Publish(resultsChannel, resultWire)

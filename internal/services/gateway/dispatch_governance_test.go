@@ -16,12 +16,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -254,8 +256,15 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 			cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
 			resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
 			unreg := broker.RegisterHandler(cmdChannel, func(_ string, data []byte) {
-				// Echo a minimal result envelope with the same Id.
-				broker.Publish(resultsChannel, data)
+				cmdEnv := &commonv1.GovernanceEnvelope{}
+				if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
+					return
+				}
+				resultWire, err := protojson.Marshal(dispatchTestResultEnvelope(cmdEnv, nil))
+				if err != nil {
+					return
+				}
+				broker.Publish(resultsChannel, resultWire)
 			})
 			defer unreg()
 

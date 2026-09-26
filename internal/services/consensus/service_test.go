@@ -37,12 +37,26 @@ func newTestResponder() *response.Writer {
 	return response.NewWriter(slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
+func eventTypeForAction(actionType string) string {
+	switch actionType {
+	case string(constants.ActionTypeFetchLogs):
+		return string(constants.Event.Operator.FetchLogs.Requested)
+	case string(constants.ActionTypeExecuteBash):
+		return string(constants.Event.Operator.Command.Requested)
+	default:
+		return ""
+	}
+}
+
 func makeEnvelope(t *testing.T, actionType string, payload []byte) *governance.GovernanceEnvelope {
 	t.Helper()
+	eventType := eventTypeForAction(actionType)
+	require.NotEmpty(t, eventType, "consensus tests must use a registered action/event pair")
 	env := &governance.GovernanceEnvelope{
 		ProtocolVersion:   governance.GovernanceProtocolVersionV2,
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
+		EventType:       eventType,
 		ActionType:      actionType,
 		TargetResource:  "localhost",
 		Payload:         payload,
@@ -189,6 +203,7 @@ func TestConsensusService_Deliberate_WithIntentData(t *testing.T) {
 		ProtocolVersion:   governance.GovernanceProtocolVersionV2,
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
+		EventType:       string(constants.Event.Operator.Command.Requested),
 		ActionType:      string(constants.ActionTypeExecuteBash),
 		TargetResource:  "localhost",
 		IntentData:      intentData,

@@ -26,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -353,7 +354,7 @@ func TestOperationalExportImporter_VerifiesAuditChainAndCrossLinksReceipts(t *te
 	receiptBody, err := compliancev1.MarshalCanonical(receipt)
 	require.NoError(t, err)
 
-	timestamp := executedAt.UTC().Format(time.RFC3339Nano)
+	timestamp := timesvc.FormatTimestamp(executedAt.UTC())
 	digest, err := storage.ComputeAuditEventContentDigest(&storage.Event{ContentText: string(receiptBody)})
 	require.NoError(t, err)
 	prevHash := strings.Repeat("0", 64)

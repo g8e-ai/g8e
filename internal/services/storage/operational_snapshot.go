@@ -17,6 +17,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
 // OperationalEvidenceQuery selects one consistent, bounded database snapshot.
@@ -198,7 +199,7 @@ func readOperationalCommitments(ctx context.Context, tx *sql.Tx, query Operation
 
 func readOperationalAuditChain(ctx context.Context, tx *sql.Tx, query OperationalEvidenceQuery, snapshot *OperationalEvidenceSnapshot) error {
 	rows, err := tx.QueryContext(ctx, `
-		SELECT seq, prev_hash, hash, type, operator_session_id, timestamp, content_digest, transaction_id, content_text
+		SELECT seq, prev_hash, hash, type, operator_session_id, timestamp, content_digest, transaction_id, content_text, encrypted
 		FROM events
 		WHERE seq IS NOT NULL
 		  AND type = ?
@@ -215,6 +216,7 @@ func readOperationalAuditChain(ctx context.Context, tx *sql.Tx, query Operationa
 		var timestampStr string
 		var transactionID sql.NullString
 		var contentText sql.NullString
+		var encrypted int
 		if err := rows.Scan(
 			&entry.Seq,
 			&entry.PrevHash,
@@ -225,6 +227,7 @@ func readOperationalAuditChain(ctx context.Context, tx *sql.Tx, query Operationa
 			&entry.ContentDigest,
 			&transactionID,
 			&contentText,
+			&encrypted,
 		); err != nil {
 			return fmt.Errorf("operational evidence: scan audit chain entry: %w", err)
 		}
@@ -234,10 +237,10 @@ func readOperationalAuditChain(ctx context.Context, tx *sql.Tx, query Operationa
 		if transactionID.Valid {
 			entry.TransactionID = transactionID.String
 		}
-		if contentText.Valid {
+		if encrypted == 0 && contentText.Valid {
 			entry.ContentText = contentText.String
 		}
-		parsedAt, err := time.Parse(time.RFC3339Nano, timestampStr)
+		parsedAt, err := timesvc.ParseTimestamp(timestampStr)
 		if err != nil {
 			return fmt.Errorf("operational evidence: parse audit chain timestamp: %w", err)
 		}

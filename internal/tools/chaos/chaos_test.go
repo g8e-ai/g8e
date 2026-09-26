@@ -1646,7 +1646,7 @@ func TestSignedEnvelopeProtocolVersion(t *testing.T) {
 		t.Fatalf("signedEnvelope() error = %v", err)
 	}
 
-	if env.ProtocolVersion != "1.0" {
+	if env.ProtocolVersion != govpkg.GovernanceProtocolVersionV2 {
 		t.Errorf("ProtocolVersion = %s, want %s", env.ProtocolVersion, govpkg.GovernanceProtocolVersionV2)
 	}
 }

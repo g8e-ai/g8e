@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -181,7 +182,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 			Hash:              entry.Hash,
 			EventType:         entry.EventType,
 			OperatorSessionID: entry.OperatorSessionID,
-			Timestamp:         entry.Timestamp.UTC().Format(time.RFC3339Nano),
+			Timestamp:         timesvc.FormatTimestamp(entry.Timestamp),
 			ContentDigest:     entry.ContentDigest,
 			TransactionID:     entry.TransactionID,
 			ContentText:       entry.ContentText,

@@ -119,14 +119,16 @@ func VerifyAuditChainSegment(entries []AuditChainSegmentEntry, boundaryPriorHash
 		if entry.PrevHash != expectedPrevHash {
 			return fmt.Errorf("audit chain segment: prev_hash mismatch at seq %d", entry.Seq)
 		}
-		recomputedDigest, err := ComputeAuditEventContentDigest(&Event{
-			ContentText: entry.ContentText,
-		})
-		if err != nil {
-			return fmt.Errorf("audit chain segment: content digest at seq %d: %w", entry.Seq, err)
-		}
-		if recomputedDigest != entry.ContentDigest {
-			return fmt.Errorf("audit chain segment: content_digest mismatch at seq %d", entry.Seq)
+		if entry.ContentText != "" {
+			recomputedDigest, err := ComputeAuditEventContentDigest(&Event{
+				ContentText: entry.ContentText,
+			})
+			if err != nil {
+				return fmt.Errorf("audit chain segment: content digest at seq %d: %w", entry.Seq, err)
+			}
+			if recomputedDigest != entry.ContentDigest {
+				return fmt.Errorf("audit chain segment: content_digest mismatch at seq %d", entry.Seq)
+			}
 		}
 		if _, err := timesvc.ParseTimestamp(entry.Timestamp); err != nil {
 			return fmt.Errorf("audit chain segment: timestamp at seq %d: %w", entry.Seq, err)
