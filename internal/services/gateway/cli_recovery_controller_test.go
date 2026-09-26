@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/gateway/embedded"
 )
 
 // setupTestCLIRecoveryController creates a CLIRecoveryController backed by
@@ -991,7 +992,7 @@ func TestCLIRecoveryController_IssueCLIIdentity_ReusesEmbeddedSession(t *testing
 
 	// Claim the embedded operator for the user: the same state the first
 	// user's bootstrap produces.
-	operatorID, operatorSessionID, err := newEmbeddedOperatorService(c.docStore, c.operatorSessionSvc).ClaimEmbeddedOperator(user.ID)
+	operatorID, operatorSessionID, err := embedded.New(c.docStore, c.operatorSessionSvc).ClaimEmbeddedOperator(user.ID)
 	require.NoError(t, err)
 	require.Equal(t, string(constants.DocIDEmbeddedOperator), operatorID)
 

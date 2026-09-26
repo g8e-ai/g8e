@@ -10,7 +10,7 @@ This page is the public sequence of repository work. It states what the current 
 v2.2.0 is in progress on `draft/v2.2.0`. The theme is a boundaries release after monorepo reunification. g8ee and g8ed have been in-tree since v2.0.0.
 
 - Protocol under [`protocol/`](protocol/README.md) is the schema and source of truth. Go and protobuf live there. Python and Node are consumers.
-- Keep three code boundaries distinct: the Gateway HTTP and control plane, the embedded Operator substrate, and the outbound Operator runtime (`G8eoService`). Package extraction for that split is still open.
+- Keep three code boundaries distinct: the Gateway HTTP and control plane (`internal/services/gateway/`), the embedded Operator substrate (`internal/services/gateway/embedded/`), and the outbound Operator runtime (`G8eoService` in `internal/services/g8eo.go`). The embedded substrate package is extracted. Outbound Operator stays put. Splitting the gateway HTTP controllers further is not part of this line.
 - `./g8e` stays command-and-control: grouped commands, not a grab-bag. The [Code Map](docs/devs/codemap.md) lists the current groups. Splitting `internal/cli/cmd` into those groups is still open.
 - Diligence hygiene already merged to `draft/v2.2.0`: toolchain pins, typed contracts, test hygiene, and ensemble utils ownership ([#314](https://github.com/g8e-ai/g8e/pull/314), [#315](https://github.com/g8e-ai/g8e/pull/315), [#316](https://github.com/g8e-ai/g8e/pull/316)).
 - Merge to `main` only after the full [Release Process](docs/devs/release_process.md) checklist: change inventory, documentation reconciliation, release notes, version sync, compliance evidence, and the large-release gates.

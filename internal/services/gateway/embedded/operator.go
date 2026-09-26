@@ -5,12 +5,22 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package gateway
+// Package embedded is the gateway's in-process Operator substrate.
+//
+// It owns the embedded operator document: pending registration at gateway
+// start, the single-user claim that mints an operator session, and
+// persistence of that session for browser bootstrap. Document IDs, claim
+// rules, and error sentinels match the previous gateway helpers.
+//
+// HTTP routing stays in the parent gateway package (operator_controller.go
+// is a shell over registration and dispatch). Web-session binding stays on
+// RegistrationService. The outbound Operator runtime is services.G8eoService,
+// not this package.
+package embedded
 
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -19,26 +29,50 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
-// The embedded operator is the gateway's in-process operator substrate
-// (OperatorPubSubService). It carries no certificate: its operators document
-// is a binding record whose operator_session_id authorizes the sessions the
-// first user's bootstrap binds to it. The document lifecycle is:
+// Store is the document persistence the substrate needs.
+// *gateway.DocumentStoreService satisfies it.
+type Store interface {
+	DocGet(collection, id string) (*models.Document, error)
+	DocSet(collection, id string, data json.RawMessage) error
+	DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error)
+}
+
+// SessionPersister records the operator session a claim mints.
+// *gateway.OperatorSessionService satisfies it.
+type SessionPersister interface {
+	PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error
+}
+
+// Service is the gateway's in-process embedded Operator substrate.
 //
-//  1. gw start registers a pending document (registerPendingEmbeddedOperator)
-//     with a deterministic doc ID, claimed=false, empty user_id, and empty
+// The embedded operator carries no certificate: its operators document is a
+// binding record whose operator_session_id authorizes the sessions the first
+// user's bootstrap binds to it. The document lifecycle is:
+//
+//  1. Gateway start registers a pending document (RegisterPending) with a
+//     deterministic doc ID, claimed=false, empty user_id, and empty
 //     operator_session_id. Empty user_id keeps it unclaimable by
 //     RegisterDeviceCSR (which matches on user_id); empty
 //     operator_session_id keeps it unauthenticated by
 //     ValidateOperatorSession (which matches on operator_session_id).
-//  2. First-user bootstrap claims it (claimEmbeddedOperator): the explicit
-//     human enrollment act binds the operator to the first user and mints
-//     its operator_session_id.
+//  2. First-user bootstrap claims it (Claim): the explicit human enrollment
+//     act binds the operator to the first user and mints its
+//     operator_session_id.
 //  3. Web-session creation binds the user's claimed embedded operator to
 //     the web session via RegistrationService.BindOperators.
+type Service struct {
+	docs     Store
+	sessions SessionPersister
+}
 
-// pendingEmbeddedOperatorDocument returns the unclaimed embedded-operator
-// document registered at gateway start.
-func pendingEmbeddedOperatorDocument(now time.Time) *models.OperatorDocumentGo {
+// New constructs the substrate over the gateway document store and the
+// operator-session persister. Both are required for ClaimEmbeddedOperator;
+// Claim itself only writes the operator document.
+func New(docs Store, sessions SessionPersister) *Service {
+	return &Service{docs: docs, sessions: sessions}
+}
+
+func pendingDocument(now time.Time) *models.OperatorDocumentGo {
 	return &models.OperatorDocumentGo{
 		ID:           string(constants.DocIDEmbeddedOperator),
 		Component:    constants.ComponentNameG8EO,
@@ -52,53 +86,30 @@ func pendingEmbeddedOperatorDocument(now time.Time) *models.OperatorDocumentGo {
 	}
 }
 
-// registerPendingEmbeddedOperator ensures the pending embedded-operator
-// document exists. It is idempotent: an existing document (pending or
-// claimed) is left untouched. Called once at gateway start; a failure
-// aborts startup so the gateway never runs without its operator substrate
-// record.
-func registerPendingEmbeddedOperator(docStore *DocumentStoreService, logger *slog.Logger) error {
-	doc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+// RegisterPending ensures the pending embedded-operator document exists.
+// It is idempotent: an existing document (pending or claimed) is left
+// untouched. Called once at gateway start; a failure aborts startup so the
+// gateway never runs without its operator substrate record.
+func (s *Service) RegisterPending() error {
+	doc, err := s.docs.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	if err != nil {
 		return fmt.Errorf("gateway: embedded operator: load pending document: %w", err)
 	}
 	if doc != nil {
 		return nil
 	}
-	return persistEmbeddedOperatorDocument(docStore, pendingEmbeddedOperatorDocument(time.Now().UTC()))
+	return persistDocument(s.docs, pendingDocument(time.Now().UTC()))
 }
 
-// persistEmbeddedOperatorDocument marshals and stores an embedded-operator
-// document at the deterministic doc ID.
-func persistEmbeddedOperatorDocument(docStore *DocumentStoreService, op *models.OperatorDocumentGo) error {
+func persistDocument(docs Store, op *models.OperatorDocumentGo) error {
 	b, err := json.Marshal(op)
 	if err != nil {
 		return fmt.Errorf("gateway: embedded operator: marshal document: %w", err)
 	}
-	if err := docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), op.ID, b); err != nil {
+	if err := docs.DocSet(marshaler.CollectionName(constants.CollectionOperators), op.ID, b); err != nil {
 		return fmt.Errorf("gateway: embedded operator: persist document: %w", err)
 	}
 	return nil
-}
-
-// embeddedOperatorClaimer claims the gateway's embedded operator for a user
-// and persists the operator session the claim mints. Satisfied by
-// *embeddedOperatorService.
-type embeddedOperatorClaimer interface {
-	ClaimEmbeddedOperator(userID string) (operatorID, operatorSessionID string, err error)
-}
-
-// embeddedOperatorService implements embeddedOperatorClaimer over the
-// document store and operator session service so claim sites outside the
-// bootstrap controller (browser bootstrap) claim and persist through one
-// narrow dependency.
-type embeddedOperatorService struct {
-	docStore           *DocumentStoreService
-	operatorSessionSvc *OperatorSessionService
-}
-
-func newEmbeddedOperatorService(docStore *DocumentStoreService, operatorSessionSvc *OperatorSessionService) *embeddedOperatorService {
-	return &embeddedOperatorService{docStore: docStore, operatorSessionSvc: operatorSessionSvc}
 }
 
 // ClaimEmbeddedOperator claims the embedded operator for userID with an
@@ -106,45 +117,47 @@ func newEmbeddedOperatorService(docStore *DocumentStoreService, operatorSessionS
 // the operator session. Same-user re-claim returns the document's existing
 // operator session ID and re-persists the identical session document, so a
 // retried claim stays idempotent.
-func (s *embeddedOperatorService) ClaimEmbeddedOperator(userID string) (operatorID, operatorSessionID string, err error) {
-	operatorID, operatorSessionID, err = claimEmbeddedOperator(s.docStore, userID, "", time.Now().UTC())
+func (s *Service) ClaimEmbeddedOperator(userID string) (operatorID, operatorSessionID string, err error) {
+	operatorID, operatorSessionID, err = s.Claim(userID, "", time.Now().UTC())
 	if err != nil {
 		return "", "", err
 	}
-	if err := s.operatorSessionSvc.PersistOperatorSession(
+	if err := s.sessions.PersistOperatorSession(
 		operatorSessionID, userID, userID, operatorID, string(constants.HeartbeatTypeBootstrap)); err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: persist operator session: %w", err)
 	}
 	return operatorID, operatorSessionID, nil
 }
 
-// claimEmbeddedOperator binds the embedded operator to userID and mints its
-// operator session ID. It is the explicit human enrollment act for the
-// gateway's embedded operator substrate.
+// Claim binds the embedded operator to userID and mints its operator
+// session ID. It is the explicit human enrollment act for the gateway's
+// embedded operator substrate. The caller persists the operator session
+// when it owns that write (CLI bootstrap). ClaimEmbeddedOperator persists
+// it for browser bootstrap.
 //
 // Semantics:
 //   - Document absent: a pending document is created first, then claimed
 //     (self-healing for a gateway that lost the pending record), so a
 //     bootstrap never fails on a missing pending record.
 //   - Already claimed by the same user: no-op returning the document's
-//     existing operator_session_id. No rotation, no re-persist — true
-//     idempotence, so a retried claim cannot strand a previously minted
-//     binding.
+//     existing operator_session_id. No rotation, no re-persist of the
+//     operator document — true idempotence, so a retried claim cannot
+//     strand a previously minted binding.
 //   - Already claimed by a different user: ErrEmbeddedOperatorClaimed. The
 //     embedded operator belongs to exactly one user for its lifetime.
 //
 // Returns the operator document ID and the (possibly newly minted)
 // operator session ID the caller must bind sessions to.
-func claimEmbeddedOperator(docStore *DocumentStoreService, userID, systemFingerprint string, now time.Time) (operatorID, operatorSessionID string, err error) {
-	doc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+func (s *Service) Claim(userID, systemFingerprint string, now time.Time) (operatorID, operatorSessionID string, err error) {
+	doc, err := s.docs.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 	if err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: load document: %w", err)
 	}
 	if doc == nil {
-		if err := persistEmbeddedOperatorDocument(docStore, pendingEmbeddedOperatorDocument(now)); err != nil {
+		if err := persistDocument(s.docs, pendingDocument(now)); err != nil {
 			return "", "", err
 		}
-		doc, err = docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+		doc, err = s.docs.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
 		if err != nil {
 			return "", "", fmt.Errorf("gateway: embedded operator: reload document: %w", err)
 		}
@@ -168,7 +181,7 @@ func claimEmbeddedOperator(docStore *DocumentStoreService, userID, systemFingerp
 	}
 
 	operatorSessionID = uuid.NewString()
-	type embeddedOperatorClaimUpdate struct {
+	type claimUpdate struct {
 		UserID            string    `json:"user_id"`
 		OrganizationID    string    `json:"organization_id"`
 		Status            string    `json:"status"`
@@ -178,7 +191,7 @@ func claimEmbeddedOperator(docStore *DocumentStoreService, userID, systemFingerp
 		OperatorSessionID string    `json:"operator_session_id"`
 		UpdatedAt         time.Time `json:"updated_at"`
 	}
-	updateBytes, err := json.Marshal(embeddedOperatorClaimUpdate{
+	updateBytes, err := json.Marshal(claimUpdate{
 		UserID:            userID,
 		OrganizationID:    userID,
 		Status:            string(constants.OperatorStatusActive),
@@ -191,7 +204,7 @@ func claimEmbeddedOperator(docStore *DocumentStoreService, userID, systemFingerp
 	if err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: marshal claim: %w", err)
 	}
-	if _, err := docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), op.ID, updateBytes); err != nil {
+	if _, err := s.docs.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), op.ID, updateBytes); err != nil {
 		return "", "", fmt.Errorf("gateway: embedded operator: persist claim: %w", err)
 	}
 	return op.ID, operatorSessionID, nil
