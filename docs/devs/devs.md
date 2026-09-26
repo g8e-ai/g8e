@@ -100,7 +100,7 @@ Follow these rules for runtime I/O:
 
 Public CLI and startup configuration currently contain directory fields such as Gateway `DataDir`, `PKIDir`, `SecretsDir`, and `VaultDir`. Do not spread those absolute paths through service code or add duplicate directory fields merely to route runtime I/O. Resolve runtime locations at the boundary and pass the file service to the owner.
 
-Command constructors under `internal/cli/cmd/` that access runtime state accept a file-service factory so tests can inject an isolated service. A factory initialization failure wraps `constants.ErrFileServiceInit` and preserves the underlying error. Every new factory injection point requires a matching case in `internal/cli/cmd/factory_error_test.go` that proves downstream dependencies are not called.
+Command constructors under `internal/cli/cmd/` that access runtime state accept a file-service factory so tests can inject an isolated service. A factory initialization failure wraps `constants.ErrFileServiceInit` and preserves the underlying error. Every new factory injection point requires a matching case in that group's `internal/cli/cmd/<group>/factory_error_<group>_test.go` that proves downstream dependencies are not called.
 
 Tests use `testutil.TempDir` and `testutil.TestPaths` for isolated roots. `testutil.TempDir` returns an absolute base directory; pass it directly to `fs.NewRuntimeFileService` and path initialization rather than appending `.g8e` yourself. The [Testing Guide](tests.md#runtime-files-and-test-paths) owns the complete fixture and path rules.
 

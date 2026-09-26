@@ -454,7 +454,7 @@ See [SSE Streaming](../../docs/architecture/sse.md) for the full endpoint and se
 
 | Concern | File |
 |---|---|
-| Governance proxy (agent run) | `internal/cli/cmd/mcp.go` (runMCPAgentRun) |
+| Governance proxy (agent run) | `internal/cli/cmd/mcp/` (`runMCPAgentRun`) |
 | Gateway entry | `internal/cli/cmd/gateway.go` (gatewayCmd, gatewayStartCmd) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http_router.go` |
@@ -482,7 +482,7 @@ See [SSE Streaming](../../docs/architecture/sse.md) for the full endpoint and se
 | Action type constants | `internal/constants/action_types.go` |
 | Protobuf schemas | `protocol/proto/g8e/operator/v1/operator.proto` |
 | MCP config generation | `internal/services/mcp/config.go` |
-| CLI MCP commands | `internal/cli/cmd/mcp.go` (mcpCmd, agentCmd, mcpStdioCmd) |
+| CLI MCP commands | `internal/cli/cmd/mcp/` (`Cmd`, `agentCmd`, `mcpStdioCmd`) |
 | Gateway lifecycle commands | `internal/cli/cmd/gateway.go` (gatewayCmd) |
 
 ---

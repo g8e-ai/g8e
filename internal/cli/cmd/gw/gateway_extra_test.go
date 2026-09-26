@@ -1,0 +1,91 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+package gw
+
+import (
+	"bytes"
+	"testing"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestGatewayCmdStructure(t *testing.T) {
+	t.Run("gateway command has correct use and aliases", func(t *testing.T) {
+		cmd := Cmd()
+		assert.Equal(t, "gw", cmd.Use)
+		assert.Contains(t, cmd.Aliases, "gateway")
+		assert.Contains(t, cmd.Short, "Gateway")
+	})
+
+	t.Run("gateway command has all expected subcommands including data and security", func(t *testing.T) {
+		cmd := Cmd()
+		require.NotNil(t, cmd)
+
+		expectedSubcommands := []string{"start", "stop", "status", "restart", "logs", "settings", "reset", "clean", "data", "security", "tunnel"}
+		for _, subcmd := range expectedSubcommands {
+			found := false
+			for _, c := range cmd.Commands() {
+				if c.Name() == subcmd {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "gateway command should have %s subcommand", subcmd)
+		}
+	})
+}
+
+func TestGatewayStartCmdFlags(t *testing.T) {
+	t.Run("start command has all expected flags", func(t *testing.T) {
+		cmd := gatewayStartCmd()
+		require.NotNil(t, cmd)
+
+		expectedFlags := []string{
+			"posture", "http-port", "https-port", "data-dir", "pki-dir", "secrets-dir",
+			"vault-dir", "vault-key",
+			"passkey-rp-id", "passkey-rp-name",
+			"rate-limit-rps", "rate-limit-burst",
+			"log", "cert-mode", "consensus-id", "consensus-url",
+			"mcp-downstream-url", "a2a-downstream-url", "follow",
+			"doctrine-dir",
+		}
+		for _, flagName := range expectedFlags {
+			flag := cmd.Flags().Lookup(flagName)
+			assert.NotNil(t, flag, "gateway start should have --%s flag", flagName)
+		}
+	})
+
+	t.Run("start command has follow shorthand", func(t *testing.T) {
+		cmd := gatewayStartCmd()
+		flag := cmd.Flags().ShorthandLookup("f")
+		assert.NotNil(t, flag)
+	})
+
+	t.Run("start command posture defaults to doctrine", func(t *testing.T) {
+		cmd := gatewayStartCmd()
+		flag := cmd.Flags().Lookup("posture")
+		require.NotNil(t, flag)
+		assert.Equal(t, "doctrine", flag.DefValue)
+	})
+}
+
+func TestGatewayLogsCmdNoLogFile(t *testing.T) {
+	t.Run("logs command reports no log file when none exists", func(t *testing.T) {
+		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+
+		cmd := gatewayLogsCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FileSvcFactoryFor(fileSvc))
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "No log file found")
+	})
+}

@@ -282,6 +282,7 @@ These properties do not mean every byte in every store is encrypted, every model
 
 ```text
 cmd/                  g8e CLI entry point
+internal/cli/cmd/     grouped C2 command packages (gw, auth, operator, eval, and the other root groups)
 internal/             Gateway, Operator, governance, storage, evaluation, and CLI implementation
 protocol/             Protobuf schemas, constants, generated bindings, and protocol docs
 ensemble/             g8ee Python/FastAPI agentic application
