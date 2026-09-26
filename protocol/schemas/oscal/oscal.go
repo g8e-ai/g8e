@@ -13,8 +13,8 @@
 // that retrieves the embedded bytes through [SchemaBytes] receives a copy
 // whose digest is verified against the pinned value at package initialization
 // time. A digest mismatch fails closed: [SchemaBytes] panics at init and
-// [VerifySchemaDigest] returns a wrapped [ErrOSCALSchemaDigestMismatch] at
-// runtime, so no production path can validate against a tampered or replaced
+// [VerifySchemaDigest] returns a wrapped [constants.ErrOSCALSchemaDigestMismatch]
+// at runtime, so no production path can validate against a tampered or replaced
 // schema.
 //
 // The schema is Draft-07 JSON Schema and is consumed by the repository-owned
@@ -31,11 +31,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 
 	_ "embed"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 //go:embed v1.1.2/oscal_assessment-results_schema.json
@@ -43,15 +44,6 @@ var embeddedSchemaJSON []byte
 
 //go:embed v1.1.2/provenance.json
 var embeddedProvenanceJSON []byte
-
-// ErrSchemaDigestMismatch is returned when the embedded schema bytes do not
-// match the pinned SHA-256 digest. This is a fail-closed condition: the
-// validator must not run against an unauthenticated schema.
-var ErrSchemaDigestMismatch = errors.New("oscal: embedded schema digest mismatch")
-
-// ErrProvenanceMismatch is returned when the embedded provenance metadata
-// does not match the embedded schema bytes (byte length or SHA-256).
-var ErrProvenanceMismatch = errors.New("oscal: provenance metadata does not match embedded schema")
 
 // PinnedSHA256 is the authenticated SHA-256 digest of the official NIST OSCAL
 // 1.1.2 assessment-results JSON Schema. It is the single source of truth for
@@ -82,13 +74,13 @@ var (
 func verifyOnce() {
 	initOnce.Do(func() {
 		if len(embeddedSchemaJSON) != PinnedByteLength {
-			initErr = fmt.Errorf("%w: expected %d bytes, got %d", ErrSchemaDigestMismatch, PinnedByteLength, len(embeddedSchemaJSON))
+			initErr = fmt.Errorf("%w: expected %d bytes, got %d", constants.ErrOSCALSchemaDigestMismatch, PinnedByteLength, len(embeddedSchemaJSON))
 			return
 		}
 		sum := sha256.Sum256(embeddedSchemaJSON)
 		got := hex.EncodeToString(sum[:])
 		if got != PinnedSHA256 {
-			initErr = fmt.Errorf("%w: expected %s, got %s", ErrSchemaDigestMismatch, PinnedSHA256, got)
+			initErr = fmt.Errorf("%w: expected %s, got %s", constants.ErrOSCALSchemaDigestMismatch, PinnedSHA256, got)
 			return
 		}
 		verifiedBytes = bytes.Clone(embeddedSchemaJSON)
@@ -98,7 +90,7 @@ func verifyOnce() {
 // SchemaBytes returns a copy of the authenticated NIST OSCAL 1.1.2
 // assessment-results JSON Schema bytes. The digest is verified against
 // PinnedSHA256 on the first call; a mismatch returns a wrapped
-// ErrSchemaDigestMismatch and no bytes.
+// constants.ErrOSCALSchemaDigestMismatch and no bytes.
 func SchemaBytes() ([]byte, error) {
 	verifyOnce()
 	if initErr != nil {
@@ -133,7 +125,7 @@ type Provenance struct {
 
 // LoadProvenance decodes the embedded provenance metadata and verifies that
 // its declared byte length and SHA-256 match the embedded schema bytes. A
-// mismatch returns ErrProvenanceMismatch.
+// mismatch returns constants.ErrOSCALProvenanceMismatch.
 func LoadProvenance() (*Provenance, error) {
 	var p Provenance
 	if err := json.Unmarshal(embeddedProvenanceJSON, &p); err != nil {
@@ -144,12 +136,12 @@ func LoadProvenance() (*Provenance, error) {
 		return nil, err
 	}
 	if p.ByteLength != len(schemaBytes) {
-		return nil, fmt.Errorf("%w: provenance byte_length=%d, actual=%d", ErrProvenanceMismatch, p.ByteLength, len(schemaBytes))
+		return nil, fmt.Errorf("%w: provenance byte_length=%d, actual=%d", constants.ErrOSCALProvenanceMismatch, p.ByteLength, len(schemaBytes))
 	}
 	sum := sha256.Sum256(schemaBytes)
 	got := hex.EncodeToString(sum[:])
 	if got != p.SHA256 {
-		return nil, fmt.Errorf("%w: provenance sha256=%s, actual=%s", ErrProvenanceMismatch, p.SHA256, got)
+		return nil, fmt.Errorf("%w: provenance sha256=%s, actual=%s", constants.ErrOSCALProvenanceMismatch, p.SHA256, got)
 	}
 	return &p, nil
 }
