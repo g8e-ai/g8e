@@ -1,21 +1,246 @@
+---
+doc_id: devs
+title: Developer Guidelines
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-26
+version: v2.1.13
+owners:
+  - go.mod
+  - Makefile
+  - docker-compose.yml
+  - internal/cli/cmd/main.go
+  - internal/cli/cmd/test/test.go
+  - internal/constants/errors.go
+  - internal/constants/paths.go
+  - internal/services/fs/file_service.go
+  - internal/services/pubsub/mode_deps.go
+  - internal/services/pubsub/pubsub_commands.go
+  - internal/services/gateway/gateway_service.go
+  - internal/services/gateway/embedded/operator.go
+  - internal/services/governance/l1_doctrine.go
+  - internal/services/mcp/registry.go
+  - internal/services/mcp/native_tool_registry.go
+related:
+  - docs/devs/codemap.md
+  - docs/devs/tests.md
+  - docs/devs/docs.md
+  - docs/devs/release_process.md
+  - docs/architecture/governance.md
+  - docs/architecture/agents.md
+when_to_read: Changing Go platform code, CLI commands, runtime files, governance construction, native MCP tools, or doctrine loading.
+do_not_use_for:
+  - Package and runtime ownership maps (docs/devs/codemap.md)
+  - Test selection, fixtures, CI, and lifecycle detail (docs/devs/tests.md)
+  - Documentation audit, catalog, and generation ownership (docs/devs/docs.md)
+  - Release, native evaluation acceptance, and signed evidence (docs/devs/release_process.md)
+  - Deployment and enrollment procedures (docs/guides/getting_started.md)
+---
+
 # Developer Guidelines
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+## Purpose
 
-This guide defines the coding and maintenance rules for the g8e repository. The current working tree is the source of truth for current behavior. Use the [Code Map](codemap.md) for package and runtime ownership, the [Testing Guide](tests.md) for test infrastructure and commands, and the [Documentation Guide](docs.md) for documentation ownership, style, metadata, generation, and validation.
+Coding invariants for the g8e Go platform. The current tree is the source of truth. Command names, flags, defaults, and destructive effects come from `./g8e <command> --help`; this file is a map, not a flag dump.
 
-## Platform Boundaries
+## Quick index
 
-g8e contains a Governance Gateway, an in-process Operator substrate, and an outbound Governed Operator. Governed operations enter the execution boundary as typed intent or a canonical protobuf `GovernanceEnvelope`; the active posture determines whether L2 consensus and L3 notary evidence gate execution. L1 doctrine, L4 verification, and L5 actuation remain part of every governed execution path.
+- [Purpose](#purpose)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-The governance guarantee applies only to operations that traverse a g8e ingress. An external MCP wrapper performs inline L1 screening but does not add an envelope, L2 through L5 execution, a signed receipt, or Gateway audit. Client-native tools and other side channels remain outside the governance boundary. Read [Governance](../architecture/governance.md) for the canonical five-layer and posture model and [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for integration-path limits.
+Invariant groups: [Boundaries](#boundaries-inv-bound), [Environment](#environment-inv-env), [CLI layout](#cli-layout-inv-cli), [Code](#code-inv-code), [Errors](#errors-inv-err), [Typed contracts](#typed-contracts-inv-type), [Runtime files](#runtime-files-inv-fs), [Dependency construction](#dependency-construction-inv-dep), [Testing](#testing-inv-test), [Generated artifacts](#generated-artifacts-inv-gen), [Doctrine](#doctrine-inv-doctrine), [Native MCP](#native-mcp-inv-mcp), [Contribution](#contribution-inv-contrib).
 
-## Development Environment
+## Invariants
 
-The Go module declares Go 1.26.6, and the platform setup scripts read that version from `go.mod`. They check for `git`, `make`, Go, Node.js 22+, and `npm`, offer to install missing prerequisites interactively, build the evaluation-explorer asset when `dist/index.html` is absent, run `make build`, and add the repository root to the user path. See [Scripts](../architecture/scripts.md) for platform-specific behavior.
+Ids are stable. Append the next free number in a topic. Do not renumber.
 
-Run commands from the repository root unless the owning component guide says otherwise:
+### Boundaries (`INV-BOUND`)
+
+| ID | Rule |
+| --- | --- |
+| INV-BOUND-01 | A governed operation MUST enter as typed intent or a canonical protobuf `GovernanceEnvelope`. The active posture determines whether L2 consensus and L3 notary evidence gate execution. L1 doctrine, L4 verification, and L5 actuation stay on every governed execution path. |
+| INV-BOUND-02 | The governance guarantee MUST apply only to operations that traverse a g8e ingress. An external MCP wrapper performs inline L1 screening and MUST NOT be described as adding an envelope, L2 through L5, a signed receipt, or Gateway audit. Client-native tools and other side channels stay outside the boundary. |
+| INV-BOUND-03 | A mutation added to a governed ingress MUST be classified with the canonical action and event registries, represented by a typed payload, wrapped in a `GovernanceEnvelope`, verified by L4, and dispatched by L5. MUST NOT call mutation handlers directly to skip envelope construction or the verification gauntlet. |
+| INV-BOUND-04 | The Gateway in-process Operator substrate MUST stay in `internal/services/gateway/embedded/`. The outbound Operator runtime is `G8eoService` in `internal/services/g8eo.go`. `G8eoService` MUST NOT construct `mcp.GatewayService`. |
+
+### Environment (`INV-ENV`)
+
+| ID | Rule |
+| --- | --- |
+| INV-ENV-01 | The Go toolchain MUST satisfy the `go` line in `go.mod` (1.26.6). Setup scripts read that line and also check `git`, `make`, Node.js 22+, and `npm`. |
+| INV-ENV-02 | Commands in this guide MUST be run from the repository root unless the owning component guide says otherwise. |
+| INV-ENV-03 | CLI behavior MUST be taken from `./g8e <command> --help`. This file MUST NOT grow a flag inventory. |
+
+### CLI layout (`INV-CLI`)
+
+| ID | Rule |
+| --- | --- |
+| INV-CLI-01 | A new Cobra group MUST be a package under `internal/cli/cmd/<group>/`. The root command stays in `internal/cli/cmd/main.go`. Shared non-group helpers stay in `internal/cli/cmd/shared/`. The group inventory lives in the [Code Map](codemap.md#cli-packages). |
+
+### Code (`INV-CODE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-CODE-01 | MUST replace a broken path. MUST NOT preserve a compatibility shim for technical debt. |
+| INV-CODE-02 | MUST fix the root cause. MUST NOT add a caller guard that hides invalid construction or state. |
+| INV-CODE-03 | A function MUST do one job: reads read, writes write, validation validates, and orchestration composes explicit dependencies. |
+| INV-CODE-04 | A security check MUST fail closed and MUST propagate its error. |
+| INV-CODE-05 | MUST pass explicit dependencies and state transitions. MUST NOT add package globals, lazy adapters, reflection, or hidden side effects for control flow. |
+| INV-CODE-06 | A production path MUST return errors. MUST NOT panic for a recoverable production failure. |
+| INV-CODE-07 | MUST use `context.Context` for cancellation. Every goroutine MUST have an owner, cancellation, and completion via channels or `sync.WaitGroup`. |
+| INV-CODE-08 | Go MUST be formatted with `gofmt`. Imports MUST be grouped as standard library, external modules, then internal packages. |
+| INV-CODE-09 | MUST pass a pointer for a mutable or large struct and a value for a small read-only struct. |
+| INV-CODE-10 | MUST confirm a dependency is already required before importing it. A new dependency MUST be added through the owning package manager. MUST NOT hand-edit a lockfile or manifest entry. |
+| INV-CODE-11 | MUST search for an existing implementation before adding code. MUST extend the existing service, utility, model, constant, or pattern. MUST NOT add a helper, shim, wrapper, or compatibility layer that duplicates one. |
+| INV-CODE-12 | MUST NOT add an `ensure*` or `getOrCreate*` helper that combines a read and a write or hides creation as a lookup side effect. |
+| INV-CODE-13 | MUST reproduce a bug with a failing regression test before changing production code, then show that the test passes with the fix. |
+| INV-CODE-14 | MUST update the documentation and generated artifacts in the same change as the behavior they describe. |
+| INV-CODE-15 | A change SHOULD stay on one coherent behavior and SHOULD leave the affected code easier to follow. |
+
+### Errors (`INV-ERR`)
+
+| ID | Rule |
+| --- | --- |
+| INV-ERR-01 | Sentinel errors and distinct reusable platform failure modes MUST live in `internal/constants/errors.go`. MUST NOT declare a package-level sentinel error anywhere else. |
+| INV-ERR-02 | MUST NOT use `errors.New` for a distinct production failure mode outside `internal/constants/errors.go`. |
+| INV-ERR-03 | Before adding an error, MUST search `internal/constants/errors.go` and existing callers for an equivalent constant. Add a centralized constant only when none fits, then replace duplicate hand-written forms in the affected scope. |
+| INV-ERR-04 | MUST wrap an error with operation context and preserve the cause with `%w`, for example `fmt.Errorf("gateway: load doctrine: %w", err)`. |
+| INV-ERR-05 | MUST use a centralized `constants.Err*` for a known failure mode, `fmt.Errorf` with runtime values for a dynamic error, and a one-off `fmt.Errorf` in tests only when the injected cause has no production meaning. |
+| INV-ERR-06 | MUST NOT compare rendered error strings when `errors.Is`, `errors.As`, or a typed status is available. |
+
+### Typed contracts (`INV-TYPE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-TYPE-01 | A known shape MUST use a typed model. MUST NOT replace a protobuf or domain model with an untyped map or an ad hoc JSON object. |
+| INV-TYPE-02 | MUST NOT use protobuf `Any`, `map[string]interface{}`, or an equivalent untyped container for a known contract. |
+| INV-TYPE-03 | Schemas under `protocol/proto/g8e/` own governance envelopes, proofs, Operator messages, pub/sub messages, receipts, and compliance messages. Governance and transport code MUST keep those payloads typed. |
+| INV-TYPE-04 | An internal envelope payload MUST use protobuf binary encoding where the execution path expects it. A protobuf-owned JSON boundary MUST use `protojson`. |
+| INV-TYPE-05 | A non-protobuf HTTP surface MUST use named request and response structs. |
+| INV-TYPE-06 | Runtime Go constants live under `internal/constants/`. External registries and schemas live under `protocol/constants/`, `protocol/models/`, and `protocol/schemas/`. When a public registry has both a Go and a JSON representation, MUST update both through the established owner and run the owning contract or conformance tests. |
+
+### Runtime files (`INV-FS`)
+
+| ID | Rule |
+| --- | --- |
+| INV-FS-01 | `.g8e/` state MUST go through `RuntimeFileService` in `internal/services/fs/file_service.go`. MUST NOT hardcode a `.g8e/` runtime path or call `os` file operations for that state outside `internal/services/fs`. |
+| INV-FS-02 | Reusable system, repository, and runtime path strings MUST be defined in `internal/constants/paths.go`. Consumers MUST NOT introduce an inline `.g8e/` fragment or a `filepath.Join` of path literals. |
+| INV-FS-03 | A service or function that owns runtime I/O MUST receive `fs.RuntimeFileService` as an explicit argument. |
+| INV-FS-04 | MUST use `fileSvc.Resolve` only when an API requires an absolute path. MUST use `fileSvc.Rel` to turn an absolute path inside the runtime root back into a relative service path. |
+| INV-FS-05 | An existence check MUST use `fileSvc.FileExists`. A missing-file error MUST be compared with `errors.Is(err, constants.ErrNotFound)`. |
+| INV-FS-06 | Runtime file and directory permissions MUST use `constants.Perm*` values. |
+| INV-FS-07 | Gateway startup configuration carries `DataDir`, `PKIDir`, `SecretsDir`, and `VaultDir` (`internal/cli/serve/gateway.go`). Those absolute paths MUST stay at the CLI and startup boundary. Service code MUST receive the file service. MUST NOT add a duplicate directory field only to route runtime I/O. |
+| INV-FS-08 | A command constructor under `internal/cli/cmd/<group>/` that touches runtime state MUST accept a file-service factory. Factory initialization failure MUST wrap `constants.ErrFileServiceInit` and preserve the underlying error. Every new factory injection point MUST have a matching case in `internal/cli/cmd/<group>/factory_error_<group>_test.go` that proves downstream dependencies are not called. |
+| INV-FS-09 | Tests MUST use `testutil.TempDir` and `testutil.TestPaths` for isolated roots. `testutil.TempDir` returns an absolute base directory. Pass that directory to `fs.NewRuntimeFileService` and `paths.InitWithBase`. MUST NOT append `.g8e` yourself. |
+
+Consumers pass relative paths from `internal/constants/paths.go` into `ReadFile`, `WriteFile`, `Stat`, `FileExists`, `ReadDir`, `Rename`, `Remove`, `RemoveAll`, and the other `RuntimeFileService` methods. Startup constructs the service and calls `CreateRuntimeTree` (`internal/cli/serve/gateway.go`, `internal/cli/serve/operator.go`).
+
+### Dependency construction (`INV-DEP`)
+
+| ID | Rule |
+| --- | --- |
+| INV-DEP-01 | Shared governance dependencies MUST be `pubsub.GovernanceCoreDeps`. Gateway-only document, consensus, field-read, platform-enrollment, and posture dependencies MUST be added on `pubsub.GatewayModeDeps`. Outbound mode MUST use `pubsub.OutboundModeDeps`, which embeds only the shared fields. |
+| INV-DEP-02 | `G8eoService` MUST build outbound dependencies with `NewOutboundModeDeps`. That constructor validates the outbound core before `OperatorPubSubService` is constructed. |
+| INV-DEP-03 | The production Gateway builder MUST construct `GatewayModeDeps` directly and pass it to `NewGatewayOperatorPubSubService`. `NewGatewayModeDeps` validates a bundle when something calls it. Code on the production builder path MUST NOT assume that validating constructor ran. Keep the builder's explicit non-nil wiring and the command-service constructor checks. |
+| INV-DEP-04 | `OperatorPubSubService.BindMCPGateway` MUST run once, before either service starts. It MUST reject nil (`constants.ErrPubSubMCPGatewayNil`), duplicate (`constants.ErrPubSubMCPGatewayAlreadyBound`), and post-start (`constants.ErrPubSubMCPGatewayBindAfterStart`) binding. MUST NOT reintroduce a construction-time setter for audit, consensus, or session validation. |
+| INV-DEP-05 | Posture-dependent L2 MUST stay optional only where the posture does not require it. A required posture dependency MUST fail closed. |
+| INV-DEP-06 | Gateway governance wiring MUST follow the order in [Gateway governance construction](#gateway-governance-construction). |
+
+### Testing (`INV-TEST`)
+
+Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing Guide](tests.md). These rules still bind platform changes.
+
+| ID | Rule |
+| --- | --- |
+| INV-TEST-01 | A platform suite MUST run through `./g8e test ...` or the owning Makefile target. MUST NOT invoke `go test` directly for a platform suite. |
+| INV-TEST-02 | MUST NOT use `t.Parallel()` in an integration or E2E test. |
+| INV-TEST-03 | Go tests SHOULD be table-driven and SHOULD use `testify/assert` and `testify/require` when an assertion library helps. |
+| INV-TEST-04 | Test functions, subtests, and files MUST be named for the behavior they verify. MUST NOT use a generic `coverage`, `gap`, `edge`, `misc`, `success`, or `error` name as the scope. |
+| INV-TEST-05 | Tier 1 MUST stay independent of a running platform. Tier 2 and Tier 3 MUST exercise real local boundaries. MUST NOT mock an internal service, a database client, or cross-component communication in those tiers. |
+| INV-TEST-06 | `NewGatewayFixture` registers teardown. MUST NOT stop its Gateway, close its databases, or close its downstream server a second time. |
+| INV-TEST-07 | Temporary credential and long-lived fixture cleanup MUST be registered with `t.Cleanup`. MUST NOT use a helper-local `defer` that runs before the test body. |
+| INV-TEST-08 | A test MUST use an explicit cancellation context and MUST join goroutines before it returns. |
+| INV-TEST-09 | Assertions MUST use typed constants for statuses, reasons, paths, and permissions. |
+| INV-TEST-10 | The canonical trust bundle path is `.g8e/pki/trust/g8eg-ca-bundle.pem`. A test MUST NOT repair a failure by mutating developer PKI state. |
+| INV-TEST-11 | MUST NOT use `os.Chdir` to line up runtime state. A working-directory change is allowed only for behavior that discovers source-tree or configuration files, and that file MUST explain the change and clean it up. |
+| INV-TEST-12 | `./g8e test e2e-full` MUST be described from `internal/cli/cmd/test/test.go`: it runs `docker compose up -d` with profile name `bootstrapped` (`constants.DockerBootstrappedProfile`), adds profile `cross-enrollment` when `--cross-enrollment` is set, waits up to 60 seconds for HTTP 200 from Gateway `http://localhost:8080/api/v1/health` and Ensemble `http://localhost:8000/health`, runs the same `go test` arguments as `./g8e test e2e`, and tears the stack down with `docker compose down -v`. |
+| INV-TEST-13 | `docker-compose.yml` has no `bootstrapped` profile and no `evaluation` profile. Unprofiled services (gateway, data operator, inference operator, ensemble, dashboard) start on `docker compose up -d`. Named profiles are `cross-enrollment` and `g8ellama`. MUST NOT describe `bootstrapped` as a Compose profile that selects those workloads. `constants.DockerBootstrappedProfile` and `constants.DockerEvaluationProfile` still exist; the Compose file does not assign them. |
+
+### Generated artifacts (`INV-GEN`)
+
+| ID | Rule |
+| --- | --- |
+| INV-GEN-01 | Generated protobuf reference and OpenAPI output MUST change only through the source owner and its generator. MUST NOT hand-edit those outputs. |
+| INV-GEN-02 | Current-state documentation MUST move with the behavior it describes. MUST NOT broaden a security or evidence claim past the path and artifacts that support it. |
+
+| Output | Source | Update |
+| --- | --- | --- |
+| Root `README.md` | Handwritten product overview | Re-read the changed sections, check links, and run every command whose behavior the prose states |
+| Go, Python, TypeScript, and Markdown protobuf output | `protocol/proto/g8e/` | `make proto` (`make generate` depends on `proto`) plus the affected conformance tests |
+| Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
+| Website | Root `README.md` | `make website-test` and `make website-build` when rendering changes |
+| Doctrine references | `protocol/constants/doctrine/` and demo doctrine inputs | `make validate-doctrines` |
+| COSAiS overlays | Canonical overlay and doctrine references | `make validate-cosais` |
+
+The [Documentation Guide](docs.md#generated-and-machine-readable-documentation) owns the full matrix. The [Release Process](release_process.md) owns native evaluation and signed compliance evidence.
+
+### Doctrine (`INV-DOCTRINE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-DOCTRINE-01 | `governance.NewL1DoctrineFromDir` MUST remain the loader: built-in MITRE-oriented detectors, plus enabled entries from `*.json` files in the configured directory. An empty directory argument falls back to `NewL1Doctrine()`. |
+| INV-DOCTRINE-02 | `./g8e gw start --doctrine-dir <path>` sets that directory. `G8E_DOCTRINE_DIR` supplies it when the flag is absent. The Gateway loads doctrine during construction, so a runtime doctrine change MUST be followed by a Gateway restart. |
+| INV-DOCTRINE-03 | Reference JSON under `protocol/constants/doctrine/` MUST pass `make validate-doctrines`. An identifier or public-shape change MUST update the owning JSON and the affected Go or protocol contracts together. |
+
+### Native MCP (`INV-MCP`)
+
+| ID | Rule |
+| --- | --- |
+| INV-MCP-01 | A native MCP tool MUST implement `mcp.NativeTool` and MUST execute through the Gateway in-process Operator boundary after governed dispatch. |
+| INV-MCP-02 | The native registry is not an outbound Operator tool server. See INV-BOUND-04. |
+| INV-MCP-03 | `RegisterNativeTools` in `internal/services/mcp/native_tool_registry.go` is the inventory. Documentation MUST NOT copy the tool list. |
+| INV-MCP-04 | Registration MUST be explicit in `RegisterNativeTools`. MUST NOT register a native tool from `init`. Registry construction MUST return errors. |
+
+### Contribution (`INV-CONTRIB`)
+
+| ID | Rule |
+| --- | --- |
+| INV-CONTRIB-01 | A documentation change MUST follow the [Documentation Guide](docs.md). Front matter `last_updated` and `version` (or an older `Last Updated` / `Version` header still on an unaudited file) MUST change only after that audit. `version` MUST equal the `VERSION` file. |
+| INV-CONTRIB-02 | A contribution MUST be one coherent change and MUST include tests for a fix or a feature. |
+| INV-CONTRIB-03 | Issue, security-reporting, and contribution entry points are the [Contributing Guide](../../.github/CONTRIBUTING.md). Distribution terms are the [Business Source License 1.1](../../LICENSE). |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
+| --- | --- | --- |
+| Go version and module | `go.mod` | `go` directive is `1.26.6` |
+| Setup prerequisites | `scripts/lib/dev-setup-common.sh`, `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, `scripts/windows-setup.ps1` | Scripts read `go.mod`, check `git`, `make`, Node.js 22+, and `npm`, offer to install missing prerequisites, build `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` when it is absent, run `make build`, and add the repo root to the user path |
+| Platform CLI binary | `Makefile` (`MAIN_PKG := ./cmd/g8e`), `cmd/g8e` | `make build` writes `bin/g8e-<os>-<arch>` and copies a runnable binary to the repo root |
+| Cobra root and groups | `internal/cli/cmd/main.go`, `internal/cli/cmd/<group>/` | `./g8e --help` |
+| Sentinel errors | `internal/constants/errors.go` | `constants.Err*` declarations, including `ErrFileServiceInit` |
+| Runtime path constants and Docker profile names | `internal/constants/paths.go` | `DockerBootstrappedProfile`, `DockerEvaluationProfile`, `DockerCrossEnrollProfile`, `DockerG8ellamaProfile` |
+| `.g8e/` file service | `internal/services/fs/file_service.go` | `RuntimeFileService`, `NewRuntimeFileService`, `CreateRuntimeTree` |
+| Trust bundle path | `internal/cli/config/config.go` | `.g8e/pki/trust/g8eg-ca-bundle.pem` |
+| Mode dependency types | `internal/services/pubsub/mode_deps.go` | `GovernanceCoreDeps`, `GatewayModeDeps`, `OutboundModeDeps`, `NewOutboundModeDeps`, `NewGatewayModeDeps` |
+| Outbound construction | `internal/services/g8eo.go` | Calls `pubsub.NewOutboundModeDeps` |
+| Gateway builder | `internal/services/gateway/gateway_service.go` | Direct `GatewayModeDeps` composite, then `NewGatewayOperatorPubSubService`, `NewPlatformEnrollmentService`, `mcp.NewGatewayService`, `BindMCPGateway`, `initHTTPHandler` |
+| MCP bind errors | `internal/services/pubsub/pubsub_commands.go` | `BindMCPGateway` |
+| In-process Operator substrate | `internal/services/gateway/embedded/operator.go` | `embedded.New`, `RegisterPending`; outbound runtime is not this package |
+| L1 doctrine loader | `internal/services/governance/l1_doctrine.go` | `NewL1DoctrineFromDir` |
+| Doctrine flag and env | `internal/cli/cmd/gw/gateway.go`, `internal/constants/env_vars.go` | `--doctrine-dir` wins over `G8E_DOCTRINE_DIR` |
+| Native tool contract and registry | `internal/services/mcp/registry.go`, `internal/services/mcp/native_tool_registry.go`, `protocol/docs/mcp_tool_template.go` | `NativeTool`, `RegisterNativeTools` |
+| Compose profiles | `docker-compose.yml` | Header comment plus `profiles:` keys: `cross-enrollment`, `g8ellama` |
+| `e2e-full` | `internal/cli/cmd/test/test.go` | `./g8e test e2e-full --help` |
+
+## Procedures
+
+### Build and inspect
+
+1. From the repo root:
 
 ```bash
 make build
@@ -25,178 +250,82 @@ make build
 make lint
 ```
 
-`make build` compiles the complete `g8e` platform CLI from `cmd/g8e`, writes a platform binary under `bin/`, and copies the runnable binary to the repository root. Use `./g8e <command> --help` as the live source for command names, arguments, flags, defaults, and destructive effects. Use the [Getting Started Guide](../guides/getting_started.md) for deployment and enrollment rather than treating this coding guide as an operations procedure.
+2. Read flags from `./g8e <command> --help` (INV-ENV-03). Deployment and enrollment stay in the [Getting Started Guide](../guides/getting_started.md).
 
-This guide owns repository-wide invariants and Go platform conventions. Component-specific workflows live in the [Protocol README](../../protocol/README.md), [Dashboard Development](../dashboard/devs.md), [Dashboard Testing](../dashboard/tests.md), [Ensemble Development](../ensemble/devs.md), and [Ensemble Testing](../ensemble/tests.md).
+### Platform test entry points
 
-## Engineering Rules
+1. Go platform:
 
-### Always
+```bash
+./g8e test unit
+./g8e test integration
+./g8e test e2e
+./g8e test e2e-full
+./g8e test coverage
+./g8e test lint
+./g8e test chaos
+./g8e test summary
+```
 
-- Replace broken paths instead of preserving compatibility shims for technical debt.
-- Fix root causes. Do not add defensive guards at callers to conceal invalid construction or state.
-- Keep functions focused: reads read, writes write, validation validates, and orchestration composes explicit dependencies.
-- Make security checks fail closed and propagate their errors.
-- Prefer explicit dependencies and state transitions over package globals, lazy adapters, reflection, or hidden side effects.
-- Return errors from production paths. Do not panic for recoverable production failures.
-- Wrap errors with operation context and preserve the cause with `%w`, for example `fmt.Errorf("gateway: load doctrine: %w", err)`.
-- Use `context.Context` for cancellation and give every goroutine clear ownership, cancellation, and completion coordination through channels or `sync.WaitGroup`.
-- Use typed models for known shapes. Do not replace protobuf or domain models with untyped maps or ad hoc JSON objects.
-- Format Go with `gofmt` and group imports as standard library, external dependencies, and internal repository packages.
-- Pass pointers for mutable or large structs and values for small read-only structs.
-- Confirm a dependency is already available before importing it; add new dependencies through the owning package manager rather than editing lock or manifest entries by hand.
-- Search the codebase for an existing implementation before writing new code. Reuse established services, utilities, models, constants, and patterns; the repository already contains the primitives most tasks need, so keep additions minimal and extend existing code rather than introducing parallel functionality.
-- Keep changes focused and leave the affected code cleaner than it was.
-- Reproduce bugs with a failing regression test before changing production code, then verify the test passes with the fix.
-- Update documentation and generated artifacts in the same change as the behavior they describe.
+2. `./g8e test unit` delegates to `make test-unit`. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
+3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make test-external`, `make dashboard-test`.
+4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-full` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
 
-### Never
+### Add a runtime-file CLI command
 
-- Do not reinvent the wheel: no new helpers, shims, wrappers, or compatibility layers that duplicate an existing implementation. Extend or reuse the existing code instead.
-- Do not add `ensure*` or `getOrCreate*` helpers that combine reads and writes or hide creation as a lookup side effect.
-- Do not use protobuf `Any`, `map[string]interface{}`, or equivalent untyped containers for a known contract.
-- Do not declare package-level sentinel errors outside `internal/constants/errors.go`.
-- Do not use `errors.New` for a distinct production failure mode outside `internal/constants/errors.go`.
-- Do not hardcode `.g8e/` runtime paths or bypass `RuntimeFileService` with direct `os` file operations outside the file-service implementation.
-- Do not invoke `go test` directly for platform suites; use `./g8e test ...` or the owning Makefile target.
-- Do not use `t.Parallel()` in integration or E2E tests.
-- Do not hand-edit generated protobuf reference or OpenAPI output.
-- Do not leave current-state documentation stale or broaden a security or evidence claim beyond the path and artifacts that support it.
+1. Put the command in `internal/cli/cmd/<group>/` (INV-CLI-01).
+2. Accept a file-service factory (INV-FS-08).
+3. On factory failure, return `fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)`.
+4. Add a case in `internal/cli/cmd/<group>/factory_error_<group>_test.go` that fails if a downstream dependency is called.
 
-## Errors
+### Gateway governance construction
 
-`internal/constants/errors.go` owns sentinel errors that callers compare, wrap, or inspect with `errors.Is` or `errors.As`, as well as distinct reusable platform failure modes. Before adding an error, search that file and existing callers for an equivalent constant. Add a centralized constant only when no suitable owner exists, then replace duplicate hand-written forms in the affected scope.
-
-Use:
-
-- A centralized `constants.Err*` value for a known failure mode.
-- `fmt.Errorf("component: action: %w", err)` to add context while preserving a cause.
-- `fmt.Errorf` with runtime values for dynamic errors.
-- A one-off `fmt.Errorf` value in tests when the test needs an injected cause that has no production meaning.
-
-Do not compare rendered error strings when `errors.Is`, `errors.As`, or a typed status is available.
-
-## Typed Contracts and Serialization
-
-Protobuf schemas under `protocol/proto/g8e/` own governance envelopes, proofs, Operator messages, pub/sub messages, receipts, and compliance messages. Preserve typed protobuf payloads through governance and transport code. Internal envelope payloads use protobuf binary encoding where the execution path expects it; protobuf-owned JSON boundaries use `protojson` so field names, enums, and canonical message semantics remain consistent. Non-protobuf HTTP surfaces use named typed request and response structs rather than raw dictionaries.
-
-A mutation added to a governed ingress must be classified with the canonical action and event registries, represented by a typed payload, wrapped in a `GovernanceEnvelope`, verified by L4, and dispatched by L5. Do not call mutation handlers directly to bypass envelope construction or the verification gauntlet. The [Protocol Specification](../../protocol/docs/spec.md) owns wire requirements, while [Governance](../architecture/governance.md) owns posture and execution behavior.
-
-Registry ownership is surface-specific. Runtime Go constants live under `internal/constants/`; external registries and schemas live under `protocol/constants/`, `protocol/models/`, and `protocol/schemas/`. Check the owning registry and its contract tests before changing either side. When a public registry has both Go and JSON representations, update both through the established owner and run the relevant contract or conformance tests.
-
-## Runtime Paths and File I/O
-
-`RuntimeFileService` in `internal/services/fs/file_service.go` is the canonical boundary for `.g8e/` state. Startup constructs the service and calls `CreateRuntimeTree`. Consumers pass relative paths assembled from constants in `internal/constants/paths.go` to methods such as `ReadFile`, `WriteFile`, `Stat`, `FileExists`, `ReadDir`, `Rename`, `Remove`, and `RemoveAll`.
-
-Follow these rules for runtime I/O:
-
-- Define reusable system, repository, and runtime path strings in `internal/constants/paths.go`. Do not introduce inline `.g8e/` fragments or `filepath.Join` calls with path literals in consumers.
-- Pass `fs.RuntimeFileService` explicitly to services and functions that own runtime I/O.
-- Use `fileSvc.Resolve` only when an API requires an absolute path.
-- Use `fileSvc.Rel` to convert an absolute path inside the runtime root back to a relative service path.
-- Use `fileSvc.FileExists` for existence checks and compare missing-file errors with `errors.Is(err, constants.ErrNotFound)`.
-- Use `constants.Perm*` values for runtime file and directory permissions.
-- Keep direct `os` operations that implement this boundary inside `internal/services/fs`; callers use the service.
-
-Public CLI and startup configuration currently contain directory fields such as Gateway `DataDir`, `PKIDir`, `SecretsDir`, and `VaultDir`. Do not spread those absolute paths through service code or add duplicate directory fields merely to route runtime I/O. Resolve runtime locations at the boundary and pass the file service to the owner.
-
-Command constructors under `internal/cli/cmd/` that access runtime state accept a file-service factory so tests can inject an isolated service. A factory initialization failure wraps `constants.ErrFileServiceInit` and preserves the underlying error. Every new factory injection point requires a matching case in that group's `internal/cli/cmd/<group>/factory_error_<group>_test.go` that proves downstream dependencies are not called.
-
-Tests use `testutil.TempDir` and `testutil.TestPaths` for isolated roots. `testutil.TempDir` returns an absolute base directory; pass it directly to `fs.NewRuntimeFileService` and path initialization rather than appending `.g8e` yourself. The [Testing Guide](tests.md#runtime-files-and-test-paths) owns the complete fixture and path rules.
-
-## Dependency Construction
-
-The Gateway and outbound Operator have different dependency sets. `pubsub.GovernanceCoreDeps` contains the governance dependencies shared by both modes. `pubsub.GatewayModeDeps` adds gateway-only document, consensus, field-read, platform-enrollment, and posture dependencies; `pubsub.OutboundModeDeps` exposes only the shared fields.
-
-`NewOutboundModeDeps` validates the outbound core before `G8eoService` constructs `OperatorPubSubService`. `NewGatewayModeDeps` provides validation for a gateway bundle when called, but the current production Gateway builder constructs `GatewayModeDeps` directly and passes it to `NewGatewayOperatorPubSubService`. Code in that path must not assume the validating constructor ran; preserve the builder's explicit non-nil wiring and the command-service constructor's checks.
-
-The Gateway builder constructs the current runtime in this order:
+`gatewayServiceBuilder.build` in `internal/services/gateway/gateway_service.go` wires governance in this order. Other startup work sits between these milestones; do not reorder the milestones.
 
 1. Open the canonical database and obtain typed stores.
-2. Load L1 doctrine and bootstrap posture-required L2 consensus when configured.
-3. Construct the gateway-mode `OperatorPubSubService` with governance and platform-enrollment dependencies.
-4. Construct `PlatformEnrollmentService` with the command service as its envelope processor.
-5. Construct `mcp.GatewayService` with the command service as envelope processor and session validator and with audit and L2 dependencies supplied at construction.
-6. Call `OperatorPubSubService.BindMCPGateway` once before either service starts to complete the genuine egress cycle.
-7. Build the HTTP handler and servers after all controller dependencies exist.
+2. After those stores exist, and before `InitializePKI` or `InitializePKIWithNames`, construct the in-process substrate with `embedded.New` and `RegisterPending`.
+3. Load L1 doctrine with `NewL1DoctrineFromDir`, then bootstrap posture-required L2 consensus when configured.
+4. Construct the gateway-mode `OperatorPubSubService` with governance and platform-enrollment dependencies. The builder assigns `GatewayModeDeps` literally (INV-DEP-03).
+5. Construct `PlatformEnrollmentService` with the command service as its envelope processor.
+6. Construct `mcp.GatewayService` with the command service as envelope processor and session validator, and with audit and L2 dependencies supplied at construction.
+7. Call `OperatorPubSubService.BindMCPGateway` once before either service starts (INV-DEP-04).
+8. Build the HTTP handler and servers after every controller dependency exists.
 
-`BindMCPGateway` rejects nil, duplicate, and post-start binding with centralized typed errors. Do not reintroduce construction-time setters for audit, consensus, or session validation. Posture-dependent L2 remains optional only where the posture does not require it; required posture dependencies fail closed.
+### Add a native MCP tool
 
-See the [Code Map](codemap.md#runtime-modes) for the broader Gateway and outbound Operator ownership model.
-
-## Testing
-
-The repository uses four tiers:
-
-| Tier | Purpose | Runtime dependencies |
-| --- | --- | --- |
-| Tier 1: Unit | Untagged package and component tests | No running platform or third-party service |
-| Tier 2: In-process integration | Integration-tagged Go tests and component integration suites | Local files, processes, SQLite, PKI, pub/sub, and in-process services |
-| Tier 3: Live platform E2E | Public-interface tests against deployed components | Running Gateway, Operator, Ensemble, and Dashboard with enrolled local credentials |
-| Tier 4: External | Ensemble and eval tests that call provider APIs | Explicit third-party credentials and endpoints |
-
-Core test rules:
-
-- Use table-driven Go tests with `testify/assert` and `testify/require` where appropriate.
-- Name test functions, subtests, and files for the behavior they verify. Do not use generic `coverage`, `gap`, `edge`, `misc`, `success`, or `error` names as the scope.
-- Keep Tier 1 independent of a running platform. Tier 2 and Tier 3 exercise real local boundaries rather than mocking internal services, database clients, or cross-component communication.
-- Let `NewGatewayFixture` register teardown. Do not stop its Gateway, close its databases, or close its downstream server a second time.
-- Register temporary credential and long-lived fixture cleanup with `t.Cleanup`, not a helper-local `defer` that runs before the test body.
-- Use explicit cancellation contexts and join goroutines before the test returns.
-- Use typed constants for statuses, reasons, paths, and permissions instead of duplicating their values in assertions.
-- Keep the canonical trust bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`; tests do not repair failures by mutating developer PKI state.
-- Do not use `os.Chdir` to align runtime state. Working-directory changes are limited to behavior that intentionally discovers source-tree or configuration files and require a file-level explanation and cleanup.
-
-Use these primary entry points:
-
-- `./g8e test unit`
-- `./g8e test integration`
-- `./g8e test e2e`
-- `./g8e test e2e-full` (starts the `bootstrapped` Compose profile and removes its Compose volumes during teardown; add `--cross-enrollment` for that profile)
-- `./g8e test coverage`
-- `./g8e test lint`
-- `./g8e test chaos`
-- `./g8e test summary`
-- `make test`, `make test-unit`, `make test-integration`, `make test-docker`, and `make test-coverage`
-- `make ensemble-test`, `make test-external`, and `make dashboard-test`
-
-The CLI delegates Tier 1 execution to the Makefile, while other suites may still use component-specific package and timeout flags. Reproduce a CI failure through the same owning entry point. Read the [Testing Guide](tests.md) for exact selection, lifecycle, state, race, coverage, and component-specific behavior.
-
-## Generated Artifacts
-
-Generated output is changed through its owner:
-
-| Output | Source | Update and validation |
-| --- | --- | --- |
-| Root `README.md` | Handwritten product overview | Re-read changed sections, validate links, and run commands whose behavior the prose documents |
-| Go, Python, TypeScript, and Markdown protobuf output | Schemas and comments under `protocol/proto/g8e/` | `make proto` (`make generate` is an alias) plus affected conformance tests |
-| Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
-| Website | Handwritten root `README.md` | `make website-test` and `make website-build` when rendering is affected |
-| Doctrine references | JSON under `protocol/constants/doctrine/` and demo doctrine inputs | `make validate-doctrines` |
-| COSAiS overlays | Canonical overlay and doctrine references | `make validate-cosais` |
-
-Do not edit generated protobuf API reference or OpenAPI files as the source change. The [Documentation Guide](docs.md#generated-and-machine-readable-documentation) defines complete ownership and validation, and the [Release Process](release_process.md) defines native evaluation and signed compliance evidence acceptance.
-
-## Doctrine Changes
-
-`governance.NewL1DoctrineFromDir` starts with the built-in MITRE-oriented detectors and loads additional `*.json` files from the configured Gateway doctrine directory. `./g8e gw start --doctrine-dir <path>` sets that directory, and `G8E_DOCTRINE_DIR` supplies it when the flag is absent. The Gateway loads doctrine during construction, so restart the Gateway after changing runtime doctrine files.
-
-Reference doctrine JSON under `protocol/constants/doctrine/` is validated by `make validate-doctrines`; the validator also checks compliance references. Update the owning JSON and affected Go or protocol contracts together when a doctrine identifier or public shape changes.
-
-## Native MCP Tools
-
-Native MCP tools implement `mcp.NativeTool` and execute through the Gateway's in-process Operator boundary after governed dispatch. The outbound `G8eoService` does not construct `mcp.GatewayService`, so the native MCP registry is not an independent outbound Operator tool server. `internal/services/mcp/native_tool_registry.go` is the current inventory and registration owner; do not duplicate its tool list in documentation.
-
-To add a native tool:
-
-1. Use `protocol/docs/mcp_tool_template.go` as the implementation template.
+1. Start from `protocol/docs/mcp_tool_template.go`.
 2. Implement `Name`, `Description`, `InputSchema`, and `Execute` with typed inputs and contextual errors.
-3. Register the tool explicitly in `RegisterNativeTools` in `internal/services/mcp/native_tool_registry.go`.
-4. Add focused unit tests and any governed integration coverage required by the execution path.
-5. Do not use `init`; registration is explicit and registry construction returns errors.
+3. Register the tool in `RegisterNativeTools` in `internal/services/mcp/native_tool_registry.go`.
+4. Add focused unit tests and the governed integration coverage the execution path requires.
+5. Do not use `init` (INV-MCP-04). Do not copy the tool list into a doc (INV-MCP-03).
 
-## Documentation and Contribution Workflow
+### Change runtime doctrine
 
-Treat documentation as code. Audit every changed document end to end, trace claims to current owners, update related current-state summaries, regenerate source-owned output, review relative links, and update `Last Updated` and `Version` only after the audit. Use the exact value in `VERSION` for maintained `Version:` headers. Follow [Documentation Guidelines](docs.md) for the complete process.
+1. Edit the owning JSON under `protocol/constants/doctrine/` or the Gateway doctrine directory, together with any Go or protocol contract that names the same identifier (INV-DOCTRINE-03).
+2. Run `make validate-doctrines`.
+3. Restart the Gateway after a runtime directory change. `./g8e gw start --doctrine-dir <path>` sets the directory; `G8E_DOCTRINE_DIR` applies only when the flag is absent (INV-DOCTRINE-02).
 
-Keep a contribution focused on one coherent change and include tests for fixes and features. The [Contributing Guide](../../.github/CONTRIBUTING.md) owns issue, security-reporting, and contribution entry points. The repository is distributed under the [Business Source License 1.1](../../LICENSE), with the Change Date and Change License defined in that file.
+## Anti-patterns
+
+- A compatibility shim that keeps a broken path alive (INV-CODE-01).
+- An `ensure*` or `getOrCreate*` helper (INV-CODE-12).
+- `errors.New` or a package-level sentinel outside `internal/constants/errors.go` (INV-ERR-01, INV-ERR-02).
+- Protobuf `Any` or `map[string]interface{}` for a known contract (INV-TYPE-02).
+- `os.ReadFile`, `os.WriteFile`, or a hardcoded `.g8e/` path outside `internal/services/fs` (INV-FS-01).
+- `go test` for a platform suite, or `t.Parallel()` in integration or E2E (INV-TEST-01, INV-TEST-02).
+- A second `Stop` or `Close` on a `NewGatewayFixture` resource (INV-TEST-06).
+- Hand-editing generated protobuf Markdown or Gateway OpenAPI output (INV-GEN-01).
+- `init` registration of a native MCP tool, or a pasted tool inventory (INV-MCP-03, INV-MCP-04).
+- Calling `bootstrapped` a Compose profile that selects the operator, ensemble, or dashboard. The CLI still passes that profile name; `docker-compose.yml` does not define it (INV-TEST-12, INV-TEST-13).
+- A flag dump in place of `./g8e <command> --help` (INV-ENV-03).
+
+## Links out
+
+- [Code Map](codemap.md): package ownership, runtime modes, and the CLI group list. Gateway and outbound mode ownership is [Runtime Modes](codemap.md#runtime-modes).
+- [Testing Guide](tests.md): tiers, fixtures, `testutil` path rules, selection, race, coverage, and CI. `tests.md` still says `e2e-full` starts a `bootstrapped` Compose profile; that sentence disagrees with tip `docker-compose.yml` (INV-TEST-13).
+- [Documentation Guide](docs.md): audit, catalog, style, generation, and the `docs/devs/` format.
+- [Release Process](release_process.md): versioning, native evaluation acceptance, and signed evidence.
+- [Governance](../architecture/governance.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md): five-layer and posture model, and ingress limits.
+- [Protocol Specification](../../protocol/docs/spec.md): wire requirements.
+- [Scripts](../architecture/scripts.md): platform setup behavior.
+- Component workflows: [Protocol README](../../protocol/README.md), [Dashboard Development](../dashboard/devs.md), [Dashboard Testing](../dashboard/tests.md), [Ensemble Development](../ensemble/devs.md), [Ensemble Testing](../ensemble/tests.md).
