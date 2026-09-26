@@ -87,7 +87,7 @@ describe('CasesManager URL State [UNIT]', () => {
     }
 
     function triggerSSEInvestigationList(investigations) {
-        eventBus.emit(EventType.INVESTIGATION_LIST_COMPLETED, {
+        eventBus.emit(EventType.APP_INVESTIGATION_LIST_COMPLETED, {
             investigations,
             count: investigations.length,
             timestamp: now()
@@ -238,7 +238,7 @@ describe('CasesManager URL State [UNIT]', () => {
             ]);
 
             expect(manager.currentCaseId).toBeNull();
-            expect(eventBus.emitted(EventType.CASE_CLEARED)).toHaveLength(1);
+            expect(eventBus.emitted(EventType.APP_CASE_CLEARED)).toHaveLength(1);
         });
 
         it('does not call resetForNewCase when cases list is empty', () => {

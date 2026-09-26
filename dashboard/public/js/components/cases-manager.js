@@ -119,15 +119,15 @@ export class CasesManager {
         window.addEventListener('popstate', this.boundHandlers.popstate);
 
         // EventBus listeners for investigation events from backend
-        this.eventBus.on(EventType.INVESTIGATION_LIST_COMPLETED, (data) => {
+        this.eventBus.on(EventType.APP_INVESTIGATION_LIST_COMPLETED, (data) => {
             this.handleInvestigationQuerySuccess(data);
         });
 
-        this.eventBus.on(EventType.CASE_CREATED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_CREATED, (data) => {
             this._applyCaseCreationResult(data);
         });
 
-        this.eventBus.on(EventType.CASE_UPDATED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_UPDATED, (data) => {
             this.handleCaseUpdated(data);
         });
     }
@@ -475,7 +475,7 @@ export class CasesManager {
 
         this.setDropdownValue('');
         this.userCases = [];
-        this.eventBus.emit(EventType.CASE_CLEARED);
+        this.eventBus.emit(EventType.APP_CASE_CLEARED);
     }
 
     /**
@@ -540,7 +540,7 @@ export class CasesManager {
             this.currentCaseId = null;
             this.currentInvestigationId = null;
             this.updateUrlState(null);
-            this.eventBus.emit(EventType.CASE_CLEARED);
+            this.eventBus.emit(EventType.APP_CASE_CLEARED);
             return;
         }
 
@@ -567,14 +567,14 @@ export class CasesManager {
         // Update URL to reflect current investigation (enables refresh/bookmarking)
         this.updateUrlState(caseId);
 
-        this.eventBus.emit(EventType.CASE_SELECTED, {
+        this.eventBus.emit(EventType.APP_CASE_SELECTED, {
             caseId: this.currentCaseId,
             investigationId: this.currentInvestigationId,
             caseData: investigationData,
             conversationHistory: investigationData.conversation_history
         });
         
-        this.eventBus.emit(EventType.CASE_SWITCHED, {
+        this.eventBus.emit(EventType.APP_CASE_SWITCHED, {
             caseId: this.currentCaseId,
             investigationId: this.currentInvestigationId,
             investigation: investigationData
@@ -592,7 +592,7 @@ export class CasesManager {
 
         this.setDropdownValue('');
         this.updateUrlState(null);
-        this.eventBus.emit(EventType.CASE_CLEARED);
+        this.eventBus.emit(EventType.APP_CASE_CLEARED);
     }
 
     _applyCaseCreationResult(caseData) {
@@ -664,10 +664,10 @@ export class CasesManager {
 
         this.authStateUnsubscribe = window.authState.subscribe((event, data) => {
             switch (event) {
-                case EventType.AUTH_USER_AUTHENTICATED:
+                case EventType.PLATFORM_AUTH_USER_AUTHENTICATED:
                     this.handleUserAuthenticated(data);
                     break;
-                case EventType.AUTH_USER_UNAUTHENTICATED:
+                case EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED:
                     this.handleUserUnauthenticated(data);
                     break;
             }

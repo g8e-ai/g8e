@@ -14,6 +14,7 @@ import { OperatorDeviceAuthMixin } from './operator-device-auth-mixin.js';
 import { OperatorLayoutMixin } from './operator-layout-mixin.js';
 import { OperatorListMixin } from './operator-list-mixin.js';
 import { OperatorMetricsDisplayMixin } from './operator-metrics-display-mixin.js';
+import { UIEventType } from '../constants/ui-events.js';
 
 const _STATUS_UPDATED_VALUES = [
     EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
@@ -90,7 +91,7 @@ export class OperatorPanel {
             this._applyOperatorState(this._pendingRender);
             this._pendingRender = null;
         }
-        this.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_OPERATOR, {
+        this.eventBus.emit(UIEventType.AUTH_COMPONENT_INITIALIZED_OPERATOR, {
             isAuthenticated: true
         });
     }
@@ -391,12 +392,12 @@ export class OperatorPanel {
     _setupAuthStateListener() {
         this.authStateUnsubscribe = window.authState.subscribe((event, data) => {
             switch (event) {
-                case EventType.AUTH_USER_AUTHENTICATED:
+                case EventType.PLATFORM_AUTH_USER_AUTHENTICATED:
                     this.webSessionModel = data.webSessionModel || window.authState.getWebSessionModel();
                     this.populateApiKey();
                     this.displayInitialOperatorStatus();
                     break;
-                case EventType.AUTH_USER_UNAUTHENTICATED:
+                case EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED:
                     this.webSessionModel = null;
                     this.clearOperatorData();
                     break;

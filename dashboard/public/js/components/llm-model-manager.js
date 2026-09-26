@@ -71,11 +71,11 @@ export class LlmModelManager {
             this.handleConfigReceived(data);
         });
 
-        this.eventBus.on(EventType.CASE_SWITCHED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_SWITCHED, (data) => {
             this.handleCaseSwitched(data);
         });
 
-        this.eventBus.on(EventType.CASE_CLEARED, () => {
+        this.eventBus.on(EventType.APP_CASE_CLEARED, () => {
             this.handleCaseCleared();
         });
 

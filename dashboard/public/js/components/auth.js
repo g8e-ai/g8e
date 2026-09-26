@@ -9,6 +9,7 @@ import { AppPaths } from '../constants/app-constants.js';
 import { notificationService } from '../utils/notification-service.js';
 import { ServiceName } from '../constants/service-client-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
+import { UIEventType } from '../constants/ui-events.js';
 
 const CLI_SESSION_ID = 'browser';
 
@@ -161,9 +162,9 @@ export class AuthManager {
     completeInitialization() {
         this.initialized = true;
         const state = this.getState();
-        this.notifySubscribers(EventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, state);
+        this.notifySubscribers(UIEventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, state);
         if (this.eventBus) {
-            this.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, state);
+            this.eventBus.emit(UIEventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, state);
         }
     }
 
@@ -188,9 +189,9 @@ export class AuthManager {
                 webSessionId: sessionModel.getWebSessionId?.() ?? sessionModel.web_session_id,
                 isAuthenticated: true
             };
-            this.notifySubscribers(EventType.AUTH_USER_AUTHENTICATED, payload);
+            this.notifySubscribers(EventType.PLATFORM_AUTH_USER_AUTHENTICATED, payload);
             if (this.eventBus) {
-                this.eventBus.emit(EventType.AUTH_USER_AUTHENTICATED, payload);
+                this.eventBus.emit(EventType.PLATFORM_AUTH_USER_AUTHENTICATED, payload);
             }
 
             const currentPath = window.location.pathname;
@@ -225,9 +226,9 @@ export class AuthManager {
                 webSessionId: null,
                 webSessionModel: null
             };
-            this.notifySubscribers(EventType.AUTH_USER_UNAUTHENTICATED, payload);
+            this.notifySubscribers(EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED, payload);
             if (this.eventBus) {
-                this.eventBus.emit(EventType.AUTH_USER_UNAUTHENTICATED, payload);
+                this.eventBus.emit(EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED, payload);
             }
         }
     }
@@ -364,7 +365,7 @@ export class AuthManager {
     handleSessionExpired() {
         console.log('[AUTH] WebSession expired');
         this.clearSession();
-        this.notifySubscribers(EventType.AUTH_SESSION_EXPIRED, {
+        this.notifySubscribers(EventType.PLATFORM_AUTH_SESSION_EXPIRED, {
             message: 'Your session has expired. Please sign in again.'
         });
     }
@@ -444,7 +445,7 @@ export class AuthManager {
         console.log('[AUTH] Info:', message);
         notificationService.info(message);
         if (this.eventBus) {
-            this.eventBus.emit(EventType.AUTH_INFO, { message });
+            this.eventBus.emit(EventType.PLATFORM_AUTH_INFO, { message });
         }
     }
 

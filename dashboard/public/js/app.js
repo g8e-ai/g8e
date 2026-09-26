@@ -78,14 +78,14 @@ class G8eDashboardApp {
     }
 
     setupEventListeners() {
-        this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, (data) => {
+        this.eventBus.once(UIEventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, (data) => {
             this.setupUI();
             if (data.isAuthenticated && data.webSessionId) {
                 this.sseConnectionManager.initializeConnection(data.webSessionId);
             }
         });
 
-        this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_CHAT, () => {
+        this.eventBus.once(UIEventType.AUTH_COMPONENT_INITIALIZED_CHAT, () => {
             if (this.operatorPanel) {
                 this.operatorPanel.init().catch(error => {
                     console.error('[G8eDashboardApp] Failed to initialize OperatorPanel:', error);

@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MessageRenderer } from '@g8ed/public/js/components/message-renderer.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
+import { MessageSender } from '@g8ed/public/js/constants/message-senders.js';
 
 function makeMarkdownRenderer() {
     return {
@@ -42,7 +43,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('returns a DIV element', () => {
             const el = renderer.renderMessage({
                 content: 'Hello world.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
             });
             expect(el.tagName).toBe('DIV');
@@ -51,16 +52,16 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('sender value applied as class', () => {
             const el = renderer.renderMessage({
                 content: 'Hello.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
             });
-            expect(el.className).toContain(EventType.EVENT_SOURCE_AI_PRIMARY);
+            expect(el.className).toContain(MessageSender.AI_PRIMARY);
         });
 
         it('.message-header and .message-content present', () => {
             const el = renderer.renderMessage({
                 content: 'Hello.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
             });
             expect(el.querySelector('.message-header')).not.toBeNull();
@@ -70,7 +71,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('content text in .content-text', () => {
             const el = renderer.renderMessage({
                 content: 'My response text.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
             });
             expect(el.querySelector('.content-text').textContent).toContain('My response text.');
@@ -79,7 +80,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('.copy-response-btn present for AI_PRIMARY', () => {
             const el = renderer.renderMessage({
                 content: 'AI response.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
             });
             expect(el.querySelector('.copy-response-btn')).not.toBeNull();
@@ -88,7 +89,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('.copy-response-btn absent for USER_CHAT', () => {
             const el = renderer.renderMessage({
                 content: 'User message.',
-                sender: EventType.EVENT_SOURCE_USER_CHAT,
+                sender: MessageSender.USER_CHAT,
                 timestamp: null,
             });
             expect(el.querySelector('.copy-response-btn')).toBeNull();
@@ -97,7 +98,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('.sender-label is g8e for AI_PRIMARY', () => {
             const el = renderer.renderMessage({
                 content: 'AI.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
             });
             expect(el.querySelector('.sender-label').textContent).toBe('g8e');
@@ -106,7 +107,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('.sender-label is You for USER_CHAT', () => {
             const el = renderer.renderMessage({
                 content: 'User.',
-                sender: EventType.EVENT_SOURCE_USER_CHAT,
+                sender: MessageSender.USER_CHAT,
                 timestamp: null,
             });
             expect(el.querySelector('.sender-label').textContent).toBe('You');
@@ -115,7 +116,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('.sender-label is SYSTEM for SYSTEM sender', () => {
             const el = renderer.renderMessage({
                 content: 'System notification.',
-                sender: EventType.EVENT_SOURCE_SYSTEM,
+                sender: MessageSender.SYSTEM,
                 timestamp: null,
             });
             expect(el.querySelector('.sender-label').textContent).toBe('SYSTEM');
@@ -126,7 +127,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('.sources-panel appended inside .content-text when grounding_used: true and sources present', () => {
             const el = renderer.renderMessage({
                 content: 'Nginx can handle high traffic.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 groundingMetadata: makeGrounding({
                     sources: [makeSource({ citation_num: 1 })],
@@ -141,7 +142,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('no .sources-panel when groundingMetadata is null', () => {
             const el = renderer.renderMessage({
                 content: 'No grounding here.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 groundingMetadata: null,
             });
@@ -152,7 +153,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('.sources-panel still appended when grounding_used: false but sources are present — renderMessage gates on sources.length > 0 only, not grounding_used', () => {
             const el = renderer.renderMessage({
                 content: 'Grounding not used.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 groundingMetadata: makeGrounding({
                     grounding_used: false,
@@ -166,7 +167,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('no .sources-panel when sources is empty', () => {
             const el = renderer.renderMessage({
                 content: 'Sources empty.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 groundingMetadata: makeGrounding({ sources: [] }),
             });
@@ -181,7 +182,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
             ];
             const el = renderer.renderMessage({
                 content: 'Two sources cited.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 groundingMetadata: makeGrounding({ sources, grounding_supports: [] }),
             });
@@ -193,7 +194,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('.sources-panel rendered for any sender value when grounding metadata and sources are present', () => {
             const el = renderer.renderMessage({
                 content: 'User sent this.',
-                sender: EventType.EVENT_SOURCE_USER_CHAT,
+                sender: MessageSender.USER_CHAT,
                 timestamp: null,
                 groundingMetadata: makeGrounding({ sources: [makeSource()] }),
             });
@@ -206,7 +207,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('case_id present — Case: {id} in output', () => {
             const el = renderer.renderMessage({
                 content: 'Response.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 contextInfo: { case_id: 'case-abc-123', investigation_id: null },
             });
@@ -217,7 +218,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('investigation_id present — Investigation: {id} in output', () => {
             const el = renderer.renderMessage({
                 content: 'Response.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 contextInfo: { case_id: null, investigation_id: 'inv-xyz-456' },
             });
@@ -228,7 +229,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('contextInfo null — no .message-context element', () => {
             const el = renderer.renderMessage({
                 content: 'Response.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 contextInfo: null,
             });
@@ -239,7 +240,7 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
         it('both IDs null — no .message-context element', () => {
             const el = renderer.renderMessage({
                 content: 'Response.',
-                sender: EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender: MessageSender.AI_PRIMARY,
                 timestamp: null,
                 contextInfo: { case_id: null, investigation_id: null },
             });

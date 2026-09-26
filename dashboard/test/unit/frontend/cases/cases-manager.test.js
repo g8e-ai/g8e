@@ -93,7 +93,7 @@ describe('CasesManager [UNIT]', () => {
 
     function triggerAuthEvent(session) {
         authState.setAuthenticated(session);
-        authState.notifySubscribers(EventType.AUTH_USER_AUTHENTICATED, {
+        authState.notifySubscribers(EventType.PLATFORM_AUTH_USER_AUTHENTICATED, {
             isAuthenticated: true,
             webSessionModel: session,
             webSessionId: session.id
@@ -102,14 +102,14 @@ describe('CasesManager [UNIT]', () => {
 
     function triggerUnauthEvent() {
         authState.setUnauthenticated();
-        authState.notifySubscribers(EventType.AUTH_USER_UNAUTHENTICATED, {
+        authState.notifySubscribers(EventType.PLATFORM_AUTH_USER_UNAUTHENTICATED, {
             isAuthenticated: false,
             webSessionModel: null
         });
     }
 
     function triggerSSEInvestigationList(investigations) {
-        eventBus.emit(EventType.INVESTIGATION_LIST_COMPLETED, {
+        eventBus.emit(EventType.APP_INVESTIGATION_LIST_COMPLETED, {
             investigations,
             count: investigations.length,
             timestamp: now()
@@ -500,7 +500,7 @@ describe('CasesManager [UNIT]', () => {
             eventBus.clear();
             await manager.switchToCase(caseId);
 
-            const selected = eventBus.emitted(EventType.CASE_SELECTED);
+            const selected = eventBus.emitted(EventType.APP_CASE_SELECTED);
             expect(selected).toHaveLength(1);
             expect(selected[0].data.caseId).toBe(caseId);
         });
@@ -513,7 +513,7 @@ describe('CasesManager [UNIT]', () => {
             eventBus.clear();
             await manager.switchToCase(caseId);
 
-            const switched = eventBus.emitted(EventType.CASE_SWITCHED);
+            const switched = eventBus.emitted(EventType.APP_CASE_SWITCHED);
             expect(switched).toHaveLength(1);
             expect(switched[0].data.caseId).toBe(caseId);
         });
@@ -526,7 +526,7 @@ describe('CasesManager [UNIT]', () => {
             await manager.switchToCase('');
 
             expect(manager.currentCaseId).toBeNull();
-            expect(eventBus.emitted(EventType.CASE_CLEARED)).toHaveLength(1);
+            expect(eventBus.emitted(EventType.APP_CASE_CLEARED)).toHaveLength(1);
             expect(serviceClient.getRequestLog()).toHaveLength(0);
         });
 
@@ -613,7 +613,7 @@ describe('CasesManager [UNIT]', () => {
             const manager = makeManager();
             const spy = vi.spyOn(manager, '_applyCaseCreationResult');
 
-            eventBus.emit(EventType.CASE_CREATED, {
+            eventBus.emit(EventType.APP_CASE_CREATED, {
                 case_id: 'sse_case',
                 title: 'SSE Case',
                 investigation_id: 'inv_sse'
@@ -640,7 +640,7 @@ describe('CasesManager [UNIT]', () => {
             eventBus.clear();
             manager.resetForNewCase();
 
-            expect(eventBus.emitted(EventType.CASE_CLEARED)).toHaveLength(1);
+            expect(eventBus.emitted(EventType.APP_CASE_CLEARED)).toHaveLength(1);
         });
 
         it('resets dropdown value to empty string', () => {
@@ -660,7 +660,7 @@ describe('CasesManager [UNIT]', () => {
             manager.newCaseBtn.dispatchEvent(new dom.window.MouseEvent('click'));
 
             expect(manager.currentCaseId).toBeNull();
-            expect(eventBus.emitted(EventType.CASE_CLEARED)).toHaveLength(1);
+            expect(eventBus.emitted(EventType.APP_CASE_CLEARED)).toHaveLength(1);
         });
     });
 
@@ -671,7 +671,7 @@ describe('CasesManager [UNIT]', () => {
                 { case_id: 'case_x', case_title: 'Original', id: 'inv_x', created_at: now() }
             ]);
 
-            eventBus.emit(EventType.CASE_UPDATED, { case_id: 'case_x', title: 'Renamed' });
+            eventBus.emit(EventType.APP_CASE_UPDATED, { case_id: 'case_x', title: 'Renamed' });
 
             expect(manager.userCases[0].case_title).toBe('Renamed');
         });
@@ -682,7 +682,7 @@ describe('CasesManager [UNIT]', () => {
                 { case_id: 'case_x', case_title: 'Original', id: 'inv_x', created_at: now() }
             ]);
 
-            eventBus.emit(EventType.CASE_UPDATED, { case_id: null, title: 'Should Not Apply' });
+            eventBus.emit(EventType.APP_CASE_UPDATED, { case_id: null, title: 'Should Not Apply' });
 
             expect(manager.userCases[0].case_title).toBe('Original');
         });
@@ -692,7 +692,7 @@ describe('CasesManager [UNIT]', () => {
             triggerSSEInvestigationList(makeInvestigations(1));
 
             expect(() => {
-                eventBus.emit(EventType.CASE_UPDATED, { title: 'No case_id' });
+                eventBus.emit(EventType.APP_CASE_UPDATED, { title: 'No case_id' });
             }).not.toThrow();
         });
 
@@ -702,7 +702,7 @@ describe('CasesManager [UNIT]', () => {
                 { case_id: 'case_y', case_title: 'Original', id: 'inv_y', created_at: now() }
             ]);
 
-            eventBus.emit(EventType.CASE_UPDATED, { case_id: 'case_y', title: 'Renamed' });
+            eventBus.emit(EventType.APP_CASE_UPDATED, { case_id: 'case_y', title: 'Renamed' });
 
             const option = manager.dropdownMenu.querySelector('[data-value="case_y"]');
             expect(option.textContent).toContain('Renamed');

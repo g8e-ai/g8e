@@ -8,6 +8,7 @@ import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockAuthState, MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
+import { MessageSender } from '@g8ed/public/js/constants/message-senders.js';
 
 const INVESTIGATION_ID = 'inv-test-abc123';
 const WEB_SESSION_ID = 'session-test-abc123';
@@ -202,9 +203,9 @@ describe('ChatComponent message rendering [FRONTEND - jsdom]', () => {
     });
 
     describe('EventType constants', () => {
-        it('EventType.EVENT_SOURCE_USER_CHAT is "user.chat", not "user"', () => {
-            expect(EventType.EVENT_SOURCE_USER_CHAT).toBe('user.chat');
-            expect(EventType.EVENT_SOURCE_USER_CHAT).not.toBe('user');
+        it('MessageSender.USER_CHAT is the canonical sender wire value', () => {
+            expect(MessageSender.USER_CHAT).toBe('g8e.v1.source.user.chat');
+            expect(MessageSender.USER_CHAT).not.toBe('user');
         });
     });
 

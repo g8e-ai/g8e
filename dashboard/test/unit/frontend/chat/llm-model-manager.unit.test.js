@@ -146,7 +146,7 @@ describe('LlmModelManager [UNIT]', () => {
         it('restores saved models from investigation', () => {
             emitConfig(eventBus);
 
-            eventBus.emit(EventType.CASE_SWITCHED, {
+            eventBus.emit(EventType.APP_CASE_SWITCHED, {
                 investigation: {
                     llm_primary_model: 'gemini-3-flash-preview',
                     llm_assistant_model: 'gemini-3-flash-preview',
@@ -160,7 +160,7 @@ describe('LlmModelManager [UNIT]', () => {
         it('falls back to defaults when investigation has no saved models', () => {
             emitConfig(eventBus);
 
-            eventBus.emit(EventType.CASE_SWITCHED, { investigation: {} });
+            eventBus.emit(EventType.APP_CASE_SWITCHED, { investigation: {} });
 
             expect(manager.selectedPrimaryModel).toBe('gemini-3.1-pro-preview');
             expect(manager.selectedAssistantModel).toBe('gemini-3.1-flash-lite-preview');
@@ -173,7 +173,7 @@ describe('LlmModelManager [UNIT]', () => {
             manager.selectedPrimaryModel = 'gemini-3-flash-preview';
             manager.selectedAssistantModel = 'gemini-3-flash-preview';
 
-            eventBus.emit(EventType.CASE_CLEARED);
+            eventBus.emit(EventType.APP_CASE_CLEARED);
 
             expect(manager.selectedPrimaryModel).toBe('gemini-3.1-pro-preview');
             expect(manager.selectedAssistantModel).toBe('gemini-3.1-flash-lite-preview');

@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-import { EventType, ToolDisplayCategory } from '../constants/events.js';
+import { EventType } from '../constants/events.js';
+import { ToolDisplayCategory } from '../constants/display-constants.js';
 import { UIEventType } from '../constants/ui-events.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { decodeHtmlEntities } from '../utils/html.js';
@@ -195,16 +196,16 @@ export const ChatSSEHandlersMixin = {
             }
         });
 
-        this.eventBus.on(EventType.CASE_SELECTED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_SELECTED, (data) => {
             this.clearChat();
             this.handleCaseSelected(data);
         });
 
-        this.eventBus.on(EventType.CASE_CREATED, (data) => {
+        this.eventBus.on(EventType.APP_CASE_CREATED, (data) => {
             this.handleCaseCreated(data);
         });
 
-        this.eventBus.on(EventType.CASE_CLEARED, () => {
+        this.eventBus.on(EventType.APP_CASE_CLEARED, () => {
             this.handleCaseCleared();
         });
 

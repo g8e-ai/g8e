@@ -580,11 +580,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.CASE_CREATED,
+            type: EventType.APP_CASE_CREATED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.CASE_CREATED);
+        const emitted = eventBus.getEmittedEvents(EventType.APP_CASE_CREATED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.case_id).toBe('case_new_001');
     });

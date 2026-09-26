@@ -5,6 +5,7 @@ import { CitationsHandler } from './citations.js';
 import { decodeHtmlEntities } from '../utils/html.js';
 import { EventType } from '../constants/events.js';
 import { CopyText } from '../constants/ui-constants.js';
+import { MessageSender } from '../constants/message-senders.js';
 
 /**
  * Unified Message Renderer
@@ -28,7 +29,7 @@ class MessageRenderer {
 
         const displayTime = this._formatTimestamp(timestamp);
         const senderInfo = this._getSenderInfo(sender);
-        const copyButtonHtml = sender === EventType.EVENT_SOURCE_AI_PRIMARY ? this._getCopyButton() : '';
+        const copyButtonHtml = sender === MessageSender.AI_PRIMARY ? this._getCopyButton() : '';
         const contextDisplay = this._renderContextInfo(contextInfo);
 
         // Decode and render content using unified markdown renderer
@@ -179,17 +180,17 @@ class MessageRenderer {
 
     _getSenderInfo(sender) {
         const senderMap = {
-            [EventType.EVENT_SOURCE_USER_CHAT]: {
+            [MessageSender.USER_CHAT]: {
                 label: 'You',
                 icon: '',
                 className: 'user-message'
             },
-            [EventType.EVENT_SOURCE_AI_PRIMARY]: {
+            [MessageSender.AI_PRIMARY]: {
                 label: 'g8e',
                 icon: '',
                 className: 'g8e_ai_agent'
             },
-            [EventType.EVENT_SOURCE_SYSTEM]: {
+            [MessageSender.SYSTEM]: {
                 label: 'SYSTEM',
                 icon: '<span class="material-symbols-outlined">settings</span>',
                 className: 'system_message'
