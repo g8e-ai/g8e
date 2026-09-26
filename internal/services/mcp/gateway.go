@@ -709,7 +709,7 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 	}
 
 	_, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		eventType:      constants.EventType(constants.ActionTypeMcpResourceRead),
+		eventType:      constants.Event.Operator.Mcp.ResourceReadRequested,
 		targetResource: readParams.URI,
 		payloadBytes:   payloadBytes,
 	})
@@ -762,7 +762,7 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 	}
 
 	_, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		eventType:      constants.EventType(constants.ActionTypeMcpPromptGet),
+		eventType:      constants.Event.Operator.Mcp.PromptGetRequested,
 		targetResource: getParams.Name,
 		payloadBytes:   payloadBytes,
 	})
@@ -827,7 +827,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		}
 	}
 
-	actionType, err := constants.ResolveGovernedAction(opts.eventType)
+	actionType, err := constants.ValidateGovernedRequest(opts.eventType)
 	if err != nil {
 		return "", nil, "", fmt.Errorf("gateway: %w", err)
 	}

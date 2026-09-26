@@ -255,6 +255,8 @@ const EventOperatorLogsFetchFailed EventType = "g8e.v1.operator.logs.fetch.faile
 const EventOperatorLogsFetchReceived EventType = "g8e.v1.operator.logs.fetch.received"
 const EventOperatorLogsFetchRequested EventType = "g8e.v1.operator.logs.fetch.requested"
 const EventOperatorMcpCallRequested EventType = "g8e.v1.operator.mcp.call.requested"
+const EventOperatorMcpPromptGetRequested EventType = "g8e.v1.operator.mcp.prompt.get.requested"
+const EventOperatorMcpResourceReadRequested EventType = "g8e.v1.operator.mcp.resource.read.requested"
 const EventOperatorModelProvenanceObservationCompleted EventType = "g8e.v1.operator.model.provenance.observation.completed"
 const EventOperatorModelProvenanceObservationRequested EventType = "g8e.v1.operator.model.provenance.observation.requested"
 const EventOperatorNetworkPingCompleted EventType = "g8e.v1.operator.network.ping.completed"
@@ -2289,6 +2291,24 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		GovernanceAction: ActionTypeMcpCall,
 		GovernancePayload: "g8e.operator.v1.McpCallRequested",
 	},
+	EventOperatorMcpPromptGetRequested: {
+		Key: "OperatorMcpPromptGetRequested",
+		Kind: EventKindRequest,
+		Transport: []string{"governed"},
+		Producers: []string{"mcp"},
+		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeMcpPromptGet,
+		GovernancePayload: "g8e.operator.v1.McpPromptGetRequested",
+	},
+	EventOperatorMcpResourceReadRequested: {
+		Key: "OperatorMcpResourceReadRequested",
+		Kind: EventKindRequest,
+		Transport: []string{"governed"},
+		Producers: []string{"mcp"},
+		Persistence: "ephemeral",
+		GovernanceAction: ActionTypeMcpResourceRead,
+		GovernancePayload: "g8e.operator.v1.McpResourceReadRequested",
+	},
 	EventOperatorModelProvenanceObservationCompleted: {
 		Key: "OperatorModelProvenanceObservationCompleted",
 		Kind: EventKindOutcome,
@@ -3187,6 +3207,8 @@ type _EventOperatorIntent struct {
 
 type _EventOperatorMcp struct {
 	CallRequested EventType
+	PromptGetRequested EventType
+	ResourceReadRequested EventType
 }
 
 type _EventOperatorModelProvenanceObservation struct {
@@ -3391,6 +3413,8 @@ var Event = struct {
 		},
 		Mcp: _EventOperatorMcp{
 			CallRequested: EventOperatorMcpCallRequested,
+			PromptGetRequested: EventOperatorMcpPromptGetRequested,
+			ResourceReadRequested: EventOperatorMcpResourceReadRequested,
 		},
 		ModelProvenanceObservation: _EventOperatorModelProvenanceObservation{
 			Completed: EventOperatorModelProvenanceObservationCompleted,

@@ -741,6 +741,13 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, fmt.Errorf("%w: %w", constants.ErrTxInvalidEnvelope, err)
 	}
 
+	if err := constants.ValidateGovernedEnvelopeFields(
+		constants.EventType(envelope.EventType),
+		constants.ActionType(envelope.ActionType),
+	); err != nil {
+		return nil, err
+	}
+
 	if rs.l4warden == nil {
 		return nil, constants.ErrPubSubTransactionVerifier
 	}

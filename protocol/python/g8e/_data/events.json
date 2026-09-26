@@ -2827,6 +2827,38 @@
       ],
       "persistence": "ephemeral"
     },
+    "OperatorMcpPromptGetRequested": {
+      "_go_const": "EventOperatorMcpPromptGetRequested",
+      "value": "g8e.v1.operator.mcp.prompt.get.requested",
+      "kind": "request",
+      "transport": [
+        "governed"
+      ],
+      "governance": {
+        "action_type": "MCP_PROMPT_GET",
+        "payload": "g8e.operator.v1.McpPromptGetRequested"
+      },
+      "producers": [
+        "mcp"
+      ],
+      "persistence": "ephemeral"
+    },
+    "OperatorMcpResourceReadRequested": {
+      "_go_const": "EventOperatorMcpResourceReadRequested",
+      "value": "g8e.v1.operator.mcp.resource.read.requested",
+      "kind": "request",
+      "transport": [
+        "governed"
+      ],
+      "governance": {
+        "action_type": "MCP_RESOURCE_READ",
+        "payload": "g8e.operator.v1.McpResourceReadRequested"
+      },
+      "producers": [
+        "mcp"
+      ],
+      "persistence": "ephemeral"
+    },
     "OperatorModelProvenanceObservationCompleted": {
       "_go_const": "EventOperatorModelProvenanceObservationCompleted",
       "value": "g8e.v1.operator.model.provenance.observation.completed",

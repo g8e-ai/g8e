@@ -1044,6 +1044,29 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	t.Run("rejects event and action_type mismatch before verification", func(t *testing.T) {
+		t.Parallel()
+		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-mismatch"}
+		payload, _ := proto.Marshal(req)
+		env := &govpkg.GovernanceEnvelope{
+			ProtocolVersion: "1.0",
+			Timestamp:       timestamppb.Now(),
+			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			EventType:       string(constants.Event.Operator.FsList.Requested),
+			ActionType:      string(constants.ActionTypeExecuteBash),
+			TargetResource:  "localhost",
+			Payload:         payload,
+			StateMerkleRoot: "test-state-root",
+			Nonce:           "nonce-mismatch",
+			Posture:         constants.PostureDoctrine,
+		}
+		envelopeBytes, _ := protojson.Marshal(env)
+
+		_, err := f.Svc.ProcessEnvelope(context.Background(), envelopeBytes)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrTxEventActionMismatch)
+	})
+
 	t.Run("rejects when transaction verifier not configured", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
