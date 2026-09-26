@@ -80,6 +80,11 @@
       "value": "unsubscribe",
       "_python_const": "UNSUBSCRIBE"
     },
+    "PrefixAudit": {
+      "_go_const": "ChannelPrefixAudit",
+      "value": "audit",
+      "_python_const": "PREFIX_AUDIT"
+    },
     "PrefixCmd": {
       "_go_const": "ChannelPrefixCmd",
       "value": "cmd",

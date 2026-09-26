@@ -73,6 +73,7 @@ var APIPaths = struct {
 	// Audit routes
 	AuditReceipts       string `json:"audit_receipts"`
 	AuditReceiptsExport string `json:"audit_receipts_export"`
+	AuditRecords        string `json:"audit_records"`
 	AuditEvents         string `json:"audit_events"`
 	AuditSummary        string `json:"audit_summary"`
 	AuditReport         string `json:"audit_report"`
@@ -250,6 +251,7 @@ var APIPaths = struct {
 	// Audit routes
 	AuditReceipts:       "/api/v1/audit/receipts",
 	AuditReceiptsExport: "/api/v1/audit/receipts/export",
+	AuditRecords:        "/api/v1/audit/records",
 	AuditEvents:         "/api/v1/audit/events",
 	AuditSummary:        "/api/v1/audit/summary",
 	AuditReport:         "/api/v1/audit/report",

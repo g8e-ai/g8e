@@ -140,6 +140,8 @@ const EventAppMemoryCreateRequested EventType = "g8e.v1.app.memory.create.reques
 const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"
 const EventAppMemoryUpdateRequested EventType = "g8e.v1.app.memory.update.requested"
 const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
+const EventAppReputationCommitmentCreateRequested EventType = "g8e.v1.app.reputation.commitment.create.requested"
+const EventAppReputationStakeResolutionCreateRequested EventType = "g8e.v1.app.reputation.stake.resolution.create.requested"
 const EventAppRunStatusUpdated EventType = "g8e.v1.app.run.status.updated"
 const EventAppTaskAssigned EventType = "g8e.v1.app.task.assigned"
 const EventAppTaskCompleted EventType = "g8e.v1.app.task.completed"
@@ -1416,6 +1418,26 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers: []string{"ensemble"},
 		Persistence: "gateway.docstore",
 	},
+	EventAppReputationCommitmentCreateRequested: {
+		Key: "AppReputationCommitmentCreateRequested",
+		Kind: EventKindRequest,
+		Transport: []string{"governed"},
+		Producers: []string{"ensemble"},
+		Persistence: "gateway.docstore",
+		GovernanceAction: ActionTypeDocumentUpdate,
+		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"OperatorReputationCommitmentCreated"},
+	},
+	EventAppReputationStakeResolutionCreateRequested: {
+		Key: "AppReputationStakeResolutionCreateRequested",
+		Kind: EventKindRequest,
+		Transport: []string{"governed"},
+		Producers: []string{"ensemble"},
+		Persistence: "gateway.docstore",
+		GovernanceAction: ActionTypeDocumentUpdate,
+		GovernancePayload: "g8e.operator.v1.DocumentUpdateRequested",
+		Outcomes: []string{"OperatorReputationStakeResolutionCreated"},
+	},
 	EventAppRunStatusUpdated: {
 		Key: "AppRunStatusUpdated",
 		Kind: EventKindFact,
@@ -1486,7 +1508,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
 		Outcomes: []string{"OperatorAuditAiRecorded"},
-		Reserved: true,
 	},
 	EventOperatorAuditAiRecorded: {
 		Key: "OperatorAuditAiRecorded",
@@ -1503,7 +1524,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
 		Outcomes: []string{"OperatorAuditCommandRecorded"},
-		Reserved: true,
 	},
 	EventOperatorAuditCommandRecorded: {
 		Key: "OperatorAuditCommandRecorded",
@@ -1519,7 +1539,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
 		Outcomes: []string{"OperatorAuditDirectCommandRecorded"},
-		Reserved: true,
 	},
 	EventOperatorAuditDirectCommandRecorded: {
 		Key: "OperatorAuditDirectCommandRecorded",
@@ -1535,7 +1554,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
 		Outcomes: []string{"OperatorAuditDirectCommandResultRecorded"},
-		Reserved: true,
 	},
 	EventOperatorAuditDirectCommandResultRecorded: {
 		Key: "OperatorAuditDirectCommandResultRecorded",
@@ -1552,7 +1570,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
 		Outcomes: []string{"OperatorAuditMcpCallRecorded"},
-		Reserved: true,
 	},
 	EventOperatorAuditMcpCallRecorded: {
 		Key: "OperatorAuditMcpCallRecorded",
@@ -1569,7 +1586,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers: []string{"ensemble"},
 		Persistence: "operator.audit_log",
 		Outcomes: []string{"OperatorAuditUserRecorded"},
-		Reserved: true,
 	},
 	EventOperatorAuditUserRecorded: {
 		Key: "OperatorAuditUserRecorded",

@@ -1124,6 +1124,9 @@ func verifyPublishACL(channel, publisherOperatorID, publisherSPIFFEID string) er
 		}
 		return fmt.Errorf("%w: operators cannot publish to cmd: channels", constants.ErrPubSubPublishUnauthorized)
 
+	case constants.ChannelPrefixAudit:
+		return fmt.Errorf("%w: audit channel publish is gateway-internal only", constants.ErrPubSubPublishUnauthorized)
+
 	case constants.ChannelPrefixResults, constants.ChannelPrefixHeartbeat, constants.ChannelPrefixReceipts:
 		// Operators may publish only to their own heartbeat:, results:, and
 		// receipts: channels. The ensemble (g8ee) is authorized to publish

@@ -357,10 +357,10 @@ type PreparedAuditEventInsert struct {
 }
 
 // AppendPreparedAuditEvent appends one event to the audit chain under SQLite's write lock.
-func AppendPreparedAuditEvent(ctx context.Context, conn *sql.Conn, prepared PreparedAuditEventInsert) (int64, int64, error) {
+func AppendPreparedAuditEvent(ctx context.Context, conn *sql.Conn, prepared PreparedAuditEventInsert) (int64, int64, string, error) {
 	head, err := loadAuditChainHeadConn(ctx, conn)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
 
 	nextSeq := head.Seq + 1
@@ -369,7 +369,7 @@ func AppendPreparedAuditEvent(ctx context.Context, conn *sql.Conn, prepared Prep
 	digestEvent.CommandStderr = prepared.StderrPlaintext
 	contentDigest, err := computeEventContentDigest(&digestEvent)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
 	hash := computeAuditEventHash(
 		nextSeq,
@@ -414,10 +414,10 @@ func AppendPreparedAuditEvent(ctx context.Context, conn *sql.Conn, prepared Prep
 		prepared.Event.TransactionID,
 	)
 	if err != nil {
-		return 0, 0, fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordEventFailed, err)
+		return 0, 0, "", fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordEventFailed, err)
 	}
 	eventID, _ := result.LastInsertId()
-	return eventID, nextSeq, nil
+	return eventID, nextSeq, hash, nil
 }
 
 func appendAuditChainCheckpoint(
@@ -450,7 +450,7 @@ func appendAuditChainCheckpoint(
 		StderrBytes:      nil,
 		EncryptedFlag:    0,
 	}
-	if _, _, err := AppendPreparedAuditEvent(ctx, conn, prepared); err != nil {
+	if _, _, _, err := AppendPreparedAuditEvent(ctx, conn, prepared); err != nil {
 		return "", err
 	}
 

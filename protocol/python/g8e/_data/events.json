@@ -1415,6 +1415,44 @@
       ],
       "persistence": "gateway.docstore"
     },
+    "AppReputationCommitmentCreateRequested": {
+      "_go_const": "EventAppReputationCommitmentCreateRequested",
+      "value": "g8e.v1.app.reputation.commitment.create.requested",
+      "kind": "request",
+      "governance": {
+        "action_type": "DOCUMENT_UPDATE",
+        "payload": "g8e.operator.v1.DocumentUpdateRequested"
+      },
+      "transport": [
+        "governed"
+      ],
+      "producers": [
+        "ensemble"
+      ],
+      "persistence": "gateway.docstore",
+      "outcomes": [
+        "OperatorReputationCommitmentCreated"
+      ]
+    },
+    "AppReputationStakeResolutionCreateRequested": {
+      "_go_const": "EventAppReputationStakeResolutionCreateRequested",
+      "value": "g8e.v1.app.reputation.stake.resolution.create.requested",
+      "kind": "request",
+      "governance": {
+        "action_type": "DOCUMENT_UPDATE",
+        "payload": "g8e.operator.v1.DocumentUpdateRequested"
+      },
+      "transport": [
+        "governed"
+      ],
+      "producers": [
+        "ensemble"
+      ],
+      "persistence": "gateway.docstore",
+      "outcomes": [
+        "OperatorReputationStakeResolutionCreated"
+      ]
+    },
     "AppRunStatusUpdated": {
       "_go_const": "EventAppRunStatusUpdated",
       "value": "g8e.v1.app.run.status.updated",
@@ -1516,8 +1554,7 @@
       ],
       "transport": [
         "pubsub"
-      ],
-      "reserved": true
+      ]
     },
     "OperatorAuditAiRecorded": {
       "_go_const": "EventOperatorAuditAiRecorded",
@@ -1545,8 +1582,7 @@
       ],
       "transport": [
         "pubsub"
-      ],
-      "reserved": true
+      ]
     },
     "OperatorAuditCommandRecorded": {
       "_go_const": "EventOperatorAuditCommandRecorded",
@@ -1574,8 +1610,7 @@
       ],
       "transport": [
         "pubsub"
-      ],
-      "reserved": true
+      ]
     },
     "OperatorAuditDirectCommandRecorded": {
       "_go_const": "EventOperatorAuditDirectCommandRecorded",
@@ -1603,8 +1638,7 @@
       ],
       "transport": [
         "pubsub"
-      ],
-      "reserved": true
+      ]
     },
     "OperatorAuditDirectCommandResultRecorded": {
       "_go_const": "EventOperatorAuditDirectCommandResultRecorded",
@@ -1632,8 +1666,7 @@
       ],
       "transport": [
         "pubsub"
-      ],
-      "reserved": true
+      ]
     },
     "OperatorAuditMcpCallRecorded": {
       "_go_const": "EventOperatorAuditMcpCallRecorded",
@@ -1661,8 +1694,7 @@
       ],
       "transport": [
         "pubsub"
-      ],
-      "reserved": true
+      ]
     },
     "OperatorAuditUserRecorded": {
       "_go_const": "EventOperatorAuditUserRecorded",

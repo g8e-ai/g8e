@@ -274,7 +274,9 @@ class TestLFAAServiceIdentityPropagation:
         command_service = build_command_service()
         lfaa_service = command_service._lfaa_service
 
-        lfaa_service.pubsub_service.publish_command = AsyncMock(return_value=1)
+        lfaa_service._gateway_operator_client.ingest_audit_record = AsyncMock(
+            return_value={"seq": 1, "hash": "abc"}
+        )
 
         g8e_context = _identity_context()
         g8e_context.bound_operators = [
@@ -286,6 +288,6 @@ class TestLFAAServiceIdentityPropagation:
         )
 
         assert result is True
-        msg = lfaa_service.pubsub_service.publish_command.call_args[1]["command_data"]
-        assert msg.user_id == "user-123", "user_id must be propagated from g8e_context"
-        assert msg.cli_session_id == "cli-456", "cli_session_id must be propagated from g8e_context"
+        kwargs = lfaa_service._gateway_operator_client.ingest_audit_record.await_args.kwargs
+        assert kwargs["user_id"] == "user-123", "user_id must be propagated from g8e_context"
+        assert kwargs["cli_session_id"] == "cli-456", "cli_session_id must be propagated from g8e_context"

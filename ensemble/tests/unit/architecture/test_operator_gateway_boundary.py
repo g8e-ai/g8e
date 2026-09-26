@@ -48,9 +48,7 @@ DELETED_OPERATOR_IMPORT_PREFIXES = (
     "app.services.operator.heartbeat_stale_monitor",
 )
 
-ALLOWED_DIRECT_PUBSUB_PUBLISHERS = {
-    REPO_ROOT / "ensemble" / "app" / "services" / "operator" / "lfaa_service.py",
-}
+ALLOWED_DIRECT_PUBSUB_PUBLISHERS: set[Path] = set()
 
 
 def _python_files_under(path: Path) -> list[Path]:

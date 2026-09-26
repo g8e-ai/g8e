@@ -134,6 +134,8 @@ export const EventType = Object.freeze({
     APP_MEMORY_CREATED: 'g8e.v1.app.memory.created',
     APP_MEMORY_UPDATE_REQUESTED: 'g8e.v1.app.memory.update.requested',
     APP_MEMORY_UPDATED: 'g8e.v1.app.memory.updated',
+    APP_REPUTATION_COMMITMENT_CREATE_REQUESTED: 'g8e.v1.app.reputation.commitment.create.requested',
+    APP_REPUTATION_STAKE_RESOLUTION_CREATE_REQUESTED: 'g8e.v1.app.reputation.stake.resolution.create.requested',
     APP_RUN_STATUS_UPDATED: 'g8e.v1.app.run.status.updated',
     APP_TASK_ASSIGNED: 'g8e.v1.app.task.assigned',
     APP_TASK_COMPLETED: 'g8e.v1.app.task.completed',
@@ -1109,6 +1111,22 @@ export const EventRegistry = Object.freeze({
         producers: ['ensemble'],
         persistence: 'gateway.docstore',
     }),
+    APP_REPUTATION_COMMITMENT_CREATE_REQUESTED: Object.freeze({
+        kind: 'request',
+        transport: ['governed'],
+        producers: ['ensemble'],
+        persistence: 'gateway.docstore',
+        actionType: 'DOCUMENT_UPDATE',
+        payload: 'g8e.operator.v1.DocumentUpdateRequested',
+    }),
+    APP_REPUTATION_STAKE_RESOLUTION_CREATE_REQUESTED: Object.freeze({
+        kind: 'request',
+        transport: ['governed'],
+        producers: ['ensemble'],
+        persistence: 'gateway.docstore',
+        actionType: 'DOCUMENT_UPDATE',
+        payload: 'g8e.operator.v1.DocumentUpdateRequested',
+    }),
     APP_RUN_STATUS_UPDATED: Object.freeze({
         kind: 'fact',
         producers: ['ensemble', 'gateway'],
@@ -1162,7 +1180,6 @@ export const EventRegistry = Object.freeze({
         transport: ['pubsub'],
         producers: ['ensemble'],
         persistence: 'operator.audit_log',
-        reserved: true,
     }),
     OPERATOR_AUDIT_AI_RECORDED: Object.freeze({
         kind: 'fact',
@@ -1176,7 +1193,6 @@ export const EventRegistry = Object.freeze({
         transport: ['pubsub'],
         producers: ['ensemble'],
         persistence: 'operator.audit_log',
-        reserved: true,
     }),
     OPERATOR_AUDIT_COMMAND_RECORDED: Object.freeze({
         kind: 'fact',
@@ -1189,7 +1205,6 @@ export const EventRegistry = Object.freeze({
         transport: ['pubsub'],
         producers: ['ensemble'],
         persistence: 'operator.audit_log',
-        reserved: true,
     }),
     OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED: Object.freeze({
         kind: 'fact',
@@ -1202,7 +1217,6 @@ export const EventRegistry = Object.freeze({
         transport: ['pubsub'],
         producers: ['ensemble'],
         persistence: 'operator.audit_log',
-        reserved: true,
     }),
     OPERATOR_AUDIT_DIRECT_COMMAND_RESULT_RECORDED: Object.freeze({
         kind: 'fact',
@@ -1216,7 +1230,6 @@ export const EventRegistry = Object.freeze({
         transport: ['pubsub'],
         producers: ['ensemble'],
         persistence: 'operator.audit_log',
-        reserved: true,
     }),
     OPERATOR_AUDIT_MCP_CALL_RECORDED: Object.freeze({
         kind: 'fact',
@@ -1230,7 +1243,6 @@ export const EventRegistry = Object.freeze({
         transport: ['pubsub'],
         producers: ['ensemble'],
         persistence: 'operator.audit_log',
-        reserved: true,
     }),
     OPERATOR_AUDIT_USER_RECORDED: Object.freeze({
         kind: 'fact',

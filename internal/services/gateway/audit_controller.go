@@ -24,29 +24,68 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
-// AuditController handles audit receipt, event, summary, and report endpoints.
+// AuditController handles audit receipt, event, summary, report, and ingest endpoints.
 type AuditController struct {
-	cfg        *config.Config
-	logger     *slog.Logger
-	auditStore *storage.SQLAuditStore
-	responder  *response.Writer
+	cfg               *config.Config
+	logger            *slog.Logger
+	auditStore        *storage.SQLAuditStore
+	auditIngestSvc    *AuditIngestService
+	responder         *response.Writer
 }
 
 // AuditControllerDeps groups all dependencies for AuditController.
 type AuditControllerDeps struct {
-	Cfg        *config.Config
-	Logger     *slog.Logger
-	AuditStore *storage.SQLAuditStore
-	Responder  *response.Writer
+	Cfg            *config.Config
+	Logger         *slog.Logger
+	AuditStore     *storage.SQLAuditStore
+	AuditIngestSvc *AuditIngestService
+	Responder      *response.Writer
 }
 
 func newAuditController(d AuditControllerDeps) *AuditController {
 	return &AuditController{
-		cfg:        d.Cfg,
-		logger:     d.Logger,
-		auditStore: d.AuditStore,
-		responder:  d.Responder,
+		cfg:            d.Cfg,
+		logger:         d.Logger,
+		auditStore:     d.AuditStore,
+		auditIngestSvc: d.AuditIngestSvc,
+		responder:      d.Responder,
 	}
+}
+
+// handleAuditRecords ingests an LFAA audit record and returns operator chain metadata.
+func (c *AuditController) handleAuditRecords(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.auditIngestSvc == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrInternal.Error())
+		return
+	}
+
+	var req models.AuditRecordIngestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+
+	requestorUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	result, err := c.auditIngestSvc.Ingest(r.Context(), req, requestorUserID)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, constants.ErrAuditIngestTimeout),
+			errors.Is(err, constants.ErrAuditIngestNoDelivery):
+			status = http.StatusGatewayTimeout
+		case errors.Is(err, constants.ErrRegistrationOperatorNotBelongToUser):
+			status = http.StatusForbidden
+		}
+		c.logger.Error("audit ingest failed", "error", err)
+		c.responder.Error(w, status, err.Error())
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, result)
 }
 
 // @Summary		Get or list audit receipts

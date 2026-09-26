@@ -11,6 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -574,7 +575,7 @@ func (ass *SQLAuditStore) RecordEvents(events []*Event) error {
 			if err != nil {
 				return err
 			}
-			if _, _, err := AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
+			if _, _, _, err := AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrAuditStoreExecuteBatchFailed, err)
 			}
 		}
@@ -619,7 +620,7 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 			return err
 		}
 
-		id, _, err := AppendPreparedAuditEvent(context.Background(), conn, prepared)
+		id, _, _, err := AppendPreparedAuditEvent(context.Background(), conn, prepared)
 		if err != nil {
 			return err
 		}
@@ -638,6 +639,86 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 	})
 
 	return eventID, err
+}
+
+// RecordEventChained records an audit event and returns the chain metadata for acknowledgement.
+func (ass *SQLAuditStore) RecordEventChained(event *Event) (int64, int64, string, error) {
+	if ass == nil {
+		return 0, 0, "", nil
+	}
+	if ass.db == nil {
+		return 0, 0, "", constants.ErrAuditStoreDBNotInitialized
+	}
+
+	ass.muWrites.Add(1)
+	defer ass.muWrites.Done()
+
+	var eventID, seq int64
+	var hash string
+	err := ass.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		if event.OperatorSessionID != "" {
+			if _, err := conn.ExecContext(context.Background(),
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+				event.OperatorSessionID, string(constants.SessionTypeApp), event.OperatorSessionID, event.OperatorSessionID,
+			); err != nil {
+				return fmt.Errorf("audit store: create app session: %w", err)
+			}
+		}
+
+		if err := ass.requireExistingSessionConn(conn, event); err != nil {
+			return err
+		}
+
+		prepared, err := ass.prepareAuditEventInsert(event)
+		if err != nil {
+			return err
+		}
+
+		id, chainSeq, chainHash, err := AppendPreparedAuditEvent(context.Background(), conn, prepared)
+		if err != nil {
+			return err
+		}
+		eventID = id
+		seq = chainSeq
+		hash = chainHash
+
+		ass.logger.Info("Event recorded",
+			"event_id", eventID,
+			"type", event.Type,
+			"operator_session_id", event.OperatorSessionID,
+			"seq", seq,
+			"stdout_truncated", prepared.StdoutTruncated,
+			"stderr_truncated", prepared.StderrTruncated,
+			"encrypted", prepared.EncryptedFlag,
+			"exit_code", event.CommandExitCode)
+
+		return nil
+	})
+
+	return eventID, seq, hash, err
+}
+
+// GetEventChainMetaByTransactionID returns chain metadata for an idempotent audit append.
+func (ass *SQLAuditStore) GetEventChainMetaByTransactionID(transactionID string) (int64, string, bool, error) {
+	if ass == nil || ass.db == nil {
+		return 0, "", false, constants.ErrAuditStoreDBNotInitialized
+	}
+	if transactionID == "" {
+		return 0, "", false, nil
+	}
+
+	var seq int64
+	var hash string
+	err := ass.db.QueryRowContext(context.Background(), `
+		SELECT seq, hash FROM events WHERE transaction_id = ? ORDER BY id DESC LIMIT 1
+	`, transactionID).Scan(&seq, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", false, nil
+	}
+	if err != nil {
+		return 0, "", false, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryEventsFailed, err)
+	}
+	return seq, hash, true, nil
 }
 
 // RecordActionReceipt records a signed ActionReceipt in the audit store.

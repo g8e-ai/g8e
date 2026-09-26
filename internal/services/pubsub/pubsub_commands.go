@@ -484,6 +484,13 @@ func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 			defer rs.wg.Done()
 			rs.listenForCommands(channelName)
 		}()
+
+		auditChannel := AuditChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
+		rs.wg.Add(1)
+		go func() {
+			defer rs.wg.Done()
+			rs.listenForAuditRecords(auditChannel)
+		}()
 	} else if rs.gatewayMode {
 		rs.logger.Info("Command service starting in Gateway mode (no pub/sub subscription)",
 			"mode", string(constants.GatewayModeGateway))
@@ -629,6 +636,53 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 			return
 		}
 		reconnectDelay = nextReconnectDelay(reconnectDelay, maxReconnectDelay)
+	}
+}
+
+func (rs *OperatorPubSubService) listenForAuditRecords(channelName string) {
+	if rs.audit == nil || rs.client == nil {
+		rs.logger.Error("Audit ingest listener disabled: audit service or pubsub client missing")
+		return
+	}
+
+	for {
+		select {
+		case <-rs.ctx.Done():
+			return
+		default:
+		}
+
+		msgCh, err := rs.client.Subscribe(rs.ctx, channelName)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			rs.logger.Warn("[AUDIT] Failed to subscribe to audit channel", "error", err)
+			if !waitForReconnect(rs.ctx, rs.reconnectBaseDelay) {
+				return
+			}
+			continue
+		}
+
+		rs.logger.Info("Subscribed to audit ingest channel", "channel_name", channelName)
+		disconnected := false
+		for !disconnected {
+			select {
+			case <-rs.ctx.Done():
+				return
+			case payload, ok := <-msgCh:
+				if !ok {
+					disconnected = true
+					break
+				}
+				if err := rs.audit.HandleAuditRecord(rs.ctx, payload, rs.client); err != nil {
+					rs.logger.Error("Failed to ingest audit record", "error", err)
+				}
+			}
+		}
+		if !waitForReconnect(rs.ctx, rs.reconnectBaseDelay) {
+			return
+		}
 	}
 }
 

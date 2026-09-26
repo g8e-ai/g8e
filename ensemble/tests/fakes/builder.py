@@ -166,7 +166,7 @@ def build_command_service(
     pubsub_service = OperatorPubSubService()
 
     lfaa_service = OperatorLFAAService(
-        pubsub_service=pubsub_service,
+        gateway_operator_client=gateway_operator_client,
     )
 
     if execution_service is None:

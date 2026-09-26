@@ -703,10 +703,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			G8eReader:     g8eReader,
 		},
 		AuditControllerDeps: AuditControllerDeps{
-			Cfg:        cfg,
-			Logger:     logger,
-			AuditStore: ls.auditStore,
-			Responder:  ls.responder,
+			Cfg:            cfg,
+			Logger:         logger,
+			AuditStore:     ls.auditStore,
+			AuditIngestSvc: NewAuditIngestService(auth, pubsub, logger),
+			Responder:      ls.responder,
 		},
 		DataControllerDeps: DataControllerDeps{
 			Cfg:       cfg,

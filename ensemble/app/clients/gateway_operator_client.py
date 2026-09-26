@@ -142,6 +142,43 @@ class GatewayOperatorClient:
             body["cli_session_id"] = context.cli_session_id
         return await self._post("/api/v1/operators/commands", body, "dispatch operator command")
 
+    async def ingest_audit_record(
+        self,
+        *,
+        operator_id: str,
+        operator_session_id: str,
+        event_type: str,
+        payload: bytes,
+        idempotency_key: str,
+        case_id: str | None = None,
+        investigation_id: str | None = None,
+        task_id: str | None = None,
+        web_session_id: str | None = None,
+        cli_session_id: str | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Ingest an LFAA audit record and return operator chain acknowledgement."""
+        body: dict[str, Any] = {
+            "operator_id": operator_id,
+            "operator_session_id": operator_session_id,
+            "event_type": event_type,
+            "payload": base64.b64encode(payload).decode("ascii"),
+            "idempotency_key": idempotency_key,
+        }
+        if case_id:
+            body["case_id"] = case_id
+        if investigation_id:
+            body["investigation_id"] = investigation_id
+        if task_id:
+            body["task_id"] = task_id
+        if web_session_id:
+            body["web_session_id"] = web_session_id
+        if cli_session_id:
+            body["cli_session_id"] = cli_session_id
+        if user_id:
+            body["requestor_user_id"] = user_id
+        return await self._post("/api/v1/audit/records", body, "ingest audit record")
+
     def _ensure_mtls(self) -> None:
         self._internal_http_client._ensure_mtls()
 

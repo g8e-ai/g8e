@@ -190,7 +190,7 @@ class OperatorCommandService:
         pubsub_service = OperatorPubSubService()
 
         lfaa_service = OperatorLFAAService(
-            pubsub_service=pubsub_service,
+            gateway_operator_client=gateway_operator_client,
         )
 
         execution_service = OperatorExecutionService(

@@ -170,7 +170,7 @@ class ReputationDataService:
                 collection=self.commitments_collection,
                 document_id=commitment.id,
                 updates=commitment.model_dump(mode="json"),
-                event_type=EventType.APP_DOCUMENT_UPDATE_REQUESTED,
+                event_type=EventType.APP_REPUTATION_COMMITMENT_CREATE_REQUESTED,
                 web_session_id=context.web_session_id,
                 user_id=context.user_id,
                 operator_id=context.operator_id,

@@ -635,7 +635,7 @@ func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 			if err != nil {
 				return err
 			}
-			if _, _, err := storage.AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
+			if _, _, _, err := storage.AppendPreparedAuditEvent(context.Background(), conn, prepared); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrAuditStoreExecuteBatchFailed, err)
 			}
 		}
@@ -745,7 +745,7 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 			return err
 		}
 
-		id, _, err := storage.AppendPreparedAuditEvent(context.Background(), conn, prepared)
+		id, _, _, err := storage.AppendPreparedAuditEvent(context.Background(), conn, prepared)
 		if err != nil {
 			return err
 		}
