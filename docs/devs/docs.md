@@ -5,6 +5,42 @@ Version: v2.1.9
 
 This guide defines how maintainers and AI agents audit, write, generate, review, and cross-link g8e documentation. The current working tree is the source of truth for current behavior. Historical release notes and evidence artifacts describe only their stated release, run, or assessment scope.
 
+## Dev docs format (`docs/devs/`)
+
+Files in `docs/devs/` are the agent- and machine-readable maintainer set. [Developer Guidelines](devs.md) is the reference shape. Adopt this format when adding a file in this directory or when fully auditing an existing one. Do not bolt the front matter onto an unaudited file: `last_updated` and `version` change only after the [End-to-End Audit Workflow](#end-to-end-audit-workflow). This guide keeps its current metadata until its own full audit.
+
+### Front matter
+
+Start every conformant file with YAML front matter. Keep the human H1; the front matter does not replace it.
+
+| Field | Content |
+| --- | --- |
+| `doc_id` | Stable id. Use the file stem (`devs`, `tests`). |
+| `title` | Document title. |
+| `audience` | Who should open it (`maintainers`, `agents`, or both). |
+| `status` | `current` for a maintained document. |
+| `last_updated` | ISO date of the completed audit (`YYYY-MM-DD`). |
+| `version` | Exact `VERSION` file value after that audit. |
+| `owners` | Repo-relative paths that own the claims. |
+| `related` | Repo-relative links to canonical neighbors. |
+| `when_to_read` | The task that should open this file. |
+| `do_not_use_for` | Topics this file does not own, each pointed at the owner. |
+
+### Section order
+
+Use these H2 headings, in this order: Purpose, Quick index, Invariants, Owned surfaces, Procedures, Anti-patterns, Links out. The quick index is an anchor list to those sections and to invariant groups. Invariants use `MUST`, `MUST NOT`, or `SHOULD` and a stable id `INV-<TOPIC>-<NN>` (two digits). Do not renumber an existing id; append the next free number in that topic. `devs.md` topics are `BOUND`, `ENV`, `CLI`, `CODE`, `ERR`, `TYPE`, `FS`, `DEP`, `TEST`, `GEN`, `DOCTRINE`, `MCP`, and `CONTRIB`.
+
+Owned surfaces are a table of claim, repo-relative path, and how to verify (command, symbol, or file). Procedures are numbered and include the exact commands. Anti-patterns name the bad shape and cite the invariant id.
+
+### Writing rules
+
+- Prefer tables and short bullets. Do not hard-wrap source lines.
+- Use repo-relative paths. Do not cite source line numbers or machine-absolute paths.
+- CLI flags: the live source of truth is `./g8e … --help`. These docs are maps, not flag dumps.
+- Role split: [Developer Guidelines](devs.md) holds coding invariants only. Package ownership stays in the [Code Map](codemap.md), test infrastructure in [Testing](tests.md), audit and generation in this guide, and release procedure in the [Release Process](release_process.md). Link. Do not paste a second essay.
+- State an absolute rule as `MUST` or `MUST NOT`. Do not soften it.
+- Verify every behavioral claim against the current tree before writing it. Delete a claim the tree no longer supports.
+
 ## Documentation Standard
 
 Every documentation change is a code change. A complete update verifies the entire affected document against the implementation, updates every related current-state document, preserves the boundaries of historical and evidence-bearing material, refreshes generated outputs through their owners, and increments document metadata only after the audit is complete.
@@ -28,7 +64,7 @@ Use this sequence for every reviewed document. Do not change `Last Updated` or `
 5. **Inspect related documentation.** Search for the same concept, symbol, command, route, or claim. Select one canonical explanation, update stale summaries, and add links instead of preserving conflicting copies.
 6. **Update source-owned and generated material correctly.** Edit source annotations, schemas, templates, or reviewed evidence inputs before running the relevant generator. Never hand-edit a generated output to conceal source drift.
 7. **Review the revised document end to end.** Confirm that the structure is coherent, examples are internally consistent, limitations are explicit, links resolve, prose is not hard-wrapped, and no stale text remains.
-8. **Update metadata last.** For a maintained document that carries `Last Updated` and `Version`, set the date to the completed audit date and the version to the exact value in `VERSION`. Metadata certifies that the document was reviewed for that repository version; it is not a substitute for the audit.
+8. **Update metadata last.** For a maintained document that carries `Last Updated` and `Version`, or `docs/devs/` front matter `last_updated` and `version`, set the date to the completed audit date and the version to the exact value in `VERSION`. Metadata certifies that the document was reviewed for that repository version; it is not a substitute for the audit.
 9. **Run the owning validation.** Run the narrow generator, tests, build, or validation commands for the changed surfaces, then reread the final generated and handwritten output.
 
 A partial review does not qualify for a metadata update. If the available source or environment cannot substantiate a claim, narrow or remove the claim and record the limitation in the document.
@@ -62,6 +98,7 @@ Developer documentation in `docs/devs/`, component development guides, and proto
 - Use repository-relative source paths and stable package, type, function, command, and message names.
 - Document construction order, persistence, error propagation, test infrastructure, generated artifacts, and internal contracts when they affect maintenance.
 - Keep wire requirements in `protocol/docs/`; keep implementation and contribution guidance in `docs/devs/` or the owning component documentation.
+- Write files in `docs/devs/` in the [Dev docs format](#dev-docs-format-docsdevs).
 - Link code ownership and package locations to the [Code Map](codemap.md) rather than copying a second repository map.
 
 ### Historical and evidence-bearing documentation
@@ -143,7 +180,7 @@ This catalog covers every first-party documentation surface in the repository. I
 
 ### Developer documentation
 
-- [Developer Guidelines](devs.md): Coding, error, path, runtime file, testing, and contribution rules.
+- [Developer Guidelines](devs.md): Coding invariants for the Go platform, written in the [dev docs format](#dev-docs-format-docsdevs).
 - [Code Map](codemap.md): Current repository ownership by runtime entry point and package.
 - [Testing](tests.md): Four-tier test model, fixtures, commands, and CI scope.
 - [Release Process](release_process.md): Versioning, native evaluation acceptance, signed compliance evidence, and publication procedure.
@@ -200,7 +237,7 @@ The [g8ee index](../ensemble/index.md) owns the component documentation map. Its
 - Use inline backticks for commands, flags, configuration keys, routes, fields, symbols, file names, and repository paths.
 - Use code blocks only for exact commands, configuration, requests, responses, or public API examples. Keep examples minimal, executable, and consistent with surrounding prerequisites.
 - Use repository-relative source paths in developer documentation. Never publish machine-specific absolute paths, credentials, private endpoints, or private topology.
-- Preserve existing front matter and metadata shape. Do not add redundant front matter solely to carry a title already present as a heading.
+- Outside `docs/devs/`, preserve existing front matter and metadata shape. Do not add redundant front matter solely to carry a title already present as a heading. Files in `docs/devs/` follow [Dev docs format](#dev-docs-format-docsdevs), including the required front matter and the human H1.
 - Use diagrams when they clarify a trust boundary, topology, state transition, or sequence. Do not add decorative icons or emojis.
 - Summarize a linked concept only far enough to establish context, then link to its canonical explanation.
 
@@ -244,6 +281,6 @@ Before declaring a documentation change complete:
 5. Confirm that each changed document appears in this catalog or its linked component index and has useful inbound and outbound navigation.
 6. Update all related current-state summaries and remove conflicting duplication.
 7. Preserve historical and evidence scope; do not broaden claims beyond the cited artifacts.
-8. Update `Last Updated` and `Version` only after the preceding audit is complete.
+8. Update `Last Updated` and `Version`, or `docs/devs/` front matter `last_updated` and `version`, only after the preceding audit is complete.
 9. Run the owning validation commands and inspect their final output.
 10. Perform a final structure, prose, metadata, and relative-link review without relying on CI to find documentation omissions.
