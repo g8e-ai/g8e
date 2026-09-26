@@ -60,11 +60,17 @@ func walkProductionGoFiles(root string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if info.IsDir() {
+			if strings.HasPrefix(info.Name(), ".") {
+				return filepath.SkipDir
+			}
 			switch info.Name() {
-			case "vendor", "testdata", "docs", ".local.dev":
+			case "vendor", "testdata", "docs":
 				return filepath.SkipDir
 			}
 			return nil

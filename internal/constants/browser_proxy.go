@@ -14,9 +14,9 @@ const (
 	HeaderGatewayBrowserProxy = "X-G8E-Gateway-Browser-Proxy"
 	GatewayBrowserProxyValue  = "1"
 
-	HeaderProxyUserID        = "X-Proxy-User-Id"
-	HeaderProxyUserEmail     = "X-Proxy-User-Email"
-	HeaderProxyWebSessionID  = "X-Proxy-Web-Session-Id"
+	HeaderProxyUserID         = "X-Proxy-User-Id"
+	HeaderProxyUserEmail      = "X-Proxy-User-Email"
+	HeaderProxyWebSessionID   = "X-Proxy-Web-Session-Id"
 	HeaderProxyOrganizationID = "X-Proxy-Organization-Id"
 
 	// DefaultEnsembleUpstreamURL is the default g8ee HTTP surface for browser proxy.

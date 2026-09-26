@@ -99,7 +99,7 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 		target.RawQuery = r.URL.RawQuery
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), method, target.String(), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(r.Context(), method, target.String(), bytes.NewReader(body)) //nolint:gosec // G704: target is constructed from configured upstreamBase and allowlisted path
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 		return
@@ -116,7 +116,7 @@ func (c *EnsembleBrowserProxyController) handleProxy(w http.ResponseWriter, r *h
 	}
 	req.Header.Set("Accept", r.Header.Get("Accept"))
 
-	resp, err := c.client.Do(req)
+	resp, err := c.client.Do(req) //nolint:gosec // G704: proxy call to configured ensemble upstream URL
 	if err != nil {
 		c.logger.Warn("gateway: ensemble browser proxy upstream failed", "path", upstreamPath, "error", err)
 		c.responder.Error(w, http.StatusBadGateway, "ensemble upstream unavailable")

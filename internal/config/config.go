@@ -121,26 +121,26 @@ type LoadOptions struct {
 // backbone for the entire g8e platform, replacing external databases.
 // No outbound authentication is required - the Operator simply starts and listens.
 type GatewayConfig struct {
-	Enabled          bool
-	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, ratify, notary)
-	HTTPPort         int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
-	HTTPSPort        int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
-	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
-	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
-	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
-	VaultDir         string         // Directory for encryption vault (default: .g8e/vault)
-	VaultKeyPath     string         // Path to vault key file (default: .g8e/vault/key)
-	PasskeyRpID      string         // RP ID for passkey operations (default: localhost)
-	PasskeyRpName    string         // RP Name for passkey operations (default: g8e)
-	PasskeyRpOrigins []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
-	MCPDownstreamURL string         // URL of the downstream MCP server to proxy discovery and execution to
-	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
-	EnsembleUpstreamURL string     // HTTP URL of the g8ee ensemble for browser proxy forwarding
-	PublicBaseURL    string         // Public base URL for L3 approval links (e.g., https://localhost:8443)
-	JWKSURL          string         // URL to fetch JWKS for JWT validation
-	JWTRoleClaim     string         // The claim in JWT that contains roles (default: "roles")
-	JWTIssuer        string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
-	JWTAudience      string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
+	Enabled             bool
+	Posture             GatewayPosture // Governance enforcement posture (doctrine, consensus, ratify, notary)
+	HTTPPort            int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
+	HTTPSPort           int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
+	DataDir             string         // Root directory for SQLite database (default: .g8e/data in working directory)
+	PKIDir              string         // Directory for TLS certificates (default: .g8e/pki)
+	SecretsDir          string         // Directory for platform secrets (default: .g8e/secrets)
+	VaultDir            string         // Directory for encryption vault (default: .g8e/vault)
+	VaultKeyPath        string         // Path to vault key file (default: .g8e/vault/key)
+	PasskeyRpID         string         // RP ID for passkey operations (default: localhost)
+	PasskeyRpName       string         // RP Name for passkey operations (default: g8e)
+	PasskeyRpOrigins    []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
+	MCPDownstreamURL    string         // URL of the downstream MCP server to proxy discovery and execution to
+	A2ADownstreamURL    string         // URL of the downstream A2A server to proxy execution to
+	EnsembleUpstreamURL string         // HTTP URL of the g8ee ensemble for browser proxy forwarding
+	PublicBaseURL       string         // Public base URL for L3 approval links (e.g., https://localhost:8443)
+	JWKSURL             string         // URL to fetch JWKS for JWT validation
+	JWTRoleClaim        string         // The claim in JWT that contains roles (default: "roles")
+	JWTIssuer           string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
+	JWTAudience         string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
 
 	// HTTP server limits
 	MaxPayloadBytes   int64         // Maximum request payload size in bytes (default: 10MB)
@@ -349,25 +349,25 @@ func FindProjectRoot() string {
 
 // GatewayOptions contains configuration values for LoadGateway.
 type GatewayOptions struct {
-	Posture          GatewayPosture
-	HTTPPort         int
-	HTTPSPort        int
-	DataDir          string
-	PKIDir           string
-	SecretsDir       string
-	VaultDir         string
-	VaultKeyPath     string
-	PasskeyRpID      string
-	PasskeyRpName    string
-	PasskeyRpOrigins []string
+	Posture             GatewayPosture
+	HTTPPort            int
+	HTTPSPort           int
+	DataDir             string
+	PKIDir              string
+	SecretsDir          string
+	VaultDir            string
+	VaultKeyPath        string
+	PasskeyRpID         string
+	PasskeyRpName       string
+	PasskeyRpOrigins    []string
 	MCPDownstreamURL    string
 	A2ADownstreamURL    string
 	EnsembleUpstreamURL string
 	PublicBaseURL       string
-	JWKSURL          string
-	JWTRoleClaim     string
-	JWTIssuer        string
-	JWTAudience      string
+	JWKSURL             string
+	JWTRoleClaim        string
+	JWTIssuer           string
+	JWTAudience         string
 
 	RateLimitRPS   float64
 	RateLimitBurst int
@@ -548,24 +548,24 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			Enabled: true,
 			Posture: posture,
 
-			HTTPPort:         httpPort,
-			HTTPSPort:        httpsPort,
-			DataDir:          dataDir,
-			PKIDir:           pkiDir,
-			SecretsDir:       secretsDir,
-			VaultDir:         vaultDir,
-			VaultKeyPath:     vaultKeyPath,
-			PasskeyRpID:      passkeyRpID,
-			PasskeyRpName:    passkeyRpName,
-			PasskeyRpOrigins: opts.PasskeyRpOrigins,
+			HTTPPort:            httpPort,
+			HTTPSPort:           httpsPort,
+			DataDir:             dataDir,
+			PKIDir:              pkiDir,
+			SecretsDir:          secretsDir,
+			VaultDir:            vaultDir,
+			VaultKeyPath:        vaultKeyPath,
+			PasskeyRpID:         passkeyRpID,
+			PasskeyRpName:       passkeyRpName,
+			PasskeyRpOrigins:    opts.PasskeyRpOrigins,
 			MCPDownstreamURL:    mcpDownstreamURL,
 			A2ADownstreamURL:    a2aDownstreamURL,
 			EnsembleUpstreamURL: ensembleUpstreamURL,
 			PublicBaseURL:       opts.PublicBaseURL,
-			JWKSURL:          jwksURL,
-			JWTRoleClaim:     jwtRoleClaim,
-			JWTIssuer:        jwtIssuer,
-			JWTAudience:      jwtAudience,
+			JWKSURL:             jwksURL,
+			JWTRoleClaim:        jwtRoleClaim,
+			JWTIssuer:           jwtIssuer,
+			JWTAudience:         jwtAudience,
 
 			// HTTP server limits with fail-closed defaults
 			MaxPayloadBytes:   512 * 1024, // 512KB

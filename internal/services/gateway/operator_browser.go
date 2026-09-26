@@ -32,8 +32,9 @@ func (c *OperatorController) handleOperatorsByID(w http.ResponseWriter, r *http.
 }
 
 // handleOperatorBrowserSubpath serves browser-facing operator detail and stop routes:
-//   GET  /api/v1/operators/{operator_id}
-//   POST /api/v1/operators/{operator_id}/stop
+//
+//	GET  /api/v1/operators/{operator_id}
+//	POST /api/v1/operators/{operator_id}/stop
 func (c *OperatorController) handleOperatorBrowserSubpath(w http.ResponseWriter, r *http.Request) {
 	remainder := strings.TrimPrefix(r.URL.Path, constants.APIPaths.OperatorsByID)
 	remainder = strings.Trim(remainder, "/")

@@ -46,30 +46,30 @@ func getBinaryName() string {
 // It is populated by addGatewayFlags and converted to serve.GatewayConfig
 // via gatewayFlagsToServeConfig.
 type GatewayFlags struct {
-	Posture            string
-	HTTPPort           int
-	HTTPSPort          int
-	DataDir            string
-	PKIDir             string
-	SecretsDir         string
-	VaultDir           string
-	VaultKeyPath       string
-	PasskeyRpID        string
-	PasskeyRpName      string
-	PasskeyRpOrigins   []string
-	RateLimitRPS       float64
-	RateLimitBurst     int
-	LogLevel           string
-	CertIdentityMode   string
-	ConsensusID        string
-	ConsensusURL       string
-	ConsensusBootstrap string
+	Posture             string
+	HTTPPort            int
+	HTTPSPort           int
+	DataDir             string
+	PKIDir              string
+	SecretsDir          string
+	VaultDir            string
+	VaultKeyPath        string
+	PasskeyRpID         string
+	PasskeyRpName       string
+	PasskeyRpOrigins    []string
+	RateLimitRPS        float64
+	RateLimitBurst      int
+	LogLevel            string
+	CertIdentityMode    string
+	ConsensusID         string
+	ConsensusURL        string
+	ConsensusBootstrap  string
 	MCPDownstreamURL    string
 	A2ADownstreamURL    string
 	EnsembleUpstreamURL string
 	PublicBaseURL       string
-	AllowedOrigins     []string
-	DoctrineDir        string
+	AllowedOrigins      []string
+	DoctrineDir         string
 
 	PublicSpectatorEnabled           bool
 	PublicSpectatorPrivateAddr       string
