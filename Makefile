@@ -239,6 +239,15 @@ python-build:
 	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
 
+.PHONY: constants constants-check
+constants:
+	@echo "Regenerating protocol constants from protocol/constants/events.json..."
+	@go run ./internal/tools/constgen -write
+
+constants-check:
+	@echo "Checking protocol/constants/events.json registry and generated constants..."
+	@go run ./internal/tools/constgen -check
+
 .PHONY: website-build
 website-build:
 	@echo "Rendering g8e.ai from README.md..."
@@ -562,7 +571,7 @@ test: test-unit test-integration
 
 # Unit Tests: Run immediately without any build tags (excludes integration and e2e)
 .PHONY: test-unit
-test-unit:
+test-unit: constants-check
 	@echo "Running Tier 1 (Unit) tests..."
 	@go test -tags=!integration $(TEST_UNIT_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 

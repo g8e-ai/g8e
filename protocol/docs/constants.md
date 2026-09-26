@@ -5,7 +5,7 @@ Version: v2.1.13
 
 ## Overview
 
-The g8e constants system maintains canonical constant definitions across the platform. Go source files in `internal/constants/` are the single source of truth (SSOT) for the platform. JSON schemas in `protocol/constants/` provide protocol-level reference documentation and external protocol definitions for SDKs and other consumers.
+The g8e constants system maintains canonical constant definitions across the platform. JSON files in `protocol/constants/` are the single source of truth (SSOT). Go (`internal/constants/*_gen.go`), dashboard (`dashboard/public/js/constants/events.js`), and Python (`protocol/python/g8e/_data/`) are generated or bundled views of the same JSON.
 
 ## Constant Categories
 
@@ -23,9 +23,9 @@ Canonical collection names for the operator embedded SQLite database, typed as `
 - `CollectionRevokedCertificates`, `CollectionTrustedSigners`, `CollectionAppPolicies`
 - `CollectionConsensus`, `CollectionEnrollmentTokens`, `CollectionCLIRecoveryRequests`, `CollectionPlatformEnrollments` (`platform_enrollments`)
 
-### Event Types (`events.go`)
+### Event Types (`protocol/constants/events.json` → `events_gen.go`)
 
-Typed event identifiers for the pub/sub system, typed as `EventType`. The file defines approximately 300 individual event constants organized across the following categories:
+Typed event identifiers for the pub/sub system, typed as `EventType`. `make constants` generates `internal/constants/events_gen.go` from the registry JSON. The registry currently defines 354 events organized across the following categories:
 
 - App Case: `EventAppCaseCreated`, `EventAppCaseUpdated`, `EventAppCaseAssigned`, `EventAppCaseEscalated`, `EventAppCaseResolved`, `EventAppCaseClosed`, `EventAppCaseSelected`, `EventAppCaseCleared`, `EventAppCaseSwitched`, `EventAppCaseCreationRequested`, `EventAppCaseUpdateRequested`
 - App Task: `EventAppTaskCreated`, `EventAppTaskUpdated`, `EventAppTaskAssigned`, `EventAppTaskStarted`, `EventAppTaskCompleted`, `EventAppTaskFailed`
