@@ -72,7 +72,6 @@ describe('ThinkingManager [UNIT]', () => {
             new ThinkingManager(eventBus, null, null);
             eventBus.emit(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, {
                 thinking: 'hi',
-                phase: ThinkingPhase.UPDATE,
                 web_session_id: 'sess-2',
                 phase: 'start',
                 thinking_content: 'legacy',
