@@ -10,8 +10,9 @@ package audit
 import (
 	"bytes"
 	"fmt"
-	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"testing"
+
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

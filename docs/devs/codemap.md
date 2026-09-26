@@ -4,7 +4,7 @@ title: g8e Code Map
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-09-26
-version: v2.1.13
+version: v2.2.0
 owners:
   - cmd/g8e/main.go
   - internal/cli/cmd/main.go

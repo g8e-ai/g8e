@@ -12,10 +12,11 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
-	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"net/http"
 	"testing"
 	"time"
+
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

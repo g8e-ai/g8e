@@ -12,7 +12,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +19,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 

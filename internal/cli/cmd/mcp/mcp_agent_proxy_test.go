@@ -8,10 +8,11 @@
 package mcp
 
 import (
-	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"os"
 	"path/filepath"
 	"testing"
+
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 

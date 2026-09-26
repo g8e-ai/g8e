@@ -9,8 +9,9 @@ package eval
 
 import (
 	"context"
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
 	"testing"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
 
 	"github.com/stretchr/testify/require"
 )

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 )
 
 // ReexecGatewayIfRequested exits when the test binary is re-executed by
@@ -37,7 +38,12 @@ func serveHealth() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintf(w, "{\"status\":\"ok\",\"mode\":\"gateway\",\"posture\":\"doctrine\",\"pid\":%d}", os.Getpid())
 	})
-	_ = http.ListenAndServe("127.0.0.1:"+strconv.Itoa(port), mux)
+	srv := &http.Server{
+		Addr:              "127.0.0.1:" + strconv.Itoa(port),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	_ = srv.ListenAndServe()
 }
 
 func parseHTTPPortFromArgs(args []string) int {

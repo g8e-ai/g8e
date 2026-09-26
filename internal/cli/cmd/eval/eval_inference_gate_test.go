@@ -14,7 +14,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
 	"io"
 	"log/slog"
 	"net/http"
@@ -24,6 +23,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"

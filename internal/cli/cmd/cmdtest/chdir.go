@@ -29,6 +29,6 @@ func ChdirTemp(t *testing.T) string {
 	require.NoError(t, err)
 	tmpDir := testutil.TempDir(t)
 	require.NoError(t, os.Chdir(tmpDir))
-	t.Cleanup(func() { os.Chdir(originalWd) })
+	t.Cleanup(func() { _ = os.Chdir(originalWd) })
 	return tmpDir
 }

@@ -12,10 +12,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
 	"log/slog"
 	"testing"
 	"time"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"

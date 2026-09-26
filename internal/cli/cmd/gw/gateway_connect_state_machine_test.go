@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/report"
 	"net/http"
 	"net/http/httptest"
 	"net/url"

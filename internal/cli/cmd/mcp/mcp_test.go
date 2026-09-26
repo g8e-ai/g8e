@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -27,6 +26,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 
