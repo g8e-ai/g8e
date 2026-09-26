@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -250,12 +251,22 @@ func pythonExecutable(t *testing.T) string {
 func runInferenceDispatchHarnessPython(t *testing.T, fixturePath string) {
 	t.Helper()
 	repoRoot := repoRootFromTest(t)
-	script := filepath.Join(repoRoot, "ensemble", "tests", "integration", "inference_dispatch_harness_runner.py")
+	ensembleRoot := filepath.Join(repoRoot, "ensemble")
+	protocolPythonRoot := filepath.Join(repoRoot, "protocol", "python")
+	script := filepath.Join(ensembleRoot, "tests", "integration", "inference_dispatch_harness_runner.py")
 	require.FileExists(t, script)
+
+	pythonPaths := []string{ensembleRoot, protocolPythonRoot, repoRoot}
+	if existing := os.Getenv("PYTHONPATH"); existing != "" {
+		pythonPaths = append(pythonPaths, existing)
+	}
 
 	cmd := exec.Command(pythonExecutable(t), script)
 	cmd.Dir = repoRoot
-	cmd.Env = append(os.Environ(), "G8E_INFERENCE_DISPATCH_HARNESS_FIXTURE="+fixturePath)
+	cmd.Env = append(os.Environ(),
+		"G8E_INFERENCE_DISPATCH_HARNESS_FIXTURE="+fixturePath,
+		"PYTHONPATH="+strings.Join(pythonPaths, string(os.PathListSeparator)),
+	)
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "python harness runner failed: %s", string(output))
 }
