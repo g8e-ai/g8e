@@ -141,7 +141,7 @@ class TestUpdateMemoryFromConversation:
         conversation_history = [
             ConversationHistoryMessage(
                 id=f"msg-{i}",
-                sender=EventType.SOURCE_USER_CHAT,
+                sender=MessageSender.USER_CHAT,
                 content=f"Message {i}",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
@@ -225,7 +225,7 @@ class TestConversationToContents:
         conversation_history = [
             ConversationHistoryMessage(
                 id="msg-1",
-                sender=EventType.SOURCE_USER_CHAT,
+                sender=MessageSender.USER_CHAT,
                 content="Normal message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
@@ -234,7 +234,7 @@ class TestConversationToContents:
             ),
             ConversationHistoryMessage(
                 id="msg-2",
-                sender=EventType.SOURCE_AI_PRIMARY,
+                sender=MessageSender.AI_PRIMARY,
                 content="Thinking message",
                 timestamp=datetime.now(UTC),
                 metadata=AIResponseMetadata(sentinel_mode=False, is_thinking=True),
@@ -347,7 +347,7 @@ class TestConversationToContents:
         conversation_history = [
             ConversationHistoryMessage(
                 id="msg-1",
-                sender=EventType.SOURCE_SYSTEM,
+                sender=MessageSender.SYSTEM,
                 content="System message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),

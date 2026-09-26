@@ -20,7 +20,6 @@ from g8e.enums import (
     HealthStatus,
     InfrastructureStatus,
     NetworkProtocol,
-    ThinkingActionType,
     ToolCallStatus,
     ToolDisplayCategory,
 )

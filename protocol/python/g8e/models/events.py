@@ -185,7 +185,7 @@ class ChatRetryPayload(G8eBaseModel):
 
 class ChatThinkingPayload(G8eBaseModel):
     thinking: str | None
-    action_type: str
+    phase: str
     timestamp: str | None = None
 
 

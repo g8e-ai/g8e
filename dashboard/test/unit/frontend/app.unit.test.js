@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MockEventBus, MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
+import { UIEventType } from '@g8ed/public/js/constants/ui-events.js';
 import { CssClass } from '@g8ed/public/js/constants/ui-constants.js';
 
 vi.mock('@g8ed/public/js/utils/notification-service.js', () => ({
@@ -358,7 +359,7 @@ describe('G8eDashboardApp [FRONTEND - jsdom]', () => {
             app = new G8eDashboardApp();
             app.init();
             expect(() => {
-                eventBus.emit(EventType.PLATFORM_TERMINAL_OPENED);
+                eventBus.emit(UIEventType.TERMINAL_OPENED);
             }).not.toThrow();
         });
 
@@ -367,7 +368,7 @@ describe('G8eDashboardApp [FRONTEND - jsdom]', () => {
             app = new G8eDashboardApp();
             app.init();
             expect(() => {
-                eventBus.emit(EventType.PLATFORM_TERMINAL_MINIMIZED);
+                eventBus.emit(UIEventType.TERMINAL_MINIMIZED);
             }).not.toThrow();
         });
 
@@ -376,7 +377,7 @@ describe('G8eDashboardApp [FRONTEND - jsdom]', () => {
             app = new G8eDashboardApp();
             app.init();
             expect(() => {
-                eventBus.emit(EventType.PLATFORM_TERMINAL_MAXIMIZED);
+                eventBus.emit(UIEventType.TERMINAL_MAXIMIZED);
             }).not.toThrow();
         });
     });

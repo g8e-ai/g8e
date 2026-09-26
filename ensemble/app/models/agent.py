@@ -259,7 +259,7 @@ class StreamChunkData(G8eBaseModel):
 
     content: str | None = None
     thinking: str | None = None
-    action_type: str | None = None
+    phase: str | None = None
     tool_name: str | None = None
     execution_id: str | None = None
     command: str | None = None

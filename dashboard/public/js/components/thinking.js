@@ -12,8 +12,9 @@
  * - UX-optimized display (only shows when there are actual thoughts)
  */
 
-import { EventType, ThinkingActionType } from '../constants/events.js';
-import { ThinkingEvent } from '../models/ai-event-models.js';
+import { EventType } from '../constants/events.js';
+import { UIEventType } from '../constants/ui-events.js';
+import { ThinkingEvent, ThinkingPhase } from '../models/ai-event-models.js';
 import { decodeHtmlEntities } from '../utils/html.js';
 
 export class ThinkingManager {
@@ -29,20 +30,20 @@ export class ThinkingManager {
     }
 
     setupEventListeners() {
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, (raw) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED, (raw) => {
             if (this._isFiltered()) return;
             const data = ThinkingEvent.parse(raw);
 
-            if (data.action_type === ThinkingActionType.START) {
+            if (data.phase === ThinkingPhase.START) {
                 this.handleThinkingStart(data);
-            } else if (data.action_type === ThinkingActionType.END) {
+            } else if (data.phase === ThinkingPhase.END) {
                 this.handleThinkingEnd(data);
             } else {
                 this.handleThinkingUpdate(data);
             }
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_STARTED, (raw) => {
+        this.eventBus.on(EventType.AI_LLM_CHAT_ITERATION_STARTED, (raw) => {
             if (this._isFiltered()) return;
             const data = ThinkingEvent.parse(raw);
             this.handleThinkingUpdate(data);
@@ -51,7 +52,7 @@ export class ThinkingManager {
 
     _isFiltered() {
         let rejected = false;
-        this.eventBus.emit(EventType.LLM_CHAT_FILTER_EVENT, { reject: () => { rejected = true; } });
+        this.eventBus.emit(EventType.AI_LLM_CHAT_FILTER_EVENT, { reject: () => { rejected = true; } });
         return rejected;
     }
 
@@ -67,7 +68,7 @@ export class ThinkingManager {
         this.activeSessions.add(webSessionId);
         this.thinkingActive = true;
 
-        this.eventBus.emit(EventType.LLM_CHAT_STOP_SHOW);
+        this.eventBus.emit(UIEventType.CHAT_STOP_SHOW);
         if (text) {
             this.eventBus.emit(EventType.OPERATOR_TERMINAL_THINKING_APPEND, { webSessionId, text });
         }
@@ -85,7 +86,7 @@ export class ThinkingManager {
         this.activeSessions.add(webSessionId);
         this.thinkingActive = true;
 
-        this.eventBus.emit(EventType.LLM_CHAT_STOP_SHOW);
+        this.eventBus.emit(UIEventType.CHAT_STOP_SHOW);
         if (text) {
             this.eventBus.emit(EventType.OPERATOR_TERMINAL_THINKING_APPEND, { webSessionId, text });
         }
@@ -108,7 +109,7 @@ export class ThinkingManager {
         this.activeSessions.delete(webSessionId);
         this.thinkingActive = this.activeSessions.size > 0;
 
-        this.eventBus.emit(EventType.LLM_CHAT_STOP_HIDE);
+        this.eventBus.emit(UIEventType.CHAT_STOP_HIDE);
     }
 
     hideThinkingIndicator(webSessionId = null) {
@@ -123,7 +124,7 @@ export class ThinkingManager {
         }
 
         this.thinkingActive = this.activeSessions.size > 0;
-        this.eventBus.emit(EventType.LLM_CHAT_STOP_HIDE);
+        this.eventBus.emit(UIEventType.CHAT_STOP_HIDE);
     }
 
     getThinkingText(data) {

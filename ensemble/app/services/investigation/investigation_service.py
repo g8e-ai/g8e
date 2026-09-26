@@ -421,9 +421,9 @@ class InvestigationService:
             return False
 
         # Map MessageSender to appropriate EventSource for metadata
-        source = EventType.SOURCE_AI_PRIMARY
+        source = MessageSender.AI_PRIMARY
         if sender == MessageSender.AI_ASSISTANT:
-            source = EventType.SOURCE_AI_ASSISTANT
+            source = MessageSender.AI_ASSISTANT
 
         return await self.investigation_data_service.add_chat_message(
             investigation_id=investigation_id,

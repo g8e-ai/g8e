@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 from __future__ import annotations
+from app.constants.message_sender import MessageSender
 
 
 from app.models.base import ConfigDict, Field, field_validator, model_validator
@@ -38,12 +39,12 @@ class ConversationMessageMetadata(G8eBaseModel):
     """Base typed metadata for a conversation message.
 
     Use a typed subclass when the message category is known:
-    - UserChatMetadata       - EventType.SOURCE_USER_CHAT messages
-    - AIResponseMetadata     - EventType.SOURCE_AI_PRIMARY / EventType.SOURCE_AI_ASSISTANT messages
-    - OperatorCommandMetadata - EventType.SOURCE_USER_TERMINAL command execution messages
+    - UserChatMetadata       - MessageSender.USER_CHAT messages
+    - AIResponseMetadata     - MessageSender.AI_PRIMARY / MessageSender.AI_ASSISTANT messages
+    - OperatorCommandMetadata - MessageSender.USER_TERMINAL command execution messages
     - ApprovalMetadata       - approval request/response messages
     - FileEditMetadata       - file edit operation messages
-    - SystemMetadata         - EventType.SOURCE_SYSTEM / system notification messages
+    - SystemMetadata         - MessageSender.SYSTEM / system notification messages
 
     The base class is kept for backward compat and for cases where the category
     cannot be statically determined (e.g. deserialization from DB).
@@ -58,8 +59,8 @@ class ConversationMessageMetadata(G8eBaseModel):
     is_thinking: bool | None = Field(
         default=None, description="Whether this is an AI thinking message"
     )
-    source: EventType | None = Field(
-        default=None, description="AI response source (EventType.SOURCE_* only)"
+    source: MessageSender | None = Field(
+        default=None, description="AI response source (MessageSender.* only)"
     )
     approval_id: str | None = Field(default=None, description="Approval request ID")
     hostname: str | None = Field(default=None, description="Operator hostname")
@@ -73,7 +74,7 @@ class ConversationMessageMetadata(G8eBaseModel):
         default=None, description="Whether this message has embedded thinking content"
     )
     thinking_content: str | None = Field(default=None, description="Embedded AI thinking content")
-    response_source: EventType | None = Field(default=None, description="Source of the AI response")
+    response_source: MessageSender | None = Field(default=None, description="Source of the AI response")
     approved: bool | None = Field(default=None, description="Whether the approval was granted")
     reason: str | None = Field(default=None, description="Approval decision reason or feedback")
     feedback_reason: str | None = Field(
@@ -146,7 +147,7 @@ class ConversationMessageMetadata(G8eBaseModel):
 
 
 class UserChatMetadata(ConversationMessageMetadata):
-    """Metadata for user-entered chat messages (EventType.SOURCE_USER_CHAT).
+    """Metadata for user-entered chat messages (MessageSender.USER_CHAT).
 
     User chat is the source of truth for what the user typed. It must never
     carry execution IDs, commands, or AI-routing fields - those belong to
@@ -162,16 +163,16 @@ class UserChatMetadata(ConversationMessageMetadata):
 
 
 class AIResponseMetadata(ConversationMessageMetadata):
-    """Metadata for AI-generated response messages (EventType.SOURCE_AI_PRIMARY / EVENT_SOURCE_AI_ASSISTANT).
+    """Metadata for AI-generated response messages (MessageSender.AI_PRIMARY / MessageSender.AI_ASSISTANT).
 
-    The `source` field here uses EventType.SOURCE_* - the attribution of which AI
+    The `source` field here uses MessageSender.* - the attribution of which AI
     system produced the response.
     """
 
-    source: EventType | None = Field(
+    source: MessageSender | None = Field(
         default=None, description="AI response attribution (source_ai, source_tool_call)"
     )
-    response_source: EventType | None = Field(default=None, description="Source of the AI response")
+    response_source: MessageSender | None = Field(default=None, description="Source of the AI response")
     model: str | None = Field(default=None, description="AI model that produced this response")
     tokens: int | None = Field(default=None, description="Token count for this response")
     has_thinking: bool | None = Field(
@@ -195,7 +196,7 @@ class OperatorCommandMetadata(ConversationMessageMetadata):
     These are commands dispatched by the AI agent, not entered by the user.
     For user-entered terminal commands, use UserRunCommandMetadata.
 
-    The command source is implied by EventType.SOURCE_USER_TERMINAL + direct_execution=False.
+    The command source is implied by MessageSender.USER_TERMINAL + direct_execution=False.
     """
 
     execution_id: str | None = Field(default=None, description="Operator execution ID")

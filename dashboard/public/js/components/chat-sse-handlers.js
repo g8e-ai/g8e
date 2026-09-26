@@ -2,6 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { EventType, ToolDisplayCategory } from '../constants/events.js';
+import { UIEventType } from '../constants/ui-events.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { decodeHtmlEntities } from '../utils/html.js';
 import { notificationService } from '../utils/notification-service.js';
@@ -179,8 +180,8 @@ export const ChatSSEHandlersMixin = {
             });
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_STOP_SHOW, () => this.showAIStopButton());
-        this.eventBus.on(EventType.LLM_CHAT_STOP_HIDE, () => this.hideAIStopButton());
+        this.eventBus.on(UIEventType.CHAT_STOP_SHOW, () => this.showAIStopButton());
+        this.eventBus.on(UIEventType.CHAT_STOP_HIDE, () => this.hideAIStopButton());
 
         this.eventBus.on(EventType.OPERATOR_TERMINAL_THINKING_APPEND, ({ webSessionId, text }) => {
             if (this.anchoredTerminal) {

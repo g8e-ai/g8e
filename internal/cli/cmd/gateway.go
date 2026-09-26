@@ -386,7 +386,7 @@ func gatewayStartCmdWithConfig(
 	var interactive bool
 
 	cmd := &cobra.Command{
-		Use:   string(constants.ThinkingActionTypeStart),
+		Use:   string(constants.ThinkingPhaseStart),
 		Short: "Start the g8e Gateway",
 		Long: `Start the g8e Gateway as a background process. The gateway runs in its own
 session (setsid) so Ctrl+C in the terminal does not affect it.

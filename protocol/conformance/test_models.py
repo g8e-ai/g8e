@@ -432,10 +432,10 @@ class TestEventPayloadConformance:
     def test_chat_thinking_payload_round_trip(self):
         from g8e.models import ChatThinkingPayload
 
-        payload = ChatThinkingPayload(thinking="hmm", action_type="execute_bash")
+        payload = ChatThinkingPayload(thinking="hmm", phase="execute_bash")
         parsed = json.loads(payload.model_dump_json())
         assert parsed["thinking"] == "hmm"
-        assert parsed["action_type"] == "execute_bash"
+        assert parsed["phase"] == "execute_bash"
 
     def test_chat_turn_complete_payload_round_trip(self):
         from g8e.models import ChatTurnCompletePayload

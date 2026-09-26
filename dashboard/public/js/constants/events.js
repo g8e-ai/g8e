@@ -62,8 +62,6 @@ export const EventType = Object.freeze({
     AI_LLM_CHAT_MESSAGE_PROCESSING_FAILED: 'g8e.v1.ai.llm.chat.message.processing.failed',
     AI_LLM_CHAT_MESSAGE_REPLAYED: 'g8e.v1.ai.llm.chat.message.replayed',
     AI_LLM_CHAT_MESSAGE_SENT: 'g8e.v1.ai.llm.chat.message.sent',
-    AI_LLM_CHAT_STOP_HIDE: 'g8e.v1.ai.llm.chat.stop.hide',
-    AI_LLM_CHAT_STOP_SHOW: 'g8e.v1.ai.llm.chat.stop.show',
     AI_LLM_CHAT_SUBMITTED: 'g8e.v1.ai.llm.chat.submitted',
     AI_LLM_CONFIG_FAILED: 'g8e.v1.ai.llm.config.failed',
     AI_LLM_CONFIG_RECEIVED: 'g8e.v1.ai.llm.config.received',
@@ -303,9 +301,6 @@ export const EventType = Object.freeze({
     OPERATOR_TERMINAL_THINKING_COMPLETE: 'g8e.v1.operator.terminal.thinking.complete',
     OPERATOR_UNBOUND: 'g8e.v1.operator.unbound',
     PLATFORM_AUDIT_CHAIN_CHECKPOINTED: 'g8e.v1.platform.audit.chain.checkpointed',
-    PLATFORM_AUTH_COMPONENT_INITIALIZED_AUTHSTATE: 'g8e.v1.platform.auth.component.initialized.authstate',
-    PLATFORM_AUTH_COMPONENT_INITIALIZED_CHAT: 'g8e.v1.platform.auth.component.initialized.chat',
-    PLATFORM_AUTH_COMPONENT_INITIALIZED_OPERATOR: 'g8e.v1.platform.auth.component.initialized.operator',
     PLATFORM_AUTH_INFO: 'g8e.v1.platform.auth.info',
     PLATFORM_AUTH_LOGIN_FAILED: 'g8e.v1.platform.auth.login.failed',
     PLATFORM_AUTH_LOGIN_REQUESTED: 'g8e.v1.platform.auth.login.requested',
@@ -339,22 +334,12 @@ export const EventType = Object.freeze({
     PLATFORM_TELEMETRY_ERROR_LOGGED: 'g8e.v1.platform.telemetry.error.logged',
     PLATFORM_TELEMETRY_HEALTH_REPORTED: 'g8e.v1.platform.telemetry.health.reported',
     PLATFORM_TELEMETRY_PERFORMANCE_RECORDED: 'g8e.v1.platform.telemetry.performance.recorded',
-    PLATFORM_TERMINAL_CLOSED: 'g8e.v1.platform.terminal.closed',
-    PLATFORM_TERMINAL_MAXIMIZED: 'g8e.v1.platform.terminal.maximized',
-    PLATFORM_TERMINAL_MINIMIZED: 'g8e.v1.platform.terminal.minimized',
-    PLATFORM_TERMINAL_OPENED: 'g8e.v1.platform.terminal.opened',
     PLATFORM_USAGE_UPDATED: 'g8e.v1.platform.usage.updated',
     PLATFORM_VAULT_MODE_CHANGED: 'g8e.v1.platform.sentinel.mode.changed',
     PUBLIC_FEED_BATCH_ACKNOWLEDGED: 'g8e.v1.public.feed.batch.acknowledged',
     PUBLIC_FEED_BATCH_EXPORTED: 'g8e.v1.public.feed.batch.exported',
     PUBLIC_FEED_KEY_ROTATED: 'g8e.v1.public.feed.key.rotated',
     PUBLIC_FEED_PROOF_PUBLISHED: 'g8e.v1.public.feed.proof.published',
-    SOURCE_AI_ASSISTANT: 'g8e.v1.source.ai.assistant',
-    SOURCE_AI_PRIMARY: 'g8e.v1.source.ai.primary',
-    SOURCE_AI_TRIAGE: 'g8e.v1.source.ai.triage',
-    SOURCE_SYSTEM: 'g8e.v1.source.system',
-    SOURCE_USER_CHAT: 'g8e.v1.source.user.chat',
-    SOURCE_USER_TERMINAL: 'g8e.v1.source.user.terminal',
 });
 
 export const EventRegistry = Object.freeze({
@@ -686,16 +671,6 @@ export const EventRegistry = Object.freeze({
     AI_LLM_CHAT_MESSAGE_SENT: Object.freeze({
         kind: 'outcome',
         producers: ['ensemble'],
-        persistence: 'gateway.sse_store',
-    }),
-    AI_LLM_CHAT_STOP_HIDE: Object.freeze({
-        kind: 'outcome',
-        producers: ['cli', 'ensemble'],
-        persistence: 'gateway.sse_store',
-    }),
-    AI_LLM_CHAT_STOP_SHOW: Object.freeze({
-        kind: 'outcome',
-        producers: ['cli', 'ensemble'],
         persistence: 'gateway.sse_store',
     }),
     AI_LLM_CHAT_SUBMITTED: Object.freeze({
@@ -2138,24 +2113,6 @@ export const EventRegistry = Object.freeze({
         persistence: 'operator.audit_log',
         reserved: true,
     }),
-    PLATFORM_AUTH_COMPONENT_INITIALIZED_AUTHSTATE: Object.freeze({
-        kind: 'outcome',
-        producers: ['gateway'],
-        persistence: 'ephemeral',
-        reserved: true,
-    }),
-    PLATFORM_AUTH_COMPONENT_INITIALIZED_CHAT: Object.freeze({
-        kind: 'outcome',
-        producers: ['gateway'],
-        persistence: 'ephemeral',
-        reserved: true,
-    }),
-    PLATFORM_AUTH_COMPONENT_INITIALIZED_OPERATOR: Object.freeze({
-        kind: 'outcome',
-        producers: ['gateway'],
-        persistence: 'ephemeral',
-        reserved: true,
-    }),
     PLATFORM_AUTH_INFO: Object.freeze({
         kind: 'outcome',
         producers: ['cli', 'gateway'],
@@ -2362,27 +2319,6 @@ export const EventRegistry = Object.freeze({
         persistence: 'ephemeral',
         reserved: true,
     }),
-    PLATFORM_TERMINAL_CLOSED: Object.freeze({
-        kind: 'outcome',
-        producers: ['gateway'],
-        persistence: 'ephemeral',
-        reserved: true,
-    }),
-    PLATFORM_TERMINAL_MAXIMIZED: Object.freeze({
-        kind: 'outcome',
-        producers: ['dashboard', 'gateway'],
-        persistence: 'ephemeral',
-    }),
-    PLATFORM_TERMINAL_MINIMIZED: Object.freeze({
-        kind: 'outcome',
-        producers: ['dashboard', 'gateway'],
-        persistence: 'ephemeral',
-    }),
-    PLATFORM_TERMINAL_OPENED: Object.freeze({
-        kind: 'outcome',
-        producers: ['dashboard', 'gateway'],
-        persistence: 'ephemeral',
-    }),
     PLATFORM_USAGE_UPDATED: Object.freeze({
         kind: 'outcome',
         producers: ['gateway'],
@@ -2418,35 +2354,5 @@ export const EventRegistry = Object.freeze({
         producers: ['gateway'],
         persistence: 'gateway.audit_log',
         reserved: true,
-    }),
-    SOURCE_AI_ASSISTANT: Object.freeze({
-        kind: 'fact',
-        producers: ['dashboard', 'ensemble'],
-        persistence: 'ephemeral',
-    }),
-    SOURCE_AI_PRIMARY: Object.freeze({
-        kind: 'fact',
-        producers: ['ensemble'],
-        persistence: 'ephemeral',
-    }),
-    SOURCE_AI_TRIAGE: Object.freeze({
-        kind: 'fact',
-        producers: ['ensemble'],
-        persistence: 'ephemeral',
-    }),
-    SOURCE_SYSTEM: Object.freeze({
-        kind: 'fact',
-        producers: ['ensemble'],
-        persistence: 'ephemeral',
-    }),
-    SOURCE_USER_CHAT: Object.freeze({
-        kind: 'fact',
-        producers: ['dashboard', 'ensemble'],
-        persistence: 'ephemeral',
-    }),
-    SOURCE_USER_TERMINAL: Object.freeze({
-        kind: 'fact',
-        producers: ['ensemble'],
-        persistence: 'ephemeral',
     }),
 });

@@ -7,17 +7,6 @@
 
 package constants
 
-// ActionStatus is a typed string for action status.
-type ActionStatus string
-
-const (
-	ActionStatusCancelled     ActionStatus = "cancelled"
-	ActionStatusCompleted     ActionStatus = "completed"
-	ActionStatusFailed        ActionStatus = "failed"
-	ActionStatusTimeout       ActionStatus = "timeout"
-	ActionStatusUserCancelled ActionStatus = "user.cancelled"
-)
-
 // ExecutionStatus is a typed string for execution status.
 type ExecutionStatus string
 
@@ -268,13 +257,13 @@ const (
 	GatewayModeStatusOK GatewayMode = "ok"
 )
 
-// ThinkingActionType is a typed string for thinking action type.
-type ThinkingActionType string
+// ThinkingPhase is a typed string for an AI thinking phase.
+type ThinkingPhase string
 
 const (
-	ThinkingActionTypeEnd    ThinkingActionType = "end"
-	ThinkingActionTypeStart  ThinkingActionType = "start"
-	ThinkingActionTypeUpdate ThinkingActionType = "update"
+	ThinkingPhaseEnd    ThinkingPhase = "end"
+	ThinkingPhaseStart  ThinkingPhase = "start"
+	ThinkingPhaseUpdate ThinkingPhase = "update"
 )
 
 // HistoryEventType is a typed string for history event type.

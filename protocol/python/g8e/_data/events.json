@@ -604,28 +604,6 @@
       ],
       "persistence": "gateway.sse_store"
     },
-    "AiLLMChatStopHide": {
-      "_go_const": "EventAiLLMChatStopHide",
-      "value": "g8e.v1.ai.llm.chat.stop.hide",
-      "kind": "outcome",
-      "grammar_allowlist_owner": "lead",
-      "producers": [
-        "cli",
-        "ensemble"
-      ],
-      "persistence": "gateway.sse_store"
-    },
-    "AiLLMChatStopShow": {
-      "_go_const": "EventAiLLMChatStopShow",
-      "value": "g8e.v1.ai.llm.chat.stop.show",
-      "kind": "outcome",
-      "grammar_allowlist_owner": "lead",
-      "producers": [
-        "cli",
-        "ensemble"
-      ],
-      "persistence": "gateway.sse_store"
-    },
     "AiLLMChatSubmitted": {
       "_go_const": "EventAiLLMChatSubmitted",
       "value": "g8e.v1.ai.llm.chat.submitted",
@@ -3414,36 +3392,6 @@
       "persistence": "operator.audit_log",
       "reserved": true
     },
-    "PlatformAuthComponentInitializedAuthstate": {
-      "_go_const": "EventPlatformAuthComponentInitializedAuthstate",
-      "value": "g8e.v1.platform.auth.component.initialized.authstate",
-      "kind": "outcome",
-      "producers": [
-        "gateway"
-      ],
-      "persistence": "ephemeral",
-      "reserved": true
-    },
-    "PlatformAuthComponentInitializedChat": {
-      "_go_const": "EventPlatformAuthComponentInitializedChat",
-      "value": "g8e.v1.platform.auth.component.initialized.chat",
-      "kind": "outcome",
-      "producers": [
-        "gateway"
-      ],
-      "persistence": "ephemeral",
-      "reserved": true
-    },
-    "PlatformAuthComponentInitializedOperator": {
-      "_go_const": "EventPlatformAuthComponentInitializedOperator",
-      "value": "g8e.v1.platform.auth.component.initialized.operator",
-      "kind": "outcome",
-      "producers": [
-        "gateway"
-      ],
-      "persistence": "ephemeral",
-      "reserved": true
-    },
     "PlatformAuthInfo": {
       "_go_const": "EventPlatformAuthInfo",
       "value": "g8e.v1.platform.auth.info",
@@ -3844,46 +3792,6 @@
       "persistence": "ephemeral",
       "reserved": true
     },
-    "PlatformTerminalClosed": {
-      "_go_const": "EventPlatformTerminalClosed",
-      "value": "g8e.v1.platform.terminal.closed",
-      "kind": "outcome",
-      "producers": [
-        "gateway"
-      ],
-      "persistence": "ephemeral",
-      "reserved": true
-    },
-    "PlatformTerminalMaximized": {
-      "_go_const": "EventPlatformTerminalMaximized",
-      "value": "g8e.v1.platform.terminal.maximized",
-      "kind": "outcome",
-      "producers": [
-        "dashboard",
-        "gateway"
-      ],
-      "persistence": "ephemeral"
-    },
-    "PlatformTerminalMinimized": {
-      "_go_const": "EventPlatformTerminalMinimized",
-      "value": "g8e.v1.platform.terminal.minimized",
-      "kind": "outcome",
-      "producers": [
-        "dashboard",
-        "gateway"
-      ],
-      "persistence": "ephemeral"
-    },
-    "PlatformTerminalOpened": {
-      "_go_const": "EventPlatformTerminalOpened",
-      "value": "g8e.v1.platform.terminal.opened",
-      "kind": "outcome",
-      "producers": [
-        "dashboard",
-        "gateway"
-      ],
-      "persistence": "ephemeral"
-    },
     "PlatformUsageUpdated": {
       "_go_const": "EventPlatformUsageUpdated",
       "value": "g8e.v1.platform.usage.updated",
@@ -3943,68 +3851,6 @@
       ],
       "persistence": "gateway.audit_log",
       "reserved": true
-    },
-    "SourceAiAssistant": {
-      "_go_const": "EventSourceAiAssistant",
-      "value": "g8e.v1.source.ai.assistant",
-      "kind": "fact",
-      "grammar_allowlist_owner": "w3",
-      "producers": [
-        "dashboard",
-        "ensemble"
-      ],
-      "persistence": "ephemeral"
-    },
-    "SourceAiPrimary": {
-      "_go_const": "EventSourceAiPrimary",
-      "value": "g8e.v1.source.ai.primary",
-      "kind": "fact",
-      "grammar_allowlist_owner": "w3",
-      "producers": [
-        "ensemble"
-      ],
-      "persistence": "ephemeral"
-    },
-    "SourceAiTriage": {
-      "_go_const": "EventSourceAiTriage",
-      "value": "g8e.v1.source.ai.triage",
-      "kind": "fact",
-      "grammar_allowlist_owner": "w3",
-      "producers": [
-        "ensemble"
-      ],
-      "persistence": "ephemeral"
-    },
-    "SourceSystem": {
-      "_go_const": "EventSourceSystem",
-      "value": "g8e.v1.source.system",
-      "kind": "fact",
-      "grammar_allowlist_owner": "w3",
-      "producers": [
-        "ensemble"
-      ],
-      "persistence": "ephemeral"
-    },
-    "SourceUserChat": {
-      "_go_const": "EventSourceUserChat",
-      "value": "g8e.v1.source.user.chat",
-      "kind": "fact",
-      "grammar_allowlist_owner": "w3",
-      "producers": [
-        "dashboard",
-        "ensemble"
-      ],
-      "persistence": "ephemeral"
-    },
-    "SourceUserTerminal": {
-      "_go_const": "EventSourceUserTerminal",
-      "value": "g8e.v1.source.user.terminal",
-      "kind": "fact",
-      "grammar_allowlist_owner": "w3",
-      "producers": [
-        "ensemble"
-      ],
-      "persistence": "ephemeral"
     }
   }
 }

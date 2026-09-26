@@ -68,8 +68,6 @@ const EventAiLLMChatMessageDeadLettered EventType = "g8e.v1.ai.llm.chat.message.
 const EventAiLLMChatMessageProcessingFailed EventType = "g8e.v1.ai.llm.chat.message.processing.failed"
 const EventAiLLMChatMessageReplayed EventType = "g8e.v1.ai.llm.chat.message.replayed"
 const EventAiLLMChatMessageSent EventType = "g8e.v1.ai.llm.chat.message.sent"
-const EventAiLLMChatStopHide EventType = "g8e.v1.ai.llm.chat.stop.hide"
-const EventAiLLMChatStopShow EventType = "g8e.v1.ai.llm.chat.stop.show"
 const EventAiLLMChatSubmitted EventType = "g8e.v1.ai.llm.chat.submitted"
 const EventAiLLMConfigFailed EventType = "g8e.v1.ai.llm.config.failed"
 const EventAiLLMConfigReceived EventType = "g8e.v1.ai.llm.config.received"
@@ -309,9 +307,6 @@ const EventOperatorTerminalThinkingAppend EventType = "g8e.v1.operator.terminal.
 const EventOperatorTerminalThinkingComplete EventType = "g8e.v1.operator.terminal.thinking.complete"
 const EventOperatorUnbound EventType = "g8e.v1.operator.unbound"
 const EventPlatformAuditChainCheckpointed EventType = "g8e.v1.platform.audit.chain.checkpointed"
-const EventPlatformAuthComponentInitializedAuthstate EventType = "g8e.v1.platform.auth.component.initialized.authstate"
-const EventPlatformAuthComponentInitializedChat EventType = "g8e.v1.platform.auth.component.initialized.chat"
-const EventPlatformAuthComponentInitializedOperator EventType = "g8e.v1.platform.auth.component.initialized.operator"
 const EventPlatformAuthInfo EventType = "g8e.v1.platform.auth.info"
 const EventPlatformAuthLoginFailed EventType = "g8e.v1.platform.auth.login.failed"
 const EventPlatformAuthLoginRequested EventType = "g8e.v1.platform.auth.login.requested"
@@ -345,22 +340,12 @@ const EventPlatformTelemetryAuditLogged EventType = "g8e.v1.platform.telemetry.a
 const EventPlatformTelemetryErrorLogged EventType = "g8e.v1.platform.telemetry.error.logged"
 const EventPlatformTelemetryHealthReported EventType = "g8e.v1.platform.telemetry.health.reported"
 const EventPlatformTelemetryPerformanceRecorded EventType = "g8e.v1.platform.telemetry.performance.recorded"
-const EventPlatformTerminalClosed EventType = "g8e.v1.platform.terminal.closed"
-const EventPlatformTerminalMaximized EventType = "g8e.v1.platform.terminal.maximized"
-const EventPlatformTerminalMinimized EventType = "g8e.v1.platform.terminal.minimized"
-const EventPlatformTerminalOpened EventType = "g8e.v1.platform.terminal.opened"
 const EventPlatformUsageUpdated EventType = "g8e.v1.platform.usage.updated"
 const EventPlatformVaultModeChanged EventType = "g8e.v1.platform.sentinel.mode.changed"
 const EventPublicFeedBatchAcknowledged EventType = "g8e.v1.public.feed.batch.acknowledged"
 const EventPublicFeedBatchExported EventType = "g8e.v1.public.feed.batch.exported"
 const EventPublicFeedKeyRotated EventType = "g8e.v1.public.feed.key.rotated"
 const EventPublicFeedProofPublished EventType = "g8e.v1.public.feed.proof.published"
-const EventSourceAiAssistant EventType = "g8e.v1.source.ai.assistant"
-const EventSourceAiPrimary EventType = "g8e.v1.source.ai.primary"
-const EventSourceAiTriage EventType = "g8e.v1.source.ai.triage"
-const EventSourceSystem EventType = "g8e.v1.source.system"
-const EventSourceUserChat EventType = "g8e.v1.source.user.chat"
-const EventSourceUserTerminal EventType = "g8e.v1.source.user.terminal"
 
 // EventKind classifies registry entries.
 type EventKind string
@@ -851,20 +836,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Kind: EventKindOutcome,
 		Transport: nil,
 		Producers: []string{"ensemble"},
-		Persistence: "gateway.sse_store",
-	},
-	EventAiLLMChatStopHide: {
-		Key: "AiLLMChatStopHide",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"cli", "ensemble"},
-		Persistence: "gateway.sse_store",
-	},
-	EventAiLLMChatStopShow: {
-		Key: "AiLLMChatStopShow",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"cli", "ensemble"},
 		Persistence: "gateway.sse_store",
 	},
 	EventAiLLMChatSubmitted: {
@@ -2706,30 +2677,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "operator.audit_log",
 		Reserved: true,
 	},
-	EventPlatformAuthComponentInitializedAuthstate: {
-		Key: "PlatformAuthComponentInitializedAuthstate",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"gateway"},
-		Persistence: "ephemeral",
-		Reserved: true,
-	},
-	EventPlatformAuthComponentInitializedChat: {
-		Key: "PlatformAuthComponentInitializedChat",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"gateway"},
-		Persistence: "ephemeral",
-		Reserved: true,
-	},
-	EventPlatformAuthComponentInitializedOperator: {
-		Key: "PlatformAuthComponentInitializedOperator",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"gateway"},
-		Persistence: "ephemeral",
-		Reserved: true,
-	},
 	EventPlatformAuthInfo: {
 		Key: "PlatformAuthInfo",
 		Kind: EventKindOutcome,
@@ -2990,35 +2937,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Persistence: "ephemeral",
 		Reserved: true,
 	},
-	EventPlatformTerminalClosed: {
-		Key: "PlatformTerminalClosed",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"gateway"},
-		Persistence: "ephemeral",
-		Reserved: true,
-	},
-	EventPlatformTerminalMaximized: {
-		Key: "PlatformTerminalMaximized",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"dashboard", "gateway"},
-		Persistence: "ephemeral",
-	},
-	EventPlatformTerminalMinimized: {
-		Key: "PlatformTerminalMinimized",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"dashboard", "gateway"},
-		Persistence: "ephemeral",
-	},
-	EventPlatformTerminalOpened: {
-		Key: "PlatformTerminalOpened",
-		Kind: EventKindOutcome,
-		Transport: nil,
-		Producers: []string{"dashboard", "gateway"},
-		Persistence: "ephemeral",
-	},
 	EventPlatformUsageUpdated: {
 		Key: "PlatformUsageUpdated",
 		Kind: EventKindOutcome,
@@ -3066,48 +2984,6 @@ var Registry = EventRegistry{byType: map[EventType]EventRegistryEntry{
 		Producers: []string{"gateway"},
 		Persistence: "gateway.audit_log",
 		Reserved: true,
-	},
-	EventSourceAiAssistant: {
-		Key: "SourceAiAssistant",
-		Kind: EventKindFact,
-		Transport: nil,
-		Producers: []string{"dashboard", "ensemble"},
-		Persistence: "ephemeral",
-	},
-	EventSourceAiPrimary: {
-		Key: "SourceAiPrimary",
-		Kind: EventKindFact,
-		Transport: nil,
-		Producers: []string{"ensemble"},
-		Persistence: "ephemeral",
-	},
-	EventSourceAiTriage: {
-		Key: "SourceAiTriage",
-		Kind: EventKindFact,
-		Transport: nil,
-		Producers: []string{"ensemble"},
-		Persistence: "ephemeral",
-	},
-	EventSourceSystem: {
-		Key: "SourceSystem",
-		Kind: EventKindFact,
-		Transport: nil,
-		Producers: []string{"ensemble"},
-		Persistence: "ephemeral",
-	},
-	EventSourceUserChat: {
-		Key: "SourceUserChat",
-		Kind: EventKindFact,
-		Transport: nil,
-		Producers: []string{"dashboard", "ensemble"},
-		Persistence: "ephemeral",
-	},
-	EventSourceUserTerminal: {
-		Key: "SourceUserTerminal",
-		Kind: EventKindFact,
-		Transport: nil,
-		Producers: []string{"ensemble"},
-		Persistence: "ephemeral",
 	},
 }}
 

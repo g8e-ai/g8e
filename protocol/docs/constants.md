@@ -144,7 +144,6 @@ Cloud provider intent classification values for governance posture, typed as `Cl
 
 Internal enumeration constants, each defined as a typed string:
 
-- `ActionStatus`: `ActionStatusCancelled`, `ActionStatusCompleted`, `ActionStatusFailed`, `ActionStatusTimeout`, `ActionStatusUserCancelled`
 - `ExecutionStatus`: `ExecutionStatusCancelRequested`, `ExecutionStatusCancelled`, `ExecutionStatusCompleted`, `ExecutionStatusDenied`, `ExecutionStatusExecuting`, `ExecutionStatusFailed`, `ExecutionStatusFeedback`, `ExecutionStatusPending`, `ExecutionStatusTimeout`
 - `FileOperation`: `FileOperationCreate`, `FileOperationDelete`, `FileOperationInsert`, `FileOperationPatch`, `FileOperationRead`, `FileOperationReplace`, `FileOperationUpdate`, `FileOperationWrite`
 - `ConnectionState`: `ConnectionStateClosed`, `ConnectionStateConnected`, `ConnectionStateConnecting`, `ConnectionStateDisconnected`, `ConnectionStateError`, `ConnectionStateReconnecting`
@@ -168,7 +167,7 @@ Internal enumeration constants, each defined as a typed string:
 - `CAType`: `CATypeRoot`, `CATypeHub`, `CATypeOperator`, `CATypeGatewayPeer`
 - `ServiceName`: `ServiceNameOperatorGateway`
 - `GatewayMode`: `GatewayModeGateway`, `GatewayModeStatusOK`
-- `ThinkingActionType`: `ThinkingActionTypeEnd`, `ThinkingActionTypeStart`, `ThinkingActionTypeUpdate`
+- `ThinkingPhase`: `ThinkingPhaseEnd`, `ThinkingPhaseStart`, `ThinkingPhaseUpdate`
 - `HistoryEventType`: `HistoryEventTypeAPIKeyRefreshed`, `HistoryEventTypeAuthenticated`, `HistoryEventTypeBound`, `HistoryEventTypeClaimed`, `HistoryEventTypeCreated`, `HistoryEventTypeCreatedFromRefresh`, `HistoryEventTypeDeactivated`, `HistoryEventTypeHeartbeatReceived`, `HistoryEventTypeReconnected`, `HistoryEventTypeRegistered`, `HistoryEventTypeReset`, `HistoryEventTypeShutdownRequested`, `HistoryEventTypeSlotConsumed`, `HistoryEventTypeSlotCreated`, `HistoryEventTypeSlotReleased`, `HistoryEventTypeStatusChanged`, `HistoryEventTypeStopped`, `HistoryEventTypeTerminated`, `HistoryEventTypeTerminatedForRefresh`, `HistoryEventTypeUnbound`
 - `HeartbeatType`: `HeartbeatTypeAutomatic`, `HeartbeatTypeBootstrap`, `HeartbeatTypeRequested`
 - `AuthAuditResult`: `AuthAuditResultFailure`, `AuthAuditResultInvalidAPIKey`, `AuthAuditResultSuccess`

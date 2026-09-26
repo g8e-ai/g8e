@@ -1,32 +1,5 @@
 {
   "status": {
-    "action_status": {
-      "cancelled": {
-        "_go_const": "ActionStatusCancelled",
-        "_python_const": "CANCELLED",
-        "value": "cancelled"
-      },
-      "completed": {
-        "_go_const": "ActionStatusCompleted",
-        "_python_const": "COMPLETED",
-        "value": "completed"
-      },
-      "failed": {
-        "_go_const": "ActionStatusFailed",
-        "_python_const": "FAILED",
-        "value": "failed"
-      },
-      "timeout": {
-        "_go_const": "ActionStatusTimeout",
-        "_python_const": "TIMEOUT",
-        "value": "timeout"
-      },
-      "user.cancelled": {
-        "_go_const": "ActionStatusUserCancelled",
-        "_python_const": "USER_CANCELLED",
-        "value": "user.cancelled"
-      }
-    },
     "action_type": {
       "A2A_CALL": {
         "_go_const": "ActionTypeA2aCall",
@@ -1197,38 +1170,6 @@
         "value": "write"
       }
     },
-    "g8e_action_type": {
-      "g8e.port.check": {
-        "_go_const": "G8eActionTypePortCheck",
-        "_python_const": "PORT_CHECK",
-        "value": "g8e.port.check"
-      },
-      "operator.command.executed": {
-        "_go_const": "G8eActionTypeCommandExecuted",
-        "_python_const": "COMMAND_EXECUTED",
-        "value": "operator.command.executed"
-      },
-      "operator.command.execution": {
-        "_go_const": "G8eActionTypeCommandExecution",
-        "_python_const": "COMMAND_EXECUTION",
-        "value": "operator.command.execution"
-      },
-      "operator.file.edit": {
-        "_go_const": "G8eActionTypeFileEdit",
-        "_python_const": "FILE_EDIT",
-        "value": "operator.file.edit"
-      },
-      "operator.file.list": {
-        "_go_const": "G8eActionTypeFileList",
-        "_python_const": "FILE_LIST",
-        "value": "operator.file.list"
-      },
-      "operator.file.read": {
-        "_go_const": "G8eActionTypeFileRead",
-        "_python_const": "FILE_READ",
-        "value": "operator.file.read"
-      }
-    },
     "g8e_availability": {
       "OFFLINE": {
         "_go_const": "G8eAvailabilityOffline",
@@ -2120,23 +2061,6 @@
         "value": "pending"
       }
     },
-    "thinking_action_type": {
-      "end": {
-        "_go_const": "ThinkingActionTypeEnd",
-        "_python_const": "END",
-        "value": "end"
-      },
-      "start": {
-        "_go_const": "ThinkingActionTypeStart",
-        "_python_const": "START",
-        "value": "start"
-      },
-      "update": {
-        "_go_const": "ThinkingActionTypeUpdate",
-        "_python_const": "UPDATE",
-        "value": "update"
-      }
-    },
     "tool_call_defaults": {
       "Processing": {
         "_go_const": "ToolCallDefaultsLabel",
@@ -2844,6 +2768,23 @@
         "_go_const": "TriagePostureEscalated",
         "_python_const": "ESCALATED",
         "value": "escalated"
+      }
+    },
+    "thinking_phase": {
+      "end": {
+        "_go_const": "ThinkingPhaseEnd",
+        "_python_const": "END",
+        "value": "end"
+      },
+      "start": {
+        "_go_const": "ThinkingPhaseStart",
+        "_python_const": "START",
+        "value": "start"
+      },
+      "update": {
+        "_go_const": "ThinkingPhaseUpdate",
+        "_python_const": "UPDATE",
+        "value": "update"
       }
     }
   }

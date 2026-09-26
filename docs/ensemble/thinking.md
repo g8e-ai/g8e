@@ -82,7 +82,7 @@ Anthropic signatures remain attached to their corresponding thinking blocks when
 
 ## Streaming Events
 
-The stream processor emits internal `THINKING` chunks for thought text and a `THINKING_END` chunk when a phase ends. The SSE layer publishes all three lifecycle actions under the single event identifier `g8e.v1.ai.llm.chat.iteration.thinking.started` using `ChatThinkingPayload.action_type`:
+The stream processor emits internal `THINKING` chunks for thought text and a `THINKING_END` chunk when a phase ends. The SSE layer publishes all three lifecycle actions under the single event identifier `g8e.v1.ai.llm.chat.iteration.thinking.started` using `ChatThinkingPayload.phase`:
 
 - `start` carries the first thought chunk in a phase.
 - `update` carries each later thought chunk in that phase.
