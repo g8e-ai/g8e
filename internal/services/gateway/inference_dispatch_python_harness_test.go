@@ -228,23 +228,44 @@ func repoRootFromTest(t *testing.T) string {
 func pythonExecutable(t *testing.T) string {
 	t.Helper()
 	repoRoot := repoRootFromTest(t)
+	ensembleRoot := filepath.Join(repoRoot, "ensemble")
+	protocolPythonRoot := filepath.Join(repoRoot, "protocol", "python")
+	pythonPaths := []string{ensembleRoot, protocolPythonRoot, repoRoot}
+	if existing := os.Getenv("PYTHONPATH"); existing != "" {
+		pythonPaths = append(pythonPaths, existing)
+	}
+	pythonPathEnv := strings.Join(pythonPaths, string(os.PathListSeparator))
+
 	candidates := []string{
 		filepath.Join(repoRoot, ".venv", "bin", "python"),
 		filepath.Join(repoRoot, "ensemble", ".venv", "bin", "python"),
 		"python3",
+		"python",
 	}
 	for _, candidate := range candidates {
-		if candidate == "python3" {
-			if path, err := exec.LookPath(candidate); err == nil {
-				return path
+		var execPath string
+		if candidate == "python3" || candidate == "python" {
+			var err error
+			execPath, err = exec.LookPath(candidate)
+			if err != nil {
+				continue
 			}
-			continue
+		} else {
+			if _, err := os.Stat(candidate); err != nil {
+				continue
+			}
+			execPath = candidate
 		}
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
+
+		// Verify this interpreter has required dependencies installed.
+		checkCmd := exec.Command(execPath, "-c", "import pydantic, httpx, cryptography, google.protobuf; from app.models.internal_api import InferenceDispatchRequest")
+		checkCmd.Dir = repoRoot
+		checkCmd.Env = append(os.Environ(), "PYTHONPATH="+pythonPathEnv)
+		if err := checkCmd.Run(); err == nil {
+			return execPath
 		}
 	}
-	t.Skip("python interpreter not available for inference dispatch harness")
+	t.Skip("python interpreter with ensemble dependencies not available for inference dispatch harness")
 	return ""
 }
 
