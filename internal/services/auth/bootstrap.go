@@ -117,16 +117,35 @@ type AuthServicesResponse struct {
 func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*BootstrapConfig, error) {
 	bs.logger.Info("Authenticating with endpoint...", "endpoint", bs.config.Endpoint)
 
-	fingerprint, err := GenerateSystemFingerprint(bs.logger)
+	role := constants.OperatorRoleData
+	if bs.config.Inference.Enabled {
+		role = constants.OperatorRoleInference
+	} else if bs.config.ProvenanceOperator.Enabled {
+		role = constants.OperatorRoleProvenance
+	} else if bs.config.ProviderBoundaryObserver.Enabled {
+		role = constants.OperatorRoleObserver
+	}
+
+	account := ResolveCurrentAccount()
+	fingerprint, err := GenerateOperatorFingerprint(bs.logger, FingerprintOptions{
+		LocalDir: bs.config.WorkDir,
+		Account:  account,
+		Port:     bs.config.HTTPPort,
+		Role:     string(role),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapFingerprint, err)
 	}
 
 	bs.config.SystemFingerprint = fingerprint.Fingerprint
 
-	bs.logger.Info("System fingerprint generated",
+	bs.logger.Info("Operator fingerprint generated",
 		"os", fingerprint.OS,
-		"architecture", fingerprint.Architecture)
+		"architecture", fingerprint.Architecture,
+		"local_dir", fingerprint.LocalDir,
+		"account", fingerprint.Account,
+		"port", fingerprint.Port,
+		"role", fingerprint.Role)
 
 	bootstrapConfig, err := bs.requestHTTPAuth(ctx)
 	if err != nil {
@@ -144,6 +163,16 @@ type operatorAuthRequest struct {
 
 // requestHTTPAuth authenticates via POST /api/v1/operators/reauth with exponential backoff.
 func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConfig, error) {
+	role := constants.OperatorRoleData
+	if bs.config.Inference.Enabled {
+		role = constants.OperatorRoleInference
+	} else if bs.config.ProvenanceOperator.Enabled {
+		role = constants.OperatorRoleProvenance
+	} else if bs.config.ProviderBoundaryObserver.Enabled {
+		role = constants.OperatorRoleObserver
+	}
+
+	account := ResolveCurrentAccount()
 
 	runtimeConfig := &models.RuntimeConfig{
 		CloudMode:             bs.config.CloudMode,
@@ -153,6 +182,9 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		LogLevel:              bs.config.LogLevel,
 
 		HTTPPort: bs.config.HTTPPort,
+		Role:     role,
+		LocalDir: bs.config.WorkDir,
+		Account:  account,
 
 		InferenceEnabled:                   bs.config.Inference.Enabled,
 		InferenceOllamaEndpoint:            bs.config.Inference.OllamaEndpoint,

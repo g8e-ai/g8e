@@ -26,8 +26,12 @@ type OperatorRegistrationRequest struct {
 	Hostname          string `json:"hostname"`
 	OS                string `json:"os"`
 	Arch              string `json:"arch"`
-	Username          string `json:"username"`
-	IPAddress         string `json:"ip_address,omitempty"`
+	Username          string                 `json:"username"`
+	IPAddress         string                 `json:"ip_address,omitempty"`
+	LocalDir          string                 `json:"local_dir,omitempty"`
+	Account           string                 `json:"account,omitempty"`
+	Port              int                    `json:"port,omitempty"`
+	OperatorRole      constants.OperatorRole `json:"operator_role,omitempty"`
 }
 
 // BootstrapRequest is the inbound body for /api/v1/auth/bootstrap.
@@ -127,6 +131,10 @@ type OperatorDocumentGo struct {
 	Claimed              bool                     `json:"claimed"`
 	OperatorType         constants.OperatorType   `json:"operator_type,omitempty"`
 	SystemFingerprint    string                   `json:"system_fingerprint,omitempty"`
+	OperatorRole         constants.OperatorRole   `json:"operator_role,omitempty"`
+	LocalDir             string                   `json:"local_dir,omitempty"`
+	Account              string                   `json:"account,omitempty"`
+	Port                 int                      `json:"port,omitempty"`
 	CreatedAt            time.Time                `json:"created_at"`
 	UpdatedAt            time.Time                `json:"updated_at"`
 	StartedAt            *time.Time               `json:"started_at,omitempty"`

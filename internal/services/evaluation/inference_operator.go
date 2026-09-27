@@ -54,7 +54,32 @@ func ActiveInferenceOperators(operators []models.OperatorDocumentGo) []Inference
 // When sessionID is non-empty it must match an active inference Operator;
 // otherwise exactly one active inference Operator must exist.
 func SelectInferenceOperator(operators []models.OperatorDocumentGo, sessionID string) (*InferenceOperatorStatus, error) {
+	return SelectInferenceOperatorForHardware(operators, sessionID, "")
+}
+
+// SelectInferenceOperatorForHardware resolves an inference operator using the
+// exact OperatorDocument system fingerprint when one is available.
+func SelectInferenceOperatorForHardware(
+	operators []models.OperatorDocumentGo,
+	sessionID string,
+	systemFingerprint string,
+) (*InferenceOperatorStatus, error) {
 	matches := ActiveInferenceOperators(operators)
+	if systemFingerprint != "" {
+		filtered := make([]InferenceOperatorStatus, 0, len(matches))
+		for _, op := range operators {
+			if op.SystemFingerprint != systemFingerprint {
+				continue
+			}
+			for _, match := range matches {
+				if match.OperatorSessionID == op.OperatorSessionID {
+					filtered = append(filtered, match)
+					break
+				}
+			}
+		}
+		matches = filtered
+	}
 	if sessionID != "" {
 		for _, match := range matches {
 			if match.OperatorSessionID == sessionID {

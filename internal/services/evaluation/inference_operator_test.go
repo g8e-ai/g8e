@@ -74,3 +74,36 @@ func TestSelectInferenceOperator_FailsClosedOnAmbiguity(t *testing.T) {
 	_, err := SelectInferenceOperator(operators, "")
 	require.ErrorIs(t, err, constants.ErrInferenceOperatorAmbiguous)
 }
+
+func TestSelectInferenceOperatorForHardware(t *testing.T) {
+	t.Parallel()
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "inf-host1",
+			OperatorSessionID: "sess-inf-host1",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			SystemFingerprint: "fp-host1",
+			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+		},
+		{
+			ID:                "inf-host2",
+			OperatorSessionID: "sess-inf-host2",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			SystemFingerprint: "fp-host2",
+			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+		},
+	}
+
+	t.Run("resolves by system fingerprint", func(t *testing.T) {
+		selected, err := SelectInferenceOperatorForHardware(operators, "", "fp-host2")
+		require.NoError(t, err)
+		assert.Equal(t, "inf-host2", selected.OperatorID)
+	})
+
+	t.Run("returns not found for non-matching fingerprint", func(t *testing.T) {
+		_, err := SelectInferenceOperatorForHardware(operators, "", "fp-nonexistent")
+		require.ErrorIs(t, err, constants.ErrInferenceOperatorNotFound)
+	})
+}

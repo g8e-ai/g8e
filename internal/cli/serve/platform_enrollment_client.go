@@ -105,11 +105,12 @@ type operatorPendingState struct {
 // or enroll. This client does not hide that decision behind an
 // ensure* method.
 type OperatorPlatformEnrollmentClient struct {
-	gatewayHTTPURL string
-	instanceID     string
-	hostname       string
-	fileSvc        fs.RuntimeFileService
-	logger         *slog.Logger
+	gatewayHTTPURL  string
+	instanceID      string
+	hostname        string
+	fileSvc         fs.RuntimeFileService
+	logger          *slog.Logger
+	fingerprintOpts auth.FingerprintOptions
 }
 
 // NewOperatorPlatformEnrollmentClient constructs an enrollment client.
@@ -129,6 +130,11 @@ func NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname st
 		fileSvc:        fileSvc,
 		logger:         logger,
 	}, nil
+}
+
+// SetFingerprintOptions sets the options that differentiate operators on the same system.
+func (c *OperatorPlatformEnrollmentClient) SetFingerprintOptions(opts auth.FingerprintOptions) {
+	c.fingerprintOpts = opts
 }
 
 // Enroll performs the full nine-step platform enrollment sequence and
@@ -201,7 +207,7 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 			return nil, fmt.Errorf("operator enrollment: encode cli key: %w", err)
 		}
 
-		systemFp, err := auth.GenerateSystemFingerprint(c.logger)
+		systemFp, err := auth.GenerateOperatorFingerprint(c.logger, c.fingerprintOpts)
 		if err != nil {
 			return nil, fmt.Errorf("operator enrollment: system fingerprint: %w", err)
 		}

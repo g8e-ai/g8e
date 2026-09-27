@@ -38,3 +38,23 @@ class TestOperatorDocumentNoSystemInfoField:
             current_hostname="test-hostname",
         )
         assert doc.hostname == "test-hostname"
+
+    def test_operator_document_differentiation_fields(self):
+        """OperatorDocument supports multi-operator differentiation fields."""
+        doc = OperatorDocument(
+            id="op-inf-1",
+            user_id="user-1",
+            status=OperatorStatus.ACTIVE,
+            system_fingerprint="fp-sha256-composite",
+            operator_role="inference",
+            local_dir="/home/bob/op-inf",
+            account="bob",
+            port=8444,
+            runtime_config={"inference_enabled": True, "http_port": 8444},
+        )
+        assert doc.operator_role == "inference"
+        assert doc.local_dir == "/home/bob/op-inf"
+        assert doc.account == "bob"
+        assert doc.port == 8444
+        assert doc.system_fingerprint == "fp-sha256-composite"
+        assert doc.runtime_config == {"inference_enabled": True, "http_port": 8444}
