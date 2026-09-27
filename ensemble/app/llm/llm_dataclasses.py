@@ -180,11 +180,14 @@ class GenerateContentResponse:
 
     @property
     def text(self) -> str | None:
-        """Convenience: extract first text part from first candidate."""
+        """Convenience: extract all non-thought text parts from first candidate."""
         if self.candidates:
-            for part in self.candidates[0].content.parts:
-                if part.text and not part.thought:
-                    return part.text
+            texts = [
+                part.text
+                for part in self.candidates[0].content.parts
+                if part.text and not part.thought
+            ]
+            return "".join(texts) if texts else None
         return None
 
     @property
