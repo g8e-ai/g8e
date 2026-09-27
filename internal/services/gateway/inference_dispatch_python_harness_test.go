@@ -179,7 +179,7 @@ func setupInferenceDispatchHarnessGateway(t *testing.T) (*HTTPHandler, *boundary
 	})
 	h.router = h.buildPublicRouter()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	tlsMaterials := generateInferenceDispatchHarnessTLS(t, dir, inferenceHarnessUserID)
 	return h, backend, tlsMaterials
 }
@@ -334,7 +334,7 @@ func TestInferenceDispatch_PythonClientVerifiedRoundTrip(t *testing.T) {
 	baseURL, cleanup := startInferenceDispatchHarnessServer(t, h, tlsMaterials)
 	defer cleanup()
 
-	fixturePath := filepath.Join(t.TempDir(), "harness.json")
+	fixturePath := filepath.Join(testutil.TempDir(t), "harness.json")
 	writeInferenceDispatchHarnessFixture(t, fixturePath, inferenceDispatchHarnessFixture{
 		ClientURL:               baseURL,
 		CACertPath:              tlsMaterials.CACertPath,

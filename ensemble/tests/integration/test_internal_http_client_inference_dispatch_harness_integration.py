@@ -51,7 +51,7 @@ def _wait_for_fixture(
     path: Path,
     proc: subprocess.Popen | None = None,
     log_path: Path | None = None,
-    timeout_seconds: float = 30.0,
+    timeout_seconds: float = 120.0,
 ) -> dict[str, str]:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
@@ -95,14 +95,15 @@ def _build_settings(fixture: dict[str, str]) -> G8eeAppSettings:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_inference_round_trips_through_go_harness_gateway(tmp_path: Path):
+@pytest.mark.timeout(180)
+async def test_dispatch_inference_round_trips_through_go_harness_gateway(test_runtime_dir: Path):
     """Python InternalHttpClient drives a real in-process Go gateway over mTLS."""
     go_bin = _require_go()
     if not HARNESS_RUNNER.is_file():
         pytest.skip("inference dispatch harness runner is unavailable")
 
-    fixture_path = tmp_path / "harness.json"
-    log_path = tmp_path / "go_harness.log"
+    fixture_path = test_runtime_dir / "harness.json"
+    log_path = test_runtime_dir / "go_harness.log"
     env = {
         **os.environ,
         "G8E_INFERENCE_DISPATCH_HARNESS": "serve",

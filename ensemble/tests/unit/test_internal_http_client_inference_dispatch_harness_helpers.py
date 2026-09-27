@@ -22,18 +22,18 @@ from tests.integration.test_internal_http_client_inference_dispatch_harness_inte
 )
 
 
-def test_wait_for_fixture_success(tmp_path: Path):
-    fixture_path = tmp_path / "harness.json"
-    data = {"client_url": "https://localhost:8443", "ca_cert_path": "/tmp/ca.pem"}
+def test_wait_for_fixture_success(test_runtime_dir: Path):
+    fixture_path = test_runtime_dir / "harness.json"
+    data = {"client_url": "https://localhost:8443", "ca_cert_path": ".g8e/pki/trust/ca.pem"}
     fixture_path.write_text(json.dumps(data), encoding="utf-8")
 
     result = _wait_for_fixture(fixture_path, timeout_seconds=1.0)
     assert result == data
 
 
-def test_wait_for_fixture_fails_fast_on_process_exit(tmp_path: Path):
-    fixture_path = tmp_path / "harness.json"
-    log_path = tmp_path / "harness.log"
+def test_wait_for_fixture_fails_fast_on_process_exit(test_runtime_dir: Path):
+    fixture_path = test_runtime_dir / "harness.json"
+    log_path = test_runtime_dir / "harness.log"
     log_path.write_text("go: build failed due to syntax error\n", encoding="utf-8")
 
     mock_proc = MagicMock()
@@ -48,9 +48,9 @@ def test_wait_for_fixture_fails_fast_on_process_exit(tmp_path: Path):
     assert "go: build failed due to syntax error" in err
 
 
-def test_wait_for_fixture_times_out(tmp_path: Path):
-    fixture_path = tmp_path / "nonexistent.json"
-    log_path = tmp_path / "harness.log"
+def test_wait_for_fixture_times_out(test_runtime_dir: Path):
+    fixture_path = test_runtime_dir / "nonexistent.json"
+    log_path = test_runtime_dir / "harness.log"
     log_path.write_text("server listening on port 8080\n", encoding="utf-8")
 
     mock_proc = MagicMock()
