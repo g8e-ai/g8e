@@ -64,6 +64,8 @@ func rolloutEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var logDir string
 	var ensembleHealthURL string
 	var mirrorBootstrapURL string
+	var gateSmoke bool
+	var promoteOnPass bool
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run init-campaign start → verify for every queued model",
@@ -75,6 +77,8 @@ Defaults: --require-witness, --verify, --publish, --daemon, and --skip-verified 
 
 Examples:
   g8e eval rollout run
+  g8e eval rollout run --gate-smoke
+  g8e eval rollout run --gate-smoke --promote-on-pass
   g8e eval rollout run --dry-run --skip-variant granite3-3-2b
   g8e eval rollout run --log-dir .g8e/eval/logs/batch-001
   g8e eval rollout run --skip-verified=false`,
@@ -149,6 +153,7 @@ Examples:
 					Verify:                     verify,
 					RequireProviderObservation: requireProviderObservation,
 					RequireModelProvenance:     requireModelProvenance,
+					GateSmoke:                  gateSmoke,
 				})
 				closeErr := logFile.Close()
 				if runErr != nil {
@@ -180,6 +185,45 @@ Examples:
 					})
 					_, _ = fmt.Fprintf(stdout, "PASS %s → %s\n", entry.VariantID, flowResult.Plan.RunID)
 				}
+
+				if gateSmoke && promoteOnPass {
+					_, _ = fmt.Fprintf(stdout, "PROMOTING %s (%s) from Tier 1 Smoke Gate to Full Qualification\n", entry.VariantID, entry.ServedModelTag)
+					fullResult, fullErr := runCampaignStartFlow(&subCmd, deps, campaignStartFlowOptions{
+						QueueRef:                   entry.VariantID,
+						InferenceSessionID:         inferenceSessionID,
+						DataSessionID:              dataSessionID,
+						DataSystemFingerprint:      dataSystemFingerprint,
+						EnsembleURL:                ensembleURL,
+						Publish:                    publish,
+						Daemon:                     daemon,
+						Verify:                     verify,
+						RequireProviderObservation: requireProviderObservation,
+						RequireModelProvenance:     requireModelProvenance,
+						GateSmoke:                  false,
+					})
+					if fullErr != nil {
+						result.Failed++
+						result.Failures = append(result.Failures, campaignQueueRunFailure{
+							VariantID: entry.VariantID,
+							Tag:       entry.ServedModelTag,
+							Error:     fullErr.Error(),
+						})
+						_, _ = fmt.Fprintf(teeErr, "Full Qualification Error: %v\n", fullErr)
+						_, _ = fmt.Fprintf(stdout, "FAIL FULL %s (%s)\n", entry.VariantID, entry.ServedModelTag)
+						if markErr := markQueueEntryFailedAfterFailure(cmd.Context(), fileSvc, queuePath, entry, fullResult, fullErr); markErr != nil {
+							_, _ = fmt.Fprintf(stderr, "warning: update queue entry %s: %v\n", entry.VariantID, markErr)
+						}
+						continue
+					}
+					if fullResult != nil && fullResult.Plan != nil {
+						result.Runs = append(result.Runs, campaignQueueRunSuccess{
+							VariantID: entry.VariantID,
+							Tag:       entry.ServedModelTag,
+							RunID:     fullResult.Plan.RunID,
+						})
+						_, _ = fmt.Fprintf(stdout, "PASS FULL %s → %s\n", entry.VariantID, fullResult.Plan.RunID)
+					}
+				}
 			}
 			return finishCampaignQueueRun(cmd, queuePath, result)
 		},
@@ -199,6 +243,8 @@ Examples:
 	cmd.Flags().StringVar(&logDir, "log-dir", "", "Directory for per-model logs (default: .g8e/eval/logs/queue-run-TIMESTAMP)")
 	cmd.Flags().StringVar(&ensembleHealthURL, "ensemble-health-url", "http://127.0.0.1:8000/health", "Preflight g8ee health URL")
 	cmd.Flags().StringVar(&mirrorBootstrapURL, "mirror-bootstrap-url", "http://127.0.0.1:8082/bootstrap", "Preflight public mirror bootstrap URL")
+	cmd.Flags().BoolVar(&gateSmoke, "gate-smoke", false, "Execute fast Tier 1 smoke gate (5 scenarios × 3 roles = 15 assignments) for rapid screening")
+	cmd.Flags().BoolVar(&promoteOnPass, "promote-on-pass", false, "Automatically promote models that pass Tier 1 smoke gate to full 75-assignment qualification")
 	return cmd
 }
 

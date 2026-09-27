@@ -1505,7 +1505,11 @@ func variantIDForAssignmentModelRole(assignment *evalv1.EvaluationAssignment, ro
 }
 
 func primaryVariantIDForAssignment(assignment *evalv1.EvaluationAssignment) (string, error) {
-	return variantIDForAssignmentModelRole(assignment, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY)
+	if IsHeterogeneousAssignment(assignment) {
+		return variantIDForAssignmentModelRole(assignment, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY)
+	}
+	variantID, _, err := homogeneousVariantRole(assignment)
+	return variantID, err
 }
 
 func variantRoleAggregateFor(state *runAggregateState, variantID, role string) *variantRoleAggregate {

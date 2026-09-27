@@ -769,7 +769,6 @@ func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.
 }
 
 func TestDecodeInferenceProgressEnvelope(t *testing.T) {
-	t.Parallel()
 	progress := &operatorv1.InferenceProgressEvent{
 		ProviderAttemptId: "attempt-1",
 		Sequence:          2,

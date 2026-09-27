@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from app.constants import (
@@ -663,7 +664,13 @@ class G8eeAppSettings(G8eBaseModel):
             with open(ca_path):
                 return ca_path
         except OSError:
-            return None
+            pki_dir = Path(PATHS["infra"]["pki_dir"])
+            candidate = pki_dir / "trust" / "g8eg-ca-bundle.pem"
+            try:
+                with open(candidate):
+                    return str(candidate)
+            except OSError:
+                return None
 
     @property
     def client_cert_path(self) -> str | None:

@@ -35,6 +35,7 @@ type HomogeneousScheduleRequest struct {
 	Variants        []*evalv1.ModelVariant
 	RepetitionCount uint32
 	QueuedAt        time.Time
+	ScenarioIDs     []string
 }
 
 // BuildHomogeneousAssignmentMatrix materializes the full model-role smoke matrix
@@ -47,6 +48,19 @@ func BuildHomogeneousAssignmentMatrix(req HomogeneousScheduleRequest) ([]*evalv1
 		req.RepetitionCount = 1
 	}
 	scenarios := append([]*evalv1.EvaluationScenarioDefinition(nil), req.Catalog.GetScenarios()...)
+	if len(req.ScenarioIDs) > 0 {
+		allowed := make(map[string]struct{}, len(req.ScenarioIDs))
+		for _, id := range req.ScenarioIDs {
+			allowed[id] = struct{}{}
+		}
+		filtered := make([]*evalv1.EvaluationScenarioDefinition, 0, len(req.ScenarioIDs))
+		for _, scenario := range scenarios {
+			if _, ok := allowed[scenario.GetScenarioId()]; ok {
+				filtered = append(filtered, scenario)
+			}
+		}
+		scenarios = filtered
+	}
 	sort.Slice(scenarios, func(i, j int) bool {
 		return scenarios[i].GetScenarioId() < scenarios[j].GetScenarioId()
 	})

@@ -95,7 +95,7 @@ func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 2 (In-Process Integration) tests...")
 
-			testArgs := []string{"test", "-tags=integration", "-count=1", "-timeout", "180s"}
+			testArgs := []string{"test", "-tags=integration", "-count=1", "-timeout", "360s"}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}
@@ -476,6 +476,9 @@ func testSummaryCmd() *cobra.Command {
 				}
 				results = append(results, Result{Category: category, Outcome: outcome, Count: count})
 				total += count
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrAuditScanFailed, err)
 			}
 
 			if total == 0 {

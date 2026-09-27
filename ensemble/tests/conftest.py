@@ -32,6 +32,34 @@ from app.constants import G8EE_COMPONENT
 logger = logging.getLogger(__name__)
 
 
+@pytest.fixture(autouse=True)
+def _reset_paths_cache():
+    """Reset the global PATHS cache before and after every test to prevent test isolation leaks."""
+    from app.constants.paths import reload_paths
+
+    reload_paths()
+    yield
+    reload_paths()
+
+
+@pytest.fixture
+def test_runtime_dir():
+    """Isolated test directory under project root .g8e-test-tmp (avoiding system /tmp)."""
+    import shutil
+    import uuid
+    from app.utils.path import resolve_project_root
+
+    root = resolve_project_root()
+    base = root / ".g8e-test-tmp"
+    base.mkdir(parents=True, exist_ok=True)
+    dir_path = base / f"test_{uuid.uuid4().hex}"
+    dir_path.mkdir(parents=True, exist_ok=True)
+    try:
+        yield dir_path
+    finally:
+        shutil.rmtree(dir_path, ignore_errors=True)
+
+
 def _has_llm_credentials(llm) -> bool:
     """Return True if the given LLMSettings has the credentials it needs."""
     from app.constants import LLMProvider
@@ -519,7 +547,6 @@ async def task_tracker():
     tracker = TaskTracker()
     yield tracker
     await tracker.cleanup()
-
 
 @pytest.fixture
 def unique_investigation_id():

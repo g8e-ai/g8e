@@ -73,6 +73,9 @@ func (p *Publisher) publish(reader io.Reader, provenance *Provenance) (Manifest,
 	if err != nil {
 		return Manifest{}, fmt.Errorf("%w: validate exported artifacts: %w", constants.ErrG8eBinaryExport, err)
 	}
+	if !manifest.HasManifest() {
+		return Manifest{}, fmt.Errorf("%w: missing manifest", constants.ErrG8eBinaryExport)
+	}
 	if provenance != nil {
 		if err := MatchProvenance(*manifest.manifest, *provenance); err != nil {
 			return Manifest{}, err

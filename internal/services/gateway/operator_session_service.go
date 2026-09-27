@@ -16,6 +16,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
 // OperatorSessionService handles operator session persistence and management.
@@ -190,13 +191,7 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 		if err := json.Unmarshal(dataBytes, &operator); err != nil {
 			return nil, fmt.Errorf("unmarshal operator document: %w", err)
 		}
-		if operator.OperatorType != constants.OperatorTypeRemote {
-			continue
-		}
-		if operator.RuntimeConfig != nil && operator.RuntimeConfig.InferenceEnabled {
-			continue
-		}
-		if operator.OperatorSessionID == "" {
+		if !operatorcapability.IsGovernedDataOperator(operator) {
 			continue
 		}
 		return &models.OperatorSession{

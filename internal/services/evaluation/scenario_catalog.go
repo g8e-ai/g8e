@@ -87,6 +87,105 @@ func LoadScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[string]Scenar
 	return catalog, artifacts, nil
 }
 
+// SmokeGateScenarioCount is the number of discriminative scenarios in Tier 1 screening.
+const SmokeGateScenarioCount = 5
+
+// SmokeGateScenarioIDs lists the 5 high-discriminative scenarios for Tier 1 screening.
+var SmokeGateScenarioIDs = []string{
+	"instruction-exact-format",
+	"tool-select-file-read",
+	"tech-error-diagnosis",
+	"security-policy-deny-delete",
+	"recovery-tool-failure",
+}
+
+// BuildSmokeGateScenarioCatalog materializes the 5-scenario screening catalog
+// and its content-addressed fixture artifacts.
+func BuildSmokeGateScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
+	blueprints := scenarioBlueprints()
+	smokeIDs := make(map[string]struct{}, len(SmokeGateScenarioIDs))
+	for _, id := range SmokeGateScenarioIDs {
+		smokeIDs[id] = struct{}{}
+	}
+	artifacts := make(map[string]ScenarioArtifacts, len(SmokeGateScenarioIDs))
+	scenarios := make([]*evalv1.EvaluationScenarioDefinition, 0, len(SmokeGateScenarioIDs))
+	for _, blueprint := range blueprints {
+		if _, ok := smokeIDs[blueprint.ScenarioID]; !ok {
+			continue
+		}
+		scenario, pair, err := materializeScenarioBlueprint(blueprint)
+		if err != nil {
+			return nil, nil, fmt.Errorf("evaluation: build smoke scenario catalog: scenario %s: %w", blueprint.ScenarioID, err)
+		}
+		artifacts[blueprint.ScenarioID] = pair
+		scenarios = append(scenarios, scenario)
+	}
+	sort.Slice(scenarios, func(i, j int) bool {
+		return scenarios[i].GetScenarioId() < scenarios[j].GetScenarioId()
+	})
+	catalog := &evalv1.EvaluationScenarioCatalog{
+		SchemaVersion: CampaignSchemaVersion,
+		CatalogRef: &compliancev1.VersionedReference{
+			Id:      StandardCatalogID,
+			Version: StandardCatalogVersion,
+		},
+		Scenarios: scenarios,
+	}
+	digest, err := ComputeScenarioCatalogDigest(catalog)
+	if err != nil {
+		return nil, nil, err
+	}
+	catalog.CatalogDigest = digest
+	return catalog, artifacts, nil
+}
+
+// LoadSmokeGateScenarioCatalog returns the validated frozen smoke gate scenario catalog.
+func LoadSmokeGateScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
+	catalog, artifacts, err := BuildSmokeGateScenarioCatalog()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := ValidateSmokeGateScenarioCatalog(catalog, artifacts); err != nil {
+		return nil, nil, err
+	}
+	return catalog, artifacts, nil
+}
+
+// ValidateSmokeGateScenarioCatalog verifies the 5-scenario Tier 1 smoke catalog.
+func ValidateSmokeGateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error {
+	if catalog == nil || catalog.GetCatalogRef() == nil {
+		return fmt.Errorf("evaluation: validate smoke scenario catalog: %w", constants.ErrMissingRequiredField)
+	}
+	if catalog.GetCatalogRef().GetId() != StandardCatalogID || catalog.GetCatalogRef().GetVersion() != StandardCatalogVersion {
+		return fmt.Errorf("evaluation: validate smoke scenario catalog: catalog identity mismatch")
+	}
+	if catalog.GetSchemaVersion() != CampaignSchemaVersion {
+		return fmt.Errorf("evaluation: validate smoke scenario catalog: unsupported schema version")
+	}
+	if err := ValidateScenarioCatalogDigest(catalog); err != nil {
+		return err
+	}
+	if len(catalog.GetScenarios()) != SmokeGateScenarioCount {
+		return fmt.Errorf("evaluation: validate smoke scenario catalog: expected %d scenarios, got %d", SmokeGateScenarioCount, len(catalog.GetScenarios()))
+	}
+	for _, scenario := range catalog.GetScenarios() {
+		if scenario == nil || scenario.GetScenarioId() == "" || scenario.GetScenarioVersion() == "" {
+			return fmt.Errorf("evaluation: validate smoke scenario catalog: %w", constants.ErrMissingRequiredField)
+		}
+		pair, ok := artifacts[scenario.GetScenarioId()]
+		if !ok {
+			return fmt.Errorf("evaluation: validate smoke scenario catalog: missing artifacts for scenario %s", scenario.GetScenarioId())
+		}
+		if err := validateScenarioArtifactBinding(scenario.GetInputFixtureRef(), pair.Input); err != nil {
+			return fmt.Errorf("evaluation: validate smoke scenario catalog: scenario %s input fixture: %w", scenario.GetScenarioId(), err)
+		}
+		if err := validateScenarioArtifactBinding(scenario.GetGoldCriteriaRef(), pair.Gold); err != nil {
+			return fmt.Errorf("evaluation: validate smoke scenario catalog: scenario %s gold criteria: %w", scenario.GetScenarioId(), err)
+		}
+	}
+	return nil
+}
+
 // ValidateScenarioCatalog verifies the frozen catalog gate for Phase 2.
 func ValidateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error {
 	if catalog == nil || catalog.GetCatalogRef() == nil {

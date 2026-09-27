@@ -11,7 +11,6 @@ package gateway
 
 import (
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -135,13 +134,10 @@ func TestBlobStoreService_BlobGet(t *testing.T) {
 	})
 
 	t.Run("BlobGet returns not found for expired blob", func(t *testing.T) {
-		// Insert blob with very short TTL
+		// Insert blob that is already expired (ttlSeconds = -1)
 		data := []byte("expiring soon")
-		err := blobStore.BlobPut("expire-ns", "expire-blob", data, "text/plain", 1)
+		err := blobStore.BlobPut("expire-ns", "expire-blob", data, "text/plain", -1)
 		require.NoError(t, err)
-
-		// Wait for expiration
-		time.Sleep(2 * time.Second)
 
 		// Should not be retrievable
 		retrievedData, contentType, found := blobStore.BlobGet("expire-ns", "expire-blob")
@@ -200,11 +196,8 @@ func TestBlobStoreService_BlobMeta(t *testing.T) {
 
 	t.Run("BlobMeta returns not found for expired blob", func(t *testing.T) {
 		data := []byte("expiring soon")
-		err := blobStore.BlobPut("meta-expire-ns", "meta-expire-blob", data, "text/plain", 1)
+		err := blobStore.BlobPut("meta-expire-ns", "meta-expire-blob", data, "text/plain", -1)
 		require.NoError(t, err)
-
-		// Wait for expiration
-		time.Sleep(2 * time.Second)
 
 		meta, found := blobStore.BlobMeta("meta-expire-ns", "meta-expire-blob")
 		assert.False(t, found)
@@ -362,17 +355,14 @@ func TestBlobStoreService_RunMaintenance_Comprehensive(t *testing.T) {
 	blobStore, _ := setupBlobStoreTest(t)
 
 	t.Run("RunMaintenance removes expired blobs", func(t *testing.T) {
-		// Insert blob with short TTL
+		// Insert blob that is already expired (ttlSeconds = -1)
 		data := []byte("will expire")
-		err := blobStore.BlobPut("maint-ns", "expire-blob", data, "text/plain", 1)
+		err := blobStore.BlobPut("maint-ns", "expire-blob", data, "text/plain", -1)
 		require.NoError(t, err)
 
 		// Insert blob without expiration
 		err = blobStore.BlobPut("maint-ns", "no-expire-blob", []byte("will not expire"), "text/plain", 0)
 		require.NoError(t, err)
-
-		// Wait for expiration
-		time.Sleep(2 * time.Second)
 
 		// Run maintenance
 		err = blobStore.RunMaintenance()

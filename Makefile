@@ -583,7 +583,7 @@ test-unit: constants-check
 .PHONY: test-integration
 test-integration:
 	@echo "Running Tier 2 (In-Process Integration) tests..."
-	@go test -p=1 -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
+	@go test $(if $(TEST_P),-p=$(TEST_P),) -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) $(TEST_PKGS)
 
 # Tier 3: Docker E2E Tests - requires a running platform.
 # Start the platform first (docker compose up or ./g8e gw start), approve all

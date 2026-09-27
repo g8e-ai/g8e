@@ -112,6 +112,16 @@ func initializeCampaignRun(
 	plan *evaluation.CampaignStartPlan,
 	sessions campaignOperatorSessions,
 ) error {
+	return initializeCampaignRunWithSmokeGate(cmd, deps, plan, sessions, false)
+}
+
+func initializeCampaignRunWithSmokeGate(
+	cmd *cobra.Command,
+	deps nativeEvalDeps,
+	plan *evaluation.CampaignStartPlan,
+	sessions campaignOperatorSessions,
+	gateSmoke bool,
+) error {
 	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 	if err != nil {
 		return err
@@ -128,7 +138,13 @@ func initializeCampaignRun(
 		return fmt.Errorf("evaluation: campaign init: inventory campaign_id mismatch")
 	}
 	inventory.CampaignID = plan.CampaignID
-	catalog, artifacts, err := evaluation.LoadScenarioCatalog()
+	var catalog *evalv1.EvaluationScenarioCatalog
+	var artifacts map[string]evaluation.ScenarioArtifacts
+	if gateSmoke {
+		catalog, artifacts, err = evaluation.LoadSmokeGateScenarioCatalog()
+	} else {
+		catalog, artifacts, err = evaluation.LoadScenarioCatalog()
+	}
 	if err != nil {
 		return fmt.Errorf("evaluation: campaign init: %w", err)
 	}
@@ -675,6 +691,7 @@ type campaignStartFlowOptions struct {
 	RequireModelProvenance     bool
 	NoAutoRefresh              bool
 	JSONOutput                 bool
+	GateSmoke                  bool
 }
 
 type campaignStartFlowResult struct {
@@ -715,7 +732,7 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 		return &campaignStartFlowResult{Plan: plan}, nil
 	}
 	startedAt := deps.now().UTC()
-	if err := initializeCampaignRun(cmd, deps, plan, sessions); err != nil {
+	if err := initializeCampaignRunWithSmokeGate(cmd, deps, plan, sessions, opts.GateSmoke); err != nil {
 		return nil, err
 	}
 	if !opts.JSONOutput {

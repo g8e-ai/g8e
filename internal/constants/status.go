@@ -75,6 +75,18 @@ const (
 	OperatorTypeRemote   OperatorType = "remote"
 )
 
+// OperatorRole is a typed string for an Operator's operational role and responsibilities.
+// Multiple operators running on the same host are differentiated by their role, local directory,
+// launching account, and port.
+type OperatorRole string
+
+const (
+	OperatorRoleInference  OperatorRole = "inference"
+	OperatorRoleProvenance OperatorRole = "provenance"
+	OperatorRoleObserver   OperatorRole = "observer"
+	OperatorRoleData       OperatorRole = "data"
+)
+
 // UserStatus is a typed string for user status.
 type UserStatus string
 

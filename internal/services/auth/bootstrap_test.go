@@ -606,7 +606,10 @@ func TestNewBootstrapService_NilTLSConfig(t *testing.T) {
 func TestRequestHTTPAuth_ContextCancellation(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(5 * time.Second)
+		select {
+		case <-r.Context().Done():
+		case <-time.After(100 * time.Millisecond):
+		}
 	}))
 	defer server.Close()
 

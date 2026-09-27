@@ -64,3 +64,27 @@ func TestQueueEvalNext_PrintsPendingEntry(t *testing.T) {
 	assert.Contains(t, output.String(), "deepseek-r1:7b")
 	assert.Contains(t, output.String(), "campaign start --queue next")
 }
+
+func TestRolloutRun_SmokeGateFlags(t *testing.T) {
+	root := t.TempDir()
+	queue := evaluation.CampaignQueue{
+		Models: []evaluation.CampaignQueueModel{
+			{ServedModelTag: "deepseek-r1:7b", VariantID: "deepseek-r1-7b", CampaignID: "eval-init-deepseek-r1-7b", Status: "pending", InventoryFile: "eval/inventories/eval-init-deepseek-r1-7b.json", ModelRegistryDigest: "digest", HomogeneousCellCount: 75},
+		},
+	}
+	writeTestRuntimeQueue(t, root, &queue)
+
+	deps := nativeEvalDeps{
+		configLoader: func(string) (*config.Config, error) { return &config.Config{ProjectRoot: root}, nil },
+		fileSvcFactory: func(string, *slog.Logger) (fs.RuntimeFileService, error) {
+			return fs.NewRuntimeFileService(root, slog.Default())
+		},
+		createRuntimeTree: func(context.Context, fs.RuntimeFileService) error { return nil },
+	}
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"rollout", "run", "--dry-run", "--gate-smoke", "--promote-on-pass", "--project-root", root})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "deepseek-r1-7b")
+}

@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/exitcode"
 	"github.com/g8e-ai/g8e/v2/internal/services"
+	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -327,6 +328,8 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	clientCert := resolveCertPath(opts.ClientCert, fileSvc, logger)
 	enrolled := false
 
+	effectiveWorkDir := resolveWorkingDir(opts.WorkingDir, opts.LaunchDir)
+
 	// If no installed operator credentials exist and an endpoint is
 	// provided, drive the owner-approved platform enrollment protocol
 	// to obtain them. This replaces the removed bypass
@@ -345,13 +348,27 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
 			os.Exit(constants.ExitConfigError)
 		}
-		instanceID := fmt.Sprintf("operator-%s", hostname)
+		role := constants.OperatorRoleData
+		if opts.InferenceEnabled {
+			role = constants.OperatorRoleInference
+		} else if opts.ProvenanceOperatorEnabled {
+			role = constants.OperatorRoleProvenance
+		} else if opts.ProviderBoundaryObserverEnabled {
+			role = constants.OperatorRoleObserver
+		}
+		account := auth.ResolveCurrentAccount()
+		instanceID := fmt.Sprintf("operator-%s-%s", hostname, role)
 		enrollClient, err := NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname, fileSvc, logger)
 		if err != nil {
 			logger.Error("Failed to create enrollment client", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
 			os.Exit(constants.ExitConfigError)
 		}
+		enrollClient.SetFingerprintOptions(auth.FingerprintOptions{
+			LocalDir: effectiveWorkDir,
+			Account:  account,
+			Role:     string(role),
+		})
 		result, err := enrollClient.Enroll(context.Background())
 		if err != nil {
 			logger.Error("Platform enrollment failed", string(constants.ConnectionStateError), err)
@@ -418,7 +435,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		"key_file", privateKey,
 	)
 
-	effectiveWorkDir := resolveWorkingDir(opts.WorkingDir, opts.LaunchDir)
+	effectiveWorkDir = resolveWorkingDir(opts.WorkingDir, opts.LaunchDir)
 
 	cfg, err := config.Load(buildOperatorLoadOptions(opts, operatorEndpoint, effectiveWorkDir))
 	if err != nil {

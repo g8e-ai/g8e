@@ -54,12 +54,78 @@ func TestDispatchCommand_UsesTypedAuthenticatedIngressAndRecordsExchange(t *test
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
-	assert.Equal(t, request, received)
+	assert.Equal(t, "session-1", received.TargetOperatorSessionID)
+	assert.Equal(t, "FILE_EDIT", received.ActionType)
+	assert.Equal(t, string(constants.EventOperatorFileEditRequested), received.EventType)
 	assert.Equal(t, "tx-1", response.TransactionID)
 	assert.Equal(t, []byte("result"), response.ResultPayload)
 	assert.JSONEq(t, `{"success":true,"transaction_id":"tx-1","action_type":"FILE_EDIT","result_payload":"cmVzdWx0"}`, string(raw))
 	require.Len(t, exchanges, 1)
 	assert.Equal(t, constants.APIPaths.OperatorsCommands, exchanges[0].URL[len(server.URL):])
+}
+
+func TestDispatchCommand_ResolvesEventTypeForGovernedActions(t *testing.T) {
+	tests := []struct {
+		name          string
+		actionType    string
+		eventType     string
+		wantEventType string
+		wantAction    string
+	}{
+		{
+			name:          "residency action derives event type",
+			actionType:    string(constants.ActionTypeOllamaModelResidency),
+			wantEventType: string(constants.EventOperatorOllamaModelResidencyRequested),
+			wantAction:    string(constants.ActionTypeOllamaModelResidency),
+		},
+		{
+			name:          "inventory action derives event type",
+			actionType:    string(constants.ActionTypeOllamaModelInventory),
+			wantEventType: string(constants.EventOperatorOllamaModelInventoryRequested),
+			wantAction:    string(constants.ActionTypeOllamaModelInventory),
+		},
+		{
+			name:          "execute bash action derives event type",
+			actionType:    string(constants.ActionTypeExecuteBash),
+			wantEventType: string(constants.EventOperatorCommandRequested),
+			wantAction:    string(constants.ActionTypeExecuteBash),
+		},
+		{
+			name:          "event type derives action type",
+			eventType:     string(constants.EventOperatorOllamaModelResidencyRequested),
+			wantEventType: string(constants.EventOperatorOllamaModelResidencyRequested),
+			wantAction:    string(constants.ActionTypeOllamaModelResidency),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var received DispatchCommandRequest
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+				w.Header().Set("Content-Type", "application/json")
+				_, err := w.Write([]byte(`{"success":true,"transaction_id":"tx-1"}`))
+				require.NoError(t, err)
+			}))
+			t.Cleanup(server.Close)
+
+			client, err := New(config.Config{MTLSBaseURL: server.URL})
+			require.NoError(t, err)
+
+			request := DispatchCommandRequest{
+				TargetOperatorSessionID: "session-1",
+				ActionType:              tt.actionType,
+				EventType:               tt.eventType,
+				Payload:                 []byte("payload"),
+				CLISessionID:            "cli-1",
+			}
+			status, _, _, err := client.DispatchCommand(context.Background(), Persona{ID: "evaluation", CLISessionID: "cli-1"}, request)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, status)
+			assert.Equal(t, tt.wantEventType, received.EventType)
+			assert.Equal(t, tt.wantAction, received.ActionType)
+		})
+	}
 }
 
 func TestHealth_ReturnsTypedPostureAndRecordsExchange(t *testing.T) {

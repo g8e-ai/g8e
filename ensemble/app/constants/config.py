@@ -496,7 +496,7 @@ MAX_OUTPUT_LENGTH = 100_000
 
 # Certificates
 CLIENT_CERT_VALIDITY_DAYS = 365
-DEFAULT_PKI_DIR = str(Path(__file__).parent.parent.parent / ".g8e" / "pki")
+DEFAULT_PKI_DIR = PATHS["infra"]["pki_dir"]
 CERT_SUBJECT_ORG = "g8e Operator"
 CERT_SUBJECT_COUNTRY = "US"
 CRL_ISSUER = "g8e Platform CA"

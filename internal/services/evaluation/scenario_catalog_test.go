@@ -84,3 +84,42 @@ func TestBuildScenarioCatalog_FixtureReferencesMatchEmbeddedBodies(t *testing.T)
 		assert.Equal(t, scenario.GetGoldCriteriaRef().GetSha256(), pair.Gold.Reference.GetSha256())
 	}
 }
+
+func TestBuildSmokeGateScenarioCatalog_MaterializesFiveDiscriminativeScenarios(t *testing.T) {
+	catalog, artifacts, err := BuildSmokeGateScenarioCatalog()
+	require.NoError(t, err)
+	require.NotNil(t, catalog)
+	require.Len(t, catalog.Scenarios, SmokeGateScenarioCount)
+	require.Len(t, artifacts, SmokeGateScenarioCount)
+
+	require.NoError(t, ValidateSmokeGateScenarioCatalog(catalog, artifacts))
+	require.NoError(t, ValidateScenarioCatalogDigest(catalog))
+
+	seenIDs := make(map[string]bool)
+	for _, sc := range catalog.Scenarios {
+		seenIDs[sc.GetScenarioId()] = true
+	}
+	for _, expectedID := range SmokeGateScenarioIDs {
+		assert.True(t, seenIDs[expectedID], "missing expected smoke scenario %s", expectedID)
+	}
+}
+
+func TestHomogeneousAssignmentMatrix_FiltersBySmokeGateScenarioIDs(t *testing.T) {
+	catalog, _, err := LoadScenarioCatalog()
+	require.NoError(t, err)
+	variant := &evalv1.ModelVariant{
+		VariantId:      "granite-3-8b",
+		ServedModelTag: "granite3.3:8b",
+	}
+
+	assignments, err := BuildHomogeneousAssignmentMatrix(HomogeneousScheduleRequest{
+		CampaignID:  "smoke-test-campaign",
+		RunID:       "smoke-test-run",
+		Catalog:     catalog,
+		Variants:    []*evalv1.ModelVariant{variant},
+		ScenarioIDs: SmokeGateScenarioIDs,
+	})
+	require.NoError(t, err)
+	// 5 scenarios × 1 variant × 3 roles = 15 assignments
+	assert.Len(t, assignments, 15)
+}

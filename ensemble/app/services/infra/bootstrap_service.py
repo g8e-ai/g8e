@@ -124,9 +124,9 @@ class BootstrapService:
         if self._cached_ca_path is not None:
             return self._cached_ca_path
 
-        # Check the canonical location in the PKI directory
+        # Check canonical location in the PKI directory
         try:
-            ca_path = validate_safe_path("trust/hub-bundle.pem", self._pki_dir)
+            ca_path = validate_safe_path("trust/g8eg-ca-bundle.pem", self._pki_dir)
             if ca_path.exists():
                 self._cached_ca_path = str(ca_path)
                 self._logger.info(
