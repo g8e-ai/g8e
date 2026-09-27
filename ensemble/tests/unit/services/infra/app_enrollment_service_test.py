@@ -291,7 +291,7 @@ class TestLoadIdentityValidCert:
 
         assert identity.cert_path == cert_path
         assert identity.key_path == key_path
-        assert identity.ca_cert_path == str(pki_dir / "trust" / "hub-bundle.pem")
+        assert identity.ca_cert_path == str(pki_dir / "trust" / "g8eg-ca-bundle.pem")
         assert identity.app_id == "spiffe://g8e.local/app/g8ee"
 
 
@@ -411,7 +411,7 @@ class TestEnrollPlatformEnrollment:
         assert identity.app_id == "spiffe://g8e.local/app/g8ee"
         assert identity.cert_path == str(pki_dir / "issued" / "apps" / "g8ee.crt")
         assert identity.key_path == str(pki_dir / "issued" / "apps" / "g8ee.key")
-        assert identity.ca_cert_path == str(pki_dir / "trust" / "hub-bundle.pem")
+        assert identity.ca_cert_path == str(pki_dir / "trust" / "g8eg-ca-bundle.pem")
 
         # All three platform enrollment endpoints were called.
         paths_hit = [r.url.path for r in captured["requests"]]

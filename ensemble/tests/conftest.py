@@ -32,6 +32,16 @@ from app.constants import G8EE_COMPONENT
 logger = logging.getLogger(__name__)
 
 
+@pytest.fixture(autouse=True)
+def _reset_paths_cache():
+    """Reset the global PATHS cache before and after every test to prevent test isolation leaks."""
+    from app.constants.paths import reload_paths
+
+    reload_paths()
+    yield
+    reload_paths()
+
+
 def _has_llm_credentials(llm) -> bool:
     """Return True if the given LLMSettings has the credentials it needs."""
     from app.constants import LLMProvider
@@ -519,7 +529,6 @@ async def task_tracker():
     tracker = TaskTracker()
     yield tracker
     await tracker.cleanup()
-
 
 @pytest.fixture
 def unique_investigation_id():

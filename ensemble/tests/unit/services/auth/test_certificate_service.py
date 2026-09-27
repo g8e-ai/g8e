@@ -63,7 +63,7 @@ def ca_cert(ca_key):
 def setup_ca_files(temp_pki_dir, ca_cert):
     trust_dir = os.path.join(temp_pki_dir, "trust")
     os.makedirs(trust_dir, exist_ok=True)
-    cert_path = os.path.join(trust_dir, "hub-bundle.pem")
+    cert_path = os.path.join(trust_dir, "g8eg-ca-bundle.pem")
 
     with open(cert_path, "wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
