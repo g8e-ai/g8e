@@ -173,17 +173,21 @@ button { font-family: inherit; cursor: pointer; }
 }
 .header-campaign-task {
   display: flex; flex: 0 1 auto; align-items: center; justify-content: flex-start;
-  gap: 7px; min-width: 0; max-width: min(360px, 40vw);
-  padding: 5px 10px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
-  border-radius: 999px; background: var(--bg-elev);
+  gap: 6px; min-width: 0; max-width: min(220px, 25vw);
+  padding: 4px 10px; border: 1px solid var(--border);
+  border-radius: 999px; background: color-mix(in srgb, var(--bg-elev2) 80%, transparent);
+  opacity: 0.85; transition: opacity 160ms ease;
+}
+.header-campaign-task:hover {
+  opacity: 1;
 }
 .header-campaign-task-label {
-  flex: 0 0 auto; color: var(--fg-dim); font-size: var(--text-xs); font-weight: 700;
+  flex: 0 0 auto; color: var(--fg-dim); font-size: var(--text-2xs); font-weight: 700;
   letter-spacing: 0.45px; text-transform: uppercase; white-space: nowrap;
 }
 .header-campaign-task-id {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font-size: var(--text-lg); font-weight: 700; line-height: 1.2;
+  white-space: nowrap; font-size: var(--text-md); font-weight: 600; line-height: 1.2;
 }
 .header-campaign-state {
   flex: 0 0 auto; color: var(--fg-muted); font-size: var(--text-xs); font-weight: 700;
@@ -192,27 +196,59 @@ button { font-family: inherit; cursor: pointer; }
   background: color-mix(in srgb, var(--fg-muted) 12%, transparent);
 }
 .header-campaign-roles {
-  display: flex; flex: 1 1 0; align-items: stretch; gap: 8px;
+  display: flex; flex: 1 1 auto; align-items: stretch; gap: 8px;
   min-width: 0; overflow: hidden;
 }
 .header-campaign-role {
   display: flex; flex: 1 1 0; flex-direction: row; align-items: center; justify-content: flex-start;
   gap: 7px; min-width: 0; max-width: 100%;
-  padding: 5px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elev);
+  padding: 5px 12px; border-style: solid; border-radius: 999px; background: var(--bg-elev);
+  transition: border-color 160ms ease, background-color 160ms ease;
 }
-.header-campaign-role-active {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-elev));
+.header-campaign-role-role-primary {
+  border-width: 2.5px;
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
 }
-.header-campaign-role-completed {
-  border-color: color-mix(in srgb, var(--tone-ok) 45%, var(--border));
+.header-campaign-role-role-assistant {
+  border-width: 1.5px;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
-.header-campaign-role-failed {
-  border-color: color-mix(in srgb, var(--tone-critical) 45%, var(--border));
+.header-campaign-role-role-lite {
+  border-width: 1px;
+  border-color: var(--border);
+}
+.header-campaign-role-role-primary.header-campaign-role-active {
+  border-color: color-mix(in srgb, var(--accent) 90%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elev));
+}
+.header-campaign-role-role-assistant.header-campaign-role-active {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-elev));
+}
+.header-campaign-role-role-lite.header-campaign-role-active {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-elev));
+}
+.header-campaign-role-role-primary.header-campaign-role-completed {
+  border-color: color-mix(in srgb, var(--tone-ok) 75%, var(--border));
+}
+.header-campaign-role-role-assistant.header-campaign-role-completed {
+  border-color: color-mix(in srgb, var(--tone-ok) 55%, var(--border));
+}
+.header-campaign-role-role-lite.header-campaign-role-completed {
+  border-color: color-mix(in srgb, var(--tone-ok) 40%, var(--border));
+}
+.header-campaign-role-role-primary.header-campaign-role-failed {
+  border-color: color-mix(in srgb, var(--tone-critical) 75%, var(--border));
+}
+.header-campaign-role-role-assistant.header-campaign-role-failed {
+  border-color: color-mix(in srgb, var(--tone-critical) 55%, var(--border));
+}
+.header-campaign-role-role-lite.header-campaign-role-failed {
+  border-color: color-mix(in srgb, var(--tone-critical) 40%, var(--border));
 }
 .header-campaign-role-name {
-  flex: 0 0 auto; color: var(--fg-dim); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.45px;
-  text-transform: uppercase; white-space: nowrap;
+  display: none;
 }
 .header-campaign-role-status {
   display: inline-flex; align-items: center; gap: 4px; color: var(--tone-info);
@@ -224,6 +260,9 @@ button { font-family: inherit; cursor: pointer; }
 .header-campaign-role-model {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; font-size: var(--text-lg); font-weight: 700; line-height: 1.2;
+}
+.header-campaign-role-role-primary .header-campaign-role-model {
+  font-weight: 800;
 }
 .header-campaign-role-progress {
   display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;

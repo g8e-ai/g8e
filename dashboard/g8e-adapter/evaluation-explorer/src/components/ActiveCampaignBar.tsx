@@ -41,11 +41,11 @@ function RoleSlot({ slot }: { slot: RoleSlotState }) {
 
   return (
     <div
-      className={`header-campaign-role header-campaign-role-${slot.status}`}
+      className={`header-campaign-role header-campaign-role-role-${slot.role} header-campaign-role-${slot.status}`}
       aria-label={roleSlotAriaLabel(slot)}
+      title={`${roleName}: ${modelLabel}`}
     >
-      <span className="header-campaign-role-name">{roleName}</span>
-      <span className="header-campaign-role-model" title={modelLabel}>{modelLabel}</span>
+      <span className="header-campaign-role-model">{modelLabel}</span>
       {slot.status === 'active' ? (
         <span className="header-campaign-role-status">
           <span className="status-dot" aria-hidden="true" />
