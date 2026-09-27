@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 		case "serve":
 			serveHealth()
 		case "hold":
-			time.Sleep(30 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 		os.Exit(0)
 	}

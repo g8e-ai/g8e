@@ -279,8 +279,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 		var authResp AuthServicesResponse
 		if err := json.Unmarshal(respBody, &authResp); err != nil {
-			lastErr = fmt.Errorf("%w: %w", constants.ErrBootstrapResponseDecode, err)
-			continue
+			return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapResponseDecode, err)
 		}
 
 		if !authResp.Success {

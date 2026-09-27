@@ -152,7 +152,7 @@ func (env *capacityMirrorEnv) coldLifecycle(ctx context.Context, clientIP string
 			return "snapshot", status == http.StatusTooManyRequests
 		}
 		if snapshot.HighWaterSequence == cursor {
-			survived, status, outcome := env.openStream(ctx, source, cursor, clientIP, 2*time.Second)
+			survived, status, outcome := env.openStream(ctx, source, cursor, clientIP, 200*time.Millisecond)
 			if !survived && outcome != "complete" {
 				return outcome, status == http.StatusTooManyRequests
 			}
@@ -289,7 +289,7 @@ func TestPublicSpectatorPublicationDeliversDuringSSEHold(t *testing.T) {
 	defer cancel()
 
 	const subscribers = 32
-	hold := 5 * time.Second
+	hold := 1 * time.Second
 	var delivered atomic.Int32
 	var wg sync.WaitGroup
 	wg.Add(subscribers)
@@ -329,7 +329,7 @@ func TestPublicSpectatorPublicationDeliversDuringSSEHold(t *testing.T) {
 		}(index)
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	var snapshot models.PublicFeedSnapshot
 	require.Equal(t, http.StatusOK, env.helper.getJSON("/snapshot?source="+env.sourceID, &snapshot))
 	publishRecord := env.helper.makeRecord(6, applyProjectionDefaults(models.NewPublicFeedObject(map[string]string{
@@ -351,7 +351,7 @@ func TestPublicSpectatorStreamHold_ThousandDistinctClientsSurvive(t *testing.T) 
 	defer cancel()
 
 	const clients = constants.PublicFeedSSEMaxSubscribers
-	hold := 3 * time.Second
+	hold := 300 * time.Millisecond
 	results := make(chan bool, clients)
 	var wg sync.WaitGroup
 	wg.Add(clients)

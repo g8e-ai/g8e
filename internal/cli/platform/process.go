@@ -77,6 +77,14 @@ type ProcessManager struct {
 	// isProcessRunningFn allows mocking for tests (used in process_windows.go)
 	//nolint:unused // Used in platform-specific files and tests
 	isProcessRunningFn func(pid int) bool
+	healthCheckInterval time.Duration
+	maxHealthChecks     int
+}
+
+// SetHealthCheckParameters overrides the health check polling interval and max check count (primarily for tests).
+func (pm *ProcessManager) SetHealthCheckParameters(interval time.Duration, maxChecks int) {
+	pm.healthCheckInterval = interval
+	pm.maxHealthChecks = maxChecks
 }
 
 func NewProcessManager(fileSvc fs.RuntimeFileService) (*ProcessManager, error) {
@@ -499,9 +507,18 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logPath)
 	}
 
+	checkInterval := HealthCheckInterval
+	if pm.healthCheckInterval > 0 {
+		checkInterval = pm.healthCheckInterval
+	}
+	maxChecks := MaxHealthChecks
+	if pm.maxHealthChecks > 0 {
+		maxChecks = pm.maxHealthChecks
+	}
+
 	healthURL := fmt.Sprintf("http://%s:%d%s", constants.LocalhostIP, availableHTTPPort, constants.APIPaths.Health)
-	client := &http.Client{Timeout: HealthCheckInterval}
-	for i := 0; i < MaxHealthChecks; i++ {
+	client := &http.Client{Timeout: checkInterval}
+	for i := 0; i < maxChecks; i++ {
 		select {
 		case <-waitCh:
 			return failStart()
@@ -519,7 +536,7 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 		select {
 		case <-waitCh:
 			return failStart()
-		case <-time.After(HealthCheckInterval):
+		case <-time.After(checkInterval):
 		}
 	}
 

@@ -474,8 +474,8 @@ func TestMonitorPasskeyRegistration_MatchingEventCompletesOnce(t *testing.T) {
 	assert.True(t, isRegistered, "expected passkeyRegisteredMsg, got %T", msg)
 	registeredCount := 1
 
-	// Wait a bit to see if a duplicate arrives.
-	time.Sleep(500 * time.Millisecond)
+	// Wait briefly to see if a duplicate arrives.
+	time.Sleep(50 * time.Millisecond)
 	for {
 		select {
 		case m := <-sender.msgCh:

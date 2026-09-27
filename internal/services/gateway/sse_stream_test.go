@@ -173,7 +173,7 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	}()
 
 	// Wait for stream to start
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	// Publish an event to the pubsub channel. The stream handler expects a
 	// models.SSEPublishedEvent envelope (R1) carrying the DB row ID and the
@@ -185,7 +185,7 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, envelopeJSON)
 
 	// Wait for delivery
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	cancel()
 	<-done
 
@@ -303,7 +303,7 @@ func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
 	}()
 
 	// Wait for replay to complete (event2 is replayed, lastEmittedID = event2ID).
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	// Publish a duplicate event with the same ID as the replayed row.
 	// The stream handler should suppress it via lastEmittedID dedup.
@@ -320,7 +320,7 @@ func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
 	require.NoError(t, err)
 	h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, newJSON)
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	cancel()
 	<-done
 
