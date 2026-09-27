@@ -76,7 +76,7 @@ type ProcessManager struct {
 	commandExecutor CommandExecutor
 	// isProcessRunningFn allows mocking for tests (used in process_windows.go)
 	//nolint:unused // Used in platform-specific files and tests
-	isProcessRunningFn func(pid int) bool
+	isProcessRunningFn  func(pid int) bool
 	healthCheckInterval time.Duration
 	maxHealthChecks     int
 }
