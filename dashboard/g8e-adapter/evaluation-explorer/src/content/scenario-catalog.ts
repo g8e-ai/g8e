@@ -138,7 +138,7 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     publicDescription: 'Choose investigation context lookup instead of a plausible wrong tool.',
     gradingMethod: 'deterministic',
     userPrompt:
-      'Use the available tools to determine whether case CASE-EVAL-001 mentions payment timeout. Prefer the investigation context tool over shell commands.',
+      'Look up case CASE-EVAL-001 in the investigation context to determine whether it mentions a payment timeout.',
     expectedBehavior: 'The model selects query_investigation_context and avoids run_commands_with_operator.',
     requiredConcepts: ['tool-selection', 'investigation'],
     allowedTools: ['query_investigation_context', 'recursive_grep_search', 'run_commands_with_operator'],
@@ -152,7 +152,7 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'tool_selection',
     publicDescription: 'Choose file read instead of grep or command execution for a direct file lookup.',
     gradingMethod: 'deterministic',
-    userPrompt: 'Read the attached synthetic config file and report the value of retry_limit.',
+    userPrompt: 'Read /synthetic/eval/retry-config.env on the operator and report the value of retry_limit.',
     systemContext: 'The answer is available by reading the named file directly.',
     expectedBehavior: 'The model selects file_read_on_operator to inspect the synthetic config.',
     requiredConcepts: ['tool-selection', 'file-read'],
@@ -167,7 +167,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'tool_selection',
     publicDescription: 'Choose recursive grep instead of listing or command execution for a pattern search.',
     gradingMethod: 'deterministic',
-    userPrompt: 'Find whether the synthetic workspace contains the token PAYMENT_TIMEOUT without using shell commands.',
+    userPrompt:
+      'Search the synthetic workspace files for occurrences of PAYMENT_TIMEOUT using recursive grep rather than shell execution.',
     expectedBehavior: 'The model selects recursive_grep_search for the pattern search.',
     requiredConcepts: ['tool-selection', 'grep'],
     allowedTools: ['recursive_grep_search', 'list_files_and_directories_with_detailed_metadata', 'run_commands_with_operator'],
@@ -182,7 +183,7 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     publicDescription: 'Check command constraints before proposing operator execution.',
     gradingMethod: 'deterministic',
     userPrompt:
-      'Before suggesting any operator command, use the constraints tool to confirm whether read-only inspection is allowed.',
+      'Check the active command constraints to determine what commands are permitted on the operator before proposing any command execution.',
     expectedBehavior: 'The model calls get_command_constraints before any operator execution tool.',
     requiredConcepts: ['tool-selection', 'constraints'],
     allowedTools: ['get_command_constraints', 'run_commands_with_operator'],

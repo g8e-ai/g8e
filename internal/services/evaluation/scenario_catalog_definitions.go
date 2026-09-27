@@ -180,7 +180,7 @@ func toolSelectInvestigation() ScenarioBlueprint {
 		RequiredConcepts:     []string{"tool-selection", "investigation"},
 		RequiresToolDecision: true,
 		Input: ScenarioInputFixture{
-			UserPrompt: "Use the available tools to determine whether case CASE-EVAL-001 mentions payment timeout. Prefer the investigation context tool over shell commands.",
+			UserPrompt: "Look up case CASE-EVAL-001 in the investigation context to determine whether it mentions a payment timeout.",
 		},
 		Gold: withToolGold(baseGold(
 			"The model selects query_investigation_context and avoids run_commands_with_operator.",
@@ -206,7 +206,7 @@ func toolSelectFileRead() ScenarioBlueprint {
 		RequiredConcepts:     []string{"tool-selection", "file-read"},
 		RequiresToolDecision: true,
 		Input: ScenarioInputFixture{
-			UserPrompt:    "Read the attached synthetic config file and report the value of retry_limit.",
+			UserPrompt:    "Read /synthetic/eval/retry-config.env on the operator and report the value of retry_limit.",
 			SystemContext: "The answer is available by reading the named file directly.",
 			Attachments: []ScenarioAttachment{
 				syntheticAttachment("file", "synthetic-retry-config", "retry_limit=3\nbackoff_seconds=5"),
@@ -236,7 +236,7 @@ func toolSelectGrep() ScenarioBlueprint {
 		RequiredConcepts:     []string{"tool-selection", "grep"},
 		RequiresToolDecision: true,
 		Input: ScenarioInputFixture{
-			UserPrompt: "Find whether the synthetic workspace contains the token PAYMENT_TIMEOUT without using shell commands.",
+			UserPrompt: "Search the synthetic workspace files for occurrences of PAYMENT_TIMEOUT using recursive grep rather than shell execution.",
 		},
 		Gold: withToolGold(baseGold(
 			"The model selects recursive_grep_search for the pattern search.",
@@ -262,7 +262,7 @@ func toolSelectConstraints() ScenarioBlueprint {
 		TinyTask:             true,
 		RequiresToolDecision: true,
 		Input: ScenarioInputFixture{
-			UserPrompt: "Before suggesting any operator command, use the constraints tool to confirm whether read-only inspection is allowed.",
+			UserPrompt: "Check the active command constraints to determine what commands are permitted on the operator before proposing any command execution.",
 		},
 		Gold: withToolGold(baseGold(
 			"The model calls get_command_constraints before any operator execution tool.",

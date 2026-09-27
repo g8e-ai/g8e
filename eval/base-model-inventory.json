@@ -1,6 +1,6 @@
 {
   "campaign_id": "eval-genesis-homogeneous",
-  "model_registry_digest": "7bc429b08211cd77dbe613c83587469eca99a79dc8a293ac36e851d3889a4b9a",
+  "model_registry_digest": "0caf9345f176d6f73871261b1e44e6c8daf377e7e4fae88da321ad6290ad9cd1",
   "model_count": 50,
   "homogeneous_cell_count": 3750,
   "variants": [
@@ -71,7 +71,7 @@
       "variantId": "gemma4-12b",
       "providerClass": "ollama",
       "servedModelTag": "gemma4:12b",
-      "modelDigest": "3e0ec7365f8f9129bc039b653fed4d372a59585b1ee36d523c9b883a4890b093",
+      "modelDigest": "89e70d6532d46faa1c63418a283eff7355d393909b4d16986a6820de439d3081",
       "modelFamily": "gemma4",
       "parameterCount": "12000000000",
       "quantization": "Q4_K_M",
@@ -137,9 +137,9 @@
       "variantId": "granite4-2-3b",
       "providerClass": "ollama",
       "servedModelTag": "granite4.2:3b",
-      "modelDigest": "40577dc168a3a9ad34e9a1234e0c2570be86097fa75a236d4574ae985705d3c4",
+      "modelDigest": "f729fb864e75285ef536f142185eecf0f56e6634aed806ba9cc1b5e3791da58f",
       "modelFamily": "granite",
-      "parameterCount": "3000000000",
+      "parameterCount": "3200000000",
       "quantization": "Q4_K_M",
       "contextLimit": 131072
     },
@@ -147,9 +147,9 @@
       "variantId": "granite4-2-8b",
       "providerClass": "ollama",
       "servedModelTag": "granite4.2:8b",
-      "modelDigest": "f586c02fdecdf151b656207c339aa003997345774a41768bac1fd6d2fb85913b",
+      "modelDigest": "f639313d874c2c678f017211be7a92e12cc0b1c5f3f1a1589d3460fc637def65",
       "modelFamily": "granite",
-      "parameterCount": "8000000000",
+      "parameterCount": "8200000000",
       "quantization": "Q4_K_M",
       "contextLimit": 131072
     },
@@ -193,7 +193,7 @@
       "variantId": "milkey-glm-4-9b-0414-q4-k-m",
       "providerClass": "ollama",
       "servedModelTag": "milkey/GLM-4-9B-0414:Q4_K_M",
-      "modelDigest": "537211882a70230a6357420509469391976686c620d9d220c422ab0dc7297c83",
+      "modelDigest": "42ee4f79860d6bacb4e2c2f4e2ffd8d0970238928341df4cd66f2bcfab3e87a9",
       "modelFamily": "chatglm",
       "parameterCount": "9000000000",
       "quantization": "Q4_K_M",
@@ -304,27 +304,27 @@
       "variantId": "qwen3-5-0-8b",
       "providerClass": "ollama",
       "servedModelTag": "qwen3.5:0.8b",
-      "modelDigest": "f3817196d142eaf72ce79dfebe53dcb20bd21da87ce13e138a8f8e10a866b3a4",
+      "modelDigest": "a3f5b6b45c5e4c1a4ace41c6de62aa8e6efa1d7043fab0017b492b3114a08067",
       "modelFamily": "qwen35",
-      "parameterCount": "800000000",
-      "quantization": "Q8_0",
+      "parameterCount": "752000000",
+      "quantization": "Q4_K_M",
       "contextLimit": 262144
     },
     {
       "variantId": "qwen3-5-2b",
       "providerClass": "ollama",
       "servedModelTag": "qwen3.5:2b",
-      "modelDigest": "324d162be6ca5629ae4517c8710434d0bd2d665bc94dbad46e9af8fbf8a2f0df",
+      "modelDigest": "8572a8510e8517742777c4a2b49accaaf3d19a99aa08bf09bce216de82b76233",
       "modelFamily": "qwen35",
       "parameterCount": "2000000000",
-      "quantization": "Q8_0",
+      "quantization": "Q4_K_M",
       "contextLimit": 262144
     },
     {
       "variantId": "qwen3-5-4b",
       "providerClass": "ollama",
       "servedModelTag": "qwen3.5:4b",
-      "modelDigest": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd",
+      "modelDigest": "d31742299266cc8758092a5907bca52e823bb11e92db2e06ad1a0e7b46628159",
       "modelFamily": "qwen35",
       "parameterCount": "4000000000",
       "quantization": "Q4_K_M",
@@ -334,7 +334,7 @@
       "variantId": "qwen3-5-9b",
       "providerClass": "ollama",
       "servedModelTag": "qwen3.5:9b",
-      "modelDigest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+      "modelDigest": "0c8756d182362a618011b3c184b853909f9a4cac31f0eaf27700dbf1b345d5ca",
       "modelFamily": "qwen35",
       "parameterCount": "9000000000",
       "quantization": "Q4_K_M",
@@ -501,7 +501,7 @@
     },
     {
       "model": "gemma4:12b",
-      "digest": "3e0ec7365f8f9129bc039b653fed4d372a59585b1ee36d523c9b883a4890b093"
+      "digest": "89e70d6532d46faa1c63418a283eff7355d393909b4d16986a6820de439d3081"
     },
     {
       "model": "gemma4:e2b",
@@ -529,11 +529,11 @@
     },
     {
       "model": "granite4.2:3b",
-      "digest": "40577dc168a3a9ad34e9a1234e0c2570be86097fa75a236d4574ae985705d3c4"
+      "digest": "f729fb864e75285ef536f142185eecf0f56e6634aed806ba9cc1b5e3791da58f"
     },
     {
       "model": "granite4.2:8b",
-      "digest": "f586c02fdecdf151b656207c339aa003997345774a41768bac1fd6d2fb85913b"
+      "digest": "f639313d874c2c678f017211be7a92e12cc0b1c5f3f1a1589d3460fc637def65"
     },
     {
       "model": "hermes3:8b",
@@ -553,7 +553,7 @@
     },
     {
       "model": "milkey/GLM-4-9B-0414:Q4_K_M",
-      "digest": "537211882a70230a6357420509469391976686c620d9d220c422ab0dc7297c83"
+      "digest": "42ee4f79860d6bacb4e2c2f4e2ffd8d0970238928341df4cd66f2bcfab3e87a9"
     },
     {
       "model": "ministral-3:3b",
@@ -601,19 +601,19 @@
     },
     {
       "model": "qwen3.5:0.8b",
-      "digest": "f3817196d142eaf72ce79dfebe53dcb20bd21da87ce13e138a8f8e10a866b3a4"
+      "digest": "a3f5b6b45c5e4c1a4ace41c6de62aa8e6efa1d7043fab0017b492b3114a08067"
     },
     {
       "model": "qwen3.5:2b",
-      "digest": "324d162be6ca5629ae4517c8710434d0bd2d665bc94dbad46e9af8fbf8a2f0df"
+      "digest": "8572a8510e8517742777c4a2b49accaaf3d19a99aa08bf09bce216de82b76233"
     },
     {
       "model": "qwen3.5:4b",
-      "digest": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd"
+      "digest": "d31742299266cc8758092a5907bca52e823bb11e92db2e06ad1a0e7b46628159"
     },
     {
       "model": "qwen3.5:9b",
-      "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7"
+      "digest": "0c8756d182362a618011b3c184b853909f9a4cac31f0eaf27700dbf1b345d5ca"
     },
     {
       "model": "qwen3.6:35b-a3b",
