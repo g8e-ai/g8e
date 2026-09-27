@@ -369,6 +369,35 @@ func TestCampaignControllerWithPublicationPublishesQueuedAssignments(t *testing.
 	assert.GreaterOrEqual(t, len(exporter.records), 8)
 }
 
+func TestCampaignPublicationCoordinatorPublishAssignmentLifecycles(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	req := testCampaignInitRequest(t)
+	catalog := req.Catalog
+	runID := "run-batch-lifecycles"
+	assignments := []*evalv1.EvaluationAssignment{
+		{
+			AssignmentId:    "assign-1",
+			RunId:           runID,
+			CampaignId:      "camp-1",
+			ScenarioId:      catalog.Scenarios[0].ScenarioId,
+			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED,
+		},
+		{
+			AssignmentId:    "assign-2",
+			RunId:           runID,
+			CampaignId:      "camp-1",
+			ScenarioId:      catalog.Scenarios[0].ScenarioId,
+			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED,
+		},
+	}
+	err := coordinator.PublishAssignmentLifecycles(context.Background(), runID, assignments, catalog)
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(exporter.records))
+}
+
 func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservationWindows(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

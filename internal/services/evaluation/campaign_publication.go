@@ -119,6 +119,42 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentLifecycle(ctx context.
 	return c.publishEnvelope(ctx, assignment.GetRunId(), idempotencyKey, publicMessageTypeAssignmentLifecycle, projection)
 }
 
+// PublishAssignmentLifecycles emits lifecycle projections for a batch of assignments in bounded feed batches.
+func (c *CampaignPublicationCoordinator) PublishAssignmentLifecycles(ctx context.Context, runID string, assignments []*evalv1.EvaluationAssignment, catalog *evalv1.EvaluationScenarioCatalog) error {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil {
+		return fmt.Errorf("evaluation: publish assignment lifecycles: %w", constants.ErrMissingRequiredField)
+	}
+	if len(assignments) == 0 {
+		return nil
+	}
+	if runID == "" {
+		runID = assignments[0].GetRunId()
+	}
+	if runID == "" {
+		return fmt.Errorf("evaluation: publish assignment lifecycles: %w", constants.ErrMissingRequiredField)
+	}
+	requests := make([]campaignFeedPublishRequest, 0, len(assignments))
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		category, err := ScenarioCategoryForAssignment(catalog, assignment)
+		if err != nil {
+			return err
+		}
+		request, err := buildAssignmentLifecyclePublishRequest(assignment, category, assignmentLifecycleObservedAt(assignment))
+		if err != nil {
+			return err
+		}
+		requests = append(requests, request)
+	}
+	if len(requests) == 0 {
+		return nil
+	}
+	_, err := c.exportFeedRecords(ctx, runID, requests)
+	return err
+}
+
 // PublishAssignmentResult emits one terminal result projection when it has not
 // yet been published for the run.
 func (c *CampaignPublicationCoordinator) PublishAssignmentResult(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, scenarioCategory evalv1.EvaluationScenarioCategory, verificationStatus string) error {
