@@ -11,8 +11,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"sort"
+	"strconv"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -293,3 +296,188 @@ func (freeze *ModelInventoryFreeze) ToModelRegistryFreeze() *ModelRegistryFreeze
 		Variants:   freeze.InferenceVariants,
 	}
 }
+
+// ParseParameterCount parses human parameter count strings such as "12b", "8B", "3.8b", "700m", "135M", or raw integers.
+func ParseParameterCount(raw string) (uint64, error) {
+	s := strings.TrimSpace(strings.ToLower(raw))
+	if s == "" {
+		return 0, nil
+	}
+	multiplier := float64(1)
+	switch {
+	case strings.HasSuffix(s, "b"):
+		multiplier = 1_000_000_000
+		s = strings.TrimSuffix(s, "b")
+	case strings.HasSuffix(s, "m"):
+		multiplier = 1_000_000
+		s = strings.TrimSuffix(s, "m")
+	case strings.HasSuffix(s, "k"):
+		multiplier = 1_000
+		s = strings.TrimSuffix(s, "k")
+	}
+	s = strings.TrimSpace(s)
+	val, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: parse parameter count %q: %w", raw, err)
+	}
+	if val < 0 {
+		return 0, fmt.Errorf("evaluation: parse parameter count %q: must be non-negative", raw)
+	}
+	return uint64(math.Round(val * multiplier)), nil
+}
+
+// FormatParameterCount formats a parameter count into human readable shorthand (e.g. 12B, 3.8B, 700M).
+func FormatParameterCount(count uint64) string {
+	if count == 0 {
+		return "-"
+	}
+	switch {
+	case count >= 1_000_000_000:
+		val := float64(count) / 1_000_000_000
+		if val == math.Floor(val) {
+			return fmt.Sprintf("%.0fB", val)
+		}
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", val), "0"), ".") + "B"
+	case count >= 1_000_000:
+		val := float64(count) / 1_000_000
+		if val == math.Floor(val) {
+			return fmt.Sprintf("%.0fM", val)
+		}
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", val), "0"), ".") + "M"
+	case count >= 1_000:
+		val := float64(count) / 1_000
+		if val == math.Floor(val) {
+			return fmt.Sprintf("%.0fK", val)
+		}
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", val), "0"), ".") + "K"
+	default:
+		return fmt.Sprintf("%d", count)
+	}
+}
+
+// FilterVariantsByMaxParameters returns variants with parameterCount <= maxParams.
+// If maxParams is 0, all variants are returned.
+func FilterVariantsByMaxParameters(variants []*evalv1.ModelVariant, maxParams uint64) []*evalv1.ModelVariant {
+	if maxParams == 0 {
+		return variants
+	}
+	filtered := make([]*evalv1.ModelVariant, 0, len(variants))
+	for _, v := range variants {
+		if v == nil {
+			continue
+		}
+		if v.GetParameterCount() > 0 && v.GetParameterCount() > maxParams {
+			continue
+		}
+		filtered = append(filtered, v)
+	}
+	return filtered
+}
+
+// FilterVariantsByFamily returns variants matching modelFamily (case-insensitive substring).
+func FilterVariantsByFamily(variants []*evalv1.ModelVariant, family string) []*evalv1.ModelVariant {
+	family = strings.TrimSpace(strings.ToLower(family))
+	if family == "" {
+		return variants
+	}
+	filtered := make([]*evalv1.ModelVariant, 0, len(variants))
+	for _, v := range variants {
+		if v == nil {
+			continue
+		}
+		if strings.EqualFold(v.GetModelFamily(), family) || strings.Contains(strings.ToLower(v.GetModelFamily()), family) {
+			filtered = append(filtered, v)
+		}
+	}
+	return filtered
+}
+
+// AddOrUpdateModelVariant adds a new model variant or replaces an existing one matching
+// the served model tag or variant ID, preserving canonical tag sorting and valid registry digest.
+func AddOrUpdateModelVariant(freeze *ModelInventoryFreeze, variant *evalv1.ModelVariant) (*ModelInventoryFreeze, error) {
+	if freeze == nil || variant == nil {
+		return nil, fmt.Errorf("evaluation: add model variant: %w", constants.ErrMissingRequiredField)
+	}
+	if variant.GetServedModelTag() == "" || variant.GetModelDigest() == "" {
+		return nil, fmt.Errorf("evaluation: add model variant: served model tag and digest required: %w", constants.ErrMissingRequiredField)
+	}
+	if variant.GetVariantId() == "" {
+		variant.VariantId = inference.NormalizeProviderModelVariantID(variant.GetServedModelTag())
+	}
+	if variant.GetProviderClass() == "" {
+		variant.ProviderClass = "ollama"
+	}
+
+	variants := make([]*evalv1.ModelVariant, 0, len(freeze.Variants)+1)
+	replaced := false
+	for _, existing := range freeze.Variants {
+		if existing == nil {
+			continue
+		}
+		if existing.GetServedModelTag() == variant.GetServedModelTag() || existing.GetVariantId() == variant.GetVariantId() {
+			variants = append(variants, variant)
+			replaced = true
+		} else {
+			variants = append(variants, existing)
+		}
+	}
+	if !replaced {
+		variants = append(variants, variant)
+	}
+	sort.Slice(variants, func(i, j int) bool {
+		return variants[i].GetServedModelTag() < variants[j].GetServedModelTag()
+	})
+
+	updatedFreeze, err := MaterializeModelRegistry(freeze.CampaignID, variants)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateModelRegistry(updatedFreeze); err != nil {
+		return nil, err
+	}
+	return updatedFreeze, nil
+}
+
+// MergeModelVariants merges source variants into target freeze, replacing duplicates by served tag.
+func MergeModelVariants(targetFreeze *ModelInventoryFreeze, sourceVariants []*evalv1.ModelVariant) (*ModelInventoryFreeze, error) {
+	if targetFreeze == nil {
+		return nil, fmt.Errorf("evaluation: merge model variants: %w", constants.ErrMissingRequiredField)
+	}
+	if len(sourceVariants) == 0 {
+		return targetFreeze, nil
+	}
+	byTag := make(map[string]*evalv1.ModelVariant, len(targetFreeze.Variants))
+	for _, v := range targetFreeze.Variants {
+		if v != nil {
+			byTag[v.GetServedModelTag()] = v
+		}
+	}
+	for _, v := range sourceVariants {
+		if v == nil || v.GetServedModelTag() == "" {
+			continue
+		}
+		if v.GetVariantId() == "" {
+			v.VariantId = inference.NormalizeProviderModelVariantID(v.GetServedModelTag())
+		}
+		if v.GetProviderClass() == "" {
+			v.ProviderClass = "ollama"
+		}
+		byTag[v.GetServedModelTag()] = v
+	}
+	merged := make([]*evalv1.ModelVariant, 0, len(byTag))
+	for _, v := range byTag {
+		merged = append(merged, v)
+	}
+	sort.Slice(merged, func(i, j int) bool {
+		return merged[i].GetServedModelTag() < merged[j].GetServedModelTag()
+	})
+	newFreeze, err := MaterializeModelRegistry(targetFreeze.CampaignID, merged)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateModelRegistry(newFreeze); err != nil {
+		return nil, err
+	}
+	return newFreeze, nil
+}
+

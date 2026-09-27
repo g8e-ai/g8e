@@ -19,15 +19,15 @@ The optional Hugging Face rollout intake (`eval/rollout-intake-hf.json`) also tr
 | Family | Models |
 | --- | --- |
 | DeepSeek | `deepseek-r1:7b` |
-| GLM | `milkey/GLM-4-9B-0414:Q4_K_M` |
+| GLM | `milkey/GLM-4-9B-0414:Q4_K_M`, `glm-5.3-air` |
 | GPT-OSS | `gpt-oss:20b` |
-| Gemma | `gemma2:9b`, `gemma3:270m`, `gemma3:1b`, `gemma3:4b`, `gemma4:e2b`, `gemma4:e4b` |
+| Gemma | `gemma2:9b`, `gemma3:270m`, `gemma3:1b`, `gemma3:4b`, `gemma4:e2b`, `gemma4:e4b`, `gemma4:12b` |
 | Granite | `granite4.2:3b`, `granite4.2:8b`, `granite3.3:2b`, `granite3.3:8b` |
 | Hermes | `hermes3:8b` |
 | Llama | `llama3.1:8b`, `llama3.2:1b`, `llama3.2:3b`, `tinyllama:1.1b` |
 | Mistral | `mistral:7b`, `ministral-3:3b`, `ministral-3:8b` |
 | Phi | `phi4-mini:3.8b`, `phi4-mini-reasoning:3.8b` |
-| Qwen | `pdevine/qwen3.6:27b-mtp-q4_K_M`, `qwen3:30b`, `qwen3.5:0.8b`, `qwen3.5:2b`, `qwen3.5:4b`, `qwen3.5:9b`, `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b`, `qwen2.5:0.5b`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5-coder:7b` |
+| Qwen | `pdevine/qwen3.6:27b-mtp-q4_K_M`, `qwen3:30b`, `qwen3.5:0.8b`, `qwen3.5:2b`, `qwen3.5:4b`, `qwen3.5:9b`, `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b`, `qwen2.5:0.5b`, `qwen2.5:1b-rlcd`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5-coder:7b` |
 | SmolLM | `smollm2:135m`, `smollm2:360m`, `smollm2:1.7b`, `Impulse2000/smollm3:3b-q4_k_m` |
 | Other | `Randomblock1/nemotron-nano:8b`, `sam860/LFM2:350m`, `sam860/LFM2:700m`, `sam860/LFM2:2.6b` |
 

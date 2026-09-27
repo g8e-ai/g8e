@@ -358,6 +358,9 @@ OLLAMA_GEMMA4_E2B = "gemma4:e2b"
 # TODO: OLLAMA_GEMMA4_E2B_G8EA currently duplicates OLLAMA_GEMMA4_E2B value
 # This may be intentional (alias) or a copy-paste error. Verify intended behavior.
 OLLAMA_GEMMA4_E2B_G8EA = "gemma4:e2b"
+OLLAMA_GEMMA4_12B = "gemma4:12b"
+OLLAMA_GRANITE4_2_8B = "granite4.2:8b"
+OLLAMA_GRANITE4_2_3B = "granite4.2:3b"
 OLLAMA_LLAMA_3_2_3B = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B = "qwen3.5:2b"
 

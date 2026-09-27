@@ -92,7 +92,7 @@ The registry contains these unique model names:
 | Gemini | `gemini-3.1-pro-preview`, `gemini-3.1-pro-preview-customtools`, `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | Off plus low, medium, and high; flash lite also supports minimal | Enabled |
 | Anthropic | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Opus and Sonnet support off, low, medium, and high; Haiku supports off, minimal, and low | Not declared |
 | OpenAI | `gpt-5.4`, `gpt-5.4-mini` | `gpt-5.4` has no declared thinking support; mini supports off, minimal, and low | Enabled |
-| Ollama | `gemma4:e4b`, `gemma4:e2b`, `llama3.2:3b`, `qwen3.5:2b` | Gemma4 and Qwen use an off/high native toggle; Llama has no thinking mode | Structured output is disabled in the registry; the adapter can serialize a supplied schema when a caller provides one |
+| Ollama | `gemma4:e4b`, `gemma4:e2b`, `gemma4:12b`, `granite4.2:8b`, `granite4.2:3b`, `llama3.2:3b`, `qwen3.5:2b` | Gemma4, Granite, and Qwen use an off/high native toggle; Llama has no thinking mode | Structured output is disabled in the registry; the adapter can serialize a supplied schema when a caller provides one |
 
 Adapters can send other model names to a backend, but unknown names use the shared unknown profile. That profile disables thinking, tools, and provider-enforced structured-output decisions. Register a model profile before relying on reasoning, tools, or provider-enforced structured output for a custom model. Unregistered llama.cpp model names use the unknown profile.
 

@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { useEffect } from 'react';
-import { BrowserRouter, Navigate, NavLink, Route, Routes, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { useFeedStatus, useConnection, useStoreState, evalStore } from './state/store';
 import { startFeed, stopFeed } from './state/startup';
 import { ActiveCampaignBar } from './components/ActiveCampaignBar';
@@ -17,23 +17,13 @@ import { AssignmentDetailView } from './views/AssignmentDetailView';
 import { MethodologyView } from './views/MethodologyView';
 import { TasksView } from './views/TasksView';
 import { ThemeToggle } from './components/ThemeToggle';
+import { NavDrawer } from './components/NavDrawer';
 import { G8E_REPO_URL, GITHUB_SPONSORS_URL } from './content/platform';
 
 function CompareRedirect() {
   const [params] = useSearchParams();
   const dest = params.toString() ? `/models?${params.toString()}` : '/models';
   return <Navigate to={dest} replace />;
-}
-
-function NavItem({ to, label }: { to: string; label: string }) {
-  return (
-    <NavLink
-      to={to}
-      className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-    >
-      {label}
-    </NavLink>
-  );
 }
 
 function Shell() {
@@ -63,14 +53,7 @@ function Shell() {
       </a>
       <header className="app-header">
         <div className="header-primary">
-          <nav className="app-nav" aria-label="Primary navigation">
-            <NavItem to="/" label="Live" />
-            <NavItem to="/evaluations" label="Evals" />
-            <NavItem to="/tasks" label="Tasks" />
-            <NavItem to="/models" label="Models" />
-            <NavItem to="/methodology" label="Docs" />
-            <NavItem to="/about" label="About" />
-          </nav>
+          <NavDrawer />
           <div className="header-campaign-slot">
             <ActiveCampaignBar />
           </div>
