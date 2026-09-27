@@ -53,6 +53,33 @@ The main startup options are:
 
 The inference, Observer, Provenance, and Lattice behavior is specialized configuration, not a replacement for the Operator's general governance path. See [Evaluations](./evals.md) and [Model Provenance](./model-provenance.md) for the evaluation roles. Use `./g8e operator start --help` as the complete command-surface reference.
 
+## Multi-Operator Coexistence and Role Separation on the Same System
+
+The g8e Operator is a compact binary, and multiple operator processes can execute concurrently on the exact same host system for entirely different purposes. For instance, an **Inference Operator** (g8ellama), a **Provenance Operator** (weight attestation), an **Observer Operator** (hardware metrics), and a **Data Operator** (governed tools/command execution) may all run on the same physical host or container runtime.
+
+### Disambiguation and Composite Fingerprinting
+
+Operators running on the same host are differentiated and separated by four key factors:
+1. **Local Directory (`local_dir`)**: The working and runtime root where the instance maintains its sovereign `.g8e/` state and execution tree.
+2. **Launching Account (`account`)**: The operating system account or user profile that spawned the process.
+3. **Port (`port`)**: The HTTP/HTTPS port dialed or bound by the operator instance.
+4. **Operational Role (`operator_role`)**: The primary purpose and execution boundary determined by startup flags.
+
+The canonical `system_fingerprint` is a SHA-256 composite hash of immutable host properties (`os`, `arch`, `cpu_count`, `machine_id`, `hostname`) combined with `local_dir`, `account`, `port`, and `role`. This ensures that each operator running on the same host produces a distinct, collision-free identity in the Gateway operator registry and SQLite document store, allowing idempotent re-enrollment and unambiguous slot binding.
+
+### Role Boundaries and Verification Gates
+
+Each operator's responsibilities and execution boundaries are strictly gated by its operational role:
+
+| Role | Activation Flags | Responsibilities | Execution Boundaries |
+| --- | --- | --- | --- |
+| **Inference Operator** | `--inference-enabled` | Governed LLM inference (g8ellama), model registry sync, Ollama provider dispatch | Serves LLM requests; executes model pull/release/residency commands. Excluded from general tool-execution discovery. |
+| **Provenance Operator** | `--provenance-operator-enabled`, `--model-storage-root` | Storage-side model provenance attestation over local model weights | Read-only witness. Arbitrary command execution is hard-rejected by `ValidateWitnessCommand`. |
+| **Observer Operator** | `--provider-boundary-observer-enabled`, `--provider-boundary-observer-id` | Read-only hardware, temperature, power, and residency observation on approved host | Read-only witness. Arbitrary command execution is hard-rejected by `ValidateWitnessCommand`. |
+| **Data Operator** | Default (or `--data-operator-enabled`) | Governed tool execution, command execution, local filesystem triage, and execution vault | Primary PEP for tool execution. Discovered by Gateway session service for tool and workflow dispatch. |
+
+The Gateway's `OperatorDocument` stores `operator_role`, `local_dir`, `account`, and `port` alongside `system_fingerprint`. Session resolution helpers (`IsGovernedDataOperator`, `SelectInferenceOperatorForHardware`, `SelectCampaignDataOperatorForHardware`, `SelectProviderBoundaryObserverForHardware`) verify that callers cannot dispatch general commands to witness operators or confuse distinct operators sharing the same machine.
+
 ## Command and receipt channels
 
 The Gateway's client-facing MCP, A2A, CLI, and enrolled-app HTTP dispatch paths are distinct ingress paths. For governed operator dispatch, an enrolled application posts a registered request `event_type` and serialized protobuf payload to `POST /api/v1/operators/commands`. The Gateway validates the event against the registry, derives `action_type`, validates the target session, obtains the current Gateway state root, applies L1 screening, sets identity and correlation fields, adds posture and transaction metadata, and publishes a canonical protojson `GovernanceEnvelope` to the matching `cmd:<operator_id>:<operator_session_id>` session. WebSocket publishers cannot inject `CommandIntent` on `cmd:` channels; outbound Operators subscribe there and receive Gateway-constructed envelopes only. The dispatch path does not synthesize missing L2 votes or L3 proofs.

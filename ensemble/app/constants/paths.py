@@ -69,7 +69,7 @@ def _load_paths() -> PathsDict:
     default_secrets_dir = str(secrets_path)
     app_cert_dir = str(Path(default_pki_dir) / "issued" / "apps")
 
-    default_ca_cert_path = str(Path(default_pki_dir) / "trust" / "hub-bundle.pem")
+    default_ca_cert_path = str(Path(default_pki_dir) / "trust" / "g8eg-ca-bundle.pem")
     ca_cert_path = os.environ.get(EnvVar.CA_CERT_PATH) or default_ca_cert_path
     pending_enrollment_dir = str(Path(default_pki_dir) / "pending-enrollment")
 

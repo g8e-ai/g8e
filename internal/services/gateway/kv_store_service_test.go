@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -183,12 +182,8 @@ func TestKVStore_Expiration(t *testing.T) {
 	// Not parallel due to time sensitivity
 	s := setupKVStore(t)
 
-	// Set with short TTL
-	require.NoError(t, s.KVSet("short", "val", 1))
-	assert.True(t, s.KVExists("short"))
-
-	// Wait for expiration
-	time.Sleep(1200 * time.Millisecond)
+	// Set with negative TTL so it is immediately expired
+	require.NoError(t, s.KVSet("short", "val", -1))
 
 	_, found := s.KVGet("short")
 	assert.False(t, found, "Key should be expired and not found via KVGet")

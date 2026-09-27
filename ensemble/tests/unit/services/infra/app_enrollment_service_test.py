@@ -117,15 +117,19 @@ def _self_signed_cert(
 
 
 def _write_existing_identity(
-    pki_dir: Path, cert_pem: str, key_pem: str, app_name: str = "g8ee"
+    pki_dir: Path, cert_pem: str, key_pem: str, app_name: str = "g8ee", write_ca: bool = True
 ) -> tuple[str, str]:
-    """Write a pre-existing app cert/key pair into the isolated PKI tree."""
+    """Write a pre-existing app cert/key pair (and CA bundle) into the isolated PKI tree."""
     app_cert_dir = pki_dir / "issued" / "apps"
     app_cert_dir.mkdir(parents=True, exist_ok=True)
     cert_path = app_cert_dir / f"{app_name}.crt"
     key_path = app_cert_dir / f"{app_name}.key"
     cert_path.write_text(cert_pem, encoding="utf-8")
     key_path.write_text(key_pem, encoding="utf-8")
+    if write_ca:
+        trust_dir = pki_dir / "trust"
+        trust_dir.mkdir(parents=True, exist_ok=True)
+        (trust_dir / "g8eg-ca-bundle.pem").write_text("dummy ca bundle", encoding="utf-8")
     return str(cert_path), str(key_path)
 
 
@@ -291,7 +295,7 @@ class TestLoadIdentityValidCert:
 
         assert identity.cert_path == cert_path
         assert identity.key_path == key_path
-        assert identity.ca_cert_path == str(pki_dir / "trust" / "hub-bundle.pem")
+        assert identity.ca_cert_path == str(pki_dir / "trust" / "g8eg-ca-bundle.pem")
         assert identity.app_id == "spiffe://g8e.local/app/g8ee"
 
 
@@ -319,6 +323,19 @@ class TestLoadIdentityMissingCert:
 
         service = AppEnrollmentService()
         with pytest.raises(ConfigurationError, match="app key not found"):
+            service.load_identity()
+
+    def test_raises_when_ca_cert_missing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+
+        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=90)
+        cert_pem, key_pem = _self_signed_cert(not_after)
+        _write_existing_identity(pki_dir, cert_pem, key_pem, write_ca=False)
+
+        service = AppEnrollmentService()
+        with pytest.raises(ConfigurationError, match="gateway CA bundle not found"):
             service.load_identity()
 
 
@@ -411,7 +428,7 @@ class TestEnrollPlatformEnrollment:
         assert identity.app_id == "spiffe://g8e.local/app/g8ee"
         assert identity.cert_path == str(pki_dir / "issued" / "apps" / "g8ee.crt")
         assert identity.key_path == str(pki_dir / "issued" / "apps" / "g8ee.key")
-        assert identity.ca_cert_path == str(pki_dir / "trust" / "hub-bundle.pem")
+        assert identity.ca_cert_path == str(pki_dir / "trust" / "g8eg-ca-bundle.pem")
 
         # All three platform enrollment endpoints were called.
         paths_hit = [r.url.path for r in captured["requests"]]

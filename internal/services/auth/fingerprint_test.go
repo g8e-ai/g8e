@@ -283,3 +283,79 @@ func TestGetMachineIDWithPlatform_UnsupportedOS(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrFingerprintUnsupportedOS)
 	assert.Contains(t, err.Error(), "solaris")
 }
+
+func TestGenerateOperatorFingerprint_DifferentiationOnSameSystem(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	baseFp, err := GenerateSystemFingerprint(logger)
+	require.NoError(t, err)
+
+	t.Run("differentiates by role", func(t *testing.T) {
+		fpInference, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Role: "inference"})
+		require.NoError(t, err)
+
+		fpData, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Role: "data"})
+		require.NoError(t, err)
+
+		fpProvenance, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Role: "provenance"})
+		require.NoError(t, err)
+
+		fpObserver, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Role: "observer"})
+		require.NoError(t, err)
+
+		assert.NotEqual(t, baseFp.Fingerprint, fpInference.Fingerprint)
+		assert.NotEqual(t, fpInference.Fingerprint, fpData.Fingerprint)
+		assert.NotEqual(t, fpInference.Fingerprint, fpProvenance.Fingerprint)
+		assert.NotEqual(t, fpInference.Fingerprint, fpObserver.Fingerprint)
+		assert.NotEqual(t, fpData.Fingerprint, fpProvenance.Fingerprint)
+		assert.NotEqual(t, fpData.Fingerprint, fpObserver.Fingerprint)
+		assert.NotEqual(t, fpProvenance.Fingerprint, fpObserver.Fingerprint)
+	})
+
+	t.Run("differentiates by local dir", func(t *testing.T) {
+		fpDir1, err := GenerateOperatorFingerprint(logger, FingerprintOptions{LocalDir: "/var/run/op1"})
+		require.NoError(t, err)
+
+		fpDir2, err := GenerateOperatorFingerprint(logger, FingerprintOptions{LocalDir: "/var/run/op2"})
+		require.NoError(t, err)
+
+		assert.NotEqual(t, fpDir1.Fingerprint, fpDir2.Fingerprint)
+	})
+
+	t.Run("differentiates by account", func(t *testing.T) {
+		fpUser1, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Account: "alice"})
+		require.NoError(t, err)
+
+		fpUser2, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Account: "bob"})
+		require.NoError(t, err)
+
+		assert.NotEqual(t, fpUser1.Fingerprint, fpUser2.Fingerprint)
+	})
+
+	t.Run("differentiates by port", func(t *testing.T) {
+		fpPort1, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Port: 8443})
+		require.NoError(t, err)
+
+		fpPort2, err := GenerateOperatorFingerprint(logger, FingerprintOptions{Port: 8444})
+		require.NoError(t, err)
+
+		assert.NotEqual(t, fpPort1.Fingerprint, fpPort2.Fingerprint)
+	})
+
+	t.Run("combines system info with local dir, account, port, and role", func(t *testing.T) {
+		fpFull, err := GenerateOperatorFingerprint(logger, FingerprintOptions{
+			LocalDir: "/data/g8e/operators/inference",
+			Account:  "service-inference",
+			Port:     9090,
+			Role:     string(constants.OperatorRoleInference),
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, "/data/g8e/operators/inference", fpFull.LocalDir)
+		assert.Equal(t, "service-inference", fpFull.Account)
+		assert.Equal(t, 9090, fpFull.Port)
+		assert.Equal(t, string(constants.OperatorRoleInference), fpFull.Role)
+		assert.Len(t, fpFull.Fingerprint, 64)
+	})
+}

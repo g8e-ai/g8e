@@ -125,15 +125,24 @@ describe('ActiveCampaignBar', () => {
     expect(link).toHaveAttribute('href', `/evaluations/${datasetId}/${evaluation.run_id}`);
     expect(link).not.toHaveTextContent('Now evaluating');
     expect(link).toHaveTextContent('tool-selection-04');
-    expect(link).toHaveTextContent('Primary');
     expect(link).toHaveTextContent('ministral-3-8b');
-    expect(link).toHaveTextContent('Assistant');
-    expect(link).toHaveTextContent('Lite');
     expect(link).toHaveTextContent('8%');
     expect(link).not.toHaveTextContent('Semantic grading');
+
+    const primarySlot = screen.getByTitle('Primary: ministral-3-8b');
+    expect(primarySlot).toBeInTheDocument();
+    expect(primarySlot).toHaveClass('header-campaign-role-role-primary');
+
+    const assistantSlot = screen.getByTitle('Assistant: —');
+    expect(assistantSlot).toBeInTheDocument();
+    expect(assistantSlot).toHaveClass('header-campaign-role-role-assistant');
+
+    const liteSlot = screen.getByTitle('Lite: —');
+    expect(liteSlot).toBeInTheDocument();
+    expect(liteSlot).toHaveClass('header-campaign-role-role-lite');
   });
 
-  it('shows heterogeneous formation models in each role slot', () => {
+  it('shows heterogeneous formation models in each role slot with role tooltips and border classes', () => {
     const heterogeneousEvaluation: EvaluationSummary = {
       ...evaluation,
       evaluation_unit: 'system',
@@ -187,5 +196,9 @@ describe('ActiveCampaignBar', () => {
     expect(link).toHaveTextContent('qwen3-4b');
     expect(link).toHaveTextContent('Active');
     expect(link).toHaveTextContent('8%');
+
+    expect(screen.getByTitle('Primary: qwen3-8b')).toBeInTheDocument();
+    expect(screen.getByTitle('Assistant: ministral-3-8b')).toBeInTheDocument();
+    expect(screen.getByTitle('Lite: qwen3-4b')).toBeInTheDocument();
   });
 });

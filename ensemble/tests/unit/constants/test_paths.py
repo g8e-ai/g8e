@@ -26,7 +26,7 @@ def _configure_protocol_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
             {
                 "infra": {
                     "db_path": ".g8e/data/g8e.db",
-                    "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+                    "ca_cert_path": ".g8e/pki/trust/g8eg-ca-bundle.pem",
                     "app_cert_dir": ".g8e/pki/issued/apps",
                     "pki_dir": ".g8e/pki",
                     "docs_dir": "/docs",
@@ -58,7 +58,7 @@ def test_load_paths_prefers_explicit_host_pki_dir(monkeypatch: pytest.MonkeyPatc
     paths = load_paths()
 
     assert paths["infra"]["pki_dir"] == str(pki_dir)
-    assert paths["infra"]["ca_cert_path"] == str(pki_dir / "trust" / "hub-bundle.pem")
+    assert paths["infra"]["ca_cert_path"] == str(pki_dir / "trust" / "g8eg-ca-bundle.pem")
     assert paths["infra"]["app_cert_dir"] == str(pki_dir / "issued" / "apps")
     assert paths["g8ee"]["cert_name"] == "g8ee"
 
@@ -76,7 +76,7 @@ def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(
     paths = load_paths()
 
     assert paths["infra"]["pki_dir"] == str(runtime_dir / "pki")
-    assert paths["infra"]["ca_cert_path"] == str(runtime_dir / "pki" / "trust" / "hub-bundle.pem")
+    assert paths["infra"]["ca_cert_path"] == str(runtime_dir / "pki" / "trust" / "g8eg-ca-bundle.pem")
     assert paths["infra"]["app_cert_dir"] == str(runtime_dir / "pki" / "issued" / "apps")
     assert paths["g8ee"]["cert_name"] == "g8ee"
 
@@ -84,14 +84,12 @@ def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(
 def test_load_paths_ca_cert_path_env_var_overrides_default(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ):
-    """G8E_CA_CERT_PATH overrides the default hub-bundle.pem path so the ensemble
-    can use the gateway's g8eg-ca-bundle.pem trust bundle in the docker-compose
-    setup where the gateway's PKI dir is mounted read-only."""
+    """G8E_CA_CERT_PATH overrides the default trust bundle path."""
     _configure_protocol_paths(monkeypatch, tmp_path)
     pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
     monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
     monkeypatch.delenv("G8E_RUNTIME_DIR", raising=False)
-    override = str(pki_dir / "trust" / "g8eg-ca-bundle.pem")
+    override = str(pki_dir / "trust" / "custom-bundle.pem")
     monkeypatch.setenv("G8E_CA_CERT_PATH", override)
     paths_module.reload_paths()
 
@@ -103,11 +101,10 @@ def test_load_paths_ca_cert_path_env_var_overrides_default(
     assert paths["infra"]["app_cert_dir"] == str(pki_dir / "issued" / "apps")
 
 
-def test_load_paths_ca_cert_path_defaults_to_hub_bundle_when_env_unset(
+def test_load_paths_ca_cert_path_defaults_to_g8eg_ca_bundle_when_env_unset(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ):
-    """When G8E_CA_CERT_PATH is unset, ca_cert_path falls back to the
-    pki_dir/trust/hub-bundle.pem default for backward compatibility."""
+    """When G8E_CA_CERT_PATH is unset, ca_cert_path defaults to g8eg-ca-bundle.pem."""
     _configure_protocol_paths(monkeypatch, tmp_path)
     pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
     monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
@@ -117,4 +114,4 @@ def test_load_paths_ca_cert_path_defaults_to_hub_bundle_when_env_unset(
 
     paths = load_paths()
 
-    assert paths["infra"]["ca_cert_path"] == str(pki_dir / "trust" / "hub-bundle.pem")
+    assert paths["infra"]["ca_cert_path"] == str(pki_dir / "trust" / "g8eg-ca-bundle.pem")

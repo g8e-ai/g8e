@@ -238,6 +238,42 @@ Model campaigns bind scored inference to frozen `served_model_tag` and `model_di
 
 **Execute-time provenance preflight.** Before consuming scored assignments, campaign execute and `g8e eval rollout run` call Gateway preflight endpoints that verify provenance command delivery and run a per-model storage attestation probe for each frozen binding. The probe fails fast when the Provenance Operator cannot resolve or attest the served tag, rather than completing assignments with missing windows. See [Model Provenance](model-provenance.md) for manifest layout and preflight API detail.
 
+### Two-tier rollout qualification strategy
+
+Standard homogeneous campaigns evaluate each candidate model across all 25 catalog scenarios in all 3 roles (`primary`, `assistant`, `lite`), resulting in 75 scored assignments taking ~45–60 minutes per model. To accelerate high-throughput model qualification, `g8e eval rollout run` supports a two-tier screening pipeline:
+
+1. **Tier 1 — Fast Smoke Gate (`--gate-smoke`)**:
+   - Executes 5 high-discriminative scenarios across 3 roles = 15 assignments (~8 minutes per model).
+   - Scenarios exercise:
+     - Syntax and tool execution (`tool-select-file-read`)
+     - Investigation and diagnostic reasoning (`tech-error-diagnosis`)
+     - Dissent and safety compliance (`security-policy-deny-delete`)
+     - Multi-step remediation (`recovery-tool-failure`)
+     - Fast-path direct instruction response (`instruction-exact-format`)
+   - Requires 100% pass status on witness and verification gates to qualify.
+2. **Tier 2 — Comprehensive Qualification (`--promote-on-pass`)**:
+   - Automatically promotes candidates passing Tier 1 directly into the full 75-assignment matrix.
+   - Discards models failing Tier 1 early, saving 45+ minutes of GPU residency per non-viable candidate.
+
+```bash
+# Fast Tier 1 screening for all queued candidates:
+g8e eval rollout run --gate-smoke
+
+# Fast screening with automatic promotion to full qualification on pass:
+g8e eval rollout run --gate-smoke --promote-on-pass
+```
+
+### Production agentic loop and persona binding
+
+Homogeneous campaigns do **not** use synthetic harnesses or mock loops. Scored assignments post directly to `POST /api/v1/chat` and drive the real ReAct loop (`G8eAgent._stream_with_tool_loop`), dispatching real tool actions to the bound remote **Data Operator**.
+
+Role control (`apply_homogeneous_role_control`) activates authentic production agent personas:
+- `primary`: Activates **`ReasoningAgent.SAGE`** bound to `SagePersona` (*"You are Sage, the senior reasoning authority for g8e..."*).
+- `assistant`: Activates **`ReasoningAgent.DASH`** bound to `DashPersona` (*"You are Dash, the high-efficiency responder for g8e..."*).
+- `lite`: Activates **`ReasoningAgent.DASH`** with lite-tier operational constraints.
+
+Each persona is wrapped in the production modular system prompt stack: Core Safety, Core Loyalty, Core Dissent, Mode Execution/Capabilities, Tool Schemas, Response Constraints, System Context, and Sentinel Mode.
+
 ### Campaign lanes and formations
 
 The default campaign lane is `model_role`: a homogeneous matrix schedules each frozen model variant against the catalog scenarios and records role-specific results. Campaigns can also use the `system` lane. The CLI generates a deterministic, persisted heterogeneous stack set with `g8e eval campaign stacks generate --campaign-id <id> --seed <seed>` and schedules it with `g8e eval campaign schedule --heterogeneous`; heterogeneous runs are separate from homogeneous model-role aggregates.

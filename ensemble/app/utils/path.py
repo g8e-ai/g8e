@@ -15,7 +15,10 @@ def resolve_project_root() -> Path:
     """
     Resolves the project root directory.
     """
-    return Path(__file__).parent.parent.parent
+    root = Path(__file__).resolve().parent.parent.parent
+    if (root.parent / ".g8e").exists() or (root.parent / "go.mod").exists():
+        return root.parent
+    return root
 
 
 def resolve_config_path(filename: str) -> Path:

@@ -234,16 +234,98 @@ func campaignEvalFormationsShowCmd(_ nativeEvalDeps) *cobra.Command {
 
 func campaignEvalFormationsRunCmd(deps nativeEvalDeps) *cobra.Command {
 	opts := formationRunOptions{FormationID: "ultra-light-speedster"}
+	var runCatalog bool
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "Run one frozen formation through the governed Inference Operator path",
-		Long: `Execute Lite → Assistant → Primary for one catalog formation using frozen
-registry digests and exact Operator sessions. This is a governed smoke path, not
-a scored campaign assignment.`,
+		Short: "Run one or all frozen formations through the governed Inference Operator path",
+		Long: `Execute Lite → Assistant → Primary for catalog formations using frozen
+registry digests and exact Operator sessions. Use --catalog to batch-run all 4 sovereign
+execution topologies in sequence. This is a governed smoke path, not a scored campaign assignment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.InferenceSessionID == "" {
 				return fmt.Errorf("evaluation: formations run: --inference-session is required")
 			}
+
+			if runCatalog {
+				topologies, err := evaluation.NewExecutionTopologies()
+				if err != nil {
+					return fmt.Errorf("evaluation: formations run: %w", err)
+				}
+				formations := topologies.Formations()
+				type catalogSummaryItem struct {
+					FormationID string `json:"formation_id"`
+					Passed      bool   `json:"passed"`
+					PeakVRAMMiB uint64 `json:"peak_vram_mib"`
+					Error       string `json:"error,omitempty"`
+				}
+				var batchResults []formationRunJSON
+				var summaries []catalogSummaryItem
+				hasFailure := false
+
+				for _, form := range formations {
+					runOpts := opts
+					runOpts.FormationID = form.ID
+					if !output.JSONEnabled(cmd) {
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "=== START Formation %s (%s) ===\n", form.ID, form.DisplayName)
+					}
+					result, sessions, freeze, err := runFormationProductionFlow(cmd, deps, runOpts)
+					if err != nil {
+						hasFailure = true
+						summaries = append(summaries, catalogSummaryItem{
+							FormationID: form.ID,
+							Passed:      false,
+							Error:       err.Error(),
+						})
+						if !output.JSONEnabled(cmd) {
+							_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "FAIL Formation %s: %v\n", form.ID, err)
+						}
+						continue
+					}
+					batchResults = append(batchResults, formationRunResultJSON(result, sessions, freeze.CampaignID, opts.RunID))
+					summaries = append(summaries, catalogSummaryItem{
+						FormationID: form.ID,
+						Passed:      result.Passed,
+						PeakVRAMMiB: result.PeakVRAMMiB,
+					})
+					if !result.Passed {
+						hasFailure = true
+					}
+					if !output.JSONEnabled(cmd) {
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Formation %s %s (Peak VRAM: %d MiB)\n",
+							result.FormationID, passedLabel(result.Passed), result.PeakVRAMMiB)
+						for _, role := range result.Roles {
+							_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s %s digest=%s attempt=%s\n",
+								role.Role, role.Model.ServedModelTag, role.AttestationDigest, role.AttemptID)
+						}
+					}
+				}
+
+				if output.JSONEnabled(cmd) {
+					payload, err := json.MarshalIndent(batchResults, "", "  ")
+					if err != nil {
+						return err
+					}
+					_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+					if err != nil {
+						return err
+					}
+				} else {
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "\n--- Formation Catalog Batch Summary ---")
+					for _, s := range summaries {
+						status := "PASS"
+						if !s.Passed {
+							status = "FAIL"
+						}
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-25s %s (Peak VRAM: %d MiB)\n", s.FormationID, status, s.PeakVRAMMiB)
+					}
+				}
+
+				if hasFailure {
+					return fmt.Errorf("evaluation: formations run: one or more formations failed")
+				}
+				return nil
+			}
+
 			result, sessions, freeze, err := runFormationProductionFlow(cmd, deps, opts)
 			if err != nil {
 				return err
@@ -278,6 +360,8 @@ a scored campaign assignment.`,
 		},
 	}
 	cmd.Flags().StringVar(&opts.FormationID, "formation-id", opts.FormationID, "Catalog formation ID to execute")
+	cmd.Flags().BoolVar(&runCatalog, "catalog", false, "Execute all 4 sovereign formations in the catalog in sequence")
+	cmd.Flags().BoolVar(&runCatalog, "all", false, "Alias for --catalog")
 	cmd.Flags().StringVar(&opts.RegistryFile, "registry-file", "", "Frozen inventory JSON from eval models freeze --output")
 	cmd.Flags().StringVar(&opts.InventoryFile, "inventory-file", "", "Explicit inventory freeze path (runtime-relative or external)")
 	cmd.Flags().StringVar(&opts.InferenceSessionID, "inference-session", "", "Exact inference Operator session ID (required)")

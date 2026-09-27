@@ -186,6 +186,20 @@ The `g8e vault` commands provide explicit administration:
 
 `vault unlock` validates that a key opens the vault in that process; it does not leave a daemon or persistent unlocked process behind. `operator start` opens and unlocks its own vault instance.
 
+### Running Multiple Operators on the Same System
+
+The g8e operator is a lightweight binary designed so that multiple instances can run simultaneously on the same host for unique purposes (e.g. an Inference Operator, a Provenance Operator, an Observer Operator, and a Data Operator).
+
+To run multiple operators on the same host without collisions:
+1. **Use Distinct Local Directories**: Launch each operator from its own distinct directory (or configure `--working-dir`). Each instance maintains its own isolated `.g8e/` runtime tree, SQLite storage, and enrollment keys.
+2. **Account and Port Separation**: Operators can run under different user accounts and bind different ports (via `--port` or configured endpoints).
+3. **Role Determination via Flags**: Trigger the specific role using dedicated startup flags:
+   - Inference Operator: `--inference-enabled` (plus `--inference-ollama-endpoint`)
+   - Provenance Operator: `--provenance-operator-enabled` (plus `--model-storage-root`)
+   - Observer Operator: `--provider-boundary-observer-enabled` (plus `--provider-boundary-observer-id`)
+   - Data Operator: Default flags (governed tools/command execution)
+4. **Collision-Free Composite Fingerprints**: The operator automatically computes a SHA-256 composite `system_fingerprint` incorporating system properties, local directory, launching account, port, and role. This prevents slot collisions on the Gateway and allows the Gateway and AI ensembles to cleanly differentiate operators running on the same host.
+
 ---
 
 ## Operate Remote Operators from the CLI

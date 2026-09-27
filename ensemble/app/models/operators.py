@@ -15,7 +15,7 @@ Defines data structures for tracking g8eo operators and their runtime configurat
 
 import asyncio
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from app.models.base import (
     ConfigDict,
@@ -194,6 +194,24 @@ class OperatorDocument(G8eIdentifiableModel):
     history_trail: list[OperatorHistoryEntry] = Field(
         default_factory=list,
         description="Operator lifecycle audit trail (Gateway-owned append-only history).",
+    )
+    system_fingerprint: str | None = Field(
+        default=None, description="System fingerprint differentiating operator instance"
+    )
+    operator_role: str | None = Field(
+        default=None, description="Operational role (inference, provenance, observer, data)"
+    )
+    local_dir: str | None = Field(
+        default=None, description="Local runtime or working directory"
+    )
+    account: str | None = Field(
+        default=None, description="OS user account that launched the operator"
+    )
+    port: int | None = Field(
+        default=None, description="Port configured for operator"
+    )
+    runtime_config: dict[str, Any] | None = Field(
+        default=None, description="Active runtime configuration"
     )
 
     @property

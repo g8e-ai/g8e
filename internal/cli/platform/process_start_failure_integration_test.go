@@ -239,6 +239,7 @@ func TestStartOperator_ForeignHealthServerWhileChildAliveIsRejected(t *testing.T
 
 	pm, err := NewProcessManager(fileSvc)
 	require.NoError(t, err)
+	pm.SetHealthCheckParameters(20*time.Millisecond, 3)
 
 	done := make(chan struct{})
 	defer close(done)

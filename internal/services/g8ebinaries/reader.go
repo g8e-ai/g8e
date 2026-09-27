@@ -8,6 +8,7 @@
 package g8ebinaries
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,8 +24,9 @@ type Reader struct {
 	manifest *Manifest
 }
 
-// OpenReader validates an existing artifact root. A missing root represents a
-// source-only development environment and is kept unavailable rather than fatal.
+// OpenReader validates an existing artifact root. A missing root or missing manifest
+// represents a development environment without complete catalogued binaries and is
+// kept unavailable rather than fatal.
 func OpenReader(root string) (*Reader, error) {
 	info, err := os.Stat(root)
 	if err != nil {
@@ -38,6 +40,9 @@ func OpenReader(root string) (*Reader, error) {
 	}
 	manifest, err := LoadManifest(root)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &Reader{root: root}, nil
+		}
 		return nil, err
 	}
 	for _, artifact := range manifest.Targets {

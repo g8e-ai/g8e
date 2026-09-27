@@ -715,9 +715,12 @@ func TestOllamaBackend_GenerateContextCancelledReturnsErrInferenceBackendTimeout
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	// Server that hangs forever
+	// Server that hangs until client cancels or disconnects
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(2 * time.Second)
+		select {
+		case <-r.Context().Done():
+		case <-time.After(100 * time.Millisecond):
+		}
 	}))
 	defer server.Close()
 
@@ -1074,7 +1077,10 @@ func TestOllamaBackend_StatusContextCancelledReturnsErrInferenceBackendTimeout(t
 	logger := testutil.NewTestLogger()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(2 * time.Second)
+		select {
+		case <-r.Context().Done():
+		case <-time.After(100 * time.Millisecond):
+		}
 	}))
 	defer server.Close()
 
@@ -1164,7 +1170,10 @@ func TestOllamaBackend_GenerateCallerCancellationReturnsContextCanceled(t *testi
 	logger := testutil.NewTestLogger()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(2 * time.Second)
+		select {
+		case <-r.Context().Done():
+		case <-time.After(100 * time.Millisecond):
+		}
 	}))
 	defer server.Close()
 

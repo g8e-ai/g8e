@@ -13,24 +13,60 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/user"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// SystemFingerprint represents a unique, stable identifier for the system
+// SystemFingerprint represents a unique, stable identifier for the system or specific operator instance.
 type SystemFingerprint struct {
 	Fingerprint  string `json:"fingerprint"`
 	OS           string `json:"os"`
 	Architecture string `json:"architecture"`
 	CPUCount     int    `json:"cpu_count"`
 	MachineID    string `json:"machine_id,omitempty"`
+	LocalDir     string `json:"local_dir,omitempty"`
+	Account      string `json:"account,omitempty"`
+	Port         int    `json:"port,omitempty"`
+	Role         string `json:"role,omitempty"`
 }
 
-// GenerateSystemFingerprint creates a unique fingerprint based on immutable system properties
+// FingerprintOptions specifies operator-specific parameters that differentiate
+// multiple operators coexisting on the same host system.
+type FingerprintOptions struct {
+	LocalDir string
+	Account  string
+	Port     int
+	Role     string
+}
+
+// ResolveCurrentAccount returns the current operating system user account username or UID.
+func ResolveCurrentAccount() string {
+	if u, err := user.Current(); err == nil && u != nil {
+		if u.Username != "" {
+			return u.Username
+		}
+		if u.Uid != "" {
+			return u.Uid
+		}
+	}
+	return os.Getenv("USER")
+}
+
+// GenerateSystemFingerprint creates a unique fingerprint based on immutable system properties.
+// Calling this preserves the canonical 5-property system hash when no operator options are set.
 func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) {
-	logger.Info("Generating system fingerprint based on immutable system properties...")
+	return GenerateOperatorFingerprint(logger, FingerprintOptions{})
+}
+
+// GenerateOperatorFingerprint creates a unique fingerprint incorporating system properties,
+// local directory, launching account, port, and operator role. This guarantees that
+// multiple operators running on the same host for unique purposes are completely separated.
+func GenerateOperatorFingerprint(logger *slog.Logger, opts FingerprintOptions) (*SystemFingerprint, error) {
+	logger.Info("Generating system fingerprint based on immutable system and operator properties...")
 
 	osType := runtime.GOOS
 	arch := runtime.GOARCH
@@ -55,6 +91,25 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 		fmt.Sprintf("hostname:%s", hostname),
 	}
 
+	cleanDir := ""
+	if opts.LocalDir != "" {
+		cleanDir = filepath.Clean(opts.LocalDir)
+		components = append(components, fmt.Sprintf("local_dir:%s", cleanDir))
+	}
+
+	account := opts.Account
+	if account != "" {
+		components = append(components, fmt.Sprintf("account:%s", account))
+	}
+
+	if opts.Port > 0 {
+		components = append(components, fmt.Sprintf("port:%d", opts.Port))
+	}
+
+	if opts.Role != "" {
+		components = append(components, fmt.Sprintf("role:%s", opts.Role))
+	}
+
 	hasher := sha256.New()
 	fingerprintInput := strings.Join(components, "|")
 	hasher.Write([]byte(fingerprintInput))
@@ -66,6 +121,10 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 		Architecture: arch,
 		CPUCount:     cpuCount,
 		MachineID:    machineID,
+		LocalDir:     cleanDir,
+		Account:      account,
+		Port:         opts.Port,
+		Role:         opts.Role,
 	}
 
 	logger.Info("System fingerprint generated successfully",
@@ -74,6 +133,10 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 		"cpu_count", fingerprint.CPUCount,
 		"machine_id", machineID,
 		"hostname", hostname,
+		"local_dir", cleanDir,
+		"account", account,
+		"port", opts.Port,
+		"role", opts.Role,
 		"fingerprint", fingerprintHash[:16])
 
 	return fingerprint, nil

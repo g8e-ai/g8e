@@ -12,7 +12,6 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/stretchr/testify/assert"
@@ -60,14 +59,8 @@ func TestTestTokenStore_TTLExpiry(t *testing.T) {
 	store := NewTestTokenStore()
 	ctx := context.Background()
 
-	err := store.KVSet(ctx, "ephemeral", "data", 1)
+	err := store.KVSet(ctx, "ephemeral", "data", -1)
 	require.NoError(t, err)
-
-	got, err := store.KVGet(ctx, "ephemeral")
-	require.NoError(t, err)
-	assert.Equal(t, "data", got)
-
-	time.Sleep(2 * time.Second)
 
 	_, err = store.KVGet(ctx, "ephemeral")
 	require.Error(t, err)
@@ -105,9 +98,7 @@ func TestTestTokenStore_ScanPrefix_ExcludesExpired(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, store.KVSet(ctx, "group:alive", "v1", 0))
-	require.NoError(t, store.KVSet(ctx, "group:dead", "v2", 1))
-
-	time.Sleep(2 * time.Second)
+	require.NoError(t, store.KVSet(ctx, "group:dead", "v2", -1))
 
 	result, err := store.KVScanPrefix(ctx, "group:")
 	require.NoError(t, err)

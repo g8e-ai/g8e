@@ -45,7 +45,7 @@ class CertificateService:
             pki_dir = PATHS["infra"]["pki_dir"]
             ca_cert_path = ca_cert_path or PATHS["infra"]["ca_cert_path"]
         self.pki_dir = pki_dir
-        self.ca_cert_path = ca_cert_path or os.path.join(pki_dir, "trust", "hub-bundle.pem")
+        self.ca_cert_path = ca_cert_path or os.path.join(pki_dir, "trust", "g8eg-ca-bundle.pem")
         self.data_service = data_service
         self.ca_cert: x509.Certificate | None = None
         self.ca_key: ec.EllipticCurvePrivateKey | None = None
@@ -77,7 +77,7 @@ class CertificateService:
         # We no longer read ca.key directly. Key operations are behind the /.well-known/g8e/pki/sign-csr API.
         paths = [
             self.ca_cert_path,
-            os.path.join(self.pki_dir, "trust", "hub-bundle.pem"),
+            os.path.join(self.pki_dir, "trust", "g8eg-ca-bundle.pem"),
             os.path.join(self.pki_dir, "authorities", "hub_ca.crt"),
             os.path.join(self.pki_dir, "root", "root_ca.crt"),
         ]

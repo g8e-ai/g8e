@@ -1140,7 +1140,7 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 			close(done)
 		}()
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(15 * time.Millisecond)
 		cancel()
 		<-done
 
@@ -1181,7 +1181,7 @@ func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
 			close(done)
 		}()
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(15 * time.Millisecond)
 		cancel()
 		<-done
 

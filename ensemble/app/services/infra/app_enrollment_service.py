@@ -213,6 +213,11 @@ class AppEnrollmentService:
         app_id = self._extract_app_id(cert)
         ca_cert_path = PATHS["infra"]["ca_cert_path"]
 
+        if not Path(ca_cert_path).exists():
+            raise ConfigurationError(
+                f"AppEnrollmentService: gateway CA bundle not found at {ca_cert_path}"
+            )
+
         logger.info(
             "AppEnrollmentService: loaded existing app cert (cert=%s, app_id=%s, expires=%s)",
             cert_path,

@@ -7,6 +7,8 @@
 
 package models
 
+import "github.com/g8e-ai/g8e/v2/internal/constants"
+
 // FsGrepMatch represents a single grep match result
 type FsGrepMatch struct {
 	Path       string   `json:"path"`
@@ -25,7 +27,10 @@ type RuntimeConfig struct {
 	NoGit                 bool   `json:"no_git"`
 	LogLevel              string `json:"log_level"`
 
-	HTTPPort int `json:"http_port"`
+	HTTPPort int                    `json:"http_port"`
+	Role     constants.OperatorRole `json:"role,omitempty"`
+	LocalDir string                 `json:"local_dir,omitempty"`
+	Account  string                 `json:"account,omitempty"`
 
 	// InferenceEnabled is true when the Operator started with
 	// --inference-enabled, marking it as an Inference Node in the g8ellama
