@@ -14,7 +14,6 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -723,12 +722,10 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 	token := service.GetTokenForValue(context.Background(), sensitiveValue)
 	assert.NotEmpty(t, token)
 
-	// Write an additional key with a 1s TTL to verify expiry behaviour.
+	// Write an additional key that is already expired (ttlSeconds = -1) to verify expiry behaviour.
 	key := fmt.Sprintf("sentinel_token_%s", token)
-	err := tokenStore.KVSet(context.Background(), key, sensitiveValue, 1)
+	err := tokenStore.KVSet(context.Background(), key, sensitiveValue, -1)
 	require.NoError(t, err)
-
-	time.Sleep(2 * time.Second)
 
 	_, err = tokenStore.KVGet(context.Background(), key)
 	require.Error(t, err, "Token should expire after TTL")

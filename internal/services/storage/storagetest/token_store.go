@@ -40,6 +40,8 @@ func (f *TestTokenStore) KVSet(_ context.Context, key, value string, ttlSeconds 
 	var exp time.Time
 	if ttlSeconds > 0 {
 		exp = time.Now().Add(time.Duration(ttlSeconds) * time.Second)
+	} else if ttlSeconds < 0 {
+		exp = time.Now().Add(-1 * time.Second)
 	}
 	f.data[key] = testEntry{value: value, expiresAt: exp}
 	return nil

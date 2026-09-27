@@ -47,12 +47,16 @@ func (s *KVStoreService) KVGet(key string) (string, bool) {
 	return value, true
 }
 
-// KVSet stores a key/value pair. ttlSeconds <= 0 means no expiration.
+// KVSet stores a key/value pair. ttlSeconds == 0 means no expiration.
+// Negative ttlSeconds means the key is immediately expired.
 func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
 	now := timesvc.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
 		exp := timesvc.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		expiresAt = &exp
+	} else if ttlSeconds < 0 {
+		exp := timesvc.FormatTimestamp(time.Now().Add(-1 * time.Second))
 		expiresAt = &exp
 	}
 
@@ -67,12 +71,16 @@ func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
 
 // KVSetObserved stores a key/value pair as observed-state (state_tier = 'observed').
 // Observed-state entries are excluded from the bound freshness root and are
-// hashed separately in the observed-state commitment. ttlSeconds <= 0 means no expiration.
+// hashed separately in the observed-state commitment. ttlSeconds == 0 means no expiration.
+// Negative ttlSeconds means the key is immediately expired.
 func (s *KVStoreService) KVSetObserved(key, value string, ttlSeconds int) error {
 	now := timesvc.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
 		exp := timesvc.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		expiresAt = &exp
+	} else if ttlSeconds < 0 {
+		exp := timesvc.FormatTimestamp(time.Now().Add(-1 * time.Second))
 		expiresAt = &exp
 	}
 
