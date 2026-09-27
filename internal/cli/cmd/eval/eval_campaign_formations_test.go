@@ -224,3 +224,13 @@ func TestCampaignEvalFormationsShow_RejectsUnknownFormation(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFormationInvalid)
 }
+
+func TestCampaignEvalFormationsRun_CatalogFlag(t *testing.T) {
+	command := evalCmdWithConfig(panickingNativeEvalDeps(t))
+	command.SilenceUsage = true
+	command.SilenceErrors = true
+	command.SetArgs([]string{"campaign", "formations", "run", "--catalog", "--project-root", t.TempDir()})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--inference-session is required")
+}

@@ -1028,6 +1028,39 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   font-size: var(--overview-meta-size, var(--text-md)); color: var(--fg-muted);
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+.stream-run-divider-row td {
+  padding: 6px 12px;
+  background: var(--bg-elev2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.stream-run-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.stream-run-divider-badge {
+  font-size: var(--overview-label-size, var(--text-sm));
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.stream-run-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.stream-metric-elapsed {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 
 /* System overview */
 .sys-platform {

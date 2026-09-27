@@ -697,5 +697,131 @@ describe('LiveEventStream', () => {
     expect(cells[4]).toBe('—');
     expect(cells[5]).toBe('custom-unknown-task');
   });
+
+  it('filters by category using the category dropdown', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-tool-sel',
+              kind: 'assignment_started',
+              task_id: 'tool-select-file-read',
+              stage_label: 'assignment started · Tool Selection · tool-select-file-read',
+            }),
+            liveEvent({
+              event_id: 'evt-exact-format',
+              kind: 'assignment_started',
+              task_id: 'instruction-exact-format',
+              stage_label: 'assignment started · Instruction Adherence · instruction-exact-format',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const categorySelect = screen.getByRole('combobox', { name: 'Filter by category' });
+    expect(categorySelect).toBeInTheDocument();
+    expect(screen.getByText('tool-select-file-read')).toBeInTheDocument();
+    expect(screen.getByText('instruction-exact-format')).toBeInTheDocument();
+
+    await user.selectOptions(categorySelect, 'Tool Selection');
+
+    expect(screen.getByText('tool-select-file-read')).toBeInTheDocument();
+    expect(screen.queryByText('instruction-exact-format')).not.toBeInTheDocument();
+  });
+
+  it('renders a visual run divider when consecutive events belong to different runs', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-run-2',
+              run_id: 'eval-init-model-2',
+              kind: 'assignment_started',
+              observed_at: '2026-09-17T08:02:00Z',
+            }),
+            liveEvent({
+              event_id: 'evt-run-1',
+              run_id: 'eval-init-model-1',
+              kind: 'assignment_completed',
+              observed_at: '2026-09-17T08:01:00Z',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('run-divider-eval-init-model-1')).toBeInTheDocument();
+    expect(screen.getByText('Run: eval-init-model-1')).toBeInTheDocument();
+  });
+
+  it('displays an active elapsed duration timer for running in-progress assignments', () => {
+    const startedAgo = new Date(Date.now() - 15000).toISOString();
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-running-timer',
+              kind: 'assignment_started',
+              lifecycle_status: 'running',
+              observed_at: startedAgo,
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const elapsedElement = document.querySelector('.stream-metric-elapsed');
+    expect(elapsedElement).toBeInTheDocument();
+    expect(elapsedElement?.textContent).toMatch(/^\d+s…$/);
+  });
+
+  it('switches to active run only and retains all run events past default limit', async () => {
+    const user = userEvent.setup();
+    // 120 events for active run 'eval-run-current', and 10 for 'eval-run-past'
+    const pastEvents = Array.from({ length: 10 }, (_, i) =>
+      liveEvent({
+        event_id: `past-${i}`,
+        run_id: 'eval-run-past',
+        kind: 'assignment_completed',
+        lifecycle_status: 'completed',
+        observed_at: `2026-09-17T07:${String(i).padStart(2, '0')}:00Z`,
+      }),
+    );
+    const currentEvents = Array.from({ length: 120 }, (_, i) =>
+      liveEvent({
+        event_id: `current-${i}`,
+        run_id: 'eval-run-current',
+        kind: 'assignment_completed',
+        observed_at: `2026-09-17T08:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00Z`,
+      }),
+    );
+    const allEvents = [...pastEvents, ...currentEvents];
+
+    render(
+      <MemoryRouter>
+        <LiveEventStream events={allEvents} connection="live" streamConnection="connected" />
+      </MemoryRouter>,
+    );
+
+    // Default 'All runs' is capped at 100 events
+    expect(screen.getByText(/Page 1 of 4 \(100 events\)/)).toBeInTheDocument();
+
+    const scopeSelect = screen.getByRole('combobox', { name: 'Filter by run scope' });
+    await user.selectOptions(scopeSelect, 'active');
+
+    // In active run mode, all 120 events for eval-run-current are retained
+    expect(screen.getByText(/Page 1 of 5 \(120 events\)/)).toBeInTheDocument();
+  });
 });
 
