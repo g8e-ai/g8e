@@ -15,7 +15,8 @@ import {
   visibleStreamEvents,
 } from '../views/derived';
 import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
-import type { AssignmentResult, LiveEvent, MetricValue, PublicModelActivityRecord } from '../contract/types';
+import { SCENARIO_TASK_BY_ID } from '../content/scenario-catalog';
+import { MODEL_ROLES, type AssignmentResult, type LiveEvent, type MetricValue, type PublicModelActivityRecord } from '../contract/types';
 import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
 const STREAM_PAGE_SIZE = 25;
 const STREAM_EMPTY_METRIC = '--';
@@ -149,11 +150,40 @@ type EventParts = {
 
 function eventParts(event: LiveEvent, assignment: AssignmentResult | undefined): EventParts {
   const stageParts = event.stage_label?.split(' · ').map((part) => part.trim()) ?? [];
+  const isModelRoleInvocation = stageParts[0]?.toLowerCase() === 'model role invoked';
+
+  const secondPart = stageParts[1];
+  const task =
+    assignment?.task_id ??
+    event.task_id ??
+    (isModelRoleInvocation
+      ? stageParts[3]
+      : stageParts.length > 2
+        ? stageParts[2]
+        : stageParts.length === 2 && secondPart !== undefined && SCENARIO_TASK_BY_ID.has(secondPart)
+          ? secondPart
+          : undefined) ??
+    '—';
+
+  let fallbackCategory: string | undefined;
+  if (!isModelRoleInvocation && secondPart !== undefined) {
+    const isRole = (MODEL_ROLES as readonly string[]).includes(secondPart.toLowerCase());
+    const isTask = secondPart === task || SCENARIO_TASK_BY_ID.has(secondPart);
+    if (!isRole && !isTask) {
+      fallbackCategory = secondPart;
+    }
+  }
+
+  const rawCategory =
+    assignment?.scenario_category ??
+    (task !== '—' ? SCENARIO_TASK_BY_ID.get(task)?.category : undefined) ??
+    fallbackCategory;
+
   return {
     kind: displayLabel(event.kind) ?? '—',
     status: displayLabel(eventStatus(event)) ?? '—',
-    category: displayLabel(assignment?.scenario_category) ?? stageParts[1] ?? '—',
-    task: assignment?.task_id ?? event.task_id ?? stageParts[2] ?? '—',
+    category: displayLabel(rawCategory) ?? '—',
+    task,
   };
 }
 

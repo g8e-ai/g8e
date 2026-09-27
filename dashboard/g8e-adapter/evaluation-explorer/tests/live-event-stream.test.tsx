@@ -636,4 +636,66 @@ describe('LiveEventStream', () => {
     expect(screen.queryByText('Page 1 of 2 (30 events)')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
+
+  it('correctly maps category for model role invocation stage_updated events without assignment in store', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-invocation-1',
+              kind: 'stage_updated',
+              role: 'lite',
+              variant_id: 'gemma3:4b',
+              task_id: 'tool-select-file-read',
+              stage_label: 'model role invoked · lite · gemma3:4b · tool-select-file-read',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const row = screen.getByRole('row', { name: /Stage Updated/i });
+    expect(row).toBeInTheDocument();
+    const cells = Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent?.trim());
+    // Columns: [Time, Role, Event, Status, Category, Task, Pass, Pass Rate, Latency, Input tokens, Output tokens, Tokens/s, Retries, Model, Progress]
+    expect(cells[1]).toBe('Lite');
+    expect(cells[2]).toBe('Stage Updated');
+    expect(cells[3]).toBe('Running');
+    expect(cells[4]).toBe('Tool Selection');
+    expect(cells[5]).toBe('tool-select-file-read');
+    expect(cells[4]).not.toBe('Lite');
+    expect(cells[4]).not.toBe('lite');
+  });
+
+  it('does not fallback to role name when task is unrecognized and assignment is missing', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-custom-task',
+              kind: 'stage_updated',
+              role: 'lite',
+              variant_id: 'gemma3:4b',
+              task_id: 'custom-unknown-task',
+              stage_label: 'model role invoked · lite · gemma3:4b · custom-unknown-task',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const row = screen.getByRole('row', { name: /Stage Updated/i });
+    expect(row).toBeInTheDocument();
+    const cells = Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent?.trim());
+    expect(cells[1]).toBe('Lite');
+    expect(cells[4]).toBe('—');
+    expect(cells[5]).toBe('custom-unknown-task');
+  });
 });
+
