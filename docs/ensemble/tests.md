@@ -17,9 +17,9 @@ Every pytest session runs the shared configuration hook, which probes the locall
 | Tier 3 | End-to-end tests | `ensemble/tests/e2e/` | `e2e` marker | Reserved for full-stack tests; no executable cases in this directory |
 | Tier 4 | External-provider tests | `ensemble/tests/integration/` | `ai_integration`, `requires_web_search`, `requires_api`, or `requires_typesafe` | Configured LLM, TypeSafe/Jev, Vertex AI Search, or other enabled external API configuration |
 
-The root `make ensemble-test` target and the ensemble CI job collect only `tests/unit/` and `tests/integration/`. They do not collect tests located directly under `tests/` or under `tests/fakes/`. Running pytest against `tests/` also collects `tests/test_constants_parity.py` and `tests/fakes/test_fakes_protocol_conformance.py`, as well as any other matching top-level checks.
+The root `make ensemble-test` target and the ensemble CI job collect only `tests/unit/` and `tests/integration/`. They do not collect tests located directly under `tests/` or under `tests/fakes/`. Running pytest against all of `tests/` also collects `tests/test_constants_parity.py` and `tests/fakes/test_fakes_protocol_conformance.py`, as well as any other top-level checks.
 
-The `tests/e2e/` directory contains only package support and does not add executable end-to-end cases.
+The `tests/e2e/` directory contains only package support and does not add executable end-to-end test cases.
 
 ## Set Up the Test Environment
 
@@ -38,7 +38,7 @@ Run commands from the repository root unless a command explicitly says otherwise
 
 From the repository root:
 
-- `make ensemble-test` runs `ensemble/tests/unit/` and `ensemble/tests/integration/` with `-m "not ai_integration and not requires_web_search and not requires_api"`.
+- `make ensemble-test` runs `ensemble/tests/unit/` and `ensemble/tests/integration/` with `-m "not ai_integration and not requires_web_search and not requires_api"`. Tests marked `requires_typesafe` are skipped at collection time when the TypeSafe API key is absent.
 - `make test-external` runs only integration tests selected by `ai_integration`, `requires_web_search`, `requires_api`, or `requires_typesafe`.
 - `make ensemble-lint` runs Ruff and Pyright against `ensemble/app`.
 - `make ci-ensemble` runs `ensemble-lint` followed by `ensemble-test`.
@@ -68,7 +68,7 @@ The third command includes top-level parity and fake conformance checks while ex
 
 ## Markers and External Configuration
 
-The suite registers markers in `ensemble/pyproject.toml` and enforces them with `--strict-markers`. Directory selection remains the primary unit/integration split; markers identify external dependencies and specialized behavior. Active markers are `unit`, `integration`, `ai_integration`, `requires_web_search`, `requires_typesafe`, `requires_operator`, and `slow`. The harness also applies `thinking` and `tools` dynamically to selected accuracy scenarios. `e2e`, `smoke`, `ai`, `aws`, `intent_workflow`, `requires_api`, and `operator_wire` are registered but have no test population; `requires_api` remains part of the external selection and gating commands.
+The suite registers markers in `ensemble/pyproject.toml` and enforces them with `--strict-markers`. Directory selection remains the primary unit/integration split; markers identify external dependencies and specialized behavior. Markers with active test population include `unit`, `integration`, `ai_integration`, `requires_web_search`, `requires_typesafe`, `requires_operator`, `slow`, `thinking`, and `tools`. The harness dynamically applies `thinking` and `tools` to selected accuracy test scenarios based on scenario configuration. Registered markers with no current test population are `e2e`, `smoke`, `ai`, `aws`, `intent_workflow`, `operator_wire`, and others reserved for future use. The `requires_api` marker is registered and included in external test selection/gating commands, although no ensemble test is directly marked with it.
 
 The external markers mean:
 
@@ -84,20 +84,20 @@ The environment variables configure the test process; they do not bypass provide
 
 ## Fixtures and Isolation
 
-The shared harness provides unique investigation, user, case, operator, and session identifiers. `TaskTracker` closes captured coroutines and cancels and awaits captured tasks after each test. The fake implementations under `ensemble/tests/fakes/` provide typed service-boundary doubles, and `tests/fakes/mock_gateway.py` provides an in-process HTTPS and WebSocket mock Gateway for tests that use it.
+The main test harness (`ensemble/tests/conftest.py`) provides shared fixtures: unique investigation, user, case, operator, and session identifiers; `TaskTracker` to close coroutines and cancel tasks after each test; and session-scope `cache_aside_service`, `db_client`, `db_service`, and `llm_provider` for tests that require operator connectivity. The fake implementations under `ensemble/tests/fakes/` provide typed service-boundary doubles, and `tests/fakes/mock_gateway.py` provides an in-process HTTPS and WebSocket mock Gateway for tests that use it.
 
-Integration fixtures are not uniformly hermetic. `all_services` first checks the local CA certificate and a live TLS connection to the configured Operator, then constructs most services with fakes and a governance client that writes through to the fake database. Other integration tests connect to local Gateway database, KV, pub/sub, or inference services. Inspect the fixtures used by a test before assuming that it runs without local platform state.
+Integration-specific fixtures are defined in `ensemble/tests/integration/conftest.py`. The `all_services` fixture first checks for a local CA certificate and a live TLS connection to the configured Operator (skipping the test if unavailable), then constructs application services using the real `cache_aside_service` with mocked individual db/kv/blob boundaries and a write-through governance client that persists to the operator database. Other integration tests use fakes, the mock Gateway, or local operator connections depending on their needs. Inspect fixture implementations before assuming a test runs hermetically without platform state.
 
-Integration approval helpers can resolve pending approvals after a code path returns or inline as approvals are registered. The inline callback is required for flows that block while waiting for an approval, including long-running benchmark scenarios. Integration cleanup tracks created documents and waits for background work before deleting them.
+Integration approval helpers resolve pending approvals post-hoc or inline via callback (required for flows that block on approval wait). Integration cleanup tracks created documents and awaits background work before deletion.
 
 Protocol checks cover two separate concerns. Fake conformance tests verify that the doubles in `tests/fakes/` implement their declared Python protocols. The top-level constants parity test validates protocol JSON against the ensemble's typed constants models and supports `G8E_PROTOCOL_DIR` when the protocol directory is not at its repository-relative location. Run pytest against all of `tests/` when changing shared fakes or protocol constants.
 
 ## Coverage and Quality
 
-Coverage tracks branch coverage for `app/` and omits tests, package entry points, conftest files, empty modules, pytest caches, and site packages. The ensemble does not configure a coverage failure threshold. From `ensemble/`, this command produces a terminal report without selecting configured external-provider tests:
+Coverage tracks branch coverage for `app/` and omits tests, package entry points, conftest files, empty modules, pytest caches, and site packages. The ensemble does not configure a coverage failure threshold. From `ensemble/`, this command produces a terminal report while excluding external-provider and e2e tests:
 
 ```bash
-python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not e2e" --cov=app --cov-report=term-missing
+python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe and not e2e" --cov=app --cov-report=term-missing
 ```
 
 Add `--cov-report=html` or `--cov-report=json` to write reports to the configured locations under `coverage-reports/g8ee/`. Ruff and Pyright targets cover only `app/` in the ensemble Makefile and CI job. Go-native evaluation code is covered by the platform commands `./g8e test unit`, `./g8e test lint`, and the platform coverage workflow.
