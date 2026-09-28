@@ -1,202 +1,188 @@
 ---
-title: Evaluations
-parent: Architecture
+doc_id: evals
+title: Evaluation Programs
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - internal/services/evaluation/
+  - internal/cli/cmd/eval/
+  - eval/
+related:
+  - gateway.md
+  - operator.md
+  - model-provenance.md
+  - public_spectator.md
+  - ensemble.md
+  - governance.md
+  - ../guides/unified_stack.md
+  - ../guides/sovereignty_gauntlet.md
+  - ../core/position_paper.md
+when_to_read: Understanding g8e's evaluation programs, native execution-boundary test suites, model campaign scoring through real inference paths, provider-boundary observation, model provenance attestation, evidence persistence and verification, and the topology of witness operators separate from execution.
+do_not_use_for:
+  - Governance five-layer interlock and policy enforcement (governance.md)
+  - Gateway HTTP routes and session routing (gateway.md)
+  - Operator execution boundary and native tool catalog (operator.md)
+  - Model weight zero-trust attestation (model-provenance.md)
+  - Public evaluation projections and explorer contract (public_spectator.md)
 ---
 
-# Evaluations
+# Evaluation Programs
 
-Last Updated: 2026-09-25
-Version: v2.1.13
+## Purpose
 
-## Scope
+Defines g8e's platform evaluation programs: the native execution-boundary suite and model campaign scoring. These programs prove governance posture, isolated inference dispatch, real model invocations through production paths, provider-boundary hardware telemetry, and storage-side model weight attestation. Both programs combine read-only witness collection with governed execution through the Gateway and Operator architecture, and persist canonical content-addressed evidence for deterministic verification independent of execution.
 
-g8e owns the platform evaluation programs: the Go-native **execution-boundary** suite and **model campaign** scoring that exercises real models through governed inference, tool dispatch, provider-boundary hardware observation, and storage-side model provenance attestation. Model campaigns support homogeneous model-role runs and heterogeneous system-lane runs built from preregistered formations. These programs are the reference proof of the Gateway + Operator topology described in [Beyond evaluations](#beyond-evaluations). They combine read-only witness collection with governed execution: the native suite mutates a controlled fixture, and campaign tool scenarios can mutate the Data Operator's target through the production chat path. The evaluator, campaign controller, evidence store, and verifier live in the `g8e` binary under `internal/services/evaluation/` and the `g8e eval` CLI.
+## Quick index
 
-g8ee participates in model campaigns as the production chat path (`POST /api/v1/chat`) but does not own platform evidence, verification, or campaign orchestration. See [Ensemble Evaluations](../ensemble/evals.md) for how g8ee uses these programs.
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+  - [Topology: Confidential Edge Execution with Governed State Mutation](#topology-confidential-edge-execution-with-governed-state-mutation)
+  - [Evaluation programs](#evaluation-programs)
+  - [CLI surface](#cli-surface)
+  - [Native execution-boundary suite](#native-execution-boundary-suite)
+  - [Model campaign evaluations](#model-campaign-evaluations)
+  - [Witness operator roles](#witness-operator-roles)
+  - [Evidence and verification](#evidence-and-verification)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-Operational deployment (Compose profiles, enrollment order, smoke workflows, troubleshooting) lives in the [Unified Docker Stack Guide](../guides/unified_stack.md). Runtime campaign inventories and rollout queues live under `.g8e/eval/` (gitignored); checked-in templates and the public/private boundary are documented in [eval/examples/README.md](../../eval/examples/README.md).
+Key invariant groups: [Program Definitions](#program-definitions-inv-eval-prog), [Campaign Structure](#campaign-structure-inv-eval-camp), [Witness Separation](#witness-separation-inv-eval-wit), [Evidence Storage](#evidence-storage-inv-eval-evid), [Verification Posture](#verification-posture-inv-eval-verif).
 
----
+## Invariants
 
-## Beyond evaluations
+Ids are stable. Append the next free number within each group; do not renumber.
 
-g8e evaluation programs exercise one instance of a broader architecture: **Confidential Edge Execution with Governed State Mutation**. The same Gateway + Operator topology combines local artifact provenance, runtime telemetry observation, a central Policy Decision Point (Gateway), and outbound-only state-mutation Operators at the data owner's boundary.
+### Program Definitions (`INV-EVAL-PROG`)
 
-Evaluations are a mixed execution-and-witness use case. They prove that:
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-PROG-01 | The native execution-boundary suite (`core-execution-boundary@1.0.0`) MUST NOT use g8ee, external model providers, model judges, campaigns, scheduling, or synthetic simulators. |
+| INV-EVAL-PROG-02 | Model campaigns MUST score inference through the production g8ee `POST /api/v1/chat` path with real models and real tool dispatch to governed Data Operator sessions. |
+| INV-EVAL-PROG-03 | All evaluation run evidence MUST be persisted as content-addressed digests in `.g8e/data/eval/runs/<run-id>/` with canonical protobuf JSON, separate from campaign definitions in `.g8e/data/eval/campaigns/<campaign-id>/`. |
+| INV-EVAL-PROG-04 | Campaign run verification through `g8e eval runs verify` and native boundary verification through `g8e eval boundary verify` MUST recompute all bindings and signatures without executing new scored actions. |
 
-- allowed governed mutations succeed through the real Gateway and remote Operator;
-- doctrine-prohibited equivalents fail closed without another effect;
-- independent observers can attest terminal state without network access or write authority;
-- model-role and system-lane inference remains bound to the selected Inference Operator; and
-- Provenance and Observer Operators can witness model weights and provider-boundary hardware separately from the inference executor.
+### Campaign Structure (`INV-EVAL-CAMP`)
 
-The native target reader and the campaign witness Operators are read-only observers. They do not authorize execution. The Data and Inference Operators remain the execution boundaries for campaign tool actions, model inference, and any governed mutation those scenarios request.
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-CAMP-01 | Model campaigns bind scored inference to frozen `served_model_tag` and `model_digest` pairs registered in the campaign's frozen model inventory. Placeholder digests lacking provenance authority MUST be re-frozen from the provider before scored runs. |
+| INV-EVAL-CAMP-02 | The default campaign lane is `model_role`, which schedules each frozen model variant against catalog scenarios and records role-specific results. The `system` lane supports heterogeneous multi-model formations with deterministic per-formation binding. |
+| INV-EVAL-CAMP-03 | On `g8e eval rollout run`, strict witness verification MUST default true and MUST fail closed when coverage is missing and `--require-witness` is active. On `g8e eval runs start`, witness requirements remain opt-in via `--require-observation`, `--require-provenance`, or `--require-witness`. |
+| INV-EVAL-CAMP-04 | Homogeneous campaigns MUST apply authentic production agent personas (Sage, Dash) bound to real ReAct agentic loops in the Data Operator, not synthetic harnesses or mock loops. |
 
-When AI **actively alters system state** from local inference — not merely scores model output — the value of zero-trust provenance and outbound-only telemetry scales with the consequence of each mutation. The evaluation topology is the reference proof of that separation; the domain mirrors below show where the same pattern applies in production workflows.
+### Witness Separation (`INV-EVAL-WIT`)
 
-### Common topology
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-WIT-01 | The Observer Operator (`--provider-boundary-observer-enabled`) and Provenance Operator (`--provenance-operator-enabled`) MUST enroll as separate governed sessions from the Inference Operator with distinct capability flags. MUST NOT pass `--inference-enabled` on witness-only sessions. |
+| INV-EVAL-WIT-02 | The Observer Operator MUST run on the machine where Ollama and GPU hardware execute. The Provenance Operator MUST run where model storage lives (for example `~/.ollama/models`). Neither MUST have generic command authority or access to Inference Operator attempt files. |
+| INV-EVAL-WIT-03 | When scored inference begins and ends, the Gateway MUST fan out fire-and-forget BEGIN/FINALIZE commands in parallel with inference dispatch to separate Observer and Provenance Operator sessions. Witness coverage MUST be independent of inference completion. |
+| INV-EVAL-WIT-04 | The Observer Operator MUST report provider-boundary GPU VRAM, utilization, temperature, power, clocks, and system RAM samples between BEGIN and FINALIZE, bound to the same `provider_attempt_id` as inference. The Provenance Operator MUST attest model manifest and blob SHA-256 hashes. |
+
+### Evidence Storage (`INV-EVAL-EVID`)
+
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-EVID-01 | Native run evidence (`report.json`, `verification.json`, digest-named artifacts) MUST be persisted under `.g8e/data/eval/runs/<run-id>/` and owned by `g8e eval boundary run` and `g8e eval boundary verify`. Campaign evidence MUST be persisted under the same `.g8e/data/eval/runs/<run-id>/` path and owned by `g8e eval runs …`. |
+| INV-EVAL-EVID-02 | Provider-boundary observation windows (ingested from Observer Operator results) MUST be stored under the Gateway volume at `data/inference/provider-observer/windows/`. Model provenance attestation windows (ingested from Provenance Operator results) MUST be stored under `data/inference/model-provenance/windows/`. |
+| INV-EVAL-EVID-03 | Campaign run state is run-scoped: definitions, frozen scenario artifacts, lifecycle, assignment, trace, and aggregate records MUST all persist in `.g8e/data/eval/campaigns/<campaign-id>/` and `.g8e/data/eval/runs/<run-id>/`. |
+| INV-EVAL-EVID-04 | Public-safe campaign projections MUST omit principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields. Private prompts, traces other than bounded `model_response` and `failure_output`, execution identifiers, and artifact locations MUST NOT cross the public boundary. |
+
+### Verification Posture (`INV-EVAL-VERIF`)
+
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-VERIF-01 | Campaign assignment results use projection envelope `1.1.0` for new records with named public extensions: `scenario_summary`, `semantic_grade_summaries`, `activity_summary`, `benchmark_observations`, `resource_summary`, `verification_metadata`, and `evidence_bindings`. Historical envelopes (`1.0.0`) remain readable. |
+| INV-EVAL-VERIF-02 | Model quality state `exploratory_verified` MUST be published only for exact run-derived datasets and eligible `(variant_id, role)` aggregates covered by an applicable passing verification report. Other datasets and roles remain at their existing state (`exploratory_partial` or `unavailable`). |
+| INV-EVAL-VERIF-03 | A passing campaign verification report is applicable only when its run, campaign, catalog, model registry, completed population, and verified population match persisted evidence. Applicable verification MUST republish verified assignment results and emit report-scoped model-summary revisions. |
+| INV-EVAL-VERIF-04 | Observation unavailability MUST use the closed vocabulary: `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. Observed zero MUST be preserved separately from unavailable values. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
+| --- | --- | --- |
+| Native suite registry, grading, and target observer | `internal/services/evaluation/` | `g8e eval boundary run` and `g8e eval boundary verify` |
+| Campaign controller and publication coordinator | `internal/services/evaluation/` | `g8e eval runs start`, `resume`, `verify`, `publish` |
+| Provider-boundary observation | `internal/services/operatorcapability/provider_boundary_observer.go`, `internal/services/inference/provider_observer/` | Observer Operator enrollment and telemetry sampling |
+| Model provenance attestation | `internal/services/operatorcapability/provenance_operator.go`, `internal/services/inference/model_provenance/` | Provenance Operator enrollment and weight hashing |
+| CLI command tree and subcommands | `internal/cli/cmd/eval/` | `./g8e eval --help` and per-subcommand help |
+| Campaign definitions and frozen artifacts | `eval/examples/` (checked-in templates), `.g8e/data/eval/campaigns/` (runtime) | `g8e eval campaigns create` and `g8e eval campaigns show` |
+| Model inventory and rollout intake | `eval/base-model-inventory.json`, `eval/rollout-intake-hf.json` | `g8e eval models list` and registry inspection |
+| Protocol contracts and envelopes | `protocol/proto/g8e/eval/v1/` | `make proto` generates Go, Python, TypeScript bindings |
+
+## Procedures
+
+### Topology: Confidential Edge Execution with Governed State Mutation
+
+Evaluation programs implement one instance of a broader architecture: **Confidential Edge Execution with Governed State Mutation**. The same Gateway (Policy Decision Point) and Operator (Policy Execution Point) topology combines local artifact provenance, runtime telemetry observation, central policy enforcement, and outbound-only state-mutation operators at the data owner's boundary.
+
+Evaluations prove that allowed governed mutations succeed through the real Gateway and remote Operator; doctrine-prohibited equivalents fail closed without side effects; independent observers attest terminal state without network access or write authority; model-role and system-lane inference remain bound to the selected Inference Operator; and Provenance and Observer Operators witness model weights and provider-boundary hardware separately from the inference executor.
+
+When AI actively alters system state from local inference, the value of zero-trust provenance and outbound-only telemetry scales with each mutation's consequence. The evaluation topology proves this separation; the topology mirrors in the [Position Paper](../core/position_paper.md) show where the same pattern applies in DevSecOps, OT/SCADA, healthcare EHR, and financial trading workflows.
 
 Every mirror deployment separates four roles:
 
 | Role | Evaluation instance | General responsibility |
 | --- | --- | --- |
-| **Provenance Operator** | Storage-side model weight attestation | Hashes local artifacts inference depends on (code, firmware, scans, feeds, weights) |
+| **Provenance Operator** | Storage-side model weight attestation | Hashes local artifacts inference depends on (code, firmware, scans, feeds, model weights) |
 | **Observer** | Provider-boundary GPU/RAM sampling; networkless fixture reader | Captures runtime telemetry at the execution boundary without mutating target state |
 | **Data Operator** | Campaign host tool/filesystem/process boundary | Mutates authoritative state at the owner's boundary (PRs, actuators, EHR, trades) |
 | **Gateway (PDP)** | Campaign and boundary-suite policy admission | Enforces central policy from provenance proofs, observer telemetry, and posture-required authorization |
 
 All Operators connect outbound-only over mTLS. The Gateway admits work; each Operator independently verifies envelopes before any local side effect or witness publication.
 
-### Domain mirrors
+### Evaluation programs
 
-The following workflows reuse the same topology with different artifacts, observers, mutators, and policy gates. They are architectural mappings — not claims that g8e ships turnkey sector products — but they explain why evaluation witness separation generalizes.
-
-#### 1. Autonomous zero-trust DevSecOps and auto-remediation
-
-Instead of scoring models, the system acts as an autonomous tier-3 DevSecOps engineer remediating critical vulnerabilities in air-gapped repositories.
-
-```text
-[Local Code Repo] ---> (Provenance Operator: hashes Git tree and SAST binaries)
-                              | outbound
-                              v
-   [Inference Engine] ---> [g8e Gateway] <--- (Data Operator: pushes verified Git PRs)
-   (runs local codegen)       ^
-                              | outbound
-[Compiler / Sandbox] ---> (Observer: captures test and memory telemetry)
-```
-
-- **Workflow:** A scanner flags a zero-day. A local coding agent generates a patch, compiles it, and runs unit tests.
-- **Provenance Operator:** Hashes the codebase, compiler binary, and local LLM so the patch environment has not been tampered with.
-- **Observer:** Captures execution telemetry, memory behavior, and test pass/fail metrics inside a local sandbox.
-- **Data Operator:** Mutates state by opening a cryptographically signed pull request or merging into the enterprise repository.
-- **Gateway value:** SecOps policy blocks code mutation on the primary branch unless provenance confirms pristine source hashes and the observer confirms 100% test pass without unauthorized network egress.
-
-#### 2. Critical infrastructure and OT/SCADA cyber-physical response
-
-In operational technology, SCADA, and industrial IoT, cloud latency and internet ingress are often unacceptable due to safety and physical security constraints.
-
-```text
-[PLC Firmware / Logic] ---> (Provenance Operator: hashes sensor baselines and edge weights)
-                                   | outbound
-                                   v
-    [Edge GPU Inference] ---> [g8e Gateway] <--- (Data Operator: actuates PLC valves/breakers)
-    (runs anomaly model)           ^
-                                   | outbound
-  [Physical OT Sensors] ---> (Observer: monitors voltage, pressure, temp telemetry)
-```
-
-- **Workflow:** Local sensors detect vibration anomalies in a hydro turbine. An edge model decides whether to drop load or adjust valve pressure.
-- **Provenance Operator:** Hashes PLC configuration, sensor calibrations, and edge model weights against supply-chain or firmware tampering.
-- **Observer:** Monitors GPU load, physical sensor telemetry, and reaction latency.
-- **Data Operator:** Mutates physical state through low-level actuation commands to the SCADA controller.
-- **Gateway value:** Central industrial safety policy verifies automated physical changes stay within pre-approved engineering envelopes while the SOC receives outbound plant telemetry.
-
-#### 3. Confidential healthcare AI and local EHR state mutation
-
-Healthcare deployments must keep PHI on premises while still using AI on DICOM images and clinical notes.
-
-```text
-[DICOM Medical Scans] ---> (Provenance Operator: hashes patient data headers and model identity)
-                                   | outbound
-                                   v
-  [Hospital Edge GPU]  ---> [g8e Gateway] <--- (Data Operator: mutates central EHR record)
-  (runs diagnostic AI)             ^
-                                   | outbound
-   [Local Inference]   ---> (Observer: monitors confidence and memory isolation)
-```
-
-- **Workflow:** A hospital GPU runs an oncology diagnostic model on fresh CT scans, drafting notes and flagging urgent cases.
-- **Provenance Operator:** Proves DICOM scan header integrity and confirms the diagnostic model matches FDA/compliance certification.
-- **Observer:** Tracks confidence thresholds, processing speed, and verifies PHI did not leak into ephemeral temp directories.
-- **Data Operator:** Appends approved diagnostic notes to the hospital's central EHR.
-- **Gateway value:** CISOs and HIPAA auditors receive an immutable audit trail that inference used certified models without patient data traversing external networks.
-
-#### 4. Sovereign financial risk management and autonomous ledger execution
-
-High-frequency trading and treasury management execute automated trades or rebalance exposure from local model outputs over confidential order books.
-
-```text
-[Confidential Order Book] ---> (Provenance Operator: hashes financial feeds and model weights)
-                                      | outbound
-                                      v
-     [High-Spec GPU Host] ---> [g8e Gateway] <--- (Data Operator: executes ledger/broker trade)
-     (runs risk engine)               ^
-                                      | outbound
-     [Execution Runtime]  ---> (Observer: tracks order slippage and execution speed)
-```
-
-- **Workflow:** A trading firm runs local risk models that rebalance portfolios or issue margin calls.
-- **Provenance Operator:** Verifies integrity of market data feeds and proprietary model weights before order generation.
-- **Observer:** Captures execution latency, slippage, and node stability during volatile markets.
-- **Data Operator:** Executes trade orders against exchange APIs or blockchain smart contracts.
-- **Gateway value:** Regulatory and risk policy blocks state-mutating transactions that exceed pre-set dollar limits or risk ratios even if a local agent misbehaves during market panic.
-
-### Pattern across domains
-
-| Layer | DevSecOps | OT / SCADA | Healthcare | FinTech |
-| --- | --- | --- | --- | --- |
-| **Provenance** | Git tree and compiler | PLC configs and firmware | DICOM scans and FDA weights | Order book and risk weights |
-| **Observer** | Test execution and build | Sensor heat, pressure, latency | PHI isolation and confidence | Latency and slippage |
-| **Data Operator** | Merge pull requests | Actuate valves / breakers | Mutate central EHR | Execute trades |
-| **Gateway (PDP)** | Code release policy | Physical safety policy | HIPAA / FDA compliance | Treasury / risk limits |
-
-The evaluation programs below instantiate this topology on the reference stack. Model campaigns add Provenance and Observer witness Operators; the native execution-boundary suite adds a networkless target observer. See the [position paper](../core/position_paper.md#57-confidential-edge-execution-with-governed-state-mutation) for the research framing and claim boundaries.
-
----
-
-## Evaluation programs
+Two programs exercise the evaluation topology:
 
 | Program | Suite / catalog | Proves | Does not use |
-| --- | --- | --- | --- |
-| **Execution-boundary** | `core-execution-boundary@1.0.0` | One allowed governed mutation and one doctrine-prohibited equivalent through the real Gateway and remote Operator | g8ee, model providers, campaigns, synthetic simulators |
-| **Model campaign** | `north-star-25@1.0.0` (standard scenario catalog) | Governed model-role scoring through production inference, tool scenarios, optional heterogeneous system-lane formations, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from the campaign CLI or g8ee |
+| --- | --- | --- |
+| **Execution-boundary** | `core-execution-boundary@1.0.0` | One allowed governed mutation and one doctrine-prohibited equivalent through the real Gateway and remote Operator | g8ee, model providers, model judges, campaigns, synthetic simulators |
+| **Model campaign** | `north-star-25@1.0.0` (standard scenario catalog) | Governed model-role scoring through production inference, tool scenarios, heterogeneous system-lane formations, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from campaign CLI or g8ee |
 
-Both programs persist canonical, content-addressed run evidence beneath `.g8e/data/eval/runs/`. Campaign definitions and frozen scenario artifacts are stored separately beneath `.g8e/data/eval/campaigns/<campaign-id>/`, while campaign assignments, traces, results, reports, and exports are run-scoped. Verification is independent of scored execution: `g8e eval boundary verify` and `g8e eval runs verify` recompute bindings and signatures without executing another scored action. Run verification also persists its report and, by default, may publish disclosure-safe projections through the Gateway public mirror.
+Both programs persist canonical, content-addressed run evidence beneath `.g8e/data/eval/runs/` with campaign definitions and frozen artifacts stored separately beneath `.g8e/data/eval/campaigns/<campaign-id>/`. Verification is independent of execution: `g8e eval boundary verify` and `g8e eval runs verify` recompute bindings and signatures without executing new scored actions.
 
----
+### CLI surface
 
-## CLI surface
+The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across eight top-level subcommands:
 
-The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across eight top-level groups:
-
-| Command group | Purpose |
+| Subcommand | Purpose |
 | --- | --- |
 | `g8e eval boundary …` | Run, list, verify, and show native execution-boundary test suites |
-| `g8e eval models …` | Catalog and registry management (`list`, `show`, `add`, `remove`, `import`, `freeze`, `pull`, `diff`) |
-| `g8e eval campaigns …` | Campaign definitions (`list`, `show`, `create`, `archive`, `unarchive`) |
-| `g8e eval runs …` | Campaign execution and lifecycle (`list`, `show`, `start`, `resume`, `cancel`, `logs`, `verify`, `publish`, `export`, `repair`, `compare`, `archive`, `unarchive`) |
-| `g8e eval rollout …` | Rollout qualification queue (`list`, `add`, `remove`, `next`, `retry`, `skip`, `run`) |
-| `g8e eval formations …` | Heterogeneous multi-model stacks (`list`, `show`, `smoke`) |
-| `g8e eval gates …` | Pre-campaign acceptance gates (`chat`, `inference`, `probe`) |
-| `g8e eval observer …` | Provider-boundary hardware observer (`run`, `verify`) |
+| `g8e eval models …` | Catalog and registry management (list, show, add, remove, import, freeze, pull, diff) |
+| `g8e eval campaigns …` | Campaign definitions (list, show, create, archive, unarchive) |
+| `g8e eval runs …` | Campaign execution and lifecycle (list, show, start, resume, cancel, logs, verify, publish, export, repair, compare, archive, unarchive) |
+| `g8e eval rollout …` | Rollout qualification queue (list, add, remove, next, retry, skip, run) |
+| `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, smoke) |
+| `g8e eval gates …` | Pre-campaign acceptance gates (chat, inference, probe) |
+| `g8e eval observer …` | Provider-boundary hardware observer (run, verify) |
 
-Public mirror restore is `g8e public restore`. Use `./g8e eval --help` as the command-surface reference. On `g8e eval runs start`, verification and witness flags are optional by default; use `--require-observation`, `--require-provenance`, or the `--require-witness` preset when those witness requirements are part of the acceptance scope. On `g8e eval rollout run`, strict witness verification is the default (`--gate-smoke` and `--promote-on-pass` provide fast candidate screening).
+Use `./g8e eval --help` as the command-surface reference. On `g8e eval runs start`, verification and witness flags are optional by default; use `--require-observation`, `--require-provenance`, or the `--require-witness` preset when witness requirements are part of acceptance scope. On `g8e eval rollout run`, strict witness verification defaults true; `--gate-smoke` and `--promote-on-pass` provide fast candidate screening.
 
----
+### Native execution-boundary suite
 
-## Native execution-boundary suite
+The Phase 1 suite is `core-execution-boundary@1.0.0`. It requires doctrine posture and does not use g8ee, external model providers, model judges, campaigns, scheduling, or synthetic simulators.
 
-The Phase 1 suite is `core-execution-boundary@1.0.0`. It requires doctrine posture and does not use g8ee, a model provider, model judges, campaigns, scheduling, or synthetic simulators.
-
-### Run
-
-Start and enroll the unified stack with one active remote Operator, then run:
+**Run:** Start and enroll the unified stack with one active remote Operator, then execute:
 
 ```bash
 ./g8e eval boundary run
 ```
 
-Pin an exact active remote Operator session when more than one remote Operator is available:
+Pin an exact Operator session when multiple are available:
 
 ```bash
 ./g8e eval boundary run --operator-session <session-id>
 ```
 
-The suite performs two attempts. The allowed attempt writes one run-specific marker through the authenticated Gateway command ingress and the bound remote Operator. The prohibited equivalent traverses the same ingress and must be rejected by L1 without another effect. Required verdicts cover independent effect counts, target identity, terminal receipt status, receipt durability, deterministic protocol-chain validity, rejection, absence of another completed execution, and Gateway L1 attribution.
+The suite performs two attempts: the allowed attempt writes one run-specific marker through the authenticated Gateway command ingress and the bound remote Operator; the prohibited equivalent traverses the same ingress and must be rejected by L1 without side effect. Required verdicts cover independent effect counts, target identity, terminal receipt status, receipt durability, deterministic protocol-chain validity, rejection, absence of completed alternative execution, and Gateway L1 attribution.
 
-### Verify and inspect
-
-Each run persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`. Re-run verification without executing another mutation:
+**Verify and inspect:** Each run persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`. Re-run verification without executing new mutations:
 
 ```bash
 ./g8e eval boundary verify <run-id>
@@ -205,296 +191,112 @@ Each run persists `report.json`, `verification.json`, and digest-named evidence 
 
 Add `--json` to emit canonical protojson. Verification resolves every declared artifact, recomputes content addresses, validates report and attempt bindings, verifies receipt and persistence signatures, validates deterministic stage evidence, reconstructs typed observations, recomputes verdicts and metrics, and rejects missing, substituted, contradictory, misbound, or undeclared evidence.
 
-### Trust boundaries
+**Trust boundaries:** The Gateway is the Policy Decision Point and owns ingress authentication, envelope construction, L1-L3 decisions, and coordination state. The selected remote Operator is the Policy Execution Point and owns L4-L5 execution and authoritative local evidence. The Gateway receipt query is a verified mirror of Operator-authored evidence, not an independent read.
 
-The Gateway is the Policy Decision Point and owns ingress authentication, envelope construction, L1-L3 decisions, and coordination state. The selected remote Operator is the Policy Execution Point and owns L4-L5 execution and authoritative local evidence. The Gateway receipt query is a verified mirror of Operator-authored evidence, not an independent read of the Operator database.
+The native suite reads terminal fixture state through a short-lived `g8e-native-target-reader` process defined only in `eval/native-boundary-compose.yml`. It is not an Observer Operator and not a unified-stack service. The evaluator invokes it explicitly with `docker compose run --rm`; it has no network, workload identity, runtime volume, credentials, or writeable target mount. It mounts only the shared controlled fixture volume read-only with all Linux capabilities dropped so it can read root-owned fixture state without mutations or network crossings.
 
-The native suite reads terminal fixture state through a short-lived `g8e-native-target-reader` process defined only in `eval/native-boundary-compose.yml`. It is not an Observer Operator and is not a unified-stack service. The evaluator invokes it explicitly with `docker compose run --rm`; it has no network, workload identity, runtime volume, credentials, or writeable target mount. It mounts only the shared controlled fixture volume read-only and runs with all Linux capabilities dropped so it can read the root-owned, owner-only fixture without mutating the volume or crossing a network boundary.
+### Model campaign evaluations
 
----
-
-## Model campaign evaluations
-
-Evaluation model campaigns score real models through the production g8ee `POST /api/v1/chat` path, governed inference dispatch, and a frozen scenario catalog. They use one campaign Gateway with **two** core enrolled remote Operator sessions on the campaign host (Data and Inference) plus **one or two** provider-side witness sessions when hardware observation and model provenance are enabled:
+Evaluation model campaigns score real models through the production g8ee `POST /api/v1/chat` path, governed inference dispatch, and a frozen scenario catalog. They use one campaign Gateway with two core Operator sessions on the campaign host (Data and Inference) plus optional provider-side witness sessions for hardware observation and model provenance:
 
 | Session | Capability flag | Host | Role |
-| --- | --- | --- | --- |
+| --- | --- | --- |
 | **Data Operator** | `inference_enabled=false` | Campaign host (Docker) | Governed tool/filesystem/process boundary for model-originated host actions |
-| **Inference Operator** | `inference_enabled=true` | Campaign host (Docker) | Governed L4/L5 inference PEP; sole scored path to the approved Ollama provider |
-| **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host (where Ollama/GPU runs) | Read-only GPU and system RAM sampling at the provider execution boundary; no provider lifecycle or generic command authority |
+| **Inference Operator** | `inference_enabled=true` | Campaign host (Docker) | Governed L4/L5 inference Policy Execution Point; sole scored path to the approved Ollama provider |
+| **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host (where Ollama/GPU runs) | Read-only GPU and system RAM sampling at the provider execution boundary |
 | **Provenance Operator** | `provenance_operator_enabled=true` | Model storage site (where weight blobs live) | Independent SHA-256 attestation of model manifests and weight blobs |
 
-Scored inference and provider maintenance never call Ollama directly from g8ee or the campaign CLI. The Gateway routes inference envelopes and governed model pull, copy, inventory, residency, and release commands to the exact Inference Operator session. Tool intents route to the exact Data Operator session, `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) to the exact Observer Operator session, and `ModelProvenanceObservationCommand` (BEGIN/FINALIZE) to the exact Provenance Operator session when provenance is enabled. Campaign-host `--ollama-endpoint` and `G8E_OLLAMA_ENDPOINT` overrides are not accepted; maintenance derives `OLLAMA_HOST` only from the selected Inference Operator's enrolled `runtime_config`.
+Scored inference and provider maintenance never call Ollama directly from g8ee or the campaign CLI. The Gateway routes inference envelopes to the exact Inference Operator session. Tool intents route to the exact Data Operator session, observation commands to the exact Observer Operator session (when enabled), and provenance commands to the exact Provenance Operator session (when enabled). Campaign-host `--ollama-endpoint` and `G8E_OLLAMA_ENDPOINT` overrides are not accepted; the Inference Operator's enrolled `runtime_config` determines Ollama access.
 
-See [Model Provenance](model-provenance.md) for the zero-trust weight attestation architecture.
+**Model inventory and rollout intake:** Model campaigns bind scored inference to frozen `served_model_tag` and `model_digest` pairs in the campaign registry. The checked-in genesis inventory (`eval/base-model-inventory.json`) is a reference snapshot; live provider runs should re-freeze digests before execution.
 
-### Model inventory, Hugging Face staging, and rollout intake
+`g8e eval models pull --all` reads the rollout intake catalog (`eval/rollout-intake-hf.json`) and dispatches governed pull and copy commands to the exact Inference Operator. The Operator-owned Ollama client pulls GGUF models (for example `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M`) and applies canonical served-model aliases (for example `qwen3.8:27b`). Use `--formations` to pull the sovereign ExecutionTopologies library tags through the same governed path.
 
-Model campaigns bind scored inference to frozen `served_model_tag` and `model_digest` pairs in the campaign registry. The checked-in genesis program inventory (`eval/base-model-inventory.json`) is a reference snapshot; scored runs on a live provider should re-freeze digests from that provider before execute.
+After pulling, `g8e eval models freeze` discovers live provider inventory through a governed Inference Operator command and writes the frozen registry to `.g8e/eval/model-inventory.json`. Optional `--probe-capabilities` requests bounded, unscored inference through the same session. `g8e eval campaigns create` and `g8e eval rollout add` then bind campaigns and the rollout queue with provider-accurate digests.
 
-**Hugging Face staging.** `g8e eval models pull --all` reads the rollout intake catalog (`eval/rollout-intake-hf.json`) and dispatches governed pull and copy commands to the exact Inference Operator. The Operator-owned Ollama client uses deep Hugging Face compatibility to pull GGUF models (for example `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M`) and applies canonical served-model aliases (for example `qwen3.8:27b`). Use `--formations` to pull the sovereign ExecutionTopologies library tags through the same governed path. Catalog entries marked `manual_create` (sharded GGUF) or `pending` are skipped until a governed provider-side workflow can create the alias. The intake only adds small text-generation trend candidates suitable for the 16 GiB provider, currently including Qwen 2.5 1B RLCD; larger trend entries are intentionally excluded. Classification, image, audio, and image-text-to-text repositories are also excluded from this text-generation queue. Trending untagged aliases such as `glm-5.3-flash` and `glm-5.3-air` are first-class served tags once present on the provider.
+`g8e eval models add` inserts or replaces one variant and recomputes the registry digest. When `--digest` is omitted, `add` derives a placeholder digest that lacks attestation authority; re-freeze from the provider before scored runs. `g8e eval models remove` deletes one variant and recomputes the same values. `g8e eval models import` copies selected variants from the catalog into the runtime registry.
 
-**Freeze and registry.** After pulling, `g8e eval models freeze` discovers live provider inventory through a governed Inference Operator command and writes the frozen registry to `.g8e/eval/model-inventory.json`. Optional `--probe-capabilities` requests bounded, unscored inference through the same session rather than constructing a campaign-host provider backend. `g8e eval campaigns create` and `g8e eval rollout add` then bind campaigns and the rollout queue with provider-accurate digests. Placeholder digests in the checked-in base inventory are not valid attestation authorities.
+**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model across all 25 catalog scenarios in all 3 roles (primary, assistant, lite), resulting in 75 scored assignments taking ~45–60 minutes per model.
 
-**Inventory edits.** `g8e eval models add` inserts or replaces one variant (served tag, family, parameter count, quantization, digest) in the runtime registry, or with `--catalog` in `eval/base-model-inventory.json`, and recomputes the registry digest and homogeneous cell count. When `--digest` is omitted, `add` derives a placeholder digest from the provider class and tag, which is not an attestation authority; re-freeze from the provider before scored runs. `g8e eval models remove` deletes one variant by served tag or variant ID and recomputes the same values. `g8e eval models import` copies selected variants from the catalog into the runtime registry. `g8e eval models list`, `g8e eval rollout add`, and `g8e eval rollout run` accept `--max-params` (for example `12b` or `700m`) to restrict work to variants at or below a parameter count; variants without a recorded parameter count are not excluded by the rollout-run filter.
+To accelerate high-throughput qualification, `g8e eval rollout run` supports a two-tier screening pipeline:
 
-**Execute-time provenance preflight.** Before consuming scored assignments, campaign execute and `g8e eval rollout run` call Gateway preflight endpoints that verify provenance command delivery and run a per-model storage attestation probe for each frozen binding. The probe fails fast when the Provenance Operator cannot resolve or attest the served tag, rather than completing assignments with missing windows. See [Model Provenance](model-provenance.md) for manifest layout and preflight API detail.
+1. **Tier 1 — Fast Smoke Gate** (`--gate-smoke`): Executes 5 high-discriminative scenarios across 3 roles (15 assignments, ~8 minutes per model). Scenarios exercise syntax and tool execution, investigation and diagnostic reasoning, dissent and safety compliance, multi-step remediation, and fast-path direct instruction response. Requires 100% pass status on witness and verification gates.
 
-### Two-tier rollout qualification strategy
-
-Standard homogeneous campaigns evaluate each candidate model across all 25 catalog scenarios in all 3 roles (`primary`, `assistant`, `lite`), resulting in 75 scored assignments taking ~45–60 minutes per model. To accelerate high-throughput model qualification, `g8e eval rollout run` supports a two-tier screening pipeline:
-
-1. **Tier 1 — Fast Smoke Gate (`--gate-smoke`)**:
-   - Executes 5 high-discriminative scenarios across 3 roles = 15 assignments (~8 minutes per model).
-   - Scenarios exercise:
-     - Syntax and tool execution (`tool-select-file-read`)
-     - Investigation and diagnostic reasoning (`tech-error-diagnosis`)
-     - Dissent and safety compliance (`security-policy-deny-delete`)
-     - Multi-step remediation (`recovery-tool-failure`)
-     - Fast-path direct instruction response (`instruction-exact-format`)
-   - Requires 100% pass status on witness and verification gates to qualify.
-2. **Tier 2 — Comprehensive Qualification (`--promote-on-pass`)**:
-   - Automatically promotes candidates passing Tier 1 directly into the full 75-assignment matrix.
-   - Discards models failing Tier 1 early, saving 45+ minutes of GPU residency per non-viable candidate.
+2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 75-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
 
 ```bash
-# Fast Tier 1 screening for all queued candidates:
-g8e eval rollout run --gate-smoke
-
-# Fast screening with automatic promotion to full qualification on pass:
-g8e eval rollout run --gate-smoke --promote-on-pass
+./g8e eval rollout run --gate-smoke --promote-on-pass
 ```
 
-### Production agentic loop and persona binding
+**Production agentic loop and persona binding:** Homogeneous campaigns score assignments by posting directly to `POST /api/v1/chat` and drive the real ReAct loop with real tool dispatch to the bound Data Operator. Role control activates authentic production agent personas:
 
-Homogeneous campaigns do **not** use synthetic harnesses or mock loops. Scored assignments post directly to `POST /api/v1/chat` and drive the real ReAct loop (`G8eAgent._stream_with_tool_loop`), dispatching real tool actions to the bound remote **Data Operator**.
+- `primary`: Activates `ReasoningAgent.SAGE` bound to `SagePersona`
+- `assistant`: Activates `ReasoningAgent.DASH` bound to `DashPersona`
+- `lite`: Activates `ReasoningAgent.DASH` with lite-tier operational constraints
 
-Role control (`apply_homogeneous_role_control`) activates authentic production agent personas:
-- `primary`: Activates **`ReasoningAgent.SAGE`** bound to `SagePersona` (*"You are Sage, the senior reasoning authority for g8e..."*).
-- `assistant`: Activates **`ReasoningAgent.DASH`** bound to `DashPersona` (*"You are Dash, the high-efficiency responder for g8e..."*).
-- `lite`: Activates **`ReasoningAgent.DASH`** with lite-tier operational constraints.
+Each persona wraps in the production modular system prompt stack: Core Safety, Core Loyalty, Core Dissent, Mode Execution/Capabilities, Tool Schemas, Response Constraints, System Context, and Sentinel Mode.
 
-Each persona is wrapped in the production modular system prompt stack: Core Safety, Core Loyalty, Core Dissent, Mode Execution/Capabilities, Tool Schemas, Response Constraints, System Context, and Sentinel Mode.
+**Campaign lanes and formations:** The default campaign lane is `model_role`, which schedules each frozen model variant against catalog scenarios and records role-specific results. Campaigns can also use the `system` lane. The CLI creates deterministic, persisted heterogeneous stacks with `g8e eval campaigns create <id> --formations <id>... --seed <seed>` and starts execution with `g8e eval runs start <id>`.
 
-### Campaign lanes and formations
+A formation contains primary, assistant, and lite model bindings. The runner allocates all sovereign local models only after storage-side provenance attestation, brackets each role with provider-boundary observation, executes roles in `lite → assistant → primary` order while passing state forward, and routes a role's mutation candidate through the governed policy gate.
 
-The default campaign lane is `model_role`: a homogeneous matrix schedules each frozen model variant against the catalog scenarios and records role-specific results. Campaigns can also use the `system` lane. The CLI creates a deterministic, persisted heterogeneous stack set with `g8e eval campaigns create <id> --formations <id>... --seed <seed>` and starts execution with `g8e eval runs start <id>`; heterogeneous runs are separate from homogeneous model-role aggregates.
+### Witness operator roles
 
-A formation contains `primary`, `assistant`, and `lite` model bindings. The runner allocates all sovereign local models only after storage-side provenance attestation, brackets each role with provider-boundary observation, executes roles in `lite → assistant → primary` order while passing state forward, and routes a role's mutation candidate through the governed policy gate before accepting the formation. The checked-in catalog currently contains four sovereign formations; the delegated-primary hybrid remains deferred until a governed delegated-provider executor exists. Formation validation rejects provider or model-family overlap and excessive estimated local VRAM. Campaign execution imports each role's reported prompt and completion usage into canonical `ModelInferenceRecord` evidence; unavailable provider usage remains unavailable rather than becoming an observed zero.
-
-### Why witness operators are separate from the Inference Operator
-
-The Inference Operator, Observer Operator, and Provenance Operator all use the same `g8e operator` binary but enroll as **different remote sessions** with different capability flags. Production witness enrollment on the provider host uses `--provider-boundary-observer-enabled` and/or `--provenance-operator-enabled` only; do **not** pass `--inference-enabled` on the provider host. Witness sessions have no generic command or provider-lifecycle authority; the Gateway and outbound Operator reject command execution on those boundaries.
-
-**1. Provider-host placement.** The Inference Operator runs on the campaign host and calls the remote Ollama HTTP API. GPU VRAM, utilization, temperature, power, clocks, and host RAM must be sampled on the machine where inference actually runs. Model weight blobs must be hashed at the storage site where Ollama keeps content-addressed blobs (for example `~/.ollama/models`). A Linux Docker container on the campaign host cannot authoritatively witness either signal.
-
-**2. Independent witness evidence.** Hardware-efficiency metrics and model provenance are witness evidence, not executor self-report. When enabled, model campaigns use typed witnesses at the **provider execution boundary** (Observer) and **model storage boundary** (Provenance Operator) that bind evidence to `provider_attempt_id`. The campaign controller verifies witness coverage separately from inference receipts.
-
-**3. Least privilege and evidence ownership.** The Observer has no inference backend, no model-management authority, no prompt access, and no access to Inference Operator attempt files. The Provenance Operator reads model manifests and blobs locally but does not run inference, sample GPU state, or mutate weights. Merging either witness into the Inference Operator would let the inference executor attest its own GPU usage or model integrity.
-
-**4. Gateway coordination, separate execution.** When scored inference starts and ends, the Gateway fans out fire-and-forget BEGIN/FINALIZE commands in parallel with inference dispatch:
-
-- `ProviderBoundaryObservationCoordinator` → Observer Operator → `ProviderBoundaryObservationWindow`
-- `ModelProvenanceObservationCoordinator` → Provenance Operator → `ModelProvenanceAttestationWindow`
-
-Campaigns without observer coverage remain explicitly incomplete for hardware-efficiency claims. `g8e eval runs verify --require-observation` makes provider-observation coverage a fail-closed verification requirement. Model provenance is similarly interim by default and becomes fail-closed when `g8e eval runs verify --require-provenance` is used. On `g8e eval rollout run`, `--require-witness` defaults true and enables both strict witness requirements; on `g8e eval runs start` it remains opt-in.
-
-**5. Same pattern as tool scenarios.** Governed tool assignments require an independent observer that cannot mutate the target. Provider-boundary observation and model provenance apply the same separation to inference-side hardware telemetry and storage-side weight attestation.
-
-### Evaluation witness roles
-
-g8e uses distinct witness mechanisms for native boundary tests and model campaigns:
+g8e uses distinct witness mechanisms:
 
 | Name | Where it runs | Purpose |
 | --- | --- | --- |
-| **Native target reader** | Ephemeral campaign-host process invoked from `eval/native-boundary-compose.yml` | Networkless target-state read for the native `core-execution-boundary@1.0.0` suite only; not a unified-stack service or Operator |
+| **Native target reader** | Ephemeral campaign-host process from `eval/native-boundary-compose.yml` | Networkless target-state read for native `core-execution-boundary@1.0.0` suite only; not a unified-stack service or Operator |
 | **Observer Operator** | Provider host (`g8e operator start --provider-boundary-observer-enabled`) | Enrolled read-only remote Operator for provider-boundary GPU/RAM telemetry during scored model campaigns |
 | **Provenance Operator** | Model storage site (`g8e operator start --provenance-operator-enabled --model-storage-root <path>`) | Enrolled remote Operator for storage-side model weight hashing and digest attestation during scored model campaigns |
 
-Only the remote Observer Operator supplies provider-boundary observation for model campaigns. The native target reader cannot satisfy hardware-efficiency requirements, and the Provenance Operator attests model files rather than GPU state.
+Only the remote Observer Operator supplies provider-boundary observation for model campaigns. The native target reader cannot satisfy hardware-efficiency requirements; the Provenance Operator attests model files rather than GPU state.
 
-### Provider-boundary Observer Operator
+**Provider-boundary Observer Operator:** Deploy on the machine that runs Ollama (for example a remote Windows GPU host), not on the Linux campaign host. When scored inference starts and ends, the Observer samples GPU VRAM, utilization, temperature, power, clocks, and system RAM. The Gateway sends `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) on the observer's pub/sub channel; the Observer publishes `ProviderBoundaryObservationCompleted` on its results channel. Gateway ingests windows for `g8e eval runs verify --require-observation`.
 
-Deploy the Observer Operator **on the machine that runs Ollama** (for example a remote Windows GPU host), not on the Linux campaign host. Enrollment and startup procedure live in the [Unified Docker Stack Guide](../guides/unified_stack.md#provider-boundary-observer-operator-windows-ollama-host).
-
-What the Observer does:
-
-1. Gateway sends `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) on the observer's pub/sub cmd channel when scored inference starts and ends.
-2. Observer samples GPU VRAM, utilization, temperature, power, clocks, and system RAM between BEGIN and FINALIZE.
-3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
-4. Gateway ingests windows for `g8e eval runs verify --require-observation`.
-
-The Observer has no Ollama management capability. Ollama owns its daemon and runner processes. Consecutive scored assignments keep the daemon resident; after a completed queue, the controller reads typed `/api/ps` residency and dispatches the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. That governed command uses the existing `OllamaBackend` HTTP client to send an empty `/api/generate` request with `keep_alive: 0` to the Operator's approved endpoint, after which the controller confirms the campaign-owned tags are absent. No external Ollama CLI is installed or required. The Observer continues to provide only independent BEGIN/FINALIZE telemetry.
+The Observer has no Ollama management capability. Consecutive scored assignments keep the daemon resident; after a completed queue, the controller dispatches model-release commands through the exact Inference Operator. That governed command sends an empty `/api/generate` request with `keep_alive: 0` to the Operator's approved endpoint; the controller confirms campaign-owned tags are absent.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
-#### Example operator output (Windows Ollama host)
+**Storage-side Provenance Operator:** Deploy at the model storage site where Ollama manifests and content-addressed weight blobs live (for example `~/.ollama/models`). On FINALIZE, the operator resolves the served tag with Ollama's canonical name parser and reads the matching manifest. The operator hashes every referenced blob and compares the manifest digest to the expected campaign model digest. The operator publishes `ModelProvenanceObservationCompleted` on its results channel.
 
-While a scored campaign runs, the Observer Operator console on the provider host shows paired BEGIN/FINALIZE cycles for `PROVIDER_BOUNDARY_OBSERVATION`. Each cycle verifies the incoming `GovernanceEnvelope`, mints and dissolves a JIT capability, appends a ledger commitment, samples GPU and system RAM, and publishes completion on the session results channel.
+**Fail closed:** If the served tag cannot be resolved, a referenced blob is missing, or observed and expected model digests do not match, FINALIZE fails and the attestation window is not published. This is independent of the Inference Operator's own digest checks — the Provenance Operator is a storage-side witness, not self-report from the inference executor.
 
-Healthy output looks like this (excerpt from a live run against remote Ollama):
+**Timing rule:** Assignments that reached a terminal state before the Provenance Operator was enrolled and pub/sub-connected will lack attestation windows. Enroll the provenance operator before `execute` when chain-of-custody claims are required.
 
-```text
-2026-09-18T08:49:23.763-07:00 INFO: Minted JIT capability
-  - message_id: 29ea0607ec447a953984ea7255867b5a386e68ade4eac2577331fba9552b33f0
-  - action_type: PROVIDER_BOUNDARY_OBSERVATION
-  - target_resource:
-  - expires_at: 2026-09-18T15:54:24Z
-2026-09-18T08:49:23.763-07:00 INFO: Executing verified transaction through Actuator
-  - event_type: g8e.v1.operator.provider.boundary.observation.requested
-2026-09-18T08:49:23.763-07:00 INFO: Provider-boundary observation started
-  - provider_attempt_id: f7607d6c-6804-4df9-af89-abfe16404212
-  - inference_transaction_id:
-2026-09-18T08:49:23.763-07:00 INFO: Dissolved JIT capability
-  - message_id: 29ea0607ec447a953984ea7255867b5a386e68ade4eac2577331fba9552b33f0
-  - action_type: PROVIDER_BOUNDARY_OBSERVATION
-2026-09-18T08:49:23.779-07:00 INFO: ActionReceipt recorded
-  - transaction_id: 29ea0607ec447a953984ea7255867b5a386e68ade4eac2577331fba9552b33f0
-  - status: EXECUTION_STATUS_COMPLETED
-...
-2026-09-18T08:49:24.185-07:00 INFO: Publishing result
-  - channel: results:02da84b2-ec05-421d-8b50-778dbbcad68f:cb0fc6ba-52d9-4fcf-a854-dde9f99592ff
-  - event_type: g8e.v1.operator.provider.boundary.observation.completed
-  - id: e9f93e9bb84e7f9d0a3743958b8048ef09292009c10d1297c3c19fa36003c9a4
-2026-09-18T08:49:24.185-07:00 INFO: Provider-boundary observation completion transmitted
-  - operator_session_id: cb0fc6ba-52d9-4fcf-a854-dde9f99592ff
-  - provider_attempt_id: f7607d6c-6804-4df9-af89-abfe16404212
-  - transaction_id: e9f93e9bb84e7f9d0a3743958b8048ef09292009c10d1297c3c19fa36003c9a4
-2026-09-18T08:49:24.185-07:00 INFO: Provider-boundary observation completed
-  - provider_attempt_id: f7607d6c-6804-4df9-af89-abfe16404212
-  - sample_count: 2
-  - observation_digest: 6ccbf0a05dd150f8ff97b74ee03f6cbc9ac9dc9ae7f288fb5381cc73af7c7361
-...
-2026-09-18T08:49:24.275-07:00 INFO: Provider-boundary observation started
-  - provider_attempt_id: d8e52fc2-2f43-41ab-94a6-50a0c171147c
-  - inference_transaction_id:
-...
-2026-09-18T08:49:26.953-07:00 INFO: Provider-boundary observation completed
-  - provider_attempt_id: d8e52fc2-2f43-41ab-94a6-50a0c171147c
-  - sample_count: 6
-  - observation_digest: cb3ed7e0c112021ad22bb3bf01c9f203a0ae2cb67005507a8d0f3185bf6baf3f
-...
-2026-09-18T08:49:27.002-07:00 INFO: Provider-boundary observation started
-  - provider_attempt_id: c497dfc0-55ab-4bb8-a10a-5d0e5c210393
-  - inference_transaction_id:
-2026-09-18T08:49:27.008-07:00 INFO: Actuator execution succeeded
-  - message_id: 115392cc60037b05166607eb97ab571acdbca1ace1258d2886cac5061dc50d81
-  - receipt_status: EXECUTION_STATUS_COMPLETED
-```
+### Evidence and verification
 
-What to verify:
+**Storage layout:** Native run evidence (`report.json`, `verification.json`, digest-named artifacts) persists under `.g8e/data/eval/runs/<run-id>/` owned by `g8e eval boundary run` and `g8e eval boundary verify`. Campaign definitions and frozen scenario artifacts persist under `.g8e/data/eval/campaigns/<campaign-id>/`. Campaign run state and results persist under `.g8e/data/eval/runs/<run-id>/` (campaign-scoped lifecycle, assignment, trace, and aggregate records). Provider observation windows ingested from Observer Operator persist under the Gateway volume at `data/inference/provider-observer/windows/`. Model provenance attestation windows ingested from Provenance Operator persist under `data/inference/model-provenance/windows/`.
 
-- **BEGIN** lines (`Provider-boundary observation started`) arrive when scored inference starts for a `provider_attempt_id`.
-- **FINALIZE** lines (`Provider-boundary observation completed`) include `sample_count` and `observation_digest` for the same `provider_attempt_id`.
-- Every transaction ends with `Actuator execution succeeded` and `receipt_status: EXECUTION_STATUS_COMPLETED`.
-- `Publishing result` uses event type `g8e.v1.operator.provider.boundary.observation.completed` on the session `results:` channel.
+Native verification is owned by `g8e eval boundary verify`. Campaign verification is owned by `g8e eval runs verify`, with `--require-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing.
 
-If you see only BEGIN without matching FINALIZE for an attempt, or repeated `EXECUTION_STATUS_EXECUTING` without `COMPLETED`, check Gateway connectivity and that the campaign `execute` process is still running.
+**Public spectator projection:** The checked-in evaluation explorer reads canonical native and campaign projections from persisted runs. A public-safe projector omits principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields before records enter the signed public feed. Native verification remains on the owner path; mirror availability is not verification evidence. See [Public Spectator Architecture](./public_spectator.md).
 
-### Storage-side Provenance Operator
+Campaign assignment results use the enriched campaign projection envelope (`1.1.0`) for new records with named public extensions: scenario context, deterministic and semantic grade summaries, typed activity families, bounded resource metrics, verification metadata, and lowercase SHA-256 evidence bindings. Scenario descriptions and criterion labels come from the exact persisted campaign/catalog bindings; private prompts, gold answers, trace text other than the bounded `model_response` and `failure_output` extensions, execution identifiers, receipt bodies, and artifact locations do not cross the boundary.
 
-Deploy the Provenance Operator **at the model storage site** — the directory tree that holds Ollama manifests and content-addressed weight blobs. On a typical Ollama deployment this is the same physical host as the Observer (`~/.ollama/models`), but it enrolls as a **separate** governed session with `--provenance-operator-enabled`. Enrollment and startup procedure live in the [Unified Docker Stack Guide](../guides/unified_stack.md#storage-side-provenance-operator).
+Assignment activity preserves the distinction between an observed empty list, unavailable source capture, and scenario-not-applicable. Resource metrics preserve an observed zero and identify unavailable token, retry, or latency values explicitly. The closed public unavailable-reason vocabulary is `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`.
 
-What the Provenance Operator does:
+Current campaign aggregate records use Evaluation Explorer view schema `1.5.0`. The `evaluation_summary` projection emits typed pass-rate, scored-inference latency p50, and output-throughput p50 metrics with units and observed, eligible, and unavailable contributor counts. A passing campaign verification report publishes `quality_state: exploratory_verified` only for the exact run-derived dataset and eligible `(variant_id, role)` aggregate covered by the verified population. Other datasets, roles, incomplete populations, failed reports, and mismatched bindings remain at their existing quality state, normally `exploratory_partial` or `unavailable`. `exploratory_verified` means the named run evidence passed the verifier's scope; it does not mean universal model quality, complete optional telemetry, or `verified_public`.
 
-1. Gateway sends `ModelProvenanceObservationCommand` (BEGIN/FINALIZE) on the provenance operator's pub/sub cmd channel when scored inference starts and ends. BEGIN carries `served_model_tag`, `expected_model_digest`, `model_registry_digest`, and `campaign_id` from the frozen campaign registry.
-2. On FINALIZE, the operator resolves the served tag with Ollama's canonical name parser and reads the matching manifest under `--model-storage-root`. Untagged aliases such as `glm-5.3-flash` resolve to `manifests/registry.ollama.ai/library/<name>/latest`; tagged library models such as `qwen3.8:27b` and registry namespaces such as `Impulse2000/smollm3:3b-q4_k_m` resolve under their namespace; Hugging Face deep pulls such as `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M` resolve under `manifests/huggingface.co/...`. The operator hashes every referenced blob and compares the manifest digest to the expected campaign model digest.
-3. The operator publishes `ModelProvenanceObservationCompleted` on its results channel.
-4. Gateway ingests attestation windows under `data/inference/model-provenance/windows/` for campaign verification.
+## Anti-patterns
 
-**Fail closed:** If the served tag cannot be resolved, a referenced blob is missing, or observed and expected model digests do not match, FINALIZE fails and the attestation window is not published. This is independent of the Inference Operator's own digest checks — the Provenance Operator is a storage-side witness, not a self-report from the inference executor.
+- Deploying Observer Operator on the campaign host instead of the provider host where Ollama and GPU hardware run.
+- Passing `--inference-enabled` on witness-only Operator sessions; witness sessions must enroll with only capability flags for observation or provenance.
+- Hand-editing frozen campaign digests or model inventories instead of running `g8e eval models freeze` to re-attest provider state.
+- Running scored campaigns without witness operators enrolled when `--require-witness` or rollout defaults are active, resulting in failed verification.
+- Updating placeholder model digests without re-freezing from the provider; placeholder digests lack provenance authority for attestation.
+- Omitting pre-campaign `g8e eval models freeze` after adding new models, resulting in stale or unverified digests.
+- Assuming the Inference Operator's digest checks alone prove model integrity; the Provenance Operator provides independent storage-side attestation.
 
-**Timing rule:** Assignments that reached a terminal state before the Provenance Operator was enrolled and pub/sub-connected will lack attestation windows. Enroll the provenance operator before `execute` when chain-of-custody claims are required. Restart the Provenance Operator after upgrading g8e when manifest-resolution behavior changes.
-
-#### Example operator output (provenance)
-
-While a scored campaign runs, the Provenance Operator console shows paired BEGIN/FINALIZE cycles for `MODEL_PROVENANCE_OBSERVATION`:
-
-```text
-INFO: Model provenance observation started
-  - provider_attempt_id: f7607d6c-6804-4df9-af89-abfe16404212
-  - served_model_tag: gemma4:e4b
-  - expected_model_digest: 9ce994a6bd3c0985667bac5cdeddbdbba3d1553570a52fe6cad2225ab159d318
-INFO: Model provenance observation completed
-  - provider_attempt_id: f7607d6c-6804-4df9-af89-abfe16404212
-  - served_model_tag: gemma4:e4b
-  - observed_model_digest: 9ce994a6bd3c0985667bac5cdeddbdbba3d1553570a52fe6cad2225ab159d318
-  - attestation_digest: a1b2c3...
-INFO: Model provenance observation completion transmitted
-  - event_type: g8e.v1.operator.model.provenance.observation.completed
-```
-
-What to verify:
-
-- **BEGIN** lines include the correct `served_model_tag` and `expected_model_digest` for the frozen campaign model.
-- **FINALIZE** lines show `observed_model_digest` matching `expected_model_digest` and a non-empty `attestation_digest`.
-- `Publishing result` uses event type `g8e.v1.operator.model.provenance.observation.completed` on the session `results:` channel.
-
-If FINALIZE fails with `invalid served model tag` or `manifest not found`, confirm the alias exists on the provider (`ollama list`), that HF staging or `ollama create` completed, and that `--model-storage-root` points at the host's Ollama model tree. If preflight reports `digest mismatch`, re-freeze the provider inventory and rebuild campaign inventories before execute.
-
-See [Model Provenance](model-provenance.md) for the full zero-trust weight attestation architecture.
-
----
-
-## Evidence and verification
-
-### Storage layout
-
-| Artifact | Path | Owner |
-| --- | --- | --- |
-| Native run report and verification | `.g8e/data/eval/runs/<run-id>/report.json`, `verification.json`, digest-named evidence | `g8e eval boundary run` / `g8e eval boundary verify` |
-| Campaign definitions and frozen scenario artifacts | `.g8e/data/eval/campaigns/<campaign-id>/` | `g8e eval campaigns create` |
-| Campaign run state and results | `.g8e/data/eval/runs/<run-id>/` (campaign-scoped lifecycle, assignment, trace, and aggregate records) | `g8e eval runs …` |
-| Provider observation windows (ingested) | Gateway volume under `data/inference/provider-observer/windows/` | Gateway ingest from Observer Operator results |
-| Model provenance attestation windows (ingested) | Gateway volume under `data/inference/model-provenance/windows/` | Gateway ingest from Provenance Operator results |
-
-Native verification is owned by `g8e eval boundary verify`. Campaign verification is owned by `g8e eval runs verify`, with `--require-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing. Model provenance attestation windows are verified through the campaign assignment verifier when strict provenance policy is enabled (see [Model Provenance](model-provenance.md)).
-
-### Public spectator projection
-
-The checked-in evaluation explorer reads canonical native and campaign projections from persisted runs. A public-safe projector omits principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields before records enter the signed public feed. Native verification remains on the owner path; mirror availability is not verification evidence. See [Public Spectator Architecture](./public_spectator.md).
-
-Campaign assignment results use the enriched campaign projection envelope (`1.1.0`) for new records while historical result envelopes (`1.0.0`) remain readable. The enriched assignment record combines canonical protobuf JSON with named public extensions: scenario context, deterministic and semantic grade summaries, typed activity families, bounded resource metrics, verification metadata, and lowercase SHA-256 evidence bindings. Scenario descriptions and criterion labels come from the exact persisted campaign/catalog bindings; private prompts, gold answers, trace text other than the bounded `model_response` and `failure_output` extensions, execution identifiers, receipt bodies, and artifact locations do not cross the boundary.
-
-Assignment activity preserves the distinction between an observed empty list, unavailable source capture, and scenario-not-applicable. Resource metrics preserve an observed zero and identify unavailable token, retry, or latency values explicitly. Reported tool and policy outcomes are application evidence, not independent protocol authorization or schema-validation claims. Evidence bindings identify approved content-addressed artifacts only; a binding does not prove that the artifact is publicly accessible or individually verified.
-
-Current campaign aggregate records use Evaluation Explorer view schema `1.5.0`. The `evaluation_summary` projection emits typed pass-rate, scored-inference latency p50, and output-throughput p50 metrics with units and observed, eligible, and unavailable contributor counts. Model-role campaign summaries identify `evaluation_unit: "model"`, omit heterogeneous system-only metrics, begin with `verifier_state: "not_run"`, and carry bound report metadata only after an applicable persisted verification result is published. A fresh campaign export writes the same projector-owned record to `evaluation_summary.json`, preserving headline values, coverage, unavailable reasons, verifier state, and report and population bindings without recomputation. Historical view schemas remain readable by the explorer, but new Go projections use only the current schema.
-
-A passing campaign verification report is applicable only when its run, campaign, catalog, model registry, completed population, and verified population match the persisted evidence. When applicable, publication emits report-scoped `exploratory_verified` model-summary revisions for each eligible dataset/variant/role aggregate and republishes verified assignment results. Existing runs can be backfilled through verified catch-up even when the run-level verification summary idempotency key already exists; distinct report-scoped model keys prevent that summary from suppressing model revisions. The catch-up path probes the gateway-owned mirror and resets stale host publication idempotency when the canonical dataset is absent, so a wiped mirror can be restored without editing host state. Failed or inapplicable verification never promotes model quality.
-
-### Public assignment result and quality vocabulary
-
-New terminal assignment results use campaign projection envelope `1.1.0` with `message_type: "PublicAssignmentResultProjection"`. The envelope keeps canonical protobuf JSON in `record` and adds named public extensions for `scenario_summary`, `semantic_grade_summaries`, `activity_summary`, `benchmark_observations`, `resource_summary`, `verification_metadata`, and `evidence_bindings`, plus the optional model-text extensions `model_response` and `failure_output`. Lifecycle envelopes remain `1.0.0`, and readers continue to accept historical assignment-result envelopes from `1.0.0` without enriching or rewriting them.
-
-The public assignment projection contains approved scenario identity and description, closed criterion and grade metadata, grouped model/tool/policy/governed-action activity, bounded scored-inference resource observations, verification disposition, and approved lowercase SHA-256 content bindings. The optional `model_response` extension carries the model's designated-role output from the assignment trace, and `failure_output` carries the recorded error, failure output, or non-`stop` finish reason when the assignment did not complete; both are bounded to 256 KiB by the public validator, which also rejects private-key and SPIFFE markers but does not otherwise redact model text. It does not contain prompts, reasoning, private grade detail, call or transaction identifiers, receipt bodies, provider identities, filesystem paths, or private artifact locations. Reported application tool and policy outcomes do not prove protocol authorization, schema validity, or prevented disclosure.
-
-Activity families distinguish `observed` with an empty record list, `unavailable` with a typed reason, and `not_applicable` for a scenario that does not define that family. The closed public unavailable-reason vocabulary is `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. Resource metrics preserve observed zero and use the same vocabulary when a contributing value is unavailable; no scored calls are unavailable rather than zero. The latency value is the validated elapsed span across the scored inference population, not a lifecycle duration or a sum of call durations.
-
-Model quality verification is run-scoped and bucket-scoped. An applicable passing report publishes `quality_state: exploratory_verified` only for the exact run-derived dataset and eligible `(variant_id, role)` aggregate covered by the verified population. Other datasets, roles, incomplete populations, failed reports, and mismatched bindings remain at their existing quality state, normally `exploratory_partial` or `unavailable`. Historical measurements whose older verifier result does not satisfy the current evidence and verification contract use `legacy_unverified`; they remain visible but never appear as currently verified. `exploratory_verified` means that the named run evidence passed the verifier's scope; it does not mean universal model quality, complete optional telemetry, or `verified_public`. The browser and exports consume the stored revision and never infer or promote quality from an assignment row, run ID, or another dataset.
-
----
-
-## Implementation
-
-Platform evaluation logic lives in `internal/services/evaluation/`:
-
-- Native suite registry, governed command lane, and deterministic grading
-- Independent target observer for the execution-boundary suite
-- Campaign controller, publication coordinator, provider-boundary observation integration, and model provenance verification
-- Canonical evidence storage and fail-closed verification
-
-Provider-boundary sampling runs in the Observer Operator through `internal/services/operatorcapability/provider_boundary_observer.go` and `internal/services/inference/provider_observer/`. Storage-side model weight attestation runs in the Provenance Operator through `internal/services/operatorcapability/provenance_operator.go` and `internal/services/inference/model_provenance/`. Campaign-owned model release uses typed residency reads and governed model commands through the exact Inference Operator in `internal/services/evaluation/ollama_service.go`. Protocol contracts are defined under `protocol/proto/g8e/eval/v1/`.
-
----
-
-## Related documentation
+## Links out
 
 - [Position Paper](../core/position_paper.md) — Research framing for confidential edge execution and governed state mutation
 - [Unified Docker Stack Guide](../guides/unified_stack.md) — Compose profiles, enrollment order, campaign workflows, and troubleshooting
+- [Sovereignty Gauntlet](../guides/sovereignty_gauntlet.md) — Evidence-oriented demonstration and claim-scoping workflow
 - [Ensemble Evaluations](../ensemble/evals.md) — How g8ee uses g8e evals through the production chat path
 - [Ensemble (g8ee)](./ensemble.md) — g8ee's role in the platform and trust boundaries
 - [Model Provenance](./model-provenance.md) — Zero-trust weight attestation, Provenance Operator enrollment, and chain of custody
 - [Gateway Architecture](./gateway.md) — Inference dispatch, provider-boundary coordination, and pub/sub
 - [Operator Architecture](./operator.md) — L4 Warden, L5 Actuator, and capability flags
+- [Governance Architecture](./governance.md) — Five-layer verification pipeline and fail-closed enforcement
 - [Public Spectator Architecture](./public_spectator.md) — Public-safe evaluation projections and explorer contract
-- [Sovereignty Gauntlet](../guides/sovereignty_gauntlet.md) — Evidence-oriented demonstration and claim-scoping workflow
