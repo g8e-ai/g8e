@@ -2,99 +2,190 @@
 
 **Give AI systems a governed path to real infrastructure—without giving them direct authority over it.**
 
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![FIPS 140-3](https://img.shields.io/badge/FIPS%20140--3-Go%20Cryptographic%20Module-006400.svg)](docs/reference/fips140-3.md) [![MCP](https://img.shields.io/badge/MCP-governed-5D3FD3.svg)](protocol/docs/mcp.md)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Version](https://img.shields.io/badge/version-v2.2.3-green.svg)](VERSION) [![FIPS 140-3](https://img.shields.io/badge/FIPS%20140--3-Go%20Cryptographic%20Module-006400.svg)](docs/reference/fips140-3.md) [![MCP](https://img.shields.io/badge/MCP-governed-5D3FD3.svg)](protocol/docs/mcp.md)
 
-g8e is a zero-trust execution and evidence platform for AI agents, operators, and the systems they act on. An AI client proposes intent. A central **Gateway** authenticates the request and applies policy. A host-side **Operator** independently verifies the exact transaction before it executes anything, then records signed evidence at the execution boundary.
+g8e is a zero-trust execution and evidence platform for AI agents, human operators, and distributed target runtimes. An AI client or operator proposes typed intent. A central **Gateway** authenticates the ingress, binds identity and state roots, and screens policy. A host-side **Operator** on the target machine independently verifies the exact transaction before executing anything, mints a short-lived capability, and records signed cryptographic receipts and commitment chains at the local execution boundary.
 
-> **The short version:** the model can ask, but it cannot directly act. The machine that owns the data keeps final control.
+> **The core principle:** the model can ask, but it cannot directly act. The machine that owns the data retains sovereign execution authority.
 
-[Quick start](#quick-start) · [How it works](#how-g8e-works) · [Explore the suite](#the-suite) · [Architecture](docs/architecture/overview.md) · [Documentation](#find-your-next-step) · [Roadmap](ROADMAP.md) · [Protocol](protocol/docs/spec.md)
+[Quick Start](#quick-start) · [How It Works](#how-it-works) · [Platform Architecture](#the-platform-suite) · [Capabilities](#what-the-platform-can-do) · [Workflows](#common-operational-workflows) · [Documentation](#find-your-next-step) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md)
+
+---
 
 ## Why g8e exists
 
-Most agent integrations collapse four different responsibilities into one process: reasoning, authorization, execution, and logging. That makes a prompt, application approval, or model decision dangerously close to a production side effect.
+Traditional AI agent frameworks collapse four separate responsibilities into a single process: reasoning, authorization, execution, and audit logging. Giving an LLM or autonomous agent direct shell access, long-lived API keys, or unrestricted MCP tools turns every prompt, heuristic, or model decision into an unverified production side effect.
 
-g8e separates those responsibilities:
+g8e enforces a strict separation of concerns across distributed trust boundaries:
 
-- **AI systems express intent; they do not authorize mutation.** Model output, g8ee Tribunal votes, application approvals, memory, and events remain outside protocol authorization.
-- **The Gateway decides whether work may proceed.** It is the Policy Decision Point for identity, PKI, current state, and the L1-L3 policy layers.
-- **The target Operator decides whether work may execute there.** It is the sovereign Policy Execution Point for its own runtime and independently re-verifies every required proof.
-- **Evidence stays anchored where execution happened.** The executing Operator owns the authoritative local receipt and audit record; a Gateway copy is a verified, best-effort mirror.
-- **Managed hosts need no inbound control port.** Remote Operators initiate outbound-only mTLS connections and pull work from session-specific channels.
+- **AI systems express intent; they do not authorize mutation.** Model output, prompt chains, agentic ensemble debates, memory states, and application approvals remain strictly outside protocol authorization.
+- **The Gateway governs admission.** Acting as the central Policy Decision Point (PDP), the Gateway authenticates principals, manages platform PKI, enforces L1 Doctrine screening, coordinates L2 Consensus deliberation, and manages L3 Notary approval suspensions.
+- **The target Operator governs execution.** Acting as the sovereign Policy Execution Point (PEP) on the managed machine, the Operator independently re-runs L1, verifies required L2 and L3 proofs at its L4 Warden, and controls execution through its L5 Actuator. Gateway admission cannot force execution on a remote host.
+- **Evidence anchors at the execution boundary.** The executing Operator owns the authoritative local SQLite audit database, signed action receipts, and tamper-evident commitment chains. Gateway copies are best-effort coordination projections.
+- **Target hosts require zero inbound control ports.** Remote Operators connect to the Gateway over outbound-only mTLS WebSockets and pull work strictly from session-specific channels.
+- **Explicit disclosure and data boundaries.** Bounded scrubbing masks sensitive tokens before transport, and registered secrets are rehydrated only at the local L5 Actuator execution boundary.
 
-The boundary governs operations that traverse g8e. It does not sandbox an AI process or govern native tools, direct network access, or other side channels that remain enabled outside the platform.
+The g8e boundary governs operations that traverse the platform. It does not sandbox external client processes or block unmanaged side channels outside g8e.
 
-## The suite
+---
 
-The repository is a polyglot platform, not a single agent or dashboard.
+## How it works
 
-| Part | What it does | Trust position |
-| --- | --- | --- |
-| **g8eg · Governance Gateway** | Authenticates ingress, owns PKI and platform coordination state, constructs or admits canonical transactions, applies L1-L3 policy, exposes MCP/A2A and platform APIs, and brokers work to exact Operator sessions. It also contains an embedded Operator for actions against the Gateway runtime itself. | Core Policy Decision Point. It coordinates work but cannot bypass a remote Operator's verification. |
-| **g8eo · Governed Operator** | Runs beside the resources it governs, opens an outbound-only mTLS connection, re-runs or verifies L1-L4, performs L5 execution, and stores authoritative local evidence. The same Go binary can run as a data, inference, observer, or provenance Operator with explicit capabilities. | Core Policy Execution Point and sole g8e authority for mutation in its own runtime. |
-| **g8ee · Agentic Ensemble** | Provides conversational triage, model selection, ReAct tool loops, the five-member Tribunal, command generation, cases, investigations, memory, and model telemetry. | Optional, untrusted first-party application. Its reasoning and approvals never replace protocol L2 or L3. |
-| **g8ed · Dashboard** | Serves a framework-free browser application and enrolls a separate dashboard workload identity. | Optional, untrusted interface. The current in-tree runtime is a limited static host, not a complete operations backend; see [Browser surfaces](#browser-surfaces). |
-| **g8e Protocol** | Publishes protobuf contracts, canonical protojson models, constants, receipt verification, workload identities, and Go/Python packages for compatible clients and services. | Canonical wire contract shared by the suite. |
-| **Evaluation and evidence tools** | Exercise the real Gateway/Operator boundary, orchestrate governed model campaigns, verify content-addressed evidence, and publish allowlisted public projections. | Verification tooling; it measures specific artifacts and deployments rather than granting execution authority. |
-
-The Gateway and Operator are modes of one statically linked Go binary. g8ee is a Python 3.12/FastAPI service. g8ed is a JavaScript application served by Node.js 22/Express 5.
-
-## How g8e works
+### The transaction pipeline
 
 ```mermaid
 flowchart LR
-    Client[Human, AI client, or g8ee] -->|typed intent| Gateway[Gateway · PDP]
+    Client[Human, AI Agent, or g8ee] -->|typed intent| Gateway[Gateway · PDP]
     Gateway -->|L1 Doctrine| L1[Technical hard gates]
-    L1 -->|L2 when required| L2[K-of-N Ed25519 authorization]
-    L2 -->|L3 when required| L3[Human authorization]
-    L3 -->|one bound session| Operator[Operator · PEP]
+    L1 -->|L2 when required| L2[K-of-N Ed25519 quorum]
+    L1 -->|L3 when required| L3[WebAuthn / passkey notary]
+    L2 & L3 -->|outbound-only mTLS| Operator[Operator · PEP]
     Operator -->|L4 Warden| Verify[Independent local verification]
     Verify -->|L5 Actuator| Target[Operator-visible runtime]
-    Target --> Receipt[Signed local receipt and evidence]
+    Target --> Receipt[Signed local receipt & commitment]
     Receipt -.->|verified best-effort mirror| Gateway
 ```
 
-A governed mutation follows one transaction path:
+Every governed mutation traverses a deterministic, fail-closed transaction lifecycle:
 
-1. A human, AI client, application, or g8ee submits typed intent through an authenticated Gateway surface.
-2. The Gateway binds principal identity, target, typed payload, current state root, nonce, expiry, and policy evidence into a canonical `GovernanceEnvelope`.
-3. The active governance posture determines whether machine authorization at L2 and human authorization at L3 are required.
-4. The Gateway routes work to one exact Operator session. Work is never broadcast.
-5. That Operator recomputes the transaction hash, re-runs L1, verifies required L2/L3 proofs, checks expiry, replay state, target identity, and state binding, then either rejects the transaction or passes it to the Actuator.
-6. Before a side effect, the Actuator signs and persists an `EXECUTING` receipt and commitment. It executes with a transaction-bound, short-lived capability, then signs and persists the final outcome and durability attestation.
-
-The Gateway's embedded Operator executes only against the Gateway process's runtime. A remote Operator executes only against the runtime visible to that Operator process. In the root Docker Compose stack, the Gateway and Data Operator are separate containers; neither can inspect or mutate the Docker host unless a deployment explicitly grants that access.
+1. **Ingress:** A client submits typed intent via MCP (`POST /mcp` or stdio), A2A (`POST /a2a`), governed HTTP command relay, or direct protobuf envelope.
+2. **Canonical Envelope:** The Gateway binds the principal identity (SPIFFE URI), target Operator session, typed payload, current state Merkle root, cryptographic nonce, expiration, and governance metadata into a canonical `GovernanceEnvelope` (protocol version 2) with a deterministic SHA-256 transaction hash.
+3. **PDP Screening:** The Gateway evaluates L1 Doctrine rules. If the active posture requires machine consensus (L2), member deliberators evaluate the transaction and sign `<tx_hash>|<decision>`. If human authorization (L3) is required for a mutation, the transaction suspends awaiting WebAuthn passkey assertion or signed CLI proof.
+4. **Session-Bound Routing:** The Gateway dispatches the verified envelope over an outbound-only mTLS WebSocket to the exact session channel `cmd:<operator_id>:<operator_session_id>`. Transactions are never broadcast.
+5. **L4 Warden Verification:** The target Operator pulls the envelope, reserves the nonce in durable storage to prevent replay races, checks expiration, decodes the typed protobuf payload, independently re-runs L1 Doctrine, recomputes the transaction hash (`tx_hash == envelope.id == recomputed_hash`), verifies the state Merkle root against the Gateway, and verifies posture-required L2 and L3 cryptographic proofs.
+6. **L5 Actuator Execution:** Before invoking any handler, the Actuator signs and persists an initial `EXECUTING` receipt, appends a signed commitment to the SQLite chain, rehydrates scrubbed secret tokens at the local site, and mints a short-lived, transaction-bound capability. It dispatches the handler, dissolves the capability, captures the post-execution state root, and persists a final signed `COMPLETED` or `FAILED` receipt with durability attestation before mirroring it to the Gateway.
 
 ### The five-layer interlock
 
-| Layer | Owner | Purpose |
+| Layer | Owner | Responsibility |
 | --- | --- | --- |
-| **L1 · Doctrine** | Gateway and Operator | Typed payload validation, forbidden-pattern rules, and MITRE ATT&CK-oriented threat detection. Always enforced. |
-| **L2 · Consensus** | Gateway decision, Operator verification | K-of-N Ed25519 votes from enrolled members over the exact transaction hash and decision. This is protocol authorization, not Byzantine consensus or model voting. |
-| **L3 · Notary** | Gateway decision, Operator verification | Transaction-bound human authorization through WebAuthn or a signed CLI proof for mutations when required. |
-| **L4 · Warden** | Operator | Final fail-closed check of hash integrity, target, expiry, nonce replay, state root, typed payload, doctrine, and posture-required proofs. |
-| **L5 · Actuator** | Operator | The singular execution boundary: pre-execution receipt, commitment, JIT capability, dispatch, final receipt, and persistence attestation. |
+| **L1 · Doctrine** | Gateway and Operator | Technical hard gates: typed payload validation, forbidden-pattern detection, and MITRE ATT&CK-oriented threat heuristics (reverse shells, privilege escalation, destructive disk operations, credential theft). Screened on Gateway admission and independently re-evaluated locally by the executing Operator. |
+| **L2 · Consensus** | Gateway coordination, Operator verification | K-of-N Ed25519 multi-signature cryptographic authorization over `<tx_hash>\|<decision>` from enrolled member keys. Evaluates deterministic policy compliance; distinct from LLM voting or distributed Byzantine consensus. |
+| **L3 · Notary** | Gateway coordination, Operator verification | Transaction-bound human authorization for mutations. Gateway workflows suspend for WebAuthn/FIDO2 hardware passkeys; remote Operator CLI workflows verify signed Ed25519 approval proofs bound to the transaction hash. Read-only actions bypass L3. |
+| **L4 · Warden** | Executing Operator | Sovereign pre-dispatch verification gate. Reserves nonces against replay, verifies expiry, decodes typed payloads, runs local L1 Doctrine, validates state Merkle roots, recomputes transaction hashes, and verifies posture-required L2/L3 proofs. Rejections fail closed and release the nonce. |
+| **L5 · Actuator** | Executing Operator | The singular execution boundary. Signs and persists `EXECUTING` receipts, appends signed commitments to the SQLite ledger, rehydrates scrubbed secrets locally, mints short-lived transaction capabilities, dispatches typed handlers, dissolves capabilities, and signs final `COMPLETED` or `FAILED` receipts with persistence attestations. |
 
 ### Governance postures
 
-| Posture | L1 Doctrine | L2 Consensus | L3 Notary for mutations | Typical use |
-| --- | --- | --- | --- | --- |
-| `doctrine` (default) | Enforced | Audited | Audited | Local development and CI |
-| `consensus` | Enforced | Enforced | Audited | Automated workflows requiring cryptographic multi-member authorization |
-| `ratify` | Enforced | Audited | Enforced | Human-authorized workflows without required L2 quorum |
-| `notary` | Enforced | Enforced | Enforced | Workflows requiring both L2 quorum and human authorization |
+The platform operates under one of four immutable governance postures, configured at Gateway startup via `--posture`:
 
-Transaction hash integrity, nonce replay protection, expiry, state-root validation, action typing, payload decoding, and L1 Doctrine fail closed in every posture. Read-only actions do not require L3. See [Governance](docs/architecture/governance.md) for exact semantics.
+| Posture | L1 Doctrine | L2 Consensus | L3 Notary (Mutations) | Intended Environment |
+| --- | --- | --- | --- | --- |
+| `doctrine` (default) | Enforced | Audited | Audited | Local development, testing, and automated CI pipelines |
+| `consensus` | Enforced | Enforced | Audited | Multi-agent autonomous workflows requiring cryptographic quorum |
+| `ratify` | Enforced | Audited | Enforced | Human-supervised operations requiring WebAuthn/passkey sign-off |
+| `notary` | Enforced | Enforced | Enforced | Regulated production systems requiring both cryptographic quorum and human sign-off |
+
+Fail-closed universal gates enforced across every posture: transaction hash integrity, nonce replay prevention, timestamp expiration, state Merkle root validation, action type validation, and L1 Doctrine screening. See [Governance Architecture](docs/architecture/governance.md) for full specifications.
+
+---
+
+## The platform suite
+
+g8e is a polyglot platform combining a single statically linked Go binary with first-party Python, JavaScript, and protocol modules:
+
+| Component | Implementation | Primary Role | Trust Boundary |
+| --- | --- | --- | --- |
+| **g8eg · Governance Gateway** | Go (`g8e gw start`) | Policy Decision Point (PDP). Exposes REST, MCP, and A2A APIs, manages the 4-tier PKI hierarchy, enforces L1-L3 policies, brokers outbound-only pub/sub channels, and hosts an embedded Operator for Gateway-local actions. | Core PDP. Coordinates policy and routes work, but cannot bypass a remote Operator's verification gates. |
+| **g8eo · Governed Operator** | Go (`g8e operator start`) | Policy Execution Point (PEP). Runs directly on the target host, opens an outbound-only mTLS connection to the Gateway, executes the L4 Warden and L5 Actuator pipeline, and owns sovereign local audit storage. Supports specialized roles (`data`, `inference`, `provenance`, `observer`). | Core PEP. The sole authority for mutation and audit truth within its own operating runtime. |
+| **g8ee · Agentic Ensemble** | Python 3.12 / FastAPI (`ensemble/`) | First-party conversational triage, multi-provider model routing, ReAct tool execution loops, five-member Tribunal deliberation, and case/investigation management. | Untrusted application tier. Enrolls an app workload identity; its reasoning and application approvals never replace protocol L2 or L3 gates. |
+| **g8ed · Dashboard** | Node.js 22 / Vanilla JS (`dashboard/`) | Static web host serving the operator browser interface on port 3000. Authenticates to the Gateway directly via WebAuthn passkeys. | Untrusted interface. Serves browser assets and provides workload enrollment; operational tasks use the Gateway Console. |
+| **g8e Tactical Console (TUI)** | Go (`g8e tui`) | Real-time terminal UI streaming over Gateway SSE. Visualizes L1-L5 execution stages, L2 consensus deliberations, and the sovereign audit ledger. | Authenticated operator client. Displays live pipeline events and historical records. |
+| **g8e Protocol** | Protobuf v3 / Go / Python (`protocol/`) | Defines canonical protobuf contracts, deterministic canonical protojson serialization, constants registries, workload identities, and receipt verifiers. | Shared wire contract across all suite services and external integrations. |
+| **Evaluation & Evidence Tools** | Go CLI (`g8e eval`, `g8e compliance`) | Native execution-boundary test suites, governed model campaign runners, provider-side witness verifiers, and FedRAMP 20x KSI evidence engines. | Verification tooling. Measures and proves runtime invariants against frozen criteria. |
+
+---
+
+## What the platform can do
+
+### 1. Governed AI agent integrations (MCP & A2A)
+Connect autonomous agents and AI coding assistants to real infrastructure through a governed reverse proxy:
+- **Universal MCP Server:** Run g8e as a local stdio MCP server (`g8e mcp stdio`) or stream over HTTP (`POST /mcp`) to expose 32 governed system tools to any MCP-compliant client.
+- **Built-in Agent Launchers:** Configure and run popular coding agents with delegated, short-lived identities using `g8e mcp agent run <claude|codex|devin|gemini|goose>`.
+- **MCP Proxy & Tool Governance:** Wrap and govern third-party MCP servers (`g8e mcp agent run --wrap-cmd "<cmd>"`), subjecting arbitrary tools to L1-L5 verification.
+- **Agent-to-Agent (A2A) Routing:** Expose structured JSON-RPC endpoints (`POST /a2a`) that wrap downstream agent skill invocations inside canonical `GovernanceEnvelope` transactions.
+- See [AI Agents and the g8e Boundary](docs/architecture/agents.md) and [MCP Specification](protocol/docs/mcp.md).
+
+### 2. Distributed multi-operator execution & specialized roles
+Deploy lightweight, outbound-only Operators across distributed environments with role-based segregation:
+- **Zero Inbound Attack Surface:** Operators initiate outbound TLS 1.3 mTLS connections to the Gateway and listen on no inbound network ports.
+- **Multi-Operator Coexistence:** Multiple Operator instances run safely on the same physical host, isolated by composite SHA-256 system fingerprints (`os`, `arch`, `local_dir`, `account`, `port`, `operator_role`).
+- **Four Specialized Operator Roles:**
+  - `Data Operator`: Executes governed system tools, database queries, and shell commands; maintains the execution vault and local audit ledger.
+  - `Inference Operator` (`g8ellama`): Manages local/remote LLM backends (Ollama), model registry synchronization, and model residency.
+  - `Provenance Operator`: Read-only storage witness attesting content-addressed model weight files. Hard-rejects mutating commands.
+  - `Observer Operator`: Read-only hardware witness monitoring GPU telemetry, power, temperatures, and memory residency. Hard-rejects mutating commands.
+- See [Operator Architecture](docs/architecture/operator.md) and [Connect an Operator](docs/guides/connect_operator_to_gateway.md).
+
+### 3. Native catalog of 32 governed system tools
+The Go binary compiles a native registry of 32 typed tools in `internal/services/mcp/native_tool_registry.go`, giving agents structured, governed visibility into host systems:
+
+| Category | Native Tools | Operational Capabilities |
+| --- | --- | --- |
+| **Databases** | `db_discover_topology`, `db_query_validate`, `db_isolated_read`, `db_index_triage` | Discovers database schemas, validates query safety, runs read-only queries with row limits, and inspects index performance across PostgreSQL, MySQL, and SQLite. |
+| **System & Host** | `sys_info`, `sys_oom_detect`, `sys_env_vars`, `sys_service_status`, `sys_container_status`, `sys_time_clock`, `proc_metric_top`, `proc_signal_safe`, `proc_tree` | Inspects OS details, detects OOM events, sanitizes environment variables, checks systemd/container health, inspects process trees, and dispatches safe POSIX signals. |
+| **Network & TLS** | `net_socket_audit`, `net_endpoint_ping`, `net_http_probe`, `net_dns_resolve`, `tls_cert_inspect`, `net_ssh_known_hosts` | Audits open listening sockets, pings IP/host endpoints, tests HTTP endpoints, resolves DNS records, inspects TLS certificate chains/expirations, and audits SSH known hosts. |
+| **Filesystem & Git** | `fs_disk_profile`, `fs_disk_usage`, `fs_file_checksum`, `file_read`, `git_ops`, `config_diff_mask` | Profiles directory disk usage, checks filesystem space, computes file SHA-256 digests, reads bounded text files, runs read-only Git operations, and computes masked diffs. |
+| **Cloud & K8s** | `cloud_metadata`, `k8s_inspect` | Safely queries cloud instance metadata (AWS, GCP, Azure) and inspects Kubernetes cluster pods, deployments, services, and nodes. |
+| **Execution & Audit** | `run_shell_command`, `operator_deploy`, `audit_receipt_list`, `audit_receipt_get` | Runs bounded shell commands under L1-L5 screening, coordinates remote operator deployment, and queries local signed action receipts. |
+
+### 4. Agentic Ensemble (g8ee) & The Five-Member Tribunal
+The first-party Python service provides high-level reasoning and triage while maintaining strict zero-trust boundaries:
+- **Five-Member Tribunal:** Deliberates on incoming user inquiries across five distinct specialist personas: **Architect**, **Security**, **SRE**, **QA**, and **Lead**, generating risk evaluations and command recommendations.
+- **Multi-Provider LLM Integration:** Connects to local/remote Ollama instances, Anthropic Claude, OpenAI, Google Gemini, and AWS Bedrock.
+- **ReAct Execution Loops:** Orchestrates multi-turn triage, investigations, and tool execution loops with automatic context management.
+- **Protected State Mutation:** Dispatches all host commands and application-record changes through the Gateway's governed endpoints (`POST /api/v1/operators/commands` and `POST /api/v1/governance/envelopes`).
+- See [Ensemble Architecture](docs/architecture/ensemble.md) and [Getting Started with g8ee](docs/ensemble/getting-started.md).
+
+### 5. Zero-trust security, PKI, and cryptographic vaults
+- **Strict mTLS & TLS 1.3:** All inter-service and control communications enforce mutual TLS with ECDSA P-256 certificates.
+- **Four-Tier PKI Hierarchy:** Dedicated Gateway Root CA, Hub Intermediate CA, Operator Intermediate CA, and Gateway Peer Intermediate CA with per-request CRL revocation checks.
+- **SPIFFE Workload Identities:** Every workload and session is bound to a structured SPIFFE URI (e.g. `spiffe://g8e.local/operator/...`, `spiffe://g8e.local/app/g8ee`).
+- **WebAuthn / Passkeys:** Human authorization (L3 Notary) uses hardware-backed FIDO2 passkeys for interactive browser sessions, with headless mTLS options for automated CLIs.
+- **Three-Tier Per-Runtime Vault:** Protects sensitive audit records, stdout/stderr, and diffs using AES-256-GCM (Master Key → HKDF-derived KEK → wrapped DEK).
+- **Sensitive Token Scrubbing & Rehydration:** Outbound tool outputs are scrubbed of credentials and sensitive tokens; registered secrets are securely rehydrated only at the local L5 Actuator boundary prior to execution.
+- **FIPS 140-3 Cryptographic Module:** Compatible with the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) via `GOFIPS140=v1.0.0`. See [FIPS 140-3 Reference](docs/reference/fips140-3.md).
+
+### 6. Local-First Audit Architecture (LFAA) & Verifiable Evidence
+- **Authoritative Host Storage:** Each Operator persists its own local SQLite audit database (`.g8e/data/g8e.db`), retaining sovereignty over execution records.
+- **Cryptographic Action Receipts:** The L5 Actuator signs Ed25519 receipts before dispatch (`EXECUTING`) and upon completion (`COMPLETED` or `FAILED`), attaching deterministic stage evidence and signed persistence attestations.
+- **Commitment Chains & Git Ledgers:** Consecutive executions are linked in an append-only, hash-chained SQLite commitment ledger; file mutations are recorded in an optional Git-backed file ledger.
+- **Replay Protection:** Nonces are durably reserved in persistent storage before validation to prevent replay attacks across reboots.
+- **Deterministic CSV Reports:** Export flat, verified CSV evidence files across all platform stores with cryptographic proof checks (`g8e report all`, `g8e report verify`).
+- See [Storage Architecture](docs/architecture/storage.md) and [Compliance Evidence](docs/reference/compliance-evidence.md).
+
+### 7. Compliance framework & FedRAMP 20x KSI
+- **FedRAMP 20x KSI Evaluation:** Built-in engine evaluates platform runtime state against FedRAMP 20x Key Security Indicators (KSIs) with historical snapshots (`g8e compliance ksi`).
+- **Multi-Framework Crosswalks:** Maps platform evidence to FedRAMP, NIST AI RMF, SOC 2, HIPAA, and ISO 27001 controls with COSAiS overlay catalogs.
+- **Reproducible Evidence Bundles:** Offline verification commands (`g8e compliance demo-run verify`) validate signed manifests, scenario definitions, receipts, and artifact hashes.
+- See [Compliance Alignment Reference](docs/reference/compliance-alignment.md).
+
+### 8. Turnkey demo environments & air-gapped deployments
+- **Domain-Specific Demos:** Sealed, isolated Docker Compose environments demonstrating end-to-end governance in regulated scenarios:
+  - `healthcare`: Clinical record governance and HIPAA safeguards.
+  - `finance`: Transaction controls and SOX compliance evidence.
+  - `dhs`: Critical mission safeguards and threat detection.
+  - `fedramp`: Baseline cloud security and KSI continuous monitoring.
+- **Air-Gapped Tooling:** Pre-pull, export, and import all container images to tar archives for secure air-gapped installations (`g8e demos export`, `g8e demos import`).
+- See [Air Gap Guide](docs/guides/air_gap.md).
+
+### 9. Multi-tier observer interfaces & Tactical Console (TUI)
+- **Tactical Governance Console (TUI):** Run `g8e tui` to launch a real-time terminal UI streaming live L1-L5 execution stages, L2 consensus deliberations, and ledger events.
+- **Gateway Console:** Access the operational web UI at `https://localhost:8443/console/` for WebAuthn passkey management, approval queues, workload enrollment, and audit logs.
+- **Evaluation Explorer:** Real-time web application on port 5173 for tracking model evaluation runs, residency verifications, and benchmark telemetry.
+- **Public Spectator Mirror:** Isolated, read-only mirror service on port 8082 serving allowlisted public projections and proof artifacts without direct access to the private Gateway. See [Public Spectator Architecture](docs/architecture/public_spectator.md).
+
+---
 
 ## Quick start
 
-The recommended first run is the two-phase Docker Compose deployment. It starts the Gateway, lets you enroll the first owner, then starts the Operator, g8ee, and g8ed as owner-approved workloads.
+The standard deployment uses the root Docker Compose stack, starting the Gateway, Data Operator, Inference Operator, Agentic Ensemble, and Dashboard together.
 
-### Requirements
+### Prerequisites
 
-- Docker 24.0+ with Docker Compose v2
-- A browser with WebAuthn support for interactive owner enrollment
-- Ports 8080, 8443, 8000, 3000, 8081, 8082, and 5173 available
+- Docker 24.0+ with Docker Compose v2 plugin
+- A modern browser with WebAuthn support (or use `--headless` for terminal-only enrollment)
+- Ports `8080`, `8443`, `8000`, `3000`, `5173`, `8081`, and `8082` available
 
 ### 1. Start the unified stack
 
@@ -103,230 +194,237 @@ git clone https://github.com/g8e-ai/g8e.git
 cd g8e
 cp .env.example .env
 docker compose up -d --build
-docker compose cp g8e-gateway:/g8e ./g8e && cp ./g8e bin/g8e
 ```
 
-The unified stack starts all 5 core services (Gateway, Data Operator, Inference Operator, ensemble, dashboard) together. Workloads automatically submit platform enrollment requests and wait for owner approval.
+### 2. Install the host CLI binary
 
-### 2. Enroll the first owner
+Copy the compiled `g8e` binary from the gateway container to your host:
 
 ```bash
-# Host CLI (interactive passkey):
+docker compose cp g8e-gateway:/g8e ./g8e && chmod +x ./g8e
+```
+
+*(Alternatively, download it directly over HTTP from `http://<gateway-host>:8080/.well-known/g8e/bin/g8e-linux-amd64`)*
+
+### 3. Enroll the first owner
+
+```bash
+# Interactive enrollment (opens browser for WebAuthn passkey registration):
 ./g8e auth enroll user -e localhost
 
-# Or pure Docker (headless inside container):
-docker compose exec g8e-gateway /g8e auth enroll user --headless -e localhost
+# Or headless enrollment (CLI mTLS credentials without browser ceremony):
+./g8e auth enroll user --headless -e localhost
 ```
 
-This creates the first owner, issues CLI mTLS credentials, installs the Gateway root CA with consent, and opens the passkey ceremony. For an mTLS-only CLI without browser enrollment, add `--headless`.
+This creates the first platform owner, installs the Gateway Root CA in your local trust store (interactive mode), issues mTLS client credentials, and configures the CLI.
 
-### 3. Approve the suite workloads
+### 4. Approve pending workload enrollments
+
+List pending platform workloads and approve them using your authenticated owner identity:
 
 ```bash
-# Host CLI:
 ./g8e auth enroll pending
 
+# Approve each workload (Data Operator, Ensemble, Dashboard, Inference Operator):
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <inference-operator-request-id> --yes
-
-# Or pure Docker:
-docker compose exec g8e-gateway /g8e auth enroll pending
-docker compose exec g8e-gateway /g8e auth enroll approve <request-id> --yes
 ```
 
-Each workload generates its own key material and remains unready until the owner approves that exact enrollment request. Compare component identity and fingerprints before approval.
+Each workload generates its own cryptographic keys on startup and remains unready until explicitly approved by an enrolled owner.
 
-### 4. Check the deployment
+### 5. Verify the deployment
 
 ```bash
 docker compose ps
 ./g8e gw status
 ./g8e operator list
+./g8e tui
 ```
 
-| Surface | Default address | Purpose |
-| --- | --- | --- |
-| Gateway discovery | `http://localhost:8080` | Health, trust discovery, bootstrap, and enrollment |
-| Gateway API and MCP | `https://localhost:8443` | Authenticated platform API; MCP is at `/mcp` |
-| Gateway Console | `https://localhost:8443/console/` | Operational passkey, approval, enrollment, and audit UI |
-| g8ee API | `http://localhost:8000` | First-party agentic application API |
-| g8ed | `http://localhost:3000` | Limited first-party static dashboard runtime |
+### Platform network surfaces
 
-For prerequisites, non-default ports, automated bootstrap, evaluation profiles, enrollment order, and troubleshooting, use the [Getting Started guide](docs/guides/getting_started.md) and [Unified Docker Stack guide](docs/guides/unified_stack.md).
-
-## Choose your path
-
-### Connect an AI agent
-
-The Gateway exposes standard MCP and A2A ingress. The managed launcher configures supported coding agents with a short-lived delegated identity and g8e as their MCP server:
-
-```bash
-./g8e mcp agent list
-./g8e mcp agent run claude
-```
-
-Named launchers attempt to disable native tools where the client supports reliable controls. Any native tools, direct filesystem access, other MCP servers, or unrestricted network paths that remain enabled are outside g8e's boundary. See [AI agents and the g8e boundary](docs/architecture/agents.md).
-
-### Govern a remote runtime
-
-Run an Operator on the machine or runtime that owns the target resources:
-
-```bash
-./g8e operator start --endpoint <gateway-host>
-```
-
-The Operator needs outbound access to Gateway ports 8080 and 8443 and opens no inbound management listener. After owner approval, bind or target its exact session and dispatch governed work:
-
-```bash
-./g8e operator list
-./g8e operator bind <operator-session-id>
-./g8e operator run <operator-session-id> --cmd "uname -a"
-```
-
-Read [Connect an Operator](docs/guides/connect_operator_to_gateway.md) before remote deployment; endpoint, certificate identity, runtime directory, and visible filesystem determine the real execution boundary.
-
-### Build an application
-
-Choose the integration surface by who must construct proofs:
-
-| Surface | Best for | Important behavior |
-| --- | --- | --- |
-| **MCP** | Standard tool-capable AI clients | Gateway constructs the envelope, coordinates configured L2, and manages L3 suspension. |
-| **A2A** | Governed downstream skills | Same posture-aware Gateway construction path as MCP. |
-| **CLI Operator dispatch** | Owner automation across explicit Operator sessions | Gateway constructs envelopes and waits for each target's terminal result. |
-| **`CommandIntent` relay** | First-party-style app dispatch under a compatible posture | Gateway binds target and state, but the relay does not synthesize missing L2 votes or L3 proofs. |
-| **Direct envelope** | Privileged protocol clients that already possess every proof | Caller submits complete canonical protojson; app certificates are rejected from this route. |
-
-Start with [Build Apps](docs/guides/build_apps.md), then use the [protocol specification](protocol/docs/spec.md) and [MCP contract](protocol/docs/mcp.md).
-
-### Use the protocol packages
-
-```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.13
-pip install g8e==2.1.13
-```
-
-The Go module and Python package provide generated protobuf types, canonical models and constants, SPIFFE identity helpers, transaction hashing, and receipt verification. Both share the platform release version. See [Protocol Library](docs/architecture/protocol.md).
-
-## Browser surfaces
-
-g8e has three distinct browser architectures. They are not interchangeable.
-
-| Surface | Audience | Authentication | Current role |
+| Service | Port / Protocol | Auth Mode | Purpose |
 | --- | --- | --- | --- |
-| **Gateway Console** | Platform owner | WebAuthn and Gateway HttpOnly session cookie | Canonical operational UI for passkeys, approvals, workload enrollment, recovery, and audit streaming. |
-| **Owner-local observe frontend** | Authenticated owner | Browser connects directly to the private Gateway | Build with the audited `dashboard/g8e-adapter`, which owns absolute Gateway URLs, credentials, allowlisted reads, WebAuthn, SSE, and typed state. |
-| **Public spectator** | Anonymous visitors | None | Reads only allowlisted, signed projections and public proof artifacts from a separate mirror. Public browsers never connect to the private Gateway. |
+| **Gateway Discovery** | `http://localhost:8080` | Public / Token | PKI discovery, health, binary bootstrap, and enrollment |
+| **Gateway API & MCP** | `https://localhost:8443` | mTLS / Route-Gated | Authenticated platform API; MCP endpoint is at `/mcp` |
+| **Gateway Console** | `https://localhost:8443/console/` | WebAuthn Cookie | Operational web UI for passkeys, approvals, and audit logs |
+| **Agentic Ensemble (g8ee)** | `http://localhost:8000` | mTLS to Gateway | First-party Python agentic chat and triage API |
+| **Dashboard (g8ed)** | `http://localhost:3000` | Direct to Gateway | Static web host serving the operator browser interface |
+| **Evaluation Explorer** | `http://localhost:5173` | Direct / Local | Live campaign telemetry and model evaluation explorer |
+| **Public Spectator Mirror** | `http://localhost:8082` | Anonymous | Read-only public mirror for allowlisted projections |
 
-The in-tree **g8ed** runtime is not currently a complete operational control plane. Its static host and workload enrollment work, and the browser can restore or end an existing Gateway session, but its chat, Operator, approval, audit, settings, terminal, and standard SSE paths are not fully wired in the deployed host. Use the Gateway Console for administration and the audited adapter for new owner-local observe frontends. See [Dashboard architecture](docs/dashboard/architecture.md), [Build a frontend](docs/guides/build_frontend.md), and [Public Spectator architecture](docs/architecture/public_spectator.md).
+See the [Getting Started Guide](docs/guides/getting_started.md) and [Unified Docker Stack Guide](docs/guides/unified_stack.md) for full configuration details.
 
-## Evaluation, evidence, and public results
+---
 
-g8e includes verification programs because architectural claims and measured evidence are different things.
+## Common operational workflows
 
-### Native execution-boundary evaluation
+### Connect an AI coding agent via MCP
+
+Launch supported AI coding assistants with g8e as their governed tool provider:
 
 ```bash
+# List supported agents (Claude, Codex, Devin, Gemini, Goose)
+./g8e mcp agent list
+
+# Launch Claude Code with governed g8e tools
+./g8e mcp agent run claude
+
+# Run an MCP stdio server proxying through the Gateway
+./g8e mcp stdio
+
+# Govern an external MCP server via reverse proxy
+./g8e mcp agent run --wrap-cmd "npx -y @modelcontextprotocol/server-filesystem /tmp"
+```
+
+See [AI Agents and the g8e Boundary](docs/architecture/agents.md).
+
+### Govern a remote host with an Operator
+
+Deploy an Operator on any remote machine to govern its local resources:
+
+```bash
+# On the remote machine: download g8e and start the Operator
+curl -fSLO http://<gateway-host>:8080/.well-known/g8e/bin/g8e-linux-amd64
+chmod +x g8e-linux-amd64 && mv g8e-linux-amd64 g8e
+./g8e operator start --endpoint <gateway-host>
+
+# On the administrator workstation: approve the remote enrollment
+./g8e auth enroll pending
+./g8e auth enroll approve <remote-operator-request-id> --yes
+
+# Bind the remote session and dispatch governed commands
+./g8e operator list
+./g8e operator bind <remote-operator-session-id>
+./g8e operator run <remote-operator-session-id> --cmd "df -h"
+```
+
+See [Connect an Operator to Gateway](docs/guides/connect_operator_to_gateway.md).
+
+### Generate compliance reports and verify evidence
+
+```bash
+# Evaluate FedRAMP 20x Key Security Indicators
+./g8e compliance ksi
+
+# Export flat CSV evidence across all persistent stores and verify integrity
+./g8e report all
+
+# Verify Gateway audit event hash chains and receipt signatures
+./g8e audit verify
+./g8e audit receipts
+```
+
+See [Compliance Evidence Reference](docs/reference/compliance-evidence.md).
+
+### Run native boundary evaluations and model campaigns
+
+```bash
+# Run the native execution boundary evaluation suite (10/10 invariants, no models)
 ./g8e eval boundary run
 ./g8e eval boundary verify <run-id>
-./g8e eval boundary show <run-id>
+
+# Freeze the model catalog and create an evaluation campaign
+./g8e eval models freeze
+./g8e eval campaigns create eval-qwen3-4b qwen3:4b
+./g8e eval runs start eval-qwen3-4b --publish --daemon --verify --require-witness
 ```
 
-The native suite selects one exact remote Operator, performs one allowed governed mutation, sends the doctrine-prohibited equivalent through the same ingress, and verifies effect counts, target identity, receipts, durability, protocol-chain evidence, and rejection. It does not use g8ee, a model provider, or a synthetic compatibility layer.
+See [Evaluations Architecture](docs/architecture/evals.md) and [Model Provenance](docs/architecture/model-provenance.md).
 
-### Governed model campaigns
-
-Model campaigns use the production g8ee chat path, a Data Operator, an Inference Operator, and optional provider-side Observer and Provenance Operators. These are separate sessions and evidence owners: the inference executor does not attest its own GPU telemetry or model-weight integrity.
+### Launch sealed domain demo environments
 
 ```bash
-./g8e eval models freeze \
-  --campaign-id eval-genesis-homogeneous \
-  --output .g8e/eval/model-inventory.json
+# List available environments (dhs, fedramp, finance, healthcare)
+./g8e demos list
 
-./g8e eval campaign start --model qwen3:4b \
-  --publish --daemon --verify \
-  --require-provider-observation \
-  --require-model-provenance
+# Start the healthcare demo environment
+./g8e demos start healthcare
+
+# Export demo images for air-gapped transport
+./g8e demos export --output ./g8e-demo-images.tar
 ```
 
-Scored inference reaches the approved remote Ollama provider only through the governed Inference Operator path. See [Evaluations](docs/architecture/evals.md), [Model Provenance](docs/architecture/model-provenance.md), and the [Unified Docker Stack guide](docs/guides/unified_stack.md).
+See [Air Gap Guide](docs/guides/air_gap.md).
 
-### Proof, not promises
+### Developer SDKs
 
-Published results remain scoped to the exact artifacts, versions, environments, and trust inputs that produced them.
+Integrate with the g8e protocol in Go or Python:
 
-| Proof | Published result | Boundary |
-| --- | --- | --- |
-| [Native core execution-boundary evaluation](docs/architecture/evals.md) | The Go-native suite passed 10/10 required invariants against the unified Docker stack, and an independent `g8e eval boundary verify` invocation returned valid with zero failures. | One doctrine-posture deployment, one exact remote Operator session, one controlled target, and one networkless observer. |
-| [Clean offline compliance verification](docs/release_notes/v2.1.x/v2.1.7-offline-acceptance.md) | A fresh network-disabled, read-only container reproduced a signed compliance bundle and passed all 10 verification checks. Four protected-source, renderer, and signature mutations failed closed. | One v2.1.7 candidate and one point-in-time assessment scope. This is not certification or recurring operating effectiveness. |
-| [Compliance evidence model](docs/reference/compliance-evidence.md) | Typed assertions, evidence-grade scenarios, explicit control classifications, and fail-closed verification. | Catalog and verifier coverage do not imply customer compliance, authorization, or external attestation. |
-| [Live CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) | Build and test status is published as a live external signal. | Live CI is not frozen release evidence. |
+```bash
+# Go module (canonical protobuf bindings, models, hashing, and verifiers)
+go get github.com/g8e-ai/g8e/v2@v2.2.3
 
-The project does not claim zero leakage, certification, broad model quality, or production suitability without evidence supporting that exact statement.
+# Python package (FastAPI clients, envelope models, and receipt validation)
+pip install g8e==2.2.3
+```
 
-## What the boundary provides
+See [Protocol Library](docs/architecture/protocol.md).
 
-- **Independent execution control:** the Gateway admits work, but the target Operator independently decides whether that exact transaction may execute.
-- **State-bound, replay-resistant transactions:** the envelope binds typed intent to principal, target, state root, nonce, expiry, and policy evidence.
-- **Transaction-bound authorization:** L2 signs the exact transaction decision; required L3 approval is bound to the transaction hash.
-- **Outbound-only managed runtimes:** Operators connect to the Gateway and listen on no inbound management port.
-- **Local-first evidence:** the executing Operator retains authoritative signed receipts, commitments, state roots, and host-local audit data.
-- **Explicit identity:** TLS 1.3, Gateway-owned PKI, and SPIFFE workload identities bind transport principals to sessions and targets.
-- **Disclosure boundaries:** scrubbing limits returned data, selected persisted fields are encrypted, and the public mirror exports only a closed allowlist.
-
-These properties do not mean every byte in every store is encrypted, every model-provider action is attested, every client side channel is blocked, or every UI module in the repository is operational. The architecture documentation records those limits directly.
+---
 
 ## Repository map
 
 ```text
-cmd/                  g8e CLI entry point
-internal/cli/cmd/     grouped C2 command packages (gw, auth, operator, eval, and the other root groups)
-internal/             Gateway, Operator, governance, storage, evaluation, and CLI implementation
-protocol/             Protobuf schemas, constants, generated bindings, and protocol docs
-ensemble/             g8ee Python/FastAPI agentic application
-dashboard/            g8ed and the audited browser integration adapter
-evaluation-explorer/  Public evaluation explorer
-eval/                 Evaluation fixtures and public examples
-demos/                Healthcare, finance, DHS, and FedRAMP demonstration environments
-docs/                 Architecture, guides, component docs, references, and release notes
+cmd/g8e/              Unified CLI binary entry point
+internal/cli/cmd/     CLI command implementations (gw, operator, auth, mcp, compliance, eval, demos, report, etc.)
+internal/services/    Core services (gateway, operator, governance, consensus, storage, network, vault, sse, pubsub)
+protocol/             Protobuf contracts (proto/g8e/), constants registries, generated Go/Python/TS code
+ensemble/             g8ee Python 3.12 / FastAPI agentic application (Tribunal, ReAct loops, multi-provider LLMs)
+dashboard/            g8ed Node.js static host and framework-free JavaScript operator interface
+evaluation-explorer/  Evaluation Explorer frontend for live model campaign inspection
+eval/                 Evaluation fixtures, campaign schemas, and benchmark datasets
+demos/                Healthcare, finance, DHS, and FedRAMP demo environment configurations
+docs/                 Comprehensive platform documentation (architecture, guides, reference, devs)
 ```
+
+---
 
 ## Find your next step
 
-| Goal | Start here |
+| What you want to do | Recommended documentation |
 | --- | --- |
-| Understand the system in plain architecture terms | [Architecture Overview](docs/architecture/overview.md), [Governance](docs/architecture/governance.md), [Gateway](docs/architecture/gateway.md), and [Operator](docs/architecture/operator.md) |
-| Install or run the suite | [Getting Started](docs/guides/getting_started.md) and [Unified Docker Stack](docs/guides/unified_stack.md) |
-| Connect a managed runtime | [Connect an Operator](docs/guides/connect_operator_to_gateway.md) and [Operator Architecture](docs/architecture/operator.md) |
-| Connect an AI client or build an app | [AI Agent Boundary](docs/architecture/agents.md), [Build Apps](docs/guides/build_apps.md), [MCP](protocol/docs/mcp.md), and [A2A](protocol/docs/a2a.md) |
-| Build a browser experience | [Build a Frontend](docs/guides/build_frontend.md), [Observe Frontend](docs/guides/build_observe_frontend.md), and [Dashboard Architecture](docs/dashboard/architecture.md) |
-| Understand identity, transport, and data ownership | [Authentication](docs/architecture/auth.md), [Network](docs/architecture/network.md), [Encryption](docs/architecture/encryption.md), and [Storage](docs/architecture/storage.md) |
-| Run or inspect evaluations | [Evaluations](docs/architecture/evals.md), [Model Provenance](docs/architecture/model-provenance.md), and [Evaluation Data Layout](eval/examples/README.md) |
-| Review public or compliance evidence | [Public Spectator](docs/architecture/public_spectator.md), [Compliance Evidence](docs/reference/compliance-evidence.md), and [Compliance Alignment](docs/reference/compliance-alignment.md) |
-| Develop and contribute | [Contributing](.github/CONTRIBUTING.md), [Developer Guide](docs/devs/devs.md), [Code Map](docs/devs/codemap.md), and [Testing](docs/devs/tests.md) |
+| **Understand core architecture & governance** | [Architecture Overview](docs/architecture/overview.md) · [Governance Architecture](docs/architecture/governance.md) · [Gateway Architecture](docs/architecture/gateway.md) · [Operator Architecture](docs/architecture/operator.md) · [Consensus Architecture](docs/architecture/consensus.md) |
+| **Deploy and operate the platform** | [Getting Started](docs/guides/getting_started.md) · [Unified Docker Stack](docs/guides/unified_stack.md) · [Connect an Operator](docs/guides/connect_operator_to_gateway.md) · [Docker Gateway Guide](docs/guides/docker_gateway.md) |
+| **Connect AI agents or build applications** | [AI Agents & Governance Boundary](docs/architecture/agents.md) · [Build Applications](docs/guides/build_apps.md) · [MCP Protocol Guide](protocol/docs/mcp.md) · [A2A Protocol Guide](protocol/docs/a2a.md) · [Protocol Spec](protocol/docs/spec.md) |
+| **Explore the Agentic Ensemble (g8ee)** | [Ensemble Architecture](docs/architecture/ensemble.md) · [Getting Started with g8ee](docs/ensemble/getting-started.md) · [Ensemble Agents](docs/ensemble/agents.md) · [LLM Providers](docs/ensemble/llm-providers.md) |
+| **Build frontend & spectator experiences** | [Build a Frontend](docs/guides/build_frontend.md) · [Build an Observe Frontend](docs/guides/build_observe_frontend.md) · [Dashboard Architecture](docs/dashboard/architecture.md) · [Public Spectator Architecture](docs/architecture/public_spectator.md) |
+| **Security, identity & cryptographic storage** | [Authentication & Identity](docs/architecture/auth.md) · [Network & PKI](docs/architecture/network.md) · [Encryption & Vault](docs/architecture/encryption.md) · [Storage Architecture](docs/architecture/storage.md) · [FIPS 140-3](docs/reference/fips140-3.md) |
+| **Compliance, evidence & evaluations** | [Compliance Evidence](docs/reference/compliance-evidence.md) · [Compliance Alignment](docs/reference/compliance-alignment.md) · [Evaluations Architecture](docs/architecture/evals.md) · [Model Provenance](docs/architecture/model-provenance.md) · [Glossary](docs/reference/glossary.md) |
+| **Air-gap & sovereignty validation** | [Air Gap Guide](docs/guides/air_gap.md) · [Sovereignty Gauntlet](docs/guides/sovereignty_gauntlet.md) · [Position Paper](docs/core/position_paper.md) · [About g8e](docs/core/about.md) |
+| **Developer guides & testing** | [Developer Guidelines](docs/devs/devs.md) · [Code Map](docs/devs/codemap.md) · [Testing Guide](docs/devs/tests.md) · [Documentation Guide](docs/devs/docs.md) · [Contributing](.github/CONTRIBUTING.md) |
 
-## Build and contribute
+---
+
+## Build and test
 
 ```bash
+# Build the unified g8e binary
 make build
+
+# Run platform test suites
 ./g8e test unit
 ./g8e test integration
 ./g8e test lint
+
+# Run first-party service test suites
 make ensemble-test
 make dashboard-test
 ```
 
-Use the project test wrapper for platform tests; do not invoke `go test` directly. See the [contribution guide](.github/CONTRIBUTING.md), [developer guidelines](docs/devs/devs.md), and [documentation guide](docs/devs/docs.md).
+Always use `./g8e test <suite>` rather than running `go test` directly, to ensure required environment flags and FIPS configurations are applied. See the [Testing Guide](docs/devs/tests.md) and [Developer Guidelines](docs/devs/devs.md).
+
+---
 
 ## Support OpenDevOps.ai
 
-[OpenDevOps.ai](https://opendevops.ai) is a fully independent, verifiable LLM benchmarking project. I am completely self-funded and refuse to take venture capital. If this data helps you, please [sponsor the work on GitHub](https://github.com/sponsors/Badoot) to help keep the servers running and the pipeline unbiased.
+[OpenDevOps.ai](https://opendevops.ai) is a fully independent, verifiable LLM benchmarking and governance project. It operates without venture capital funding to remain unbiased and reproducible. If this platform helps your organization, please [sponsor the work on GitHub](https://github.com/sponsors/Badoot) to support open-source development and infrastructure testing.
 
 ## Pilots and partnerships
 
-Lateralus Labs works with teams evaluating governed AI execution, sovereign data workflows, and proof-backed compliance reporting. Contact [danny@lateraluslabs.com](mailto:danny@lateraluslabs.com), [schedule a call](https://calendly.com/danny-lateraluslabs/quick_discovery), or connect on [LinkedIn](https://www.linkedin.com/in/dannybarbour/).
+Lateralus Labs collaborates with engineering and security teams deploying governed AI agents, zero-trust infrastructure boundaries, and cryptographic compliance reporting. To evaluate g8e for your environment, contact [danny@lateraluslabs.com](mailto:danny@lateraluslabs.com), [schedule a discovery call](https://calendly.com/danny-lateraluslabs/quick_discovery), or connect on [LinkedIn](https://www.linkedin.com/in/dannybarbour/).
 
 ---
 

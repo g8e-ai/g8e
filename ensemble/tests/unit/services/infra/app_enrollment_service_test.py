@@ -430,8 +430,9 @@ class TestEnrollPlatformEnrollment:
         assert identity.key_path == str(pki_dir / "issued" / "apps" / "g8ee.key")
         assert identity.ca_cert_path == str(pki_dir / "trust" / "g8eg-ca-bundle.pem")
 
-        # All three platform enrollment endpoints were called.
+        # All platform enrollment endpoints were called, including CA bundle pull.
         paths_hit = [r.url.path for r in captured["requests"]]
+        assert "/.well-known/g8e/pki/ca-bundle" in paths_hit
         assert "/api/v1/auth/platform-enrollments/request" in paths_hit
         assert "/api/v1/auth/platform-enrollments/status" in paths_hit
         assert "/api/v1/auth/platform-enrollments/complete" in paths_hit
@@ -447,6 +448,25 @@ class TestEnrollPlatformEnrollment:
         # Pending state was removed after successful enrollment.
         pending_path = str(pki_dir / "pending-enrollment" / "g8ee.json")
         assert not Path(pending_path).exists()
+
+    async def test_fetch_ca_bundle_pulls_via_http_and_writes_to_disk(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+
+        handler, captured = _mock_platform_enrollment_handler()
+        _patch_httpx_with_mock_transport(monkeypatch, handler)
+
+        service = AppEnrollmentService()
+        ca_pem = await service.fetch_ca_bundle()
+
+        assert ca_pem == "CA-BUNDLE-PEM"
+        ca_path = pki_dir / "trust" / "g8eg-ca-bundle.pem"
+        assert ca_path.exists()
+        assert ca_path.read_text(encoding="utf-8") == "CA-BUNDLE-PEM"
+        paths_hit = [r.url.path for r in captured["requests"]]
+        assert "/.well-known/g8e/pki/ca-bundle" in paths_hit
 
     async def test_persists_credentials_with_0600_permissions(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

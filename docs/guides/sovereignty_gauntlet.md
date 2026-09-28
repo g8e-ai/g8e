@@ -1,7 +1,39 @@
-# Sovereignty Gauntlet Evidence and Social Content Guide
+---
+doc_id: sovereignty_gauntlet
+title: Sovereignty Gauntlet Evidence and Social Content Guide
+audience: developers, evaluators, compliance auditors, campaign managers
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/guides/
+  - internal/cli/cmd/compliance/
+  - internal/cli/cmd/demos/
+  - internal/cli/cmd/eval/
+  - internal/cli/cmd/report/
+related:
+  - docs/guides/unified_stack.md
+  - docs/guides/ux_smoke_test.md
+  - docs/architecture/evals.md
+  - docs/architecture/governance.md
+  - docs/architecture/agents.md
+  - docs/architecture/operator.md
+  - docs/architecture/model-provenance.md
+  - docs/reference/compliance-evidence.md
+  - docs/reference/compliance-alignment.md
+  - docs/ensemble/index.md
+  - docs/ensemble/agents.md
+  - demos/README.md
+  - demos/fedramp/README.md
+  - demos/dhs/README.md
+when_to_read: Running evidence-generation campaigns for social posts, articles, demonstrations, and technical review; generating and verifying proof artifacts; understanding the current runnable evidence lanes and publication gates.
+do_not_use_for:
+  - Governance boundary and L1-L5 architecture (docs/architecture/governance.md)
+  - Evaluations and eval-native verification (docs/architecture/evals.md)
+  - AI agent governance and ensemble persona roster (docs/ensemble/agents.md)
+---
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+# Sovereignty Gauntlet Evidence and Social Content Guide
 
 This runbook gives a coding agent a repeatable process for generating, preserving, and explaining g8e proof artifacts for social posts, articles, demonstrations, and technical review. The campaign message is:
 
@@ -182,7 +214,7 @@ unset G8E_HARNESS_LLM_MODEL G8E_HARNESS_LLM_ENDPOINT
 printf 'provider=fake\nclassification=deterministic-rehearsal\n' | tee "${CAMPAIGN_DIR}/metadata/model.txt"
 ```
 
-A fake-provider run proves orchestration and platform behavior, not real-model utility or safety performance. Never shorten “deterministic fake provider” to “AI” in a result claim.
+A fake-provider run proves orchestration and platform behavior, not real-model utility or safety performance. Never shorten "deterministic fake provider" to "AI" in a result claim.
 
 ### 3.3 Run useful governed work
 
@@ -234,7 +266,7 @@ mkdir -p "${CAMPAIGN_DIR}/unified/verifier-pki"
 docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem"
 docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem"
 cd "${REPO_ROOT}"
-ensemble/.venv/bin/python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY' | tee "${CAMPAIGN_DIR}/unified/receipt-verification.txt"
+ensemble/.venv/bin/python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY'
 import binascii
 import json
 import sys
@@ -303,7 +335,7 @@ The `compliance ksi` command fails closed unless the caller binds the evaluation
 ```bash
 docker exec g8e-operator /g8e compliance ksi \
   --class C \
-  --catalog /docs/reference/ksi-catalog.json \
+  --catalog docs/reference/ksi-catalog.json \
   --scope-id '<assessment-scope-id>' \
   --run-id '<assessment-run-id>' \
   --assertion-assessment-id '<canonical-assertion-assessment-id>' \
@@ -318,7 +350,7 @@ Add repeatable `--assertion-assessment-id`, `--attempt-id`, `--scenario-id`, and
 
 The compliance report pipeline is implemented in the current release. `g8e compliance report generate` imports explicit scope-bound demo runs, eval runs, or standalone KSI, commitment, attestation, audit, ledger, and build or configuration sources; generates canonical analysis and deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers; copies protected source bytes into the bundle; and signs the complete bundle. `g8e compliance report verify` reads only bundle-confined bytes, authenticates the report with an external assessed report trust policy, separately authenticates represented signed source evidence with external assessed evidence trust when required, independently replays every protected source, reproduces the analysis and renderers, and exits nonzero when the canonical verification report is invalid.
 
-Follow [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md#cli-commands) for the complete generation and trust setup. Generate one report per assessment scope; do not combine FedRAMP and DHS runs merely because they belong to one campaign. Retain the generated bundle, external trust-policy digests, exact verification command, verifier output, and exit status. A valid report bundle proves point-in-time integrity for its represented source set; it does not establish certification, recurring operating effectiveness, independent hardware or organizational control, or eval-native flagship results.
+Follow [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md) for the complete generation and trust setup. Generate one report per assessment scope; do not combine FedRAMP and DHS runs merely because they belong to one campaign. Retain the generated bundle, external trust-policy digests, exact verification command, verifier output, and exit status. A valid report bundle proves point-in-time integrity for its represented source set; it does not establish certification, recurring operating effectiveness, independent hardware or organizational control, or eval-native flagship results.
 
 ## 4. Run the audience-specific visual demos
 
@@ -332,7 +364,7 @@ Start the environment and retain its bootstrap output:
 ./g8e demos start fedramp 2>&1 | tee "${CAMPAIGN_DIR}/logs/fedramp-start.log"
 ```
 
-Follow the exact owner-enrollment and operator-approval commands printed by `demos start`, then wait for `./g8e demos status fedramp` to show healthy services. Run all four scenarios in verbose mode:
+Follow the exact owner-enrollment and operator-approval commands printed by `demos start`, then wait for `./g8e demos status fedramp` to show healthy services. Run all scenarios in verbose mode:
 
 ```bash
 ./g8e demos run fedramp --verbose 2>&1 | tee "${CAMPAIGN_DIR}/fedramp/scenarios-verbose.txt"
@@ -357,7 +389,7 @@ Treat the automatic KSI row as unavailable rather than a pass. When canonical as
 ```bash
 docker exec g8e-fedramp-gateway /g8e compliance ksi \
   --class C \
-  --catalog /docs/reference/ksi-catalog.json \
+  --catalog docs/reference/ksi-catalog.json \
   --scope-id '<assessment-scope-id>' \
   --run-id '<assessment-run-id>' \
   --assertion-assessment-id '<canonical-assertion-assessment-id>' \
@@ -385,7 +417,7 @@ Require a zero exit status and `"valid":true` before claiming that the persisted
 3. Authorized predictive cueing completes under L2 quorum.
 4. Audit destruction is rejected, independently verified that the audit vault is intact, and a separate governed purge completes with a cryptographic destruction receipt.
 
-Say “simulated coalition datalink” and “synthetic data.” Do not claim cloud-model inference continued during disconnection unless the recorded run actually uses a reachable local model during that interval. Scenario 2 verifies network detachment after the datalink is severed, runs a governed ingest during the disconnected interval, checks that the Git ledger directory and SQLite audit vault are non-empty with real existence checks, and reports datalink restoration failure separately from the continuity claim. Scenario 4 includes an independent post-rejection verification that the operator audit vault DB is still present and non-empty after the blocked wipe attempt.
+Say "simulated coalition datalink" and "synthetic data." Do not claim cloud-model inference continued during disconnection unless the recorded run actually uses a reachable local model during that interval. Scenario 2 verifies network detachment after the datalink is severed, runs a governed ingest during the disconnected interval, checks that the Git ledger directory and SQLite audit vault are non-empty with real existence checks, and reports datalink restoration failure separately from the continuity claim. Scenario 4 includes an independent post-rejection verification that the operator audit vault DB is still present and non-empty after the blocked wipe attempt.
 
 ## 5. Run the native execution-boundary evaluation
 
@@ -452,7 +484,7 @@ A current-run social claim is publishable only when all applicable checks pass:
 Do not publish the planned flagship result card or aggregate Sovereignty Gauntlet rates until the repository provides and the run passes all of these:
 
 - The preregistered minimum 25-scenario matrix with useful reads, useful mutations, policy attacks, protocol attacks, and benign near-boundary controls.
-- At least three frozen repetitions per eligible arm, or the current preregistration’s documented replacement rule.
+- At least three frozen repetitions per eligible arm, or the current preregistration's documented replacement rule.
 - Real-provider SDK-boundary canary observations and exact local rehydration observations.
 - Independent prohibited-side-effect and final-state observations.
 - Complete schema, hash, reference, denominator, stage-graph, receipt, persistence, commitment, state, privacy, encrypted-evidence, and trust-root verification.
@@ -485,7 +517,7 @@ Replace placeholders only with values traced to retained artifacts. Remove lines
 >
 > Authorized operation: `<measured result>`
 > Destruction attempt: `<measured L1 rejection>`
-> Prohibited target-side effect: `<scenario’s measured unchanged-state result>`
+> Prohibited target-side effect: `<scenario's measured unchanged-state result>`
 > Signed evidence: `<receipt or transaction reference>`
 >
 > Assume the agent, gateway, and network can be wrong. Make the host verify.
@@ -535,14 +567,14 @@ Use this only after the publication-grade gate passes and the complete verifier 
 
 Do not use:
 
-- “Unhackable,” “perfect security,” “zero risk,” or “guaranteed safe.”
-- “The cloud can never see data.” State the tested provider boundary, declared synthetic canaries, detectors, and observed count.
-- “FedRAMP certified” or “FedRAMP authorized” for KSI or demo-evidence output.
-- “Independent proof” when the producer controls the verifier and trust root. Use “independently verifiable” only after another party can run complete verification against a published root.
-- "BFT multi-agent reasoning" for protocol L2. Describe distinct Ed25519 signers enforcing quorum over deterministic doctrine decisions. The g8ee Tribunal is a separate information-isolated command-generation mechanism; see [Ensemble Agents](../ensemble/agents.md) for the persona roster and Tribunal structure.
-- “100% benchmark performance” from a one-task or fake-provider run.
-- “No cloud dependency during disconnection” when a cloud-hosted model is still required during the disconnected interval.
-- “All integrity checks passed” when any advertised check is `SKIPPED`.
+- "Unhackable," "perfect security," "zero risk," or "guaranteed safe."
+- "The cloud can never see data." State the tested provider boundary, declared synthetic canaries, detectors, and observed count.
+- "FedRAMP certified" or "FedRAMP authorized" for KSI or demo-evidence output.
+- "Independent proof" when the producer controls the verifier and trust root. Use "independently verifiable" only after another party can run complete verification against a published root.
+- "BFT multi-agent reasoning" for protocol L2. Describe distinct Ed25519 signers enforcing quorum over deterministic doctrine decisions. The g8e Tribunal is a separate information-isolated command-generation mechanism; see [Ensemble Agents](../ensemble/agents.md) for the persona roster and Tribunal structure.
+- "100% benchmark performance" from a one-task or fake-provider run.
+- "No cloud dependency during disconnection" when a cloud-hosted model is still required during the disconnected interval.
+- "All integrity checks passed" when any advertised check is `SKIPPED`.
 
 ## 10. What the agent returns
 
@@ -594,7 +626,7 @@ The agent also calls out any `FAIL`, `SKIPPED`, empty report, missing observer, 
 
 The root `README.md` is hand-maintained. It states the current native evaluation boundary and links to [Evaluations](../architecture/evals.md) for acceptance invariants, trust boundaries, and JSON output. The native evaluation proof table row reflects the Go-native `core-execution-boundary` suite result against the unified Docker stack. Update the README directly when its current behavior or evidence summary changes, then review it end to end and validate its links.
 
-## Related documentation
+## Links out
 
 - [Evaluations](../architecture/evals.md) — Go-native execution-boundary commands, model campaign evidence, Observer and Provenance Operator witness roles, verification, and the connected evaluation explorer projection.
 - [Model Provenance](../architecture/model-provenance.md) — Storage-side weight attestation and chain-of-custody for scored inference.
@@ -605,3 +637,7 @@ The root `README.md` is hand-maintained. It states the current native evaluation
 - [DHS Demo](../../demos/dhs/README.md) — disconnected-operations and governed-destruction campaign.
 - [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md) — current evidence graph, signed report-bundle generation, external trust, complete offline verification, and remaining limits.
 - [Compliance Alignment](../reference/compliance-alignment.md) — KSI, protocol-owned compliance catalog, and persisted demo-evidence semantics and claim boundaries.
+- [Governance](../architecture/governance.md) — canonical governance layer architecture and L1-L5 contracts.
+- [AI Agents and the g8e Governance Boundary](../architecture/agents.md) — agent governance model and MCP/A2A boundaries.
+- [Operator](../architecture/operator.md) — remote Operator architecture and session models.
+- [Ensemble Agents](../ensemble/agents.md) — ensemble agent personas and Tribunal structure.

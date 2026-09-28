@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -46,6 +47,8 @@ type nativeEvalStore interface {
 	evaluation.ReportStore
 	SaveVerification(context.Context, string, *compliancev1.ComplianceVerificationReport) (*compliancev1.ComplianceEvidenceReference, error)
 	LoadReport(context.Context, string) (*evalv1.EvaluationReport, error)
+	LoadVerification(context.Context, string) (*compliancev1.ComplianceVerificationReport, error)
+	ListReports(context.Context) ([]string, error)
 }
 
 type nativeEvalDeps struct {
@@ -60,8 +63,22 @@ type nativeEvalDeps struct {
 	storeFactory               func(fs.RuntimeFileService) nativeEvalStore
 	verifierFactory            func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier
 	campaignPublicationFactory campaignVerificationPublicationFactory
+	runControl                 runControlDeps
 	now                        func() time.Time
 	newID                      func() string
+}
+
+// chatDeps projects the shared dependencies onto the operator-facing helpers.
+func (d nativeEvalDeps) chatDeps() chatEvalDeps {
+	return chatEvalDeps{
+		configLoader:         d.configLoader,
+		fileSvcFactory:       d.fileSvcFactory,
+		authLoader:           d.authLoader,
+		clientFactory:        d.clientFactory,
+		refreshClientFactory: authcmd.DefaultRefreshClientFactory,
+		now:                  d.now,
+		newID:                d.newID,
+	}
 }
 
 func Cmd() *cobra.Command {
@@ -85,8 +102,9 @@ func Cmd() *cobra.Command {
 		campaignPublicationFactory: func(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (campaignVerificationPublication, error) {
 			return NewCampaignPublicationCoordinator(cmd, fileSvc)
 		},
-		now:   time.Now,
-		newID: uuid.NewString,
+		runControl: defaultRunControlDeps(),
+		now:        time.Now,
+		newID:      uuid.NewString,
 	})
 }
 
@@ -97,21 +115,26 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		Short:   "Run and verify g8e evaluation programs",
 		Long: `Platform evaluation programs and their supporting workflows.
 
-  boundary   Native execution-boundary suite (no models)
-  campaign   Model scoring through production chat/inference
-  models     Provider inventory freeze and materialize
-  rollout    Per-model init qualification queue
-  gate       Pre-campaign acceptance gates
-  dev        Local development utilities`,
+  models      Model catalog and registry
+  campaigns   Frozen evaluation definitions
+  runs        Executions of a campaign
+  rollout     Per-model init qualification queue
+  formations  Heterogeneous model sets (read-only in v2.2.3)
+  gates       Pre-campaign acceptance gates
+  boundary    Native execution-boundary suite (no models)
+  observer    Provider-boundary hardware observer`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
+	bindSessionFlags(cmd)
 	cmd.AddCommand(
-		boundaryEvalCmd(deps),
-		campaignEvalCmd(deps),
 		modelsEvalCmd(deps),
+		campaignsEvalCmd(deps),
+		runsEvalCmd(deps),
 		rolloutEvalCmd(deps),
-		gateEvalCmd(deps),
-		devEvalCmd(deps),
+		formationsEvalCmd(deps),
+		gatesEvalCmd(deps),
+		boundaryEvalCmd(deps),
+		observerEvalCmd(deps),
 	)
 	return cmd
 }
@@ -122,32 +145,112 @@ func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Native execution-boundary suite (no models)",
 	}
 	cmd.AddCommand(
-		boundaryEvalRunCmd(deps),
-		boundaryEvalVerifyCmd(deps),
-		boundaryEvalShowCmd(deps),
+		jsonLeaf(boundaryEvalListCmd(deps)),
+		jsonLeaf(boundaryEvalRunCmd(deps)),
+		jsonLeaf(boundaryEvalVerifyCmd(deps)),
+		jsonLeaf(boundaryEvalShowCmd(deps)),
 	)
 	return cmd
 }
 
-func gateEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gate",
+		Use:   "formations",
+		Short: "Heterogeneous model sets (read-only in v2.2.3)",
+	}
+	cmd.AddCommand(
+		formationsListEvalCmd(deps),
+		formationsShowEvalCmd(deps),
+		formationsSmokeEvalCmd(deps),
+	)
+	return cmd
+}
+
+func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gates",
 		Short: "Pre-campaign acceptance gates",
 	}
 	cmd.AddCommand(
-		gateInferenceEvalCmd(deps),
-		gateChatEvalCmd(deps),
+		jsonLeaf(gatesChatEvalCmd(deps)),
+		jsonLeaf(gatesInferenceEvalCmd(deps)),
+		jsonLeaf(gatesProbeEvalCmd(deps)),
 	)
 	return cmd
 }
 
-func devEvalCmd(deps nativeEvalDeps) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "dev",
-		Short: "Local development utilities",
+func boundaryEvalListCmd(deps nativeEvalDeps) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "list",
+		Short: "List boundary execution reports",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			store := deps.storeFactory(fileSvc)
+			runIDs, err := store.ListReports(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("evaluation: list boundary reports: %w", err)
+			}
+
+			type reportRow struct {
+				RunID     string `json:"run_id"`
+				Suite     string `json:"suite"`
+				Status    string `json:"status"`
+				StartedAt string `json:"started_at"`
+				Operator  string `json:"operator"`
+				Valid     *bool  `json:"valid,omitempty"`
+			}
+
+			var rows []reportRow
+			for _, runID := range runIDs {
+				report, err := store.LoadReport(cmd.Context(), runID)
+				if err != nil {
+					continue
+				}
+				var valid *bool
+				verification, err := store.LoadVerification(cmd.Context(), runID)
+				if err == nil && verification != nil {
+					v := verification.GetValid()
+					valid = &v
+				}
+				startedAt := ""
+				if report.GetRun().GetStartedAt() != nil {
+					startedAt = report.GetRun().GetStartedAt().AsTime().Format("2006-01-02T15:04:05Z")
+				}
+				rows = append(rows, reportRow{
+					RunID:     report.GetRun().GetRunId(),
+					Suite:     report.GetRun().GetSuiteRef().GetId(),
+					Status:    report.GetSummaryStatus().String(),
+					StartedAt: startedAt,
+					Operator:  report.GetRun().GetTargetOperatorId(),
+					Valid:     valid,
+				})
+			}
+
+			if output.JSONEnabled(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), map[string]interface{}{
+					"reports": rows,
+				})
+			}
+			if len(rows) == 0 {
+				cmd.Println("No boundary reports found")
+				return nil
+			}
+			for _, row := range rows {
+				valid := "—"
+				if row.Valid != nil {
+					valid = fmt.Sprintf("%t", *row.Valid)
+				}
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\n",
+					row.RunID, row.Suite, row.Status, row.StartedAt, row.Operator, valid)
+			}
+			return nil
+		},
 	}
-	cmd.AddCommand(providerObserverEvalCmd(deps))
-	return cmd
+	return command
 }
 
 func boundaryEvalRunCmd(deps nativeEvalDeps) *cobra.Command {

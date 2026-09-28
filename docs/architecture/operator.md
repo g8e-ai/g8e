@@ -1,18 +1,17 @@
 ---
 title: g8e Operator
-parent: Architecture
 ---
 
 # g8e Operator
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Last Updated: 2026-09-28
+Version: v2.2.3
 
 The Governed Operator is the Policy Execution Point (PEP) for the runtime in which the Operator process runs. The reference implementation is the `g8e` binary started with `g8e operator start`. It receives governed `GovernanceEnvelope` transactions from a Gateway over an outbound-only mTLS WebSocket connection, verifies each transaction locally, executes accepted typed actions through the L5 Actuator, and stores authoritative local execution evidence.
 
 The Operator is not the Gateway and does not receive inbound management connections. The Gateway is the Policy Decision Point (PDP): it authenticates ingress, owns platform coordination state and PKI, constructs or admits envelopes, coordinates L1-L3 according to the active posture, and publishes work to an exact Operator session. The Operator independently performs the L4/L5 execution path and does not trust the fact that the Gateway sent a message as authorization.
 
-This document describes the outbound Operator. The Gateway also has an embedded in-process Operator substrate, but that substrate executes only against the Gateway process runtime. See [Gateway Architecture](./gateway.md) for the distinction and [Connect Operator to Gateway](../guides/connect_operator_to_gateway.md) for deployment procedure.
+This document describes the outbound Operator. The Gateway also has an embedded in-process Operator substrate that executes only against the Gateway process runtime. See [Gateway Architecture](./gateway.md) for the distinction and [Connect Operator to Gateway](../guides/connect_operator_to_gateway.md) for deployment procedure.
 
 ## Runtime and trust boundaries
 
@@ -34,24 +33,43 @@ cmd:<operator-id>:<operator-session-id>
 
 It publishes an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds. An automatic heartbeat is Operator-originated liveness, not a governed operation: it is published directly and produces no receipt or ledger commitment, so it never appears in operational compliance evidence. The worker retries a closed pub/sub connection with bounded backoff. It initializes encrypted local storage and execution services before accepting governed work. The execution vault is required by the outbound startup path; setting `--execution-vault=false` fails closed during initialization.
 
-The main startup options are:
+The startup command accepts numerous flags controlling enrollment, runtime behavior, and specialized roles. The primary options are:
 
-| Option | Runtime behavior |
+| Option | Description |
 | --- | --- |
-| `-e, --endpoint <host>` | Gateway discovery host; defaults to `localhost` when omitted. |
-| `--cert <path>` and `-k, --key <path>` | Explicit Operator client certificate and matching private key. |
-| `--trust-bundle <path>` | Explicit Gateway CA bundle; otherwise the installed runtime bundle or endpoint discovery is used. |
-| `--working-dir <path>` | Working directory used by governed command execution; it does not relocate the `.g8e/` runtime tree. |
-| `-c, --cloud` and `--provider <aws\|gcp\|azure>` | Enables cloud Operator configuration and records the selected provider. |
-| `-s, --execution-vault` | Enables the execution vault; it is enabled by default and required for outbound startup. |
-| `-G, --no-git` | Disables Git integration for the file ledger while retaining encrypted audit storage. |
-| `--heartbeat-interval <seconds>` | Sets heartbeat frequency; the default is 30 seconds. |
-| `--inference-enabled` | Enables the governed inference backend for an inference Operator. |
-| `--provider-boundary-observer-enabled` | Enables read-only provider-boundary observation. |
-| `--provenance-operator-enabled` and `--model-storage-root <path>` | Enables storage-side model provenance attestation over the selected local model tree. |
-| `--lattice-*` | Configures the optional Lattice adapter. The current CLI exposes these flags, but the adapter task handler does not provide a completed governed task-dispatch integration. |
+| `-e, --endpoint <host>` | Gateway HTTP discovery endpoint (global flag); defaults to `localhost` when omitted. |
+| `-p, --port <int>` | Gateway HTTPS/mTLS port (global flag); overrides default 8443 when used with `--endpoint`. |
+| `--cert <path>` | Path to Operator client certificate for mTLS enrollment. |
+| `-k, --key <path>` | Path to Operator private key matching the certificate. |
+| `--trust-bundle <path>` | Explicit Gateway CA bundle; otherwise uses installed runtime bundle or endpoint discovery. |
+| `--working-dir <path>` | Working directory for command execution; does not relocate `.g8e/` runtime tree. |
+| `-c, --cloud` | Enables cloud Operator mode. |
+| `--provider <aws\|gcp\|azure>` | Selects cloud provider when used with `--cloud`. |
+| `--heartbeat-interval <int>` | Sets heartbeat frequency in seconds (default: 30). |
+| `-s, --execution-vault` | Enables execution vault (default: true); required for outbound startup. |
+| `-G, --no-git` | Disables Git integration for file ledger while retaining encrypted audit storage. |
+| `-l, --log <info\|error\|debug>` | Sets log level (default: info). |
+| `--inference-enabled` | Enables governed LLM inference backend (g8ellama). |
+| `--inference-primary-model <name>` | Ollama model name for the Primary chat tier. |
+| `--inference-lite-model <name>` | Ollama model name for the Lite chat tier. |
+| `--inference-assistant-model <name>` | Ollama model name for the Assistant chat tier. |
+| `--inference-ollama-endpoint <url>` | Remote Ollama provider endpoint (default: http://127.0.0.1:11434). |
+| `--inference-keep-alive <duration>` | Ollama keep-alive duration (default: -1 for infinite). |
+| `--inference-campaign-id <id>` | Frozen evaluation campaign authorized by this inference Operator. |
+| `--inference-model-registry-digest <sha256>` | SHA-256 digest of the frozen campaign model registry. |
+| `--provider-boundary-observer-enabled` | Enables read-only provider-boundary hardware observation. |
+| `--provider-boundary-observer-id <id>` | Stable observer identity pseudonym. |
+| `--provenance-operator-enabled` | Enables storage-side model provenance attestation at model file site. |
+| `--provenance-operator-id <id>` | Stable provenance Operator identity pseudonym. |
+| `--model-storage-root <path>` | Root directory containing content-addressed model weight blobs (e.g., ~/.ollama/models). |
+| `--lattice-endpoint <url>` | Lattice gRPC endpoint URL. |
+| `--lattice-client-id <id>` | OAuth2 client ID for Lattice. |
+| `--lattice-client-secret <secret>` | OAuth2 client secret for Lattice. |
+| `--lattice-entity-name <name>` | Entity display name for Lattice. |
+| `--lattice-posture-floor <posture>` | Minimum governance posture for Lattice (default: consensus). |
+| `--lattice-sandboxes-token <token>` | Sandbox authorization token for Lattice. |
 
-The inference, Observer, Provenance, and Lattice behavior is specialized configuration, not a replacement for the Operator's general governance path. See [Evaluations](./evals.md) and [Model Provenance](./model-provenance.md) for the evaluation roles. Use `./g8e operator start --help` as the complete command-surface reference.
+The inference, observer, provenance, and Lattice options configure specialized roles that supplement the Operator's core governance path. See [Evaluations](./evals.md) and [Model Provenance](./model-provenance.md) for evaluation roles. Use `./g8e operator start --help` as the authoritative command-surface reference.
 
 ## Multi-Operator Coexistence and Role Separation on the Same System
 
@@ -94,22 +112,28 @@ The complete posture and proof behavior is canonical in [Governance](./governanc
 
 ### L1 Doctrine, L2 Consensus, and L3 Notary
 
-The Gateway owns or coordinates the Policy Decision Point work for L1-L3 on its client-facing construction paths. A remote Operator does not assume that upstream screening is sufficient. Its L4 Warden decodes the typed payload and runs the local L1 Doctrine validator, then verifies the L2 and L3 evidence required by the posture carried in the envelope.
+The Gateway owns or coordinates the Policy Decision Point work for L1-L3 on its client-facing construction paths. A remote Operator does not assume that upstream screening is sufficient; its L4 Warden decodes the typed payload and independently verifies L1 Doctrine, then checks L2 and L3 evidence required by the posture carried in the envelope.
 
-The envelope is the authoritative source of posture for Operator-side gating. `doctrine` requires L1 and audits L2/L3; `consensus` requires L1/L2 and audits L3; `ratify` requires L1 and L3 for mutation action types; `notary` requires L1/L2 and L3 for mutation action types. A command relay does not add missing protocol proofs, so a relay path must satisfy the selected posture with the evidence it carries.
+The envelope's `Posture` field is the authoritative source for Operator-side verification gating. Posture enforcement rules are:
+
+- **doctrine**: L1 enforced, L2/L3 audited (minimum verification).
+- **consensus**: L1/L2 enforced, L3 audited.
+- **ratify**: L1 enforced, L3 enforced for mutation actions, L2 audited.
+- **notary**: L1/L2 enforced, L3 enforced for mutation actions (maximum verification).
+
+A command relay does not synthesize missing proofs, so a relay path must carry evidence sufficient for the selected posture.
 
 ### L4 Warden
 
-`L4Warden.VerifyEnvelope` performs the pre-dispatch checks in this order:
+`L4Warden.VerifyEnvelope` performs pre-dispatch verification in five sequential stages:
 
-1. Tracks the nonce in process and reserves it in the durable replay store before expensive validation.
-2. Checks that expiry and nonce fields are present and that the transaction is not expired or replayed.
-3. Validates the known action type, decodes its typed protobuf payload, and runs local L1 Doctrine validation.
-4. Recomputes the transaction hash and requires it to match both `transaction_hash` and the envelope `id`.
-5. Fetches the current state root from the configured provider and requires it to match the envelope state Merkle root. In outbound mode this provider obtains the Gateway state root; the Operator's local ledger root is not substituted for the Gateway root.
-6. Reads the envelope posture and verifies posture-required L2 and L3 evidence, including the trusted signer and notary checks.
+1. **In-flight nonce tracking**: Tracks the nonce in process memory and reserves it in the durable replay store before expensive validation to prevent race conditions during crashes.
+2. **Expiry and nonce validation**: Checks that nonce and expiry fields are present, the transaction is not expired, and the nonce has not been replayed in the local store.
+3. **Stateless validation**: Validates protocol version, action type, decodes the typed protobuf payload, runs local L1 Doctrine validation against the decoded payload, recomputes the transaction hash, and verifies it matches both `transaction_hash` and the envelope `id`.
+4. **Stateful validation**: Fetches the current state root from the configured provider and verifies it matches the envelope's `StateMerkleRoot`. In outbound mode, the provider obtains the Gateway state root; the Operator never substitutes its local ledger root for the Gateway root.
+5. **Posture validation**: Reads the envelope's governance posture from its `Posture` field and verifies posture-required L2 and L3 evidence (signatures and proofs) according to the active posture's enforcement model.
 
-A rejected transaction does not reach the handler. The Warden produces deterministic stage evidence and releases a nonce reservation when validation fails. When the Actuator and its audit dependencies are available, the rejection is recorded as a signed failed receipt.
+A rejected transaction does not reach the L5 Actuator. The Warden produces deterministic stage evidence for each verification stage and releases the nonce reservation when validation fails. When the Actuator and its audit dependencies are available, rejections are recorded as signed failed receipts with stage evidence.
 
 ### L5 Actuator
 

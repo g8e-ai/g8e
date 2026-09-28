@@ -1,313 +1,293 @@
+---
+doc_id: network
+title: Network Architecture
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - internal/services/gateway/
+  - internal/services/network/
+  - internal/constants/ports.go
+  - internal/constants/channels.go
+  - protocol/workload_identity.go
+related:
+  - docs/architecture/auth.md
+  - docs/architecture/gateway.md
+  - docs/architecture/operator.md
+  - docs/architecture/sse.md
+  - docs/guides/unified_stack.md
+when_to_read: Understanding platform networking, PKI hierarchy, TLS/mTLS enforcement, SPIFFE identity formats, port topology, pub/sub communication, and network identity detection.
+do_not_use_for:
+  - Authentication and session lifecycle mechanics (docs/architecture/auth.md)
+  - Gateway operational modes and policy decision points (docs/architecture/gateway.md)
+  - Operator local execution and L4/L5 verification (docs/architecture/operator.md)
+  - Server-Sent Events event framing and consumer routing (docs/architecture/sse.md)
+  - Deployment recipes and container compose stacks (docs/guides/unified_stack.md)
+---
+
 # Network Architecture
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+## Purpose
 
-This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
+Documents the networking architecture of the g8e platform, including Public Key Infrastructure (PKI), workload identities (SPIFFE), TLS 1.3 and mTLS transport security, consolidated port topology, outbound-only pub/sub communication patterns, and automated network identity detection.
 
-## Overview
+## Quick index
 
-The g8e platform uses a zero-trust networking model with verified SPIFFE workload identities. The HTTPS API and Operator pub/sub transport use TLS 1.3 and mTLS where their route or channel requires it; the Gateway also exposes deliberately limited plain-HTTP discovery and enrollment routes, browser web-session routes, and optional JWT-authenticated MCP/A2A ingress. The platform uses `g8e.local` as the SPIFFE trust domain and as the TLS ServerName for connections that resolve the Gateway by IP.
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+  - [PKI hierarchy and trust anchors](#pki-hierarchy-and-trust-anchors)
+  - [Workload identity format (SPIFFE)](#workload-identity-format-spiffe)
+  - [Transport security and mTLS enforcement](#transport-security-and-mtls-enforcement)
+  - [Port topology and router classification](#port-topology-and-router-classification)
+  - [Enrollment, bootstrap, and recovery routing](#enrollment-bootstrap-and-recovery-routing)
+  - [Cross-gateway cascading topologies](#cross-gateway-cascading-topologies)
+  - [Pub/sub communication patterns](#pubsub-communication-patterns)
+  - [Network identity detection and SAN drift](#network-identity-detection-and-san-drift)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-### Design Goals
+Key invariant groups: [PKI and Cryptography](#pki-and-cryptography-inv-net-pki), [Workload Identity](#workload-identity-inv-net-id), [Transport Security](#transport-security-inv-net-tls), [Port Topology](#port-topology-inv-net-port), [Communication Patterns](#communication-patterns-inv-net-comm).
 
-The use of `g8e.local` and the underlying network architecture are driven by several key goals:
-1. **Canonical stability**: `g8e.local` remains the stable trust domain across all installations.
-2. **Automated bootstrap**: Users do not configure DNS or host-specific addressing unless they choose to; the CLI defaults to `localhost` for HTTP discovery and can fall back to a direct IP override when a non-default host is needed.
-3. **Security**: mTLS identity binding and SPIFFE URI SAN validation are preserved regardless of whether clients connect via `g8e.local`, `localhost`, or direct IP.
+## Invariants
 
-### Runtime and deployment boundaries
+Ids are stable. Append the next free number within each group; do not renumber.
 
-The Gateway is the Policy Decision Point and owns the platform PKI, coordination state, and its embedded Operator. A remote Governed Operator is the Policy Execution Point for the runtime visible to its own process and opens an outbound-only mTLS WebSocket connection to the Gateway; it does not expose an inbound command, MCP, or A2A listener. The embedded Operator and a remote Operator are separate execution boundaries even when they use the same binary.
+### PKI and Cryptography (`INV-NET-PKI`)
 
-In the root Compose deployment, `g8e-gateway` and `g8e-operator` use separate containers, network namespaces, process namespaces, and named volumes. The Compose Operator has no Docker socket, host root, host PID namespace, or host network by default. Containers reach the Gateway through Compose DNS such as `g8e.local:8080` and `g8e.local:8443`; host-side clients reach the published host ports. `localhost` is namespace-relative. The Gateway volume owns Gateway PKI and state, while the Operator volume owns the remote Operator's credentials and local execution evidence. See [Unified Docker Stack](../guides/unified_stack.md) and [Operator Architecture](./operator.md) for deployment-specific details.
+| ID | Rule |
+| --- | --- |
+| INV-NET-PKI-01 | All platform certificates (Root CA, intermediate CAs, serving certificate, and leaf certificates) MUST use ECDSA with the NIST P-256 curve (`elliptic.P256()`). Non-P-256 CSRs MUST be rejected. |
+| INV-NET-PKI-02 | The PKI hierarchy MUST separate serving issuance from workload issuance: the Hub Intermediate CA signs only the Gateway serving certificate (`operator-gateway`), while the Operator Intermediate CA signs all workload leaf certificates (`operator`, `cli`, `app`). |
+| INV-NET-PKI-03 | Workload leaf certificates MUST have a maximum validity of 7 days. Serving and peer certificates MUST have a maximum validity of 90 days. Root and intermediate CAs MUST have a validity of 3650 days. |
+| INV-NET-PKI-04 | Certificate revocation MUST be verified on every mTLS request and WebSocket handshake. An X.509 CRL DER binary signed by the Operator Intermediate CA MUST be exposed at `/.well-known/g8e/pki/crl`. |
+| INV-NET-PKI-05 | Platform workload revocation via `POST /api/v1/auth/platform-enrollments/revoke` MUST revoke the issued certificate in persistent storage and immediately disconnect all active pub/sub connections matching the authenticated SPIFFE identity. |
 
----
+### Workload Identity (`INV-NET-ID`)
 
-## 1. PKI Hierarchy & Trust Domain
+| ID | Rule |
+| --- | --- |
+| INV-NET-ID-01 | The canonical SPIFFE trust domain MUST be `g8e.local` across all deployments. All issued workload certificates MUST embed their SPIFFE identity URI in the Subject Alternative Name (SAN). |
+| INV-NET-ID-02 | SPIFFE ID URIs MUST conform to standard type paths: `operator` (`spiffe://g8e.local/operator/<org>/<op>/<session>`), `cli` (`spiffe://g8e.local/cli/<user>/<session>`), `app` (`spiffe://g8e.local/app/<id>`), `user` (`spiffe://g8e.local/user/<user>`), `hub` (`spiffe://g8e.local/hub/operator-listen`), and `gateway-peer` (`spiffe://g8e.local/gateway/<gw>`). |
+| INV-NET-ID-03 | Additive SAN drift detected at Gateway startup (missing host IPs or hostnames compared to detected network identity) MUST trigger automatic regeneration of the serving certificate. Dropped host aliases MUST NOT trigger regeneration. |
 
-The platform uses a four-tier PKI hierarchy issued by the Governance Gateway:
+### Transport Security (`INV-NET-TLS`)
 
-| Tier | Certificate | Purpose | Validity |
-| :--- | :--- | :--- | :--- |
-| **Root CA** | `g8e Root CA` | Trust anchor for the entire platform | 3650 days |
-| **Hub Intermediate CA** | `g8e Hub Intermediate CA` | Signs the gateway serving certificate | 3650 days |
-| **Operator Intermediate CA** | `g8e Operator Intermediate CA` | Signs all leaf certificates (operator, CLI, app) | 3650 days |
-| **Peer Intermediate CA** | `g8e Gateway Peer Intermediate CA` | Signs certificates for gateway-to-gateway peering | 3650 days |
-| **Serving Certificate** | operator-gateway | Gateway TLS identity for inbound connections | 90 days |
-| **Leaf Certificates** | operator, CLI, app | End-entity identities for services and clients | 7 days |
-| **Peer Certificates** | gateway-peer | Identity for federated gateway communication | 90 days |
+| ID | Rule |
+| --- | --- |
+| INV-NET-TLS-01 | Inbound HTTPS and WebSocket connections MUST enforce TLS 1.3 minimum (`tls.VersionTLS13`). Plain HTTP is restricted to discovery, health checks, and unauthenticated bootstrap/recovery initiation. |
+| INV-NET-TLS-02 | The HTTPS listener MUST configure `tls.VerifyClientCertIfGiven` at the transport layer to permit browser clients to access public and console routes without client certificates, while delegating mandatory mTLS enforcement to application-layer middleware. |
+| INV-NET-TLS-03 | Client connections resolving the Gateway via IP address MUST provide `g8e.local` as the TLS ServerName (SNI) to satisfy hostname validation against the serving certificate DNS SAN. |
 
-### Intermediate Split Rationale
+### Port Topology (`INV-NET-PORT`)
 
-The hub and Operator intermediate CAs are kept separate to enforce a blast-radius boundary. The hub intermediate signs only the gateway's serving identity, while the Operator intermediate signs delegated workload leaves. This separation allows the operator-issuing key to be rotated or revoked without touching the gateway's serving trust, and vice versa.
+| ID | Rule |
+| --- | --- |
+| INV-NET-PORT-01 | The Gateway MUST expose a consolidated two-port topology: HTTP Discovery/Bootstrap (`8080` default) and HTTPS Merged API/Console (`8443` default). Startup MUST fail if multiple logical surfaces are assigned to the same port. |
+| INV-NET-PORT-02 | The plain HTTP router (`buildHTTPRouter`) MUST serve only health, state root, CA bundle discovery, and token-scoped bootstrap/recovery initiation. All unhandled paths MUST redirect with HTTP 301 to HTTPS, validating the `Host` header against `isSafeHost`. |
+| INV-NET-PORT-03 | Privileged CSR signing (`/api/v1/pki/csr/sign`), CLI rotation, CLI refresh, CLI session query, and enrollment approval routes MUST NOT be registered on the plain HTTP router. |
 
-### Curve Policy
+### Communication Patterns (`INV-NET-COMM`)
 
-All certificates (root, intermediates, serving, and leaves) use ECDSA P-256 for broad interoperability with SPIFFE/SPIRE and TLS 1.3 stacks.
+| ID | Rule |
+| --- | --- |
+| INV-NET-COMM-01 | Governed remote Operators MUST establish outbound-only mTLS WebSocket connections to the Gateway pub/sub endpoint (`/api/v1/pubsub/stream`). Operators MUST NOT open inbound listening ports for command, MCP, or A2A traffic. |
+| INV-NET-COMM-02 | Pub/sub topic channels (`cmd:`, `results:`, `heartbeat:`, `receipts:`, `audit:`) MUST be strictly scoped by Operator ID and session ID, and authorization MUST be validated against the caller's verified SPIFFE identity URI SAN. |
+| INV-NET-COMM-03 | The Lattice gRPC adapter is a supplementary integration; the native outbound-only WebSocket pub/sub stream is the authoritative governed command dispatch path. |
 
-### Revocation
+## Owned surfaces
 
-Certificate revocation is enforced during every new mTLS request and WebSocket handshake. A standard X.509 CRL signed by the Operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption. Governed platform enrollment revocation also disconnects established pub/sub WebSockets by their authenticated SPIFFE identity, so an Operator or application cannot retain an authenticated channel after its certificate is revoked.
-
----
-
-## 2. Workload Identity (SPIFFE)
-
-Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate.
-
-| Workload Type | SPIFFE ID Format |
-| :--- | :--- |
-| **Governed Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
-| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
-| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` |
-| **Ensemble (g8ee)** | `spiffe://g8e.local/app/g8ee` |
-| **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` |
-| **Governance Gateway** | `spiffe://g8e.local/hub/operator-listen` |
-| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` |
-
-The ensemble (`g8ee`) is a special app identity that serves all operators and is authorized to push SSE events to any session regardless of operator binding. See [Ensemble (g8ee)](./ensemble.md) for details.
-
----
-
-## 3. mTLS Enforcement
-
-The Gateway's HTTPS listener and outbound Operator pub/sub clients use TLS 1.3. The separate HTTP listener is intentionally plain text and limited to discovery, health, and token-scoped bootstrap or enrollment flows. Network transport provides identity assurance for the platform's five-layer interlock pipeline: L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator.
-
-### Application-Layer mTLS Enforcement
-
-- The gateway requests and verifies client certificates when present during the TLS handshake, allowing browser-based clients (such as the g8e Console) to connect without certificates.
-- For routes classified as mTLS-only, application-layer middleware acts as a strict, fail-closed gate requiring a verified client certificate. Web-session routes and dual-auth SSE consumer routes use their documented cookie or certificate alternatives.
-- Certificate revocation is checked against the revoked certificates store.
-- Middleware binds the verified certificate's SPIFFE identity to the authenticated route context and session or workload record. Governance processing separately validates envelope identity, target, and proof bindings; callers cannot replace certificate-derived identity with request headers.
-
-### Identity Binding
-
-Operator-to-Gateway pub/sub connections enforce mTLS with SPIFFE URI SAN validation. Certificates utilize `spiffe://g8e.local/...` regardless of the host environment, ensuring identity is consistent across the supported outbound transport paths.
-
----
-
-## 4. Certificate Enrollment & Bootstrap
-
-### CSR-Based Enrollment
-
-CSR-based enrollment provides cryptographic identity proof. Instead of sharing a secret such as an API key, a client generates its own key pair and submits a Certificate Signing Request (CSR) to the Gateway. The Governance Gateway acts as the Certificate Authority (CA) that signs the certificate, attesting to the client identity. Initial human bootstrap creates the first owner; subsequent platform workload enrollment requires an owner decision, and CLI recovery requires the appropriate browser or already-enrolled CLI approval. After issuance, the client authenticates applicable calls using mTLS signed with its private key.
-
-The initial CLI enrollment flow uses the bootstrap endpoint (`POST /api/v1/auth/bootstrap`), which is public and reachable over both plain HTTP and HTTPS. The mTLS-protected CSR signing endpoint (`POST /api/v1/pki/csr/sign`) is reserved for already-authenticated callers minting privileged leaf certificates (operator, CLI, app, gateway-peer); it requires a verified mTLS identity and is never registered on the plain HTTP router.
-
-Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow:
-
-1. **CA Discovery**: Clients fetch the platform gateway trust bundle (root CA, hub intermediate, operator intermediate, and gateway peer intermediate) from the endpoint `/.well-known/g8e/pki/ca-bundle`.
-2. **CSR Submission**: Clients generate a local ECDSA P-256 key pair and submit a CSR to `POST /api/v1/auth/bootstrap` (initial enrollment) or through the CLI recovery flow (`POST /api/v1/auth/cli/recovery/request` followed by `POST /api/v1/auth/cli/recovery/complete`) when the gateway is already bootstrapped.
-3. **Registration**: The Governance Gateway validates the CSR and binds the certificate to a user identity.
-4. **Session Issuance**: Upon successful enrollment, the Governance Gateway issues a specific `operator_session_id` or `cli_session_id`.
-
-### Trusting the Self-Signed Root CA
-
-Since the Governance Gateway acts as a self-signed CA, clients must explicitly trust the platform Root CA to allow secure HTTPS communication, especially for browser-based WebAuthn registration. The `auth enroll user` command installs the platform Root CA into the OS trust store as part of the interactive enrollment flow, before opening the browser for the passkey ceremony.
-
-If automatic OS trust installation fails, `auth enroll user` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
-
-After installing the Root CA (or removing stale anchors from a previous gateway instance), close all open browser windows before clicking the enrollment link so the new trust anchor is recognized. Firefox and other browser-private trust stores may require separate handling.
-
-### CLI Recovery and Rotation Routes
-
-The old `handleCLIEnrollment` endpoint (`/api/v1/auth/cli/enroll`) and the trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) have been removed. They are replaced by the following public or mTLS-protected routes:
-
-- `POST /api/v1/auth/cli/recovery/request` and `POST /api/v1/auth/cli/recovery/complete` are public discovery-surface routes; the CSR is the proof-of-possession anchor and the opaque token is the lookup key.
-- `GET /api/v1/auth/cli/recovery/status` is public for token-scoped polling.
-- `POST /api/v1/auth/cli/recovery/approve` is HTTPS-only and requires a browser web-session cookie so an existing user can authorize the new CLI via the Console SPA.
-- `POST /api/v1/auth/cli/recovery/approve-cli` is HTTPS-only and mTLS-only; it is the headless counterpart to the browser approve endpoint. An already-enrolled CLI authorizes the new CLI via `g8e auth approve-recovery <token>`, and the approver user ID is derived from the verified mTLS certificate URI SAN by the unified auth middleware. It is never registered on the plain HTTP router.
-- `POST /api/v1/auth/cli/rotate` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. Identity is derived from the verified client certificate, and only one replacement is performed per run.
-- `POST /api/v1/auth/cli/refresh` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. It allows a CLI with a valid certificate but an expired or missing session to re-establish its session without rotating the certificate. Identity is derived from the verified client certificate URI SAN.
-- `GET /api/v1/auth/cli/session` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. It returns the authenticated CLI session's persisted identity binding (`cli_session_id`, `user_id`, `operator_session_id`, and `operator_id`) resolved from the session record and the operators collection, never from request headers. A session with no operator binding reports empty operator fields; `g8e auth context` uses the response to resync local credentials against server-side state.
-- `POST /api/v1/auth/cli/bind` and `POST /api/v1/auth/cli/unbind` are HTTPS-only and mTLS-only. They pin or clear the authenticated CLI session's operator binding. A successful bind or unbind issues a replacement CLI session server-side; local credentials must be updated to the returned `cli_session_id`. The target operator session must be active and belong to the authenticated user.
-- `POST /api/v1/operators/commands` is HTTPS-only and mTLS-only. Enrolled CLI callers submit typed dispatch requests with an explicit `target_operator_session_id`; the gateway constructs the governed envelope, publishes to the target operator's `cmd:` channel, and blocks until a terminal command result arrives. `g8e operator run` is the supported CLI surface for parallel `EXECUTE_BASH` fan-out to multiple operator sessions.
-
-The recovery request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so a new CLI without trusted TLS can initiate recovery. The approve endpoint is HTTPS-only because it requires a web-session cookie, which is only set over TLS. The approve-cli endpoint is HTTPS-only and mTLS-only because the approver must already hold a valid CLI certificate.
-
-### Platform Enrollment Routes
-
-Platform enrollment allows unenrolled workloads (dashboard, ensemble, operator) to request admission to an already-bootstrapped gateway. The flow mirrors the CLI recovery model: a public, token-scoped discovery surface for initiation, and owner-authenticated surfaces for pending review and decision.
-
-- `POST /api/v1/auth/platform-enrollments/request` is a public discovery-surface route reachable over both plain HTTP and HTTPS. The CSR is the proof-of-possession anchor and the opaque token is the lookup key.
-- `GET /api/v1/auth/platform-enrollments/status` is public for token-scoped polling, reachable over both plain HTTP and HTTPS.
-- `POST /api/v1/auth/platform-enrollments/complete` is public (token-scoped with proof-of-possession), reachable over both plain HTTP and HTTPS.
-- `POST /api/v1/auth/platform-enrollments/pending` is HTTPS-only and requires owner authentication (web session cookie or mTLS CLI) so an existing owner can review pending enrollment requests via the Console SPA or CLI.
-- `POST /api/v1/auth/platform-enrollments/decision` is HTTPS-only and requires owner authentication (web session cookie or mTLS CLI); the controller enforces active-first-user authorization after the middleware stamps the user ID.
-- `POST /api/v1/auth/platform-enrollments/revoke` is HTTPS-only and requires owner authentication (web session cookie or mTLS CLI). It accepts the completed enrollment request ID, applies the governed revocation action, invalidates the issued identity and related sessions or policy, and disconnects active pub/sub channels for the revoked SPIFFE identity.
-
-The request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so an unenrolled workload without a client certificate can initiate enrollment. The pending, decision, and revoke endpoints are HTTPS-only because they require owner authentication, which is only available over TLS.
-
-### Cross-Gateway Enrollment
-
-The platform enrollment protocol does not screen requester identity. The request endpoint is unauthenticated (`RouteAuthNone`), validation checks only CSR key material and format, and the upstream owner's manual approval is the sole admission gate. Nothing in the request validation, CSR signing, or channel ACL paths inspects whether the requester is itself a gateway or rejects gateway-originated certificates. This is permissive by design and is covered by integration and Docker E2E tests in `test/e2e/cross_enrollment_e2e_test.go`.
-
-Because the gateway binary runs the same `operator start -e <upstream-gateway>` path as any standalone operator, a gateway can enroll as an operator of another gateway. The enrolling gateway submits an operator CSR through the platform enrollment protocol, the upstream owner approves it through the same pending-list and operator-registry surfaces as any standalone operator, and the enrolling gateway receives operator and CLI leaf certificates signed by the upstream gateway's Operator intermediate CA. The issued identity is `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` — the standard operator identity path, not the gateway peer PKI tier.
-
-The enrolled gateway-as-operator then dials out to the upstream gateway over outbound-only mTLS, subscribes to its session-specific command channel, and executes governed commands through its own L4 Warden and L5 Actuator. It re-verifies the L1-L3 proofs attached by the upstream gateway before the Actuator executes, exactly as a standalone operator does. The upstream owner discovers, approves, denies, and manages the gateway-as-operator through the same surfaces as any standalone operator; denial produces no active operator and leaves the upstream gateway healthy.
-
-This enables cascading outbound-only topologies. A gateway deployed at the absolute edge — where the data lives — enrolls outbound-only to an upstream gateway, which may itself enroll outbound-only to a gateway further in, and so on to a root gateway. Every hop is an outbound mTLS connection, no edge device opens an inbound management port, and the operator at each edge re-verifies the full L1-L3 proof chain before execution. Cross-gateway enrollment uses the operator identity path and is distinct from the reserved gateway peer PKI tier (`spiffe://g8e.local/gateway/<gateway_id>`). See [Operator Architecture](./operator.md#cross-gateway-enrollment-cascading-outbound-topologies) for the operator-side re-verification behavior.
-
-### Passkey Enrollment Routes
-
-CLI-initiated passkey enrollment uses two HTTPS-only enrollment-token routes: a registration challenge step and a registration verify step under `/api/v1/auth/passkeys/enrollment/register/`. The one-time enrollment token is generated by the CLI through the mTLS-protected `POST /api/v1/auth/enrollment-token/generate` endpoint and passed to the browser via the `#enroll=1&token=...` URL fragment. The public `POST /api/v1/auth/enrollment-token/validate` endpoint allows the browser to validate the token before presenting the challenge step. The gateway derives `user_id` and `cli_session_id` from the token; neither is sent in the request body. The challenge step validates the token; the verify step consumes it.
-
-### Operator Command Dispatch Routes
-
-The command dispatch and operator session lookup endpoints are HTTPS- and mTLS-only. `POST /api/v1/operators/commands` accepts a typed `OperatorCommandRequest`, routes it through the governance pipeline, and returns a `DispatchResponse`. `POST /api/v1/operators/stop` accepts an owner-scoped remote Operator session ID, dispatches a governed `SHUTDOWN` command to that exact session, waits for its correlated acknowledgement, and records the stopped state. `GET /api/v1/operators/session/{id}` looks up an operator by session ID.
-
-### CLI Endpoint Override Flags
-
-When the gateway's HTTP and HTTPS ports are mapped to different host ports, such as in Docker environments where container ports `8080` and `8443` are exposed on host ports `8085` and `8448`, the CLI provides flags to independently override each endpoint:
-
-| Flag | Purpose | Default |
+| Claim | Path | Verify |
 | --- | --- | --- |
-| `--endpoint` (`-e`) | HTTP discovery endpoint (host or host:port) for remote enrollment | empty (uses `localhost` via the configured HTTP port) |
-| `--port` (`-p`) | HTTPS/mTLS port (overrides default 8443; use with `--endpoint`) | `0` (uses the configured HTTPS port, normally `8443`) |
+| PKI Authority and TLS config | `internal/services/gateway/gateway_certs.go` | Unit tests in `internal/services/gateway/pki_authority_test.go` |
+| Default port constants | `internal/constants/ports.go` | Schema in `protocol/constants/ports.json` and `internal/config/config.go` |
+| HTTP & HTTPS route muxing | `internal/services/gateway/gateway_http_router.go` | Route tests in `internal/services/gateway/gateway_http_test.go` |
+| SPIFFE identity formatting | `protocol/workload_identity.go` | Spec tests in `protocol/workload_identity_test.go` |
+| Network identity detection | `internal/services/network/identity.go` | Interface tests in `internal/services/network/identity_test.go` |
+| Operator pub/sub transport | `internal/services/pubsub/g8eg_pubsub_client.go` | Stream tests in `internal/services/gateway/gateway_pubsub_test.go` |
+| Platform enrollment revocation | `internal/services/pubsub/platform_enrollment_handlers.go` | Lifecycle tests in `internal/services/gateway/platform_enrollment_controller_test.go` |
 
-When both flags are used together without a scheme in `--endpoint`, the CLI splits the overrides: `--endpoint` controls the HTTP discovery URL and `--port` controls the HTTPS/mTLS port. For example, running `g8e auth enroll user -e localhost:8085 --port 8448` directs HTTP discovery to port `8085` and HTTPS mTLS operations to port `8448`.
+## Procedures
 
-### `mcp stdio` Credential Flags
+### PKI hierarchy and trust anchors
 
-The `g8e mcp stdio` subcommand accepts command-scoped credential flags for direct IDE MCP config integration. These flags are not root-persistent; they apply only to `mcp stdio`. Cert and key are resolved as pairs per tier (app or client); supplying only one half of a pair fails closed.
+The platform operates an internal four-tier Public Key Infrastructure (PKI) managed by the Governance Gateway:
 
-| Flag | Purpose | Default when unset |
-| --- | --- | --- |
-| `--client-cert` | Path to CLI client certificate (mTLS) | resolved from enrolled CLI cert on disk |
-| `--client-key` | Path to CLI client key (mTLS) | resolved from enrolled CLI key on disk |
-| `--ca-bundle` | Path to gateway CA bundle PEM | resolved from the enrolled trust bundle in `.g8e/pki/trust/` |
-| `--gateway-url` | Gateway MCP endpoint URL (https only) | `https://g8e.local:8443/mcp` with a direct-IP fallback if `g8e.local` cannot resolve |
-| `--app-cert` | Path to delegated app certificate (requires `--app-key`) | none |
-| `--app-key` | Path to delegated app key (requires `--app-cert`) | none |
+| Tier | Certificate Subject | Issuer | Purpose | Validity | Key Spec |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Root CA** | `g8e Root CA` | Self-signed | Platform root trust anchor | 3650 days | ECDSA P-256 |
+| **Hub Intermediate CA** | `g8e Hub Intermediate CA` | `g8e Root CA` | Signs Gateway serving certificates | 3650 days | ECDSA P-256 |
+| **Operator Intermediate CA** | `g8e Operator Intermediate CA` | `g8e Root CA` | Signs workload leaves (operator, CLI, app) | 3650 days | ECDSA P-256 |
+| **Peer Intermediate CA** | `g8e Gateway Peer Intermediate CA` | `g8e Root CA` | Signs federated gateway peering certificates | 3650 days | ECDSA P-256 |
+| **Serving Certificate** | `operator-gateway` | `g8e Hub Intermediate CA` | TLS serving identity for Gateway listeners | 90 days | ECDSA P-256 |
+| **Workload Leaves** | Dynamic (per identity) | `g8e Operator Intermediate CA` | Mutual TLS client/server authentication | 7 days | ECDSA P-256 |
+| **Peer Certificates** | `gateway-peer` | `g8e Gateway Peer Intermediate CA` | Cross-gateway federated peering | 90 days | ECDSA P-256 |
 
-Credentials resolve in this order: command flag, then the matching `G8E_*` environment variable, then the enrolled CLI credential on disk. App cert/key pairs are evaluated before client cert/key pairs, so a fully specified app pair takes precedence.
+The Hub and Operator intermediate CAs are strictly partitioned to enforce a blast-radius boundary. Compromise or rotation of the workload-issuing intermediate does not invalidate the Gateway's serving certificate, and rotation of the serving identity does not revoke existing client leaf certificates.
 
-### No-DNS / Direct IP Configuration
+All certificates enforce ECDSA P-256. CSRs submitted to the Gateway with non-P-256 keys or invalid signatures fail verification immediately.
 
-The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. The CLI default discovery URL uses `localhost`; the `mcp stdio` default gateway URL uses `g8e.local`. If `g8e.local` does not resolve, `mcp stdio` falls back to the machine's external IPv4 interface while continuing to use `g8e.local` as the TLS ServerName, because the gateway certificate includes `g8e.local` in its DNS SAN.
+Revocation is checked during every mTLS request against the persistent database collection `revoked_certificates`. The Gateway generates a standard X.509 Certificate Revocation List (CRL) signed by the Operator Intermediate CA, served at `/.well-known/g8e/pki/crl` and `/api/v1/pki/revocation-bundle`. When an enrolled platform workload is revoked via `POST /api/v1/auth/platform-enrollments/revoke`, the Gateway writes the certificate serial to the revocation store, deletes associated application policies, and calls `Connections.DisconnectIdentity` to terminate active pub/sub WebSockets bound to that SPIFFE identity.
 
-### Windows Certificate Store Enrollment
+### Workload identity format (SPIFFE)
 
-On Windows, `g8e auth enroll user` auto-detects the platform and imports the signed CLI certificate into the CurrentUser Personal store for Windows Hello and CNG access. This is part of the same `auth enroll user` flow that installs the gateway root CA and registers a passkey; it is not a separate enrollment mode.
+Every active component in the platform receives a cryptographically verifiable SPIFFE ID embedded as a URI SAN in its leaf certificate:
 
-1. The CLI generates an ECDSA P-256 key pair and CSR.
-2. The CSR is submitted to the Governance Gateway, and a signed certificate with a SPIFFE URI SAN is returned.
-3. The signed certificate is imported into the Windows Certificate Store.
-4. The gateway extracts the SPIFFE URI SAN from the client certificate and creates a `cli_session_id` bound to the user identity.
+```text
+spiffe://g8e.local/<type>/<identity-segments>
+```
 
----
+Canonical formats defined in `protocol/workload_identity.go`:
 
-## 5. Port Topology
+| Workload Type | SPIFFE ID Format | Description |
+| :--- | :--- | :--- |
+| **Governed Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | Outbound execution worker bound to an organization, operator, and session. |
+| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | Interactive CLI tool or developer client session. |
+| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | Delegated tool, agent, or application running under an operator. |
+| **Ensemble (`g8ee`)** | `spiffe://g8e.local/app/g8ee` | System-level event broker authorized to push SSE events across all sessions. |
+| **User Principal** | `spiffe://g8e.local/user/<user_id>` | Human delegator identity embedded as secondary SAN on delegated credentials. |
+| **Governance Gateway** | `spiffe://g8e.local/hub/operator-listen` | Gateway hub identity embedded in the serving certificate URI SAN. |
+| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | Federated gateway peer identity. |
 
-The Governance Gateway utilizes a consolidated 2-port design. Surfaces with different TLS requirements are isolated by port.
+The ensemble identity (`spiffe://g8e.local/app/g8ee`) is a recognized platform service identity authorized to deliver Server-Sent Events to any active session regardless of specific operator binding.
 
-Default ports:
+### Transport security and mTLS enforcement
 
-| Surface | Port (default) | Auth | Purpose |
-| --- | --- | --- | --- |
-| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Health checks, state endpoint, CA discovery, bootstrap, CLI recovery request/status/complete, platform enrollment request/status/complete, deploy scripts, and g8e binary distribution. |
-| **HTTPS (Merged API + Console)** | `8443` (hybrid TLS) | mTLS / WebSession / JWT / Public | The primary execution boundary. Includes the g8e Console, browser WebAuthn endpoints, CA bundle and CRL endpoints, CSR signing, all mTLS-guarded operator API and MCP routes, and JWT-authenticated A2A ingress when JWKS is configured. |
+Network transport provides identity assurance for the platform's five-layer interlock pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator):
 
-### Port Constraints
+- **TLS 1.3 Minimum**: TLS 1.3 is required for all encrypted traffic. Older TLS versions are rejected.
+- **Hybrid Client Authentication**: The Gateway's public TLS listener uses `tls.VerifyClientCertIfGiven`. The TLS handshake requests client certificates and verifies them against the Gateway CA pool when presented, but does not abort if a browser client provides no certificate.
+- **Application-Layer Enforcement**: The Gateway's unified authentication middleware evaluates each route against the `RouteAuthRegistry`. Routes classified as `RouteAuthMTLS` act as fail-closed barriers, rejecting requests without a verified certificate and SPIFFE URI SAN. Dual-auth routes (`RouteAuthDual`) check mTLS first, falling back to valid browser session cookies.
+- **Identity Binding**: The middleware extracts the authenticated SPIFFE ID directly from the TLS peer certificate, resolving user ID, CLI session ID, operator session ID, or app ID. Callers cannot spoof identity via request headers; headers that contradict the certificate or persisted session bindings are rejected.
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, the state endpoint, CA bundle and fingerprint discovery, bootstrap, CLI recovery request/status/complete (token-scoped, no mTLS required), platform enrollment request/status/complete (token-scoped, no mTLS required), deploy scripts, and g8e binary distribution. It does not serve MCP, A2A, pub/sub, SSE, console, or governed API routes; other paths redirect to HTTPS. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) and `handleCLIEnrollment` (`/api/v1/auth/cli/enroll`) are removed; trust installation is now handled by `auth enroll user` directly, and enrollment is handled by the recovery or platform-enrollment flows.
-- **HTTPS Surface** (`8443`): Accepts optional client certificates at the transport layer, allowing public access to browser-based assets while requiring application-layer authentication according to the route registry. mTLS-only routes require a verified certificate and SPIFFE identity; browser routes use a web-session cookie; SSE consumer routes accept either; and MCP/A2A accept JWT as an alternative only when JWKS is configured. CSR signing (`/api/v1/pki/csr/sign`) is mTLS-protected and registered only on the HTTPS router. Public routes such as the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints are accessible without a client certificate.
-- **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
+### Port topology and router classification
 
-### Docker Port Mapping and CLI Split Endpoints
+The Governance Gateway uses a consolidated two-port architecture to separate discovery and bootstrap from the primary execution boundary:
 
-In Docker demo environments, the gateway's internal HTTP (`8080`) and HTTPS (`8443`) ports are typically mapped to different host ports (such as `8085` for HTTP and `8448` for HTTPS). Because enrollment requires HTTP discovery and HTTPS mTLS calls, the CLI uses split endpoint overrides (`--endpoint` for HTTP discovery and `--port` for HTTPS mTLS) to reach both surfaces through their respective host ports.
+```text
+       +-------------------------------------------------------------+
+       |                  g8e Governance Gateway                     |
+       +-------------------------------------------------------------+
+                       |                             |
+              Port 8080 (Plain HTTP)        Port 8443 (Hybrid TLS 1.3)
+                       |                             |
+        +--------------+--------------+      +-------+--------------------+
+        | Health & State Discovery    |      | Console SPA & Static Web   |
+        | CA Bundle & Fingerprint     |      | Browser Passkey Auth       |
+        | Unauthenticated Bootstrap   |      | Authenticated mTLS API     |
+        | Token Recovery / Enrollment |      | WebSocket Pub/Sub Stream   |
+        | 301 Catch-All -> HTTPS      |      | Governed MCP / A2A Ingress |
+        +-----------------------------+      +----------------------------+
+```
 
-### Auxiliary Service Ports
+Default ports defined in `internal/constants/ports.go`:
 
-The root Docker Compose stack also starts auxiliary first-party services and optional Gateway-owned listeners. These are deployment defaults, not protocol-level ports, and are not part of the Gateway's primary mTLS execution boundary.
+| Surface | Port | Protocol | Classification | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **HTTP Surface** | `8080` | Plain HTTP | Public / Token-Scoped | Serves `/health`, `/state`, CA bundle discovery (`/.well-known/g8e/pki/ca-bundle`), Root CA fingerprint (`/.well-known/g8e/pki/fingerprint`), initial bootstrap (`/api/v1/auth/bootstrap`), token-scoped CLI recovery request/status/complete, token-scoped platform enrollment request/status/complete, binary downloads, and installation shell scripts. All other paths redirect to HTTPS. |
+| **HTTPS Surface** | `8443` | Hybrid TLS 1.3 | mTLS / WebSession / Dual / Public | Primary execution boundary. Serves Console SPA, WebAuthn passkey registration/login, CRL (`/.well-known/g8e/pki/crl`), CSR signing (`/api/v1/pki/csr/sign`), all operator dispatch APIs, pub/sub WebSocket (`/api/v1/pubsub/stream`), SSE event streams, and governed MCP/A2A ingress. |
 
-| Service | Port (default) | Purpose |
-| --- | --- | --- |
-| **Ensemble (g8ee)** | `8000` | Python/FastAPI agentic ensemble; connects to the gateway over mTLS and streams events via SSE. See [Ensemble (g8ee)](./ensemble.md). |
-| **Dashboard (g8ed)** | `3000` | Node.js/Express operator dashboard UI. See [Dashboard (g8ed)](./dashboard.md). |
-| **Public spectator private ingest** | `8081` (loopback default) | Authenticated public-feed batch and proof ingest when `--public-spectator` is enabled. Not part of the primary mTLS execution boundary. |
-| **Public spectator public read** | `8082` (loopback default) | Anonymous bootstrap, history, SSE, and proof downloads for the in-process mirror. Cloudflared targets this listener only. |
-| **Evaluation explorer (dev)** | `5173` | Checked-in SPA for campaign observation against the public mirror. See [Public Spectator Architecture](./public_spectator.md). |
+Startup fails if multiple logical services configure the same port (`len(usage) > 1`).
 
----
+Auxiliary default ports started in Docker Compose or optional Gateway subprocesses:
+- **Ensemble (`g8ee`)**: `8000` (`constants.EnsembleDefaultPort`)
+- **Dashboard (`g8ed`)**: `3000` (`constants.DashboardDefaultPort`)
+- **Public Spectator Private Ingest**: `8081` (`constants.PublicSpectatorPrivatePort`, loopback default)
+- **Public Spectator Public Read**: `8082` (`constants.PublicSpectatorPublicPort`, loopback default)
+- **Evaluation Explorer SPA**: `5173` (`constants.EvalExplorerDefaultPort`, loopback default)
+- **Ollama Inference Backend**: `11434` (`constants.InferenceOllamaDefaultPort`, loopback default)
 
-## 6. `g8e.local` Trust Domain and Hostname
+### Enrollment, bootstrap, and recovery routing
 
-`g8e.local` serves two roles in the platform: the SPIFFE trust domain and the stable hostname used for TLS ServerName verification.
+The Gateway divides authentication surfaces into public discovery endpoints and privileged owner-authenticated endpoints:
 
-### Trust Domain
+```text
+Discovery Surface (Port 8080 & 8443)          Privileged Owner Surface (Port 8443 Only)
+------------------------------------          -----------------------------------------
+POST /api/v1/auth/bootstrap                   POST /api/v1/pki/csr/sign (mTLS only)
+POST /api/v1/auth/cli/recovery/request        POST /api/v1/auth/cli/recovery/approve (WebSession)
+GET  /api/v1/auth/cli/recovery/status         POST /api/v1/auth/cli/recovery/approve-cli (mTLS)
+POST /api/v1/auth/cli/recovery/complete       POST /api/v1/auth/cli/rotate (mTLS only)
+POST /api/v1/auth/platform-enrollments/request POST /api/v1/auth/cli/refresh (mTLS only)
+GET  /api/v1/auth/platform-enrollments/status  GET  /api/v1/auth/cli/session (mTLS only)
+POST /api/v1/auth/platform-enrollments/complete POST /api/v1/auth/platform-enrollments/pending (Dual)
+                                              POST /api/v1/auth/platform-enrollments/decision (Dual)
+                                              POST /api/v1/auth/platform-enrollments/revoke (Dual)
+```
 
-The trust domain is `g8e.local`. All SPIFFE IDs use this domain: `spiffe://g8e.local/<path>`. The trust domain is static and does not vary per installation.
+1. **CA Discovery**: Clients retrieve trust bundle certificates via `GET /.well-known/g8e/pki/ca-bundle` and verify the Root CA SHA-256 fingerprint via `GET /.well-known/g8e/pki/fingerprint`.
+2. **Initial Bootstrap**: When the Gateway has no registered users, the first caller submits an ECDSA P-256 CSR to `POST /api/v1/auth/bootstrap`, provisioning the root owner and returning initial credentials.
+3. **CLI Recovery**: On an already-bootstrapped Gateway, a new or recovering CLI submits a CSR to `POST /api/v1/auth/cli/recovery/request`, receiving an opaque lookup token. The CLI polls `GET /api/v1/auth/cli/recovery/status`. An active owner approves the request via the Console SPA (`POST /api/v1/auth/cli/recovery/approve` using web-session cookie) or headlessly via `g8e auth approve-recovery <token>` (`POST /api/v1/auth/cli/recovery/approve-cli` using mTLS). The recovering CLI completes issuance via `POST /api/v1/auth/cli/recovery/complete`.
+4. **Platform Workload Enrollment**: Unenrolled background services (dashboard, ensemble, remote operator) submit a CSR to `POST /api/v1/auth/platform-enrollments/request`, poll status, and complete issuance after owner approval via `POST /api/v1/auth/platform-enrollments/decision`.
+5. **Passkey Enrollment**: Browser WebAuthn registration is initiated by an enrolled CLI through `POST /api/v1/auth/enrollment-token/generate` (mTLS-only). The browser validates the token via `POST /api/v1/auth/enrollment-token/validate` and completes challenge/verify under `/api/v1/auth/passkeys/enrollment/register/`.
+6. **Windows Certificate Store**: On Windows hosts, `g8e auth enroll user` detects the platform and automatically imports the signed client certificate into the `CurrentUser\Personal` store, enabling seamless integration with Windows Hello and CNG.
 
-### Default Gateway Hostname
+### Cross-gateway cascading topologies
 
-The gateway serving certificate is issued to `localhost`, `g8e.local`, and `operator` by default, with `127.0.0.1` as a default IP SAN, plus any additional IPs, hostnames, and aliases detected by the network identity detector. The CLI defaults to `localhost` for HTTP discovery, while `g8e.local` is used as the TLS ServerName when connecting by direct IP and as the default hostname for the `mcp stdio` gateway URL.
+Because the `g8e` binary contains both Gateway and Operator runtimes, a downstream Gateway can enroll as a Governed Operator under an upstream Gateway by running `operator start -e <upstream-gateway>`:
 
-### Gateway Peer PKI
+1. **CSR Submission**: The downstream Gateway issues an operator CSR and submits it through the upstream Gateway's platform enrollment request endpoint.
+2. **Approval**: The upstream owner reviews and approves the enrollment request via the upstream Console or CLI.
+3. **Identity Grant**: The downstream Gateway receives an operator certificate signed by the upstream Operator Intermediate CA, embedding `spiffe://g8e.local/operator/<org>/<op>/<session>`.
+4. **Outbound Channel**: The downstream Gateway dials out to the upstream Gateway's `/api/v1/pubsub/stream` endpoint over mTLS, subscribing to its assigned `cmd:<operator_id>:<operator_session_id>` channel.
+5. **Local Re-Verification**: Governed commands received from the upstream Gateway pass through the downstream Gateway's local L4 Warden and L5 Actuator, validating signatures and policy independently before execution.
 
-The platform defines a dedicated gateway peer PKI tier for a future or separately integrated federated gateway-to-gateway communication surface. The `g8e Gateway Peer Intermediate CA` signs peer certificates with the SPIFFE ID format `spiffe://g8e.local/gateway/<gateway_id>`, where `<gateway_id>` is a persistent identifier generated at gateway installation time. The implemented cross-gateway deployment path currently enrolls the downstream Gateway as a normal Operator using the Operator intermediate and `spiffe://g8e.local/operator/...`; it does not use the gateway-peer certificate tier.
+This architecture enables multi-tier cascading deployments: edge gateways dial upstream to regional gateways, which dial upstream to central hubs. At each hop, the connection is strictly outbound-only mTLS, leaving no inbound ports exposed at the edge.
 
-### No-DNS Fallback
+### Pub/sub communication patterns
 
-When `g8e.local` does not resolve via system DNS, the `mcp stdio` path falls back to the machine's external IPv4 interface. The CLI continues to use `g8e.local` as the TLS ServerName for verification even when connecting via direct IP, since the gateway certificate includes `g8e.local` in its DNS SAN. Other CLI commands can use the `--endpoint` flag to set a non-default host or direct IP for HTTP discovery and the `--port` flag to override the HTTPS port.
+The platform coordinates real-time command dispatch, execution receipts, and telemetry via persistent WebSocket pub/sub on the HTTPS listener:
 
----
+- **Endpoint**: `/api/v1/pubsub/stream` on the HTTPS port (`8443`).
+- **Authentication**: Strict mTLS required at WebSocket upgrade time.
+- **Channel Partitioning**:
+  - `cmd:<operator_id>:<operator_session_id>`: Gateway dispatches governed commands to the designated Operator session.
+  - `results:<operator_id>:<operator_session_id>`: Operator publishes terminal command execution results back to the Gateway.
+  - `heartbeat:<operator_id>:<operator_session_id>`: Operator sends periodic liveness pings (default interval: 30 seconds). Heartbeats are lightweight transport telemetry and do not produce compliance ledger commitments.
+  - `receipts:<operator_id>:<operator_session_id>`: Operator publishes signed L5 execution receipts for audit capture.
+  - `audit:<operator_id>:<operator_session_id>`: Gateway streams compliance and audit events.
+- **Channel Access Control**: The WebSocket handler validates that every subscribe and publish request targets channels matching the caller's authenticated SPIFFE identity URI SAN.
+- **Local Loopback Delivery**: When a transaction targets the Gateway's embedded Operator, the Gateway bypasses network sockets and routes the envelope through an in-process pub/sub client directly to the embedded L4/L5 execution pipeline.
+- **Lattice Integration**: The Operator CLI provides configuration flags (`--lattice-endpoint`, `--lattice-client-id`, etc.) for an Anduril Lattice gRPC task stream. However, the Lattice adapter task handler does not provide completed governed command execution; WebSocket pub/sub remains the primary authoritative execution transport.
 
-## 7. Communication Patterns
+### Network identity detection and SAN drift
 
-### Outbound-Only WebSocket Connectivity
+At startup, the Gateway initializes `network.Detector` to discover the local host's network identities:
 
-The Governed Operator uses dial-out WebSocket pub/sub connections with zero inbound port requirements. The operator establishes a persistent WebSocket connection to the gateway's `/api/v1/pubsub/stream` endpoint using mTLS. This eliminates the need to open inbound ports on managed hosts, reducing the attack surface. A gateway enrolled as an operator of another gateway uses the same outbound path, so cascading topologies preserve the zero-inbound-port property at every edge hop.
+1. **Network Interface IPs**: Collects all IPv4 addresses from non-loopback network interfaces.
+2. **Host-Mounted Identity Bindings**: In containerized deployments (such as Docker Compose), the host's `/etc/hosts` and `/etc/hostname` are bind-mounted read-only at `/etc/hosts.host` and `/etc/hostname.host` (`internal/constants/paths.go:PathEtcHostsHost`). The detector reads these files first, merging and de-duplicating IP addresses and host aliases with container-local configurations.
+3. **System Hostnames and Aliases**: Gathers machine hostnames, `/etc/hosts` aliases, and local `.local` mDNS names.
+4. **DNS and Reverse Lookups**: Resolves reverse DNS PTR records and extracts hostnames from `~/.ssh/known_hosts`.
+5. **Windows Identifiers**: On Windows systems, extracts NetBIOS names and Active Directory domain FQDNs.
 
-### WebSocket Pub/Sub
+**Additive SAN Drift Regeneration**:
+The Gateway inspects its existing serving certificate against the detected identity:
+- Default DNS SANs include `localhost`, `g8e.local`, and `operator`.
+- Default IP SANs include `127.0.0.1`.
+- If newly detected non-loopback IPs or DNS hostnames are absent from the certificate (additive drift), the Gateway regenerates the serving certificate on-the-fly and saves the updated chain to disk. Dropped or missing host aliases do not trigger regeneration, avoiding certificate churn during temporary network reconfigurations.
 
-The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authenticated by mTLS. Channels are scoped per operator and session, covering command, result, and heartbeat streams. Subscribers can only access channels matching their mTLS workload identity.
+## Anti-patterns
 
-### Local Operator Delivery
+- **Bypassing application-layer mTLS**: Relying on transport-level certificate checks alone without verifying the SPIFFE URI SAN and session binding in application middleware (violates INV-NET-TLS-02).
+- **Hardcoding host IPs instead of using `g8e.local`**: Connecting directly to IP addresses without setting `ServerName: g8e.local`, which fails TLS certificate verification (violates INV-NET-TLS-03).
+- **Registering privileged endpoints on plain HTTP**: Exposing CSR signing, session manipulation, or recovery approval on port `8080` (violates INV-NET-PORT-03).
+- **Exposing inbound listening ports on remote Operators**: Attempting to implement reverse HTTP, SSH, or gRPC listener sockets on managed operator nodes instead of utilizing outbound-only pub/sub WebSockets (violates INV-NET-COMM-01).
+- **Trusting caller-provided identity headers**: Allowing `X-G8E-User-ID` or `X-G8E-Operator-ID` headers from the client to override the verified SPIFFE URI SAN extracted from the client certificate (violates INV-NET-ID-02).
+- **Using non-P-256 keys for platform PKI**: Generating RSA or Ed25519 keys for the platform CA hierarchy or client CSRs (violates INV-NET-PKI-01).
+- **Treating Lattice gRPC as equivalent to WebSocket command dispatch**: Documenting the supplementary Lattice gRPC adapter as a fully supported alternative to native pub/sub command dispatch (violates INV-NET-COMM-03).
 
-When a `GovernanceEnvelope` targets the local gateway, the gateway identifies the target Operator from the envelope routing metadata. If the Operator is local, the gateway delivers the envelope through a loopback pub/sub client to the in-process command service, which runs L4 Warden and L5 Actuator in-process for operations targeting the gateway host itself.
+## Links out
 
-### Lattice gRPC Adapter
-
-When configured, the Governed Operator dials out via gRPC with mTLS to an Anduril Lattice TaskManager endpoint and subscribes to assignments for its entity ID. The current CLI exposes the Lattice configuration flags, but the adapter task handler does not provide a completed governed task-dispatch integration; it must not be documented as an equivalent execution path to WebSocket-delivered commands. See [Operator Architecture](./operator.md) for the current limitation and configuration surface.
-
-### Server-Sent Events (SSE)
-
-The gateway provides real-time event streaming from app workloads to browser and CLI clients via dedicated push, polling, and live stream endpoints. Events are routed by session or user identity. The observe read API (`GET /api/v1/observe/*`) and mTLS producer endpoints (`POST /api/v1/observe/producer/agent-state`, `POST /api/v1/observe/producer/run-state`) complement SSE for browser observability. See [SSE Streaming](./sse.md) for details.
-
-### Agent Integration
-
-The platform provides zero-configuration ingress for agentic CLI coding tools through:
-- **MCP stdio proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval SSE notifications and browser opening.
-- **A2A protocol**: Agent-to-Agent execution via `/api/v1/a2a/call`, supporting JWT authentication when JWKS is configured for BYO client integration.
-
----
-
-## 8. Network Identity Detection
-
-The gateway detects the machine's network identity (IPs, hostnames, and aliases) at startup. This detection includes:
-- **Network Interface IPs**: IPv4 addresses from all non-loopback interfaces.
-- **Host-mounted hosts and hostname files**: In deployments such as the root Docker Compose stack, the host's `/etc/hosts` and `/etc/hostname` can be bind-mounted read-only at `/etc/hosts.host` and `/etc/hostname.host` (see `docker-compose.yml`). When those files are present, the detector reads them first, then the process runtime's own `/etc/hosts` and `/etc/hostname`, so the serving certificate's SANs can cover the host's real IPs and hostname rather than only the container identity. IP and alias entries are de-duplicated across both sources.
-- **Hostnames**: From system configuration and system calls.
-- **Hosts File Aliases**: Local aliases pointing to the machine's IPs.
-- **mDNS names**: Local `.local` names via mDNS services.
-- **DNS PTR records**: Reverse DNS lookups.
-- **SSH known_hosts**: Hostnames pointing to this machine.
-- **Windows Identity**: NetBIOS and AD FQDN names.
-
-This information is used for certificate SAN generation and peer discovery. The serving certificate is regenerated on startup when SAN drift is detected — if the expected IPs or DNS names are not present in the existing certificate (additive drift), the certificate is regenerated so new IPs and hostnames are covered. Removal of a name from the host does not trigger regeneration.
-
----
-
-## Related Documentation
-
-- [Authentication & Authorization](./auth.md)
-- [SSE Streaming](./sse.md)
-- [g8e Protocol](../../protocol/docs/spec.md)
-- [g8e Gateway](./gateway.md)
-- [g8e Operator](./operator.md)
-- [Ensemble (g8ee)](./ensemble.md)
-- [Dashboard (g8ed)](./dashboard.md)
-- [Public Spectator Architecture](./public_spectator.md)
+- [Authentication & Authorization Architecture](auth.md): Route classification, identity extraction, and session lifecycle.
+- [Gateway Architecture](gateway.md): Gateway admission control, operational modes, and policy decision points.
+- [Operator Architecture](operator.md): Remote operator execution, L4 Warden verification, and L5 Actuator receipts.
+- [SSE Streaming](sse.md): Real-time Server-Sent Events architecture, event types, and consumer routing.
+- [Ensemble Architecture](ensemble.md): Python agentic ensemble and SSE broadcast mechanics.
+- [Dashboard Architecture](dashboard.md): Operator web console architecture and authentication.
+- [Public Spectator Architecture](public_spectator.md): Read-only public mirror and evaluation explorer.
+- [Unified Docker Stack](../guides/unified_stack.md): Container networking, namespace isolation, and host identity bind mounts.
+- [Troubleshooting Guide](../devs/troubleshooting.md): PKI diagnostics, certificate recovery, and connection debugging.
+- [Protocol Specification](../../protocol/docs/spec.md): Wire protocols, governance envelope schemas, and message types.

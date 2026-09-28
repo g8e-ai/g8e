@@ -10,45 +10,39 @@ package evaluation
 import (
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCampaignQueueBuildBatchPlan(t *testing.T) {
 	queue := &CampaignQueue{
 		Models: []CampaignQueueModel{
-			{VariantID: "granite3-3-2b", Status: "verified"},
-			{VariantID: "qwen3-4b", Status: "verified"},
-			{VariantID: "gemma3-4b", Status: "pending"},
+			{VariantID: "granite3-3-2b", Status: QueueStatusVerified},
+			{VariantID: "skipme", Status: QueueStatusSkipped},
+			{VariantID: "qwen3-4b", Status: QueueStatusFailed},
+			{VariantID: "gemma3-4b", Status: QueueStatusPending},
+			{VariantID: "llama3-8b", Status: QueueStatusPending},
 		},
 	}
-	plan := queue.BuildBatchPlan(CampaignQueueBatchPlanRequest{
-		SkipVariantIDs: []string{"granite3-3-2b"},
-		SkipVerified:   true,
-	})
-	assert.Len(t, plan, 1)
-	assert.Equal(t, "gemma3-4b", plan[0].VariantID)
-}
 
-func TestCampaignWitnessStatusFromOperators(t *testing.T) {
-	status := CampaignWitnessStatusFromOperators([]models.OperatorDocumentGo{
-		{
-			Status: constants.OperatorStatusActive,
-			RuntimeConfig: &models.RuntimeConfig{
-				ProviderBoundaryObserverEnabled: true,
-			},
-		},
-		{
-			Status: constants.OperatorStatusActive,
-			RuntimeConfig: &models.RuntimeConfig{
-				ProvenanceOperatorEnabled: true,
-			},
-		},
-	})
-	assert.True(t, status.Ready)
-	assert.Equal(t, 1, status.ActiveObserverCount)
-	assert.Equal(t, 1, status.ActiveProvenanceCount)
+	tests := []struct {
+		name string
+		req  CampaignQueueBatchPlanRequest
+		want []string
+	}{
+		{name: "skip verified drops verified and skipped", req: CampaignQueueBatchPlanRequest{SkipVerified: true}, want: []string{"qwen3-4b", "gemma3-4b", "llama3-8b"}},
+		{name: "keep verified still drops skipped", req: CampaignQueueBatchPlanRequest{}, want: []string{"granite3-3-2b", "qwen3-4b", "gemma3-4b", "llama3-8b"}},
+		{name: "until bounds the batch", req: CampaignQueueBatchPlanRequest{SkipVerified: true, Until: 2}, want: []string{"qwen3-4b", "gemma3-4b"}},
+		{name: "until larger than the plan", req: CampaignQueueBatchPlanRequest{SkipVerified: true, Until: 10}, want: []string{"qwen3-4b", "gemma3-4b", "llama3-8b"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got []string
+			for _, entry := range queue.BuildBatchPlan(test.req) {
+				got = append(got, entry.VariantID)
+			}
+			assert.Equal(t, test.want, got)
+		})
+	}
 }
 
 func TestStrictWitnessVerifyNotes(t *testing.T) {

@@ -18,60 +18,6 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const initCampaignQueueGenerateCommand = "./g8e eval rollout init --materialize --merge"
-
-// MaterializeInitCampaignInventoryRequest writes one single-model inventory file.
-type MaterializeInitCampaignInventoryRequest struct {
-	Context         context.Context
-	FileService     fs.RuntimeFileService
-	InventoryRelDir string
-	Variant         *evalv1.ModelVariant
-}
-
-// MaterializeInitCampaignInventory freezes one model variant to a per-campaign inventory file.
-func MaterializeInitCampaignInventory(req MaterializeInitCampaignInventoryRequest) (CampaignQueueModel, error) {
-	if req.Variant == nil || req.FileService == nil {
-		return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: %w", constants.ErrMissingRequiredField)
-	}
-	inventoryRelDir := filepath.ToSlash(strings.TrimSpace(req.InventoryRelDir))
-	if inventoryRelDir == "" {
-		inventoryRelDir = DefaultCampaignInventoryRelDirname
-	}
-	if filepath.IsAbs(inventoryRelDir) || inventoryRelDir == ".." || strings.HasPrefix(inventoryRelDir, "../") {
-		return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: inventory directory must be runtime-relative")
-	}
-	campaignID := CampaignIDForVariant(req.Variant)
-	freeze, err := MaterializeModelRegistry(campaignID, []*evalv1.ModelVariant{req.Variant})
-	if err != nil {
-		return CampaignQueueModel{}, err
-	}
-	if err := ValidateModelRegistry(freeze); err != nil {
-		return CampaignQueueModel{}, err
-	}
-
-	inventoryRelPath := campaignInventoryPath(inventoryRelDir, campaignID)
-	if req.Context == nil {
-		req.Context = context.Background()
-	}
-	payload, err := marshalModelInventoryFreeze(freeze)
-	if err != nil {
-		return CampaignQueueModel{}, err
-	}
-	if err := req.FileService.WriteFile(req.Context, inventoryRelPath, payload, constants.PermFileReadOnly); err != nil {
-		return CampaignQueueModel{}, fmt.Errorf("evaluation: materialize init campaign inventory: write: %w", err)
-	}
-
-	return CampaignQueueModel{
-		VariantID:            req.Variant.GetVariantId(),
-		ServedModelTag:       req.Variant.GetServedModelTag(),
-		CampaignID:           campaignID,
-		InventoryFile:        filepath.ToSlash(inventoryRelPath),
-		ModelRegistryDigest:  freeze.RegistryDigest,
-		HomogeneousCellCount: freeze.HomogeneousCellCount,
-		Status:               "pending",
-	}, nil
-}
-
 // MaterializeCampaignInventoryRequest writes a multi-model inventory freeze file.
 type MaterializeCampaignInventoryRequest struct {
 	Context     context.Context
@@ -112,128 +58,6 @@ func MaterializeCampaignInventory(req MaterializeCampaignInventoryRequest) (*Mod
 	return freeze, outputPath, nil
 }
 
-// InitCampaignQueueRequest builds the init-campaign rollout queue manifest.
-type InitCampaignQueueRequest struct {
-	Context                     context.Context
-	FileService                 fs.RuntimeFileService
-	RuntimeInventoryPath        string
-	ExternalSourceInventoryPath string
-	InventoryRelDir             string
-	OutputQueuePath             string
-	Tags                        []string
-	MaxParameters               uint64
-	Materialize                 bool
-	MergeExisting               bool
-}
-
-// InitCampaignQueueResult summarizes queue initialization output.
-type InitCampaignQueueResult struct {
-	QueuePath    string `json:"queue_path"`
-	InventoryDir string `json:"inventory_dir"`
-	ModelCount   int    `json:"model_count"`
-	Materialized int    `json:"materialized"`
-	Preserved    int    `json:"preserved_verified"`
-	Queue        *CampaignQueue
-}
-
-// InitCampaignQueue materializes per-model inventories and writes the rollout queue manifest.
-func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, error) {
-	if req.FileService == nil {
-		return nil, fmt.Errorf("evaluation: init campaign queue: %w", constants.ErrMissingRequiredField)
-	}
-	if req.Context == nil {
-		req.Context = context.Background()
-	}
-	var variants []*evalv1.ModelVariant
-	var err error
-	externalInventoryPath := strings.TrimSpace(req.ExternalSourceInventoryPath)
-	runtimeInventoryPath := filepath.ToSlash(strings.TrimSpace(req.RuntimeInventoryPath))
-	switch {
-	case externalInventoryPath != "":
-		variants, err = LoadFrozenVariantsFromExternalSource(externalInventoryPath)
-	case runtimeInventoryPath == "":
-		variants, err = LoadFrozenVariantsFromRuntime(req.Context, req.FileService, DefaultModelInventoryRelPath)
-	default:
-		variants, err = LoadFrozenVariantsFromRuntime(req.Context, req.FileService, runtimeInventoryPath)
-	}
-	if err != nil {
-		return nil, err
-	}
-	tags := req.Tags
-	if len(tags) > 0 {
-		variants, err = VariantsByTags(variants, tags)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if req.MaxParameters > 0 {
-		variants = FilterVariantsByMaxParameters(variants, req.MaxParameters)
-	}
-	SortModelVariantsForRollout(variants)
-	variants = PrioritizeRolloutIntake(variants, loadRolloutIntakePriorityIDs())
-
-	inventoryRelDir := req.InventoryRelDir
-	if inventoryRelDir == "" {
-		inventoryRelDir = DefaultCampaignInventoryRelDirname
-	}
-
-	entries := make([]CampaignQueueModel, 0, len(variants))
-	materialized := 0
-	for _, variant := range variants {
-		entry := CampaignQueueModel{
-			VariantID:            variant.GetVariantId(),
-			ServedModelTag:       variant.GetServedModelTag(),
-			CampaignID:           CampaignIDForVariant(variant),
-			InventoryFile:        campaignInventoryPath(inventoryRelDir, CampaignIDForVariant(variant)),
-			HomogeneousCellCount: HomogeneousRoleCount * StandardScenarioCount,
-			Status:               "pending",
-		}
-		if req.Materialize {
-			materializedEntry, err := MaterializeInitCampaignInventory(MaterializeInitCampaignInventoryRequest{
-				Context:         req.Context,
-				FileService:     req.FileService,
-				InventoryRelDir: inventoryRelDir,
-				Variant:         variant,
-			})
-			if err != nil {
-				return nil, err
-			}
-			entry = materializedEntry
-			materialized++
-		}
-		entries = append(entries, entry)
-	}
-
-	queue := BuildInitCampaignQueue(inventoryRelDir, entries)
-	preserved := 0
-	if req.MergeExisting {
-		mergeQueuePath := req.OutputQueuePath
-		if mergeQueuePath == "" {
-			mergeQueuePath = DefaultInitCampaignQueueRelPath
-		}
-		if existing, loadErr := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, mergeQueuePath); loadErr == nil {
-			preserved = queue.MergePreservingVerifiedStatusFromQueue(existing)
-		}
-	}
-
-	queuePath := req.OutputQueuePath
-	if queuePath == "" {
-		queuePath = DefaultInitCampaignQueueRelPath
-	}
-	if err := SaveInitCampaignQueueToRuntime(req.Context, req.FileService, queuePath, queue); err != nil {
-		return nil, err
-	}
-
-	return &InitCampaignQueueResult{
-		QueuePath:    filepath.ToSlash(queuePath),
-		InventoryDir: filepath.ToSlash(inventoryRelDir),
-		ModelCount:   len(entries),
-		Materialized: materialized,
-		Preserved:    preserved,
-		Queue:        queue,
-	}, nil
-}
-
 // BuildInitCampaignQueue constructs a rollout queue manifest from entries.
 func BuildInitCampaignQueue(inventoryRelDir string, entries []CampaignQueueModel) *CampaignQueue {
 	if inventoryRelDir == "" {
@@ -243,35 +67,9 @@ func BuildInitCampaignQueue(inventoryRelDir string, entries []CampaignQueueModel
 		Pattern:         "eval-init-<variant_id> (legacy init-campaign for gemma4:e4b)",
 		CellsPerRun:     HomogeneousRoleCount * StandardScenarioCount,
 		InventoryDir:    filepath.ToSlash(inventoryRelDir),
-		GenerateCommand: initCampaignQueueGenerateCommand,
+		GenerateCommand: rolloutQueueGenerateCommand,
 		Models:          append([]CampaignQueueModel(nil), entries...),
 	}
-}
-
-// MergePreservingVerifiedStatusFromQueue copies verified metadata from an already loaded queue.
-func (queue *CampaignQueue) MergePreservingVerifiedStatusFromQueue(existing *CampaignQueue) int {
-	if queue == nil || existing == nil {
-		return 0
-	}
-	byVariant := make(map[string]CampaignQueueModel, len(existing.Models))
-	for _, entry := range existing.Models {
-		byVariant[entry.VariantID] = entry
-	}
-	preserved := 0
-	for i, entry := range queue.Models {
-		prev, ok := byVariant[entry.VariantID]
-		if !ok || !strings.EqualFold(prev.Status, "verified") {
-			continue
-		}
-		queue.Models[i].Status = prev.Status
-		queue.Models[i].VerifiedRunID = prev.VerifiedRunID
-		queue.Models[i].Notes = prev.Notes
-		if prev.ModelRegistryDigest != "" {
-			queue.Models[i].ModelRegistryDigest = prev.ModelRegistryDigest
-		}
-		preserved++
-	}
-	return preserved
 }
 
 // MarkCampaignQueueEntryRequest updates one queue entry after verification.

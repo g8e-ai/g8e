@@ -16,8 +16,12 @@ import (
 )
 
 func TestCampaignRunStatus(t *testing.T) {
+	t.Run("unknown without a summary", func(t *testing.T) {
+		assert.Equal(t, "unknown", CampaignRunStatus(nil, nil, false))
+	})
+
 	t.Run("initialized when no assignments are scheduled", func(t *testing.T) {
-		status := CampaignRunStatus(&CampaignRunSummary{ExpectedAssignment: 75}, nil)
+		status := CampaignRunStatus(&CampaignRunSummary{ExpectedAssignment: 75}, nil, false)
 		assert.Equal(t, "initialized", status)
 	})
 
@@ -25,18 +29,33 @@ func TestCampaignRunStatus(t *testing.T) {
 		status := CampaignRunStatus(&CampaignRunSummary{
 			ExpectedAssignment: 75,
 			QueuedCount:        75,
-		}, nil)
+		}, nil, false)
 		assert.Equal(t, "scheduled", status)
 	})
 
-	t.Run("running when an assignment is active", func(t *testing.T) {
+	t.Run("running only while a live process holds the lease", func(t *testing.T) {
+		summary := &CampaignRunSummary{
+			ExpectedAssignment: 75,
+			QueuedCount:        10,
+			RunningCount:       1,
+			TerminalCount:      64,
+		}
+		assert.Equal(t, "running", CampaignRunStatus(summary, nil, true))
+	})
+
+	t.Run("live lease reports running between assignments", func(t *testing.T) {
+		summary := &CampaignRunSummary{ExpectedAssignment: 75, QueuedCount: 10, TerminalCount: 65}
+		assert.Equal(t, "running", CampaignRunStatus(summary, nil, true))
+	})
+
+	t.Run("interrupted when an assignment is running with no live holder", func(t *testing.T) {
 		status := CampaignRunStatus(&CampaignRunSummary{
 			ExpectedAssignment: 75,
 			QueuedCount:        10,
 			RunningCount:       1,
 			TerminalCount:      64,
-		}, nil)
-		assert.Equal(t, "running", status)
+		}, nil, false)
+		assert.Equal(t, "interrupted", status)
 	})
 
 	t.Run("in_progress when partially complete", func(t *testing.T) {
@@ -44,7 +63,7 @@ func TestCampaignRunStatus(t *testing.T) {
 			ExpectedAssignment: 75,
 			QueuedCount:        10,
 			TerminalCount:      65,
-		}, nil)
+		}, nil, false)
 		assert.Equal(t, "in_progress", status)
 	})
 
@@ -52,8 +71,17 @@ func TestCampaignRunStatus(t *testing.T) {
 		status := CampaignRunStatus(&CampaignRunSummary{
 			ExpectedAssignment: 75,
 			TerminalCount:      75,
-		}, nil)
+		}, nil, false)
 		assert.Equal(t, "completed", status)
+	})
+
+	t.Run("cancelled when a cancel stopped the remaining assignments", func(t *testing.T) {
+		status := CampaignRunStatus(&CampaignRunSummary{
+			ExpectedAssignment: 75,
+			TerminalCount:      75,
+			StoppedCount:       40,
+		}, nil, false)
+		assert.Equal(t, "cancelled", status)
 	})
 
 	t.Run("verified when verification passed", func(t *testing.T) {
@@ -62,7 +90,7 @@ func TestCampaignRunStatus(t *testing.T) {
 			TerminalCount:      75,
 		}, &evalv1.EvaluationVerificationReport{
 			Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
-		})
+		}, false)
 		assert.Equal(t, "verified", status)
 	})
 
@@ -72,7 +100,7 @@ func TestCampaignRunStatus(t *testing.T) {
 			TerminalCount:      75,
 		}, &evalv1.EvaluationVerificationReport{
 			Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
-		})
+		}, false)
 		assert.Equal(t, "verify_failed", status)
 	})
 }

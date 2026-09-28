@@ -1,115 +1,402 @@
 ---
-title: Ensemble (g8ee)
-parent: Architecture
+doc_id: ensemble
+title: Ensemble Architecture (g8ee)
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - ensemble/
+  - ensemble/app/main.py
+  - ensemble/app/services/
+  - ensemble/app/clients/
+  - ensemble/app/routers/
+  - docker-compose.yml
+related:
+  - agents.md
+  - gateway.md
+  - operator.md
+  - governance.md
+  - auth.md
+  - network.md
+  - sse.md
+  - storage.md
+  - ../ensemble/agents.md
+  - ../ensemble/storage.md
+  - ../guides/unified_stack.md
+when_to_read: Understanding the architecture, runtime lifecycle, trust boundaries, tool execution loops, Tribunal command generation, application approvals, Gateway-backed persistence, and governed dispatch paths for the first-party g8ee ensemble.
+do_not_use_for:
+  - Detailed agent persona definitions, Tribunal prompt specs, and prompt templating (../ensemble/agents.md)
+  - Platform-wide five-layer governance verification and posture policy matrix (governance.md)
+  - Gateway routing, PKI, and Policy Decision Point internals (gateway.md)
+  - Operator execution engine, L5 actuator isolation, and local receipts (operator.md)
+  - MCP and external AI agent integration boundaries (agents.md)
 ---
 
-# Ensemble (g8ee)
+# Ensemble Architecture (g8ee)
 
-Last Updated: 2026-09-25
-Version: v2.1.14
+## Purpose
 
-## Scope
+Documents the first-party g8e Agentic Ensemble (`g8ee`) architecture: its Python 3.12/FastAPI runtime, startup sequence, trust boundaries, multi-model tool execution loops, Tribunal command generation pipeline, application approvals, Gateway-backed persistence, and governed dispatch mechanisms. The ensemble provides interactive conversational reasoning, triage classification, case and investigation management, and operator tool orchestration. This document maps architecture to implementation across `ensemble/` and establishes its operational constraints within the g8e zero-trust governance model.
 
-g8ee is the optional first-party Python 3.12/FastAPI application for conversational interaction with g8e. It provides triage, model selection, streaming ReAct tool loops, Tribunal command generation, application approvals, cases, investigations, memories, model telemetry, and Gateway event publication. It is not required for Gateway, MCP, A2A, or standalone Operator operation.
+## Quick index
 
-g8ee is outside the trusted execution boundary. Model output, Tribunal agreement, reputation, application memory, and application approval express application intent or telemetry; they do not authorize a host or platform mutation. Governed actions still require the Gateway and executing Operator to enforce the active posture.
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+  - [Runtime, Container, and Networking Topology](#runtime-container-and-networking-topology)
+  - [API Router Architecture and Endpoint Taxonomy](#api-router-architecture-and-endpoint-taxonomy)
+  - [Trust Boundaries and Client Hierarchy](#trust-boundaries-and-client-hierarchy)
+  - [Startup Sequence and App Identity Enrollment](#startup-sequence-and-app-identity-enrollment)
+  - [Conversation Pipeline and ReAct Tool Loop](#conversation-pipeline-and-react-tool-loop)
+  - [Tribunal Command Generation, Validation, and Risk Analysis](#tribunal-command-generation-validation-and-risk-analysis)
+  - [Governed Application-Record Mutation Flow](#governed-application-record-mutation-flow)
+  - [Persistence, Cache-Aside Architecture, and State Ownership](#persistence-cache-aside-architecture-and-state-ownership)
+  - [The Five-Layer Governance Interlock and Boundary Guarantees](#the-five-layer-governance-interlock-and-boundary-guarantees)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-## Runtime and interfaces
+Key invariant groups: [Trust and Boundary](#trust-and-boundary-inv-ens-bnd), [Startup and Identity](#startup-and-identity-inv-ens-id), [Storage and State Ownership](#storage-and-state-ownership-inv-ens-data), [Dispatch and Communication](#dispatch-and-communication-inv-ens-comm).
 
-The root Compose stack runs g8ee as the `ensemble` service in the `bootstrapped` profile. The image is built from `ensemble/Dockerfile`, exposes container port 8000, and publishes it as `${G8E_ENSEMBLE_PORT:-8000}`. Its persistent volume is `g8e-ensemble-data` mounted at `/root/.g8e`; the container also receives `/operator-state` read-only from `g8e-operator-data` for bootstrap secrets and shares the stack's `/tmp` volume. The container has no host execution boundary. Host operations target a separately enrolled Operator through Gateway HTTP dispatch.
+## Invariants
 
-The FastAPI application registers three router groups:
+Ids are stable. Append the next free number within each group; do not renumber.
 
-- `/health`, `/health/live`, and `/health/details` provide process and dependency health. `/health` is the Compose healthcheck and does not require application authentication.
-- `/api/v1/chat`, `/api/v1/chat/stop`, `/api/v1/chat/triage/*`, chat-session queries, case and investigation operations, settings, and evaluation trace routes provide the g8ee application surface. These routes use g8ee authentication and validated `G8eHttpContext` dependencies except for explicitly exempted operator-authentication relay routes.
-- `/api/v1/operator/*`, `/api/v1/operators/*`, and `/api/v1/auth/*` provide application-side Operator workflow and credential operations. They are not a replacement for the Gateway's public protocol or governance routes.
+### Trust and Boundary (`INV-ENS-BND`)
 
-The canonical route definitions are in `ensemble/app/constants/api_paths.json` and the implementation is registered in `ensemble/app/main.py`. This document describes the architecture rather than duplicating the generated API contract.
+| ID | Rule |
+| --- | --- |
+| INV-ENS-BND-01 | External AI clients, persona models, multi-seat Tribunal agreements, Marshal risk evaluations, and application approvals remain strictly outside the trusted execution boundary. Model output, reasoning traces, and application state never authorize platform or host mutations. |
+| INV-ENS-BND-02 | An operation becomes executable on a host only after entering the platform as a typed intent or canonical `GovernanceEnvelope` and satisfying the five-layer verification pipeline (L1-L5) under the active posture. Tribunal agreement does not produce protocol L2 consensus votes, and g8ee application approvals or mTLS cert fingerprints do not satisfy protocol L3 notary ratification. |
+| INV-ENS-BND-03 | The ensemble container possesses no host execution boundary and performs no direct host mutations. Host operations target a separately enrolled Operator via Gateway HTTP dispatch (`POST /api/v1/operators/commands`), where the Gateway enforces PDP validation and dispatches to the Operator PEP. |
 
-## Trust boundaries and relationships
+### Startup and Identity (`INV-ENS-ID`)
 
-| Relationship | Purpose | Boundary and identity |
+| ID | Rule |
+| --- | --- |
+| INV-ENS-ID-01 | g8ee authenticates to Gateway internal services exclusively using an enrolled mTLS client certificate carrying the SPIFFE URI SAN `spiffe://g8e.local/app/g8ee`. On startup, if credentials are missing, expired, or within 1 day of expiration, g8ee executes owner-approved platform enrollment against the Gateway's discovery surface and does not report readiness until approval completes and credentials are installed. |
+| INV-ENS-ID-02 | Application private keys, certificates, and enrollment state are stored with 0600 permissions in g8ee's dedicated runtime volume (`g8e-ensemble-data`), isolated from Gateway and Operator storage. |
+| INV-ENS-ID-03 | In unified deployments, `/operator-state` supplies only read-only bootstrap material (such as the audit HMAC key and secret paths). It is never a general host mount and does not expose the host filesystem to g8ee. |
+
+### Storage and State Ownership (`INV-ENS-DATA`)
+
+| ID | Rule |
+| --- | --- |
+| INV-ENS-DATA-01 | g8ee maintains no local durable database. The Gateway owns all durable application documents, KV entries, and blob objects in its own runtime storage. g8ee accesses these services via mTLS clients orchestrated by `CacheAsideService`. |
+| INV-ENS-DATA-02 | The g8ee process owns only ephemeral coordination state (active model turns, pending application approvals, background task tracking, and command-result correlations). This state does not survive container restarts. |
+| INV-ENS-DATA-03 | The Gateway is the sole authoritative owner of the Operator domain (documents, sessions, bindings, lifecycle states, command dispatch, results, and heartbeat snapshots). g8ee maintains no Operator service and queries or dispatches via Gateway protocol endpoints. |
+
+### Dispatch and Communication (`INV-ENS-COMM`)
+
+| ID | Rule |
+| --- | --- |
+| INV-ENS-COMM-01 | Protected application mutations (cases, investigations, memories, settings) must be submitted via `GovernanceClient` to `POST /api/v1/governance/envelopes` with deterministic transaction hashes, nonces, and current state roots. State root mismatches (`TX_STATE_MISMATCH`) must be retried up to 3 times by re-fetching the state root from `GET /api/v1/health`. |
+| INV-ENS-COMM-02 | Session and background events are published to the Gateway SSE push endpoint (`POST /api/v1/sse/push`). Events lacking both `web_session_id` and `cli_session_id` must be skipped before dispatch to prevent Gateway 400 rejections and downstream circuit breaker trips. |
+| INV-ENS-COMM-03 | When configured with `LLMProvider.G8E`, inference requests are routed through Gateway endpoint `POST /api/v1/inference/dispatch` via `InternalHttpClient` over mTLS, running generation through the full L1-L5 gauntlet on an Inference Node. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
 | --- | --- | --- |
-| Client to g8ee | Starts or resumes chat and investigations, submits turns and supported attachment references, answers triage or application approval prompts, and reads application state. | The request must carry a context that g8ee's `AuthService` authenticates and validates. Browser and CLI identity binding is mediated by the Gateway context used by the caller; g8ee does not treat arbitrary identity headers as authority. |
-| g8ee to Gateway data services | Reads platform settings, user settings, documents, key-value data, and blob objects. | g8ee uses its enrolled app certificate over mTLS through DB, KV, blob, and HTTP clients. Gateway-backed services own durable application data. |
-| g8ee to Gateway event bridge | Publishes typed chat, approval, command, reputation, and background events. | `EventService` sends session-targeted events through the Gateway SSE push API. Events are delivery telemetry, not governance state or durable execution evidence. Targetless events are skipped. |
-| g8ee to governed dispatch | Dispatches a typed host-operation request to one selected Operator and receives its correlated result. | `GatewayOperatorClient.dispatch()` posts a registered request `event_type` and serialized protobuf payload to `POST /api/v1/operators/commands` over the enrolled app mTLS connection. The Gateway validates the event, derives `action_type`, and authorizes the target session. |
-| g8ee to governance endpoint | Writes protected application records such as cases, investigations, memories, activity, reputation, and stake resolutions. | `GovernanceClient` submits canonical envelopes over the Gateway HTTPS endpoint using the enrolled app mTLS certificate and the configured Operator session bearer value. The Gateway still applies identity binding and all required governance checks. |
+| FastAPI Application & Lifespan | `ensemble/app/main.py` | Startup sequence, client init, service factory binding |
+| App Identity & Enrollment | `ensemble/app/services/infra/app_enrollment_service.py` | Resumable platform enrollment and mTLS key/cert lifecycle |
+| API Router Groups & Paths | `ensemble/app/routers/`, `ensemble/app/constants/api_paths.json` | Health, Chat, and Internal API route registration |
+| Gateway Operator Client | `ensemble/app/clients/gateway_operator_client.py` | Operator protocol dispatch and audit record ingest |
+| Governed Application Client | `ensemble/app/clients/governance_client.py` | Canonical envelope construction and retry on state root mismatch |
+| Gateway Data Transport | `ensemble/app/clients/db_client.py`, `kv_cache_client.py`, `blob_client.py` | mTLS transport clients for Gateway-backed persistence |
+| Cache-Aside Orchestrator | `ensemble/app/services/cache/cache_aside.py` | Unified KV caching and DB persistence coordination |
+| Declarative Tool Registry | `ensemble/app/services/ai/tool_registry.py` | Universal and operator-gated tool definitions |
+| Tribunal & Safety Pipeline | `ensemble/app/services/ai/tribunal/`, `generator.py` | Multi-seat candidate generation, clustering, voting, and validation |
+| Operator Execution & Approval | `ensemble/app/services/operator/execution_service.py`, `approval_service.py` | Command execution dispatch and application approval lifecycle |
+| Governed LLM Provider | `ensemble/app/llm/providers/g8e.py` | Routing inference through Gateway governed dispatch |
+| Compose Deployment | `docker-compose.yml`, `ensemble/Dockerfile` | Container configuration, volume mounts, and network ports |
 
-The Gateway is the Policy Decision Point. The target remote Operator is the Policy Execution Point for its own runtime and independently verifies the envelope before L5 execution. The Gateway's embedded Operator is a separate execution substrate for Gateway-local ingress paths; g8ee host commands use the selected remote Operator command channel instead.
+## Procedures
 
-## Startup and identity
+### Runtime, Container, and Networking Topology
 
-g8ee's FastAPI lifespan performs startup in a fixed order:
+The root Docker Compose stack runs `g8ee` as the `ensemble` service in the default profile (`docker compose up -d`). The container image is built from `ensemble/Dockerfile` using Python 3.12-slim in a multi-stage build that compiles in-tree protocol constants and Python packages:
 
-1. Load local bootstrap settings.
-2. Load a valid enrolled app identity or run owner-approved platform enrollment for component `g8ee` and kind `ensemble`.
-3. Create the app mTLS configuration and connect the DB, KV, and blob clients.
-4. Build handler services, load platform settings through the Gateway-backed cache-aside service, and merge them with local settings.
-5. Construct `GovernanceClient`, `GatewayOperatorClient`, application domain services, the chat pipeline, and the LLM provider integration.
-6. Start certificate and HTTP services. Only then does the FastAPI lifespan yield readiness; heartbeat and Operator lifecycle processing remain in the Gateway. g8ee does not connect to Gateway pub/sub.
+- **Ports**: Exposes container port 8000, published to the host as `${G8E_ENSEMBLE_PORT:-8000}`.
+- **Volumes**:
+  - `g8e-ensemble-data` mounted at `/root/.g8e`: Stores the ensemble's mTLS certificate, private key, trusted CA bundle, and pending enrollment state.
+  - `g8e-operator-data` mounted read-only at `/operator-state`: Provides bootstrap materials including audit HMAC keys and secret paths at `/operator-state/secrets`.
+  - `g8e-shared-tmp` mounted at `/tmp`: Shared temporary volume for inter-service artifacts.
+- **Network**: Connects to the internal bridge network `g8e-net` (subnet `172.28.0.0/16`), routing internal traffic to the Gateway (`g8e.local` or `g8eg`) on port 8080 (plain HTTP discovery) and port 8443 (mTLS HTTPS).
+- **Healthcheck**: Uses `python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"` running every 10 seconds with a 15-second startup grace period.
 
-Enrollment uses the Gateway's plain-HTTP discovery surface to request, poll, and complete approval. The service generates a P-256 key and CSR, persists an atomic pending attempt with restrictive permissions, resumes an unexpired pending request after restart, verifies the issued chain, SANs, public key, and component kind, and atomically installs the certificate, key, and trust bundle. Existing credentials are renewed when they are within one day of expiry. Approval occurs in the Gateway console; g8ee does not become ready while enrollment is pending. The app certificate and pending state live in g8ee's own runtime volume.
+The ensemble container does not execute host commands directly. It possesses no host bind mounts or elevated privileges; host operations target a separately enrolled Operator container or remote host over the Gateway HTTP dispatch channel.
 
-In the unified deployment, `/operator-state` supplies bootstrap material such as the audit HMAC key and secret paths. It is not a general host filesystem mount and does not make the Docker host visible to g8ee.
+### API Router Architecture and Endpoint Taxonomy
 
-See [Authentication and Authorization](./auth.md) and [Unified Docker Stack](../guides/unified_stack.md) for the platform enrollment and deployment procedures.
+The FastAPI application registers three router groups across root and internal prefixes:
 
-## Conversation and tool flow
+1. **Health Router (`ensemble/app/routers/health_router.py`)**:
+   - `GET /health`: Basic unauthenticated health check returning `{"status": "ok"}` for load balancers and Compose health checks.
+   - `GET /health/live`: Internal process liveness probe returning `{"status": "alive", "service": "g8ee"}`.
+   - `GET /health/details`: Detailed component health reporting status for `cache_aside_service`, `operator_kv`, `internal_http_client`, `operator_command_service`, and `chat_pipeline`.
 
-A chat turn is authenticated and context-validated before g8ee loads user settings, investigation history, memories, and referenced attachments. Triage routes the request to the Dash assistant path or Sage primary path. The selected provider streams model output; tool calls are processed by the typed tool registry and the ReAct loop, with each tool result returned to the model for a subsequent turn. Provider adapters include OpenAI, Anthropic, Gemini, Ollama, llama.cpp, a fake provider for tests, and the governed `g8e` inference provider when configured.
+2. **Chat Router (`ensemble/app/routers/chat_router.py`)**:
+   - `POST /chat/triage/answer`: Submits a user response to a triage clarifying question.
+   - `POST /chat/triage/skip`: Records that the user skipped triage clarification questions.
+   - `POST /chat/triage/timeout`: Records that triage clarifying questions timed out.
+   - `GET /chat/sessions/{web_session_id}`: Retrieves chat session metadata and active status.
+   - `GET /chat/cases/{case_id}/latest-session`: Retrieves the most recent chat session with conversation history for a specific case.
 
-Host-command tools pass through the Tribunal's five independent members, candidate clustering, optional Auditor review, Marshal risk analysis, deterministic command validation, and the g8ee application approval service. Auto-approved commands skip only the g8ee prompt after passing the hard command gates; auto-approval is not protocol L3. A Tribunal result is application reasoning and does not create protocol L2 signatures.
+3. **Internal API Router (`ensemble/app/routers/internal_router.py`)**:
+   Mounted under prefix `/api/v1` via `InternalAPIPaths.PREFIX`:
+   - **Chat and Triage**: `POST /api/v1/chat`, `POST /api/v1/chat/stop`, `POST /api/v1/chat/triage/answer`, `POST /api/v1/chat/triage/skip`, `POST /api/v1/chat/triage/timeout`.
+   - **Cases**: `POST /api/v1/case`, `POST /api/v1/cases`, `POST /api/v1/case/get`, `PATCH /api/v1/case`, `POST /api/v1/case/delete`.
+   - **Investigations**: `POST /api/v1/investigation`, `POST /api/v1/investigations`, `POST /api/v1/investigation/get`, `POST /api/v1/investigations/query`.
+   - **Approvals**: `POST /api/v1/operator/approval/pending`, `POST /api/v1/operator/approval/respond`.
+   - **Direct Command Relay**: `POST /api/v1/operator/direct-command`.
+   - **Operator Lifecycle Proxying**: `POST /api/v1/operators/bind`, `POST /api/v1/operators/unbind`, `POST /api/v1/operators/stop`, `POST /api/v1/operators/{operator_id}`, `POST /api/v1/operators/claim-slot`, `POST /api/v1/operators/create-slot`, `POST /api/v1/operators/device-link/register`, `POST /api/v1/operators/gateway-session-auth`, `POST /api/v1/operators/session/refresh`, `POST /api/v1/operators/session/validate`, `POST /api/v1/operators/update-api-key`.
+   - **Auth and Credentials**: `POST /api/v1/auth/api-key/generate`, `POST /api/v1/auth/certificate/revoke`.
+   - **Settings**: `POST /api/v1/settings`, `POST /api/v1/settings/sync`, `POST /api/v1/settings/user`, `POST /api/v1/settings/user/get`, `PATCH /api/v1/settings/user`.
+   - **Evaluation Traces**: `GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}`.
+   - **Health**: `GET /api/v1/health`.
 
-The command tool creates a typed internal `G8eMessage`. `OperatorExecutionService` serializes the typed payload to protobuf bytes and calls `GatewayOperatorClient.dispatch()` with the registered request `event_type`, delegated Operator session, and application context fields. g8ee does not construct the governed envelope or fetch the Gateway state root for this path.
+All chat, investigation, case, and settings endpoints require authenticated context via `require_authenticated_context`, extracting user identity from validated `G8eHttpContext` dependencies.
 
-The Gateway dispatch endpoint rejects unknown events, invalid Operator sessions, and malformed payloads. It derives `action_type` from the event registry, performs L1 screening, obtains the current state root, adds posture and identity data, constructs the canonical `GovernanceEnvelope`, and forwards it only to the matching Operator session. The Operator independently performs L1-L4 and L5 execution. The HTTP response carries the correlated result envelope; g8ee decodes it and publishes the application result event.
+### Trust Boundaries and Client Hierarchy
 
-When the agent reaches `AGENT_MAX_TOOL_TURNS` (currently 25), the loop requests a separate g8ee continuation approval. Approval resets the loop counter; denial or timeout stops the loop. This approval concerns application execution flow and is not protocol L3. Triage clarification similarly pauses the application workflow until the caller answers, skips, or times out.
+| Relationship | Purpose | Boundary and Identity Requirements |
+| --- | --- | --- |
+| Client to g8ee | Starts/resumes chat sessions, answers triage or approvals, reads case/investigation state. | Request must supply authentication validated by `AuthService` into a `G8eHttpContext`. g8ee does not trust arbitrary caller headers. |
+| g8ee to Gateway Data Services | Reads/writes platform settings, user settings, documents, KV entries, and blobs. | g8ee connects over mTLS using its enrolled app certificate via `DBClient`, `KVCacheClient`, and `BlobClient`. Gateway owns durable storage. |
+| g8ee to Gateway Event Bridge | Publishes typed chat, approval, command, and reputation events. | `EventService` posts events to Gateway SSE push API (`POST /api/v1/sse/push`). Events without a `web_session_id` or `cli_session_id` are skipped. |
+| g8ee to Governed Dispatch | Dispatches host operations to an enrolled Operator and receives correlated results. | `GatewayOperatorClient.dispatch()` sends a registered `event_type` and base64-encoded protobuf payload to `POST /api/v1/operators/commands` over mTLS. |
+| g8ee to Governance Endpoint | Writes protected records (cases, investigations, memories, reputation, stake resolutions). | `GovernanceClient` submits canonical `GovernanceEnvelope`s to `POST /api/v1/governance/envelopes` over HTTPS using mTLS and Operator session bearer tokens. |
+| g8ee to Governed Inference | Routes model inference to an enrolled Inference Node. | `InternalHttpClient` dispatches model requests to `POST /api/v1/inference/dispatch` over mTLS when using provider `LLMProvider.G8E`. |
 
-See [g8ee Agents](../ensemble/agents.md) for persona responsibilities and Tribunal stages.
+The Gateway acts as the Policy Decision Point (PDP). The remote Operator is the Policy Execution Point (PEP) for its own host runtime and verifies the envelope independently before L5 actuator invocation.
 
-## Governed application-record path
+### Startup Sequence and App Identity Enrollment
 
-Protected application data is read through the Gateway document, KV, and blob clients. The owning g8ee data services submit protected writes through `GovernanceClient` at `POST /api/v1/governance/envelopes`. The client maps internal payload names to canonical protocol types, serializes typed payload bytes, binds requestor, acting app, Operator/session, case and investigation identifiers, nonce, expiry, and state root into the transaction hash, and submits canonical protojson.
+The FastAPI lifespan in `ensemble/app/main.py` executes a deterministic 10-phase startup sequence:
 
-The client serializes submissions with a lock and retries a Gateway `TX_STATE_MISMATCH` by fetching a fresh state root, up to three retries. The Gateway verifies the supplied envelope; it does not manufacture missing L2 votes or human L3 authorization. The g8ee client may include an mTLS certificate fingerprint in the envelope's L3 metadata, but that fingerprint is not a WebAuthn assertion or signed CLI proof. Consequently, protected mutations fail closed when the active posture requires protocol evidence that the request does not contain. The application path must not be described as equivalent to Gateway MCP/A2A paths that can coordinate configured L2 deliberation or suspend supported L3 approvals.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Main as app.main.lifespan
+    participant Settings as SettingsService
+    participant Enroll as AppEnrollmentService
+    participant GW as Gateway Discovery (:8080)
+    participant Clients as Transport Clients (DB/KV/Blob)
+    participant Factory as ServiceFactory
+    participant LLM as LLM Provider Factory
 
-The current implementation uses the enrolled g8ee app certificate for this HTTPS client and supplies the configured Operator session bearer value. It does not use the read-only `/operator-state` mount as a general credential or execution channel. Transport identity, session authorization, and envelope identity fields remain separate checks.
+    Main->>Settings: Phase 0: Load local bootstrap settings
+    Main->>Enroll: Phase 0.25: load_identity()
+    alt Identity missing or near expiry
+        Enroll->>GW: POST /api/v1/platform-enrollment/request (P-256 CSR)
+        Enroll->>GW: Poll status until approved in Console
+        Enroll->>GW: POST /api/v1/platform-enrollment/complete (signed transcript)
+        Enroll-->>Main: Install cert, key, CA bundle atomically
+    end
+    Main->>Clients: Phase 1: Connect DBClient, KVCacheClient, BlobClient (mTLS)
+    Main->>Main: Phase 2: Initialize DBService, KVService, BlobService
+    Main->>Main: Phase 3: Construct CacheAsideService (KV + DB)
+    Main->>Settings: Phase 4: Fetch & merge platform settings from Gateway
+    Main->>Main: Phase 4.5: Initialize GovernanceClient
+    Main->>Factory: Phase 5: ServiceFactory.create_all_services()
+    Main->>LLM: Inject InternalHttpClient singleton for governed inference
+    Main->>Factory: Phase 6: ServiceFactory.start_services()
+    Main-->>Main: Yield readiness
+```
 
-## Persistence and ownership
+Platform enrollment (`AppEnrollmentService`) follows a 9-step resumable sequence:
+1. Inspects existing credentials in `/root/.g8e`. If valid, not expired, and beyond the 1-day renewal threshold (`_RENEWAL_THRESHOLD_DAYS = 1`), loads them immediately.
+2. If an unexpired pending attempt exists on disk, resumes polling.
+3. Otherwise, generates an ECDSA P-256 private key and CSR for component `g8ee` and kind `ensemble`, submits to Gateway discovery endpoint `POST /api/v1/platform-enrollment/request` over plain HTTP, and writes pending state to disk with 0600 permissions.
+4. Logs non-secret approval instructions (request ID, approval URL `/console/`, CSR fingerprint).
+5. Polls enrollment status with bounded exponential backoff (2s to 30s) and jitter.
+6. Upon approval, signs the canonical `PlatformEnrollmentCompletionTranscript` protobuf bytes with the P-256 private key and posts to `/api/v1/platform-enrollment/complete`.
+7. Validates the issued certificate against the pinned CA bundle, expected SPIFFE URI SAN `spiffe://g8e.local/app/g8ee`, public key, and component kind.
+8. Writes certificate, key, and CA bundle atomically using temp-file-plus-rename, then removes pending state.
+9. Returns the verified `AppIdentity`. The FastAPI process does not become ready while enrollment is pending.
 
-g8ee has no local durable application database. The Gateway owns durable application documents, KV values, and blob objects in its own runtime storage. g8ee owns application service logic and uses those Gateway-backed stores for cases, investigations, conversation history, memories, settings, Operator workflow records, agent activity, reputation, and stake resolutions.
+### Conversation Pipeline and ReAct Tool Loop
 
-The Gateway is the sole owner of the Operator domain: documents, auth/session state, binding, lifecycle, command dispatch, results, `latest_heartbeat_snapshot`, and denormalized `current_hostname`. It stores the canonical `operator.v1.HeartbeatResult` protojson snapshot. g8ee does not subscribe to heartbeat channels, persist Operator fields, or maintain an Operator service; it calls Gateway protocol endpoints when application features need Operator data or execution.
+When a user turn enters `POST /api/v1/chat`, the request context is validated, and user settings, investigation history, memories, and referenced attachments are loaded.
 
-The g8ee process owns only ephemeral coordination: active model turns, background task tracking, pending application approvals, and command-result correlations. These do not survive an ensemble restart. Its certificate, key, trust bundle, and resumable enrollment state persist in the separate ensemble runtime volume. The executing Operator owns authoritative receipts, audit, replay, execution-vault, command output, and file-mutation evidence in its own runtime; g8ee may copy selected results into application records or model context but does not replace that evidence.
+```mermaid
+flowchart TD
+    UserTurn[User Message] --> Triage[Triage Classifier]
+    Triage -->|Complex / Security / Attachments| Sage[Sage Reasoner - Primary Tier]
+    Triage -->|Standard / Direct| Dash[Dash Assistant - Fast Path]
+    Sage --> ReAct[ReAct Tool Loop]
+    Dash --> ReAct
+    ReAct -->|Universal Tool| LocalExec[Internal Tool Handler]
+    ReAct -->|Operator Tool| TribunalGate[Tribunal Generation & Safety]
+    LocalExec --> ReAct
+    TribunalGate --> ReAct
+    ReAct -->|Turn > 25| ContinueAppr{Agent Continue Approval}
+    ContinueAppr -->|Approved| ReAct
+    ContinueAppr -->|Denied / Timeout| Stop[Stop Execution]
+    ReAct -->|Final Answer| UserResponse[Stream Response to User]
+```
 
-Conversation content, attachments, prompts, model outputs, and returned host output are application data and may contain sensitive user content. Model telemetry records provider/model identity, timing, usage when available, retry and finish metadata, canonical input/output hashes, and privacy-analysis metadata; it does not make a claim about provider behavior outside the governed g8e path.
+- **Triage Classification**: The `triage` persona (`lite` tier) evaluates complexity, intent, and posture. Requests involving credentials, permissions, authentication, user management, file attachments, or empty messages automatically escalate to `complex`.
+- **Reasoning Personas**:
+  - `sage` (`primary` tier): Handles complex turns, plans multi-step investigations, interprets tool output, and formats user responses. Emits `SageOperatorRequest` containing natural language intent and constraints without raw shell commands.
+  - `dash` (`assistant` tier): Fast path for direct queries; escalates to Sage when deeper analysis is required.
+- **Tool Registry**: Defined declaratively in `ensemble/app/services/ai/tool_registry.py` via `TOOL_SPECS`:
+  - **Universal Scope** (`ToolScope.UNIVERSAL`): Requires no bound operator. Includes `query_investigation_context`, `get_command_constraints`, `ssh_inventory`, `stream_operator_to_ssh_fleet`, and `g8e_web_search`.
+  - **Operator-Gated Scope** (`ToolScope.OPERATOR_GATED`): Requires an authenticated, bound operator. Includes `run_commands_with_operator`, `file_create`, `file_write`, `file_read`, `file_update`, `list_files`, `recursive_grep_search`, `fetch_file_history`, `fetch_file_diff`, `grant_intent`, `revoke_intent`, and `check_port`.
+- **Loop Limits**: The ReAct loop tracks turns against `AGENT_MAX_TOOL_TURNS` (default `25`). Exceeding this limit triggers an `agent.continue` application approval prompt. Approval resets the counter; denial or timeout terminates the turn.
 
-## Five-layer boundary and limits
+### Tribunal Command Generation, Validation, and Risk Analysis
 
-For the command-relay path, the Gateway constructs the envelope and the remote Operator verifies it. For protected application-record writes, g8ee supplies the envelope and the Gateway verifies it. In either case the active posture determines the required gates:
+Host command requests (`run_commands_with_operator`) generated by Sage or Dash do not enter execution directly. They pass through the Tribunal pipeline:
 
-1. **L1 Doctrine** validates typed payloads and hard safety and threat rules.
-2. **L2 Consensus** verifies enrolled-member Ed25519 votes when the posture requires consensus. Tribunal model agreement is not L2.
-3. **L3 Notary** verifies WebAuthn or signed CLI authorization for mutation actions when the posture requires ratification. g8ee application approval and an mTLS fingerprint are not substitutes.
-4. **L4 Warden** checks expiry, nonce replay, transaction hash, state root, target identity, and required evidence before dispatch.
-5. **L5 Actuator** invokes the isolated handler with a transaction-bound capability and produces signed execution or rejection evidence.
+```mermaid
+flowchart TD
+    Intent[SageOperatorRequest Intent & Constraints] --> Seats[Parallel 5-Seat Generation]
+    subgraph Tribunal Seats
+        Axiom[Axiom - Composition]
+        Concord[Concord - Safety]
+        Variance[Variance - Edge Cases]
+        Pragma[Pragma - Convention]
+        Nemesis[Nemesis - Calibrated Adversary]
+    end
+    Seats --> Axiom & Concord & Variance & Pragma & Nemesis
+    Axiom & Concord & Variance & Pragma & Nemesis --> Cluster[Candidate Clustering & Uniform Voting]
+    Cluster --> ConsensusCheck{Votes >= 2?}
+    ConsensusCheck -->|No| TieBreaker[Tie-breaker / Round 2]
+    TieBreaker -->|Unresolved| Fail[Consensus Failure]
+    ConsensusCheck -->|Yes| Winner[Voting Winner]
+    Winner --> Marshal[Marshal Risk Analysis]
+    Marshal -->|HIGH Risk| Block[Investigation Block & Re-prompt]
+    Marshal -->|LOW / MEDIUM| Auditor{Auditor Enabled?}
+    Auditor -->|Yes| AuditorEval[Auditor Review ok/revised/swap]
+    Auditor -->|No| SafetyGates[Hard Safety Validation]
+    AuditorEval --> SafetyGates
+    SafetyGates --> Appr{Approval Needed?}
+    Appr -->|Auto-Approved| Dispatch[Gateway Command Dispatch]
+    Appr -->|Prompt User| UserAppr{User Approves?}
+    UserAppr -->|Yes| Dispatch
+    UserAppr -->|No| Abort[Command Aborted]
+```
 
-SSE events, application approvals, memories, reputation, and model telemetry do not authorize execution or change the Gateway state root. g8ee does not open an inbound management path to a target host. The governance boundary covers only operations that traverse g8e; it does not govern native client tools, provider behavior, unrestricted network access, or other side channels.
+1. **Independent Seats**: The Tribunal consists of five generation seats (`llm_command_gen_passes = 5`):
+   - `axiom`: Generates complete, composable command pipelines.
+   - `concord`: Favors read-only, bounded, defensive invocations with explicit scoping.
+   - `variance`: Accounts for spaces, symlinks, missing directories, and environment hazards.
+   - `pragma`: Employs idiomatic shell syntax, flags, and ecosystem conventions.
+   - `nemesis`: Introduces plausible non-destructive edge cases or emits honest commands.
+2. **Clustering and Voting**: Each seat generates a candidate in parallel. Candidates are normalized and clustered. A candidate requires at least 2 votes (`TRIBUNAL_MIN_CONSENSUS = 2`). Ties trigger deterministic tie-breakers (shortest command, non-Nemesis) or a second round.
+3. **Marshal Risk Analysis**: Analyzes command blast radius, reversibility, and failure consequence (`LOW`, `MEDIUM`, `HIGH`). A `HIGH` classification blocks the command and re-prompts the model. Two consecutive blocks trigger an agent conflict event requiring human intervention.
+4. **Auditor Review**: When enabled (`llm_command_gen_auditor`), a `primary`-tier model inspects anonymized candidate clusters against the intent. Decisions include `ok`, `revised`, or `swap`. Approvals generate an application reputation commitment for stake resolution.
+5. **Deterministic Command Validation**: Evaluates command syntax, blacklist violations, whitelist rules, and restricted argument patterns.
+6. **Application Approval Service**: Evaluates auto-approval rules against risk tiers. Auto-approved commands skip user interaction only if hard safety gates pass. Unapproved commands issue an application approval event (`command`, `file.edit`, `intent`, `stream`, or `agent.continue`).
+7. **Gateway Dispatch**: `OperatorExecutionService` serializes the typed payload to protobuf bytes and calls `GatewayOperatorClient.dispatch()` to `POST /api/v1/operators/commands`. The Gateway PDP builds the canonical `GovernanceEnvelope` and routes to the selected remote Operator PEP.
 
-See [Governance](./governance.md) for canonical posture semantics and [AI Agents and the g8e Governance Boundary](./agents.md) for the distinctions among MCP, A2A, direct envelopes, and command relay.
+### Governed Application-Record Mutation Flow
 
-## Related documentation
+When g8ee mutates protected application records (cases, investigations, memories, settings), it must submit canonical envelopes directly to the Gateway governance endpoint:
 
-- [AI Agents and the g8e Governance Boundary](./agents.md): Client integration paths and the limits of application agents.
-- [Gateway Architecture](./gateway.md): Gateway services, authentication, governance coordination, and local execution.
-- [Operator Architecture](./operator.md): Outbound transport, independent verification, L5 execution, and authoritative audit.
-- [Governance](./governance.md): Five-layer verification and posture behavior.
-- [Authentication and Authorization](./auth.md): Workload enrollment, mTLS identities, and human authorization.
-- [SSE Streaming](./sse.md): Gateway event delivery and session targeting.
-- [g8ee Agents](../ensemble/agents.md): Persona roster, Tribunal, Auditor, and Marshal.
-- [Ensemble Storage](../ensemble/storage.md): Gateway-backed application storage and restart behavior.
-- [Unified Docker Stack](../guides/unified_stack.md): Compose topology, ports, profiles, and approval workflow.
-- [Documentation Guide](../devs/docs.md): Documentation audit and ownership rules.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as g8ee Data Service
+    participant Gov as GovernanceClient
+    participant GW as Gateway (:8443)
+    participant PEP as Local Storage / Actuator
+
+    App->>Gov: submit_envelope(message)
+    Gov->>Gov: Inject operator transport identity from cert SPIFFE SAN
+    Gov->>GW: GET /api/v1/health (fetch current state_merkle_root)
+    GW-->>Gov: Return state_merkle_root
+    Gov->>Gov: Map payload type & source_component to proto enums
+    Gov->>Gov: Compute deterministic sha256 transaction hash with nonce
+    Gov->>GW: POST /api/v1/governance/envelopes
+    alt Success (200 OK)
+        GW-->>Gov: ActionReceipt (signed execution evidence)
+        Gov-->>App: Return ActionReceipt
+    else State Root Mismatch (403 TX_STATE_MISMATCH)
+        Gov->>GW: Re-fetch fresh state_merkle_root
+        Gov->>Gov: Recompute envelope hash (retry up to 3 times)
+        Gov->>GW: Re-submit POST /api/v1/governance/envelopes
+    end
+```
+
+- **Payload Translation**: `PAYLOAD_TYPE_MAPPING` maps internal names to canonical protocol schemas (e.g. `document_update` -> `DocumentUpdateRequested`, `command` -> `CommandRequested`).
+- **Source Component Translation**: Internal component strings map to proto enum value names (`g8ee` -> `COMPONENT_AGENT`, `client` -> `COMPONENT_CLIENT`). Unknown components fail closed.
+- **Identity Binding**: Resolves `operator_id` and `operator_session_id` from the client certificate's SPIFFE URI SAN (`spiffe://g8e.local/operator/<org>/<id>/<session>`), ensuring stamped metadata matches transport identity.
+- **State Root Verification & Retry**: Fetches the current `state_merkle_root` from `GET /api/v1/health`. If concurrent writes trigger a `403 Forbidden` with `TX_STATE_MISMATCH`, `GovernanceClient` retries up to 3 times by re-fetching the state root and re-signing the envelope under its internal submission lock.
+
+### Persistence, Cache-Aside Architecture, and State Ownership
+
+g8ee operates entirely without a local database. Data durability is governed by strict ownership boundaries:
+
+```mermaid
+flowchart LR
+    subgraph g8ee Runtime
+        CacheAside[CacheAsideService]
+        KVSvc[KVService]
+        DBSvc[DBService]
+        BlobSvc[BlobService]
+        MemState[Ephemeral State: Turns, Approvals, Tasks]
+    end
+    subgraph Gateway Runtime
+        GWKV[Gateway KV Store]
+        GWDoc[Gateway Document DB - SQLite]
+        GWBlob[Gateway Blob Store]
+    end
+    CacheAside --> KVSvc & DBSvc
+    KVSvc -->|mTLS| GWKV
+    DBSvc -->|mTLS| GWDoc
+    BlobSvc -->|mTLS| GWBlob
+```
+
+1. **Gateway-Owned Stores**: The Gateway owns all persistent storage for application documents (cases, investigations, memories, user settings), key-value cache entries, and binary blobs.
+2. **Cache-Aside Orchestration**: `CacheAsideService` provides read-through caching and write-through/invalidation over `KVService` and `DBService`. Read operations check KV cache before falling back to the Gateway document service; write operations update the document service and invalidate or refresh KV cache keys.
+3. **Operator Domain Exclusivity**: The Gateway is the sole owner of Operator documents, sessions, bindings, lifecycle states, command dispatch records, and heartbeat snapshots (`latest_heartbeat_snapshot`). g8ee never subscribes to Operator pub/sub or persists Operator records.
+4. **Ephemeral Coordination**: The ensemble process retains only active in-memory turns, background task handles, pending application approvals, and command correlation IDs. A container restart cleanly drops ephemeral state while persistent application data remains safe in the Gateway.
+
+### The Five-Layer Governance Interlock and Boundary Guarantees
+
+Every mutation traversing g8e must satisfy the five-layer verification pipeline. The active posture dictates the required evidence:
+
+```mermaid
+flowchart TD
+    Req[Incoming Mutation Intent] --> L1[L1 Doctrine: Safety, Whitelist, Threat Gates]
+    L1 --> L2[L2 Consensus: Enrolled Ed25519 Member Signatures]
+    L2 --> L3[L3 Notary: WebAuthn Passkey or Signed CLI Proof]
+    L3 --> L4[L4 Warden: Nonce, Expiry, State Root, Quorum]
+    L4 --> L5[L5 Actuator: Sovereign Execution & Signed Receipt]
+```
+
+- **L1 Doctrine**: Validates payload schemas, command structure, whitelists, and threat patterns. Tribunal safety rules and deterministic command validation support L1 preparation, but the Gateway independently validates L1 rules.
+- **L2 Consensus**: Verifies Ed25519 multi-member threshold signatures. Multi-seat Tribunal model agreement is application-level reasoning and does not produce L2 votes.
+- **L3 Notary**: Verifies cryptographic human authorization (WebAuthn passkeys or signed CLI tokens). g8ee application approvals and mTLS certificate fingerprints are application intent and transport telemetry; they do not satisfy L3 requirements.
+- **L4 Warden**: Verifies transaction hashes, state Merkle roots, nonces, timestamps, and evidence bundles before admitting the transaction.
+- **L5 Actuator**: Executes the operation within an isolated environment using a transaction-bound capability and generates signed execution evidence (`ActionReceipt`).
+
+## Anti-patterns
+
+- **Equating Tribunal agreement or application approvals with protocol governance**: Treating model voting as L2 Consensus or application approval prompts as L3 Notary authorization bypasses security architecture; mutations fail closed when posture requires protocol signatures.
+- **Publishing targetless SSE events**: Emitting session events lacking both `web_session_id` and `cli_session_id` causes Gateway 400 errors and trips the HTTP circuit breaker, blocking all downstream SSE communication.
+- **Maintaining local persistent databases in the ensemble container**: Introducing a local SQLite database or persisting operator records inside `g8ee` violates storage ownership and causes state divergence on restart.
+- **Hard-coding Operator auth credentials or bypassing Gateway protocol endpoints**: Attempting to manage operator lifecycle or directly issue commands without Gateway dispatch violates identity binding and bypasses L1-L4 verification.
+- **Suppressing state Merkle root retries on TX_STATE_MISMATCH**: Failing immediately on state root mismatch rather than re-fetching the state root causes intermittent mutation failures under concurrent turn execution.
+- **Relying on unauthenticated caller headers**: Using caller-supplied identity headers instead of validated `G8eHttpContext` dependencies breaks identity binding and security invariants.
+
+## Links out
+
+- [AI Agents and the g8e Governance Boundary](agents.md): Comprehensive agent integration models, trust boundaries, and MCP bridge mechanics.
+- [Gateway Architecture](gateway.md): Gateway services, Policy Decision Point coordination, and local execution.
+- [Operator Architecture](operator.md): Outbound transport, independent verification, and L5 actuator execution.
+- [Consensus Architecture](consensus.md): Multi-member Ed25519 signature policies, deliberation mechanics, and L4 quorum verification.
+- [Governance Architecture](governance.md): Five-layer verification sequence and posture state transitions.
+- [Authentication and Authorization](auth.md): Workload platform enrollment, mTLS identities, and human WebAuthn authorization.
+- [Network Architecture](network.md): TLS/mTLS topology, SPIFFE identity issuance, and port assignments.
+- [SSE Streaming](sse.md): Gateway event push delivery and session targeting.
+- [Storage Architecture](storage.md): Platform database layout and encryption boundaries.
+- [Ensemble Agents](../ensemble/agents.md): Persona models, Tribunal seats, prompt templates, and evaluation judges.
+- [Ensemble Storage](../ensemble/storage.md): Gateway-backed application storage layout and restart semantics.
+- [Unified Docker Stack](../guides/unified_stack.md): Compose topology, service profiles, and platform enrollment procedures.
+- [Documentation Guide](../devs/docs.md): Documentation invariants, audit procedures, and ownership rules.

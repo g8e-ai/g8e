@@ -19,15 +19,7 @@ import (
 )
 
 func ReconcileVerifiedCampaignMirrorQueue(ctx context.Context, projectRoot string, reconciler *evaluation.CampaignMirrorReconciler, runTimeout time.Duration, force bool, progress evaluation.CampaignMirrorReconcileProgressFunc) (*evaluation.CampaignMirrorReconcileResult, error) {
-	fileSvc, err := fs.NewRuntimeFileService(projectRoot, nil)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: campaign mirror queue file service: %w", err)
-	}
-	queue, err := evaluation.LoadInitCampaignQueueFromRuntime(ctx, fileSvc, evaluation.DefaultInitCampaignQueueRelPath)
-	if err != nil {
-		return nil, err
-	}
-	return reconciler.ReconcileVerifiedQueue(ctx, queue, runTimeout, true, force, progress)
+	return reconciler.ReconcileAllVerifiedRunsFromStore(ctx, runTimeout, true, force, progress)
 }
 
 const DockerInitCampaignMirrorRestoreTimeout = 10 * time.Second
@@ -58,11 +50,7 @@ func ReconcileVerifiedCampaignMirrorFromDockerInit(ctx context.Context, fileSvc 
 			evaluation.NewStore(fileSvc),
 			mirrorProbe,
 		)
-		queue, err := evaluation.LoadInitCampaignQueueFromRuntime(restoreCtx, fileSvc, evaluation.DefaultInitCampaignQueueRelPath)
-		if err != nil {
-			return nil, err
-		}
-		return reconciler.ReconcileVerifiedQueue(restoreCtx, queue, DockerInitCampaignMirrorRestoreTimeout, false, false, nil)
+		return reconciler.ReconcileAllVerifiedRunsFromStore(restoreCtx, DockerInitCampaignMirrorRestoreTimeout, false, false, nil)
 	})
 }
 

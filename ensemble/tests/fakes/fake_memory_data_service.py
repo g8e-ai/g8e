@@ -59,9 +59,11 @@ class FakeMemoryDataService:
         self.get_calls.append(investigation_id)
         return self._memory_to_return
 
-    async def get_user_memories(self, user_id: str) -> list[InvestigationMemory]:
+    async def get_user_memories(
+        self, user_id: str, limit: int = 10
+    ) -> list[InvestigationMemory]:
         self.get_user_memories_calls.append(user_id)
-        return self._user_memories_to_return
+        return self._user_memories_to_return[:limit]
 
     async def get_case_memories(self, case_id: str, user_id: str) -> list[InvestigationMemory]:
         self.get_case_memories_calls.append((case_id, user_id))

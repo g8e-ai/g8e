@@ -3,8 +3,8 @@ doc_id: devs
 title: Developer Guidelines
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-26
-version: v2.2.0
+last_updated: 2026-09-28
+version: v2.2.3
 owners:
   - go.mod
   - Makefile
@@ -127,7 +127,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-FS-01 | `.g8e/` state MUST go through `RuntimeFileService` in `internal/services/fs/file_service.go`. MUST NOT hardcode a `.g8e/` runtime path or call `os` file operations for that state outside `internal/services/fs`. |
+| INV-FS-01 | `.g8e/` state MUST go through `RuntimeFileService` in `internal/services/fs/file_service.go`. MUST NOT hardcode a `.g8e/` runtime path or call `os` file operations for that state outside `internal/services/fs`. Exception: checked-in repository files like `eval/base-model-inventory.json` addressed from the project root may use direct `os` operations since they are not runtime state. |
 | INV-FS-02 | Reusable system, repository, and runtime path strings MUST be defined in `internal/constants/paths.go`. Consumers MUST NOT introduce an inline `.g8e/` fragment or a `filepath.Join` of path literals. |
 | INV-FS-03 | A service or function that owns runtime I/O MUST receive `fs.RuntimeFileService` as an explicit argument. |
 | INV-FS-04 | MUST use `fileSvc.Resolve` only when an API requires an absolute path. MUST use `fileSvc.Rel` to turn an absolute path inside the runtime root back into a relative service path. |

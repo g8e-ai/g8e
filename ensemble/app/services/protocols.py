@@ -391,7 +391,9 @@ class MemoryDataServiceProtocol(Protocol):
     async def get_memory(self, investigation_id: str) -> InvestigationMemory | None:
         raise NotImplementedError
 
-    async def get_user_memories(self, user_id: str) -> list[InvestigationMemory]:
+    async def get_user_memories(
+        self, user_id: str, limit: int = 10
+    ) -> list[InvestigationMemory]:
         raise NotImplementedError
 
     async def get_case_memories(self, case_id: str, user_id: str) -> list[InvestigationMemory]:

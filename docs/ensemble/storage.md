@@ -1,86 +1,165 @@
-# Storage
+---
+doc_id: ensemble-storage
+title: Ensemble Storage
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - ensemble/app/clients/
+  - ensemble/app/services/data/
+  - internal/services/gateway/
+  - internal/constants/collections.go
+related:
+  - ../architecture/storage.md
+  - ../architecture/governance.md
+  - architecture.md
+  - governance.md
+  - pki.md
+  - llm-providers.md
+when_to_read: Understanding how g8ee interacts with Gateway storage services, collection access policies, cache strategies, attachment handling, data protection boundaries, and survival across restarts.
+do_not_use_for:
+  - Platform storage topology and encryption (docs/architecture/storage.md)
+  - Governance verification layers (docs/architecture/governance.md)
+  - Operator substrate and local stores (docs/architecture/operator.md)
+  - PKI and enrollment (ensemble/pki.md)
+---
 
-## Scope
+# Ensemble Storage
 
-g8ee does not open a local application database. It stores durable application records, cached values, and attachment objects through the Gateway's authenticated document, key-value, and blob services. The Gateway persists those services in its local `g8e.db`; active model turns, pending application approvals, background task tracking, and result correlations remain in g8ee process memory and do not survive a restart.
+## Purpose
 
-g8ee does persist its enrolled certificate, private key, trust bundle, and resumable enrollment state in its runtime volume. These credentials are process identity state, not application records. Host execution evidence has a separate owner and lifecycle. A target Operator retains its authoritative receipts, audit events, execution output, file-mutation evidence, replay state, and optional file ledger on that host. g8ee can receive governed results and persist selected content in application records or send it to a configured model provider, but it does not read the Operator's local stores directly. See [Storage Architecture](../architecture/storage.md) for the platform storage topology and protection applied to each store.
+g8ee stores durable application records, cached values, and attachment objects through the Gateway's authenticated document, key-value, and blob services. The Gateway persists these in its local `g8e.db`; active model turns, pending application approvals, background task tracking, and result correlations remain in g8ee process memory and do not survive a restart. g8ee also persists its enrolled certificate, private key, trust bundle, and resumable enrollment state in its runtime volume, which are process identity credentials rather than application records. A target Operator retains its authoritative receipts, audit events, execution output, file-mutation evidence, replay state, and optional file ledger on that host. See [Storage Architecture](../architecture/storage.md) for the platform storage topology and protection applied to each store.
 
-## Storage Topology
+## Quick index
 
-| State | Owner | Persistence | g8ee use |
-| --- | --- | --- | --- |
-| Application documents | Gateway | `g8e.db` document store | Cases, investigations, conversation history, memories, settings, Operator workflow records, agent activity, reputation, and stake resolutions |
-| Cached and short-lived values | Gateway | `g8e.db` key-value store | Document and query cache plus session, nonce, authentication, and request coordination |
-| Attachment objects | Gateway | `g8e.db` blob store | Retrieval and preparation of attachment content referenced by a conversation |
-| Gateway event delivery | Gateway | `g8e.db` SSE event store | Session-targeted progress, question, approval, result, reputation, and background events; delivery telemetry is not governance state |
-| g8ee in-flight work | g8ee process | Memory only | Model turns, application approvals, background task tracking, and Operator result correlation |
-| g8ee identity state | g8ee runtime volume | Certificate, key, trust-bundle, and enrollment files | Gateway mTLS identity and resumable enrollment |
-| Execution evidence | Executing Operator | Operator-local stores | Authoritative audit, receipt, execution-vault, replay, and file-ledger records |
+- [Purpose](#purpose)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-## Application Documents
+Invariant groups: [Document collections and access](#document-collections-and-access-inv-collections), [Key-value cache](#key-value-cache-inv-cache), [Attachment handling](#attachment-handling-inv-attachments), [State roots and governance](#state-roots-and-governance-inv-governance), [Data protection and persistence](#data-protection-and-persistence-inv-protection).
 
-The document store organizes JSON records by collection and identifier. g8ee uses it for cases and tasks, investigations and their conversation history, generated memories, settings, users and Operator workflow records, certificate-revocation records, agent activity metadata, reputation state and commitments, and stake resolutions. Conversation entries are embedded in investigation documents and linked by entry hashes.
+## Invariants
 
-Authenticated reads retrieve individual records or filter a collection with comparison operators, one ordering field, and a result limit. The g8ee client applies field projection after the Gateway returns a query and always retains the document `id` in projected results. Document replacement overwrites the stored document, while merge updates are applied by the Gateway document store.
+### Document collections and access (`INV-COLLECTIONS`)
 
-Protected application collections include cases, investigations, tasks, memories, agent activity metadata, reputation state, reputation commitments, and stake resolutions. The Gateway rejects direct document mutations for these collections with a governance-envelope redirect. g8ee submits their writes as typed document operations in a `GovernanceEnvelope`; reads continue to use the document service.
+| ID | Rule |
+| --- | --- |
+| INV-COLLECTIONS-01 | The document store organizes JSON records by collection and identifier. g8ee uses it for cases, investigations, tasks, memories, settings, users, Operator workflow records, certificate-revocation records, agent activity metadata, reputation state and commitments, and stake resolutions. Conversation entries are embedded in investigation documents and linked by entry hashes. |
+| INV-COLLECTIONS-02 | Protected application collections (cases, investigations, tasks, memories, agent_activity_metadata, reputation_state, reputation_commitments, stake_resolutions) require GovernanceEnvelope submission; the Gateway rejects direct mutations with a 409 Conflict redirect to `/api/v1/governance/envelopes`. |
+| INV-COLLECTIONS-03 | Direct-mutation allowed collections (settings, users, operators, operator_sessions, bound_sessions, passkey_challenges, revoked_certificates, trusted_signers, console_audit) bypass governance validation. The api_keys collection is not on this allowlist and requests are rejected. |
+| INV-COLLECTIONS-04 | Authenticated reads retrieve individual records or filter a collection with comparison operators, one ordering field, and a result limit. g8ee applies field projection after the Gateway returns a query and always retains the document `id`. Document replacement overwrites the full stored record; merge updates are applied by the Gateway. |
+| INV-COLLECTIONS-05 | Client-side array helpers use read-modify-write cycles and batch helpers send operations one at a time. These operations are not atomic across concurrent writers or across a batch. Cache-aside write methods do not automatically invalidate existing document or query cache entries; explicit invalidation helpers exist but callers must invoke them. |
 
-The Gateway permits direct mutations for a fixed set of platform support collections, including settings, users, Operators, Operator sessions, bound sessions, passkey challenges, revoked certificates, trusted signers, and console audit records. The g8ee API-key service targets an application-specific `api_keys` collection through direct document methods, but that collection is not on the Gateway allowlist, so its create and update requests are rejected rather than persisted.
+### Key-value cache (`INV-CACHE`)
 
-The client-side array helpers use read-modify-write cycles, and the batch helper sends operations one at a time. These operations are not atomic across concurrent writers or across a batch. The cache-aside write methods also do not automatically invalidate existing document or query cache entries; explicit invalidation helpers exist, but callers must invoke them.
+| ID | Rule |
+| --- | --- |
+| INV-CACHE-01 | The key-value service stores string values with optional expiration. g8ee serializes document and query cache entries as JSON and assigns collection-specific TTLs: users and settings (3,600s), API keys and reputation state (86,400s), cases, investigations, memories, and operators (1,800s), organizations (7,200s), reputation commitments (300s), web-session and operator-session (no collection TTL), and query cache entries (300s default). |
+| INV-CACHE-02 | Cache-management keys use the `g8e:cache:` prefix and are excluded from the Gateway's bound state root. Hash, list, counter, and pattern operations are client-side conveniences over string values; hash, list, and counter updates use read-modify-write sequences rather than server-side atomic operations. |
+| INV-CACHE-03 | Cache reads are disabled by default through `gateway.enable_cache_read`. Document and query reads warm the cache after a Gateway read, but subsequent reads bypass those entries while the setting remains disabled. Stale warmed entries remain available until expiration or explicit invalidation because document mutation paths do not clear them automatically. |
+| INV-CACHE-04 | A KV client that has not passed its health check returns cache misses or unsuccessful writes for many operations. All three clients (DB, KV, Blob) perform startup health checks via HTTP GET to the health endpoint, but g8ee does not fail startup solely because one check returns false. Later document and blob failures propagate as errors; many KV failures retain cache-miss or unsuccessful-write behavior. |
 
-## Key-Value Cache
+### Attachment handling (`INV-ATTACHMENTS`)
 
-The key-value service stores string values with optional expiration. g8ee serializes document and query cache entries as JSON and assigns collection-specific TTLs. The default TTL is 3,600 seconds; document cache TTLs are 3,600 seconds for users and settings, 86,400 seconds for API keys and reputation state, 1,800 seconds for cases, investigations, memories, and Operators, 7,200 seconds for organizations, and 300 seconds for reputation commitments. Web-session and Operator-session entries have no collection TTL in the cache strategy. Query cache entries default to 300 seconds. Cache-management keys use the `g8e:cache:` prefix and are excluded from the Gateway's bound state root.
+| ID | Rule |
+| --- | --- |
+| INV-ATTACHMENTS-01 | g8ee receives attachment metadata containing blob references in the form `att:{investigation_id}/{attachment_id}`. The attachment flow retrieves referenced objects only; it does not call the blob client's write or delete methods. Retrieved objects are parsed as serialized `AttachmentData` records containing content metadata and a base64 payload, then classified as text, image, PDF, or another type for the selected model provider. |
+| INV-ATTACHMENTS-02 | Text content smaller than 5 MiB is decoded as UTF-8 with replacement for invalid sequences. The Gateway limits one blob request body to 50 MiB. Blob reads return only active, unexpired objects. The attachment flow does not assign TTLs and has no cleanup task; attachment expiration or deletion depends on the writer and Gateway blob lifecycle. |
+| INV-ATTACHMENTS-03 | Direct blob mutation is allowed only in the `temp`, `uploads`, `cache`, and `scratch` namespaces, plus caller-owned application or user namespaces under identity rules. The `att:` namespace used by g8ee references is not on the direct-mutation allowlist. The attachment service retrieves referenced objects only and does not upload or delete attachments. |
 
-Cache reads are disabled by default through `gateway.enable_cache_read`. Document and query reads still warm the cache after a Gateway read, but subsequent reads bypass those entries while the setting remains disabled. When cache reads are enabled, stale warmed document or query entries remain available until expiration or explicit invalidation because document mutation paths do not clear them automatically.
+### State roots and governance (`INV-GOVERNANCE`)
 
-Hash, list, counter, and pattern operations are client-side conveniences over string values. Hash, list, and counter updates use read-modify-write sequences rather than server-side atomic operations. Pattern matching uses Gateway glob semantics. A KV client that has not passed its health check returns cache misses or unsuccessful writes for many operations; its delete and lookup helpers also convert several transport failures into empty or zero results.
+| ID | Rule |
+| --- | --- |
+| INV-GOVERNANCE-01 | All document content contributes to the Gateway's bound state root. Active bound key-value entries contribute unless they are cache-management keys; active bound blobs contribute with metadata and content. Expired values and blobs are excluded; observed-state entries use a separate commitment. |
+| INV-GOVERNANCE-02 | A protected application-record mutation follows the platform five-layer interlock: L1 Doctrine (typed payload validation, hard gates, threat detection), L2 Consensus (Ed25519 vote verification), L3 Notary (WebAuthn or signed CLI proof), L4 Warden (signature, expiry, nonce, transaction hash, state root, identity, and L2/L3 evidence verification), and L5 Actuator (transaction dispatch with capability token and signed receipt). |
+| INV-GOVERNANCE-03 | g8ee serializes direct-envelope submissions with a submission lock and retries a state-root mismatch with a fresh root up to three times. The client submits over the Gateway HTTPS endpoint using the enrolled g8ee app mTLS certificate. Delegated Operator and session identity fields are carried in the envelope. The route verifies supplied evidence but does not create missing L2 votes or suspend for L3; a mutation fails when the active posture requires evidence that g8ee did not supply. |
 
-The DB, KV, and blob clients each perform a startup health check, but g8ee does not fail startup solely because one of these checks returns false. Later document and blob failures propagate as storage or network errors, while many KV failures retain cache-miss or unsuccessful-write behavior. Governed command dispatch and SSE event delivery use Gateway HTTP rather than a g8ee pub/sub client.
+### Data protection and persistence (`INV-PROTECTION`)
 
-## Attachments
+| ID | Rule |
+| --- | --- |
+| INV-PROTECTION-01 | Document, key-value, blob, health, and related Gateway requests use g8ee's enrolled app workload certificate over mTLS. The GovernanceClient uses the same configured TLS identity for direct envelope submission and supplies the configured Operator session context when building the envelope. The app certificate does not grant unrestricted host access; host operations use the separate command-relay path to the target Operator. |
+| INV-PROTECTION-02 | Gateway application documents, key-value data, blobs, and structured metadata are not protected by the Operator vault's field-level encryption. At-rest protection depends on the Gateway runtime and database access controls. Operator-local stores apply their own selective encryption and retention rules as described in [Storage Architecture](../architecture/storage.md). |
+| INV-PROTECTION-03 | Returned host output and user-provided attachments can enter conversation records or model-provider context. The fact that execution evidence is authoritative on the Operator does not mean every copy of returned content remains on that host. Provider selection, application retention, and attachment handling must account for that data flow. |
+| INV-PROTECTION-04 | Gateway maintenance removes expired key-value entries and blobs. g8ee supplies TTLs for cache entries but does not apply one retention policy to durable documents and does not schedule document or attachment deletion. Cases, investigations, conversation history, memories, activity records, and reputation records remain until an application workflow deletes or replaces them. |
+| INV-PROTECTION-05 | Durable Gateway records and g8ee identity files survive a g8ee restart when their runtime volume is retained. In-flight model work, pending application approvals, result correlations, and tracked background tasks do not survive. Shutdown waits up to five seconds for tracked chat tasks before closing g8ee's Gateway transports. |
 
-g8ee receives attachment metadata containing a blob reference in the form `att:{investigation_id}/{attachment_id}`. Its application attachment flow only retrieves referenced objects; it does not call the blob client's write or delete methods. The retrieved object is parsed as a serialized `AttachmentData` record containing content metadata and a base64 payload, then classified as text, image, PDF, or another type for the selected model provider. Text content smaller than 5 MiB is decoded as UTF-8 with replacement for text context.
+## Owned surfaces
 
-The Gateway limits one blob request body to 50 MiB. Blob reads return only active, unexpired objects. The g8ee attachment flow does not assign a TTL and has no attachment cleanup task, so attachment expiration or deletion depends on the writer and Gateway blob lifecycle. The underlying g8ee blob client does expose put and delete operations for other application workflows, but they are not used by the attachment service.
+| Claim | Path | Verify |
+| --- | --- | --- |
+| Document collections | ensemble/app/services/data/ | Define application-record types and serialize/deserialize operations |
+| Protected collection policy | internal/constants/collections.go | Collection allowlist enforcement |
+| Cache strategy | ensemble/app/constants/config.py, ensemble/app/services/cache/ | TTL configuration and collection mapping |
+| Gateway client initialization | ensemble/app/main.py, ensemble/app/clients/ | Health checks and connection lifecycle |
+| Attachment reference and parsing | ensemble/app/models/attachments.py, ensemble/app/services/data/attachment_store_service.py | `att:` format and `AttachmentData` deserialization |
+| Blob mutation allowlist | internal/services/gateway/data_controller.go | Direct-mutation namespace enforcement |
+| Governance envelope submission | ensemble/app/services/governance/, internal/services/gateway/ | Five-layer verification and state-root retry logic |
+| mTLS identity and transport | ensemble/app/clients/, internal/services/gateway/platform_enrollment_service.go | Workload certificate configuration and usage |
 
-The Gateway allows direct blob mutation only in the `temp`, `uploads`, `cache`, and `scratch` namespaces, plus caller-owned application or user namespaces under its identity rules. The `att:` namespace used by g8ee references is not on that direct-mutation allowlist. The g8ee attachment service retrieves referenced objects only; it does not upload or delete attachments.
+## Procedures
 
-## State Roots and Governance
+### Verify collection access policy
 
-All document content contributes to the Gateway's bound state root. Active bound key-value entries also contribute unless they are cache-management keys, and active bound blobs contribute with their metadata and content. Expired values and blobs are excluded; observed-state entries use a separate commitment.
+Identify whether a collection requires GovernanceEnvelope submission:
 
-A protected application-record mutation follows the platform five-layer interlock:
+1. Locate the collection name in `internal/constants/collections.go`.
+2. Check if it appears in the protected collection set (cases, investigations, tasks, memories, agent_activity_metadata, reputation_state, reputation_commitments, stake_resolutions).
+3. If protected, all writes must submit to `/api/v1/governance/envelopes` with a `GovernanceEnvelope` payload.
+4. If not protected, direct document mutations are allowed via the document service.
 
-1. **L1 Doctrine** validates the typed payload and applies hard gates, forbidden-pattern matching, and MITRE ATT&CK-oriented threat detection.
-2. **L2 Consensus** verifies Ed25519 votes from enrolled consensus members when the active posture requires consensus.
-3. **L3 Notary** verifies WebAuthn or a signed CLI proof for mutations when the active posture requires human authorization.
-4. **L4 Warden** verifies signatures, expiry, nonce replay protection, the transaction hash, the current state root, target identity, and required L2 and L3 evidence.
-5. **L5 Actuator** dispatches the accepted document operation with a transaction-bound capability and produces signed receipt evidence.
+### Configure cache strategy for a collection
 
-g8ee serializes direct-envelope submissions with a submission lock and retries a state-root mismatch with a fresh root up to three times. The client submits over the Gateway HTTPS endpoint using the enrolled g8ee app mTLS certificate. Delegated Operator and session identity fields are carried in the envelope. The route verifies supplied evidence but does not create missing L2 votes or suspend for L3, so a mutation fails when the active posture requires evidence that g8ee did not supply.
+To add or modify a collection's cache TTL:
 
-## Authentication and Data Protection
+1. Locate collection-specific TTL mappings in `ensemble/app/services/cache/cache_aside.py` (lines 55-71).
+2. Add or update the collection name and desired TTL value (in seconds).
+3. Query cache entries default to 300 seconds; override via the `cache_ttl` parameter in read operations.
+4. Cache-management keys (`g8e:cache:*`) are never read unless `gateway.enable_cache_read` is enabled.
 
-Document, key-value, blob, health, and related Gateway requests use g8ee's enrolled app workload certificate over mTLS. The GovernanceClient uses the same configured TLS identity for direct envelope submission and supplies the configured Operator session context when building the envelope. The app certificate is not an Operator certificate and does not grant unrestricted host access; host operations use the separate command-relay path to the target Operator.
+### Trace attachment retrieval flow
 
-Gateway application documents, key-value data, blobs, and their structured metadata are not protected by the Operator vault's field-level encryption. Their at-rest protection depends on the Gateway runtime and database access controls. Operator-local stores apply their own selective encryption and retention rules as described in [Storage Architecture](../architecture/storage.md).
+To understand how an attachment is retrieved and processed:
 
-Returned host output and user-provided attachments can enter conversation records or model-provider context. The fact that execution evidence is authoritative on the Operator does not mean every copy of returned content remains on that host. Provider selection, application retention, and attachment handling must account for that data flow.
+1. Receive attachment metadata with blob reference: `att:{investigation_id}/{attachment_id}`.
+2. Call the blob client's `get()` method with the reference.
+3. The Gateway returns only active, unexpired blob content.
+4. Parse the returned bytes as a serialized `AttachmentData` record.
+5. Deserialize the base64 payload and classify the content type.
+6. For text content under 5 MiB, decode as UTF-8 with replacement sequences.
+7. Pass to the selected model provider or store in application records.
 
-## Retention and Restart Behavior
+### Submit a protected document mutation
 
-Gateway maintenance removes expired key-value entries and blobs. g8ee supplies TTLs for cache entries, but it does not apply one retention policy to durable documents and does not schedule document or attachment deletion. Cases, investigations, conversation history, memories, activity records, and reputation records remain until an application workflow deletes or replaces them.
+To submit a mutation to a protected collection:
 
-Durable Gateway records and g8ee identity files survive a g8ee restart when their runtime volume is retained. In-flight model work, pending application approvals, result correlations, and tracked background tasks do not. Shutdown waits up to five seconds for tracked chat tasks before closing g8ee's Gateway transports.
+1. Construct a typed document operation (create, update, or delete) for the target collection.
+2. Wrap the operation in a `GovernanceEnvelope` with delegated Operator and session identity context.
+3. Call the GovernanceClient's envelope submission method.
+4. The client serializes the submission with a submission lock.
+5. Submit via HTTPS to the Gateway using the g8ee app mTLS certificate.
+6. If the Gateway returns a state-root mismatch, retry up to three times with a fresh root.
+7. On success, the L4 Warden and L5 Actuator verify and execute the transaction.
 
-## Related
+## Anti-patterns
 
-- [Ensemble Architecture](architecture.md): Trust boundaries, startup identity, application records, events, and restart behavior
-- [Storage Architecture](../architecture/storage.md): Gateway and Operator persistence, encryption scope, retention, and state-root semantics
-- [Governance](governance.md): g8ee mutation paths and envelope validation
-- [Platform Governance](../architecture/governance.md): Five-layer verification, postures, and receipts
-- [PKI and Trust](pki.md): g8ee app enrollment and transport credentials
-- [LLM Providers](llm-providers.md): Provider configuration and model-facing data flow
+- Bypassing GovernanceEnvelope for mutations to protected collections (INV-COLLECTIONS-02). The Gateway rejects direct mutations and no document store method accepts them.
+- Assuming cache entries are automatically invalidated after a write (INV-COLLECTIONS-05, INV-CACHE-03). Explicit invalidation helpers must be called by the write path.
+- Assuming all KV failures are storage errors (INV-CACHE-04). Many KV failures retain cache-miss or unsuccessful-write behavior rather than propagating exceptions.
+- Uploading or deleting attachments via the blob client (INV-ATTACHMENTS-03). The attachment service retrieves objects only; direct blob mutations use separate namespaces.
+- Assuming startup failure if a Gateway health check fails (INV-CACHE-04). g8ee continues startup; later storage operations fail with explicit errors.
+- Assuming in-flight model work survives a restart (INV-PROTECTION-05). Active model turns and pending approvals are memory-only and are lost on shutdown.
+
+## Links out
+
+- [Ensemble Architecture](architecture.md): Trust boundaries, startup identity, application records, events, and restart behavior.
+- [Ensemble Governance](governance.md): Mutation paths, envelope validation, and posture behavior.
+- [PKI and Trust](pki.md): g8ee app enrollment and transport credentials.
+- [LLM Providers](llm-providers.md): Provider configuration and model-facing data flow.
+- [Storage Architecture](../architecture/storage.md): Gateway and Operator persistence, encryption scope, retention, and state-root semantics.
+- [Platform Governance](../architecture/governance.md): Five-layer verification, postures, and receipts.

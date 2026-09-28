@@ -252,12 +252,13 @@ func designatedRoleFromAssignment(assignment *evalv1.EvaluationAssignment) (stri
 	return modelCampaignRoleLabel(homogeneous.Homogeneous.GetDesignatedRole())
 }
 
-// LoadAssignmentTraceEvidence reads one persisted imported assignment trace.
-func LoadAssignmentTraceEvidence(ctx context.Context, reader complianceevidence.ArtifactReader, runID, assignmentID string) (EvaluationTrace, error) {
+// loadAssignmentTraceEvidence reads one persisted imported assignment trace
+// from the layout's path for the assignment.
+func loadAssignmentTraceEvidence(ctx context.Context, reader complianceevidence.ArtifactReader, layout evalLayout, runID, assignmentID string) (EvaluationTrace, error) {
 	if reader == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {
 		return nil, fmt.Errorf("evaluation: load assignment trace evidence: %w", constants.ErrMissingRequiredField)
 	}
-	path := assignmentTracePath(runID, assignmentID)
+	path := layout.assignmentTracePath(runID, assignmentID)
 	body, err := reader.ReadFile(ctx, path)
 	if err != nil {
 		return nil, err

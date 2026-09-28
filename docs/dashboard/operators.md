@@ -1,90 +1,96 @@
-# Operator Surfaces
+---
+doc_id: operators
+title: Operator Dashboard Surfaces
+audience: dashboard developers and operators
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - dashboard/public/js/components/operator-panel.js
+  - dashboard/public/js/components/anchored-terminal.js
+  - dashboard/public/js/utils/operator-panel-service.js
+related:
+  - docs/dashboard/architecture.md
+  - docs/dashboard/gateway.md
+  - docs/dashboard/sse.md
+  - docs/dashboard/tests.md
+  - docs/architecture/operator.md
+  - docs/architecture/governance.md
+when_to_read: Understanding Operator inventory, binding, metrics, terminal dispatch, and event flows in the browser dashboard.
+do_not_use_for:
+  - Operator CLI architecture (docs/architecture/operator.md)
+  - Governance enforcement and approval routing (docs/architecture/governance.md)
+  - Network and enrollment flows (docs/guides/connect_operator_to_gateway.md)
+---
 
-## Scope
+# Operator Dashboard Surfaces
 
-The dashboard browser components for Operator inventory, binding, deployment instructions, approval cards, status and metrics, and an anchored terminal call Gateway browser routes directly. The static host in `dashboard/server.js` serves assets only. Operator API traffic uses `ServiceName.GATEWAY` in `operator-panel-service.js` and resolves against `window.G8E_GATEWAY_URL`.
+## Purpose
 
-| Surface | Gateway path |
+Describes how the dashboard browser components expose Operator inventory, binding, terminal execution, and event subscription through the Gateway. Covers component responsibilities, route ownership, mixin structure, and the security boundary between event telemetry and execution authority.
+
+## Quick index
+
+- [Purpose](#purpose)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
+
+## Invariants
+
+| ID | Rule |
 | --- | --- |
-| Operator list, bind, unbind, stop, detail | `/api/v1/operators` (`RouteAuthDual`) |
-| Approval response and direct terminal command | `/api/v1/operator/approval/respond`, `/api/v1/operator/direct-command` (ensemble proxy) |
-| Operator binary download and checksum | `/.well-known/g8e/bin/{os}/{arch}` and `.../sha256` |
-| Device links and Operator API keys | Not available from the browser; service methods reject the calls |
-| Device authorization prompts | Not available from the browser; service methods reject the calls |
+| INV-OPS-PANEL-01 | `OperatorPanel` in [dashboard/public/js/components/operator-panel.js](../../dashboard/public/js/components/operator-panel.js) composes its behavior through mixin prototypes: `OperatorLayoutMixin`, `OperatorListMixin`, `OperatorMetricsDisplayMixin`, `BindOperatorsMixin`, `OperatorDeviceAuthMixin`, and `OperatorDownloadMixin`. Each mixin file MUST live in `dashboard/public/js/components/` with the suffix `-mixin.js`. |
+| INV-OPS-PANEL-02 | `AnchoredOperatorTerminal` in [dashboard/public/js/components/anchored-terminal.js](../../dashboard/public/js/components/anchored-terminal.js) composes focused behavior through terminal-specific mixins: `TerminalScrollMixin`, `TerminalOperatorMixin`, `TerminalOutputMixin`, and `TerminalExecutionMixin`. Each mixin file MUST live in `dashboard/public/js/components/` with the prefix `anchored-terminal-` and suffix `.js`. |
+| INV-OPS-PANEL-03 | `OperatorPanel` recognizes eight canonical statuses (from [dashboard/public/js/constants/operator-constants.js](../../dashboard/public/js/constants/operator-constants.js)): `available`, `unavailable`, `offline`, `bound`, `stale`, `active`, `stopped`, `terminated`. Status updates arrive via the event bus from Gateway SSE events. |
+| INV-OPS-PANEL-04 | Device links and Operator API keys MUST be rejected at the service layer with `Promise.reject()` in [dashboard/public/js/utils/operator-panel-service.js](../../dashboard/public/js/utils/operator-panel-service.js) when called from the browser. |
+| INV-OPS-PANEL-05 | All Operator HTTP calls from `OperatorPanelService` target `window.G8E_GATEWAY_URL`, not `window.location.origin`. Service method routing uses `ServiceName.GATEWAY` with endpoints from [dashboard/public/js/constants/api-paths.js](../../dashboard/public/js/constants/api-paths.js). |
+| INV-OPS-PANEL-06 | Event delivery through `SSEConnectionManager` (in [dashboard/public/js/utils/sse-connection-manager.js](../../dashboard/public/js/utils/sse-connection-manager.js)) does NOT confer execution authority. Events are UI transport only. Approval and state-mutation endpoints remain subject to separate Gateway route authentication. |
 
-Chat, settings, and ensemble-backed operator workflows require the Gateway ensemble proxy to reach g8ee (`G8E_ENSEMBLE_URL` or `--ensemble-upstream-url` on the Gateway). Operator enrollment and connectivity are separate deployment concerns. See [Connect Operator to Gateway](../guides/connect_operator_to_gateway.md).
+## Owned surfaces
 
-## Operator Panel
-
-`OperatorPanel` owns the panel lifecycle, DOM rendering, authentication-state handling, Operator event subscriptions, and aggregated list state. It applies these mixins to its prototype:
-
-- `OperatorLayoutMixin` — panel shell, resizing, and visibility.
-- `OperatorListMixin` — inventory sorting and pagination, Operator cards, metrics source selection, bind/unbind/stop actions.
-- `OperatorMetricsDisplayMixin` — status, CPU, memory, disk, latency, host details, environment details, and an obfuscated public IP toggle.
-- `BindOperatorsMixin` — confirmation overlays and single or bulk bind/unbind operations.
-- `OperatorDeviceAuthMixin` — inline device authorization UI (service calls reject when activated).
-- `OperatorDownloadMixin` — platform and architecture selection, download instructions, and checksum instructions.
-
-The panel recognizes `available`, `unavailable`, `offline`, `bound`, `stale`, `active`, `stopped`, and `terminated` Operator statuses, and distinguishes embedded and remote Operators. Inventory and status updates arrive through the Gateway SSE stream and the in-browser event bus.
-
-`operator-panel-service.js` centralizes Operator HTTP calls through `window.serviceClient` with `ServiceName.GATEWAY`.
-
-The operator list renders bind and stop actions per Operator. Device link and per-Operator API key actions are not rendered in the list.
-
-## Gateway Browser Paths
-
-| Workflow | Method and path | Browser owner |
+| Component | Path | Verify |
 | --- | --- | --- |
-| Operator inventory | `GET /api/v1/operators` | `OperatorPanelService` |
-| Operator detail | `GET /api/v1/operators/{id}` | `OperatorPanelService` |
-| Bind and unbind | `POST /api/v1/operators/bind`, `/unbind` | `OperatorPanelService`, `BindOperatorsMixin` |
-| Stop an Operator | `POST /api/v1/operators/{id}/stop` | `OperatorPanelService`, `OperatorListMixin` |
-| Approval response | `POST /api/v1/operator/approval/respond` | `AnchoredOperatorTerminal`, `TerminalExecutionMixin` |
-| Direct terminal command | `POST /api/v1/operator/direct-command` | `AnchoredOperatorTerminal` |
-| Operator binary and checksum | `GET /.well-known/g8e/bin/{os}/{arch}` and `.../sha256` | `OperatorDownloadMixin` |
+| OperatorPanel component | `dashboard/public/js/components/operator-panel.js` | Class definition, mixin imports at EOF, event handler setup in `_setupWireListeners()` |
+| Operator service layer | `dashboard/public/js/utils/operator-panel-service.js` | Service methods target `ApiPaths.operator.*` via `ServiceName.GATEWAY`; device link and API key methods reject |
+| AnchoredOperatorTerminal | `dashboard/public/js/components/anchored-terminal.js` | Terminal class, mixin application at EOF, `/run <command>` dispatch in `executeCommand()` |
+| Operator statuses | `dashboard/public/js/constants/operator-constants.js` | `OperatorStatus` enum with eight values |
+| API path constants | `dashboard/public/js/constants/api-paths.js` | `ApiPaths.operator.*` and `ApiPaths.approval.*` builders |
+| Event manager | `dashboard/public/js/utils/sse-connection-manager.js` | `SSEConnectionManager` class, event normalization, reconnect logic |
 
-Platform API calls must target `window.G8E_GATEWAY_URL`, not `window.location.origin`.
+## Procedures
 
-## Deployment and Download UI
+### Tracing an Operator Route from Browser to Gateway
 
-The deployment UI is a browser instruction surface. It offers macOS Intel and Apple Silicon choices and Linux x64, ARM64, and x86 choices, then builds curl and checksum commands for Gateway well-known binary paths.
+1. Identify the browser user action (inventory load, bind, direct command) and its owning component (`OperatorPanel` or `AnchoredOperatorTerminal`).
+2. Locate the mixin or core method that emits the request (e.g., `bindOperator()` in `BindOperatorsMixin`).
+3. Verify the service call uses `OperatorPanelService` and the correct path from `ApiPaths.operator.*` or `ApiPaths.approval.*`.
+4. Confirm the service method resolves to `window.G8E_GATEWAY_URL` and uses `ServiceName.GATEWAY` for routing.
+5. Cross-check the Gateway route in [internal/services/gateway/operator_controller.go](../../internal/services/gateway/operator_controller.go) for the matching HTTP handler (e.g., `handleBindOperators()` for `POST /api/v1/operators/bind`).
+6. Verify the Gateway handler obtains the user ID from the request context (web-session cookie or mTLS CLI identity).
 
-Device links and Operator API keys are not available from the browser. `operator-panel-service.js` rejects those service calls.
+### Testing Operator Component Behavior
 
-`OperatorDeployment` is a separate terminal welcome component that loads the `operator-deployment` template. It is a static usage-reference panel and does not implement Operator deployment or binary retrieval.
+1. Run dashboard unit tests: `npm test` or `npm run test:watch` in the `dashboard/` directory.
+2. Tests for `OperatorPanel` cover service delegation, mixin initialization, inventory sorting, bind/unbind overlays, and metrics rendering. See [dashboard/test/unit/frontend/operator/](../../dashboard/test/unit/frontend/operator/).
+3. Tests for `AnchoredOperatorTerminal` cover Operator state tracking, terminal input dispatch, approval card rendering, and execution result handling.
+4. Injected service clients and JSDOM mocks prevent real Gateway calls; test assertions verify mixin method calls and DOM updates.
 
-## Anchored Terminal
+## Anti-patterns
 
-`AnchoredOperatorTerminal` composes focused controller mixins:
+- Hardcoding a route path instead of using `ApiPaths.operator.*` — all paths MUST come from the constants file (INV-OPS-PANEL-05).
+- Calling device link or API key methods without catching the rejection — these are intentionally stubbed to fail in the browser (INV-OPS-PANEL-04).
+- Assuming event delivery creates execution permission — events are telemetry and UI sync only; every mutation endpoint requires its own auth check (INV-OPS-PANEL-06).
+- Adding new Operator mixin behavior directly to `OperatorPanel` class instead of creating a focused mixin module — mixins keep concerns isolated (INV-OPS-PANEL-01).
+- Dispatching commands through `AnchoredOperatorTerminal` without an active Operator binding or web session — the terminal checks both conditions before sending (INV-OPS-PANEL-02).
 
-- `anchored-terminal.js` — terminal DOM, input, history, attachments, chat handoff, and `/run <command>` dispatch.
-- `anchored-terminal-operator.js` — selected or bound Operator tracking and input enablement from Operator events.
-- `anchored-terminal-execution.js` — approval cards, risk information, preparing/executing indicators, command and file-edit results, and terminal approval responses.
-- `anchored-terminal-output.js` — output and thinking content.
-- `anchored-terminal-scroll.js` — viewport behavior.
+## Links out
 
-A normal input is emitted to the chat event bus. `/run <command>` sends a direct-command Gateway request only when an Operator is bound and a web session is available. Approval cards send approval or denial through the Gateway approval proxy path. Execution results arrive via SSE events on the Gateway stream.
-
-## Event Inputs and Security Boundary
-
-`SSEConnectionManager` creates a credentialed `EventSource` for `${G8E_GATEWAY_URL}/api/v1/sse/stream`, normalizes the nested Gateway push envelope, and forwards application payloads to `EventBus`. Operator components consume those event names for inventory updates, heartbeats, status transitions, bind/unbind changes, approval requests, and execution results.
-
-Event delivery is telemetry and UI transport. It does not confer execution authority, create governance proofs, or replace authenticated route checks. Any approval or mutation path remains subject to Gateway route authentication and the Gateway/Operator governance and execution boundaries described in [Governance](../architecture/governance.md) and [Operator Architecture](../architecture/operator.md).
-
-## Tests
-
-The dashboard unit tests cover service delegation, Operator binding, deployment UI, download instructions, terminal Operator state, terminal execution and approval rendering, static-host behavior, and architecture boundary guards. Tests use injected service clients, browser mocks, and JSDOM; they do not replace live deployment verification.
-
-For deployment prerequisites, see [Dashboard Architecture](architecture.md), [Gateway Integration](gateway.md), and [Server-Sent Events](sse.md). For test commands, see [Dashboard Testing](tests.md).
-
-## Related
-
-- [Dashboard Architecture](architecture.md)
-- [Gateway Integration](gateway.md)
-- [Server-Sent Events](sse.md)
-- [Dashboard Testing](tests.md)
-- [Operator Architecture](../architecture/operator.md)
-- [Governance Pipeline](../architecture/governance.md)
-- [Protocol Reference](../architecture/protocol.md)
-- [Connect Operator to Gateway](../guides/connect_operator_to_gateway.md)
-- [Unified Docker Stack](../guides/unified_stack.md)
+- [Dashboard Architecture](architecture.md): Component hierarchy and initialization.
+- [Gateway Integration](gateway.md): HTTPS origin configuration, CORS, and credential handling.
+- [Server-Sent Events](sse.md): Event stream, reconnect fallback, and payload envelope normalization.
+- [Dashboard Testing](tests.md): Test structure, mocks, and coverage gates.
+- [Operator Architecture](../architecture/operator.md): Operator lifecycle, session binding, and remote/embedded types.
+- [Governance Pipeline](../architecture/governance.md): Approval routing, execution authority, and consent boundaries.

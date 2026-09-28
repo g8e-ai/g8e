@@ -1,39 +1,92 @@
 ---
+doc_id: storage
 title: Storage Architecture
-parent: Architecture
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - internal/services/storage/
+  - internal/constants/paths.go
+related:
+  - encryption.md
+  - gateway.md
+  - operator.md
+  - governance.md
+  - events.md
+  - sse.md
+  - network.md
+  - evals.md
+when_to_read: Understanding database persistence, retention policies, audit evidence architecture, encryption boundaries, transaction storage, replay protection, and host-local execution evidence.
+do_not_use_for:
+  - Five-layer governance logic (see governance.md)
+  - Network PKI and transport identity (see network.md)
+  - Vault encryption algorithms (see encryption.md)
 ---
 
 # Storage Architecture
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+## Purpose
+
+Documents g8e's storage architecture: local SQLite databases, persistence topologies, audit evidence layout, encryption boundaries, transaction storage for L3 approvals, replay protection, and retention policies. The Gateway and outbound Operators each maintain a canonical database and optional satellite stores for audit, execution, and ledger evidence. This document maps persistence design to implementation in [internal/services/storage/](internal/services/storage/).
+
+## Quick index
+
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
+
+## Invariants
+
+(Invariants section — currently no specific invariant rules, reserved for future policy codification)
+
+## Owned surfaces
+
+(To be documented: database initialization, schema ownership, path resolution)
+
+## Procedures
+
+(To be documented: database backup, recovery, validation)
+
+## Anti-patterns
+
+- Bypassing the RuntimeFileService to open database paths directly.
+- Hardcoding database paths instead of using constants from [internal/constants/paths.go](internal/constants/paths.go).
+- Assuming database file permissions are set by SQL library code (they are owned by RuntimeFileService).
+- Placing encrypted content outside the field-level vault boundaries (see Security Properties).
 
 ## Overview
 
-g8e separates platform coordination state from host-local execution evidence. Each Gateway and outbound Operator opens a local canonical SQLite database at `.g8e/data/g8e.db`. The Gateway uses it for platform coordination state and Gateway-runtime audit evidence. An outbound Operator opens its own copy for the shared state-root schema, replay-independent execution services, and authoritative evidence from operations executed in that Operator runtime.
+g8e separates platform coordination state from host-local execution evidence. The Gateway and each outbound Operator opens a local canonical SQLite database. The Gateway uses it for platform coordination state, enrolled Operator registries, session management, and Gateway-runtime audit evidence. An outbound Operator opens its own copy of the canonical database for the shared state-root schema and its authoritative evidence from operations executed in that Operator runtime.
 
-Additional stores have separate lifecycles. An outbound Operator maintains `.g8e/data/execution_vault.db`, `.g8e/data/replay_store.db`, and, when Git integration is enabled, Git-backed ledgers under `.g8e/data/ledger/`. Both Gateway and outbound Operator modes open `.g8e/data/suspended_transactions.db` for pending L3 approvals. Native and campaign evaluation artifacts persist under `.g8e/data/eval/` on the host that owns the evaluation CLI; model inventories and the rollout queue use the project-root `.g8e/eval/` paths. See [Evaluations](./evals.md) and the [Unified Docker Stack Guide](../guides/unified_stack.md). A remote Operator remains authoritative for its local execution evidence; its publication of signed receipts to the Gateway is a best-effort mirror.
+Satellite stores have separate lifecycles and purposes. An outbound Operator maintains an execution vault for encrypted command output and file diffs, a replay database for independent nonce reservation, and optional Git-backed file ledgers. Both Gateway and outbound Operator modes open a suspended-transaction database for transactions awaiting L3 approval. Native and campaign evaluation artifacts persist under host-local `.g8e/data/eval/` on the evaluation CLI host; model inventories and rollout queues use project-root `.g8e/eval/` paths. A remote Operator remains authoritative for its local execution evidence; its publication of signed receipts to the Gateway is best-effort mirroring.
 
 See [Encryption Architecture](./encryption.md) for vault and keystore protection, [Gateway Architecture](./gateway.md) for Gateway service assembly, [Operator Architecture](./operator.md) for host-local execution, and [Event and Action Protocol](./events.md) for the audit-chain and receipt-projection contract.
 
 ## Persistence Topology
 
-| Store | Gateway | Outbound Operator | Default path and purpose |
+Database paths are relative to `.g8e/data/` within the runtime directory. Constants are defined in [internal/constants/paths.go](internal/constants/paths.go): `DbFilename`, `ExecutionVaultDBFilename`, `ReplayStoreDBFilename`, `SuspendedTxFilename`.
+
+| Store | Gateway | Outbound Operator | Purpose |
 | --- | --- | --- | --- |
-| `g8e.db` | Yes | Yes | `.g8e/data/g8e.db`: platform documents, key-value and blob state, state roots, Gateway replay nonces, SSE events, audit events, receipts, and commitments |
-| Suspended-transaction database | Yes | Yes | `.g8e/data/suspended_transactions.db`: transactions and proof material awaiting L3 approval |
-| Execution vault | Not a separate Gateway service | Yes | `.g8e/data/execution_vault.db`: command output and file-diff content plus searchable execution metadata |
-| Replay database | Gateway replay uses `g8e.db` | Yes | `.g8e/data/replay_store.db`: durable nonce reservation for the Operator's independent L4 verification |
-| File ledger | Not a separate Gateway service | Optional | `.g8e/data/ledger/`: default and per-session file snapshots, commit history, diffs, and restoration |
-| Evaluation artifacts | Host-side evaluation CLI | Host-side evaluation CLI | `.g8e/data/eval/` for run and campaign evidence; project-root `.g8e/eval/` for inventories and rollout state |
+| Canonical database (`g8e.db`) | ✓ | ✓ | Platform documents, key-value and blob state, state roots, nonce reservations, SSE events, audit chain, receipts, and commitments. |
+| Execution vault (`execution_vault.db`) | — | ✓ | Encrypted command output, stderr, and file-diff content; searchable execution metadata. |
+| Replay store (`replay_store.db`) | — | ✓ | Durable nonce reservation for independent L4 verification. Gateway replay uses the canonical database. |
+| Suspended-transaction store (`suspended_transactions.db`) | ✓ | ✓ | Transactions and approval proof material awaiting L3 approval. |
+| File ledger (`.g8e/data/ledger/`) | — | Optional | Git-backed version control: per-session repositories, file snapshots, commit history, and diffs. |
+| Evaluation artifacts | Evaluation CLI | Evaluation CLI | `.g8e/data/eval/`: run and campaign evidence. Project-root `.g8e/eval/`: model inventories, rollout queue. |
 
-All of these files are local to the runtime that opens them. The presence of `g8e.db` on an outbound Operator does not make the Operator a central platform database. During outbound verification, the Operator obtains the Gateway's current state root; its local database is not substituted for that Gateway root. The Gateway receipt mirror does not replace the Operator's local record.
+All databases are local to the runtime that opens them. An outbound Operator's `g8e.db` is not a central platform database; it is authoritative only for evidence produced by that Operator. During L4 verification, the Operator obtains the Gateway's current state root; its local database is not substituted. The Gateway mirrors remote signed receipts on a best-effort basis; mirroring failure does not invalidate the Operator's local evidence.
 
-In the root Compose deployment, `g8e-gateway`, `g8e-operator`, and `g8e-inference-operator` use separate named runtime volumes (`g8e-gateway-data`, `g8e-operator-data`, and `g8e-inference-data`). The cross-enrollment secondary gateway and the `g8ellama` inference topology also use separate volumes. The shared `/tmp` volume is not a storage-owner boundary for these databases. Removing a component volume removes that component's local database, PKI, vault, and evidence; it does not remove another component's stores. See [Docker Gateway Guide](../guides/docker_gateway.md) and [Unified Docker Stack Guide](../guides/unified_stack.md) for the complete Compose topology.
+In the root Compose deployment, `g8e-gateway`, `g8e-operator`, and `g8e-inference-operator` use separate named volumes. The cross-enrollment secondary gateway and `g8ellama` topology also use separate volumes. The shared `/tmp` volume is not a storage boundary. Removing a component volume removes that component's database, PKI, vault, and evidence only.
 
 ## Canonical Database
 
-The canonical database opens in SQLite WAL mode with foreign-key enforcement, a busy timeout, bounded retries for lock contention, and incremental vacuum support. Database-file permission changes are owned by the runtime file service and the explicit SQLite open boundary; the shared SQLite layer does not create parent directories or mutate database-file permissions on open. Gateway and audit services use separate connection pools to the same `g8e.db` file.
+The canonical database ([internal/services/storage/](internal/services/storage/)) opens in SQLite WAL mode with foreign-key enforcement, busy timeout, bounded retries for lock contention, and incremental vacuum. Database-file permissions are owned by the RuntimeFileService; the SQLite abstraction does not create parent directories or change permissions on open. Gateway and audit services use separate connection pools against the same `g8e.db` file.
 
 ### Platform Documents
 
@@ -97,9 +150,9 @@ The vault must be present, and protected writes fail while it is locked. Executi
 
 ### File Ledger
 
-When file ledger support is enabled, the Operator maintains a default git repository and an isolated repository for each Operator session. A governed file mutation snapshots the pre-mutation state, performs the host operation, then copies and commits the resulting state. The resulting before and after commit hashes, diff summary, and diff content link file history to audit and execution-vault records.
+When Git ledger support is enabled, the Operator maintains a default repository and an isolated repository for each session. A governed file mutation snapshots the pre-mutation state, performs the host operation, then copies and commits the resulting state. Before and after commit hashes, diff summaries, and diff content link file history to audit and execution-vault records.
 
-The ledger supports file history, point-in-time reads, and restoration. Host paths are normalized to stable repository-relative paths, and encrypted file copies are limited to 100 MiB. When the vault is unlocked, mirrored file content is encrypted and stored with an `.enc` suffix; the current ledger copy path writes plaintext when the supplied vault is locked, so the ledger does not provide the same fail-closed encryption behavior as the audit store, execution vault, and token adapter.
+The ledger supports file history, point-in-time reads, and restoration. Host paths are normalized to stable repository-relative paths. When the vault is unlocked, mirrored file content is encrypted and stored with an `.enc` suffix; when the vault is locked, the current ledger path writes plaintext. The ledger does not provide the same fail-closed encryption behavior as the audit store and execution vault, which fail closed when vault is locked.
 
 ### History Coordination
 
@@ -113,22 +166,22 @@ This standalone database does not apply vault field encryption. Its envelopes an
 
 ## Runtime File I/O
 
-`RuntimeFileService` is the canonical abstraction for paths and file operations inside the `.g8e/` runtime tree. The audit store uses it to establish and verify its data directory before opening the resolved SQLite path. The file ledger uses it for runtime directories and mirrored ledger files, while the execution boundary accesses governed host targets outside the runtime tree.
+RuntimeFileService ([internal/services/fs/](internal/services/fs/)) is the canonical abstraction for paths and file operations inside the `.g8e/` runtime tree. The audit store uses it to establish and verify its data directory before opening the resolved SQLite path. The file ledger uses it for runtime directories and ledger files. File operations outside the runtime tree (host targets, governed mutations) access those paths directly outside the abstraction boundary.
 
-Standalone SQLite services open their configured database paths through the shared SQLite layer. Production callers resolve each canonical relative database path exactly once through the injected `RuntimeFileService` before opening SQLite; under default configuration those paths resolve beneath the runtime data directory.
+All SQLite services resolve their database paths through RuntimeFileService before opening them. Under default configuration, relative database paths resolve beneath `.g8e/data/`. The abstraction owns file permissions and directory creation; the SQLite layer does not.
 
 ## Retention and Maintenance
 
-Retention is service-specific rather than a single policy applied to every store:
+Each service runs its own pruner on an interval. Retention is service-specific, not unified across stores:
 
-- **Audit store:** By default, an hourly task removes events, file-mutation links, and receipts older than 90 days, then removes sessions with no remaining events or receipts. Commitments are not removed. The configured audit database size value does not currently trigger size-based deletion.
-- **Execution vault:** By default, an hourly task removes execution and diff records older than 30 days. When the database exceeds 1 GiB, it removes the oldest tenth of each record set.
-- **Suspended transactions:** By default, a task runs every 30 minutes, removes expired records, and removes the oldest tenth when the database exceeds 256 MiB. Expiration, rather than the configured retention-days value, controls age-based deletion.
-- **Canonical Gateway stores:** Every 30 seconds, maintenance removes expired key-value entries, blobs, and nonces, plus SSE events older than one hour.
-- **Standalone Operator replay:** Expired nonces are removed during reservation. Additional stale-reservation and used-nonce pruning operations are available, but no background pruner runs for this database.
-- **Commitment and file ledgers:** Commitments are permanent, and file-ledger history has no automatic retention or size pruning.
+- **Audit store** ([internal/services/storage/audit_store.go](internal/services/storage/audit_store.go)): By default, an hourly background task removes events, file-mutation links, and receipts older than 90 days, then removes sessions with no remaining events or receipts. Commitments remain permanent. The configured database size limit (default 2048 MB) does not trigger size-based deletion; the time-based policy is authoritative.
+- **Execution vault** ([internal/services/storage/execution_vault.go](internal/services/storage/execution_vault.go)): By default, an hourly background task removes execution and diff records older than 30 days. When the database exceeds 1 GiB, the task removes the oldest tenth of each record set.
+- **Suspended transactions** ([internal/services/storage/suspended_transaction_store.go](internal/services/storage/suspended_transaction_store.go)): By default, a background task runs every 30 minutes. It removes expired records (expiration governs age-based deletion, not the configured retention-days value) and removes the oldest tenth when the database exceeds 256 MiB.
+- **Canonical database (key-value and blobs):** Every 30 seconds, maintenance removes expired key-value entries, blobs, and nonce reservations, plus SSE events older than one hour.
+- **Replay store (outbound Operator):** Expired nonces are removed during reservation. No automatic background pruner; stale-reservation and used-nonce pruning operations are available for manual invocation.
+- **Commitment and file ledgers:** Commitments remain permanent. File-ledger history has no automatic retention or size pruning.
 
-The audit store, execution vault, and suspended-transaction store run incremental vacuum after scheduled pruning to reclaim free pages gradually.
+The audit store, execution vault, and suspended-transaction store run incremental vacuum after scheduled pruning to gradually reclaim free pages.
 
 ## Governance Transaction Flow
 
@@ -136,11 +189,11 @@ Every governed operation follows the [five-layer interlock](./governance.md):
 
 1. **L1 Doctrine** validates the typed payload and applies hard gates, forbidden-pattern matching, and MITRE threat detection.
 2. **L2 Consensus** verifies Ed25519 consensus votes when the active posture requires them.
-3. **L3 Notary** verifies WebAuthn or signed CLI authorization for mutations when the active posture requires it; transactions awaiting Gateway-managed approval enter the suspended-transaction store.
-4. **L4 Warden** checks expiry, reserves the nonce, validates the payload and transaction hash, verifies the state root, and evaluates required L2 and L3 evidence. A failed validation releases the nonce reservation.
-5. **L5 Actuator** signs and persists the `EXECUTING` receipt, appends the signed commitment, rehydrates protected values, mints a transaction-bound capability, invokes the handler, dissolves the capability, and signs and persists the final receipt and persistence attestation.
+3. **L3 Notary** verifies WebAuthn or signed CLI authorization when the active posture requires it. Transactions awaiting Gateway-managed approval are persisted in the suspended-transaction store.
+4. **L4 Warden** checks expiry, reserves the nonce, validates payload and transaction hash, verifies the state root, and evaluates required L2 and L3 evidence. Failed validation releases the nonce reservation.
+5. **L5 Actuator** signs and persists the `EXECUTING` receipt, appends the signed commitment, rehydrates protected values, invokes the handler, and signs and persists the final receipt and persistence attestation.
 
-The initial receipt and commitment are execution gates. Final receipt persistence occurs after the mutation, so a final persistence failure is returned with the available receipt evidence but cannot roll back an external side effect. On a remote Operator, publication of the completed receipt to the Gateway is also best-effort.
+Initial receipt and commitment are execution gates. Final receipt persistence occurs after the mutation, so final-persistence failure is returned with receipt evidence but cannot roll back an external side effect. On a remote Operator, publication of the completed receipt to the Gateway is best-effort.
 
 ## Security Properties and Limits
 
@@ -154,14 +207,13 @@ The initial receipt and commitment are execution gates. Final receipt persistenc
 - A remote Operator's local receipt is authoritative. Gateway receipt mirroring improves centralized visibility but is not a durability guarantee for remote evidence.
 - Retention removes audit receipts while commitments remain permanent, so long-term commitment verification can outlive the locally retained receipt cross-link.
 
-## Related Documentation
+## Links out
 
-- [Governance](./governance.md): Five-layer verification and posture behavior
-- [Authentication and Authorization](./auth.md): Identity, sessions, and L3 approval
-- [Encryption Architecture](./encryption.md): Vault and keystore cryptography and operations
-- [Gateway Architecture](./gateway.md): Canonical database ownership and Gateway service assembly
-- [Operator Architecture](./operator.md): Host execution and local-first evidence
-- [SSE Streaming](./sse.md): Session routing and event replay
-- [Network Architecture](./network.md): mTLS and transport identity
-- [Evaluations](./evals.md): Native and campaign evaluation evidence layout
-- [g8e Protocol](../../protocol/docs/spec.md): Canonical governance messages and wire contract
+- [Governance](./governance.md): Five-layer verification and posture behavior.
+- [Encryption Architecture](./encryption.md): Vault and keystore cryptography.
+- [Gateway Architecture](./gateway.md): Gateway service assembly and canonical database ownership.
+- [Operator Architecture](./operator.md): Host execution and local-first evidence.
+- [Network Architecture](./network.md): mTLS, transport identity, and PKI.
+- [Event and Action Protocol](./events.md): Audit chain and receipt projection.
+- [SSE Streaming](./sse.md): Session routing and event replay.
+- [Evaluations](./evals.md): Native and campaign evaluation evidence layout.

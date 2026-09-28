@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-09-25
-Version: v2.1.14
+Last Updated: 2026-09-28
+Version: v2.2.3
 
 ---
 
@@ -84,7 +84,7 @@ curl -X POST https://localhost:8443/api/v1/operators/commands \
   }'
 ```
 
-WebSocket publishers can no longer inject `CommandIntent` on `cmd:` channels. That pub/sub relay was removed in v2.1.14; use this HTTP endpoint instead.
+WebSocket publishers can no longer inject `CommandIntent` on `cmd:` channels. That pub/sub relay was removed in v2.1.14 and replaced with the HTTP endpoints; use `POST /api/v1/operators/commands` or `POST /api/v1/governance/envelopes` instead.
 
 ### Direct GovernanceEnvelope
 
@@ -164,17 +164,17 @@ An app certificate is accepted only while its `AppPolicy` exists. The current au
 The Go protocol packages are part of the platform module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.14
+go get github.com/g8e-ai/g8e/v2@v2.2.3
 ```
 
-Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers. Host-operation dispatch uses registered request `event_type` values at `POST /api/v1/operators/commands`; the historical `CommandIntent` pub/sub shape was removed in v2.1.14.
+Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers. Host-operation dispatch uses registered request `event_type` values at `POST /api/v1/operators/commands`; the historical `CommandIntent` pub/sub shape was removed in v2.1.14 and is no longer available.
 
 ### Python
 
 Install the Python protocol package from PyPI:
 
 ```bash
-pip install g8e==2.1.13
+pip install g8e==2.2.3
 ```
 
 The package requires Python 3.10 or later. It includes generated protobuf modules, Pydantic models, protocol constants, deterministic transaction hashing, and receipt parsing and verification helpers. `G8E_PROTOCOL_DIR` overrides the bundled protocol constants directory for development.
