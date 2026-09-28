@@ -163,28 +163,75 @@ For a read-only observe dashboard (agent and run lifecycle, eval summaries, down
 
 See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for runtime requirements and [Build a g8e-Compatible Frontend](./build_frontend.md) for the full reference. The contract-pack generator's acceptance commands are documented in [contract-pack/README.md](../../dashboard/g8e-adapter/contract-pack/README.md).
 
-## Browser Limitations
+### Browser Limitations
 
-The CLI verifies Gateway HTTPS and CORS, but these browser-controlled restrictions remain outside its control:
+The CLI verifies Gateway HTTPS and CORS, but browser-enforced restrictions remain outside the CLI's control:
 
-- **Local Network Access:** When the frontend requests the local Gateway, the browser may prompt for permission to access devices on the local network. Select **Allow**. If the prompt was dismissed, reload the page or re-enable the permission in the site's browser settings.
-- **Top-level context:** Open the app in a top-level tab. The Lovable editor preview is an embedded context and may block loopback requests or WebAuthn ceremonies.
-- **Third-party cookies:** A hosted Lovable origin and `localhost` are cross-site. The Gateway configures its session cookie as `SameSite=None` when a cross-origin frontend is allowed, but browsers that block third-party cookies still reject the cookie. Authenticated requests then return `401` even after a successful passkey ceremony. The CLI cannot detect or override this policy. Use a deployment where the frontend and Gateway are same-site, or proxy through the frontend origin when that deployment model is appropriate. A tunnel does not guarantee cookie acceptance.
-- **Certificate trust:** The Gateway's local certificate must be trusted by the browser. Use the CLI's OS-trust flow or verify the printed fingerprint and complete the manual browser-trust flow. Never work around the warning by disabling TLS checks.
+- **Local Network Access:** When the frontend makes its first request to a loopback or local IP, the browser may prompt for permission to access local-network devices. Select **Allow**. If dismissed, reload the page or re-enable the permission in site settings.
+- **Top-level context:** Open the app in a top-level browser tab. The Lovable editor preview is an embedded iframe and may block loopback requests or WebAuthn ceremonies.
+- **Third-party cookies:** A hosted Lovable origin (`https://your-app.lovable.app`) and `localhost` are cross-site. The Gateway sets its session cookie with `SameSite=None` when a cross-origin frontend is allowed, but browsers that block third-party cookies still reject it. Authenticated requests then return `401` even after a successful passkey ceremony. The CLI cannot override this policy. Workarounds:
+  - Deploy the frontend at the same site as the Gateway (e.g., both under a tunnel or custom domain).
+  - Route browser requests through a server proxy at the frontend origin.
+  - Use a Cloudflare Tunnel and configure the origin accordingly (see [Cloudflare Tunnel Integration](./cloudflare_tunnel.md)).
+- **Certificate trust:** The Gateway's local HTTPS certificate must be trusted by the browser. Use the CLI's OS-trust flow (standard path) or verify the printed SHA-256 fingerprint and complete the manual browser-trust flow (`--no-system-trust`). Never disable TLS verification in the frontend.
 
-## If It Does Not Connect
+### If It Does Not Connect
 
-- **`Failed to fetch`:** Confirm that the Gateway is running with `./g8e gw status`, open the app in a top-level tab, allow local-network access, and rerun `./g8e gw connect <origin>`.
-- **CORS verification failure:** Rerun `./g8e gw connect <origin>` and inspect the verification report. The requested origin must be the exact origin where the app is opened, including its non-default port and excluding any path.
-- **WebAuthn `SecurityError`:** Open the app outside the Lovable editor preview and confirm that the origin supplied to `gw connect` is the origin in the browser address bar. The CLI derives the exact-host RP ID by default.
-- **Authenticated requests return `401`:** Confirm that every `fetch` uses `credentials: "include"` and every `EventSource` uses `withCredentials: true`. If login succeeds but requests still return `401`, the browser may be blocking the cross-site session cookie; see [Browser Limitations](#browser-limitations).
-- **Certificate warning or manual-trust error:** Verify the SHA-256 fingerprint printed by `gw connect`, complete the browser's trust flow, and rerun the command if necessary. Do not disable TLS verification.
-- **The command asks to restart:** Review the displayed configuration delta. Use `--yes` only when the proposed origin and passkey settings are correct. Trust prompts remain interactive even with `--yes`.
+- **`Failed to fetch`:** Check that the Gateway is running (`./g8e gw status`), open the app in a top-level browser tab (not an iframe), allow local-network access when prompted, and rerun `./g8e gw connect <origin>`.
 
-## When You Need a Tunnel
+- **CORS verification failure:** Rerun `./g8e gw connect <origin>` and review the verification report. Ensure the origin you passed matches the URL in the browser address bar exactly (including any non-default port, excluding any path).
 
-Use a tunnel when the Gateway must be reached from another computer or user, or when the integration must run in Lovable edge functions or cloud-side tests. A public deployment also requires publicly trusted HTTPS and explicit CORS and WebAuthn settings for the public origins. See [Cloudflare Tunnel Integration](./cloudflare_tunnel.md).
+- **WebAuthn `SecurityError`:** Open the app outside the Lovable editor preview and confirm the origin in the browser address bar matches what you passed to `gw connect`. The CLI derives the RP ID from the exact host; a mismatch causes the authenticator to reject the ceremony.
+
+- **Authenticated requests return `401` after passkey login:** Confirm every `fetch` uses `credentials: "include"` and every `EventSource` uses `withCredentials: true`. If login succeeds but API calls still return `401`, the browser may be blocking the cross-site session cookie (see [Browser Limitations](#browser-limitations)). Workarounds: same-site deployment, server proxy, or Cloudflare Tunnel.
+
+- **Certificate warning or manual-trust error:** Verify the SHA-256 fingerprint printed by `gw connect` against your browser's certificate dialog, complete the browser's trust flow, and rerun the command if necessary. Do not disable TLS verification.
+
+- **Command requests a Gateway restart:** The CLI detected a configuration mismatch (CORS origin, RP ID, RP name, or RP origins differ). Review the displayed delta. Use `--yes` only if the proposed settings are correct. Trust and stale-anchor removal prompts remain interactive even with `--yes`.
+
+### When You Need a Tunnel
+
+Use a tunnel when:
+- The Gateway must be reachable from another computer or user.
+- The integration runs in Lovable edge functions or cloud-side tests.
+- A public deployment requires publicly trusted HTTPS and explicit CORS/WebAuthn settings.
+
+See [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) for configuration and examples.
 
 ## Advanced Configuration
 
-`gw connect` accepts one frontend origin and derives one exact-host default RP ID. For multiple origins, a registrable parent RP ID, public tunnels, custom Gateway ports, or other advanced settings, use `./g8e gw start` with explicit flags. The relevant flags are `--cors-origin`, repeatable `--passkey-rp-origin`, `--passkey-rp-id`, `--passkey-rp-name`, and `--public-base-url`. Validate that every origin is permitted for the selected RP ID. See [Build a g8e-Compatible Frontend](./build_frontend.md#gateway-side-configuration) for the complete reference.
+`gw connect` takes a single frontend origin and derives a single exact-host RP ID. For multiple origins, a shared registrable parent RP ID, custom Gateway ports, or other advanced deployments, use `./g8e gw start` with explicit flags:
+
+```bash
+./g8e gw start \
+  --cors-origin https://app1.example.com \
+  --cors-origin https://app2.example.com \
+  --passkey-rp-id example.com \
+  --passkey-rp-origin https://app1.example.com \
+  --passkey-rp-origin https://app2.example.com \
+  --public-base-url https://example.com
+```
+
+Key flags (all from `./g8e gw start --help`):
+- `--cors-origin` (repeatable): Allowed origins for CORS preflight.
+- `--passkey-rp-id`: RP ID for WebAuthn (must be a parent or exact match of all RP origins).
+- `--passkey-rp-origin` (repeatable): RP origins for WebAuthn (must be valid origins for the chosen RP ID).
+- `--passkey-rp-name`: Display name for the RP (defaults to `g8e`).
+- `--public-base-url`: Public base URL for approval links and host validation.
+
+Validate that every origin is a valid origin for the selected RP ID. See [Build a g8e-Compatible Frontend](./build_frontend.md) for the complete reference.
+
+## Anti-patterns
+
+- Pasting server-side, edge-function, or proxy integrations into the frontend builder instead of the emitted `gw connect` prompt. The browser must call the Gateway directly.
+- Embedded iframe context (Lovable editor preview) instead of a top-level browser tab. Iframes block loopback access and WebAuthn ceremonies.
+- Missing `credentials: "include"` on fetch or `withCredentials: true` on EventSource. The browser will not send the session cookie without these.
+- Disabling TLS verification or dismissing certificate warnings. Always verify the fingerprint or trust the certificate through the OS trust store.
+- Restarting the Gateway without persisting a launch profile. Use `gw start` or `gw connect`, not manual process startup.
+
+## Links out
+
+- [Build a g8e-Compatible Frontend](./build_frontend.md) — browser API, WebAuthn, SSE reference, and Gateway-side configuration.
+- [Generator-Neutral Builder Guide](./build_observe_frontend.md) — runtime requirements for the observe frontend.
+- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) — tunnel setup for public deployments and multi-user access.
+- [Gateway Documentation](../dashboard/index.md) — operator dashboard and monitoring.

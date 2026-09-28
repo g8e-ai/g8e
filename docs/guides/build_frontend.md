@@ -1,59 +1,71 @@
 ---
+doc_id: build_frontend
 title: Build a g8e-Compatible Frontend
-parent: Guides
+audience: frontend developers, web application builders
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/guides/build_frontend.md
+  - docs/guides/build_observe_frontend.md
+  - internal/services/gateway/
+related:
+  - docs/guides/lovable.md
+  - docs/guides/build_observe_frontend.md
+  - docs/guides/public_spectator.md
+  - docs/guides/cloudflare_tunnel.md
+  - docs/guides/connect_apps_to_gateway.md
+  - docs/architecture/auth.md
+  - docs/architecture/gateway.md
+  - docs/architecture/sse.md
+when_to_read: Building or integrating a browser-hosted frontend with g8e Gateway authentication, WebAuthn ceremonies, SSE streaming, transaction approvals, or observe API endpoints.
+do_not_use_for:
+  - Deployment architecture and tunnel setup (docs/guides/cloudflare_tunnel.md, docs/guides/public_spectator.md)
+  - CLI authentication flows and token-gated enrollment (docs/guides/connect_apps_to_gateway.md)
+  - WebAuthn cryptography and threat modeling (docs/architecture/auth.md)
 ---
 
-# Build a g8e-Compatible Frontend
+## Purpose
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+Describes how to build a g8e-compatible browser frontend. The guide covers Gateway configuration, WebAuthn passkey ceremonies, SSE audit streaming, transaction approvals, observe API access, component structure, and integration testing. It applies to custom React, Vue, and vanilla JavaScript SPAs, Lovable-generated frontends, and any browser app that communicates directly with the Gateway over HTTPS with passkey authentication.
 
----
+For minimal local Lovable setup with guided one-command configuration, see [Connect a Lovable App](./lovable.md). For advanced multi-origin or public deployments, the `gw start` flags below are available after the guided workflow. For generator-neutral observe frontends, see [Generator-Neutral Builder Guide](./build_observe_frontend.md).
 
-## Overview
+## Quick index
 
-This guide describes how to build a g8e-compatible web UI. It covers gateway configuration, WebAuthn authentication, SSE streaming, approval flows, API data types, UI/UX guidelines, and the recommended project structure. It applies to custom React apps, Vue dashboards, vanilla JS consoles, and hosted platforms like Lovable.
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Prerequisites](#prerequisites)
+- [Gateway-Side Configuration](#gateway-side-configuration)
+- [API Reference](#api-reference)
+- [WebAuthn Flow Requirements](#webauthn-flow-requirements)
+- [SSE Live Audit Stream](#sse-live-audit-stream)
+- [Observe API](#observe-api-read-only-browser-surface)
+- [Pages and Components](#pages-and-components)
+- [Error Handling](#error-handling)
+- [Recommended Project Structure](#recommended-project-structure)
+- [Frontend Integration Checklist](#frontend-integration-checklist)
+- [Troubleshooting](#troubleshooting)
+- [Links out](#links-out)
 
-For the minimal local Lovable setup, see [Connect a Lovable App](./lovable.md). `./g8e gw connect <frontend-origin>` is the guided one-command workflow for connecting a browser-hosted frontend to a local Gateway; the advanced `gw start` flags below remain available for multi-origin and public deployments.
+The browser SPA communicates with the g8e Gateway over HTTPS at the configured origin. Authentication uses WebAuthn passkeys (no passwords, no API keys). The Gateway issues an HttpOnly, Secure session cookie after successful passkey verification. All authenticated API calls include `credentials: 'include'` to send the session cookie cross-origin. Real-time telemetry arrives via Server-Sent Events (SSE), not WebSockets (the WebSocket endpoint at `/api/v1/pubsub/stream` requires mTLS and is not browser-accessible).
 
-### Architecture
-
-```
-[Frontend App] → https://gateway-host:8443 → [g8e Gateway]
-      ↑                                          ↓
- credentials: 'include'              WebAuthn + Session Cookie + SSE
-```
-
-The frontend is a browser-based SPA that communicates with the g8e Gateway over HTTPS. Authentication is via WebAuthn passkeys (no passwords, no API keys). The gateway issues an HttpOnly session cookie after successful passkey verification. All authenticated API calls must include `credentials: 'include'` so the cookie is sent cross-origin. Real-time telemetry is delivered via Server-Sent Events (SSE), not WebSockets (the WebSocket endpoint requires mTLS and is not available to browsers).
-
-### The Built-In Console as Reference
-
-The g8e Gateway ships with an embedded, single-file vanilla JavaScript console SPA at `/console/`. It implements passkey registration and authentication, transaction approvals, SSE audit streaming, passkey management, CLI recovery approval, platform workload enrollment approval, and URL-fragment handling for enrollment and approval links. It is the canonical browser reference implementation.
-
----
+The Gateway ships with an embedded single-file vanilla JavaScript console at `/console/` that implements passkey registration and authentication, transaction approvals, SSE audit streaming, passkey management, CLI recovery approval, and platform workload enrollment approval. The console is the canonical browser reference implementation for all ceremony contracts and error flows.
 
 ## Prerequisites
 
 - g8e Gateway running and healthy, or permission to let `./g8e gw connect <frontend-origin>` start or restart the local Gateway
 - Frontend application served from a known top-level origin (e.g., `https://your-app.example.com`, `http://localhost:3003`)
 - Gateway started with `--cors-origin` and `--passkey-rp-origin` flags matching the frontend origin
-- Browser supports WebAuthn (all modern Chrome, Firefox, Safari, Edge)
-- Browser trusts the gateway's HTTPS certificate; the gateway session cookie is always `Secure`
-- Frontend runs in a WebAuthn secure context (HTTPS, or the browser's localhost exception for local development)
+- Browser supports WebAuthn (all modern Chrome, Firefox, Safari, Edge).
+- Browser trusts the gateway's HTTPS certificate; the gateway session cookie is always `Secure`.
+- Frontend runs in a WebAuthn secure context (HTTPS, or the browser's localhost exception for local development).
 
-### Serving and deployment requirements
+### Serving and Deployment Requirements
 
 Build the UI as a top-level browser SPA and serve it from the exact origin configured in the Gateway. For this direct-browser integration, the browser calls the Gateway directly using the absolute Gateway HTTPS origin; do not move requests through an edge function, server-side proxy, service worker, or iframe relay. A hosted deployment needs publicly trusted HTTPS on the frontend and Gateway origins. A local deployment can use loopback HTTP for the frontend, but the Gateway remains HTTPS and the browser must trust its certificate.
 
-For a same-computer local frontend, run:
-
-```bash
-./g8e gw connect http://localhost:3003
-```
-
-Replace the origin with the actual scheme, host, and port. The command validates the origin, derives the exact-host RP ID, starts or restarts the Gateway with matching CORS and passkey settings when needed, requests consent before installing local trust, and verifies Gateway HTTPS and CORS. Open the frontend in a top-level browser tab after the command succeeds; an embedded builder preview or iframe can block loopback and WebAuthn permissions. `gw connect` cannot verify browser-controlled local-network permission or third-party-cookie acceptance.
-
----
+For a same-computer local frontend, run `./g8e gw connect http://localhost:3003` with the actual scheme, host, and port. The command validates the origin, derives the exact-host RP ID, starts or restarts the Gateway with matching CORS and passkey settings when needed, requests consent before installing local trust, and verifies Gateway HTTPS and CORS. Open the frontend in a top-level browser tab after the command succeeds; an embedded builder preview or iframe can block loopback and WebAuthn permissions. `gw connect` cannot verify browser-controlled local-network permission or third-party-cookie acceptance.
 
 ## Gateway-Side Configuration
 
@@ -110,9 +122,7 @@ The cookie has a 24-hour TTL. The gateway validates the cookie on every authenti
 
 ### Third-Party Cookie Blocking
 
-When the frontend and Gateway are cross-site (for example, a hosted frontend at `https://your-app.lovable.app` calling `https://localhost:8443`), the session cookie is `SameSite=None` so the browser sends it cross-origin. Browsers that block third-party cookies reject `SameSite=None` cookies, so authenticated requests return `401` even after a successful passkey login. The Gateway cannot detect or override browser cookie policy. If the browser blocks the cookie, deploy both origins on the same site or proxy Gateway requests through the frontend origin so the cookie is first-party. A tunnel does not guarantee cookie acceptance and is not a universal fix for this limitation. For the same-machine local workflow, `./g8e gw connect` verifies HTTPS and CORS but does not claim to verify cookie acceptance.
-
----
+When the frontend and Gateway are cross-site (for example, a hosted frontend at `https://your-app.lovable.app` calling `https://localhost:8443`), the session cookie is `SameSite=None` so the browser sends it cross-origin. Browsers that block third-party cookies reject `SameSite=None` cookies, so authenticated requests return `401` even after successful passkey login. The Gateway cannot detect or override browser cookie policy. If the browser blocks the cookie, deploy both origins on the same site or proxy Gateway requests through the frontend origin so the cookie is first-party. A tunnel does not guarantee cookie acceptance and is not a universal fix for this limitation. For the same-machine local workflow, `./g8e gw connect` verifies HTTPS and CORS but does not claim to verify cookie acceptance.
 
 ## API Reference
 
@@ -154,9 +164,7 @@ The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (
 
 ### Route Authentication
 
-Browser clients use public routes and routes classified for web-session or dual authentication. The SSE consumer endpoints accept either mTLS or a session cookie. The platform enrollment owner routes also accept either authentication mode; browser calls use the session cookie. Unknown routes fail closed to mTLS. Consult `/swagger/` and the route authentication registry before exposing additional gateway operations in a browser UI.
-
----
+Browser clients use public routes and routes classified for web-session or dual authentication. The SSE consumer endpoints accept either mTLS or a session cookie. The platform enrollment owner routes also accept either authentication mode; browser calls use the session cookie. Unknown routes fail closed to mTLS. Consult `/swagger/` before exposing additional gateway operations in a browser UI.
 
 ## WebAuthn Flow Requirements
 
@@ -478,7 +486,7 @@ The `dashboard/g8e-adapter/` package is the audited integration core. It owns:
 - A safe event presentation registry: escaped bounded fields, safe labels, thinking events as phase labels (never raw chain-of-thought), unknown events as bounded diagnostic rows that cannot mutate projections or counters.
 - Explicit loading, empty, stale, unavailable, unsupported, partial-verification, disconnected, unauthenticated, and error view states.
 
-The adapter is verified by 445 unit tests, including the contract-pack drift check. A minimal host (`host/`) exercises the adapter against a real Gateway fixture in browser contract tests. A reference frontend (`reference-ui/`) demonstrates one valid presentation layer that wraps the adapter; it is replaceable and is not the only valid output.
+The adapter is verified by comprehensive unit tests, including contract-pack drift detection. A minimal host (`host/`) exercises the adapter against real Gateway fixtures in browser contract tests. A reference frontend (`reference-ui/`) demonstrates one valid presentation layer that wraps the adapter; it is replaceable and is not the only valid output.
 
 ### The deterministic contract pack
 

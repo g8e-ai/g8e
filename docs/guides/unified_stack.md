@@ -860,13 +860,16 @@ make clean-docker
 
 Restarting the gateway with `docker compose up -d g8e-gateway` preserves the trust domain. A cold reset requires owner and workload re-enrollment.
 
-## Relationship to other stacks
+## Anti-patterns
 
-- **Demos** (`demos/`, `./g8e demos`): organization-specific scenarios; no ensemble/dashboard.
-- **g8ellama profile**: legacy separate User Gateway; not used for Genesis campaigns.
-- **Native execution-boundary eval** (`g8e eval boundary run`): platform lane only; not a model campaign.
+- Starting the stack without setting `G8E_OLLAMA_ENDPOINT` when inference is required. The Inference Operator fails to enroll without a valid provider endpoint.
+- Rebinding `.env` campaign ID and digest per model instead of using dispatch-carried campaign authority. This couples the Inference Operator to a single campaign and breaks rollout workflow.
+- Running `docker compose down -v` expecting it to preserve credentials — it destroys all volumes including PKI. Use `docker compose down` (without `-v`) to preserve state.
+- Starting Formation smoke without enrolling Observer and Provenance Operators first. Early assignments will fail `--require-observation` and `--require-witness`.
+- Running `g8e eval runs publish` concurrently with `runs start --publish` or `runs resume --publish`. This causes out-of-order batches in the public feed.
+- Granting command execution authority to Observer or Provenance Operators. These are read-only witness boundaries. Never pass `--inference-enabled` or generic command flags to Observer/Provenance enrollments.
 
-## Related documentation
+## Links out
 
 - [Evaluations](../architecture/evals.md) — platform evaluation programs, Observer and Provenance Operator roles, evidence, and verification.
 - [Model Provenance](../architecture/model-provenance.md) — zero-trust weight attestation and chain of custody.
