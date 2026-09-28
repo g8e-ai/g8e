@@ -87,50 +87,7 @@ type formationRunJSON struct {
 	Roles                []formationRunRoleJSON `json:"roles"`
 }
 
-type formationRunOptions struct {
-	FormationID        string
-	RegistryFile       string
-	InventoryFile      string
-	InferenceSessionID string
-	DataSessionID      string
-	InitialState       string
-	RunID              string
-	AssignmentID       string
-}
-
-// formationsListEvalCmd wraps campaignEvalFormationsListCmd for the top-level formations group
 func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
-	return campaignEvalFormationsListCmd(deps)
-}
-
-// formationsShowEvalCmd wraps campaignEvalFormationsShowCmd for the top-level formations group
-func formationsShowEvalCmd(deps nativeEvalDeps) *cobra.Command {
-	return campaignEvalFormationsShowCmd(deps)
-}
-
-// formationsSmokeEvalCmd wraps campaignEvalFormationsRunCmd for the top-level formations group
-func formationsSmokeEvalCmd(deps nativeEvalDeps) *cobra.Command {
-	cmd := campaignEvalFormationsRunCmd(deps)
-	cmd.Use = "smoke"
-	cmd.Short = "Run one or all formations through the governed Inference Operator path"
-	return cmd
-}
-
-// campaignEvalFormationsCmd is kept for backwards compatibility but not used in Phase 4+
-func campaignEvalFormationsCmd(deps nativeEvalDeps) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "formations",
-		Short: "List, inspect, and smoke-run execution-topology formations",
-	}
-	cmd.AddCommand(
-		campaignEvalFormationsListCmd(deps),
-		campaignEvalFormationsShowCmd(deps),
-		campaignEvalFormationsRunCmd(deps),
-	)
-	return cmd
-}
-
-func campaignEvalFormationsListCmd(_ nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the checked-in execution-topology formation catalog",
@@ -179,10 +136,10 @@ func campaignEvalFormationsListCmd(_ nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	return cmd
+	return jsonLeaf(cmd)
 }
 
-func campaignEvalFormationsShowCmd(_ nativeEvalDeps) *cobra.Command {
+func formationsShowEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <formation-id>",
 		Short: "Show one catalog formation and its role bindings",
@@ -248,109 +205,88 @@ func campaignEvalFormationsShowCmd(_ nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	return cmd
+	return jsonLeaf(cmd)
 }
 
-func campaignEvalFormationsRunCmd(deps nativeEvalDeps) *cobra.Command {
-	opts := formationRunOptions{FormationID: "ultra-efficient-speedster"}
-	var runCatalog bool
+func formationsSmokeEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	var runAll bool
+	var initialState string
 	cmd := &cobra.Command{
-		Use:   "run",
-		Short: "Run one or all frozen formations through the governed Inference Operator path",
-		Long: `Execute Lite → Assistant → Primary for catalog formations using frozen
-registry digests and exact Operator sessions. Use --catalog to batch-run every sovereign
-execution topologies in sequence. This is a governed smoke path, not a scored campaign assignment.`,
+		Use:   "smoke [formations...]",
+		Short: "Run one or all formations through the governed Inference Operator path",
+		Long: `Execute Lite → Assistant → Primary for one or more catalog formations using frozen
+registry digests and exact Operator sessions. Use --all to batch-run every sovereign
+execution topology in sequence. This is a governed smoke path, not a scored campaign assignment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if opts.InferenceSessionID == "" {
-				return fmt.Errorf("evaluation: formations run: --inference-session is required")
-			}
-
-			if runCatalog {
-				topologies, err := evaluation.NewExecutionTopologies()
-				if err != nil {
-					return fmt.Errorf("evaluation: formations run: %w", err)
-				}
-				formations := topologies.Formations()
-				type catalogSummaryItem struct {
-					FormationID string `json:"formation_id"`
-					Passed      bool   `json:"passed"`
-					PeakVRAMMiB uint64 `json:"peak_vram_mib"`
-					Error       string `json:"error,omitempty"`
-				}
-				var batchResults []formationRunJSON
-				var summaries []catalogSummaryItem
-				hasFailure := false
-
-				for _, form := range formations {
-					runOpts := opts
-					runOpts.FormationID = form.ID
-					if !output.JSONEnabled(cmd) {
-						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "=== START Formation %s (%s) ===\n", form.ID, form.DisplayName)
-					}
-					result, sessions, freeze, err := runFormationProductionFlow(cmd, deps, runOpts)
-					if err != nil {
-						hasFailure = true
-						summaries = append(summaries, catalogSummaryItem{
-							FormationID: form.ID,
-							Passed:      false,
-							Error:       err.Error(),
-						})
-						if !output.JSONEnabled(cmd) {
-							_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "FAIL Formation %s: %v\n", form.ID, err)
-						}
-						continue
-					}
-					batchResults = append(batchResults, formationRunResultJSON(result, sessions, freeze.CampaignID, opts.RunID))
-					summaries = append(summaries, catalogSummaryItem{
-						FormationID: form.ID,
-						Passed:      result.Passed,
-						PeakVRAMMiB: result.PeakVRAMMiB,
-					})
-					if !result.Passed {
-						hasFailure = true
-					}
-					if !output.JSONEnabled(cmd) {
-						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Formation %s %s (Peak VRAM: %d MiB)\n",
-							result.FormationID, passedLabel(result.Passed), result.PeakVRAMMiB)
-						for _, role := range result.Roles {
-							_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s %s digest=%s attempt=%s\n",
-								role.Role, role.Model.ServedModelTag, role.AttestationDigest, role.AttemptID)
-						}
-					}
-				}
-
-				if output.JSONEnabled(cmd) {
-					payload, err := json.MarshalIndent(batchResults, "", "  ")
-					if err != nil {
-						return err
-					}
-					_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-					if err != nil {
-						return err
-					}
-				} else {
-					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "\n--- Formation Catalog Batch Summary ---")
-					for _, s := range summaries {
-						status := "PASS"
-						if !s.Passed {
-							status = "FAIL"
-						}
-						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-25s %s (Peak VRAM: %d MiB)\n", s.FormationID, status, s.PeakVRAMMiB)
-					}
-				}
-
-				if hasFailure {
-					return fmt.Errorf("evaluation: formations run: one or more formations failed")
-				}
-				return nil
-			}
-
-			result, sessions, freeze, err := runFormationProductionFlow(cmd, deps, opts)
+			sessions, err := resolveOperatorSessions(cmd, deps, operatorRoleInference, operatorRoleData)
 			if err != nil {
-				return err
+				return fmt.Errorf("evaluation: formations smoke: %w", err)
 			}
+			topologies, err := evaluation.NewExecutionTopologies()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations smoke: %w", err)
+			}
+
+			var formations []string
+			if runAll {
+				for _, f := range topologies.Formations() {
+					formations = append(formations, f.ID)
+				}
+			} else {
+				formations = args
+				if len(formations) == 0 {
+					return fmt.Errorf("evaluation: formations smoke: specify formation IDs or use --all")
+				}
+			}
+
+			type smokeSummaryItem struct {
+				FormationID string `json:"formation_id"`
+				Passed      bool   `json:"passed"`
+				PeakVRAMMiB uint64 `json:"peak_vram_mib"`
+				Error       string `json:"error,omitempty"`
+			}
+			var batchResults []formationRunJSON
+			var summaries []smokeSummaryItem
+			hasFailure := false
+
+			for _, fID := range formations {
+				if !output.JSONEnabled(cmd) {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "=== START Formation %s ===\n", fID)
+				}
+				result, runID, err := runFormationSmoke(cmd, deps, sessions, fID, initialState)
+				if err != nil {
+					hasFailure = true
+					summaries = append(summaries, smokeSummaryItem{
+						FormationID: fID,
+						Passed:      false,
+						Error:       err.Error(),
+					})
+					if !output.JSONEnabled(cmd) {
+						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "FAIL Formation %s: %v\n", fID, err)
+					}
+					continue
+				}
+				batchResults = append(batchResults, formationRunResultJSON(result, sessions, runID))
+				summaries = append(summaries, smokeSummaryItem{
+					FormationID: fID,
+					Passed:      result.Passed,
+					PeakVRAMMiB: result.PeakVRAMMiB,
+				})
+				if !result.Passed {
+					hasFailure = true
+				}
+				if !output.JSONEnabled(cmd) {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Formation %s %s (Peak VRAM: %d MiB)\n",
+						result.FormationID, passedLabel(result.Passed), result.PeakVRAMMiB)
+					for _, role := range result.Roles {
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s %s digest=%s attempt=%s\n",
+							role.Role, role.Model.ServedModelTag, role.AttestationDigest, role.AttemptID)
+					}
+				}
+			}
+
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(formationRunResultJSON(result, sessions, freeze.CampaignID, opts.RunID), "", "  ")
+				payload, err := json.MarshalIndent(batchResults, "", "  ")
 				if err != nil {
 					return err
 				}
@@ -358,37 +294,214 @@ execution topologies in sequence. This is a governed smoke path, not a scored ca
 				if err != nil {
 					return err
 				}
-			} else {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Formation %s %s\nSession: %s\nCampaign: %s\nRun: %s\nPeak VRAM: %d MiB\n",
-					result.FormationID, passedLabel(result.Passed), sessions.InferenceSessionID, freeze.CampaignID, opts.RunID, result.PeakVRAMMiB)
-				if err != nil {
-					return err
-				}
-				for _, role := range result.Roles {
-					_, err = fmt.Fprintf(cmd.OutOrStdout(), "  %s %s digest=%s attempt=%s\n",
-						role.Role, role.Model.ServedModelTag, role.AttestationDigest, role.AttemptID)
-					if err != nil {
-						return err
+			} else if len(formations) > 1 {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "\n--- Formation Batch Summary ---")
+				for _, s := range summaries {
+					status := "PASS"
+					if !s.Passed {
+						status = "FAIL"
 					}
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-25s %s (Peak VRAM: %d MiB)\n", s.FormationID, status, s.PeakVRAMMiB)
 				}
 			}
-			if !result.Passed {
-				return fmt.Errorf("evaluation: formations run: formation %s failed", result.FormationID)
+
+			if hasFailure {
+				return fmt.Errorf("evaluation: formations smoke: one or more formations failed")
 			}
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&opts.FormationID, "formation-id", opts.FormationID, "Catalog formation ID to execute")
-	cmd.Flags().BoolVar(&runCatalog, "catalog", false, "Execute all 4 sovereign formations in the catalog in sequence")
-	cmd.Flags().BoolVar(&runCatalog, "all", false, "Alias for --catalog")
-	cmd.Flags().StringVar(&opts.RegistryFile, "registry-file", "", "Frozen inventory JSON from eval models freeze --output")
-	cmd.Flags().StringVar(&opts.InventoryFile, "inventory-file", "", "Explicit inventory freeze path (runtime-relative or external)")
-	cmd.Flags().StringVar(&opts.InferenceSessionID, "inference-session", "", "Exact inference Operator session ID (required)")
-	cmd.Flags().StringVar(&opts.DataSessionID, "data-session", "", "Exact data Operator session ID for governed model release")
-	cmd.Flags().StringVar(&opts.InitialState, "initial-state", "", "Opaque initial state bytes for the formation run")
-	cmd.Flags().StringVar(&opts.RunID, "run-id", "", "Campaign run ID recorded on governed inference dispatches")
-	cmd.Flags().StringVar(&opts.AssignmentID, "assignment-id", "", "Assignment ID recorded on governed inference dispatches")
-	return cmd
+	cmd.Flags().BoolVar(&runAll, "all", false, "Run all sovereign formations in the catalog in sequence")
+	cmd.Flags().StringVar(&initialState, "initial-state", "", "Opaque initial state bytes for the formation run")
+	return jsonLeaf(cmd)
+}
+
+func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operatorSessions, formationID, initialState string) (*evaluation.FormationRunResult, string, error) {
+	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+	if err != nil {
+		return nil, "", err
+	}
+	freeze, err := loadFormationInventoryFreeze(cmd, deps, "", "")
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	if len(freeze.Variants) == 0 || freeze.RegistryDigest == "" || freeze.CampaignID == "" {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", constants.ErrFormationRegistryBinding)
+	}
+	if err := gwremote.PreflightProviderObservationDelivery(fileSvc, cfg); err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	binding, err := evaluation.FormationBindingFromCatalog(formationID, freeze.Variants)
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	formation, err := evaluation.BindFormation(binding)
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	if err := gwremote.PreflightCampaignModelProvenance(fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation)); err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	chatDeps := chatEvalDeps{
+		configLoader:   deps.configLoader,
+		fileSvcFactory: deps.fileSvcFactory,
+		authLoader:     deps.authLoader,
+		clientFactory:  deps.clientFactory,
+		now:            deps.now,
+		newID:          deps.newID,
+	}
+	_, _, authContext, err := chatEvalEnvironment(cmd, chatDeps)
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	operators, err := chatEvalListOperators(cmd, chatDeps, cfg, authContext)
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	appClient, err := inferenceEvalAppClient(cfg, fileSvc, authContext, inferenceEvalDeps{
+		configLoader:     deps.configLoader,
+		fileSvcFactory:   deps.fileSvcFactory,
+		authLoader:       deps.authLoader,
+		clientFactory:    deps.clientFactory,
+		appClientFactory: deps.clientFactory,
+		now:              deps.now,
+		newID:            deps.newID,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	dataOperator, err := evaluation.SelectCampaignDataOperator(operators, sessions.DataSessionID)
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
+		configLoader:   deps.configLoader,
+		fileSvcFactory: deps.fileSvcFactory,
+		authLoader:     deps.authLoader,
+		clientFactory:  deps.clientFactory,
+		now:            deps.now,
+		newID:          deps.newID,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	endpoint, err := resolveCampaignOllamaEndpoint(operators, sessions.InferenceSessionID)
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	observationLoader, err := gwremote.NewCampaignFormationObservationLoader(fileSvc, cfg)
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	runID := "formation-" + deps.newID()
+	assignmentID := "formation-assignment-" + deps.newID()
+	evaluationAttemptID := deps.newID()
+	productionDeps := evaluation.FormationProductionDependencies{
+		RunContext: evaluation.FormationRunContext{
+			CampaignID:          freeze.CampaignID,
+			RunID:               runID,
+			AssignmentID:        assignmentID,
+			EvaluationAttemptID: evaluationAttemptID,
+			ModelRegistryDigest: freeze.RegistryDigest,
+			InferenceSessionID:  sessions.InferenceSessionID,
+			DataSessionID:       sessions.DataSessionID,
+		},
+		Variants:               freeze.Variants,
+		ProvenancePreflight:    gatewayFormationProvenancePreflight{fileSvc: fileSvc, cfg: cfg},
+		ObservationLoader:      observationLoader,
+		InferenceDispatcher:    &harnessFormationInferenceDispatcher{client: appClient},
+		ModelCommandDispatcher: modelDispatcher,
+		OllamaEnvironment:      modelCommandEnvironment(endpoint),
+		NewID:                  func(prefix string) string { return prefix + "-" + deps.newID() },
+		Now:                    deps.now,
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), 20*time.Minute)
+	defer cancel()
+	result, err := evaluation.RunFormationProduction(ctx, binding, productionDeps, []byte(initialState))
+	if err != nil {
+		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
+	}
+	return result, runID, nil
+}
+
+func loadFormationInventoryFreeze(cmd *cobra.Command, deps nativeEvalDeps, registryFile, inventoryFile string) (*evaluation.ModelInventoryFreeze, error) {
+	if strings.TrimSpace(registryFile) != "" {
+		return evaluation.LoadModelInventoryFreezeFile(registryFile)
+	}
+	_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+	if err != nil {
+		return nil, err
+	}
+	projectRoot, err := cmd.Flags().GetString("project-root")
+	if err != nil {
+		return nil, err
+	}
+	return loadEvaluationInventoryFreeze(cmd.Context(), fileSvc, projectRoot, inventoryFile)
+}
+
+type gatewayFormationProvenancePreflight struct {
+	fileSvc fs.RuntimeFileService
+	cfg     *config.Config
+}
+
+func (g gatewayFormationProvenancePreflight) PreflightSovereignModel(_ context.Context, model evaluation.FormationModel) (*evaluation.FormationAttestation, error) {
+	window, err := gwremote.LoadModelProvenanceAttestation(g.fileSvc, g.cfg, model.ServedModelTag, model.ModelDigest)
+	if err != nil {
+		if preflightErr := gwremote.PreflightModelProvenanceAttestation(g.fileSvc, g.cfg, model.ServedModelTag, model.ModelDigest); preflightErr != nil {
+			return nil, preflightErr
+		}
+		return &evaluation.FormationAttestation{Verified: true, Digest: model.ModelDigest}, nil
+	}
+	return &evaluation.FormationAttestation{Verified: true, Digest: model.ModelDigest, Window: window}, nil
+}
+
+type harnessFormationInferenceDispatcher struct {
+	client *harnessclient.Client
+}
+
+func (d *harnessFormationInferenceDispatcher) DispatchInference(ctx context.Context, req *operatorv1.InferenceDispatchRequest) (*operatorv1.InferenceDispatchResponse, error) {
+	if d == nil || d.client == nil || req == nil {
+		return nil, fmt.Errorf("evaluation: formation inference dispatch: %w", constants.ErrMissingRequiredField)
+	}
+	response, _, err := d.client.DispatchInference(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: formation inference dispatch: %w", err)
+	}
+	return response, nil
+}
+
+func formationRunResultJSON(result *evaluation.FormationRunResult, sessions operatorSessions, runID string) formationRunJSON {
+	roles := make([]formationRunRoleJSON, 0, len(result.Roles))
+	for _, role := range result.Roles {
+		roles = append(roles, formationRunRoleJSON{
+			Role:              string(role.Role),
+			VariantID:         role.Model.VariantID,
+			ServedModelTag:    role.Model.ServedModelTag,
+			ModelDigest:       role.Model.ModelDigest,
+			AttemptID:         role.AttemptID,
+			AttestationStatus: string(role.AttestationStatus),
+			PeakVRAMMiB:       role.PeakVRAMMiB,
+			TokensPerSec:      role.GenerationTokensPerSec,
+		})
+	}
+	return formationRunJSON{
+		SchemaVersion:        result.SchemaVersion,
+		FormationID:          result.FormationID,
+		Passed:               result.Passed,
+		PeakVRAMMiB:          result.PeakVRAMMiB,
+		MutationIntercepted:  result.MutationIntercepted,
+		AllPolicyLayersValid: result.AllPolicyLayersValid,
+		InferenceSessionID:   sessions.InferenceSessionID,
+		RunID:                runID,
+		Roles:                roles,
+	}
+}
+
+func passedLabel(passed bool) string {
+	if passed {
+		return "PASSED"
+	}
+	return "FAILED"
 }
 
 type campaignFormationProductionOptions struct {
@@ -455,204 +568,4 @@ func buildCampaignFormationProductionRunner(
 		},
 	}
 	return evaluation.NewCampaignFormationProductionRunner(productionDeps), nil
-}
-
-func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts formationRunOptions) (*evaluation.FormationRunResult, operatorSessions, *evaluation.ModelInventoryFreeze, error) {
-	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
-	if err != nil {
-		return nil, operatorSessions{}, nil, err
-	}
-	freeze, err := loadFormationInventoryFreeze(cmd, deps, opts.RegistryFile, opts.InventoryFile)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	if len(freeze.Variants) == 0 || freeze.RegistryDigest == "" || freeze.CampaignID == "" {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", constants.ErrFormationRegistryBinding)
-	}
-	sessions, err := resolveOperatorSessions(cmd, deps, operatorRoleInference, operatorRoleData)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	if err := gwremote.PreflightProviderObservationDelivery(fileSvc, cfg); err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	binding, err := evaluation.FormationBindingFromCatalog(opts.FormationID, freeze.Variants)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	formation, err := evaluation.BindFormation(binding)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	if err := gwremote.PreflightCampaignModelProvenance(fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation)); err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	chatDeps := chatEvalDeps{
-		configLoader:   deps.configLoader,
-		fileSvcFactory: deps.fileSvcFactory,
-		authLoader:     deps.authLoader,
-		clientFactory:  deps.clientFactory,
-		now:            deps.now,
-		newID:          deps.newID,
-	}
-	_, _, authContext, err := chatEvalEnvironment(cmd, chatDeps)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	operators, err := chatEvalListOperators(cmd, chatDeps, cfg, authContext)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	appClient, err := inferenceEvalAppClient(cfg, fileSvc, authContext, inferenceEvalDeps{
-		configLoader:     deps.configLoader,
-		fileSvcFactory:   deps.fileSvcFactory,
-		authLoader:       deps.authLoader,
-		clientFactory:    deps.clientFactory,
-		appClientFactory: deps.clientFactory,
-		now:              deps.now,
-		newID:            deps.newID,
-	})
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	dataOperator, err := evaluation.SelectCampaignDataOperator(operators, sessions.DataSessionID)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
-		configLoader:   deps.configLoader,
-		fileSvcFactory: deps.fileSvcFactory,
-		authLoader:     deps.authLoader,
-		clientFactory:  deps.clientFactory,
-		now:            deps.now,
-		newID:          deps.newID,
-	})
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	endpoint, err := resolveCampaignOllamaEndpoint(operators, sessions.InferenceSessionID)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	observationLoader, err := gwremote.NewCampaignFormationObservationLoader(fileSvc, cfg)
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	runID := opts.RunID
-	if runID == "" {
-		runID = "formation-" + deps.newID()
-	}
-	assignmentID := opts.AssignmentID
-	if assignmentID == "" {
-		assignmentID = "formation-assignment-" + deps.newID()
-	}
-	evaluationAttemptID := deps.newID()
-	productionDeps := evaluation.FormationProductionDependencies{
-		RunContext: evaluation.FormationRunContext{
-			CampaignID:          freeze.CampaignID,
-			RunID:               runID,
-			AssignmentID:        assignmentID,
-			EvaluationAttemptID: evaluationAttemptID,
-			ModelRegistryDigest: freeze.RegistryDigest,
-			InferenceSessionID:  sessions.InferenceSessionID,
-			DataSessionID:       sessions.DataSessionID,
-		},
-		Variants:               freeze.Variants,
-		ProvenancePreflight:    gatewayFormationProvenancePreflight{fileSvc: fileSvc, cfg: cfg},
-		ObservationLoader:      observationLoader,
-		InferenceDispatcher:    &harnessFormationInferenceDispatcher{client: appClient},
-		ModelCommandDispatcher: modelDispatcher,
-		OllamaEnvironment:      modelCommandEnvironment(endpoint),
-		NewID:                  func(prefix string) string { return prefix + "-" + deps.newID() },
-		Now:                    deps.now,
-	}
-	ctx, cancel := context.WithTimeout(cmd.Context(), 20*time.Minute)
-	defer cancel()
-	result, err := evaluation.RunFormationProduction(ctx, binding, productionDeps, []byte(opts.InitialState))
-	if err != nil {
-		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
-	}
-	opts.RunID = runID
-	return result, sessions, freeze, nil
-}
-
-func loadFormationInventoryFreeze(cmd *cobra.Command, deps nativeEvalDeps, registryFile, inventoryFile string) (*evaluation.ModelInventoryFreeze, error) {
-	if strings.TrimSpace(registryFile) != "" {
-		return evaluation.LoadModelInventoryFreezeFile(registryFile)
-	}
-	_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
-	if err != nil {
-		return nil, err
-	}
-	projectRoot, err := cmd.Flags().GetString("project-root")
-	if err != nil {
-		return nil, err
-	}
-	return loadEvaluationInventoryFreeze(cmd.Context(), fileSvc, projectRoot, inventoryFile)
-}
-
-type gatewayFormationProvenancePreflight struct {
-	fileSvc fs.RuntimeFileService
-	cfg     *config.Config
-}
-
-func (g gatewayFormationProvenancePreflight) PreflightSovereignModel(_ context.Context, model evaluation.FormationModel) (*evaluation.FormationAttestation, error) {
-	window, err := gwremote.LoadModelProvenanceAttestation(g.fileSvc, g.cfg, model.ServedModelTag, model.ModelDigest)
-	if err != nil {
-		if preflightErr := gwremote.PreflightModelProvenanceAttestation(g.fileSvc, g.cfg, model.ServedModelTag, model.ModelDigest); preflightErr != nil {
-			return nil, preflightErr
-		}
-		return &evaluation.FormationAttestation{Verified: true, Digest: model.ModelDigest}, nil
-	}
-	return &evaluation.FormationAttestation{Verified: true, Digest: model.ModelDigest, Window: window}, nil
-}
-
-type harnessFormationInferenceDispatcher struct {
-	client *harnessclient.Client
-}
-
-func (d *harnessFormationInferenceDispatcher) DispatchInference(ctx context.Context, req *operatorv1.InferenceDispatchRequest) (*operatorv1.InferenceDispatchResponse, error) {
-	if d == nil || d.client == nil || req == nil {
-		return nil, fmt.Errorf("evaluation: formation inference dispatch: %w", constants.ErrMissingRequiredField)
-	}
-	response, _, err := d.client.DispatchInference(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: formation inference dispatch: %w", err)
-	}
-	return response, nil
-}
-
-func formationRunResultJSON(result *evaluation.FormationRunResult, sessions operatorSessions, campaignID, runID string) formationRunJSON {
-	roles := make([]formationRunRoleJSON, 0, len(result.Roles))
-	for _, role := range result.Roles {
-		roles = append(roles, formationRunRoleJSON{
-			Role:              string(role.Role),
-			VariantID:         role.Model.VariantID,
-			ServedModelTag:    role.Model.ServedModelTag,
-			ModelDigest:       role.Model.ModelDigest,
-			AttemptID:         role.AttemptID,
-			AttestationStatus: string(role.AttestationStatus),
-			PeakVRAMMiB:       role.PeakVRAMMiB,
-			TokensPerSec:      role.GenerationTokensPerSec,
-		})
-	}
-	return formationRunJSON{
-		SchemaVersion:        result.SchemaVersion,
-		FormationID:          result.FormationID,
-		Passed:               result.Passed,
-		PeakVRAMMiB:          result.PeakVRAMMiB,
-		MutationIntercepted:  result.MutationIntercepted,
-		AllPolicyLayersValid: result.AllPolicyLayersValid,
-		InferenceSessionID:   sessions.InferenceSessionID,
-		CampaignID:           campaignID,
-		RunID:                runID,
-		Roles:                roles,
-	}
-}
-
-func passedLabel(passed bool) string {
-	if passed {
-		return "PASSED"
-	}
-	return "FAILED"
 }
