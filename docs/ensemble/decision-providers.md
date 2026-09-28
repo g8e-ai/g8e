@@ -1,67 +1,164 @@
+---
+doc_id: decision-providers
+title: Decision Providers
+audience: developers integrating structured reasoning into agent workloads
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - ensemble/app/decision/
+  - ensemble/app/services/ai/triage.py
+  - ensemble/app/services/ai/eval_judge.py
+related:
+  - llm-providers.md
+  - evals.md
+  - agents.md
+  - docs/devs/devs.md
+  - docs/devs/tests.md
+when_to_read: Building triage or semantic eval features, integrating System One classification, testing decision provider configuration and coexistence constraints.
+do_not_use_for:
+  - Generative text LLM selection (docs/ensemble/llm-providers.md)
+  - Eval rubrics and grading specifications (docs/ensemble/evals.md)
+  - Agent persona and instruction design (docs/ensemble/agents.md)
+---
+
 # Decision Providers
 
+## Purpose
+
+g8ee separates **text generation** (generative LLM providers) from **structured decision** workloads (decision providers). Decision providers evaluate a `state` plus typed `questions` and return structured answers with probabilities. They do not emit chat prose.
+
+The first decision provider is **Jev** from TypeSafe AI, a System One model that performs native classification and scoring. Jev powers lite-role decision workloads when explicitly configured; other roles require generative LLM providers.
+
+## Quick index
+
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Overview](#overview)
+- [When to use Jev](#when-to-use-jev)
+- [Configuration](#configuration)
+- [API contract](#api-contract)
+- [Question mappings](#question-mappings-as-implemented)
+- [Guardrails](#guardrails)
+- [Testing](#testing)
+- [Links out](#links-out)
+
+Invariant groups: [Coexistence constraints](#coexistence-constraints-inv-dec-coex).
+
+## Owned surfaces
+
+| Claim | Path | Verify |
+| --- | --- | --- |
+| Decision provider architecture | [ensemble/app/decision/](ensemble/app/decision/) | `DecisionProvider` ABC, `JevProvider` implementation, factory cache |
+| Triage question mapping | [ensemble/app/services/ai/triage.py:_build_jev_questions()](ensemble/app/services/ai/triage.py) | Choice question names and criteria; confidence threshold constant |
+| Eval judge question mapping | [ensemble/app/services/ai/eval_judge.py:_build_jev_questions()](ensemble/app/services/ai/eval_judge.py) | Score and noul question names; passing threshold constant |
+| Coexistence validation | [ensemble/app/decision/validation.py](ensemble/app/decision/validation.py) | `validate_jev_lite_coexistence()` rejects Tribunal + Jev lite |
+| Configuration defaults | [ensemble/app/constants/config.py](ensemble/app/constants/config.py) | `JEV_DEFAULT_ENDPOINT`, `JEV_DEFAULT_MODEL` constants |
+
+## Procedures
+
+### Verifying Jev provider configuration
+
+1. Confirm `G8E_LLM_LITE_PROVIDER=jev` is set.
+2. Verify `G8E_LLM_JEV_API_KEY` or `TYPESAFE_API_KEY` is set (required).
+3. Check `G8E_LLM_COMMAND_GEN_ENABLED=false` (Tribunal must be off).
+4. Verify primary and assistant roles use generative providers (e.g., `ollama`, `anthropic`, `openai`).
+5. Run a test triage or eval request; logs should show Jev calls, not fallback generative triage.
+
+### Adding a new decision workload
+
+1. Create a new question type or use existing `ChoiceQuestion`, `ScoreQuestion`, or `NoulQuestion`.
+2. Implement a call site builder method (e.g., `_build_jev_questions()`) returning a dict of question objects.
+3. Call `get_decision_provider(settings.llm)` and invoke `await provider.evaluate(model=…, state=…, questions=…)`.
+4. Parse the `EvaluateResponse` into a domain-specific result struct.
+5. Add unit tests mocking the HTTP response in `ensemble/tests/unit/decision/`.
+6. Add integration tests in `ensemble/tests/integration/` with the `requires_typesafe` marker.
+
+### Updating Jev endpoint or model defaults
+
+1. Edit [ensemble/app/constants/config.py](ensemble/app/constants/config.py): update `JEV_DEFAULT_ENDPOINT` or `JEV_DEFAULT_MODEL`.
+2. Run unit tests to verify factory cache key generation and provider instantiation still work.
+3. Run integration tests against the new endpoint to confirm reachability and response format.
+
 ## Overview
-
-g8ee separates **text generation** (`LLMProvider` in `ensemble/app/llm/`) from **structured decision** workloads (`DecisionProvider` in `ensemble/app/decision/`). Decision providers evaluate a `state` plus typed `questions` and return structured answers with probabilities. They do not emit chat prose.
-
-The first decision provider is **Jev** from [TypeSafe AI](https://typesafe.ai/blog/introducing-system-one-models-and-jev), a System One model exposed at `POST https://api.typesafe.ai/v1/systemone`.
 
 Implementation entry points:
 
 | Layer | Path |
 | --- | --- |
-| ABC and types | `ensemble/app/decision/provider.py`, `ensemble/app/decision/types.py` |
-| Factory | `ensemble/app/decision/factory.py` |
-| Jev HTTP adapter | `ensemble/app/decision/providers/jev.py` |
-| Coexistence validation | `ensemble/app/decision/validation.py` |
+| Abstract base class | [ensemble/app/decision/provider.py](ensemble/app/decision/provider.py) |
+| Types and schema | [ensemble/app/decision/types.py](ensemble/app/decision/types.py) |
+| Factory and cache | [ensemble/app/decision/factory.py](ensemble/app/decision/factory.py) |
+| Jev HTTP adapter | [ensemble/app/decision/providers/jev.py](ensemble/app/decision/providers/jev.py) |
+| Coexistence validation | [ensemble/app/decision/validation.py](ensemble/app/decision/validation.py) |
+
+Call sites:
+
+| Workload | Module | Entry point | Fallback |
+| --- | --- | --- | --- |
+| Triage (complexity, intent, posture) | [ensemble/app/services/ai/triage.py](ensemble/app/services/ai/triage.py) | `get_decision_provider()` + batched `choice` questions | `_classify_generative()` when lite provider is not `jev` |
+| Semantic eval judge | [ensemble/app/services/ai/eval_judge.py](ensemble/app/services/ai/eval_judge.py) | `EvalJudge(decision_provider=…)` + `score` / `noul` questions | Generative LLM JSON judge when lite provider is not `jev` |
 
 ## When to use Jev
 
-Select Jev for the **lite role** when you want native System One classification or scoring instead of prompt-and-JSON simulation:
+Select Jev for the **lite role** to enable native System One classification and scoring without prompt-and-JSON simulation. Jev excels at structured decision tasks but does not support text generation.
 
-| Call site | Jev path | LLM fallback |
-| --- | --- | --- |
-| Triage (complexity, intent, posture) | `get_decision_provider()` + batched `choice` questions | `generate_content_lite` when lite provider is not `jev` |
-| Semantic eval judge | `EvalJudge(decision_provider=…)` + `score` / `noul` questions | LLM JSON judge when lite provider is not `jev` |
+Jev supports only **decision** and **triage** workloads via `get_decision_provider()`. Generative lite features automatically fall back to the assistant provider when lite is Jev.
 
-Jev is **not** a drop-in replacement for every lite call site. Generative lite features use `get_generative_lite_provider()`, which falls back to the **assistant provider** when `lite_provider=jev`:
+### Supported paths
+
+- **Triage** (complexity, intent, posture classification): `get_decision_provider()` returns a cached Jev instance; call `provider.evaluate()` with `choice` questions.
+- **Semantic eval judge** (rubric scoring): Pass `decision_provider=get_decision_provider()` to `EvalJudge`; judge uses `score` and `noul` questions for grading.
+
+### Unsupported paths and fallbacks
+
+Generative lite features use `get_generative_lite_provider()`, which automatically selects the **assistant provider** when `lite_provider=jev`:
 
 - Case title generation
 - Memory extraction
 - Marshal response analysis
 
-Tribunal command generation remains blocked at validation when `G8E_LLM_COMMAND_GEN_ENABLED=true` alongside Jev on the lite role.
+These call sites detect Jev on the lite role and defer to the assistant provider without additional configuration.
 
-At startup, ensemble logs a warning when `lite_provider=jev` summarizing this coexistence model. Direct `get_llm_provider(..., is_lite=True)` with Jev still raises `ConfigurationError` — use `get_generative_lite_provider()` for text generation or `get_decision_provider()` for System One paths.
+### Coexistence constraints (`INV-DEC-COEX`)
+
+| Constraint | Error | Resolution |
+| --- | --- | --- |
+| Tribunal command generation + Jev lite | Rejected at `validate_llm_config` | Set `G8E_LLM_COMMAND_GEN_ENABLED=false` or use a generative lite provider |
+| Direct `get_llm_provider(..., is_lite=True)` with Jev | `ConfigurationError` at call time | Use `get_decision_provider()` for System One workloads or `get_generative_lite_provider()` for text generation |
+| Jev on primary or assistant role | Rejected at `validate_llm_config` | Jev is valid only on the lite role |
+
+At startup, when `lite_provider=jev`, ensemble logs a warning stating which generative lite call sites fall back to the assistant provider. This is expected behavior, not a configuration error.
 
 ## Configuration
 
-Jev is selected through the same lite-role settings as other providers. `LLMProvider.JEV` (`"jev"`) is valid **only** for the lite role; primary and assistant reject it during chat validation.
+Jev is selected through the same lite-role settings as other LLM providers. The constant `LLMProvider.JEV` (`"jev"` string value) is valid **only** for the lite role.
 
 ### Environment variables
 
-| Setting | Env var | Default / notes |
-| --- | --- | --- |
-| Lite provider | `G8E_LLM_LITE_PROVIDER` | Set to `jev` |
-| Lite model | `G8E_LLM_LITE_MODEL` | `jev-latest` (pin `jev-<version>` when thresholds matter) |
-| Jev model | `G8E_LLM_JEV_MODEL` | `jev-latest` |
-| Jev API key | `G8E_LLM_JEV_API_KEY` | Required; `TYPESAFE_API_KEY` is accepted as a fallback |
-| Jev endpoint | `G8E_LLM_JEV_ENDPOINT` | `https://api.typesafe.ai/v1/systemone` |
+| Setting | Env var | Type | Default |
+| --- | --- | --- | --- |
+| Lite provider | `G8E_LLM_LITE_PROVIDER` | string | Unset (optional) |
+| Lite model | `G8E_LLM_LITE_MODEL` | string | `jev-latest` when lite provider is `jev` |
+| Jev API key | `G8E_LLM_JEV_API_KEY` | string | None (required when lite provider is `jev`) |
+| Jev endpoint | `G8E_LLM_JEV_ENDPOINT` | URL | `https://api.typesafe.ai/v1/systemone` (from `JEV_DEFAULT_ENDPOINT` constant) |
 
-Primary and assistant roles must remain generative LLM providers.
+The fallback `TYPESAFE_API_KEY` environment variable is read if `G8E_LLM_JEV_API_KEY` is not set.
 
-### Example
+Primary and assistant roles must be configured with generative LLM providers; Jev is rejected on those roles during validation.
+
+### Example configuration
 
 ```bash
-# Lite role: Jev for triage + eval judge
+# Enable Jev for lite-role decisions
 G8E_LLM_LITE_PROVIDER=jev
 G8E_LLM_LITE_MODEL=jev-latest
-G8E_LLM_JEV_API_KEY=ts_...
+G8E_LLM_JEV_API_KEY=ts_your_api_key
 
-# Tribunal off when lite is Jev (required for chat validation)
+# Disable Tribunal (required: incompatible with Jev lite)
 G8E_LLM_COMMAND_GEN_ENABLED=false
 
-# Primary/assistant remain generative
+# Configure generative providers for primary/assistant roles
 G8E_LLM_PRIMARY_PROVIDER=ollama
 G8E_LLM_PRIMARY_MODEL=qwen3.5:2b
 G8E_LLM_ASSISTANT_PROVIDER=ollama
@@ -70,66 +167,104 @@ G8E_LLM_ASSISTANT_MODEL=llama3.2:3b
 
 ## API contract
 
-Reference: [Jev how-to](https://www.jevtypesafeai.com/how-to-use)
+The `JevProvider` class in [ensemble/app/decision/providers/jev.py](ensemble/app/decision/providers/jev.py) implements a thin HTTP adapter over the TypeSafe System One API.
 
 | Field | Value |
 | --- | --- |
-| Endpoint | `POST https://api.typesafe.ai/v1/systemone` |
-| Auth | `Authorization: Bearer <api_key>` |
-| Request body | `{ "model", "state", "questions" }` |
-| Question types | `choice`, `score`, `noul` |
-| Response | `{ "model", "answers", "usage" }` with per-question typed payloads and probabilities |
+| Endpoint | `POST https://api.typesafe.ai/v1/systemone` (or `JEV_DEFAULT_ENDPOINT` if overridden) |
+| Authentication | `Authorization: Bearer <api_key>` header |
+| Request body | JSON object with `model` (string), `state` (string, dict, or list), `questions` (object mapping names to question objects) |
+| Question types | `choice` (enum classification), `score` (numeric scale 1–5), `noul` (yes/no/unknown) |
+| Response | JSON object with `model` (string), `answers` (object mapping question names to answer objects), `usage` (token counts) |
 
-`JevProvider` uses a thin `httpx` client (no `typesafe-sdk` dependency). SDK-level retries are disabled; ensemble services own retry policy where needed (for example eval judge exponential backoff on rate limits).
+Each question object includes `type`, `instructions` (string), and type-specific fields (`criteria` for `choice` and `score`). Each answer includes `type`, the resolved value (e.g., `choice` or `score`), `confidence` (0–1), and `probabilities` (per-choice or per-score-level breakdown).
+
+**Implementation notes:**
+- `JevProvider` uses `httpx.AsyncClient` with a default timeout; no `typesafe-sdk` dependency.
+- HTTP errors map to `ExternalServiceError` or `RateLimitError` for distinction.
+- Callers own retry logic; for example, `EvalJudge` applies exponential backoff on rate limits.
+- Model boundary attestation records input artifact hashes for privacy audit trails.
 
 ## Question mappings (as implemented)
 
-### Triage
+### Triage questions
 
-| Question key | Type | Maps to |
+Triage sends three `ChoiceQuestion` objects to Jev; see [ensemble/app/services/ai/triage.py:_build_jev_questions()](ensemble/app/services/ai/triage.py) for full criteria.
+
+| Question key | Type | Choices | Maps to result field |
+| --- | --- | --- | --- |
+| `complexity` | `choice` | `simple`, `complex` | `complexity` enum + `complexity_confidence` (HIGH if confidence ≥ 0.85, else LOW) |
+| `intent` | `choice` | `information`, `action`, `unknown` | `intent` enum + `intent_confidence` |
+| `request_posture` | `choice` | `normal`, `escalated`, `adversarial`, `confused` | `request_posture` enum + `posture_confidence` |
+
+Confidence mapping uses the constant `JEV_TRIAGE_HIGH_CONFIDENCE_THRESHOLD = 0.85`. `intent_summary` is synthesized from the choice result and context.
+
+### Eval judge questions
+
+Eval judge sends one `ScoreQuestion` and one `NoulQuestion` to Jev; see [ensemble/app/services/ai/eval_judge.py:_build_jev_questions()](ensemble/app/services/ai/eval_judge.py) for full instructions.
+
+| Question key | Type | Criteria | Maps to result field |
+| --- | --- | --- | --- |
+| `rubric_score` | `score` | `["1", "2", "3", "4", "5"]` | `EvalGrade.score` (1–5 integer) |
+| `meets_passing_threshold` | `noul` | N/A (yes/no/unknown) | Included in `EvalGrade.reasoning` as probability summary |
+
+Pass/fail is deterministic: `score >= 3` passes. Jev does not emit prose reasoning; the grade stores a formatted probability summary instead of natural-language justification.
+
+## Invariants
+
+### Coexistence constraints (`INV-DEC-COEX`)
+
+| Constraint | Location | Enforcement |
 | --- | --- | --- |
-| `complexity` | `choice` | `TriageComplexityClassification` |
-| `intent` | `choice` | `TriageIntentClassification` |
-| `request_posture` | `choice` | `TriageRequestPosture` |
+| `get_llm_provider(..., is_lite=True)` with Jev | [ensemble/app/llm/factory.py:get_llm_provider()](ensemble/app/llm/factory.py) | Raises `ConfigurationError` before LLM initialization |
+| `get_generative_lite_provider()` with Jev lite | [ensemble/app/llm/factory.py:get_generative_lite_provider()](ensemble/app/llm/factory.py) | Transparently falls back to assistant provider; no error |
+| Jev on primary or assistant role | [ensemble/app/services/ai/chat_pipeline.py:validate_llm_config()](ensemble/app/services/ai/chat_pipeline.py) | Rejected during config validation in routers before request handling |
+| Tribunal command generation + Jev lite | [ensemble/app/decision/validation.py:validate_jev_lite_coexistence()](ensemble/app/decision/validation.py) | Rejected during config validation; call `validate_jev_lite_coexistence()` after `resolve()` |
+| Missing Jev API key | [ensemble/app/decision/providers/jev.py:JevProvider.validate_config()](ensemble/app/decision/providers/jev.py) | Raises `ConfigurationError` when `JevProvider` is instantiated or when chat validation calls `provider_classes[LLMProvider.JEV.value].validate_config()` |
 
-`intent_summary` is synthesized from the three choices. Choice confidence maps to `TriageConfidence` (HIGH when confidence ≥ 0.85).
-
-### Eval judge
-
-| Question key | Type | Maps to |
-| --- | --- | --- |
-| `rubric_score` | `score` (criteria `["1"…"5"]`) | `EvalGrade.score` |
-| `meets_passing_threshold` | `noul` | Included in `EvalGrade.reasoning` probability summary |
-
-Pass/fail is deterministic from `score >= 3`. Jev does not emit prose reasoning; semantic grade `detail` stores the formatted probability summary.
-
-## Guardrails
-
-| Check | Behavior |
-| --- | --- |
-| `get_llm_provider(..., is_lite=True)` with `jev` | Raises `ConfigurationError` — no fake text stream |
-| `get_generative_lite_provider()` with `jev` lite | Uses assistant provider for title, memory, marshal analysis |
-| Primary or assistant `jev` | Rejected in `validate_llm_config` |
-| Jev lite + Tribunal enabled | Rejected in `validate_llm_config` and at startup |
-| Missing Jev API key | `JevProvider.validate_config` error on lite tier |
+All guardrails trigger at startup or request time, never at runtime during classification or grading. Configuration errors are fatal; invalid Jev state is never silently degraded to a fallback.
 
 ## Testing
 
-Tier 1 unit tests mock HTTP at the `JevProvider` boundary (`ensemble/tests/unit/decision/`). Tier 4 live tests use the `requires_typesafe` marker and are gated on `G8E_LLM_JEV_API_KEY` or `TYPESAFE_API_KEY`:
+### Unit tests
 
-- `tests/integration/test_jev_triage_integration.py`
-- `tests/integration/test_jev_eval_judge_integration.py`
+Tier 1 unit tests mock HTTP at the `JevProvider` boundary:
 
-Run external tests from the repository root:
+- [ensemble/tests/unit/decision/test_jev_provider.py](ensemble/tests/unit/decision/test_jev_provider.py) — `JevProvider` HTTP request/response handling and error translation
+- [ensemble/tests/unit/decision/test_factory.py](ensemble/tests/unit/decision/test_factory.py) — Provider cache key generation and factory logic
+- [ensemble/tests/unit/decision/test_validation.py](ensemble/tests/unit/decision/test_validation.py) — Coexistence constraint validation
+- [ensemble/tests/unit/decision/test_types.py](ensemble/tests/unit/decision/test_types.py) — Question and answer type schemas
 
+Run from repository root:
 ```bash
-make test-external   # includes requires_typesafe
+make test-unit
 ```
 
-See [Testing](tests.md) for marker details.
+### Integration tests
 
-## Related
+Tier 4 live tests call the actual Jev API and require `G8E_LLM_JEV_API_KEY` or `TYPESAFE_API_KEY` environment variable to be set. These tests use the `requires_typesafe` pytest marker:
 
-- [LLM Providers](llm-providers.md): Generative provider roles and adapters
-- [Evals](evals.md): Semantic judge grading and evidence
-- [Agents](agents.md): Triage and Judge personas
+- [ensemble/tests/integration/test_jev_triage_integration.py](ensemble/tests/integration/test_jev_triage_integration.py) — End-to-end triage classification via Jev
+- [ensemble/tests/integration/test_jev_eval_judge_integration.py](ensemble/tests/integration/test_jev_eval_judge_integration.py) — End-to-end eval judge grading via Jev
+
+Run external tests from repository root:
+```bash
+make test-external   # Runs all tests marked requires_typesafe
+```
+
+For details on test markers and CI scope, see [Testing Guide](docs/devs/tests.md).
+
+## Anti-patterns
+
+- Attempting to use Jev for text generation (e.g., calling `get_llm_provider(..., is_lite=True)` with Jev). Decision providers are not LLM providers; use `get_decision_provider()` for System One classification only.
+- Enabling Tribunal command generation alongside Jev lite. This configuration is rejected at validation; disable command generation or choose a generative lite provider.
+- Configuring Jev on primary or assistant roles. Jev is valid **only** on the lite role for decisions; primary and assistant must use generative providers.
+- Relying on fallback text generation when a generative lite call site runs against Jev. Callers of `get_generative_lite_provider()` automatically fall back to the assistant provider; this is correct behavior, not a degradation.
+
+## Links out
+
+- [LLM Providers](llm-providers.md): Generative provider roles, adapters, and configuration
+- [Evals](evals.md): Semantic judge rubrics, grading semantics, and evidence recording
+- [Agents](agents.md): Triage and Judge agent personas and system prompts
+- [Developer Guidelines](../devs/devs.md): Coding invariants and repository standards
+- [Testing Guide](../devs/tests.md): Test execution tiers, markers, and CI scope
