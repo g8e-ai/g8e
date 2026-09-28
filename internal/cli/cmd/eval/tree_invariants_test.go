@@ -72,7 +72,7 @@ func checkPluralGroupNames(t *testing.T, cmd *cobra.Command) {
 		}
 		// Check if name ends with 's' (simple plural check)
 		if !strings.HasSuffix(name, "s") {
-			t.Logf("note: group %s should be plural (invariant 2)", strings.Join(path, " "))
+			t.Errorf("group %s should be plural (invariant 2)", strings.Join(path, " "))
 		}
 	})
 }
@@ -105,48 +105,15 @@ func checkFlagNames(t *testing.T, cmd *cobra.Command) {
 }
 
 func checkJSONSupport(t *testing.T, cmd *cobra.Command) {
-	// This is a best-effort check; we can't fully determine if --json is needed without executing
 	walkCommands(cmd, func(path []string, c *cobra.Command) {
 		// Only check leaf commands
 		if len(c.Commands()) > 0 {
 			return
 		}
-		// Commands that are known to print structured data
-		structuredOutputCommands := map[string]bool{
-			"list": true, "show": true, "add": true, "remove": true,
-			"verify": true, "publish": true, "export": true, "compare": true,
-			"archive": true, "unarchive": true, "cancel": true, "logs": true,
-			"start": true, "resume": true, "next": true, "repair": true,
-			"run":    true, "retry": true, "skip": true,
-		}
-
-		// Skip read-only commands that don't need JSON
-		readOnlySpecialCases := map[string]bool{
-			"watch": true, "follow": true,
-		}
-
-		cmdName := c.Name()
-		if !readOnlySpecialCases[cmdName] && structuredOutputCommands[cmdName] {
-			hasJSON := false
-			if c.Flags() != nil {
-				c.Flags().VisitAll(func(f *pflag.Flag) {
-					if f.Name == "json" {
-						hasJSON = true
-					}
-				})
-			}
-			// Check parent flags too
-			if !hasJSON && c.Parent() != nil && c.Parent().Flags() != nil {
-				c.Parent().Flags().VisitAll(func(f *pflag.Flag) {
-					if f.Name == "json" {
-						hasJSON = true
-					}
-				})
-			}
-			if !hasJSON {
-				// This is a warning, not an error, since global --json might be inherited
-				t.Logf("note: %s might not support --json (invariant 4)", strings.Join(path, " "))
-			}
+		// Every leaf must declare the annotationJSON annotation
+		_, hasDeclared := c.Annotations["g8e.eval/json"]
+		if !hasDeclared {
+			t.Errorf("leaf %s must declare annotationJSON (invariant 4)", strings.Join(path, " "))
 		}
 	})
 }
@@ -178,9 +145,10 @@ func walkCommands(cmd *cobra.Command, fn func(path []string, c *cobra.Command)) 
 }
 
 func walkCommandsRecursive(path []string, cmd *cobra.Command, fn func(path []string, c *cobra.Command)) {
-	fn(append(path, cmd.Name()), cmd)
+	pathWithCmd := append(path, cmd.Name())
+	fn(pathWithCmd, cmd)
 	for _, subcmd := range cmd.Commands() {
-		walkCommandsRecursive(append(path, cmd.Name()), subcmd, fn)
+		walkCommandsRecursive(pathWithCmd, subcmd, fn)
 	}
 }
 

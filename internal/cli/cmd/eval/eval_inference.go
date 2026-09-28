@@ -67,7 +67,6 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "inference",
 		Short: "Inference-only vertical acceptance matrix",
-		Annotations: map[string]string{"jsonLeaf": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
 				return fmt.Errorf("evaluation: gates inference: --model is required")
@@ -195,7 +194,6 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "probe <model>",
 		Short: "Single non-scored governed inference probe",
 		Args:  cobra.ExactArgs(1),
-		Annotations: map[string]string{"jsonLeaf": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			model = args[0]
 			cfg, _, err := nativeEvalEnvironment(cmd, deps)

@@ -73,7 +73,6 @@ func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "chat",
 		Short: "Chat-path vertical acceptance through production POST /api/v1/chat",
-		Annotations: map[string]string{"jsonLeaf": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
 				return fmt.Errorf("evaluation: gates chat: --model is required")
