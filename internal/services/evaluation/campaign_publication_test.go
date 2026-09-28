@@ -74,7 +74,7 @@ func TestCampaignPublicationCoordinatorExportFeedRecordsBatches(t *testing.T) {
 	for index := 0; index < 3; index++ {
 		requests = append(requests, campaignFeedPublishRequest{
 			IdempotencyKey: fmt.Sprintf("run-1:key-%d", index),
-			Body:           []byte(fmt.Sprintf("{\"index\":%d}", index)),
+			Body:           fmt.Appendf(nil, "{\"index\":%d}", index),
 		})
 	}
 	count, err := coordinator.exportFeedRecords(context.Background(), "run-1", requests)

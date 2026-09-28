@@ -186,4 +186,33 @@ describe('campaign projection wire contract', () => {
       }),
     ).not.toThrow();
   });
+
+  it('accepts multiline model_response and failure_output exceeding 128 bytes', () => {
+    const record = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
+    const longResponse = 'Line 1: Model generated output.\nLine 2: Continuing with more tokens.\n'.repeat(10);
+    expect(() =>
+      decodeCampaignProjectionEnvelope({
+        ...fixtureCampaignResultEnvelope,
+        record: {
+          ...record,
+          model_response: longResponse,
+          failure_output: 'Error: execution timeout\nTraceback:\n  file.py:10',
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects forbidden text in model_response', () => {
+    const record = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
+    expect(() =>
+      decodeCampaignProjectionEnvelope({
+        ...fixtureCampaignResultEnvelope,
+        record: {
+          ...record,
+          model_response: '-----BEGIN PRIVATE KEY-----\nMIIEvg...',
+        },
+      }),
+    ).toThrow(/forbidden key text/);
+  });
 });
+
