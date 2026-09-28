@@ -1769,6 +1769,30 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 /* Overview section spacing */
 .overview > section, .overview > .panel { margin-bottom: 16px; }
 
+/* Dark mode scrollbar styling */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-elev);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 6px;
+    border: 2px solid var(--bg-elev);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--fg-muted);
+    border-color: var(--bg-elev);
+  }
+  * {
+    scrollbar-color: var(--border) var(--bg-elev);
+    scrollbar-width: thin;
+  }
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
   .header-campaign-tail { flex: 0 0 160px; }

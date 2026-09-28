@@ -169,8 +169,9 @@ func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Pre-campaign acceptance gates",
 	}
 	cmd.AddCommand(
-		gatesInferenceEvalCmd(deps),
 		gatesChatEvalCmd(deps),
+		gatesInferenceEvalCmd(deps),
+		gatesProbeEvalCmd(deps),
 	)
 	return cmd
 }

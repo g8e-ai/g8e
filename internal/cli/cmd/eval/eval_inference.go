@@ -61,139 +61,16 @@ type inferenceEvalDeps struct {
 }
 
 func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
-	shared := inferenceEvalDeps{
-		configLoader:     deps.configLoader,
-		fileSvcFactory:   deps.fileSvcFactory,
-		authLoader:       deps.authLoader,
-		clientFactory:    deps.clientFactory,
-		appClientFactory: deps.clientFactory,
-		now:              deps.now,
-		newID:            deps.newID,
-	}
-	cmd := &cobra.Command{Use: "inference", Short: "Inference Operator status, probe, and acceptance"}
-	cmd.AddCommand(
-		gatesInferenceEvalStatusCmd(shared),
-		gatesInferenceEvalProbeCmd(shared),
-		gatesInferenceEvalRunCmd(shared),
-	)
-	return cmd
-}
-
-func gatesInferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
-	var operatorSessionID string
-	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Verify that an inference-capable Operator is enrolled and active",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, authContext, client, err := inferenceEvalGatewayClient(cmd, deps)
-			if err != nil {
-				return err
-			}
-			operators, _, err := client.ListOperators(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("evaluation: list operators: %w", err)
-			}
-			selected, err := evaluation.SelectInferenceOperator(operators, operatorSessionID)
-			if err != nil {
-				return fmt.Errorf("evaluation: inference operator status: %w", err)
-			}
-			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(struct {
-					OperatorID        string `json:"operator_id"`
-					OperatorSessionID string `json:"operator_session_id"`
-					Status            string `json:"status"`
-					Gateway           string `json:"gateway"`
-					UserID            string `json:"user_id"`
-				}{
-					OperatorID:        selected.OperatorID,
-					OperatorSessionID: selected.OperatorSessionID,
-					Status:            selected.Status,
-					Gateway:           cfg.OperatorHTTPURL(),
-					UserID:            authContext.UserID,
-				}, "", "  ")
-				if err != nil {
-					return err
-				}
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-				return err
-			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Inference operator active\nOperator ID: %s\nSession ID: %s\nGateway: %s\nUser: %s\n", selected.OperatorID, selected.OperatorSessionID, cfg.OperatorHTTPURL(), authContext.UserID)
-			return err
-		},
-	}
-	cmd.Flags().StringVar(&operatorSessionID, "inference-session", "", "Pin the status check to one exact inference Operator session")
-	return cmd
-}
-
-func gatesInferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
-	var operatorSessionID string
 	var model string
 	var role string
-	var campaignID string
-	var registryDigest string
-	var registryFile string
-	var prompt string
-	var seed int32 = -1
-	var stream bool
-	cmd := &cobra.Command{
-		Use:   "probe",
-		Short: "Run one non-scored governed inference probe through the exact Inference Operator session",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if model == "" {
-				return fmt.Errorf("evaluation: inference probe: --model is required")
-			}
-			selected, probeReq, appClient, err := inferenceEvalPrepareProbe(cmd, deps, operatorSessionID, model, role, campaignID, registryDigest, registryFile, prompt, seed, stream)
-			if err != nil {
-				return err
-			}
-			ctx, cancel := context.WithTimeout(cmd.Context(), 6*time.Minute)
-			defer cancel()
-			response, progress, err := inferenceEvalExecuteProbe(ctx, appClient, probeReq)
-			if err != nil {
-				return fmt.Errorf("evaluation: inference probe: %w", err)
-			}
-			if err := evaluation.ValidateInferenceProbeStream(probeReq, progress, response); err != nil {
-				return fmt.Errorf("evaluation: inference probe: %w", err)
-			}
-			if output.JSONEnabled(cmd) {
-				body, err := protojson.Marshal(response)
-				if err != nil {
-					return fmt.Errorf("evaluation: inference probe: marshal response: %w", err)
-				}
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(body))
-				return err
-			}
-			result := response.GetResult()
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Probe accepted\nSession: %s\nModel: %s\nAttempt: %s\nResult digest: %s\nOutput hash: %s\nParts: %d\nProgress events: %d\n", selected.OperatorSessionID, result.GetRequestedModel(), result.GetProviderAttemptId(), result.GetResultDigest(), result.GetOutputHash(), len(result.GetParts()), len(progress))
-			return err
-		},
-	}
-	cmd.Flags().StringVar(&operatorSessionID, "inference-session", "", "Pin the probe to one exact inference Operator session")
-	cmd.Flags().StringVar(&model, "model", "", "Requested provider model tag")
-	cmd.Flags().StringVar(&role, "role", "primary", "Governed model role: primary, assistant, or lite")
-	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID for campaign-mode probes")
-	cmd.Flags().StringVar(&registryDigest, "registry-digest", "", "Frozen campaign model registry digest")
-	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval models freeze --output --json")
-	cmd.Flags().StringVar(&prompt, "prompt", "", "Probe prompt (default: Reply with exactly: probe-ok)")
-	cmd.Flags().Int32Var(&seed, "seed", -1, "Optional deterministic generation seed (omit for provider default)")
-	cmd.Flags().BoolVar(&stream, "stream", false, "Request live NDJSON progress telemetry during generation")
-	return cmd
-}
-
-func gatesInferenceEvalRunCmd(deps inferenceEvalDeps) *cobra.Command {
-	var operatorSessionID string
-	var model string
-	var role string
-	var campaignID string
-	var registryDigest string
-	var registryFile string
 	var casesCSV string
 	cmd := &cobra.Command{
-		Use:   "run",
-		Short: "Run the inference-only vertical acceptance matrix",
+		Use:   "inference",
+		Short: "Inference-only vertical acceptance matrix",
+		Annotations: map[string]string{"jsonLeaf": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
-				return fmt.Errorf("evaluation: inference accept: --model is required")
+				return fmt.Errorf("evaluation: gates inference: --model is required")
 			}
 			caseIDs, err := parseInferenceAcceptanceCases(casesCSV)
 			if err != nil {
@@ -201,11 +78,41 @@ func gatesInferenceEvalRunCmd(deps inferenceEvalDeps) *cobra.Command {
 			}
 			cases, err := evaluation.SelectInferenceAcceptanceCases(caseIDs)
 			if err != nil {
-				return fmt.Errorf("evaluation: inference accept: %w", err)
+				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
-			selected, baseReq, appClient, err := inferenceEvalPrepareProbe(cmd, deps, operatorSessionID, model, role, campaignID, registryDigest, registryFile, "", -1, false)
+			cfg, _, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
+			}
+			authContext, err := deps.authLoader(nil, cfg)
+			if err != nil {
+				return fmt.Errorf("evaluation: load CLI identity: %w", err)
+			}
+			gatewayClient, err := deps.clientFactory(nativeEvalClientConfig(cfg, authContext))
+			if err != nil {
+				return fmt.Errorf("evaluation: initialize gateway client: %w", err)
+			}
+			operators, _, err := gatewayClient.ListOperators(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("evaluation: list operators: %w", err)
+			}
+			selected, err := evaluation.SelectInferenceOperator(operators, "")
+			if err != nil {
+				return fmt.Errorf("evaluation: gates inference: %w", err)
+			}
+			appClient, err := inferenceEvalAppClientFrom(cfg, authContext, deps.clientFactory)
+			if err != nil {
+				return fmt.Errorf("evaluation: gates inference: %w", err)
+			}
+			probeRole, err := parseInferenceProbeRole(role)
+			if err != nil {
+				return fmt.Errorf("evaluation: gates inference: %w", err)
+			}
+			baseReq := evaluation.InferenceProbeRequest{
+				ProviderAttemptID:       deps.newID(),
+				Role:                    probeRole,
+				Model:                   model,
+				TargetOperatorSessionID: selected.OperatorSessionID,
 			}
 			results := make([]inferenceAcceptanceResultJSON, 0, len(cases))
 			failures := 0
@@ -267,80 +174,116 @@ func gatesInferenceEvalRunCmd(deps inferenceEvalDeps) *cobra.Command {
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nPhase 1A inference acceptance: %d passed, %d failed\n", len(cases)-failures, failures)
 			}
 			if failures > 0 {
-				return fmt.Errorf("evaluation: inference accept: %d case(s) failed", failures)
+				return fmt.Errorf("evaluation: gates inference: %d case(s) failed", failures)
 			}
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&operatorSessionID, "inference-session", "", "Pin acceptance to one exact inference Operator session")
 	cmd.Flags().StringVar(&model, "model", "", "Requested provider model tag")
 	cmd.Flags().StringVar(&role, "role", "primary", "Default governed model role for cases that do not override it")
-	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID for campaign-mode acceptance")
-	cmd.Flags().StringVar(&registryDigest, "registry-digest", "", "Frozen campaign model registry digest")
-	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval models freeze --output --json")
 	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A inference matrix)")
 	return cmd
 }
 
-func inferenceEvalPrepareProbe(
-	cmd *cobra.Command,
-	deps inferenceEvalDeps,
-	operatorSessionID, model, role, campaignID, registryDigest, registryFile, prompt string,
-	seed int32,
-	stream bool,
-) (*evaluation.InferenceOperatorStatus, evaluation.InferenceProbeRequest, *harnessclient.Client, error) {
-	cfg, fileSvc, authContext, listClient, err := inferenceEvalGatewayClient(cmd, deps)
+func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	var model string
+	var role string
+	var prompt string
+	var seed int32 = -1
+	var stream bool
+	cmd := &cobra.Command{
+		Use:   "probe <model>",
+		Short: "Single non-scored governed inference probe",
+		Args:  cobra.ExactArgs(1),
+		Annotations: map[string]string{"jsonLeaf": "true"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			model = args[0]
+			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			authContext, err := deps.authLoader(nil, cfg)
+			if err != nil {
+				return fmt.Errorf("evaluation: load CLI identity: %w", err)
+			}
+			gatewayClient, err := deps.clientFactory(nativeEvalClientConfig(cfg, authContext))
+			if err != nil {
+				return fmt.Errorf("evaluation: initialize gateway client: %w", err)
+			}
+			operators, _, err := gatewayClient.ListOperators(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("evaluation: list operators: %w", err)
+			}
+			selected, err := evaluation.SelectInferenceOperator(operators, "")
+			if err != nil {
+				return fmt.Errorf("evaluation: gates probe: %w", err)
+			}
+			appClient, err := inferenceEvalAppClientFrom(cfg, authContext, deps.clientFactory)
+			if err != nil {
+				return fmt.Errorf("evaluation: gates probe: %w", err)
+			}
+			probeRole, err := parseInferenceProbeRole(role)
+			if err != nil {
+				return fmt.Errorf("evaluation: gates probe: %w", err)
+			}
+			probeReq := evaluation.InferenceProbeRequest{
+				ProviderAttemptID:       deps.newID(),
+				Role:                    probeRole,
+				Model:                   model,
+				TargetOperatorSessionID: selected.OperatorSessionID,
+				Prompt:                  prompt,
+				Stream:                  stream,
+			}
+			if seed >= 0 {
+				probeReq.Seed = &seed
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), 6*time.Minute)
+			defer cancel()
+			response, progress, err := inferenceEvalExecuteProbe(ctx, appClient, probeReq)
+			if err != nil {
+				return fmt.Errorf("evaluation: gates probe: %w", err)
+			}
+			if err := evaluation.ValidateInferenceProbeStream(probeReq, progress, response); err != nil {
+				return fmt.Errorf("evaluation: gates probe: %w", err)
+			}
+			if output.JSONEnabled(cmd) {
+				body, err := protojson.Marshal(response)
+				if err != nil {
+					return fmt.Errorf("evaluation: gates probe: marshal response: %w", err)
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(body))
+				return err
+			}
+			result := response.GetResult()
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Probe accepted\nSession: %s\nModel: %s\nAttempt: %s\nResult digest: %s\nOutput hash: %s\nParts: %d\nProgress events: %d\n", selected.OperatorSessionID, result.GetRequestedModel(), result.GetProviderAttemptId(), result.GetResultDigest(), result.GetOutputHash(), len(result.GetParts()), len(progress))
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&model, "model", "", "[DEPRECATED] use positional argument instead")
+	cmd.Flags().StringVar(&role, "role", "primary", "Governed model role: primary, assistant, or lite")
+	cmd.Flags().StringVar(&prompt, "prompt", "", "Probe prompt (default: Reply with exactly: probe-ok)")
+	cmd.Flags().Int32Var(&seed, "seed", -1, "Optional deterministic generation seed (omit for provider default)")
+	cmd.Flags().BoolVar(&stream, "stream", false, "Request live NDJSON progress telemetry during generation")
+	return cmd
+}
+
+
+func inferenceEvalAppClientFrom(cfg *config.Config, authContext *auth.ClientAuthContext, clientFactory func(harnessconfig.Config) (*harnessclient.Client, error)) (*harnessclient.Client, error) {
+	certFile, keyFile, err := resolveInferenceProbeAppCredentials(nil, cfg)
 	if err != nil {
-		return nil, evaluation.InferenceProbeRequest{}, nil, err
+		return nil, err
 	}
-	operators, _, err := listClient.ListOperators(cmd.Context())
-	if err != nil {
-		return nil, evaluation.InferenceProbeRequest{}, nil, fmt.Errorf("evaluation: list operators: %w", err)
+	trustBundle := cfg.ResolvedTrustBundlePath()
+	appConfig := harnessconfig.Config{
+		MTLSBaseURL: cfg.OperatorHTTPURL(),
+		Auth: harnessconfig.Auth{
+			ClientCert: certFile,
+			ClientKey:  keyFile,
+			CABundle:   trustBundle,
+		},
+		UserID: authContext.UserID,
 	}
-	selected, err := evaluation.SelectInferenceOperator(operators, operatorSessionID)
-	if err != nil {
-		return nil, evaluation.InferenceProbeRequest{}, nil, err
-	}
-	appClient, err := inferenceEvalAppClient(cfg, fileSvc, authContext, deps)
-	if err != nil {
-		return nil, evaluation.InferenceProbeRequest{}, nil, err
-	}
-	probeRole, err := parseInferenceProbeRole(role)
-	if err != nil {
-		return nil, evaluation.InferenceProbeRequest{}, nil, err
-	}
-	var registry []*operatorv1.InferenceModelVariant
-	modelDigest := ""
-	if registryFile != "" {
-		freeze, err := loadRegistryFreezeFile(registryFile)
-		if err != nil {
-			return nil, evaluation.InferenceProbeRequest{}, nil, err
-		}
-		campaignID = freeze.CampaignID
-		registryDigest = freeze.Digest
-		registry = freeze.Variants
-		variant, err := freeze.LookupModelVariant(model)
-		if err != nil {
-			return nil, evaluation.InferenceProbeRequest{}, nil, fmt.Errorf("evaluation: lookup model variant: %w", err)
-		}
-		modelDigest = variant.GetDigest()
-	}
-	probeReq := evaluation.InferenceProbeRequest{
-		ProviderAttemptID:       deps.newID(),
-		Role:                    probeRole,
-		Model:                   model,
-		ModelDigest:             modelDigest,
-		TargetOperatorSessionID: selected.OperatorSessionID,
-		Prompt:                  prompt,
-		CampaignID:              campaignID,
-		ModelRegistryDigest:     registryDigest,
-		ModelRegistry:           registry,
-		Stream:                  stream,
-	}
-	if seed >= 0 {
-		probeReq.Seed = &seed
-	}
-	return selected, probeReq, appClient, nil
+	return clientFactory(appConfig)
 }
 
 func inferenceEvalExecuteProbe(
