@@ -185,13 +185,13 @@ func walkCommandsRecursive(path []string, cmd *cobra.Command, fn func(path []str
 }
 
 // TestEvalCmd_ContainsExpectedGroups verifies the eval command tree has the
-// expected top-level groups.
+// expected top-level groups (in alphabetical order as Cobra sorts them).
 func TestEvalCmd_ContainsExpectedGroups(t *testing.T) {
 	deps := nativeEvalDeps{}
 	cmd := evalCmdWithConfig(deps)
 
 	expected := []string{
-		"models", "campaigns", "runs", "rollout", "formations", "gates", "boundary", "observer",
+		"boundary", "campaigns", "formations", "gates", "models", "observer", "rollout", "runs",
 	}
 	var actual []string
 	for _, subcmd := range cmd.Commands() {

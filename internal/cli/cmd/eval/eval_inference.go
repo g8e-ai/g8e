@@ -60,7 +60,7 @@ type inferenceEvalDeps struct {
 	newID            func() string
 }
 
-func gateInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	shared := inferenceEvalDeps{
 		configLoader:     deps.configLoader,
 		fileSvcFactory:   deps.fileSvcFactory,
@@ -72,14 +72,14 @@ func gateInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd := &cobra.Command{Use: "inference", Short: "Inference Operator status, probe, and acceptance"}
 	cmd.AddCommand(
-		gateInferenceEvalStatusCmd(shared),
-		gateInferenceEvalProbeCmd(shared),
-		gateInferenceEvalRunCmd(shared),
+		gatesInferenceEvalStatusCmd(shared),
+		gatesInferenceEvalProbeCmd(shared),
+		gatesInferenceEvalRunCmd(shared),
 	)
 	return cmd
 }
 
-func gateInferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
+func gatesInferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	cmd := &cobra.Command{
 		Use:   "status",
@@ -125,7 +125,7 @@ func gateInferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func gateInferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
+func gatesInferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	var model string
 	var role string
@@ -180,7 +180,7 @@ func gateInferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func gateInferenceEvalRunCmd(deps inferenceEvalDeps) *cobra.Command {
+func gatesInferenceEvalRunCmd(deps inferenceEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	var model string
 	var role string

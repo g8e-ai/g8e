@@ -1544,7 +1544,6 @@ var (
 	ErrEvaluationAssignmentExecutionFailed = errors.New("evaluation: assignment execution failed")
 	ErrEvaluationProviderModelsResident    = errors.New("evaluation: provider has resident models")
 	ErrEvaluationRecoveredResultMissing    = errors.New("evaluation: recovered terminal assignment has no persisted result")
-	ErrImmutableInventoryConflict          = errors.New("evaluation: immutable inventory content conflict")
 	ErrEvaluationCampaignConflict          = errors.New("evaluation: campaign already exists with a different frozen spec")
 	ErrEvaluationArchived                  = errors.New("evaluation: campaign or run is archived")
 	ErrEvaluationNotArchived               = errors.New("evaluation: campaign or run is not archived")

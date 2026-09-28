@@ -98,6 +98,25 @@ type formationRunOptions struct {
 	AssignmentID       string
 }
 
+// formationsListEvalCmd wraps campaignEvalFormationsListCmd for the top-level formations group
+func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	return campaignEvalFormationsListCmd(deps)
+}
+
+// formationsShowEvalCmd wraps campaignEvalFormationsShowCmd for the top-level formations group
+func formationsShowEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	return campaignEvalFormationsShowCmd(deps)
+}
+
+// formationsSmokeEvalCmd wraps campaignEvalFormationsRunCmd for the top-level formations group
+func formationsSmokeEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := campaignEvalFormationsRunCmd(deps)
+	cmd.Use = "smoke"
+	cmd.Short = "Run one or all formations through the governed Inference Operator path"
+	return cmd
+}
+
+// campaignEvalFormationsCmd is kept for backwards compatibility but not used in Phase 4+
 func campaignEvalFormationsCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "formations",

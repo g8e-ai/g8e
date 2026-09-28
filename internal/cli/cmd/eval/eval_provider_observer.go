@@ -42,16 +42,16 @@ type providerObserverVerifyJSON struct {
 	FailureReasons    []string `json:"failure_reasons"`
 }
 
-func providerObserverEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func observerEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "provider-observer",
-		Short: "Run the read-only provider-boundary hardware observer",
+		Use:   "observer",
+		Short: "Provider-boundary hardware observer",
 	}
-	cmd.AddCommand(providerObserverRunCmd(deps), providerObserverVerifyCmd(deps))
+	cmd.AddCommand(observerRunCmd(deps), observerVerifyCmd(deps))
 	return cmd
 }
 
-func providerObserverRunCmd(deps nativeEvalDeps) *cobra.Command {
+func observerRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var observerID string
 	var sampleIntervalMS int
 	var pollIntervalMS int
@@ -117,7 +117,7 @@ func providerObserverRunCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func providerObserverVerifyCmd(deps nativeEvalDeps) *cobra.Command {
+func observerVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	var providerAttemptID string
 	cmd := &cobra.Command{
 		Use:   "verify",

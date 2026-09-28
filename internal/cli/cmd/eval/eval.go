@@ -117,9 +117,10 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
   campaigns   Frozen evaluation definitions
   runs        Executions of a campaign
   rollout     Per-model init qualification queue
+  formations  Heterogeneous model sets (read-only in v2.2.3)
+  gates       Pre-campaign acceptance gates
   boundary    Native execution-boundary suite (no models)
-  gate        Pre-campaign acceptance gates
-  dev         Local development utilities`,
+  observer    Provider-boundary hardware observer`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
 	bindSessionFlags(cmd)
@@ -128,9 +129,10 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		campaignsEvalCmd(deps),
 		runsEvalCmd(deps),
 		rolloutEvalCmd(deps),
+		formationsEvalCmd(deps),
+		gatesEvalCmd(deps),
 		boundaryEvalCmd(deps),
-		gateEvalCmd(deps),
-		devEvalCmd(deps),
+		observerEvalCmd(deps),
 	)
 	return cmd
 }
@@ -148,26 +150,32 @@ func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func gateEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gate",
-		Short: "Pre-campaign acceptance gates",
+		Use:   "formations",
+		Short: "Heterogeneous model sets (read-only in v2.2.3)",
 	}
 	cmd.AddCommand(
-		gateInferenceEvalCmd(deps),
-		gateChatEvalCmd(deps),
+		formationsListEvalCmd(deps),
+		formationsShowEvalCmd(deps),
+		formationsSmokeEvalCmd(deps),
 	)
 	return cmd
 }
 
-func devEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dev",
-		Short: "Local development utilities",
+		Use:   "gates",
+		Short: "Pre-campaign acceptance gates",
 	}
-	cmd.AddCommand(providerObserverEvalCmd(deps))
+	cmd.AddCommand(
+		gatesInferenceEvalCmd(deps),
+		gatesChatEvalCmd(deps),
+	)
 	return cmd
 }
+
+
 
 func boundaryEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var operatorSessionID string

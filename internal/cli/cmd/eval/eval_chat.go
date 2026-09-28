@@ -65,7 +65,7 @@ type chatAcceptanceOutput struct {
 	Cases             []chatAcceptanceCaseResult `json:"cases"`
 }
 
-func gateChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	shared := chatEvalDeps{
 		configLoader:         deps.configLoader,
 		fileSvcFactory:       deps.fileSvcFactory,
@@ -76,11 +76,11 @@ func gateChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		newID:                deps.newID,
 	}
 	cmd := &cobra.Command{Use: "chat", Short: "Production chat-path vertical acceptance"}
-	cmd.AddCommand(gateChatEvalRunCmd(shared))
+	cmd.AddCommand(gatesChatEvalRunCmd(shared))
 	return cmd
 }
 
-func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
+func gatesChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	var dataOperatorSessionID string
 	var model string
