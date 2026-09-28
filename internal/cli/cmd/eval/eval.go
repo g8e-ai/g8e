@@ -47,6 +47,8 @@ type nativeEvalStore interface {
 	evaluation.ReportStore
 	SaveVerification(context.Context, string, *compliancev1.ComplianceVerificationReport) (*compliancev1.ComplianceEvidenceReference, error)
 	LoadReport(context.Context, string) (*evalv1.EvaluationReport, error)
+	LoadVerification(context.Context, string) (*compliancev1.ComplianceVerificationReport, error)
+	ListReports(context.Context) ([]string, error)
 }
 
 type nativeEvalDeps struct {
@@ -143,9 +145,10 @@ func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Native execution-boundary suite (no models)",
 	}
 	cmd.AddCommand(
-		boundaryEvalRunCmd(deps),
-		boundaryEvalVerifyCmd(deps),
-		boundaryEvalShowCmd(deps),
+		jsonLeaf(boundaryEvalListCmd(deps)),
+		jsonLeaf(boundaryEvalRunCmd(deps)),
+		jsonLeaf(boundaryEvalVerifyCmd(deps)),
+		jsonLeaf(boundaryEvalShowCmd(deps)),
 	)
 	return cmd
 }
@@ -177,6 +180,80 @@ func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 }
 
 
+
+func boundaryEvalListCmd(deps nativeEvalDeps) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "list",
+		Short: "List boundary execution reports",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			store := deps.storeFactory(fileSvc)
+			runIDs, err := store.ListReports(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("evaluation: list boundary reports: %w", err)
+			}
+
+			type reportRow struct {
+				RunID     string `json:"run_id"`
+				Suite     string `json:"suite"`
+				Status    string `json:"status"`
+				StartedAt string `json:"started_at"`
+				Operator  string `json:"operator"`
+				Valid     *bool  `json:"valid,omitempty"`
+			}
+
+			var rows []reportRow
+			for _, runID := range runIDs {
+				report, err := store.LoadReport(cmd.Context(), runID)
+				if err != nil {
+					continue
+				}
+				var valid *bool
+				verification, err := store.LoadVerification(cmd.Context(), runID)
+				if err == nil && verification != nil {
+					v := verification.GetValid()
+					valid = &v
+				}
+				startedAt := ""
+				if report.GetRun().GetStartedAt() != nil {
+					startedAt = report.GetRun().GetStartedAt().AsTime().Format("2006-01-02T15:04:05Z")
+				}
+				rows = append(rows, reportRow{
+					RunID:     report.GetRun().GetRunId(),
+					Suite:     report.GetRun().GetSuiteRef().GetId(),
+					Status:    report.GetSummaryStatus().String(),
+					StartedAt: startedAt,
+					Operator:  report.GetRun().GetTargetOperatorId(),
+					Valid:     valid,
+				})
+			}
+
+			if output.JSONEnabled(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), map[string]interface{}{
+					"reports": rows,
+				})
+			}
+			if len(rows) == 0 {
+				cmd.Println("No boundary reports found")
+				return nil
+			}
+			for _, row := range rows {
+				valid := "—"
+				if row.Valid != nil {
+					valid = fmt.Sprintf("%t", *row.Valid)
+				}
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\n",
+					row.RunID, row.Suite, row.Status, row.StartedAt, row.Operator, valid)
+			}
+			return nil
+		},
+	}
+	return command
+}
 
 func boundaryEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var operatorSessionID string

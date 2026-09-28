@@ -47,14 +47,17 @@ func observerEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "observer",
 		Short: "Provider-boundary hardware observer",
 	}
-	cmd.AddCommand(observerRunCmd(deps), observerVerifyCmd(deps))
+	cmd.AddCommand(
+		jsonLeaf(observerRunCmd(deps)),
+		jsonLeaf(observerVerifyCmd(deps)),
+	)
 	return cmd
 }
 
 func observerRunCmd(deps nativeEvalDeps) *cobra.Command {
-	var observerID string
-	var sampleIntervalMS int
-	var pollIntervalMS int
+	var name string
+	var sampleInterval string
+	var pollInterval string
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Watch inference provider attempts and record provider-boundary hardware samples",
@@ -67,16 +70,24 @@ func observerRunCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: provider observer run: %w", err)
 			}
-			if observerID == "" {
-				observerID = "g8e-provider-boundary-observer"
+			if name == "" {
+				name = "g8e-provider-boundary-observer"
+			}
+			sampleDuration, err := time.ParseDuration(sampleInterval)
+			if err != nil {
+				return fmt.Errorf("evaluation: invalid sample interval: %w", err)
+			}
+			pollDuration, err := time.ParseDuration(pollInterval)
+			if err != nil {
+				return fmt.Errorf("evaluation: invalid poll interval: %w", err)
 			}
 			runner, err := provider_observer.NewRunner(provider_observer.RunnerConfig{
-				ObserverID:     observerID,
+				ObserverID:     name,
 				Collector:      provider_observer.DefaultCollector(),
 				WindowStore:    windowStore,
 				FileSvc:        fileSvc,
-				SampleInterval: time.Duration(sampleIntervalMS) * time.Millisecond,
-				PollInterval:   time.Duration(pollIntervalMS) * time.Millisecond,
+				SampleInterval: sampleDuration,
+				PollInterval:   pollDuration,
 				Now:            deps.now,
 			})
 			if err != nil {
@@ -86,9 +97,9 @@ func observerRunCmd(deps nativeEvalDeps) *cobra.Command {
 			defer stop()
 			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(providerObserverRunJSON{
-					ObserverID:     observerID,
-					SampleInterval: sampleIntervalMS,
-					PollInterval:   pollIntervalMS,
+					ObserverID:     name,
+					SampleInterval: int(sampleDuration.Milliseconds()),
+					PollInterval:   int(pollDuration.Milliseconds()),
 					Collector:      "nvidia-smi+proc-meminfo",
 					WindowsDir:     constants.InferenceProviderObserverDirname + "/" + constants.InferenceProviderObserverWindowsDirname,
 				}, "", "  ")
@@ -100,7 +111,7 @@ func observerRunCmd(deps nativeEvalDeps) *cobra.Command {
 					return err
 				}
 			} else {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Provider-boundary observer started\nObserver: %s\nSample interval: %dms\nPoll interval: %dms\n", observerID, sampleIntervalMS, pollIntervalMS)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Provider-boundary observer started\nObserver: %s\nSample interval: %s\nPoll interval: %s\n", name, sampleInterval, pollInterval)
 				if err != nil {
 					return err
 				}
@@ -111,21 +122,19 @@ func observerRunCmd(deps nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&observerID, "observer-id", "", "Stable observer identity pseudonym")
-	cmd.Flags().IntVar(&sampleIntervalMS, "sample-interval-ms", 250, "Hardware sample interval in milliseconds")
-	cmd.Flags().IntVar(&pollIntervalMS, "poll-interval-ms", 250, "Attempt polling interval in milliseconds")
+	cmd.Flags().StringVar(&name, "name", "", "Stable observer identity pseudonym")
+	cmd.Flags().StringVar(&sampleInterval, "sample-interval", "250ms", "Hardware sample interval (e.g., 250ms, 1s)")
+	cmd.Flags().StringVar(&pollInterval, "poll-interval", "250ms", "Attempt polling interval (e.g., 250ms, 1s)")
 	return cmd
 }
 
 func observerVerifyCmd(deps nativeEvalDeps) *cobra.Command {
-	var providerAttemptID string
 	cmd := &cobra.Command{
-		Use:   "verify",
+		Use:   "verify <attempt>",
 		Short: "Verify provider-boundary observation coverage for one provider attempt",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if providerAttemptID == "" {
-				return fmt.Errorf("evaluation: provider observer verify: %w", constants.ErrMissingRequiredField)
-			}
+			providerAttemptID := args[0]
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
@@ -188,6 +197,5 @@ func observerVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&providerAttemptID, "provider-attempt-id", "", "Governed inference provider attempt ID")
 	return cmd
 }

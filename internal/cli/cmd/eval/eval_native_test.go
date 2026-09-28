@@ -79,43 +79,35 @@ func TestEvalCmd_ContainsProgramGroups(t *testing.T) {
 	for _, child := range boundary.Commands() {
 		boundaryNames = append(boundaryNames, child.Name())
 	}
-	assert.ElementsMatch(t, []string{"run", "verify", "show"}, boundaryNames)
+	assert.ElementsMatch(t, []string{"list", "run", "verify", "show"}, boundaryNames)
 
-	var gate *cobra.Command
+	var gates *cobra.Command
 	for _, child := range command.Commands() {
-		if child.Name() == "gate" {
-			gate = child
+		if child.Name() == "gates" {
+			gates = child
 			break
 		}
 	}
-	require.NotNil(t, gate)
-	var inference *cobra.Command
-	for _, child := range gate.Commands() {
-		if child.Name() == "inference" {
-			inference = child
-			break
-		}
+	require.NotNil(t, gates)
+	gatesNames := make([]string, 0, len(gates.Commands()))
+	for _, child := range gates.Commands() {
+		gatesNames = append(gatesNames, child.Name())
 	}
-	require.NotNil(t, inference)
-	inferenceNames := make([]string, 0, len(inference.Commands()))
-	for _, child := range inference.Commands() {
-		inferenceNames = append(inferenceNames, child.Name())
-	}
-	assert.ElementsMatch(t, []string{"status", "probe", "run"}, inferenceNames)
+	assert.ElementsMatch(t, []string{"chat", "inference", "probe"}, gatesNames)
 
-	var chat *cobra.Command
-	for _, child := range gate.Commands() {
-		if child.Name() == "chat" {
-			chat = child
+	var observer *cobra.Command
+	for _, child := range command.Commands() {
+		if child.Name() == "observer" {
+			observer = child
 			break
 		}
 	}
-	require.NotNil(t, chat)
-	chatNames := make([]string, 0, len(chat.Commands()))
-	for _, child := range chat.Commands() {
-		chatNames = append(chatNames, child.Name())
+	require.NotNil(t, observer)
+	observerNames := make([]string, 0, len(observer.Commands()))
+	for _, child := range observer.Commands() {
+		observerNames = append(observerNames, child.Name())
 	}
-	assert.ElementsMatch(t, []string{"run"}, chatNames)
+	assert.ElementsMatch(t, []string{"run", "verify"}, observerNames)
 }
 
 func TestBoundaryEvalRun_AbsentCLIIdentityFailsBeforeClientCreation(t *testing.T) {
@@ -196,6 +188,18 @@ func (s *nativeEvalStoreStub) SaveVerification(_ context.Context, runID string, 
 
 func (s *nativeEvalStoreStub) LoadReport(ctx context.Context, runID string) (*evalv1.EvaluationReport, error) {
 	return s.loadReport(ctx, runID)
+}
+
+func (s *nativeEvalStoreStub) LoadVerification(context.Context, string) (*compliancev1.ComplianceVerificationReport, error) {
+	return s.savedVerification, nil
+}
+
+func (s *nativeEvalStoreStub) ListReports(context.Context) ([]string, error) {
+	var runIDs []string
+	for _, report := range s.savedReports {
+		runIDs = append(runIDs, report.GetRun().GetRunId())
+	}
+	return runIDs, nil
 }
 
 func nativeEvalTestReport(runID string) *evalv1.EvaluationReport {
