@@ -252,13 +252,13 @@ func campaignEvalFormationsShowCmd(_ nativeEvalDeps) *cobra.Command {
 }
 
 func campaignEvalFormationsRunCmd(deps nativeEvalDeps) *cobra.Command {
-	opts := formationRunOptions{FormationID: "ultra-light-speedster"}
+	opts := formationRunOptions{FormationID: "ultra-efficient-speedster"}
 	var runCatalog bool
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run one or all frozen formations through the governed Inference Operator path",
 		Long: `Execute Lite → Assistant → Primary for catalog formations using frozen
-registry digests and exact Operator sessions. Use --catalog to batch-run all 4 sovereign
+registry digests and exact Operator sessions. Use --catalog to batch-run every sovereign
 execution topologies in sequence. This is a governed smoke path, not a scored campaign assignment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.InferenceSessionID == "" {

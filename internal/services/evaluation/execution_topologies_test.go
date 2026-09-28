@@ -20,11 +20,11 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func TestNewExecutionTopologies_ReturnsFourValidTargetFormations(t *testing.T) {
+func TestNewExecutionTopologies_ReturnsFiveValidTargetFormations(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
 	formations := topologies.Formations()
-	require.Len(t, formations, 4)
+	require.Len(t, formations, 5)
 	for _, formation := range formations {
 		require.NoError(t, formation.Validate())
 		assert.Less(t, formation.EstimatedVRAMMiB(), formation.MaxVRAMMiB)
@@ -35,7 +35,7 @@ func TestNewExecutionTopologies_ReturnsFourValidTargetFormations(t *testing.T) {
 func TestFormationValidateRejectsProviderAndFamilyOverlap(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
-	formation, err := topologies.Formation("enterprise-polyglot")
+	formation, err := topologies.Formation("deepseek-reasoning-tower")
 	require.NoError(t, err)
 
 	providerOverlap := formation
@@ -52,7 +52,7 @@ func TestFormationValidateRejectsProviderAndFamilyOverlap(t *testing.T) {
 func TestFormationToStackDefinitionUsesCanonicalRoleBindings(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
-	formation, err := topologies.Formation("code-logic-edge")
+	formation, err := topologies.Formation("gemma-cascade")
 	require.NoError(t, err)
 
 	stack, err := formation.ToStackDefinition()
@@ -147,7 +147,7 @@ func formationWithDigests(t *testing.T, id string) Formation {
 }
 
 func TestFormationRunnerAttestsBeforeAllocationAndPassesStateThroughGovernance(t *testing.T) {
-	formation := formationWithDigests(t, "heavy-reasoner")
+	formation := formationWithDigests(t, "qwen-powerhouse")
 	provenance := &formationTestProvenance{}
 	observer := &formationTestObserver{}
 	allocator := &formationTestAllocator{}
@@ -176,7 +176,7 @@ func TestFormationRunnerAttestsBeforeAllocationAndPassesStateThroughGovernance(t
 		"primary:initial/lite/assistant",
 	}, executor.states)
 	assert.Len(t, provenance.events, 3)
-	assert.Equal(t, []string{"allocate:qwen25-14b", "allocate:gemma2-2b", "allocate:llama32-1b"}, allocator.events[:3])
+	assert.Equal(t, []string{"allocate:qwen35-9b", "allocate:ministral-3b-qwen", "allocate:gemma3-1b"}, allocator.events[:3])
 	assert.Len(t, result.Roles, 3)
 	assert.Equal(t, []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary}, roleProgress)
 	assert.Equal(t, FormationAttestationVerified, result.Roles[0].AttestationStatus)
@@ -216,7 +216,7 @@ func (formationOOMExecutor) ExecuteRole(_ context.Context, _ FormationRoleReques
 }
 
 func TestFormationRunnerFailsBenchmarkOnOOM(t *testing.T) {
-	formation := formationWithDigests(t, "ultra-light-speedster")
+	formation := formationWithDigests(t, "ultra-efficient-speedster")
 	runner, err := NewFormationRunner(&formationTestProvenance{}, &formationTestObserver{}, &formationTestAllocator{}, formationOOMExecutor{}, &formationTestPolicy{}, time.Now, nil)
 	require.NoError(t, err)
 
@@ -226,10 +226,10 @@ func TestFormationRunnerFailsBenchmarkOnOOM(t *testing.T) {
 	assert.False(t, result.Passed)
 }
 
-func TestUltraLightSpeedsterMeetsFrozenInventoryRequirements(t *testing.T) {
+func TestUltraEfficientSpeedsterMeetsFrozenInventoryRequirements(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
-	formation, err := topologies.Formation("ultra-light-speedster")
+	formation, err := topologies.Formation("ultra-efficient-speedster")
 	require.NoError(t, err)
 	require.NoError(t, formation.Validate())
 
@@ -253,7 +253,7 @@ func TestUltraLightSpeedsterMeetsFrozenInventoryRequirements(t *testing.T) {
 	}
 	assert.Len(t, providers, 3)
 	assert.Len(t, families, 3)
-	assert.Equal(t, uint64(5376), formation.EstimatedVRAMMiB())
+	assert.Equal(t, uint64(7552), formation.EstimatedVRAMMiB())
 	assert.Less(t, formation.EstimatedVRAMMiB(), formation.MaxVRAMMiB)
 
 	stack, err := formation.ToStackDefinition()
@@ -264,7 +264,7 @@ func TestUltraLightSpeedsterMeetsFrozenInventoryRequirements(t *testing.T) {
 func TestFormationRunnerRequiresNonEmptySovereignDigest(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
-	formation, err := topologies.Formation("ultra-light-speedster")
+	formation, err := topologies.Formation("ultra-efficient-speedster")
 	require.NoError(t, err)
 
 	runner, err := NewFormationRunner(&formationTestProvenance{}, &formationTestObserver{}, &formationTestAllocator{}, &formationTestExecutor{}, &formationTestPolicy{}, time.Now, nil)
@@ -277,7 +277,7 @@ func TestFormationRunnerRequiresNonEmptySovereignDigest(t *testing.T) {
 }
 
 func TestFormationRunnerReleasesModelsInReverseAllocationOrder(t *testing.T) {
-	formation := formationWithDigests(t, "heavy-reasoner")
+	formation := formationWithDigests(t, "qwen-powerhouse")
 	allocator := &formationTestAllocator{}
 	runner, err := NewFormationRunner(&formationTestProvenance{}, &formationTestObserver{}, allocator, &formationTestExecutor{}, &formationTestPolicy{}, time.Now, nil)
 	require.NoError(t, err)
@@ -285,12 +285,12 @@ func TestFormationRunnerReleasesModelsInReverseAllocationOrder(t *testing.T) {
 	_, err = runner.Run(context.Background(), formation, []byte("initial"))
 	require.NoError(t, err)
 	assert.Equal(t, []string{
-		"allocate:qwen25-14b",
-		"allocate:gemma2-2b",
-		"allocate:llama32-1b",
-		"release:llama32-1b",
-		"release:gemma2-2b",
-		"release:qwen25-14b",
+		"allocate:qwen35-9b",
+		"allocate:ministral-3b-qwen",
+		"allocate:gemma3-1b",
+		"release:gemma3-1b",
+		"release:ministral-3b-qwen",
+		"release:qwen35-9b",
 	}, allocator.events)
 }
 
@@ -301,7 +301,7 @@ func (formationRejectingPolicy) ValidateMutation(_ context.Context, _ string, _ 
 }
 
 func TestFormationRunnerFailsOnIncompleteL1L5Validation(t *testing.T) {
-	formation := formationWithDigests(t, "heavy-reasoner")
+	formation := formationWithDigests(t, "qwen-powerhouse")
 	runner, err := NewFormationRunner(&formationTestProvenance{}, &formationTestObserver{}, &formationTestAllocator{}, &formationTestExecutor{}, formationRejectingPolicy{}, time.Now, nil)
 	require.NoError(t, err)
 

@@ -265,9 +265,9 @@ func (t *ExecutionTopologies) Formation(id string) (Formation, error) {
 func defaultExecutionTopologies() []Formation {
 	return []Formation{
 		{
-			ID: "qwen-powerhouse", DisplayName: "Qwen Powerhouse", Description: "Trending Qwen family heterogeneous stack: Qwen3.5 primary with strong reasoning, Ministral assistant, Gemma lite.", MaxVRAMMiB: FormationMaxVRAMMiB,
+			ID: "qwen-powerhouse", DisplayName: "Qwen Powerhouse", Description: "Qwen3.5 reasoning primary with a Ministral assistant and Gemma lite triage.", MaxVRAMMiB: FormationMaxVRAMMiB,
 			Primary:   formationModel("qwen35-9b", "Qwen 3.5 9B", "Alibaba", "Qwen 3.5", "qwen3.5:9b", 9_000_000_000, "Q4_K_M", 5632, 512),
-			Assistant: formationModel("ministral-8b", "Ministral 3 8B", "Mistral", "Mistral 3", "ministral-3:8b", 8_900_000_000, "Q4_K_M", 5568, 512),
+			Assistant: formationModel("ministral-3b-qwen", "Ministral 3 3B", "Mistral", "Mistral 3", "ministral-3:3b", 3_800_000_000, "Q4_K_M", 2560, 512),
 			Lite:      formationModel("gemma3-1b", "Gemma 3 1B", "Google", "Gemma 3", "gemma3:1b", 999_890_000, "Q4_K_M", 768, 256),
 		},
 		{
@@ -277,22 +277,22 @@ func defaultExecutionTopologies() []Formation {
 			Lite:      formationModel("llama32-1b", "Llama 3.2 1B", "Meta", "Llama 3.2", "llama3.2:1b", 1_200_000_000, "Q8_0", 1024, 256),
 		},
 		{
-			ID: "gemma-cascade", DisplayName: "Gemma Cascade", Description: "Google's cutting-edge Gemma models: Gemma4 dense reasoning, Qwen assistant, Gemma lite triage.", MaxVRAMMiB: FormationMaxVRAMMiB,
+			ID: "gemma-cascade", DisplayName: "Gemma Cascade", Description: "Gemma 4 primary with a Qwen assistant and Llama lite triage.", MaxVRAMMiB: FormationMaxVRAMMiB,
 			Primary:   formationModel("gemma4-e4b", "Gemma 4 E4B", "Google", "Gemma 4", "gemma4:e4b", 8_000_000_000, "Q4_K_M", 5120, 512),
 			Assistant: formationModel("qwen25-7b", "Qwen 2.5 7B", "Alibaba", "Qwen 2.5", "qwen2.5:7b", 7_600_000_000, "Q4_K_M", 4736, 512),
-			Lite:      formationModel("gemma3-4b", "Gemma 3 4B", "Google", "Gemma 3", "gemma3:4b", 4_300_000_000, "Q4_K_M", 2688, 256),
+			Lite:      formationModel("llama32-1b-gemma", "Llama 3.2 1B", "Meta", "Llama 3.2", "llama3.2:1b", 1_200_000_000, "Q8_0", 1024, 256),
 		},
 		{
-			ID: "llama-meta-stack", DisplayName: "Llama Meta Stack", Description: "Meta's latest Llama ecosystem: Llama 3.1 powerhouse with Phi4 efficiency and Qwen triage.", MaxVRAMMiB: FormationMaxVRAMMiB,
+			ID: "llama-meta-stack", DisplayName: "Llama Meta Stack", Description: "Llama 3.1 primary with a Phi 4 assistant and Gemma lite triage.", MaxVRAMMiB: FormationMaxVRAMMiB,
 			Primary:   formationModel("llama31-8b", "Llama 3.1 8B", "Meta", "Llama 3.1", "llama3.1:8b", 8_000_000_000, "Q4_K_M", 5120, 512),
 			Assistant: formationModel("phi4-mini-38b", "Phi4 Mini 3.8B", "Microsoft", "Phi 4", "phi4-mini:3.8b", 3_800_000_000, "Q4_K_M", 2560, 512),
-			Lite:      formationModel("llama32-3b", "Llama 3.2 3B", "Meta", "Llama 3.2", "llama3.2:3b", 3_200_000_000, "Q4_K_M", 2048, 256),
+			Lite:      formationModel("gemma3-1b-llama", "Gemma 3 1B", "Google", "Gemma 3", "gemma3:1b", 999_890_000, "Q4_K_M", 768, 256),
 		},
 		{
-			ID: "ultra-efficient-speedster", DisplayName: "Ultra-Efficient Speedster", Description: "Highest throughput stack optimized for latency: small, fast models across all roles.", MaxVRAMMiB: FormationMaxVRAMMiB,
+			ID: "ultra-efficient-speedster", DisplayName: "Ultra-Efficient Speedster", Description: "Small, fast models across all roles for latency-sensitive tasks.", MaxVRAMMiB: FormationMaxVRAMMiB,
 			Primary:   formationModel("qwen35-4b", "Qwen 3.5 4B", "Alibaba", "Qwen 3.5", "qwen3.5:4b", 4_000_000_000, "Q4_K_M", 2560, 256),
 			Assistant: formationModel("gemma4-e2b", "Gemma 4 E2B", "Google", "Gemma 4", "gemma4:e2b", 5_100_000_000, "Q4_K_M", 3200, 256),
-			Lite:      formationModel("gemma3-1b-lite", "Gemma 3 1B", "Google", "Gemma 3", "gemma3:1b", 999_890_000, "Q4_K_M", 768, 256),
+			Lite:      formationModel("llama32-1b-speed", "Llama 3.2 1B", "Meta", "Llama 3.2", "llama3.2:1b", 1_200_000_000, "Q8_0", 1024, 256),
 		},
 	}
 }

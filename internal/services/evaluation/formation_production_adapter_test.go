@@ -79,17 +79,17 @@ func ptrInt64(value int64) *int64 {
 	return &value
 }
 
-func ultraLightSpeedsterProductionDeps(t *testing.T, dispatcher *recordingFormationInferenceDispatcher, modelDispatcher *recordingOllamaModelCommandDispatcher) FormationProductionDependencies {
+func ultraEfficientSpeedsterProductionDeps(t *testing.T, dispatcher *recordingFormationInferenceDispatcher, modelDispatcher *recordingOllamaModelCommandDispatcher) FormationProductionDependencies {
 	t.Helper()
-	variants := ultraLightSpeedsterRegistryVariants()
+	variants := ultraEfficientSpeedsterRegistryVariants()
 	inferenceVariants := InferenceVariantsFromEvalRegistry(variants)
 	registryDigest, err := models.ComputeInferenceModelRegistryDigest("formation-campaign", inferenceVariants)
 	require.NoError(t, err)
 	observer := &stubFormationObservationLoader{windows: map[string]*evalv1.ProviderBoundaryObservationWindow{}}
 	for _, attemptID := range []string{
-		"ultra-light-speedster-lite-id",
-		"ultra-light-speedster-assistant-id",
-		"ultra-light-speedster-primary-id",
+		"ultra-efficient-speedster-lite-id",
+		"ultra-efficient-speedster-assistant-id",
+		"ultra-efficient-speedster-primary-id",
 	} {
 		seedFormationObservationWindow(observer, attemptID)
 	}
@@ -113,15 +113,15 @@ func ultraLightSpeedsterProductionDeps(t *testing.T, dispatcher *recordingFormat
 	}
 }
 
-func TestRunFormationProduction_ExecutesUltraLightSpeedsterThroughGovernedPath(t *testing.T) {
+func TestRunFormationProduction_ExecutesUltraEfficientSpeedsterThroughGovernedPath(t *testing.T) {
 	dispatcher := &recordingFormationInferenceDispatcher{}
 	modelDispatcher := &recordingOllamaModelCommandDispatcher{}
-	deps := ultraLightSpeedsterProductionDeps(t, dispatcher, modelDispatcher)
+	deps := ultraEfficientSpeedsterProductionDeps(t, dispatcher, modelDispatcher)
 
-	result, err := RunFormationProduction(context.Background(), ultraLightSpeedsterBindingRequest(t), deps, []byte("initial"))
+	result, err := RunFormationProduction(context.Background(), ultraEfficientSpeedsterBindingRequest(t), deps, []byte("initial"))
 	require.NoError(t, err)
 	require.True(t, result.Passed)
-	assert.Equal(t, "ultra-light-speedster", result.FormationID)
+	assert.Equal(t, "ultra-efficient-speedster", result.FormationID)
 	assert.Len(t, result.Roles, 3)
 	assert.True(t, result.MutationIntercepted)
 	assert.Equal(t, []FormationRole{

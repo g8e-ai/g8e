@@ -25,14 +25,17 @@ func testFormationCatalogVariants() []*evalv1.ModelVariant {
 
 func formationCatalogTestVariants() []*evalv1.ModelVariant {
 	digestByTag := map[string]byte{
-		"qwen2.5:14b-instruct-q4_K_M":      '1',
-		"gemma2:2b-instruct-q4_K_M":        '2',
-		"llama3.2:1b-instruct-q4_K_M":      '3',
-		"llama3.1:8b-instruct-q4_K_M":      '4',
-		"phi3.5:3.8b-mini-instruct-q4_K_M": '5',
-		"qwen2.5:0.5b-instruct-q4_K_M":     '6',
-		"gemma2:9b-instruct-q4_K_M":        '7',
-		"qwen2.5-coder:7b-instruct-q4_K_M": '8',
+		"qwen3.5:9b":     '1',
+		"ministral-3:3b": '2',
+		"gemma3:1b":      '3',
+		"deepseek-r1:7b": '4',
+		"llama3.2:1b":    '5',
+		"gemma4:e4b":     '6',
+		"qwen2.5:7b":     '7',
+		"llama3.1:8b":    '8',
+		"phi4-mini:3.8b": '9',
+		"qwen3.5:4b":     'b',
+		"gemma4:e2b":     'c',
 	}
 	return FormationCatalogFixtureVariants(func(tag string) string {
 		ch := digestByTag[tag]
@@ -43,7 +46,7 @@ func formationCatalogTestVariants() []*evalv1.ModelVariant {
 	})
 }
 
-func TestGenerateFormationCatalogStackSet_ReturnsFourCatalogFormations(t *testing.T) {
+func TestGenerateFormationCatalogStackSet_ReturnsEveryCatalogFormation(t *testing.T) {
 	set, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
 		CampaignID: "eval-formations-benchmark",
 		Seed:       17,
@@ -51,10 +54,10 @@ func TestGenerateFormationCatalogStackSet_ReturnsFourCatalogFormations(t *testin
 	})
 	require.NoError(t, err)
 	assert.Equal(t, FormationCatalogStackGenerationRule, set.GenerationRule)
-	assert.Len(t, set.Stacks, 4)
-	assert.Equal(t, 4, set.Coverage.HypothesisStackCount)
+	assert.Len(t, set.Stacks, 5)
+	assert.Equal(t, 5, set.Coverage.HypothesisStackCount)
 	assert.Equal(t, 0, set.Coverage.CoverageStackCount)
-	assert.Len(t, set.VariantIDs, 8)
+	assert.Len(t, set.VariantIDs, 11)
 	require.NoError(t, ValidateHeterogeneousStackSet(set))
 
 	stackIDs := make([]string, 0, len(set.Stacks))
@@ -62,10 +65,11 @@ func TestGenerateFormationCatalogStackSet_ReturnsFourCatalogFormations(t *testin
 		stackIDs = append(stackIDs, stack.GetStackId())
 	}
 	assert.ElementsMatch(t, []string{
-		"code-logic-edge",
-		"enterprise-polyglot",
-		"heavy-reasoner",
-		"ultra-light-speedster",
+		"deepseek-reasoning-tower",
+		"gemma-cascade",
+		"llama-meta-stack",
+		"qwen-powerhouse",
+		"ultra-efficient-speedster",
 	}, stackIDs)
 }
 
@@ -97,7 +101,7 @@ func TestGenerateFormationCatalogStackSet_SelectsNamedFormations(t *testing.T) {
 		CampaignID:   "eval-formations-subset",
 		Seed:         3,
 		Variants:     testFormationCatalogVariants(),
-		FormationIDs: []string{"heavy-reasoner", "ultra-light-speedster", "heavy-reasoner"},
+		FormationIDs: []string{"qwen-powerhouse", "ultra-efficient-speedster", "qwen-powerhouse"},
 	})
 	require.NoError(t, err)
 	require.NoError(t, ValidateHeterogeneousStackSet(set))
@@ -107,8 +111,8 @@ func TestGenerateFormationCatalogStackSet_SelectsNamedFormations(t *testing.T) {
 	for _, stack := range set.Stacks {
 		stackIDs = append(stackIDs, stack.GetStackId())
 	}
-	assert.ElementsMatch(t, []string{"heavy-reasoner", "ultra-light-speedster"}, stackIDs)
-	assert.Less(t, len(set.VariantIDs), 8, "only the named formations' models are bound")
+	assert.ElementsMatch(t, []string{"qwen-powerhouse", "ultra-efficient-speedster"}, stackIDs)
+	assert.Less(t, len(set.VariantIDs), 11, "only the named formations' models are bound")
 }
 
 func TestGenerateFormationCatalogStackSet_RejectsUnknownFormation(t *testing.T) {
@@ -124,7 +128,7 @@ func TestValidateFormationCatalogStackSet_AcceptsSubsetsAndRejectsEmptySets(t *t
 	set, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
 		CampaignID:   "eval-formations-subset",
 		Variants:     testFormationCatalogVariants(),
-		FormationIDs: []string{"code-logic-edge"},
+		FormationIDs: []string{"gemma-cascade"},
 	})
 	require.NoError(t, err)
 	require.NoError(t, validateFormationCatalogStackSet(set))
@@ -153,7 +157,7 @@ func TestGenerateFormationCatalogStackSet_RejectsEmptySovereignDigest(t *testing
 func TestResolveFormationBinding_UsesCatalogBindForFormationStack(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
-	formation, err := topologies.Formation("enterprise-polyglot")
+	formation, err := topologies.Formation("deepseek-reasoning-tower")
 	require.NoError(t, err)
 	stack, err := formation.ToStackDefinition()
 	require.NoError(t, err)
@@ -164,10 +168,10 @@ func TestResolveFormationBinding_UsesCatalogBindForFormationStack(t *testing.T) 
 		Variants:    testFormationCatalogVariants(),
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "enterprise-polyglot", bound.ID)
+	assert.Equal(t, "deepseek-reasoning-tower", bound.ID)
 	assert.False(t, bound.RelaxedValidation)
 	assert.Equal(t, repeatHex('4', 64), bound.Primary.ModelDigest)
-	assert.Equal(t, "freeze-llama31-8b", bound.Primary.VariantID)
+	assert.Equal(t, "freeze-deepseek-r1-7b", bound.Primary.VariantID)
 }
 
 func TestResolveFormationBinding_FallsBackToHeterogeneousStack(t *testing.T) {

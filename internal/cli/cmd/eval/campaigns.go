@@ -445,7 +445,7 @@ Examples:
   g8e eval campaigns create eval-qwen qwen3:4b qwen3:8b --reps 3
   g8e eval campaigns create eval-small --max-params 4b
   g8e eval campaigns create eval-formations --all-formations --seed 17
-  g8e eval campaigns create eval-two --formations heavy-reasoner ultra-light-speedster`,
+  g8e eval campaigns create eval-two --formations qwen-powerhouse ultra-efficient-speedster`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			campaignID := args[0]

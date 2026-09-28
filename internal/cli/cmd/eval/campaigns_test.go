@@ -165,7 +165,7 @@ func TestCampaignsCreate_RejectsConflictingModes(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "formations and all-formations", args: []string{"campaigns", "create", "eval-f", "--formations", "heavy-reasoner", "--all-formations"}, want: "mutually exclusive"},
+		{name: "formations and all-formations", args: []string{"campaigns", "create", "eval-f", "--formations", "qwen-powerhouse", "--all-formations"}, want: "mutually exclusive"},
 		{name: "formations with a model selector", args: []string{"campaigns", "create", "eval-f", "qwen3:4b", "--all-formations"}, want: "take no model selector"},
 		{name: "unknown lane", args: []string{"campaigns", "create", "eval-f", "--all", "--lane", "warp"}, want: "--lane must be"},
 		{name: "positional models with a filter", args: []string{"campaigns", "create", "eval-f", "qwen3:4b", "--family", "qwen"}, want: "cannot be combined"},
@@ -240,7 +240,7 @@ func TestCampaignsCreate_SystemLaneSchedulesHeterogeneousAssignments(t *testing.
 	assert.NotNil(t, assignments[0].GetHeterogeneous())
 }
 
-func TestCampaignsCreate_AllFormationsMaterializesFourStacks(t *testing.T) {
+func TestCampaignsCreate_AllFormationsMaterializesEveryCatalogStack(t *testing.T) {
 	env := setupRunEnv(t)
 	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, testFormationCatalogCLIVariants()...)
 
@@ -249,20 +249,20 @@ func TestCampaignsCreate_AllFormationsMaterializesFourStacks(t *testing.T) {
 
 	stackSet, err := env.store(t).LoadHeterogeneousStackSet(context.Background(), "eval-formations")
 	require.NoError(t, err)
-	assert.Len(t, stackSet.Stacks, 4)
+	assert.Len(t, stackSet.Stacks, 5)
 	assert.Equal(t, evaluation.FormationCatalogStackGenerationRule, stackSet.GenerationRule)
 
 	env.startPrepared(t, "eval-formations", "run-formations-1")
 	assignments, err := env.store(t).ListAssignments(context.Background(), "run-formations-1")
 	require.NoError(t, err)
-	assert.Len(t, assignments, 4*evaluation.StandardScenarioCount)
+	assert.Len(t, assignments, 5*evaluation.StandardScenarioCount)
 }
 
 func TestCampaignsCreate_FormationSubsetSchedulesOnlyThoseFormations(t *testing.T) {
 	env := setupRunEnv(t)
 	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, testFormationCatalogCLIVariants()...)
 
-	env.mustRun(t, "campaigns", "create", "eval-two", "--formations", "heavy-reasoner", "--formations", "ultra-light-speedster", "--seed", "17")
+	env.mustRun(t, "campaigns", "create", "eval-two", "--formations", "qwen-powerhouse", "--formations", "ultra-efficient-speedster", "--seed", "17")
 
 	stackSet, err := env.store(t).LoadHeterogeneousStackSet(context.Background(), "eval-two")
 	require.NoError(t, err)
@@ -277,7 +277,7 @@ func TestCampaignsCreate_FormationSubsetSchedulesOnlyThoseFormations(t *testing.
 func TestCampaignsCreate_FormationsRequireTheirModelsInTheRegistry(t *testing.T) {
 	env := setupRunEnv(t)
 
-	_, err := env.run(t, "campaigns", "create", "eval-f", "--formations", "heavy-reasoner")
+	_, err := env.run(t, "campaigns", "create", "eval-f", "--formations", "qwen-powerhouse")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInferenceModelNotFound)
 }

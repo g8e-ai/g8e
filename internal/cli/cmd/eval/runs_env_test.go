@@ -593,14 +593,17 @@ func (e *runEnv) firstAssignmentServer(t *testing.T, runID string) (*httptest.Se
 
 func testFormationCatalogCLIVariants() []*evalv1.ModelVariant {
 	digestByTag := map[string]byte{
-		"qwen2.5:14b-instruct-q4_K_M":      '1',
-		"gemma2:2b-instruct-q4_K_M":        '2',
-		"llama3.2:1b-instruct-q4_K_M":      '3',
-		"llama3.1:8b-instruct-q4_K_M":      '4',
-		"phi3.5:3.8b-mini-instruct-q4_K_M": '5',
-		"qwen2.5:0.5b-instruct-q4_K_M":     '6',
-		"gemma2:9b-instruct-q4_K_M":        '7',
-		"qwen2.5-coder:7b-instruct-q4_K_M": '8',
+		"qwen3.5:9b":     '1',
+		"ministral-3:3b": '2',
+		"gemma3:1b":      '3',
+		"deepseek-r1:7b": '4',
+		"llama3.2:1b":    '5',
+		"gemma4:e4b":     '6',
+		"qwen2.5:7b":     '7',
+		"llama3.1:8b":    '8',
+		"phi4-mini:3.8b": '9',
+		"qwen3.5:4b":     'b',
+		"gemma4:e2b":     'c',
 	}
 	return evaluation.FormationCatalogFixtureVariants(func(tag string) string {
 		ch := digestByTag[tag]
