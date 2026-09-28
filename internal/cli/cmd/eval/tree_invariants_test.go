@@ -91,21 +91,14 @@ func checkFlagNames(t *testing.T, cmd *cobra.Command) {
 		if c.Flags() == nil {
 			return
 		}
-		c.Flags().VisitAll(func(f interface{}) {
-			// Cast to pflag.Flag
-			flag, ok := f.(*interface{})
-			if !ok {
-				return
-			}
-			flagName := (*flag).(interface{})
-			_ = flagName // suppress unused warning for now
+		c.Flags().VisitAll(func(f *pflag.Flag) {
 			// Check for forbidden flags
-			if forbiddenFlags[flagName.(string)] {
-				t.Errorf("flag --%s is forbidden in %s (invariant 3)", flagName.(string), strings.Join(path, " "))
+			if forbiddenFlags[f.Name] {
+				t.Errorf("flag --%s is forbidden in %s (invariant 3)", f.Name, strings.Join(path, " "))
 			}
 			// Check for path flags (ending in -file or -dir)
-			if (strings.HasSuffix(flagName.(string), "-file") || strings.HasSuffix(flagName.(string), "-dir")) && !allowedPathFlags[flagName.(string)] {
-				t.Errorf("flag --%s should not expose internal paths in %s (invariant 3)", flagName.(string), strings.Join(path, " "))
+			if (strings.HasSuffix(f.Name, "-file") || strings.HasSuffix(f.Name, "-dir")) && !allowedPathFlags[f.Name] {
+				t.Errorf("flag --%s should not expose internal paths in %s (invariant 3)", f.Name, strings.Join(path, " "))
 			}
 		})
 	})
@@ -136,7 +129,7 @@ func checkJSONSupport(t *testing.T, cmd *cobra.Command) {
 		if !readOnlySpecialCases[cmdName] && structuredOutputCommands[cmdName] {
 			hasJSON := false
 			if c.Flags() != nil {
-				c.Flags().VisitAll(func(f *cobra.Flag) {
+				c.Flags().VisitAll(func(f *pflag.Flag) {
 					if f.Name == "json" {
 						hasJSON = true
 					}
@@ -144,7 +137,7 @@ func checkJSONSupport(t *testing.T, cmd *cobra.Command) {
 			}
 			// Check parent flags too
 			if !hasJSON && c.Parent() != nil && c.Parent().Flags() != nil {
-				c.Parent().Flags().VisitAll(func(f *cobra.Flag) {
+				c.Parent().Flags().VisitAll(func(f *pflag.Flag) {
 					if f.Name == "json" {
 						hasJSON = true
 					}
@@ -165,7 +158,7 @@ func checkPositionalIDs(t *testing.T, cmd *cobra.Command) {
 		if c.Flags() == nil {
 			return
 		}
-		c.Flags().VisitAll(func(f *cobra.Flag) {
+		c.Flags().VisitAll(func(f *pflag.Flag) {
 			for _, pattern := range idFlagPatterns {
 				if strings.HasSuffix(f.Name, pattern) && f.Name != "session-id" && f.Name != "pool-id" {
 					// session-id and pool-id are not command IDs
