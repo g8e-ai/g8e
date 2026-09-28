@@ -1,20 +1,17 @@
 ---
 title: Connect Apps to Gateway
 parent: Guides
+last_updated: 2026-09-28
+version: v2.2.3
 ---
 
 # Connect Apps to g8e Gateway
-
-Last Updated: 2026-09-25
-Version: v2.1.14
-
----
 
 ## Overview
 
 This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) for governed AI-agent mutations, while the selected Operator independently verifies the envelope and owns L4/L5 execution. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), governed HTTP dispatch (`POST /api/v1/operators/commands`), audit ingest (`POST /api/v1/audit/records`), direct governance envelopes, WebSocket pub/sub for operator telemetry, and the document store API.
 
-This is a task guide for the reference Gateway. For the integration decision table and application-owned state model, see [Build g8e-Compatible Applications](./build_apps.md). For the trust boundary, ingress-path differences, and client-side bypass limits, see [AI Agents and the g8e Governance Boundary](../architecture/agents.md).
+For application integration patterns and state models, see [Build g8e-Compatible Applications](./build_apps.md). For trust boundaries and ingress-path analysis, see [AI Agents and the g8e Governance Boundary](../architecture/agents.md).
 
 ### Prerequisites
 
@@ -302,7 +299,7 @@ curl -X POST https://localhost:8443/api/v1/a2a/call \
 
 ### 3. Direct Governance Envelope
 
-Authenticated CLI, Operator, and policy-authorized app clients can submit canonical protojson `GovernanceEnvelope` transactions directly. This is the direct mutation API for clients that construct complete envelopes themselves. An app certificate must have an active `AppPolicy`, the envelope must use an app source component, and `acting_app_id` must match the app certificate's SPIFFE identity. The Gateway still verifies the complete envelope; it does not add missing L2 votes or L3 proofs. Use MCP or A2A when the Gateway must construct the envelope, request configured L2 deliberation, or suspend for L3 approval. Enrolled apps that target a bound outbound Operator session use `POST /api/v1/operators/commands` instead; WebSocket `cmd:` publishing was removed in v2.1.14.
+Authenticated CLI, Operator, and policy-authorized app clients can submit canonical protojson `GovernanceEnvelope` transactions directly. This is the direct mutation API for clients that construct complete envelopes themselves. An app certificate must have an active `AppPolicy`, the envelope must use an app source component, and `acting_app_id` must match the app certificate's SPIFFE identity. The Gateway still verifies the complete envelope; it does not add missing L2 votes or L3 proofs. Use MCP or A2A when the Gateway must construct the envelope, request configured L2 deliberation, or suspend for L3 approval. Enrolled apps that target a bound outbound Operator session use `POST /api/v1/operators/commands` instead.
 
 #### Envelope Submission
 
@@ -423,7 +420,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.13
+go get github.com/g8e-ai/g8e/v2@v2.2.3
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -431,7 +428,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.1.13
+pip install g8e==2.2.3
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.

@@ -4,7 +4,7 @@ title: Connect a Lovable App to the Gateway
 audience: frontend builders and developers
 status: current
 last_updated: 2026-09-28
-version: v2.2.0
+version: v2.2.3
 owners:
   - docs/guides/lovable.md
   - internal/cli/cmd/gw/gateway_connect.go
@@ -15,9 +15,9 @@ related:
   - docs/guides/cloudflare_tunnel.md
 when_to_read: Connecting a Lovable app or other browser-hosted frontend to a local g8e Gateway for development, testing, or secure observe workflows.
 do_not_use_for:
-  - Production Gateway configuration beyond the browser origin (use docs/guides/cloudflare_tunnel.md)
-  - Operator or consensus configuration (use docs/devs/devs.md)
-  - Contract pack generation and testing (use dashboard/g8e-adapter/contract-pack/README.md)
+  - Production Gateway configuration beyond the browser origin (use [Cloudflare Tunnel Integration](./cloudflare_tunnel.md))
+  - Operator or consensus configuration (use [Developer Guidelines](../devs/devs.md))
+  - Contract pack generation and testing (use [contract-pack/README.md](../../dashboard/g8e-adapter/contract-pack/README.md))
 ---
 
 # Connect a Lovable App to the Gateway
@@ -26,7 +26,7 @@ do_not_use_for:
 
 Guides developers through connecting a Lovable app (or any browser-hosted frontend) running locally to a g8e Gateway on the same machine. The browser communicates directly with the Gateway over HTTPS; no tunnel is required for local development. The workflow validates the frontend origin, configures WebAuthn and CORS, manages local certificate trust, and verifies end-to-end connectivity before handing off to the frontend builder.
 
-For the complete browser API, WebAuthn, SSE, and frontend reference, see [Build a g8e-Compatible Frontend](./build_frontend.md).
+For the complete browser API, WebAuthn, SSE, and frontend reference, see [Build a g8e-Compatible Frontend](build_frontend.md).
 
 ## Quick index
 
@@ -55,10 +55,10 @@ For the complete browser API, WebAuthn, SSE, and frontend reference, see [Build 
 
 | Claim | Path | Verify |
 | --- | --- | --- |
-| gw connect command | [internal/cli/cmd/gw/gateway_connect.go](internal/cli/cmd/gw/gateway_connect.go) | `./g8e gw connect --help` |
-| gw start flags | [internal/cli/cmd/gw/gateway.go:88-119](internal/cli/cmd/gw/gateway.go#L88-L119) | `./g8e gw start --help` |
-| Contract pack generator | [dashboard/g8e-adapter/](dashboard/g8e-adapter/) | `npm run gen:contract-pack` from `dashboard/g8e-adapter/` |
-| Contract pack README | [dashboard/g8e-adapter/contract-pack/README.md](dashboard/g8e-adapter/contract-pack/README.md) | Authoritative reference for contract pack contents and workflow |
+| gw connect command | [internal/cli/cmd/gw/gateway_connect.go](../../internal/cli/cmd/gw/gateway_connect.go) | `./g8e gw connect --help` |
+| gw start flags | [internal/cli/cmd/gw/gateway.go](../../internal/cli/cmd/gw/gateway.go) | `./g8e gw start --help` |
+| Contract pack generator | [dashboard/g8e-adapter/](../../dashboard/g8e-adapter/) | `npm run gen:contract-pack` from `dashboard/g8e-adapter/` |
+| Contract pack README | [contract-pack/README.md](../../dashboard/g8e-adapter/contract-pack/README.md) | Authoritative reference for contract pack contents and workflow |
 
 ## Procedures
 
@@ -161,7 +161,7 @@ For a read-only observe dashboard (agent and run lifecycle, eval summaries, down
    ./g8e gw connect <exact-origin-where-spa-is-deployed>
    ```
 
-See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for runtime requirements and [Build a g8e-Compatible Frontend](./build_frontend.md) for the full reference. The contract-pack generator's acceptance commands are documented in [contract-pack/README.md](../../dashboard/g8e-adapter/contract-pack/README.md).
+See [Generator-Neutral Builder Guide](build_observe_frontend.md) for runtime requirements and [Build a g8e-Compatible Frontend](build_frontend.md) for the full reference. The contract-pack generator's acceptance commands are documented in [contract-pack/README.md](../../dashboard/g8e-adapter/contract-pack/README.md).
 
 ### Browser Limitations
 
@@ -172,7 +172,7 @@ The CLI verifies Gateway HTTPS and CORS, but browser-enforced restrictions remai
 - **Third-party cookies:** A hosted Lovable origin (`https://your-app.lovable.app`) and `localhost` are cross-site. The Gateway sets its session cookie with `SameSite=None` when a cross-origin frontend is allowed, but browsers that block third-party cookies still reject it. Authenticated requests then return `401` even after a successful passkey ceremony. The CLI cannot override this policy. Workarounds:
   - Deploy the frontend at the same site as the Gateway (e.g., both under a tunnel or custom domain).
   - Route browser requests through a server proxy at the frontend origin.
-  - Use a Cloudflare Tunnel and configure the origin accordingly (see [Cloudflare Tunnel Integration](./cloudflare_tunnel.md)).
+  - Use a Cloudflare Tunnel and configure the origin accordingly (see [Cloudflare Tunnel Integration](cloudflare_tunnel.md)).
 - **Certificate trust:** The Gateway's local HTTPS certificate must be trusted by the browser. Use the CLI's OS-trust flow (standard path) or verify the printed SHA-256 fingerprint and complete the manual browser-trust flow (`--no-system-trust`). Never disable TLS verification in the frontend.
 
 ### If It Does Not Connect
@@ -196,7 +196,7 @@ Use a tunnel when:
 - The integration runs in Lovable edge functions or cloud-side tests.
 - A public deployment requires publicly trusted HTTPS and explicit CORS/WebAuthn settings.
 
-See [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) for configuration and examples.
+See [Cloudflare Tunnel Integration](cloudflare_tunnel.md) for configuration and examples.
 
 ## Advanced Configuration
 
@@ -219,7 +219,7 @@ Key flags (all from `./g8e gw start --help`):
 - `--passkey-rp-name`: Display name for the RP (defaults to `g8e`).
 - `--public-base-url`: Public base URL for approval links and host validation.
 
-Validate that every origin is a valid origin for the selected RP ID. See [Build a g8e-Compatible Frontend](./build_frontend.md) for the complete reference.
+Validate that every origin is a valid origin for the selected RP ID. See [Build a g8e-Compatible Frontend](build_frontend.md) for the complete reference.
 
 ## Anti-patterns
 
@@ -231,7 +231,7 @@ Validate that every origin is a valid origin for the selected RP ID. See [Build 
 
 ## Links out
 
-- [Build a g8e-Compatible Frontend](./build_frontend.md) — browser API, WebAuthn, SSE reference, and Gateway-side configuration.
-- [Generator-Neutral Builder Guide](./build_observe_frontend.md) — runtime requirements for the observe frontend.
-- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) — tunnel setup for public deployments and multi-user access.
+- [Build a g8e-Compatible Frontend](build_frontend.md) — browser API, WebAuthn, SSE reference, and Gateway-side configuration.
+- [Generator-Neutral Builder Guide](build_observe_frontend.md) — runtime requirements for the observe frontend.
+- [Cloudflare Tunnel Integration](cloudflare_tunnel.md) — tunnel setup for public deployments and multi-user access.
 - [Gateway Documentation](../dashboard/index.md) — operator dashboard and monitoring.

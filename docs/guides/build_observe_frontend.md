@@ -1,20 +1,54 @@
 ---
+doc_id: build_observe_frontend
 title: Generator-Neutral Builder Guide
-parent: Guides
+audience: SPA builders and frontend developers
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/guides/build_observe_frontend.md
+  - dashboard/g8e-adapter/
+  - protocol/docs/reference/
+related:
+  - docs/guides/build_frontend.md
+  - docs/guides/lovable.md
+  - docs/guides/public_spectator.md
+  - docs/guides/cloudflare_tunnel.md
+  - docs/architecture/sse.md
+  - docs/architecture/auth.md
+when_to_read: Building a read-only observe frontend via SPA builder (Lovable, Notion, etc.) consuming the g8e-adapter contract pack, or understanding adapter runtime requirements and capability guarantees.
+do_not_use_for:
+  - Custom frontend development without builders (docs/guides/build_frontend.md)
+  - Local Lovable quick setup (docs/guides/lovable.md)
+  - Public Spectator deployments (docs/guides/public_spectator.md)
+  - Gateway authentication details (docs/architecture/auth.md)
 ---
 
 # Generator-Neutral Builder Guide
 
-Last Updated: 2026-09-23
-Version: v2.1.12
-
----
-
 ## Purpose
 
-This guide explains the runtime capability requirements a generated observe frontend must satisfy. A generated observe frontend is a read-only browser dashboard that shows agent and run lifecycle projections, eval summaries, downloads, and a live SSE narrative. It is produced by a builder (Lovable, Notion, or other supported SPA builder) consuming the deterministic contract pack. A Notion page alone is not a runtime SPA; the builder must produce a deployable single-page application that runs in a top-level browser tab and connects directly to a local g8e Gateway.
+This guide explains the runtime capability requirements and integration guarantees that a generated observe frontend must satisfy. A generated observe frontend is a read-only browser dashboard that shows agent and run lifecycle projections, eval summaries, downloads, and a live SSE narrative. It is produced by a builder (Lovable, Notion, or other supported SPA builder) consuming the deterministic contract pack from `dashboard/g8e-adapter/contract-pack/`. The builder must produce a deployable single-page application that runs in a top-level browser tab and connects directly to a g8e Gateway with passkey authentication.
 
-For the full browser integration reference (WebAuthn, SSE, CORS, approvals, passkey management), see [Build a g8e-Compatible Frontend](./build_frontend.md). For the minimal Lovable setup, see [Connect a Lovable App](./lovable.md). This guide covers the owner-local observe frontend specifically. It is not the anonymous [Public Spectator](../architecture/public_spectator.md) mirror; see [Public Spectator Operations Guide](./public_spectator.md) for publication and tunnel operations.
+This guide covers the owner-local observe frontend specifically and the audited adapter boundary that builders must respect. It is not the anonymous [Public Spectator](../architecture/public_spectator.md) mirror; see [Public Spectator Operations Guide](./public_spectator.md) for publication and tunnel operations. For minimal Lovable setup, see [Connect a Lovable App](./lovable.md). For the full browser integration reference (WebAuthn, SSE, CORS, approvals, passkey management), see [Build a g8e-Compatible Frontend](./build_frontend.md).
+
+## Quick index
+
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Prerequisites](#prerequisites-and-workflow)
+- [Architecture](#architecture)
+- [The audited adapter](#the-audited-adapter)
+- [The contract pack](#the-contract-pack)
+- [Invariants](#invariants)
+- [Adapter capabilities](#the-audited-adapter-capabilities)
+- [Display requirements](#display-requirements)
+- [Prohibited displays](#prohibited-displays)
+- [Accessibility](#accessibility-and-responsive-behavior)
+- [Design-preview mode](#design-preview-mode)
+- [Acceptance](#acceptance)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
 ## Prerequisites and workflow
 
@@ -58,7 +92,7 @@ The generated SPA wraps the audited `g8e-adapter` package. The adapter owns runt
 
 ## The audited adapter
 
-The `dashboard/g8e-adapter/` package is the audited integration core. It is verified by 445 unit tests, including the contract-pack drift check, and ships with a minimal host, a reference frontend, and the checked-in public evaluation explorer in `evaluation-explorer/`. The evaluation explorer consumes the anonymous public adapter while retaining its own typed full-corpus presentation store. Builder-generated code imports from the adapter and calls its exported APIs.
+The [g8e-adapter](../../dashboard/g8e-adapter/) package is the audited integration core. It is verified by 445 unit tests, including the contract-pack drift check, and ships with a minimal host, a reference frontend, and the checked-in public evaluation explorer in `evaluation-explorer/`. The evaluation explorer consumes the anonymous public adapter while retaining its own typed full-corpus presentation store. Builder-generated code imports from the adapter and calls its exported APIs.
 
 The adapter exposes:
 
@@ -80,17 +114,25 @@ The `dashboard/g8e-adapter/contract-pack/` directory contains deterministic, gen
 | --- | --- |
 | `builder-prompt.md` | The prompt to give a builder. Encodes every hard constraint. |
 | `runtime-config.schema.json` | JSON Schema for `FrontendRuntimeConfig`. |
-| `observe.openapi.json` | Curated OpenAPI 3.0 for the 21 allowlisted browser operations. |
-| `event-schemas.json` | The four dashboard event payloads plus sentinel events. |
+| `observe.openapi.json` | Curated OpenAPI 3.0 for the 20 allowlisted browser operations. |
+| `event-schemas.json` | The four dashboard event payloads plus two sentinel event types. |
 | `models.ts` | Standalone TypeScript models and validators derived from protocol JSON. |
 | `fixtures/` | 11 typed fixture scenarios for all honest view states. |
 | `manifest.json` | Schema version and SHA-256 of every output. Detects drift. |
 
 Re-running the generator against identical inputs produces byte-identical files.
 
-## Runtime capability requirements
+## Invariants
 
-A generated observe SPA must satisfy these requirements. The `builder-prompt.md` encodes them as hard constraints.
+| ID | Rule |
+| --- | --- |
+| INV-OBSERVE-BUILDER-01 | The adapter boundary is inviolate. Generated code MUST import from the audited adapter and call only its exported APIs (`parseRuntimeConfig`, `createCredentialedFetch`, `createObserveClient`, WebAuthn functions, `SseStream`, `SsePollingFallback`, `adapterReducer`, `normalizeGatewayEvent`, presentation registry). Generated code MUST NOT reimplement transport, auth, SSE parsing, or allowlist enforcement. |
+| INV-OBSERVE-BUILDER-02 | All Gateway requests MUST execute in the top-level browser context. Server-side proxies, service-worker relays, and iframe delegation are prohibited. The browser authenticates; the SPA is the sole entry point. |
+| INV-OBSERVE-BUILDER-03 | The configured Gateway origin from `FrontendRuntimeConfig` MUST be used for every request. Hardcoded origins, origins derived from `window.location`, and relative URLs are prohibited. |
+| INV-OBSERVE-BUILDER-04 | Credentials MUST be included on every fetch (`credentials: 'include'`) and every EventSource (`withCredentials: true`). The Gateway session cookie is HttpOnly and Secure; SameSite behavior depends on configured cross-origin settings. |
+| INV-OBSERVE-BUILDER-05 | Only allowlisted endpoints in the adapter are reachable. Generic arbitrary-path request helpers are prohibited. Routes for SSE push, producer, audit, blob, filesystem, pub/sub, MCP, A2A, approval, chat, tool, or eval-launch operations MUST NOT be called. |
+
+## Adapter capabilities
 
 ### Transport and auth
 
@@ -101,7 +143,7 @@ A generated observe SPA must satisfy these requirements. The `builder-prompt.md`
 - Implement the exact WebAuthn and nested SSE contracts via the adapter modules. Do not hand-roll base64url conversion, attestation/assertion wire shapes, or envelope parsing.
 - Call only allowlisted operations. The adapter's endpoint allowlist is the complete set of reachable Gateway routes. Do not add a generic arbitrary-path request helper. Do not call SSE push, producer, audit, blob, filesystem, pub/sub, MCP, A2A, approval, chat, tool, or eval-launch routes.
 
-### Display requirements
+## Display requirements
 
 Populate every section in the homepage matrix from typed stores only. Static sections remain static. Dynamic values come only from observe reads, normalized safe events, runtime health, or explicit unavailable state.
 
@@ -114,11 +156,11 @@ Populate every section in the homepage matrix from typed stores only. Static sec
 - Downloads: filename, media type, byte size, SHA-256, privacy classification, authenticated URL, and generated time. Filter the typed catalog to `public_safe`; restricted artifacts must not appear in the UI.
 - Live narrative: bounded, virtualized live event rows from normalized safe events. Unknown events appear only as a bounded diagnostic row and cannot mutate projections or counters.
 
-### Prohibited displays
+## Prohibited displays
 
 Do not display throughput, CPU, RAM, VRAM, disk, parameter counts, quantization, artifact formats, file sizes, success rates, or verification claims unless the corresponding typed observed source exists. Resource and throughput cards remain unavailable until a real host telemetry collector exists. Remove dead controls and screenshot-only calls to action. "Watch Live" authenticates or focuses the stream; it never starts work.
 
-### Accessibility and responsive behavior
+## Accessibility and responsive behavior
 
 - Keyboard navigation across all interactive controls with visible focus.
 - Semantic landmarks and headings (header, main, nav, section).
@@ -128,7 +170,7 @@ Do not display throughput, CPU, RAM, VRAM, disk, parameter counts, quantization,
 - Screen-reader connection announcements when the SSE connection state changes.
 - Mobile-first login and live-status layout.
 
-### Design-preview mode
+## Design-preview mode
 
 Design-preview mode is explicit, visibly labeled, and disabled in production unless runtime configuration deliberately enables it. Fixtures never mix with connected data. A design-preview banner is shown whenever the mode is active.
 
@@ -148,7 +190,18 @@ The connected page must contain no fixture leakage, fabricated values, dead cont
 
 Real-browser acceptance (exact-origin CORS, WebAuthn authenticator, SSE credentials, two-user isolation, cross-platform trust) is an owner-operated gate documented in the release plan. It is not satisfied by unit tests alone.
 
-## See Also
+## Anti-patterns
+
+- Reimplementing transport, auth, or allowlist logic instead of using the adapter's exported APIs.
+- Calling endpoints not in the adapter's allowlist or bypassing it with a generic fetch wrapper.
+- Deriving the Gateway origin from `window.location` or hardcoding it instead of reading `FrontendRuntimeConfig`.
+- Omitting credentials from EventSource or fetch; the adapter enforces inclusion for session authentication.
+- Mixing fixture data with connected data, or displaying fixtures when design-preview mode is disabled.
+- Rendering unknown SSE events as structured data instead of bounded diagnostic rows.
+- Displaying unsourced metrics (success rate, throughput, resource usage) without typed observed data.
+- Adding dead controls or removing the requirement for explicit user auth and action.
+
+## Links out
 
 - [Build a g8e-Compatible Frontend](./build_frontend.md) — Full browser integration reference including WebAuthn, SSE, approvals, and passkey management.
 - [Connect a Lovable App](./lovable.md) — Minimal local Lovable setup with `gw connect`.

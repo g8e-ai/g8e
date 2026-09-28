@@ -1,86 +1,121 @@
 ---
+doc_id: cloudflare_tunnel
 title: Cloudflare Tunnel Integration
-parent: Guides
+audience: operators, infrastructure engineers, deployment specialists
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/guides/cloudflare_tunnel.md
+  - internal/cli/cmd/gw/tunnel.go
+  - internal/cli/cmd/gw/tunnel_route_dns.go
+related:
+  - docs/guides/public_spectator.md
+  - docs/guides/build_frontend.md
+  - docs/guides/lovable.md
+  - docs/architecture/network.md
+  - docs/architecture/gateway.md
+  - docs/architecture/auth.md
+when_to_read: Publishing a local g8e Gateway to the public internet through Cloudflare's managed edge network, configuring DNS routing, or integrating external frontends with tunnel-exposed services.
+do_not_use_for:
+  - Frontend development and authentication (docs/guides/build_frontend.md)
+  - Public spectator read-only publication (docs/guides/public_spectator.md)
+  - Local same-machine frontend workflows (docs/guides/lovable.md)
+  - Network trust boundaries and PKI architecture (docs/architecture/network.md)
+  - Gateway authentication and authorization (docs/architecture/auth.md)
 ---
 
-# Cloudflare Tunnel Integration
+## Purpose
 
-Last Updated: 2026-09-28
-Version: v2.2.3
+Describes how to publish a local g8e Gateway through Cloudflare Tunnel, making it accessible on the public internet without opening inbound firewall ports. Covers tunnel creation, DNS routing, configuration generation, and verification. `cloudflared` remains a separate foreground process; the g8e CLI does not manage its lifecycle as a system service.
 
----
+The tunnel secures transport between Cloudflare's edge and the local origin. Authentication and authorization remain the responsibility of the Gateway; Cloudflare Tunnel and Access do not replace g8e mTLS, session, JWT, or governance requirements on protected routes.
 
-## Scope
+## Quick index
 
-This guide configures `cloudflared` to publish a g8e origin through a Cloudflare-managed hostname. The g8e CLI creates or discovers a named tunnel, optionally routes DNS, and writes the `cloudflared` ingress configuration. `cloudflared` remains a separate foreground process; the g8e Gateway does not manage its lifecycle as a service.
-
-The default origin is the Gateway HTTPS listener at `https://localhost:8443`. The `--service` flag can instead publish another local origin, such as the read-only public spectator listener. Do not use this guide to expose a private Gateway, Operator, Ensemble, Dashboard, or component-local volume unintentionally. For public spectator publication, follow [Public Spectator Operations](./public_spectator.md), which defines the permitted origin and acceptance checks.
-
-A tunnel does not replace g8e authentication or authorization. Cloudflare TLS and optional Cloudflare Access protect the edge, while the Gateway continues to apply its own route authentication, WebAuthn sessions, mTLS requirements, and governance checks. See [Network Architecture](../architecture/network.md) and [Gateway Architecture](../architecture/gateway.md) for the trust boundaries and route classes.
-
-For a frontend running in a browser on the same computer as the Gateway, use `./g8e gw connect <frontend-origin>` instead of a tunnel. A tunnel is appropriate when the browser or frontend is outside the Gateway host; it does not guarantee that a browser will accept cross-site session cookies. See [Connect a Lovable App](./lovable.md) and [Build a g8e-Compatible Frontend](./build_frontend.md).
-
-### Traffic flow
-
-```text
-[Browser] -> https://console.example.com -> [Cloudflare Edge] -> [cloudflared] -> [configured local origin]
-                                                                                         |
-                                                                                         +-> Gateway HTTPS, or an explicitly selected public listener
-```
-
-`cloudflared` maintains the outbound connection to Cloudflare, so the Gateway host does not need an inbound firewall port for the tunnel. Cloudflare terminates the public TLS connection. Origin TLS is configured independently by the generated ingress: HTTPS origins default to `noTLSVerify: true`, or use a supplied CA bundle for verification; HTTP origins have no origin TLS.
-
----
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Prerequisites](#prerequisites)
+- [Scope and Architecture](#scope-and-architecture)
+- [Procedures](#procedures)
+- [Configuration Reference](#configuration-reference)
+- [Verification](#verification)
+- [Troubleshooting](#troubleshooting)
+- [Links out](#links-out)
 
 ## Prerequisites
 
-- `cloudflared` is installed and on `PATH` on the same host as the process serving the origin ([installation guide](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)).
-- A Cloudflare account controls the DNS zone for the hostname. Tunnel creation changes Cloudflare tunnel and DNS state.
-- The g8e binary is built. Repository examples use `./g8e`.
-- The selected origin is running on the local host before external verification. The default Gateway origin listens on HTTPS port `8443`; use `--https-port` or `--service` when the origin differs.
-- The operator has permission to authenticate to Cloudflare and create or update the tunnel and DNS record.
+- `cloudflared` installed and on `PATH` ([installation guide](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/))
+- Cloudflare account that controls the DNS zone for the target hostname
+- g8e binary built and available as `./g8e`
+- Selected origin running on localhost before external verification (Gateway HTTPS default: `localhost:8443`)
+- Permission to authenticate with Cloudflare and create or update tunnel and DNS records
+- For the `route-dns` command: Cloudflare API token with DNS edit permission
 
-The CLI's `tunnel create` flow uses `cloudflared tunnel login` when it does not find `cert.pem` in the selected cloudflared configuration directory. Authentication opens a browser and requires interactive Cloudflare access.
+## Scope and Architecture
 
----
+This guide configures `cloudflared` to publish a local origin through a Cloudflare-managed hostname. The g8e CLI creates or discovers a named tunnel, optionally routes DNS, and writes the `cloudflared` ingress configuration.
 
-## Step 1: Create the tunnel and generate its configuration
+**Default origin**: Gateway HTTPS listener at `https://localhost:8443`. Use `--service` to publish an HTTP origin or alternate HTTPS listener (e.g., read-only public spectator).
 
-For the default Gateway HTTPS origin, run:
+**Do not use this guide** to expose a private Gateway, Operator, Ensemble, Dashboard, or component-local volume unintentionally. For public spectator publication, follow [Public Spectator Operations](./public_spectator.md), which defines the permitted origin and acceptance checks.
+
+**For a frontend on the same machine as the Gateway**, use `./g8e gw connect <frontend-origin>` instead of a tunnel. A tunnel is appropriate when the browser or frontend runs outside the Gateway host.
+
+### Traffic flow
+
+```
+[Browser] -> https://console.example.com -> [Cloudflare Edge] -> [cloudflared] -> [configured local origin]
+                                                                                    |
+                                                                                    +-> Gateway HTTPS (default: localhost:8443)
+                                                                                    +-> or selected HTTP/HTTPS listener
+```
+
+`cloudflared` maintains the outbound connection to Cloudflare, so the Gateway host requires no inbound firewall port for the tunnel. Cloudflare terminates the public TLS connection. Origin TLS is configured independently by the generated ingress: HTTPS origins default to `noTLSVerify: true`, or validate against a supplied CA bundle; HTTP origins have no origin TLS.
+
+A tunnel does not replace g8e authentication or authorization. Cloudflare TLS and optional Cloudflare Access protect the edge, while the Gateway continues to apply its own route authentication, WebAuthn sessions, mTLS requirements, and governance checks. See [Network Architecture](../architecture/network.md) and [Gateway Architecture](../architecture/gateway.md) for trust boundaries and route classes.
+
+## Procedures
+
+### Create the tunnel and generate configuration
+
+Create a named tunnel, optionally route DNS, and generate `config.yml` for `cloudflared`:
 
 ```bash
 ./g8e gw tunnel create --name g8e --hostname console.example.com
 ```
 
-The command:
+For the default Gateway HTTPS origin on port 8443, no additional flags are required. The command:
 
-1. Checks for `cloudflared`.
-2. Requires a tunnel name and public hostname.
-3. Runs `cloudflared tunnel login` when it does not find the origin certificate.
-4. Creates the named tunnel, or continues when the tunnel already exists.
-5. Routes the hostname with `cloudflared tunnel route dns`, unless `--skip-dns` is supplied.
-6. Looks up the tunnel UUID and writes `config.yml` with the tunnel credentials file, hostname ingress, origin settings, and a `http_status:404` catch-all.
+1. Verifies `cloudflared` is installed
+2. Validates tunnel name and hostname are supplied
+3. Runs `cloudflared tunnel login` if `cert.pem` is not found in the cloudflared config directory
+4. Creates the named tunnel (or continues if it already exists)
+5. Routes the hostname via `cloudflared tunnel route dns`, unless `--skip-dns` is supplied
+6. Looks up the tunnel UUID and writes `config.yml` with ingress rules, credentials path, and a catch-all `http_status:404`
 
-The default output directory is `~/.cloudflared`. The credentials file created by `cloudflared tunnel create` is `<tunnel-id>.json` in cloudflared's default configuration directory, and the g8e command writes `config.yml` there with mode `0600`. Use `--config-dir` to choose another directory for the generated configuration and tunnel run command. The generated configuration refers to the credentials file inside that selected directory, so when using a custom directory, copy or provision the tunnel credentials there before running the tunnel. The underlying `cloudflared` login and create subprocesses use their own cloudflared default state directory rather than receiving `--config-dir` from g8e.
+**Output location**: `~/.cloudflared/config.yml` by default. The credentials file created by `cloudflared tunnel create` (`<tunnel-id>.json`) must be in the same directory; when using `--config-dir`, copy or provision the credentials file there before running the tunnel.
 
-### `tunnel create` flags
+**Configuration directory note**: The CLI's `cloudflared tunnel login` and `cloudflared tunnel create` subprocesses use cloudflared's default state directory (typically `~/.cloudflared`), not the directory specified by `--config-dir`. The generated `config.yml` refers to the credentials file inside your chosen `--config-dir`, so you must ensure the credentials file is present there.
+
+#### Create command flags
 
 | Flag | Default | Purpose |
 | --- | --- | --- |
-| `--name` | `g8e` | Named Cloudflare tunnel. |
-| `--hostname` | Required | Public hostname routed to the tunnel. |
-| `--https-port` | `8443` | Default Gateway HTTPS port used when `--service` is omitted. |
-| `--service` | `https://localhost:<https-port>` | Origin URL. It must be an HTTP or HTTPS URL without user information, query, or fragment. |
-| `--config-dir` | `~/.cloudflared` | Directory for the generated `config.yml` and the credentials path referenced by that file. |
-| `--ca-bundle` | Empty | CA bundle passed to `originCaPool` for HTTPS origin verification. Without it, the generated ingress uses `noTLSVerify: true`. |
-| `--origin-server-name` | Empty | Optional TLS SNI name written as `originServerName` when `--ca-bundle` is also supplied. |
-| `--skip-dns` | `false` | Skip the CLI's DNS-routing step. Use when the required CNAME already exists or DNS will be managed separately. |
+| `--name` | `g8e` | Named Cloudflare tunnel |
+| `--hostname` | Required | Public hostname routed to the tunnel |
+| `--https-port` | `8443` | Default Gateway HTTPS port (used when `--service` is omitted) |
+| `--service` | `https://localhost:<https-port>` | Origin URL (HTTP or HTTPS, no user info, query, or fragment) |
+| `--config-dir` | `~/.cloudflared` | Directory for generated `config.yml` and credentials path |
+| `--ca-bundle` | Empty | CA bundle for HTTPS origin verification (default: `noTLSVerify: true`) |
+| `--origin-server-name` | Empty | TLS SNI name (written as `originServerName` when `--ca-bundle` is supplied) |
+| `--skip-dns` | `false` | Skip DNS routing (use when CNAME already exists or DNS is managed separately) |
 
-The command prints suggested Gateway flags using the tunnel hostname. Review those values before using them, especially when a separate frontend calls the Gateway: `--cors-origin` and `--passkey-rp-origin` must contain the frontend's exact origin, while `--public-base-url` is the public Gateway URL used for approval links and host validation. The passkey RP ID is a hostname and must be valid for the page origin; the exact frontend hostname is the default for the guided frontend workflow.
+The command prints suggested Gateway flags using the tunnel hostname. Review these carefully before running `gw start`, especially when a separate frontend calls the Gateway: `--cors-origin` and `--passkey-rp-origin` must contain the frontend's exact origin, while `--public-base-url` is the public Gateway URL used for approval links and host validation.
 
-### Generated ingress
+#### Generated ingress configuration
 
-For the default HTTPS origin, the generated configuration has this shape. The implementation writes an absolute credentials path; `<home>` below represents the current user's home directory.
+For the default HTTPS origin, the generated `config.yml` has this shape. The credentials path is absolute; `<home>` represents the current user's home directory.
 
 ```yaml
 tunnel: <tunnel-id>
@@ -95,32 +130,32 @@ ingress:
   - service: http_status:404
 ```
 
-`http2Origin: true` is emitted for HTTPS origins. If `--ca-bundle` is supplied, `originCaPool` replaces `noTLSVerify`; `originServerName` is emitted only when `--origin-server-name` is supplied. For an HTTP origin, the generated ingress contains the service and no `originRequest` block.
+**TLS configuration**:
+- When `--ca-bundle` is supplied, `originCaPool` replaces `noTLSVerify`
+- `originServerName` is written only when `--origin-server-name` is supplied alongside `--ca-bundle`
+- For HTTP origins, no `originRequest` block is emitted
+- `http2Origin: true` is emitted for all HTTPS origins
 
-The default `noTLSVerify` setting disables verification of the local origin certificate. Use `--ca-bundle` when the origin is not strictly local or when origin certificate verification is required by the deployment. A CA bundle path must be readable by the `cloudflared` process.
+By default, `noTLSVerify` disables verification of the local origin certificate. Use `--ca-bundle` when the origin is not strictly local or when origin certificate verification is required. The CA bundle path must be readable by the `cloudflared` process.
 
----
+### Route DNS with zone-specific API command (when needed)
 
-## Step 2: Route DNS with the zone-specific command when needed
-
-`cloudflared tunnel route dns` normally creates the CNAME using the zone authorized by the Cloudflare login. If that login selects the wrong zone, use the g8e `route-dns` command to upsert the record through the Cloudflare API in the zone that owns the hostname:
+`cloudflared tunnel route dns` creates the CNAME using the Cloudflare zone authorized by the login session. If that login selected the wrong zone, use the g8e `route-dns` command to upsert the record through the Cloudflare API in the zone that owns the hostname:
 
 ```bash
 export CLOUDFLARE_API_TOKEN='<token-with-dns-edit-permission>'
 ./g8e gw tunnel route-dns --name g8e console.example.com
 ```
 
-The command also accepts `--api-token`, `CLOUDFLARE_API_TOKEN`, or `CF_API_TOKEN`, in that precedence order. The token needs DNS edit permission for the target zone. Do not place the token in a document, shell history, or a committed configuration file.
+The command accepts `--api-token`, or reads `CLOUDFLARE_API_TOKEN` or `CF_API_TOKEN`, in that precedence order. The token must have DNS edit permission for the target zone. Do not place the token in a document, shell history, or committed configuration file.
 
-`route-dns` requires an existing named tunnel and resolves its tunnel UUID with `cloudflared tunnel list`. It upserts a proxied CNAME and waits up to 30 seconds for the hostname to resolve. A DNS warning after the record update means resolution was not observed within that window; it does not roll back the record.
+`route-dns` requires an existing named tunnel and resolves its UUID via `cloudflared tunnel list`. It upserts a proxied CNAME and waits up to 30 seconds for the hostname to resolve. A DNS warning after the record update means resolution was not observed within that window; it does not roll back the record.
 
-If the regular `create` command reports that a DNS record already exists, rerun it with `--skip-dns` when the existing record targets the intended tunnel, or use `route-dns` to update the record deliberately.
+If the `create` command reports that a DNS record already exists, rerun it with `--skip-dns` when the existing record targets the intended tunnel, or use `route-dns` to deliberately update the record.
 
----
+### Start the Gateway with tunnel-aware configuration
 
-## Step 3: Start the Gateway
-
-For a Gateway exposed at `console.example.com`, configure the Gateway with the public URL and the browser origins that actually use it:
+Configure the Gateway with the public URL and the browser origins that use it:
 
 ```bash
 ./g8e gw start -f \
@@ -131,9 +166,7 @@ For a Gateway exposed at `console.example.com`, configure the Gateway with the p
   --cors-origin https://console.example.com
 ```
 
-If a separately hosted frontend calls the Gateway, add that frontend's exact origin as a repeatable `--cors-origin` and `--passkey-rp-origin` value. Use the frontend hostname as `--passkey-rp-id` when passkey ceremonies run in that frontend page. The tunnel hostname alone is not a substitute for the frontend origin.
-
-The corresponding environment variables are:
+Equivalently, use environment variables:
 
 ```bash
 export G8E_PASSKEY_RP_ID=console.example.com
@@ -144,15 +177,15 @@ export G8E_ALLOWED_ORIGINS=https://console.example.com
 ./g8e gw start -f --posture doctrine
 ```
 
-CLI flags take precedence over environment variables. These variables configure Gateway behavior; they do not configure `cloudflared` or the tunnel commands.
+CLI flags take precedence over environment variables.
 
-The default Gateway HTTPS surface is port `8443`. The health route is public, but other HTTPS routes retain their documented g8e authentication requirements. A Cloudflare Access policy or service token does not replace a required g8e mTLS identity, web session, JWT, or governance proof.
+**Multiple frontends**: If a separately hosted frontend calls the Gateway, add that frontend's exact origin as a repeatable `--cors-origin` and `--passkey-rp-origin` value. Use the frontend hostname as `--passkey-rp-id` when passkey ceremonies run in that frontend page. The tunnel hostname alone is not a substitute for the frontend origin.
 
----
+**Route protection**: The default Gateway HTTPS surface is port 8443. The health route is public, but other HTTPS routes retain their documented g8e authentication requirements. A Cloudflare Access policy or service token does not replace a required g8e mTLS identity, web session, JWT, or governance proof.
 
-## Step 4: Start the tunnel
+### Start the tunnel
 
-Start the tunnel in a separate terminal after the selected origin is running:
+Start `cloudflared` in a separate terminal after the selected origin is running:
 
 ```bash
 ./g8e gw tunnel run --name g8e
@@ -164,122 +197,139 @@ The command runs `cloudflared tunnel run g8e` in the foreground and forwards Ctr
 ./g8e gw tunnel run --name g8e --config-dir /path/to/cloudflared
 ```
 
-You can also run `cloudflared` directly after confirming that it loads the same configuration:
+You can also run `cloudflared` directly:
 
 ```bash
 cloudflared tunnel run g8e
 ```
 
----
+### Verify the tunnel and origin
 
-## Step 5: Verify the tunnel and origin
-
-The status command reports control-plane tunnel information and can optionally request the Gateway health route through the public hostname:
+Report tunnel control-plane status and optionally verify that the public hostname reaches the configured origin:
 
 ```bash
 ./g8e gw tunnel status --name g8e --hostname console.example.com
 ```
 
-`--hostname` is optional. Without it, the command skips the public health request. The status command prints `ACTIVE` when `cloudflared tunnel info` succeeds, but the health request is the check that confirms the configured public hostname reaches the expected origin. The command reports failures in its output; inspect both sections.
+The `--hostname` flag is optional. Without it, the command skips the public health request. The status command prints `ACTIVE` when `cloudflared tunnel info` succeeds, but the health request confirms the configured public hostname reaches the expected origin.
 
-Verify manually with the public health route:
+**Manual verification**:
 
 ```bash
 curl -fsS https://console.example.com/api/v1/health
 ```
 
-A ready Gateway returns JSON with `status`, `mode`, `version`, `pid`, `governance_ready`, `posture`, and `state_merkle_root`, for example:
+A ready Gateway returns HTTP 200 JSON with `status`, `mode`, `version`, `pid`, `governance_ready`, `posture`, and optionally `state_merkle_root`:
 
 ```json
-{"status":"ok","mode":"gateway","version":"<gateway-version>","pid":12345,"governance_ready":true,"posture":"doctrine","state_merkle_root":"<root>"}
+{"status":"ok","mode":"gateway","version":"<version>","pid":12345,"governance_ready":true,"posture":"doctrine","state_merkle_root":"<root>"}
 ```
 
-The exact version, process ID, posture, and state root are runtime values. An unready Gateway returns HTTP `503` with an error such as `service initializing`, `platform_settings not ready`, or `state root calculation failed`.
+Exact version, process ID, posture, and state root are runtime values. An unready Gateway returns HTTP 503 with an error message such as `service initializing`, `platform_settings not ready`, or `state root calculation failed`.
 
-For the Gateway console, open:
+**Console access**: Open `https://console.example.com/console/` in a browser. The console still requires its g8e WebAuthn enrollment and flow. Cloudflare Edge TLS makes the public URL browser-trusted; it does not enroll a g8e user or grant console access.
 
-```text
-https://console.example.com/console/
+## Configuration Reference
+
+### Cloudflare Access (optional edge gate)
+
+Cloudflare Access is an external policy and is not configured by g8e tunnel commands. To add it:
+
+1. Create a self-hosted application in **Cloudflare Zero Trust** for the tunnel hostname
+2. Attach an allow policy requiring email OTP, identity provider, or another Cloudflare-supported authentication method
+
+Resulting flow:
+
+```
+Browser -> Cloudflare Access gate -> cloudflared tunnel -> g8e origin authentication and authorization
 ```
 
-The console still requires its g8e WebAuthn flow. Cloudflare Edge TLS makes the public URL browser-trusted; it does not enroll a g8e user or grant console access.
+Access is an additional edge gate. It does not replace Gateway WebAuthn for console operations or g8e mTLS, session, JWT, and governance requirements on protected API routes. If Access service tokens are used for an API request, send the Cloudflare token headers as required by the Access application AND provide every authentication mechanism required by the g8e route. The public health route does not require g8e credentials.
 
----
+### Frontend integration
 
-## Optional: Cloudflare Access
+For a hosted frontend, configure the Gateway with the frontend's exact origin in `--cors-origin` and `--passkey-rp-origin`, use the frontend hostname or valid registrable-domain suffix for `--passkey-rp-id`, and use the tunnel URL for `--public-base-url` when approval links must resolve through the tunnel.
 
-Cloudflare Access is an external edge policy and is not configured by the g8e tunnel commands. To add it, create a self-hosted application in **Cloudflare Zero Trust** for the tunnel hostname and attach an allow policy for the required users or groups. An Access policy can require email OTP, an identity provider, or another Cloudflare-supported method before Cloudflare forwards a request to `cloudflared`.
-
-The resulting flow is:
-
-```text
-Browser -> Cloudflare Access -> cloudflared tunnel -> g8e origin authentication and authorization
-```
-
-Access is an additional edge gate. It does not replace Gateway WebAuthn for browser console operations or g8e mTLS, session, JWT, and governance requirements on protected API routes. If Access service tokens are used for an API request, send the Cloudflare token headers as required by the Access application and also provide every authentication mechanism required by the g8e route. The public health route does not require g8e credentials.
-
----
-
-## Frontend integration
-
-For a hosted frontend, configure the Gateway with the frontend's exact origin in `--cors-origin` and `--passkey-rp-origin`, use the frontend hostname or valid registrable-domain suffix for `--passkey-rp-id`, and use the tunnel URL for `--public-base-url` when approval links must resolve through the tunnel. Browser cookie policy still applies when the frontend and Gateway are cross-site. See [Build a g8e-Compatible Frontend](./build_frontend.md) for WebAuthn, CORS, cookies, and API integration requirements.
+Browser cookie policy still applies when the frontend and Gateway are cross-site. See [Build a g8e-Compatible Frontend](./build_frontend.md) for WebAuthn, CORS, cookies, and API integration requirements.
 
 For the same-machine workflow, `./g8e gw connect <frontend-origin>` derives the frontend settings, manages local Gateway startup and trust, and verifies HTTPS and CORS. A Cloudflare tunnel is not required for that workflow.
 
----
+## Verification
+
+### Tunnel connectivity
+
+Verify tunnel is active and connected to Cloudflare:
+
+```bash
+./g8e gw tunnel status --name g8e
+```
+
+### Gateway health through tunnel
+
+Verify the Gateway is reachable and ready through the public hostname:
+
+```bash
+./g8e gw tunnel status --name g8e --hostname console.example.com
+```
+
+Or manually:
+
+```bash
+curl https://console.example.com/api/v1/health
+```
+
+A ready response includes `"status":"ok"`. Any error indicates the tunnel is not passing traffic to the configured origin, or the origin is not running.
 
 ## Troubleshooting
 
 ### `cloudflared` is missing
 
-The g8e commands require an executable named `cloudflared` on `PATH`:
+Verify `cloudflared` is installed and on `PATH`:
 
 ```bash
 cloudflared --version
 ```
 
-Install or update it using the package method appropriate for the operating system. The Cloudflare installation guide is the source for supported packages and current release channels.
+Install or update using the package method appropriate for your operating system. The [Cloudflare installation guide](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) is the authoritative source for supported packages and release channels.
 
-### The public endpoint returns 502
+### Public endpoint returns 502 Bad Gateway
 
-The tunnel may be connected while the configured origin is stopped, listening on another port, or using a different protocol. Check the local origin and compare it with the generated ingress:
+The tunnel may be connected while the origin is stopped, listening on a different port, or using a different protocol. Verify the local origin is running and matches the generated ingress:
 
 ```bash
 curl -sk https://localhost:8443/api/v1/health
 ./g8e gw tunnel status --name g8e --hostname console.example.com
 ```
 
-If `--service` points to an HTTP listener, use an `http://` local check and do not expect the Gateway HTTPS health response. For the public spectator, verify that the service points only to the configured read-only public listener; do not point the tunnel at Gateway port `8443` unless that is the intended origin.
+If `--service` points to HTTP, use an `http://` local check and do not expect the Gateway HTTPS health response. For the public spectator, verify the service points only to the configured read-only listener; do not point the tunnel at Gateway port 8443 unless that is the intended origin.
 
 ### DNS routing fails or resolves to the wrong zone
 
-Confirm that the hostname belongs to the intended Cloudflare zone and that the logged-in account can edit it. For a zone-selection problem, use the token-based command:
+Confirm the hostname belongs to the intended Cloudflare zone and that the logged-in account can edit it. For a zone-selection problem, use the token-based `route-dns` command:
 
 ```bash
-./g8e gw tunnel route-dns --name g8e console.example.com --api-token '<token-with-dns-edit-permission>'
+./g8e gw tunnel route-dns --name g8e console.example.com --api-token '<token>'
 ```
 
 Use `--skip-dns` only when the existing CNAME already points to the intended tunnel or DNS is managed by another controlled process.
 
 ### WebAuthn passkey enrollment fails
 
-The RP ID must be a hostname valid for the page origin. Do not include a scheme or port. When the ceremony runs at `https://console.example.com`, use `console.example.com` or a valid registrable-domain suffix permitted by WebAuthn. If a hosted frontend runs the ceremony, use that frontend's hostname instead of assuming that the Gateway tunnel hostname is valid.
+The RP ID must be a hostname valid for the page origin. Do not include a scheme or port. When the ceremony runs at `https://console.example.com`, use `console.example.com` or a valid registrable-domain suffix permitted by WebAuthn. If a hosted frontend runs the ceremony, use that frontend's hostname instead of assuming the Gateway tunnel hostname is valid.
 
 ### CORS or authenticated requests fail
 
-Add the browser frontend's exact scheme, hostname, and port to `--cors-origin`, and add the same frontend origin to `--passkey-rp-origin` when passkeys run there. A tunnel and Cloudflare Access do not override browser third-party-cookie policy or satisfy g8e route authentication.
+Add the browser frontend's exact scheme, hostname, and port to `--cors-origin`, and add the same frontend origin to `--passkey-rp-origin` when passkeys run there. A tunnel and Cloudflare Access do not override browser third-party-cookie policy or satisfy g8e route authentication requirements.
 
 ### Origin certificate verification fails
 
 By default, HTTPS origins use `noTLSVerify: true`. For verification, regenerate the configuration with `--ca-bundle` and, when the certificate requires a specific SNI name, `--origin-server-name`. Confirm that the CA bundle path is readable by the process running `cloudflared` and that the service URL uses HTTPS.
 
----
+## Links out
 
-## See also
-
-- [Connect a Lovable App](./lovable.md): Connect a browser-hosted frontend directly to a local Gateway.
-- [Build a g8e-Compatible Frontend](./build_frontend.md): Configure public and multi-origin frontend access.
-- [Public Spectator Operations](./public_spectator.md): Publish the read-only public mirror through a tunnel.
-- [Gateway Architecture](../architecture/gateway.md): Gateway listeners, route authentication, and runtime boundaries.
-- [Network Architecture](../architecture/network.md): TLS surfaces, PKI, identities, and transport boundaries.
-- [Protocol Specification](../../protocol/docs/spec.md): Public protocol and route contract.
+- [Public Spectator Operations](./public_spectator.md): Publish the read-only public mirror through a tunnel
+- [Build a g8e-Compatible Frontend](./build_frontend.md): Configure public and multi-origin frontend access
+- [Connect a Lovable App](./lovable.md): Connect a browser-hosted frontend directly to a local Gateway
+- [Gateway Architecture](../architecture/gateway.md): Gateway listeners, route authentication, and runtime boundaries
+- [Network Architecture](../architecture/network.md): TLS surfaces, PKI, identities, and transport boundaries
+- [Cloudflare Tunnel Documentation](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/): cloudflared installation, authentication, and tunnel operation

@@ -224,7 +224,6 @@ Handle error responses (both challenge and verify endpoints):
 - `409 Conflict`: Token has already been used (one-time-use).
 - `401 Unauthorized`: Invalid token.
 
----
 
 ## SSE Live Audit Stream
 
@@ -256,13 +255,11 @@ When streaming is unavailable or blocked by deployment infrastructure, poll `GET
 
 The gateway also exposes a WebSocket pub/sub endpoint at `/api/v1/pubsub/stream`, but it requires mTLS authentication and is not available to browser clients. Use SSE for all browser-based real-time telemetry.
 
----
 
 ## API Data Types
 
 The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Use this to discover request and response schemas for all endpoints, including user, passkey, session, health, bootstrap, approval, and SSE event types. The `@simplewebauthn/browser` library provides TypeScript types for WebAuthn ceremony inputs and outputs.
 
----
 
 ## Pages and Components
 
@@ -358,7 +355,6 @@ The embedded console also handles `#recovery={token}` for CLI recovery approval 
 
 Clear secret-bearing enrollment and recovery tokens with `history.replaceState` immediately after reading them. Transaction hashes and platform enrollment request IDs are not credentials; an external frontend can retain or remove those fragments according to its routing behavior.
 
----
 
 ## Reference UI/UX
 
@@ -375,7 +371,6 @@ These choices describe the embedded console and are not compatibility requiremen
 - **Header bar**: "g8e Console" title (accent color) + current user display name on the right
 - **Footer**: "g8e Gateway © 2026 Lateralus Labs, LLC."
 
----
 
 ## Error Handling
 
@@ -385,7 +380,6 @@ These choices describe the embedded console and are not compatibility requiremen
 - **WebAuthn API not available**: Show a browser compatibility warning
 - **Network errors**: Show a retry-able error state
 
----
 
 ## Recommended Project Structure
 
@@ -397,7 +391,6 @@ Organize the frontend with separate concerns:
 - A hook for SSE audit stream management
 - Library modules for the API fetch wrapper (with `credentials: 'include'`), WebAuthn flow helpers, and type definitions
 
----
 
 ## Frontend Integration Checklist
 
@@ -413,7 +406,6 @@ Organize the frontend with separate concerns:
 - [ ] **URL hash approval**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
 - [ ] **Logout**: Sign out and confirm redirect to login page and cookie cleared.
 
----
 
 ## Troubleshooting
 
@@ -463,7 +455,6 @@ For a guided one-command workflow on a local Gateway, run `./g8e gw connect http
 
 **Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll user`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
 
----
 
 ## Generator-Neutral Observe Frontend
 
@@ -536,56 +527,64 @@ The connected page must contain no fixture leakage, fabricated values, dead cont
 
 See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for the runtime capability requirements a builder must satisfy, and the [contract pack README](../../dashboard/g8e-adapter/contract-pack/README.md) for the deterministic generation and acceptance commands.
 
----
 
-## See Also
+## Invariants
 
-- [Connect a Lovable App](./lovable.md) - Minimal local setup for a browser-hosted Lovable app
-- [Generator-Neutral Builder Guide](./build_observe_frontend.md) - Runtime capability requirements for a generated observe frontend
-- [Public Spectator Operations Guide](./public_spectator.md) - Anonymous campaign mirror deployment and tunnel setup
-- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Expose the gateway via a public tunnel
-- [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
-- [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
-- [Architecture: Gateway](../architecture/gateway.md) - Gateway service architecture
-- [Architecture: SSE Streaming](../architecture/sse.md) - SSE push ingestion, persistence, replay, and consumer endpoints
+| ID | Rule |
+| --- | --- |
+| INV-FE-WEBAUTHN-01 | WebAuthn challenge and verification wire shapes MUST match the gateway's flat credential models (not wrapped in browser SDK response objects). Binary values MUST be unpadded base64url. |
+| INV-FE-CORS-01 | Every `fetch` call to authenticated routes MUST include `credentials: 'include'`. CORS preflight requests MUST be answered with `Access-Control-Allow-Credentials: true`. |
+| INV-FE-SESSION-01 | Session cookie `g8e_web_session_cookie` is HttpOnly and Secure. Frontends MUST NOT attempt to read it directly; routing identity derives from the cookie via Gateway validation. |
+| INV-FE-SSE-01 | SSE streams use `EventSource` with `withCredentials: true` for credential delivery; session ID is derived from the cookie by the Gateway, not passed in the URL. |
+| INV-FE-APPROVAL-01 | Approval verification bodies send the flat assertion inline as the entire JSON body, not nested under `assertion_response`. |
 
----
+## Owned Surfaces
 
-## In-Tree Dashboard (g8ed) Distinction
-
-The previous sections describe an external browser frontend that calls the Gateway directly. The in-tree dashboard (`g8ed`, `dashboard/`) is a separate first-party static host with two independent identity surfaces: its browser is intended to use Gateway WebAuthn and the Gateway-issued session cookie, while its container obtains an owner-approved mTLS application identity at startup. The browser never presents the container's mTLS certificate, and the container never holds the browser's session cookie.
-
-The current g8ed interface is not a complete implementation of the browser contract above. Existing browser sessions can be restored and logged out, but passkey registration and sign-in are not operational because the current sign-in flow omits the Gateway-required user identifier. Its retained chat, Operator, approval, audit, settings, and terminal modules also do not have active API handlers in the running static host. Its legacy SSE client uses the relative `/api/v1/sse/events` polling path and expects a different event envelope, so it is not a working direct Gateway stream in the standard separate-origin deployment.
-
-### Container enrollment
-
-The dashboard container enrolls at startup through the owner-approved platform enrollment protocol, but the running static host does not use the resulting certificate for Gateway API requests. The `AppEnrollmentService` (`dashboard/services/infra/app-enrollment-service.js`) loads an existing identity when valid or performs resumable enrollment when it is missing, expired, or near expiry. Enrollment generates the key and CSR locally, discovers the CA bundle through the Gateway's plain-HTTP surface, submits the platform enrollment request, persists pending state to `pki/pending-enrollment/dashboard.json` with `0600` permissions, resumes an unexpired request after restart, and writes the approved credentials to the dashboard runtime tree.
-
-The dashboard fails closed when enrollment fails and persists its credentials and pending state in the `g8e-dashboard-data` named volume in the unified Compose deployment. The identity reuse path validates the certificate expiry and SPIFFE application identity; it does not revalidate the private-key match or trust chain. See [Authentication and Authorization](../architecture/auth.md#platform-enrollment) for the platform enrollment protocol and [Dashboard (g8ed)](../architecture/dashboard.md) for the current capability status.
-
-### Environment Variables
-
-The dashboard startup and browser configuration use these environment variables; `docker-compose.yml` supplies all three:
-
-| Variable | Default | Description |
+| Claim | Path | Verify |
 | --- | --- | --- |
-| `G8E_GATEWAY_URL` | none (required) | Browser-facing HTTPS gateway origin injected into `/g8e-config.js`. The static server exits if it is unset. |
-| `G8E_GATEWAY_HTTP_URL` | none (required) | Gateway plain-HTTP bootstrap surface URL (compose uses `http://g8eg:8080`). Enrollment uses it for CA discovery and platform enrollment requests. The service does not derive it from `G8E_GATEWAY_URL`. |
-| `G8E_RUNTIME_DIR` | none (required; compose uses `/data`) | Dashboard runtime root for credentials and pending enrollment state. The non-root `g8e` user (UID 1001) owns the `g8e-dashboard-data` volume mounted at `/data`. |
+| Browser API contract | `internal/services/gateway/passkey_*.go`, `internal/services/gateway/gateway_http_router.go` | Routes, authentication, ceremony wire shapes |
+| Embedded console implementation | `/console/` (single-file vanilla JS) | Canonical ceremony contracts and error flows |
+| g8e-adapter observe contracts | `dashboard/g8e-adapter/contract-pack/` | OpenAPI, event schemas, wire shape fixtures |
+| Gateway Swagger API reference | `/swagger/doc.json`, `/swagger/` | Auto-generated from Go Swagger annotations |
 
-### Credential Path Layout
+## Procedures
 
-The dashboard's runtime tree mirrors the ensemble's layout so the gateway-side cert directory structure is consistent across enrolled apps:
+### End-to-End Audit Workflow
 
-- `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.crt` — enrolled app certificate followed by its certificate chain (permissions `0600`)
-- `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.key` — ECDSA P-256 private key (permissions `0600`)
-- `${G8E_RUNTIME_DIR}/pki/trust/hub-bundle.pem` — trust bundle (permissions `0644`)
-- `${G8E_RUNTIME_DIR}/pki/pending-enrollment/dashboard.json` — resumable pending request state, present only while needed (permissions `0600`)
+1. Read the complete document from beginning to end.
+2. Verify all API routes exist in `internal/services/gateway/` and match `/swagger/doc.json`.
+3. Confirm CLI command flags (`./g8e gw start --help`) match documented flags.
+4. Trace WebAuthn ceremony contracts against test fixtures in `internal/services/gateway/` (files matching `passkey_*_test.go`) and the embedded console.
+5. Verify SSE polling and streaming endpoints both return valid event envelopes.
+6. Confirm observe API routes are mTLS (producer) or session-authenticated (consumer).
+7. Test the checklist items with a real frontend connected to a running Gateway.
+8. Update `last_updated` and `version` metadata last.
 
-### Browser vs Container Identity
+### Validating the Embedded Console
 
-The dashboard's browser SPA and container identity remain independent: the browser is intended to use gateway-direct WebAuthn and session cookies, while `runStartupEnrollment()` resolves the container's mTLS identity before `server.js` starts the static host. `server.js` does not construct server-to-server gateway clients with that identity, and the current browser registration and sign-in paths are not operational.
+The console at `/console/` serves as the canonical reference implementation. When developing an external frontend, validate ceremony details against the console:
 
-The current `dashboard/public/js/components/auth.js` and `dashboard/public/js/utils/sse-connection-manager.js` do not fully match the gateway browser contract documented above: the auth code reads challenge options without the `publicKey` wrapper, attempts authentication without the required `user_id`, serializes verification credentials in a nested browser shape instead of the gateway's flat model, and the SSE manager opens `EventSource` on the JSON polling endpoint rather than `/api/v1/sse/stream`. Treat the embedded `/console/` implementation and the gateway request models as canonical until those dashboard paths are aligned.
+1. Open DevTools Network tab while running a WebAuthn ceremony in the console.
+2. Inspect the challenge request and response bodies to verify wire shapes.
+3. Inspect session cookie attributes (HttpOnly, Secure, SameSite).
+4. Monitor SSE stream reconnect behavior and event replay.
 
-See [Dashboard (g8ed)](../architecture/dashboard.md) for the platform-level architecture, [Dashboard Authentication](../dashboard/auth.md) for the component enrollment flow, the [g8ed documentation](../dashboard/index.md) for the full dashboard component reference, and [Ensemble (g8ee)](../architecture/ensemble.md) for the parallel ensemble enrollment implementation.
+## Anti-Patterns
+
+- Storing challenge values or session IDs in browser storage or `localStorage`; the Gateway derives routing identity from the cookie.
+- Implementing WebAuthn challenges without the `options.publicKey` wrapper (registration and authentication only; approval uses unwrapped `publicKey`).
+- Sending base64url-padded binary values; Gateway expects unpadded format.
+- Calling `/api/v1/auth/enrollment-token/validate` before the token-gated registration flow; that endpoint consumes the token immediately.
+- Omitting `credentials: 'include'` on `fetch` calls to authenticated routes; the session cookie will not be sent cross-origin.
+- Hard-coding API paths instead of reading the Swagger schema or route constants from the Gateway.
+
+## Links out
+
+- [Connect a Lovable App](./lovable.md): Minimal local setup for a browser-hosted Lovable app.
+- [Generator-Neutral Builder Guide](./build_observe_frontend.md): Runtime capability requirements for a generated observe frontend.
+- [Public Spectator Operations Guide](./public_spectator.md): Anonymous campaign mirror deployment and tunnel setup.
+- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md): Expose the gateway via a public tunnel.
+- [Connect Apps to Gateway](./connect_apps_to_gateway.md): General application connectivity patterns.
+- [Architecture: Auth](../architecture/auth.md): WebAuthn passkey authentication architecture.
+- [Architecture: Gateway](../architecture/gateway.md): Gateway service architecture.
+- [Architecture: SSE Streaming](../architecture/sse.md): SSE push ingestion, persistence, replay, and consumer endpoints.

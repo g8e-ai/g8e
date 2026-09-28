@@ -1,12 +1,41 @@
 ---
+doc_id: build-gateway
 title: Build Gateway
-parent: Guides
+audience: developers and operators
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/guides/build_gateway.md
+  - Makefile
+  - cmd/g8e
+  - internal/cli/cmd/gw
+  - docker-compose.yml
+related:
+  - docs/guides/docker_gateway.md
+  - docs/guides/unified_stack.md
+  - docs/guides/connect_apps_to_gateway.md
+  - docs/guides/build_operator.md
+  - docs/architecture/protocol.md
+when_to_read: Building g8e from source, deploying the gateway, understanding the gateway binary architecture, or implementing custom gateway-compatible services.
+do_not_use_for:
+  - CLI commands and runtime behavior (use ./g8e --help or ./g8e <command> --help)
+  - Gateway protocol specification and contract details (see docs/architecture/protocol.md)
+  - Docker Compose deployment orchestration details (see docs/guides/docker_gateway.md)
 ---
 
 # Build a g8e Gateway
 
-Last Updated: 2026-09-24
-Version: v2.1.13
+## Quick Index
+
+- [Overview](#overview)
+- [Reference Implementation](#reference-implementation) — Prerequisites, build from source, build targets, Docker build, cross-compilation, running the gateway
+- [Protocol Library Dependencies](#protocol-library-dependencies) — Go module and Python package setup
+- [Custom Gateway Implementation](#custom-gateway-implementation) — Required capabilities, invariants, governance modes, session types, two-port architecture, protocol schema
+- [Testing](#testing) — Test suite tiers and test commands
+- [Manage](#manage) — Gateway lifecycle commands (start, stop, restart, reset, clean, setup, security validation)
+- [Monitor](#monitor) — Status, logs, data queries, and Cloudflare Tunnel
+- [Next Steps](#next-steps) — Related guides and references
 
 ---
 
@@ -79,7 +108,7 @@ Docker Engine with the Docker Compose plugin can build the binaries without a lo
 make up
 ```
 
-This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts only the gateway because the Operator, Dashboard, and Ensemble use the `bootstrapped` Compose profile. `make up` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
+This runs `docker compose up -d --build`. The builder stage runs `make build-target` for the image platform, creates the `g8e-gateway` image, and starts the complete default Compose profile (gateway, operators, ensemble, and dashboard). `make up` does not enroll the owner or workload identities. Copy the Linux CLI binary from the default gateway container when a host-side binary is needed:
 
 ```bash
 docker cp g8e-gateway:/g8e ./g8e
@@ -130,14 +159,14 @@ Use `--follow` to run in the foreground, which is appropriate for containers and
 ./g8e gw start --follow
 ```
 
-On first start, the gateway creates the `.g8e/` runtime tree and PKI hierarchy. A host-managed gateway defaults to plain HTTP on port 8080 and HTTPS on port 8443; it searches upward for a free pair while preserving the port offset when those defaults are occupied. Startup fails if it cannot reserve a valid distinct pair. Docker Compose keeps the container listeners at 8080 and 8443 and changes only published host ports through `G8E_HTTP_PORT` and `G8E_HTTPS_PORT`. Confirm the resolved endpoints, then enroll the first owner:
+On first start, the gateway creates the `.g8e/` runtime tree and PKI hierarchy. A host-managed gateway defaults to plain HTTP on port 8080 and HTTPS on port 8443; use `--http-port` and `--https-port` flags to override these defaults. Docker Compose keeps the container listeners at 8080 and 8443 and changes only published host ports through `G8E_HTTP_PORT` and `G8E_HTTPS_PORT`. Confirm the resolved endpoints, then enroll the first owner:
 
 ```bash
 ./g8e gw status
 ./g8e auth enroll user -e localhost
 ```
 
-The default owner enrollment creates the local CLI identity, installs the Gateway root CA into the operating-system trust store, and registers a passkey. Use `--no-system-trust` only when an administrator has already installed the root CA. Use `--headless` for an mTLS-only CLI identity; it skips both passkey registration and OS trust installation, and that identity cannot authenticate to the Console SPA. For a Docker deployment, use the published host ports (for example, `-e localhost --port 8443` when defaults are in use), start the `bootstrapped` profile after owner enrollment, then approve the pending Operator, Dashboard, and Ensemble requests that those workloads submit; [Docker Gateway](docker_gateway.md) documents that flow.
+The default owner enrollment creates the local CLI identity, installs the Gateway root CA into the operating-system trust store, and registers a passkey. Use `--no-system-trust` only when an administrator has already installed the root CA. Use `--headless` for an mTLS-only CLI identity; it skips both passkey registration and OS trust installation, and that identity cannot authenticate to the Console SPA. For a Docker deployment, use the published host ports (for example, `-e localhost --port 8443` when defaults are in use), ensure the gateway is running, then approve the pending Operator, Dashboard, and Ensemble enrollment requests; [Docker Gateway](docker_gateway.md) documents that flow.
 
 Choose a stricter posture only after configuring the proofs it requires:
 
@@ -198,7 +227,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.13
+go get github.com/g8e-ai/g8e/v2@v2.2.3
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -210,7 +239,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.1.13
+pip install g8e==2.2.3
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

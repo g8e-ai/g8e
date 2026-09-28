@@ -1,8 +1,8 @@
 # Proof-Backed Compliance Evidence
 
-**Document Version:** 2.1.13
-**Last Updated:** 2026-09-24
-**Platform:** g8e v2.1.13
+**Document Version:** 2.2.3
+**Last Updated:** 2026-09-28
+**Platform:** g8e v2.2.3
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -183,9 +183,9 @@ Missing, malformed, duplicated, unexpected, cross-scope, stale, unsigned, checks
 
 ---
 
-## Demonstrated evidence at v2.1.3
+## Demonstrated evidence at v2.2.3
 
-At the v2.1.3 release boundary, all 14 canonical demo scenarios produce evidence-grade results against real Compose topologies with mTLS, governed wire paths, and independent target-state collectors. The FedRAMP, finance, DHS, and healthcare stacks are enrolled and healthy, and their current-binary real-stack runs persist canonical manifests, scenario results, receipt bodies, final-persistence attestations, state-observation artifacts, and (for healthcare gold-card and SLA) typed metric evidence bodies.
+At the v2.2.3 release boundary, all 14 canonical demo scenarios produce evidence-grade results against real Compose topologies with mTLS, governed wire paths, and independent target-state collectors. The FedRAMP, finance, DHS, and healthcare stacks are enrolled and healthy, and their current-binary real-stack runs persist canonical manifests, scenario results, receipt bodies, final-persistence attestations, state-observation artifacts, and (for healthcare gold-card and SLA) typed metric evidence bodies. Evaluation campaigns are natively integrated with the compliance pipeline through `g8e eval campaigns` infrastructure and contribute protected, replayable evidence when admitted by the scope.
 
 Independent `g8e compliance demo-run verify` verification reports `valid: true` with zero failures for:
 
@@ -200,17 +200,14 @@ These runs provide real-stack source evidence with verified receipts and indepen
 
 ## What is not yet available
 
-Canonical analysis, signed report-bundle generation, protected-source replay, and offline complete-bundle verification are available. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the candidate, bundle, external trust, isolated environment, successful verification report, and four rejected mutation classes.
-
-**Delivered in v2.1.8 — Eval-native campaign infrastructure.** Go-native `g8e eval campaigns` and `runs` lifecycle (create, start, resume, verify, publish), production chat-path scoring through g8ee (`POST /api/v1/chat`), provider-boundary Observer and storage-side Provenance Operator witness evidence, independent `g8e eval runs verify`, cohort-stratified campaign analysis, signed campaign bundle offline verification, campaign-aware observe/public-mirror publication, and a bounded R0 pipeline-integrity campaign with real Ollama inference under a descriptive-only claim policy. g8ee records assignment traces and grading telemetry consumed by the campaign controller; verification and publication remain platform-owned.
+Canonical analysis, signed report-bundle generation, protected-source replay, and offline complete-bundle verification are available and verified through the release-preparation workflow. Evaluation campaigns are integrated with the compliance pipeline at v2.2.0; campaign runs can contribute protected, replayable evidence when admitted by `g8e compliance report generate --scope <scope.json> --eval-run <run-id>`.
 
 The following capabilities remain outstanding:
 
-- **Compliance-report eval release gate** — Native eval and campaign runs can contribute protected, replayable evidence when admitted by `g8e compliance report generate --scope <scope.json> --eval-run <run-id>`. A dedicated eval-native statistical release gate remains future work; campaign verification is owned by `g8e eval runs verify`, while compliance report verification reproduces the protected campaign source and the canonical report decision.
 - **Historical effectiveness evidence** — Recurring evidence collection, assertion and control history stores, release-gate profiles, failed-run denominator preservation, and version bridge assessments are not implemented. Canonical analysis calculates point-in-time evidence-window completeness but does not establish operating effectiveness over a recurring period.
 - **Additional framework crosswalks** — Only FedRAMP 20x and NIST SP 800-53 have canonical framework definitions and a reviewed crosswalk. SOC 2, ISO 27001, HIPAA, PCI DSS, GDPR, NIST SP 800-63B, and NSA ZIG do not receive generated framework-control assessments.
 - **Manual notary real-topology verification** — The `fedramp-escalate` and `dhs-release` passkey flows are implemented and unit-tested but have not been run against their real notary topologies.
-- **Init campaign qualification matrix** — Multi-model `eval-init-*` qualification runs remain in progress; the bounded R0 pipeline-integrity campaign in v2.1.8 is the demonstrated evidence lane, not the full init-campaign matrix.
+- **Evaluation qualification matrix** — Multi-model evaluation qualification campaigns remain in progress; the current campaign infrastructure provides typed evidence collection and verification but the full qualification matrix is not yet complete.
 
 ---
 
@@ -224,7 +221,7 @@ The verifier reads all source bodies through the bundle root, enforces the signe
 
 ## Roadmap
 
-Phases 0 through 5 are complete for in-tree implementation, verification, and the recorded v2.1.7 clean offline acceptance lane. v2.1.8 adds Go-native model campaign infrastructure with independent verify/publish and a bounded R0 pipeline-integrity campaign. The remaining roadmap begins with recurring operating-effectiveness evidence and additional reviewed framework catalogs and crosswalks.
+Phases 0 through 5 are complete for in-tree implementation, verification, and the release-preparation workflow. v2.2.0 integrates evaluation campaigns with the compliance pipeline; v2.2.2 refines campaign evidence collection and reporting. The remaining roadmap begins with recurring operating-effectiveness evidence and additional reviewed framework catalogs and crosswalks.
 
 **Phase 6 — Recurring evidence, release gates, and historical effectiveness.** This phase adds scheduled evidence collection, assertion and control history, release-gate profiles, failed-run denominator preservation, and bridge assessments for version changes.
 
@@ -234,16 +231,17 @@ Phases 0 through 5 are complete for in-tree implementation, verification, and th
 
 ## CLI commands
 
-The compliance CLI exposes evaluation, evidence-graph verification, demo verification, signed report-bundle generation, and offline report-bundle verification:
+The compliance CLI exposes KSI evaluation, evidence-graph verification, demo verification, signed report-bundle generation, and offline report-bundle verification:
 
-- `g8e compliance ksi --class C --scope-id <scope> --run-id <run> --window-start-unix-ms <start> --window-end-unix-ms <end>` evaluates KSIs with an explicit assessment binding and prints the result set as JSON.
+- `g8e compliance ksi --class C --scope-id <scope> --run-id <run> --assertion-assessment-id <id>... --evidence-window-start-unix-ms <start> --evidence-window-end-unix-ms <end>` evaluates KSIs with an explicit assessment binding and prints the result set as JSON.
 - `g8e compliance ksi-history --ksi <id>` reads historical evaluation snapshots for a specific KSI.
 - `g8e compliance overlay --overlay-dir <dir>` inspects and validates AI control overlay catalogs.
 - `g8e compliance demo-run verify <run-id> [--project-root <dir>]` independently verifies one persisted demo run and emits a canonical `ComplianceVerificationReport`.
-- `g8e compliance evidence-graph verify --demo-run <run-id> --eval-run <run-id>` imports and validates persisted runs as one typed content-addressed graph.
-- `g8e compliance report generate --scope <scope.json> [--demo-run <run-id>] [--eval-run <run-id>] [--source <operational-source-dir>] [standalone source flags] --report-id <report-id> [--profile <public|restricted>] --signing-metadata <path> --signing-private-key <path> [--evidence-trust <path>]` imports only sources admitted by the protected `AssessmentScope`, copies exact source bytes into admission-local protected paths, grades the evidence, constructs canonical analysis and framework profiles, renders every supported format, signs the complete bundle, persists it under the runtime report tree, and prints the descriptor path. Generation defaults to `restricted`; `--profile public` fails when any protected source admission is not affirmatively classified public. The scope supplies the assessment window and assessment-as-of time; source trust remains separate and signed standalone sources require the external assessed evidence trust input during generation.
-- `g8e compliance report verify <bundle-manifest.json> --trust-policy <assessed-report-trust.json> [--evidence-trust <assessed-evidence-trust.json>]` verifies protected scope and source bodies, directory inventory, signed roots, external assessed trust, independent source replay, protected analysis equality, and profile-aware deterministic renderer reproduction offline and emits a canonical `ComplianceVerificationReport`. Evidence trust is required whenever commitment or customer or assessor attestation evidence is represented.
-- `g8e compliance release-evidence <bundle-manifest.json> --trust-policy <assessed-report-trust.json> [--evidence-trust <assessed-evidence-trust.json>] --out <release-directory>` accepts only an independently verified public bundle, derives the version from its protected scope, and copies its canonical public Markdown and CSV. These release projections allowlist assessment outcomes, coverage, content-addressed proof digests, verifier identities, and diagnostic summaries; they omit source-local identities, runtime paths, free-form diagnostics, limitations, and source bodies.
+- `g8e compliance evidence-graph verify --demo-run <run-id> [--eval-run <run-id>]` imports and validates persisted runs as one typed content-addressed graph.
+- `g8e compliance evidence export [--demo-run <run-id>] [--eval-run <run-id>]` exports persisted evidence artifacts.
+- `g8e compliance report generate --scope <scope.json> [--demo-run <run-id>]... [--eval-run <run-id>]... [--operational-source <dir>]... [--report-id <id>] [--profile restricted|public] --signing-metadata <path> --signing-private-key <path> [--evidence-trust <path>]` imports sources admitted by the protected `AssessmentScope`, copies exact source bytes into admission-local protected paths, grades the evidence, constructs canonical analysis and framework profiles, renders every supported format, signs the complete bundle, persists it under the runtime report tree, and prints the descriptor path. Generation defaults to `restricted`; `--profile public` fails when any protected source admission is not affirmatively classified public. The scope supplies the assessment window and assessment-as-of time; source trust remains separate and signed standalone sources require the external assessed evidence trust input during generation.
+- `g8e compliance report verify <bundle> --trust-policy <trust-policy.json> [--evidence-trust <evidence-trust.json>]` verifies protected scope and source bodies, directory inventory, signed roots, external assessed trust, independent source replay, protected analysis equality, and profile-aware deterministic renderer reproduction offline and emits a canonical `ComplianceVerificationReport`. Evidence trust is required whenever commitment or customer or assessor attestation evidence is represented.
+- `g8e compliance release-evidence <bundle> --trust-policy <trust-policy.json> [--evidence-trust <evidence-trust.json>] --out <release-directory>` accepts only an independently verified public bundle, derives the version from its protected scope, and copies its canonical public Markdown and CSV. These release projections allowlist assessment outcomes, coverage, content-addressed proof digests, verifier identities, and diagnostic summaries; they omit source-local identities, runtime paths, free-form diagnostics, limitations, and source bodies.
 - `g8e compliance release-prepare --signing-metadata <path> --signing-private-key <path> [--new-key] [--project-root <runtime-root>] [--repo-root <repo>] [--window-start <rfc3339> --window-end <rfc3339>]` runs the release-preparation sequence for the version in `VERSION`. It builds the protected `AssessmentScope` (product version, `git` HEAD, the running Gateway image digest, and an assessment window that defaults to the newest ledger commitment and the preceding `--window-span`), exports the bounded operational evidence for that window from the runtime database, and derives the external report trust policy from the signing identity and the external source-evidence trust policy from the signer keys present in the exported receipts, persistence attestations, deterministic stages, and commitments. It then generates a public bundle, verifies it offline against those policies, and projects the verified bundle into `docs/release_notes/vX.Y.x/`. Scope, trust policies, and the source export are written under `<project-root>/release-evidence/<version>/`, outside the bundle. The trust policies record a first-party engineering assessment with the assessor set by `--assessor`; they never confer external attestation. An existing signing key is reused and rejected when outside its validity interval; `--new-key` creates one and refuses to overwrite. Context that is not captured as a content-addressed artifact, such as network topology, configuration, doctrine bundles, and trust anchors, is declared unavailable in the scope rather than omitted.
 
 ---
@@ -268,29 +266,28 @@ The compliance CLI exposes evaluation, evidence-graph verification, demo verific
 | Compliance catalogs | `protocol/constants/compliance/`, `internal/services/compliance/catalog/` | Digest-verified assertion, framework, crosswalk, and demo-scenario definitions with fail-closed validation |
 | Evidence import and verification | `internal/services/compliance/evidence/` | Read-only typed importers, content-addressed evidence graph validation, cryptographic verification, assertion and framework grading, canonical analysis, and deterministic framework profiles |
 | Compliance report service | `internal/services/compliance/report/` | Canonical analysis orchestration and shared JSON, CSV, OSCAL, Markdown, HTML, and CLI rendering |
-| Compliance CLI | `internal/cli/cmd/compliance.go` | KSI evaluation/history, overlay validation, demo verification, evidence-graph verification, release evidence, and canonical report generation |
+| Compliance CLI | `internal/cli/cmd/compliance/` | KSI evaluation/history, overlay validation, demo verification, evidence-graph verification, release evidence, and canonical report generation |
 | KSI evaluator | `internal/services/compliance/ksi_evaluator.go` | Scope-bound KSI outcomes from typed cryptographic, grader, state, commitment, ledger, and historical evidence methods |
 | KSI history store | `internal/services/compliance/ksi_history.go` | KSI snapshot persistence and historical metrics retention |
 | COSAiS overlay loader | `internal/services/compliance/overlay_loader.go` | AI control overlay ingestion and KSI reference validation |
 | OSCAL renderer | `internal/services/compliance/oscal.go` | Deterministic OSCAL component-definition and assessment-results generation from canonical analysis with resolvable content-addressed evidence resources |
 | Receipt evidence resolution | `internal/tools/agent_harness/scenarios/receipt_evidence.go` | Canonical receipt query, final-persistence waiting, signature verification, and content-addressed evidence propagation |
 | Protocol-chain grader | `internal/tools/agent_harness/scenarios/protocol_chain_grader.go` | Deterministic-stage normalization and protocol-chain grading |
-| Demo manifest builder | `internal/cli/cmd/demo_manifest.go` | Typed `DemoManifest` construction, provenance hashing, and canonical persistence |
-| Demo evidence persistence | `internal/cli/cmd/demo_evidence_persist.go` | Canonical receipt and persistence body persistence as resolvable runtime evidence artifacts |
+| Demo manifest builder | `internal/cli/cmd/demos/demo_manifest.go` | Typed `DemoManifest` construction, provenance hashing, and canonical persistence |
+| Demo evidence persistence | `internal/cli/cmd/demos/demo_evidence_persist.go` | Canonical receipt and persistence body persistence as resolvable runtime evidence artifacts |
 
 ### Test evidence
 
 | Test suite | Location | Coverage |
 |------------|----------|----------|
-| Compliance catalog tests | `internal/services/compliance/catalog/*_test.go` | Canonical catalog digests, reference contracts, crosswalk consistency, and validation |
-| Compliance evidence tests | `internal/services/compliance/evidence/*_test.go` | Demo evidence verification, tamper detection, and fail-closed mutation cases |
-| Demo-run verifier CLI tests | `internal/cli/cmd/compliance_demo_run_verify_test.go` | Verifier acceptance, argument validation, fail-closed reporting, and factory-error regression |
-| Demo manifest tests | `internal/cli/cmd/demo_manifest_evidence_test.go` | Manifest construction, provenance hashing, framework control union, and canonical persistence |
-| Demo receipt evidence tests | `internal/cli/cmd/demo_receipt_evidence_persist_test.go` | Canonical receipt and persistence body persistence and content-address resolvability |
-| Receipt evidence signature tests | `internal/tools/agent_harness/scenarios/receipt_evidence_signature_verification_test.go` | Independent receipt and persistence signature verification against assessed signer keys |
-| Protocol-chain grader tests | `internal/tools/agent_harness/scenarios/protocol_chain_grader_test.go` | Deterministic-stage normalization, verified and rejected chain validation, and required-stage grading |
-| Python compliance suite | `protocol/python/tests/test_compliance.py` | Canonicalization vector match, non-canonical JSON rejection, Phase 1 and Phase 2 records, and packaged catalog byte parity |
-| Phase 0 regression and inventory | `internal/services/compliance/*_phase0_test.go`, `internal/services/compliance/compliance_claim_inventory_test.go`, `internal/services/compliance/ksi_method_classification_test.go` | Baseline gap documentation, claim inventory, and KSI method classification |
+| Compliance catalog tests | `internal/services/compliance/catalog/` | Canonical catalog digests, reference contracts, crosswalk consistency, and validation |
+| Compliance evidence tests | `internal/services/compliance/evidence/` | Demo evidence verification, tamper detection, and fail-closed mutation cases |
+| Demo-run verifier CLI tests | `internal/cli/cmd/compliance/` | Verifier acceptance, argument validation, fail-closed reporting, and factory-error regression |
+| Demo manifest and evidence tests | `internal/cli/cmd/demos/` | Manifest construction, provenance hashing, framework control union, receipt and persistence body persistence, and content-address resolvability |
+| Receipt evidence signature tests | `internal/tools/agent_harness/scenarios/` | Independent receipt and persistence signature verification against assessed signer keys |
+| Protocol-chain grader tests | `internal/tools/agent_harness/scenarios/` | Deterministic-stage normalization, verified and rejected chain validation, and required-stage grading |
+| Python compliance suite | `protocol/python/tests/` | Canonicalization vector match, non-canonical JSON rejection, and packaged catalog byte parity |
+| KSI evaluation and inventory | `internal/services/compliance/` | KSI evaluator integration, claim inventory, KSI method classification, and Phase 0 baseline gap documentation |
 
 ---
 
@@ -314,6 +311,7 @@ For compliance evidence questions, audit support, or independent verification as
 | 2.1.6 | 2026-09-07 | Lateralus Labs | Reconciled completed evidence-graph, KSI, canonical analysis, OSCAL, shared renderer, control-section, and framework-profile capabilities; retained complete signed bundles, recurring effectiveness, and expanded frameworks as outstanding work |
 | 2.1.7 | 2026-09-08 | Lateralus Labs | Completed protected demo, eval, KSI, commitment, attestation, audit, ledger, and build/configuration source replay; documented distinct external report and evidence trust, fail-closed offline verification, and the remaining clean-environment, eval-native, recurring-effectiveness, and framework limits |
 | 2.1.8 | 2026-09-18 | Lateralus Labs | Documented v2.1.8 eval-native campaign infrastructure (production chat-path scoring through g8ee, campaign verify/publish, observe publication, bounded R0 campaign); refined outstanding work to compliance-report eval release gates, recurring effectiveness, expanded frameworks, manual-notary real-topology runs, and the init-campaign qualification matrix |
+| 2.2.3 | 2026-09-28 | Lateralus Labs | Updated for v2.2.x release cycle; integrated evaluation campaigns with compliance pipeline in v2.2.0; refined CLI command descriptions to match actual implementation; corrected code and test file locations; updated roadmap and outstanding work list |
 
 ---
 

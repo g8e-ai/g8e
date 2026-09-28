@@ -1,9 +1,9 @@
 # Compliance Alignment
 
-**Document Version:** 2.1.12
-**Last Updated:** 2026-09-23
-**Platform:** g8e v2.1.12
-**Maintained by:** Lateralus Labs, LLC.
+**Document Version:** 2.2.3
+**Last Updated:** 2026-09-28
+**Platform:** g8e v2.2.3
+**Maintained by:** Security and Compliance Team
 
 ## Purpose and claim boundary
 
@@ -27,7 +27,7 @@ The JSON catalogs are canonical compact documents with embedded identities, vers
 
 ## Maintained framework scope
 
-The canonical framework catalog and reviewed crosswalk currently cover FedRAMP 20x CR26 and NIST SP 800-53 Rev. 5. Their exact framework versions, controls, support classifications, responsibilities, and mappings are defined in the framework catalog and crosswalk linked above.
+The canonical framework catalog (version 1.0.0) and reviewed crosswalk (version 1.0.0) currently cover FedRAMP 20x CR26 and NIST SP 800-53 Rev. 5. Their exact framework versions, controls, support classifications, responsibilities, and mappings are defined in the framework catalog and crosswalk linked above. The assertion catalog (version 2.0.0) and demo scenario catalog (version 1.1.0) provide the technical evidence basis for compliance evaluations.
 
 SOC 2 Trust Services Criteria, ISO/IEC 27001, HIPAA Security Rule, PCI DSS, GDPR, NIST SP 800-63B, and NSA Zero Trust Implementation Guidelines do not yet have reviewed canonical catalogs and crosswalks in this repository. g8e therefore does not emit framework-control assessments or framework profiles for them. Architecture features may be relevant to those standards, but relevance is not a machine-evaluated control outcome and is not presented as one here.
 
@@ -35,15 +35,15 @@ SOC 2 Trust Services Criteria, ISO/IEC 27001, HIPAA Security Rule, PCI DSS, GDPR
 
 The proof-backed reporting path separates collection, verification, grading, analysis, profiling, and rendering:
 
-1. Read-only importers decode persisted demo, eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence.
+1. Read-only importers decode persisted demo, eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence through registered evidence importers.
 2. The evidence graph validates canonical digests, content addresses, references, prohibited cycles, assessed trust, encryption metadata, freshness, and scope, run, attempt, scenario, transaction, and evidence-window binding.
-3. `assertion_assessment@2.2.0` evaluates each selected subject independently from verified, scope-bound evidence, enforces compatible run, attempt, scenario, and transaction bindings, derives achieved evidence strength from reproduced checks, and preserves known negative measurements when other selected subjects are unavailable.
-4. `framework_assessment@1.0.0` projects assertion assessments through the reviewed crosswalk without changing the underlying assertion outcomes.
-5. `BuildComplianceAnalysis` creates the canonical cross-framework analysis, including evidence-window completeness, gaps, evidence links, limitations, findings, remediation, evidence resources, and explicit responsibility and outcome sections.
-6. `BuildFrameworkProfiles` projects the canonical control assessments into one deterministic profile per catalog framework without re-grading or changing their outcomes.
-7. The shared renderer emits canonical JSON, CSV, OSCAL JSON, Markdown, HTML, and CLI views from the same analysis.
+3. Assertion assessment evaluates each selected subject independently from verified, scope-bound evidence, enforces compatible run, attempt, scenario, and transaction bindings, derives achieved evidence strength from reproduced grader and verifier checks, and preserves known negative measurements when other selected subjects are unavailable.
+4. Framework assessment projects assertion assessments through the reviewed crosswalk without changing the underlying assertion outcomes, preserving partial, supporting, and full mapping distinctions.
+5. [BuildComplianceAnalysis](../../internal/services/compliance/evidence/analysis_builder.go) creates the canonical cross-framework analysis, including evidence-window completeness, gaps, evidence links, limitations, findings, remediation, evidence resources, and explicit responsibility and outcome sections.
+6. [BuildFrameworkProfiles](../../internal/services/compliance/evidence/framework_profile.go) projects the canonical control assessments into one deterministic profile per catalog framework without re-grading or changing their outcomes.
+7. The shared [renderer](../../internal/services/compliance/report/renderer.go) emits canonical JSON, CSV, OSCAL JSON, Markdown, HTML, and CLI views from the same analysis.
 
-Implementation boundaries are in [`internal/services/compliance/evidence/`](../../internal/services/compliance/evidence/), [`internal/services/compliance/report/`](../../internal/services/compliance/report/), and [`internal/services/compliance/oscal.go`](../../internal/services/compliance/oscal.go). The [Proof-Backed Compliance Evidence](./compliance-evidence.md) reference explains evidence levels, persisted evidence, independent verification, and remaining bundle work.
+Implementation boundaries are in [internal/services/compliance/evidence/](../../internal/services/compliance/evidence/) (assertion and framework assessment, analysis and profile building), [internal/services/compliance/report/](../../internal/services/compliance/report/) (bundle generation, signing, verification, and rendering), [internal/services/compliance/catalog/](../../internal/services/compliance/catalog/) (catalog loading and validation), and [internal/services/compliance/oscal.go](../../internal/services/compliance/oscal.go) (OSCAL profile generation). The [Proof-Backed Compliance Evidence](./compliance-evidence.md) reference explains evidence levels, persisted evidence, independent verification, and evidence graph semantics.
 
 ## Status semantics
 
@@ -103,6 +103,25 @@ g8e compliance demo-run verify <run-id>
 
 Assessment results belong in generated artifacts, not this document. The repository currently retains these generated release-evidence projections:
 
+**v2.2.x releases:**
+- [v2.2.3 release evidence (Markdown)](../release_notes/v2.2.x/v2.2.3-compliance-evidence.md)
+- [v2.2.3 release evidence (CSV)](../release_notes/v2.2.x/v2.2.3-compliance-evidence.csv)
+- [v2.2.2 release evidence (Markdown)](../release_notes/v2.2.x/v2.2.2-compliance-evidence.md)
+- [v2.2.2 release evidence (CSV)](../release_notes/v2.2.x/v2.2.2-compliance-evidence.csv)
+- [v2.2.1 release evidence (Markdown)](../release_notes/v2.2.x/v2.2.1-compliance-evidence.md)
+- [v2.2.1 release evidence (CSV)](../release_notes/v2.2.x/v2.2.1-compliance-evidence.csv)
+- [v2.2.0 release evidence (Markdown)](../release_notes/v2.2.x/v2.2.0-compliance-evidence.md)
+- [v2.2.0 release evidence (CSV)](../release_notes/v2.2.x/v2.2.0-compliance-evidence.csv)
+
+**v2.1.x releases:**
+- [v2.1.13 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.13-compliance-evidence.md)
+- [v2.1.13 release evidence (CSV)](../release_notes/v2.1.x/v2.1.13-compliance-evidence.csv)
+- [v2.1.12 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.12-compliance-evidence.md)
+- [v2.1.12 release evidence (CSV)](../release_notes/v2.1.x/v2.1.12-compliance-evidence.csv)
+- [v2.1.11 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.11-compliance-evidence.md)
+- [v2.1.11 release evidence (CSV)](../release_notes/v2.1.x/v2.1.11-compliance-evidence.csv)
+- [v2.1.10 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.10-compliance-evidence.md)
+- [v2.1.10 release evidence (CSV)](../release_notes/v2.1.x/v2.1.10-compliance-evidence.csv)
 - [v2.1.9 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.9-compliance-evidence.md)
 - [v2.1.9 release evidence (CSV)](../release_notes/v2.1.x/v2.1.9-compliance-evidence.csv)
 - [v2.1.8 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.8-compliance-evidence.md)
@@ -114,7 +133,6 @@ Assessment results belong in generated artifacts, not this document. The reposit
 - [v2.1.5 release evidence (CSV)](../release_notes/v2.1.x/v2.1.5-compliance-evidence.csv)
 - [v2.1.4 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.md)
 - [v2.1.4 release evidence (CSV)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.csv)
-- [Current public README evidence index](../evidence/readme/current/index.json)
 
 The retained historical release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs. They predate the current signed report-bundle projection path and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. New release projections are generated only from a verified public bundle and carry the protected assessment scope's release version, analysis identity, source limitations, and claim boundaries; later evidence does not rewrite an earlier result.
 
