@@ -48,6 +48,7 @@ All fields are optional but try to populate each one.
 
 CONVERSATION_HISTORY_LIMIT = 20
 FALLBACK_TEXT_LIMIT = 2000
+PAST_MEMORIES_LIMIT = 10
 
 
 class MemoryGenerationService:
@@ -83,6 +84,21 @@ class MemoryGenerationService:
         existing = await self._memory_crud.get_memory(investigation_id)
         is_new = existing is None
 
+        # Retrieve recent past memories for this user (5-10 back) as baseline context
+        past_memories: list[InvestigationMemory] = []
+        if investigation.user_id:
+            try:
+                raw_past = await self._memory_crud.get_user_memories(
+                    investigation.user_id, limit=PAST_MEMORIES_LIMIT
+                )
+                past_memories = [m for m in raw_past if m.investigation_id != investigation_id]
+            except Exception as exc:
+                logger.warning(
+                    "Failed to fetch past user memories for %s: %s",
+                    investigation.user_id,
+                    exc,
+                )
+
         if not conversation_history:
             logger.info(
                 "Skipping AI memory update for %s: no conversation history",
@@ -95,12 +111,18 @@ class MemoryGenerationService:
             return memory, None
 
         if is_new:
+            latest_past = past_memories[0] if past_memories else None
             memory = InvestigationMemory(
                 case_id=investigation.case_id,
                 investigation_id=investigation.id,
                 user_id=investigation.user_id,
                 status=investigation.status,
                 case_title=investigation.case_title,
+                communication_preferences=latest_past.communication_preferences if latest_past else "",
+                technical_background=latest_past.technical_background if latest_past else "",
+                response_style=latest_past.response_style if latest_past else "",
+                problem_solving_approach=latest_past.problem_solving_approach if latest_past else "",
+                interaction_style=latest_past.interaction_style if latest_past else "",
             )
         else:
             logger.info(
@@ -118,6 +140,7 @@ class MemoryGenerationService:
             memory,
             conversation_history,
             settings,
+            past_memories=past_memories,
             g8e_context=g8e_context,
         )
         memory.status = investigation.status
@@ -148,9 +171,12 @@ class MemoryGenerationService:
         conversation_history: list[ConversationHistoryMessage],
         settings: G8eeUserSettings,
         *,
+        past_memories: list[InvestigationMemory] | None = None,
         g8e_context: G8eHttpContext | None = None,
     ) -> ModelCallTelemetry | None:
-        contents = self._conversation_to_contents(conversation_history, memory)
+        contents = self._conversation_to_contents(
+            conversation_history, memory, past_memories=past_memories
+        )
 
         memory_persona = get_agent_persona("codex")
         system_instructions = f"{memory_persona.get_system_prompt()}\n\nYou are analyzing a technical support conversation for case: {memory.case_title}."
@@ -281,11 +307,38 @@ class MemoryGenerationService:
     def _conversation_to_contents(
         conversation_history: list[ConversationHistoryMessage],
         memory: InvestigationMemory,
+        past_memories: list[InvestigationMemory] | None = None,
     ) -> list[types.Content]:
         contents: list[types.Content] = []
 
+        # Add past memories context if present (5-10 recent memories for baseline context)
+        past_context = ""
+        if past_memories:
+            past_lines = []
+            for i, pm in enumerate(past_memories[:PAST_MEMORIES_LIMIT], 1):
+                attrs = []
+                if pm.technical_background:
+                    attrs.append(f"technical: {pm.technical_background}")
+                if pm.communication_preferences:
+                    attrs.append(f"communication: {pm.communication_preferences}")
+                if pm.interaction_style:
+                    attrs.append(f"interaction: {pm.interaction_style}")
+                if pm.response_style:
+                    attrs.append(f"response: {pm.response_style}")
+                if pm.problem_solving_approach:
+                    attrs.append(f"approach: {pm.problem_solving_approach}")
+                if attrs:
+                    past_lines.append(f"- Past memory {i} ({pm.case_title or 'Investigation'}): {'; '.join(attrs)}")
+            if past_lines:
+                past_context = (
+                    "RECENT PAST MEMORIES (for context on user temperature and knowledge baseline):\n"
+                    + "\n".join(past_lines)
+                    + "\n\n"
+                )
+
         # Add existing memory context first
         memory_context = (
+            f"{past_context}"
             f"CURRENT MEMORY STATE:\n"
             f"Investigation Summary: {memory.investigation_summary or 'None'}\n"
             f"Technical Background: {memory.technical_background or 'None'}\n"
