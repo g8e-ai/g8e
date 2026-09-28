@@ -79,11 +79,11 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			authContext, err := deps.authLoader(nil, cfg)
+			authContext, err := deps.authLoader(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("evaluation: load CLI identity: %w", err)
 			}
@@ -196,11 +196,11 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			model = args[0]
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			authContext, err := deps.authLoader(nil, cfg)
+			authContext, err := deps.authLoader(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("evaluation: load CLI identity: %w", err)
 			}
@@ -265,7 +265,6 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-
 func inferenceEvalAppClientFrom(cfg *config.Config, authContext *auth.ClientAuthContext, clientFactory func(harnessconfig.Config) (*harnessclient.Client, error)) (*harnessclient.Client, error) {
 	certFile, keyFile, err := resolveInferenceProbeAppCredentials(nil, cfg)
 	if err != nil {
@@ -324,30 +323,6 @@ func parseInferenceAcceptanceCases(raw string) ([]evaluation.InferenceAcceptance
 	return caseIDs, nil
 }
 
-func inferenceEvalGatewayClient(cmd *cobra.Command, deps inferenceEvalDeps) (*config.Config, fs.RuntimeFileService, *auth.ClientAuthContext, *harnessclient.Client, error) {
-	projectRoot, err := cmd.Flags().GetString("project-root")
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("evaluation: read project root: %w", err)
-	}
-	cfg, err := deps.configLoader(projectRoot)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("evaluation: load config: %w", err)
-	}
-	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, slog.Default())
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-	}
-	authContext, err := deps.authLoader(fileSvc, cfg)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("evaluation: load CLI identity: %w", err)
-	}
-	client, err := deps.clientFactory(nativeEvalClientConfig(cfg, authContext))
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("evaluation: initialize gateway client: %w", err)
-	}
-	return cfg, fileSvc, authContext, client, nil
-}
-
 func inferenceEvalAppClient(cfg *config.Config, fileSvc fs.RuntimeFileService, authContext *auth.ClientAuthContext, deps inferenceEvalDeps) (*harnessclient.Client, error) {
 	certFile, keyFile, err := resolveInferenceProbeAppCredentials(fileSvc, cfg)
 	if err != nil {
@@ -400,23 +375,4 @@ func parseInferenceProbeRole(role string) (models.InferenceModelRole, error) {
 	default:
 		return models.InferenceModelRoleUnspecified, constants.ErrInferenceRoleInvalid
 	}
-}
-
-func loadRegistryFreezeFile(path string) (*evaluation.ModelRegistryFreeze, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: read registry file: %w", err)
-	}
-	var payload struct {
-		CampaignID string                              `json:"campaign_id"`
-		Digest     string                              `json:"model_registry_digest"`
-		Variants   []*operatorv1.InferenceModelVariant `json:"variants"`
-	}
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, fmt.Errorf("evaluation: decode registry file: %w", err)
-	}
-	if payload.CampaignID == "" || payload.Digest == "" || len(payload.Variants) == 0 {
-		return nil, fmt.Errorf("evaluation: registry file: %w", constants.ErrInferenceModelRegistryInvalid)
-	}
-	return &evaluation.ModelRegistryFreeze{CampaignID: payload.CampaignID, Digest: payload.Digest, Variants: payload.Variants}, nil
 }

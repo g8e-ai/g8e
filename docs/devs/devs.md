@@ -3,8 +3,8 @@ doc_id: devs
 title: Developer Guidelines
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-26
-version: v2.2.0
+last_updated: 2026-09-28
+version: v2.2.3
 owners:
   - go.mod
   - Makefile

@@ -179,8 +179,6 @@ func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-
-
 func boundaryEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "list",

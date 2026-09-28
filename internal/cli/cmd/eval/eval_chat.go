@@ -30,7 +30,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 const chatAcceptTracePollInterval = 2 * time.Second
@@ -85,11 +84,11 @@ func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates chat: %w", err)
 			}
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
-			authContext, err := deps.authLoader(nil, cfg)
+			authContext, err := deps.authLoader(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("evaluation: load CLI identity: %w", err)
 			}
@@ -379,36 +378,6 @@ func chatEvalWaitForTraceWithPoll(
 		case <-ticker.C:
 		}
 	}
-}
-
-type chatRegistrySelection struct {
-	CampaignID  string
-	Digest      string
-	Variants    []*operatorv1.InferenceModelVariant
-	ModelDigest string
-}
-
-func chatEvalLoadRegistry(campaignID, registryDigest, registryFile, model string) (*chatRegistrySelection, error) {
-	if registryFile != "" {
-		freeze, err := loadRegistryFreezeFile(registryFile)
-		if err != nil {
-			return nil, err
-		}
-		variant, err := freeze.LookupModelVariant(model)
-		if err != nil {
-			return nil, fmt.Errorf("evaluation: chat accept: lookup model variant: %w", err)
-		}
-		return &chatRegistrySelection{
-			CampaignID:  freeze.CampaignID,
-			Digest:      freeze.Digest,
-			Variants:    freeze.Variants,
-			ModelDigest: variant.GetDigest(),
-		}, nil
-	}
-	if campaignID == "" || registryDigest == "" {
-		return nil, fmt.Errorf("evaluation: chat accept: set --registry-file or both --campaign-id and --registry-digest")
-	}
-	return nil, fmt.Errorf("evaluation: chat accept: model digest lookup requires --registry-file")
 }
 
 func chatEvalEnvironment(cmd *cobra.Command, deps chatEvalDeps) (*config.Config, fs.RuntimeFileService, *auth.ClientAuthContext, error) {

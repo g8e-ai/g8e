@@ -419,13 +419,17 @@ func importOperationalAuditChainEntries(ctx context.Context, importer *Operation
 		if err != nil {
 			return nil, nil, fmt.Errorf("%w: parse audit chain timestamp: %w", constants.ErrEvidenceArtifactMalformed, err)
 		}
+		producerIdentity := chainEntry.OperatorSessionID
+		if producerIdentity == "" {
+			producerIdentity = importer.admission.GetAdmissionId()
+		}
 		nodes = append(nodes, EvidenceNode{
 			ArtifactID:         entry.ArtifactID,
 			ArtifactType:       ArtifactTypeAuditChainEntry,
 			SHA256:             entry.SHA256,
 			MediaType:          constants.MediaTypeJSON,
 			SchemaRef:          "g8e.storage.AuditChainSegmentEntry",
-			ProducerIdentity:   chainEntry.OperatorSessionID,
+			ProducerIdentity:   producerIdentity,
 			ProducedAt:         producedAt.UTC(),
 			ScopeID:            importer.scopeID,
 			RunID:              importer.admission.GetRunId(),

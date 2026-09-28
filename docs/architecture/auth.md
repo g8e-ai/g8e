@@ -1,137 +1,161 @@
-# Authentication & Authorization
+---
+doc_id: auth
+title: Authentication & Authorization Architecture
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - internal/services/gateway/
+  - internal/cli/cmd/auth/
+  - internal/cli/cmd/operator/
+  - internal/constants/auth.go
+  - internal/models/auth.go
+  - internal/adapters/lattice/auth.go
+related:
+  - docs/architecture/gateway.md
+  - docs/architecture/governance.md
+  - docs/architecture/network.md
+  - docs/architecture/operator.md
+  - docs/devs/troubleshooting.md
+when_to_read: Implementing authentication or authorization logic, reviewing security posture, auditing route admission, or understanding identity binding and session lifecycle.
+do_not_use_for:
+  - WebAuthn ceremony mechanics (see [passkey_enrollment.go](../../internal/cli/auth/passkey_enrollment.go))
+  - Encryption at rest and vault operation (docs/architecture/encryption.md)
+  - Five-layer transaction verification (docs/architecture/governance.md)
+  - PKI hierarchy and SPIFFE identity format (docs/architecture/network.md)
+---
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+# Authentication & Authorization Architecture
 
-## Overview
+## Purpose
 
-g8e separates authentication from authorization. Authentication establishes the principal making a request through an mTLS workload certificate, a browser session created by WebAuthn, or a JWT from a configured identity provider. JWT authentication is limited to the explicitly wrapped external MCP and A2A surfaces, plus JWT-authenticated just-in-time passkey registration; it does not create a general browser session or unlock administrative routes. Authorization determines whether that principal may use a route and whether a governed transaction has the proofs required by the active governance posture.
+Documents how g8e separates authentication (establishing principal identity) from authorization (determining whether that principal may use a route or govern a transaction). Defines route classification, identity binding, session lifecycle, and the integration points between CLI, browser, workload, and governance layers.
 
-The Gateway exposes a deliberately classified public surface for health checks, trust discovery, first-user bootstrap, browser passkey ceremonies, and token-scoped CLI or platform enrollment discovery. The plain HTTP listener serves only health, discovery, and enrollment initiation/completion; other paths redirect to HTTPS. Governed execution and administrative operations require an authenticated identity. Unknown HTTPS routes default to mTLS authentication, so an unclassified route does not become public.
+## Quick index
 
-Every governed transaction travels in a typed `GovernanceEnvelope` and passes through the five-layer interlock. L1, L4, and L5 always apply. L2 Consensus and L3 Notary are enforced or audited according to the active posture. See [Governance](./governance.md) for the complete transaction pipeline.
+- [Purpose](#purpose)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-## Route Authentication
+Key concepts: [Route classification](#route-classification), [CLI lifecycle](#cli-enrollment-and-rotation), [Browser sessions](#browser-passkey-authentication), [Workload enrollment](#platform-workload-enrollment), [Identity binding](#identity-and-session-binding).
 
-The Gateway's unified middleware classifies routes as public, mTLS-only, browser-session-only, or dual-authentication. Dual-authentication routes try mTLS first and otherwise validate the secure browser-session cookie. The registry matches exact paths before prefixes, chooses the longest matching prefix, and applies mTLS to unknown paths as a fail-closed default. The TLS listener requests but does not require a client certificate at handshake time so browser clients can reach public and browser-session routes; application middleware enforces the route's actual requirement.
+## Invariants
 
-Browser-session routes validate the `g8e_web_session_cookie` against the Gateway's persisted web-session record and derive the user and session IDs from that record. mTLS routes validate certificate revocation and extract CLI, Operator, or application identity from the certificate's SPIFFE URI SAN and associated session or policy state. A caller-supplied identity header cannot replace that authenticated identity. Platform-enrollment review and decision routes accept either an authenticated browser session or an enrolled CLI certificate; SSE consumer routes accept either as well, while SSE producer and administrative routes remain mTLS-only.
+Ids are stable. Append the next free number within each group; do not renumber.
 
-## Authentication Methods
+### Identity and authentication (`INV-AUTH-ID`)
 
-| Principal | Credential | Primary use |
+| ID | Rule |
+| --- | --- |
+| INV-AUTH-ID-01 | Every authenticated request carries a principal extracted from the authenticated transport (mTLS certificate SPIFFE URI SAN, validated browser session cookie, or verified JWT). A caller-supplied identity header cannot replace that transported identity. |
+| INV-AUTH-ID-02 | SPIFFE identity URIs bind user, CLI session, operator session, and application identities to certificate SANs. The gateway validates revocation and matches the certificate identity to the referenced server-side session before accepting a request. |
+| INV-AUTH-ID-03 | CLI sessions and certificates expire in 7 days. Web sessions expire in 24 hours. An expired certificate cannot authenticate; expired sessions require `g8e auth refresh`. |
+| INV-AUTH-ID-04 | CLI private keys and workload private keys are generated by the requesting component; they are not transmitted to the gateway. |
+
+### Route classification (`INV-AUTH-ROUTE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-AUTH-ROUTE-01 | Routes are classified as public, mTLS-only, browser-session-only, or dual-auth. The route registry matches exact paths before prefixes and applies mTLS to unknown HTTPS paths as a fail-closed default. |
+| INV-AUTH-ROUTE-02 | Public routes (health checks, trust discovery, bootstrap initiation) are exposed on plain HTTP without requiring authentication. |
+| INV-AUTH-ROUTE-03 | Unknown HTTPS routes require mTLS authentication by default; an unclassified route does not become public. |
+| INV-AUTH-ROUTE-04 | Dual-auth routes (platform enrollment review, SSE consumer routes) try mTLS first and otherwise validate the browser-session cookie. mTLS is preferred when a certificate is present. |
+
+### Session and certificate lifecycle (`INV-AUTH-SESSION`)
+
+| ID | Rule |
+| --- | --- |
+| INV-AUTH-SESSION-01 | Enrollment, recovery, rotation, and refresh decisions are made by comparing local credential state with gateway trust anchors and session validity. An offline identity can be inspected and reused; gateway discovery is best-effort. |
+| INV-AUTH-SESSION-02 | Reusing a CLI certificate is idempotent when the local certificate matches the gateway root, has an active session server-side, and is not expiring within 24 hours. No new certificate is issued. |
+| INV-AUTH-SESSION-03 | Certificate rotation issues exactly one replacement certificate and revokes the prior one. Rotation occurs automatically within 24 hours of expiry and can be forced with `--rotate-cli`. |
+| INV-AUTH-SESSION-04 | Session refresh (`g8e auth refresh`) uses the still-valid certificate as proof of identity to mint a replacement server-side session. It is the recovery path when the certificate is valid but the session is expired or missing. |
+
+### Operator binding (`INV-AUTH-OP-BIND`)
+
+| ID | Rule |
+| --- | --- |
+| INV-AUTH-OP-BIND-01 | The embedded operator is a binding record (not an enrollment lease) anchoring the first user's sessions. It holds no certificate and persists under the deterministic ID `embedded-operator`. |
+| INV-AUTH-OP-BIND-02 | First-user bootstrap claims the embedded-operator document, recording the user and operator session ID. The claim is the explicit human enrollment act. A same-user reclaim is idempotent; a different user's claim is rejected. |
+| INV-AUTH-OP-BIND-03 | Unified auth middleware stamps operator identity from the persisted session record, not from request headers. Headers that contradict the persisted binding are rejected. |
+| INV-AUTH-OP-BIND-04 | CLI session refresh and rotation preserve the prior session's operator binding. Recovery prefers the embedded operator's active session. |
+
+### External identity providers (`INV-AUTH-JWT`)
+
+| ID | Rule |
+| --- | --- |
+| INV-AUTH-JWT-01 | JWT authentication is scoped to explicitly wrapped external-client MCP and A2A surfaces. It does not grant access to arbitrary administrative routes. |
+| INV-AUTH-JWT-02 | RS256 signatures are verified using the token's key identifier from the configured JWKS. Issuer, audience, subject, and temporal constraints are validated. |
+| INV-AUTH-JWT-03 | The first valid JWT for a subject provisions an internal user. The configured role claim maps to an internal persona. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
 | --- | --- | --- |
-| Human CLI | ECDSA P-256 client certificate and CLI session | CLI commands, approval status, enrollment administration, MCP, and A2A |
-| Browser user | WebAuthn passkey and secure web-session cookie | Console access, passkey management, browser approvals, and enrollment decisions |
-| Governed Operator | Workload certificate and operator session | Outbound gateway connection, governed dispatch, and receipt return |
-| Platform application | Workload certificate | Dashboard, ensemble, and other owner-approved platform services |
-| Delegated agent | Short-lived application certificate bound to the requesting user | Agent-specific MCP and A2A activity |
-| External client | JWT validated through configured JWKS | MCP and A2A when external identity-provider authentication is enabled |
+| CLI auth commands | `internal/cli/cmd/auth/` | `./g8e auth --help` and subcommands |
+| Operator bind commands | `internal/cli/cmd/operator/operator_bind.go` | `./g8e operator bind --help` |
+| Gateway auth middleware | `internal/services/gateway/auth.go` and route registry | Route classification and admission logic |
+| CLI enrollment state machine | `internal/cli/auth/enrollment_coordinator.go` | Decision matrix and session binding |
+| Browser session validation | `internal/services/gateway/passkey_service_http.go` | WebAuthn and cookie handling |
+| Workload enrollment flow | `internal/services/gateway/app_enrollment_*.go` | CSR submission, approval, certificate issuance |
+| Identity models | `internal/models/auth.go` | User, CLI session, operator, application identity types |
+| Auth constants | `internal/constants/auth.go` | Session TTLs, cookie names, header constants, error reasons |
 
-The gateway also accepts either mTLS or a browser session on selected shared surfaces, including event consumption and platform enrollment review. It prefers mTLS when a client certificate is present.
+## Procedures
 
-## CLI Authentication
+### Route authentication
 
-### Enrollment Decisions
+The Gateway's unified middleware classifies routes and enforces authentication at admission time:
 
-Run `g8e auth enroll user` to establish or repair a local CLI identity. The command evaluates the complete local credential set, checks the live gateway trust anchor when reachable, and selects one action:
+- **Public routes** (health, trust discovery, enrollment initiation) require no credential. The plain HTTP listener serves only public routes and enrollment bootstrap; other paths redirect to HTTPS.
+- **mTLS-only routes** require a valid client certificate. The TLS listener requests but does not require a certificate at handshake so browser clients can reach public and browser-session routes; application middleware enforces the route's actual requirement.
+- **Browser-session routes** validate the `g8e_web_session_cookie` against the persisted web-session record and derive user and session IDs from that record.
+- **Dual-auth routes** try mTLS first and otherwise validate the browser-session cookie. mTLS is preferred when a client certificate is present.
+- **Unknown HTTPS routes** default to mTLS authentication as a fail-closed default.
+
+The route registry matches exact paths before prefixes and chooses the longest matching prefix. Certificate revocation is validated on mTLS routes. CLI, Operator, and application identity is extracted from the certificate's SPIFFE URI SAN and validated against the referenced session.
+
+### CLI enrollment and rotation
+
+The `g8e auth enroll user` command runs an enrollment state machine that inspects the local credential set, checks the gateway trust anchor when reachable, and selects one action:
 
 | Local and gateway state | Action |
 | --- | --- |
 | No local identity and no gateway user | Bootstrap the first owner and issue a CLI identity |
-| No local identity on an initialized gateway | Request human-approved recovery |
+| No local identity on an initialized gateway | Request human-approved recovery via Console or `g8e auth approve-recovery` |
 | Complete identity with a valid certificate, matching gateway root, and active session | Reuse the identity without issuing another certificate |
 | Complete identity with a certificate that expires within 24 hours | Rotate the certificate through authenticated mTLS |
-| Complete identity with an expired certificate or stale gateway root | Recover the identity, or bootstrap if the gateway is empty |
-| Partial, corrupt, or mismatched local credentials | Recover the identity, or bootstrap if the gateway is empty |
+| Complete identity with an expired certificate or stale gateway root | Recover the identity or bootstrap if the gateway is empty |
+| Partial, corrupt, or mismatched local credentials | Recover the identity or bootstrap if the gateway is empty |
 
-Live CA discovery is best-effort so an offline identity can still be inspected and reused. When discovery succeeds, a root mismatch prevents attempted reuse of a certificate issued by a different gateway PKI. A matching root with changed intermediate certificates allows the local trust bundle to be refreshed.
+The coordinator validates the certificate, key, session metadata, and gateway trust bundle as one managed credential set. OS trust installation runs before the browser passkey ceremony by default; failure during trust installation prevents the browser phase.
 
-Before reporting a reused identity as healthy, the CLI probes its server-side session when the gateway is reachable. An expired or missing session directs the user to `g8e auth refresh` instead of issuing a replacement certificate.
+Use `--no-system-trust` to skip OS trust installation when an administrator has pre-installed the gateway root CA. The flag does not skip passkey registration.
 
-### Interactive Enrollment
+Use `--headless` to create an mTLS-only CLI identity without opening a browser or modifying the operating-system trust store. On an empty gateway, the command bootstraps the first owner directly. On an initialized gateway, it prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run and waits for approval.
 
-The interactive flow performs these steps:
+Use `--rotate-cli` to force rotation while the existing certificate and session remain valid. Rotation issues one replacement certificate and revokes the prior certificate.
 
-1. Start the gateway, then run `g8e auth enroll user`.
-2. The CLI generates its private key and certificate signing request locally.
-3. An empty gateway creates the first owner. An initialized gateway requires approval of a time-limited recovery request by an authenticated user.
-4. The gateway issues a seven-day CLI certificate whose SPIFFE URI SAN binds the user and CLI session.
-5. The CLI validates and writes the certificate, key, session metadata, and gateway trust bundle as one managed credential set.
-6. Unless `--no-system-trust` is set, the CLI installs the gateway root CA in the operating-system trust store. When trust changes, the CLI asks the user to close all browser windows before continuing.
-7. The CLI opens the Console for a WebAuthn registration ceremony. A short-lived, one-time enrollment token binds the browser ceremony to the new CLI user and session without placing raw session identifiers in the URL.
+### CLI recovery, refresh, and refresh
 
-If browser launch fails during recovery, the CLI prints the approval URL for manual use. If passkey registration fails after the CLI credential set is issued, rerunning enrollment reuses the valid CLI identity and starts the passkey ceremony again.
+CLI recovery requests expire after 10 minutes. Approval comes from an authenticated Console session or from an enrolled CLI using `g8e auth approve-recovery <token>`. The token is one-time-use and opaque; completion requires proof that the recovering CLI controls the private key corresponding to its certificate request.
 
-The `--no-system-trust` flag skips only operating-system trust installation. It does not skip passkey registration and is appropriate only when an administrator already manages the gateway root CA. The CLI still uses its local trust bundle for mTLS.
+Run `g8e auth refresh` when the CLI certificate is still valid but its server-side session is expired or missing. The gateway derives the user and prior session from the verified certificate, verifies that the user remains active, and creates a replacement session. Refresh requires an active operator binding; if none can be resolved, re-enroll.
 
-### Endpoint Overrides
+An expired certificate cannot authenticate to refresh; use `g8e auth enroll user` and complete recovery instead.
 
-Enrollment uses plain HTTP for trust discovery and unauthenticated bootstrap or recovery, then HTTPS for authenticated API calls and browser interaction. `--endpoint` (`-e`) selects the discovery host and optional HTTP port. `--port` selects the HTTPS port.
+Run `g8e auth logout` to remove the local CLI credentials, certificate, and private key. This does not revoke the gateway-side session or certificate and does not remove the shared gateway root CA from the operating-system trust store.
 
-For default ports, run `g8e auth enroll user`. For split Docker mappings, run `g8e auth enroll user -e localhost:<http-port> --port <https-port>`. When only `--endpoint` is supplied, both phases use that host and their configured default ports.
+### Browser passkey authentication
 
-### Headless Enrollment
+The Console uses WebAuthn passkeys for authentication. Platform authenticators (Windows Hello, Touch ID), roaming security keys, and synced passkeys satisfy the ceremony when they meet the relying-party policy. The Gateway's login assertion requests user verification as preferred rather than universally required.
 
-Run `g8e auth enroll user --headless` to create an mTLS-only CLI identity without opening a browser or changing the operating-system trust store. On an empty gateway, the command bootstraps the first owner directly. On an initialized gateway, it prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run and waits for that approval.
+The browser flow is:
 
-A headless identity can use CLI surfaces but has no browser session until a passkey is registered. The public Console bootstrap path permits only a user's first passkey. Additional passkeys can be registered by rerunning authenticated CLI enrollment, while listing and revocation require an authenticated browser session.
-
-### Recovery, Rotation, and Refresh
-
-CLI recovery requests expire after 10 minutes. Approval can come from an authenticated Console session or from an enrolled CLI using `g8e auth approve-recovery <token>`. The token is opaque and one-time-use, and completion requires proof that the recovering CLI controls the private key corresponding to its certificate request.
-
-CLI certificates and CLI sessions both have a seven-day lifetime. Enrollment rotates a certificate automatically within 24 hours of expiry, and `g8e auth enroll user --rotate-cli` forces rotation while the existing certificate and session remain valid. Rotation issues one replacement certificate and revokes the old certificate.
-
-Run `g8e auth refresh` when the CLI certificate is still valid but its server-side session is expired or missing. The gateway derives the user and prior session from the verified certificate, verifies that the user remains active, and creates a replacement session. Refresh requires an active operator binding; if none can be resolved, reenroll the CLI. An expired certificate cannot authenticate to refresh, so use `g8e auth enroll user` and complete recovery instead.
-
-### Authentication Context and Logout
-
-`g8e auth context` emits the local CLI identity, CLI and operator session binding, and certificate and key paths as typed JSON for automation. If local metadata lacks an operator binding, the command resolves the persisted binding through `GET /api/v1/auth/cli/session`, writes the returned pair back to local credentials, and fails closed with refresh guidance when the session reports no binding.
-
-### CLI Operator Session Binding
-
-`g8e operator bind` manages the authenticated CLI session's persisted operator binding independently of enrollment or refresh:
-
-| Subcommand | Purpose |
-| --- | --- |
-| `bind <operator-session-id>` | Pin the CLI session to one active operator session owned by the same user |
-| `bind list` | Show the operator currently bound to the CLI session |
-| `bind unbind` | Clear the operator binding from the CLI session |
-
-Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The gateway validates that the target operator session is active and belongs to the authenticated user, then issues a replacement CLI session server-side and returns the new `cli_session_id`. Local credentials are updated immediately. Re-binding to the same operator session is idempotent and does not rotate the CLI session.
-
-Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details before binding. Eval and chat automation paths can refresh stale bindings automatically; pass `--no-auto-refresh` on supported eval commands to skip that step.
-
-`g8e auth logout` removes the local CLI credentials, certificate, and private key. It does not revoke the gateway-side session or certificate, and it does not remove the shared gateway root CA from the operating-system trust store. Use gateway administration and certificate revocation when server-side invalidation is required.
-
-On Windows, interactive enrollment also imports the signed CLI certificate into the current user's certificate store. CLI private keys remain file-backed ECDSA P-256 keys on every platform.
-
-Browser-hosted frontend connection no longer uses a separate `auth enroll gui` command family. Run `./g8e gw connect <frontend-origin>` to validate the origin, configure WebAuthn and CORS, start or restart the Gateway with consent, install local trust when needed, and verify HTTPS and CORS against the running process. See [Build a g8e-Compatible Frontend](../guides/build_frontend.md) and [Connect a Lovable App](../guides/lovable.md).
-
-### Platform Enrollment Commands
-
-`g8e auth enroll` groups human CLI enrollment and platform workload enrollment review:
-
-| Subcommand | Purpose |
-| --- | --- |
-| `user` | Enroll or repair the local CLI identity |
-| `pending` | List pending platform workload enrollment requests |
-| `approve <request-id>` | Approve a pending request |
-| `deny <request-id>` | Deny a pending request |
-| `revoke <request-id>` | Revoke the identity issued by a completed request |
-
-`pending`, `approve`, `deny`, and `revoke` use the enrolled host CLI identity over mTLS. They accept request IDs only; requester tokens, CSRs, and certificates never pass through these commands. Decision and revocation commands support `--yes` for non-interactive automation and `--reason` for an optional bounded note. `revoke` requires the active first owner, rejects requests that never completed, and returns success without repeating side effects when the request is already revoked. Use `--endpoint` and `--port` when the gateway HTTP and HTTPS ports are remapped.
-
-Bare `g8e auth enroll` prints help and exits non-zero. Select an explicit subcommand.
-
-## Browser Authentication
-
-The Console uses WebAuthn passkeys. Platform authenticators such as Windows Hello and Touch ID, roaming security keys, and synced passkeys can satisfy the ceremony when they meet the configured relying-party policy. The Gateway's login assertion requests user verification as preferred rather than universally required; authenticator support and browser policy can therefore affect whether verification is performed.
-
-The normal browser flow is:
-
-1. Register a passkey during CLI enrollment or through an allowed first-passkey bootstrap flow.
+1. Register a passkey during CLI enrollment or through the first-passkey bootstrap flow.
 2. On later visits, enter the user identity and complete a WebAuthn assertion.
 3. The gateway creates a 24-hour browser session and sets a secure, HTTP-only cookie.
 4. Use the authenticated Console to review approvals, manage passkeys, inspect the current session, and review platform enrollment requests.
@@ -139,21 +163,23 @@ The normal browser flow is:
 
 A browser session authorizes browser-session and dual-auth routes. It does not substitute for a workload certificate on mTLS-only execution, producer, or administrative routes.
 
-## External Identity Providers
+### Operator binding
 
-When JWKS authentication is configured, the gateway requires JWT bearer authentication on MCP and A2A ingress instead of the normal mTLS application route. It verifies RS256 signatures using the token's key identifier, validates configured issuer and audience constraints and temporal claims, and requires a subject.
+The `g8e operator bind` command manages the authenticated CLI session's persisted operator binding independently of enrollment or refresh:
 
-The first valid token for a subject provisions an internal user. The configured role claim maps to an internal persona, and the token's tenant claim supplies tenant context when present. A JWT-authenticated user with no passkey may register a first passkey through the JIT registration flow, then use that passkey for later Console authentication.
+| Subcommand | Purpose |
+| --- | --- |
+| `bind <operator-session-id>` | Pin the CLI session to one active operator session owned by the same user |
+| `bind list` | Show the operator currently bound to the CLI session |
+| `bind unbind` | Clear the operator binding from the CLI session |
 
-JWT authentication does not grant access to arbitrary administrative routes. It is scoped to the explicitly wrapped external-client surfaces.
+Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The gateway validates that the target operator session is active and belongs to the authenticated user, then issues a replacement CLI session server-side and returns the new `cli_session_id`.
 
-## Agent and Application Authentication
+Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details before binding.
 
-`g8e mcp agent run` first relies on an authenticated human CLI, then enrolls the launched agent as a delegated application. The gateway issues a one-hour certificate containing both the application SPIFFE identity and the requesting user's SPIFFE identity. This lets policy and audit records distinguish the agent while retaining the human delegation chain.
+Re-binding to the same operator session is idempotent and does not rotate the CLI session.
 
-Application certificates are accepted only with an active application policy. Application identities cannot use privileged routes reserved for CLI and operator principals, and application enrollment does not grant L2 consensus authority. Consensus signing authority requires separate administrative enrollment.
-
-## Platform Workload Enrollment
+### Platform workload enrollment
 
 Operators, the dashboard, and the ensemble use owner-approved platform enrollment. Starting a gateway with no users issues no platform workload certificate. The first owner must exist before a workload can submit an enrollment request.
 
@@ -167,33 +193,19 @@ The workload enrollment flow is:
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
 7. The active first owner can revoke the completed request by its request ID. Revocation records the actor, reason, timestamp, governance envelope, and receipt identifiers on the enrollment record.
 
-For dashboard and ensemble identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active pub/sub WebSockets authenticated as either identity. New connections fail certificate and session validation immediately. An already-revoked request is idempotent; pending, approved, issuing, denied, and expired requests cannot be revoked as completed identities.
+For dashboard and ensemble identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active WebSockets authenticated as either identity.
 
-The operator, dashboard, and ensemble submit independent requests. Their recommended startup order is operational guidance, not an authorization dependency enforced by the gateway. Platform enrollment revocation does not cover human CLI enrollment, delegated agent certificates, consensus signers, or gateway-peer identities; those identity classes use separate records and administrative lifecycles.
-
-## Identity and Session Binding
+### Identity binding and isolation
 
 mTLS certificates carry SPIFFE identities in URI SANs. The gateway validates certificate revocation, extracts the principal type, and matches the certificate identity to the referenced CLI, operator, or application session before accepting a request. Disabled users, terminated operators, expired sessions, revoked certificates, duplicate bindings, and identity mismatches fail closed.
 
-A CLI command can carry a chain from CLI certificate to CLI session, user, operator session, and operator. Browser events bind to the user and browser session. Delegated application certificates bind an application identity to the human user who requested the credential. These bindings prevent caller-supplied identifiers from overriding the authenticated transport identity.
+A CLI command carries a chain from CLI certificate to CLI session to user to operator session to operator. Browser events bind to the user and browser session. Delegated application certificates bind an application identity to the human user who requested the credential. These bindings prevent caller-supplied identifiers from overriding the authenticated transport identity.
 
-### The Embedded Operator
+### Authorization and governance integration
 
-Operators carry one of two types. A `remote` operator is an enrolled workload that dials out to the gateway and holds its own certificate and session lease. The `embedded` operator is the gateway's in-process operator substrate: it holds no certificate, and its `operators` document is a binding record that anchors the first user's sessions rather than an enrollment lease.
+Authentication admits a principal to a route. Authorization determines whether that principal may perform a governed transaction. Every governed transaction passes through five layers:
 
-At startup the gateway registers a pending embedded-operator document under the deterministic ID `embedded-operator` with `claimed=false` and empty `user_id` and `operator_session_id`. The empty fields keep it unclaimable by device registration, which matches on `user_id`, and unauthenticated by operator session validation, which matches on `operator_session_id`. First-user bootstrap claims it, whether the first user is created through the CLI `auth enroll` bootstrap or the browser bootstrap path: the document records the claiming user as `user_id` and `organization_id`, transitions to active, stores the system fingerprint when the bootstrap supplies one, and mints the operator session ID that binds the substrate to that user. The claim is the explicit human enrollment act for the embedded operator. It belongs to exactly one user for its lifetime: a same-user re-claim returns the existing binding unchanged, and a different user's claim is rejected.
-
-Bootstrap also persists an `operator_sessions` record and stamps the new CLI session's `operator_session_id` with the minted value. That persisted binding is authoritative. The unified auth middleware stamps operator identity from the session record rather than request headers, rejects operator headers that contradict the persisted pair, and rejects operator headers on a session that carries no binding. `GET /api/v1/auth/cli/session` reports the persisted binding verbatim so `g8e auth context` can resync local credentials against server-side state.
-
-Session lifecycle paths preserve the binding. CLI session refresh and rotation inherit the prior session's operator binding, the refresh fallback and CLI recovery prefer the embedded operator's active session, and recovery mints a `remote` `cli-recovery-<user>` operator only when the user has no active operator session. Passkey ceremonies that create a web session bind the user's claimed embedded operator to that session. Because the embedded document is a binding record and not an enrollment lease, it is exempt from the 24-hour document-age check applied to remote operators.
-
-For PKI hierarchy, SPIFFE formats, trust bundles, revocation, and port topology, see [Network Architecture](./network.md).
-
-## Authorization and the Five-Layer Interlock
-
-Authentication admits a principal to a route. It does not by itself authorize a governed action. Every governed transaction passes through these layers:
-
-| Layer | Authorization role |
+| Layer | Role |
 | --- | --- |
 | **L1 Doctrine** | Enforces hard gates, forbidden-pattern matching, and MITRE threat detection |
 | **L2 Consensus** | Verifies a quorum of distinct Ed25519 consensus signatures over the transaction decision |
@@ -201,43 +213,33 @@ Authentication admits a principal to a route. It does not by itself authorize a 
 | **L4 Warden** | Rechecks signatures, transaction hash, replay protection, expiry, nonce, state Merkle root, and posture-required proofs before dispatch |
 | **L5 Actuator** | Mints a transaction-scoped capability, dispatches the isolated MCP or A2A action, and produces signed execution receipts |
 
-Universal checks fail closed in every posture. Optional L2 and L3 evidence is verified and recorded when present but does not block execution unless the posture requires it.
+L1, L4, and L5 apply universally. L2 Consensus and L3 Notary are enforced or audited according to the active governance posture. See [Governance](./governance.md) for the complete transaction pipeline and posture definitions.
 
-### Governance Postures
+### API endpoints for CLI and enrollment
 
-| Posture | L1 Doctrine | L2 Consensus | L3 Notary |
-| --- | --- | --- | --- |
-| **Doctrine** | Enforced | Audited | Audited |
-| **Consensus** | Enforced | Enforced | Audited |
-| **Ratify** | Enforced | Audited | Enforced for mutations |
-| **Notary** | Enforced | Enforced | Enforced for mutations |
+| Endpoint | Purpose | Auth |
+| --- | --- | --- |
+| `GET /api/v1/auth/cli/session` | Retrieve persisted CLI session and operator binding | mTLS |
+| `POST /api/v1/auth/cli/bind` | Bind CLI session to an operator session | mTLS |
+| `POST /api/v1/auth/cli/unbind` | Clear CLI session operator binding | mTLS |
 
-Read-only actions do not require L3 proof in any posture. Under `ratify` and `notary`, mutations fail closed without valid human authorization. See [Governance](./governance.md) for posture selection and the complete L1 through L5 behavior.
+## Anti-patterns
 
-### Human Approval
+- Bypassing route classification by calling internal services directly instead of routing through the Gateway (violates INV-AUTH-ROUTE-01).
+- Accepting caller-supplied identity headers instead of extracting identity from the authenticated transport (violates INV-AUTH-ID-01).
+- Re-enrolling when a simple `g8e auth refresh` suffices for expired sessions (violates INV-AUTH-SESSION-04).
+- Modifying OS trust or developer PKI state to bypass test failures instead of using proper enrollment isolation (violates INV-AUTH-SESSION-01).
+- Silently overwriting partial or corrupt local credentials instead of prompting the user for recovery (violates INV-AUTH-SESSION-01).
+- Storing session tokens in a way that does not meet compliance requirements for session storage and rotation.
+- Claiming unqualified security guarantees or third-party certifications without stating posture, ingress path, and trust boundary limitations.
 
-In gateway mode, L3 uses a WebAuthn assertion over the transaction hash. CLI-originated proofs also bind to the authenticated CLI certificate and session. In outbound operator mode, L3 verifies an approved suspended transaction and an Ed25519 signature over the transaction hash.
+## Links out
 
-A suspended approval request remains available for two minutes. After approval, the proof remains dispatchable for 30 minutes. Expired requests and proofs require a new transaction and approval. There is no mock or automatic approval bypass.
-
-## Security Properties
-
-- **Explicit route authentication:** Public, browser-session, mTLS, dual-auth, and JWT surfaces are classified separately. Unknown HTTPS routes require mTLS.
-- **Narrow bootstrap authority:** First-user bootstrap works only while the gateway has no users. Recovery and workload enrollment use short-lived tokens and private-key proof-of-possession.
-- **Certificate-bound identity:** SPIFFE URI SANs bind user, session, operator, and application identities to authenticated certificates.
-- **Revocation and lifecycle checks:** The gateway checks certificate revocation, user state, session state, and principal-specific policy on authenticated requests.
-- **Local key generation:** CLI, workload, and delegated application private keys are generated by the requesting component and are not sent to the gateway.
-- **Fail-closed governance:** Universal checks and posture-required proofs reject the transaction before execution. L5 records signed receipts around the execution boundary.
-- **Separation of trust:** A browser session cannot access mTLS-only routes, an application identity cannot assume CLI or operator privileges, and transport authentication cannot bypass governance authorization.
-
-Encryption at rest, vault operation, scrubbing, and rehydration are separate from principal authentication. See [Encryption](./encryption.md) for those controls and [FIPS 140-3 Compliance](../reference/fips140-3.md) for cryptographic compliance details.
-
-## Related Documentation
-
-- [Governance](./governance.md): Five-layer verification, posture behavior, and transaction flow.
-- [Network Architecture](./network.md): PKI hierarchy, SPIFFE workload identities, mTLS, revocation, and ports.
-- [Gateway Architecture](./gateway.md): Gateway admission, routing, and policy-decision responsibilities.
+- [Gateway Architecture](./gateway.md): Gateway admission control, route registry, and policy-decision responsibilities.
+- [Governance](./governance.md): Five-layer verification, posture definitions, and transaction flow.
+- [Network Architecture](./network.md): PKI hierarchy, SPIFFE workload identities, mTLS, revocation, and port topology.
 - [Operator Architecture](./operator.md): Operator session, L4 verification, and L5 execution boundary.
-- [AI Agents](./agents.md): Delegated agent identity and governed MCP and A2A flows.
 - [SSE Streaming](./sse.md): Browser, CLI, and application event routing.
+- [AI Agents](./agents.md): Delegated agent identity and governed MCP and A2A flows.
 - [Encryption](./encryption.md): Vault, encryption at rest, scrubbing, and execution-site rehydration.
+- [Troubleshooting](../devs/troubleshooting.md): Authentication diagnostics, identity recovery, and PKI state management.

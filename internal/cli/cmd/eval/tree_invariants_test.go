@@ -53,9 +53,9 @@ func checkNoSingletonGroups(t *testing.T, cmd *cobra.Command) {
 func checkPluralGroupNames(t *testing.T, cmd *cobra.Command) {
 	// Mass nouns that are allowed to be singular-like
 	massNouns := map[string]bool{
-		"rollout":   true,
-		"boundary":  true,
-		"observer":  true,
+		"rollout":  true,
+		"boundary": true,
+		"observer": true,
 	}
 
 	walkCommands(cmd, func(path []string, c *cobra.Command) {

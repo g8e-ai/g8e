@@ -19,7 +19,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -39,25 +38,6 @@ func resolveEvaluationInventorySource(explicitPath, projectRoot string) (runtime
 		return "", filepath.Join(projectRoot, normalized), nil
 	}
 	return normalized, "", nil
-}
-
-func loadEvaluationInventoryVariants(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) ([]*evalv1.ModelVariant, error) {
-	runtimePath, externalPath, err := resolveEvaluationInventorySource(explicitPath, projectRoot)
-	if err != nil {
-		return nil, err
-	}
-	if externalPath != "" {
-		return evaluation.LoadFrozenVariantsFromExternalSource(externalPath)
-	}
-	if runtimePath == "" {
-		if exists, err := fileSvc.FileExists(ctx, evaluation.DefaultModelInventoryRelPath); err != nil {
-			return nil, fmt.Errorf("evaluation: inventory: check runtime freeze: %w", err)
-		} else if exists {
-			return evaluation.LoadFrozenVariantsFromRuntime(ctx, fileSvc, evaluation.DefaultModelInventoryRelPath)
-		}
-		return evaluation.LoadFrozenVariantsFromExternalSource(filepath.Join(projectRoot, evaluation.DefaultBaseModelInventoryRelPath))
-	}
-	return evaluation.LoadFrozenVariantsFromRuntime(ctx, fileSvc, runtimePath)
 }
 
 func loadEvaluationInventoryFreeze(ctx context.Context, fileSvc fs.RuntimeFileService, projectRoot, explicitPath string) (*evaluation.ModelInventoryFreeze, error) {
