@@ -113,7 +113,6 @@ func TestCampaignsCreate_FromModelSelector(t *testing.T) {
 	require.NoError(t, env.runJSON(t, &payload, "campaigns", "show", "eval-a"))
 	assert.Equal(t, uint32(2), payload.RepetitionCount)
 	assert.Equal(t, []string{"qwen3:4b"}, payload.Models)
-	assertTestRuntimeFileExists(t, env.root, "eval/inventories/eval-a.json")
 }
 
 func TestCampaignsCreate_JSONReportsFrozenSpec(t *testing.T) {

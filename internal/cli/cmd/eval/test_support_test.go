@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -113,4 +114,32 @@ func TestCheckHTTPReachable_RejectsMissingURLAndNon2xx(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	require.Error(t, checkHTTPReachable(context.Background(), server.URL))
+}
+
+func assertTestRuntimeFileExists(t *testing.T, root string, relPath string) {
+	t.Helper()
+	path := filepath.Join(root, relPath)
+	assert.FileExists(t, path)
+}
+
+func campaignOrchestrateOperators() []models.OperatorDocumentGo {
+	return []models.OperatorDocumentGo{
+		{
+			ID:                "infer-op",
+			OperatorSessionID: "infer-session",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			RuntimeConfig: &models.RuntimeConfig{
+				InferenceEnabled:        true,
+				InferenceOllamaEndpoint: "http://provider.example:11434",
+			},
+		},
+		{
+			ID:                "data-op",
+			OperatorSessionID: "data-session",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: false},
+		},
+	}
 }

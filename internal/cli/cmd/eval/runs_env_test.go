@@ -363,7 +363,7 @@ func (e *runEnv) startGatewayFake(t *testing.T, executing bool) {
 			return
 		}
 		switch {
-		case executing && r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.Operators:
+		case r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.Operators:
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(operators)
 		case r.URL.Path == constants.APIPaths.PublicFeedSnapshot:
