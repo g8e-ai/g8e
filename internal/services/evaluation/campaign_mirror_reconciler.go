@@ -73,6 +73,93 @@ func NewCampaignMirrorReconciler(publication *CampaignPublicationCoordinator, st
 	}
 }
 
+// ReconcileAllVerifiedRunsFromStore walks the run store and reconciles all runs
+// that have valid verification reports. When restoreMissing is true, it
+// republishes canonical host artifacts for datasets that are absent from the
+// mirror. This is used as an alternative to ReconcileVerifiedQueue when the
+// campaign queue is not available (e.g., on restored backups).
+func (r *CampaignMirrorReconciler) ReconcileAllVerifiedRunsFromStore(ctx context.Context, runTimeout time.Duration, restoreMissing bool, force bool, progress CampaignMirrorReconcileProgressFunc) (*CampaignMirrorReconcileResult, error) {
+	if r == nil || r.publication == nil || r.store == nil || runTimeout <= 0 {
+		return nil, fmt.Errorf("evaluation: reconcile verified runs from store: missing required dependencies")
+	}
+	runIDs, err := r.store.ListRunIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: reconcile verified runs from store: list runs: %w", err)
+	}
+	verifiedRunIDs := make([]string, 0)
+	for _, runID := range runIDs {
+		report, err := r.store.LoadCampaignVerification(ctx, runID)
+		if err == nil && report != nil && report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+			verifiedRunIDs = append(verifiedRunIDs, runID)
+		}
+	}
+	result := &CampaignMirrorReconcileResult{FailedRuns: map[string]string{}}
+	for index, runID := range verifiedRunIDs {
+		update := func(status CampaignMirrorReconcileStatus, published int, err error) {
+			if progress != nil {
+				progress(CampaignMirrorReconcileProgress{Index: index + 1, Total: len(verifiedRunIDs), RunID: runID, Status: status, PublishedRecords: published, Err: err})
+			}
+		}
+		update(CampaignMirrorReconcileChecking, 0, nil)
+		effectiveTimeout := runTimeout
+		if restoreMissing {
+			effectiveTimeout = CampaignMirrorReconcileRunTimeout(runTimeout, assignmentCountForMirrorTimeout(ctx, r.store, runID))
+		}
+		runCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
+		if r.probe != nil {
+			present, err := r.probe.DatasetPresent(runCtx, CampaignDatasetID(runID))
+			if err != nil {
+				cancel()
+				result.FailedRuns[runID] = err.Error()
+				update(CampaignMirrorReconcileFailed, 0, err)
+				continue
+			}
+			if present {
+				cancel()
+				result.SkippedRunIDs = append(result.SkippedRunIDs, runID)
+				update(CampaignMirrorReconcilePresent, 0, nil)
+				continue
+			}
+		}
+		exists, err := r.store.RunExists(runCtx, runID)
+		if err != nil {
+			cancel()
+			result.FailedRuns[runID] = err.Error()
+			update(CampaignMirrorReconcileFailed, 0, err)
+			continue
+		}
+		if !exists {
+			cancel()
+			result.HostAbsentRunIDs = append(result.HostAbsentRunIDs, runID)
+			update(CampaignMirrorReconcileHostAbsent, 0, nil)
+			continue
+		}
+		if !restoreMissing {
+			cancel()
+			result.MissingRunIDs = append(result.MissingRunIDs, runID)
+			update(CampaignMirrorReconcileMissing, 0, nil)
+			continue
+		}
+		published, err := r.restoreRun(runCtx, runID, force)
+		cancel()
+		if err != nil {
+			result.FailedRuns[runID] = err.Error()
+			update(CampaignMirrorReconcileFailed, published, err)
+			if campaignMirrorGatewayUnreachable(err) {
+				for _, remainingRunID := range verifiedRunIDs[index+1:] {
+					result.FailedRuns[remainingRunID] = "skipped after gateway publication failure"
+				}
+				break
+			}
+			continue
+		}
+		result.RestoredRunIDs = append(result.RestoredRunIDs, runID)
+		update(CampaignMirrorReconcileRestored, published, nil)
+		result.PublishedRecords += published
+	}
+	return result, nil
+}
+
 // ReconcileVerifiedQueue compares verified queue entries against the public
 // mirror. When restoreMissing is true, it republishes canonical host artifacts
 // for datasets that are absent from the mirror. Present datasets are always

@@ -71,6 +71,7 @@ type CampaignStore interface {
 	SaveHeterogeneousStackSet(ctx context.Context, campaignID string, stackSet *HeterogeneousStackSet) error
 	LoadHeterogeneousStackSet(ctx context.Context, campaignID string) (*HeterogeneousStackSet, error)
 	LoadCampaignVerification(ctx context.Context, runID string) (*evalv1.EvaluationVerificationReport, error)
+	ListRunIDs(ctx context.Context) ([]string, error)
 }
 
 // CampaignController owns deterministic scheduling, canonical assignment
