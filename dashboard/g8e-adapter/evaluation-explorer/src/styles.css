@@ -1956,3 +1956,99 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .evidence-binding-list { display: grid; gap: 8px; }
 .evidence-binding-list li { display: grid; gap: 3px; }
 .evidence-binding-list code, .assignment-evidence code { font-family: var(--mono); font-size: var(--text-md); overflow-wrap: anywhere; }
+
+.assignment-model-response {
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.assignment-model-response h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.assignment-failure-callout {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 6px;
+}
+.assignment-failure-callout h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f87171;
+}
+.failure-output-detail {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--fg);
+  line-height: 1.5;
+}
+.failure-criteria-list {
+  margin: 0 0 6px;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.failure-criteria-list li {
+  margin-bottom: 4px;
+}
+.failure-criteria-list strong {
+  color: var(--fg);
+}
+.failure-missingness {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+  font-style: italic;
+}
+.model-response-block {
+  margin-top: 10px;
+}
+.model-response-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.model-response-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.model-response-variant {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent, #6ea8fe);
+}
+.model-response-text {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--bg-elev2, #0d1117);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.model-response-empty {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+.model-response-empty code {
+  font-family: var(--mono);
+  color: var(--fg-muted);
+}
+

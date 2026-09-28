@@ -268,6 +268,8 @@ export interface CampaignResultRecord {
   verification_metadata?: WireVerificationMetadata;
   benchmark_observations?: Record<string, unknown>;
   resource_summary?: Record<string, WireMetric>;
+  model_response?: string;
+  failure_output?: string;
 }
 
 export interface CampaignProjectionEnvelope {
@@ -287,6 +289,7 @@ const RESULT_FIELDS = [
   'lifecycle_status', 'summary_status', 'decomposed_scores', 'result_digest', 'verification_status',
   'unavailable_metric_reasons', 'completed_at', 'scenario_summary', 'semantic_grade_summaries',
   'activity_summary', 'evidence_bindings', 'verification_metadata', 'benchmark_observations', 'resource_summary',
+  'model_response', 'failure_output',
 ] as const;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -605,6 +608,8 @@ function assertExtensions(value: Record<string, unknown>, path: string): void {
     rejectUnknown(value.resource_summary, ['latency_ms', 'input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'retries'], `${path}.resource_summary`);
     for (const [key, metric] of Object.entries(value.resource_summary)) assertMetric(metric, `${path}.resource_summary.${key}`);
   }
+  if (value.model_response !== undefined) assertString(value.model_response, `${path}.model_response`);
+  if (value.failure_output !== undefined) assertString(value.failure_output, `${path}.failure_output`);
 }
 
 function assertResultRecord(value: unknown, path: string, version: CampaignEnvelopeVersion): asserts value is CampaignResultRecord {
@@ -629,7 +634,7 @@ function assertResultRecord(value: unknown, path: string, version: CampaignEnvel
   if (value.unavailable_metric_reasons !== undefined) assertStringArray(value.unavailable_metric_reasons, `${path}.unavailable_metric_reasons`, 16);
   assertTimestamp(value.completed_at, `${path}.completed_at`);
   if (version === '1.0.0') {
-    for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata', 'benchmark_observations', 'resource_summary'] as const) {
+    for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata', 'benchmark_observations', 'resource_summary', 'model_response', 'failure_output'] as const) {
       assert(value[field] === undefined, `${path}.${field}`, 'field requires campaign envelope 1.1.0');
     }
   } else {

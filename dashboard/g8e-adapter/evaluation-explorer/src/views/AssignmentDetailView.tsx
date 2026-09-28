@@ -59,6 +59,64 @@ function hasObservedActivity(activity: AssignmentResult['activity_summary']): bo
   return Boolean(activity && Object.values(activity).some((family) => activityFamilyHasObservedRecords(family)));
 }
 
+function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) {
+  const isFailure = assignment.terminal_status !== 'completed';
+  const hasResponse = Boolean(assignment.model_response);
+  const hasFailureOutput = Boolean(assignment.failure_output);
+
+  if (!hasResponse && !hasFailureOutput && !isFailure) {
+    return null;
+  }
+
+  const failingChips = assignmentGradeChips(assignment).filter(
+    (g) => g.status === 'fail' || g.status === 'invalid_evidence',
+  );
+
+  return (
+    <section className="assignment-model-response" aria-label="Model response and failure output">
+      <h2>{isFailure ? 'Model Response & Failure Output' : 'Model Response'}</h2>
+
+      {isFailure && (hasFailureOutput || failingChips.length > 0 || assignment.missingness_reason) ? (
+        <div className="assignment-failure-callout" role="alert">
+          <h3>Failure Diagnosis ({terminalLabel(assignment.terminal_status)})</h3>
+          {hasFailureOutput ? (
+            <p className="failure-output-detail">{assignment.failure_output}</p>
+          ) : null}
+          {failingChips.length > 0 ? (
+            <ul className="failure-criteria-list">
+              {failingChips.map((chip) => (
+                <li key={chip.criterion_id}>
+                  <strong>{chip.criterion_id.replace(/-/g, ' ')}:</strong>{' '}
+                  {chip.explanation ? chip.explanation.replace(/_/g, ' ') : observationLabel(chip.status)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {assignment.missingness_reason ? (
+            <p className="failure-missingness">{assignment.missingness_reason}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {hasResponse ? (
+        <div className="model-response-block">
+          <div className="model-response-header">
+            <span className="model-response-label">
+              {isFailure ? "Model's Response (Resulted in Failure)" : "Model's Response"}
+            </span>
+            <span className="model-response-variant">{assignment.variant_id}</span>
+          </div>
+          <pre className="model-response-text"><code>{assignment.model_response}</code></pre>
+        </div>
+      ) : isFailure && !hasFailureOutput ? (
+        <p className="model-response-empty">
+          No raw model response was captured in this assignment projection. Check local trace: <code>{assignment.assignment_id}-trace.json</code>
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 export function AssignmentDetailView() {
   const { assignmentId, runId, datasetId: routeDataset } = useParams();
   const [params] = useSearchParams();
@@ -155,6 +213,8 @@ export function AssignmentDetailView() {
           </span>
         ))}
       </div>
+
+      <ModelResponseSection assignment={assignment} />
 
       {hasResources ? (
         <div className="assignment-measured" aria-label="Measured values">

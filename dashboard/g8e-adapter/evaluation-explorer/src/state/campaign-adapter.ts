@@ -317,6 +317,8 @@ function adaptResultProjection(
     resource_summary: mapResourceSummary(record.resource_summary),
     verification_disposition: mapVerificationDisposition(optionalString(record.verification_status)),
     verification_metadata: mapVerificationMetadata(record.verification_metadata),
+    model_response: optionalString(record.model_response),
+    failure_output: optionalString(record.failure_output),
   };
 
   const records: Array<SnapshotRecord | LiveEvent> = [assignment];
