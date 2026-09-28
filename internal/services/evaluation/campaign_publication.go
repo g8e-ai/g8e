@@ -119,6 +119,42 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentLifecycle(ctx context.
 	return c.publishEnvelope(ctx, assignment.GetRunId(), idempotencyKey, publicMessageTypeAssignmentLifecycle, projection)
 }
 
+// PublishAssignmentLifecycles emits lifecycle projections for a batch of assignments in bounded feed batches.
+func (c *CampaignPublicationCoordinator) PublishAssignmentLifecycles(ctx context.Context, runID string, assignments []*evalv1.EvaluationAssignment, catalog *evalv1.EvaluationScenarioCatalog) error {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil {
+		return fmt.Errorf("evaluation: publish assignment lifecycles: %w", constants.ErrMissingRequiredField)
+	}
+	if len(assignments) == 0 {
+		return nil
+	}
+	if runID == "" {
+		runID = assignments[0].GetRunId()
+	}
+	if runID == "" {
+		return fmt.Errorf("evaluation: publish assignment lifecycles: %w", constants.ErrMissingRequiredField)
+	}
+	requests := make([]campaignFeedPublishRequest, 0, len(assignments))
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		category, err := ScenarioCategoryForAssignment(catalog, assignment)
+		if err != nil {
+			return err
+		}
+		request, err := buildAssignmentLifecyclePublishRequest(assignment, category, assignmentLifecycleObservedAt(assignment))
+		if err != nil {
+			return err
+		}
+		requests = append(requests, request)
+	}
+	if len(requests) == 0 {
+		return nil
+	}
+	_, err := c.exportFeedRecords(ctx, runID, requests)
+	return err
+}
+
 // PublishAssignmentResult emits one terminal result projection when it has not
 // yet been published for the run.
 func (c *CampaignPublicationCoordinator) PublishAssignmentResult(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, scenarioCategory evalv1.EvaluationScenarioCategory, verificationStatus string) error {
@@ -200,6 +236,14 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 	if err != nil {
 		return campaignFeedPublishRequest{}, err
 	}
+	isCompleted := result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	modelResp, failureOut := c.extractAssignmentModelOutputs(ctx, result.GetRunId(), result.GetAssignmentId(), isCompleted)
+	extensions := PublicAssignmentRecordExtensions{
+		BenchmarkObservations: benchmark,
+		ResourceSummary:       resources,
+		ModelResponse:         modelResp,
+		FailureOutput:         failureOut,
+	}
 	var record *PublicAssignmentRecord
 	if scenarioErr == nil {
 		record, err = BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
@@ -208,7 +252,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 			ScenarioContext:    scenario,
 			EvidenceBindings:   auditBindings,
 			VerificationStatus: verificationStatus,
-			Extensions:         PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources},
+			Extensions:         extensions,
 		})
 	} else {
 		projection, projectionErr := BuildAssignmentResultProjection(assignment, result, scenarioCategory, DerivePublicSummaryStatus(result), verificationStatus)
@@ -225,7 +269,7 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 		}
 		projection.ActivitySummary = activity.Summary
 		projection.EvidenceBindings = bindings
-		record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
+		record = &PublicAssignmentRecord{Projection: projection, Extensions: extensions}
 	}
 	if err != nil {
 		return campaignFeedPublishRequest{}, err
@@ -262,6 +306,30 @@ func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ct
 		return nil, err
 	}
 	return reader.BuildPublicBenchmarkObservations(ctx, result)
+}
+
+func (c *CampaignPublicationCoordinator) extractAssignmentModelOutputs(ctx context.Context, runID, assignmentID string, isCompleted bool) (string, string) {
+	if c == nil || c.store == nil || runID == "" || assignmentID == "" {
+		return "", ""
+	}
+	trace, err := c.store.LoadAssignmentTrace(ctx, runID, assignmentID)
+	if err != nil || trace == nil {
+		return "", ""
+	}
+	var modelResponse, failureOutput string
+	if resp, ok := trace["designated_role_output"].(string); ok {
+		modelResponse = resp
+	}
+	if !isCompleted {
+		if errMsg, ok := trace["error"].(string); ok && errMsg != "" {
+			failureOutput = errMsg
+		} else if failOut, ok := trace["failure_output"].(string); ok && failOut != "" {
+			failureOutput = failOut
+		} else if finishReason, ok := trace["finish_reason"].(string); ok && finishReason != "" && finishReason != "stop" {
+			failureOutput = fmt.Sprintf("finish_reason: %s", finishReason)
+		}
+	}
+	return modelResponse, failureOutput
 }
 
 // PublishRunAggregates emits explorer evaluation_summary, catalog, model, and
@@ -363,6 +431,14 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 				return 0, err
 			}
 			key := AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId())
+			isCompleted := result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+			modelResp, failureOut := c.extractAssignmentModelOutputs(ctx, runID, assignment.GetAssignmentId(), isCompleted)
+			extensions := PublicAssignmentRecordExtensions{
+				BenchmarkObservations: benchmark,
+				ResourceSummary:       resources,
+				ModelResponse:         modelResp,
+				FailureOutput:         failureOut,
+			}
 			var record *PublicAssignmentRecord
 			if scenarioErr == nil {
 				record, err = BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
@@ -372,7 +448,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 					EvidenceBindings:     auditBindings,
 					VerificationMetadata: exportVerificationMetadata(report, true),
 					VerificationStatus:   "verified",
-					Extensions:           PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources},
+					Extensions:           extensions,
 				})
 			} else {
 				category, categoryErr := ScenarioCategoryForAssignment(catalog, assignment)
@@ -393,7 +469,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 				}
 				projection.ActivitySummary = activity.Summary
 				projection.EvidenceBindings = bindings
-				record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
+				record = &PublicAssignmentRecord{Projection: projection, Extensions: extensions}
 			}
 			if err != nil {
 				return 0, err

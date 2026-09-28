@@ -66,6 +66,7 @@ func rolloutEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var mirrorBootstrapURL string
 	var gateSmoke bool
 	var promoteOnPass bool
+	var maxParamsStr string
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run init-campaign start → verify for every queued model",
@@ -83,7 +84,7 @@ Examples:
   g8e eval rollout run --log-dir .g8e/eval/logs/batch-001
   g8e eval rollout run --skip-verified=false`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
@@ -95,6 +96,36 @@ Examples:
 				SkipVariantIDs: skipVariantIDs,
 				SkipVerified:   skipVerified,
 			})
+			if maxParamsStr != "" {
+				maxParams, err := evaluation.ParseParameterCount(maxParamsStr)
+				if err != nil {
+					return err
+				}
+				if maxParams > 0 {
+					variants, err := loadEvaluationInventoryVariants(cmd.Context(), fileSvc, cfg.ProjectRoot, "")
+					if err == nil {
+						paramMap := make(map[string]uint64, len(variants))
+						for _, v := range variants {
+							if v != nil {
+								paramMap[v.GetServedModelTag()] = v.GetParameterCount()
+								paramMap[v.GetVariantId()] = v.GetParameterCount()
+							}
+						}
+						filteredPlan := make([]evaluation.CampaignQueueModel, 0, len(plan))
+						for _, entry := range plan {
+							cnt := paramMap[entry.ServedModelTag]
+							if cnt == 0 {
+								cnt = paramMap[entry.VariantID]
+							}
+							if cnt > 0 && cnt > maxParams {
+								continue
+							}
+							filteredPlan = append(filteredPlan, entry)
+						}
+						plan = filteredPlan
+					}
+				}
+			}
 			if len(plan) == 0 {
 				cmd.Println("No queue entries selected")
 				return nil
@@ -245,6 +276,8 @@ Examples:
 	cmd.Flags().StringVar(&mirrorBootstrapURL, "mirror-bootstrap-url", "http://127.0.0.1:8082/bootstrap", "Preflight public mirror bootstrap URL")
 	cmd.Flags().BoolVar(&gateSmoke, "gate-smoke", false, "Execute fast Tier 1 smoke gate (5 scenarios × 3 roles = 15 assignments) for rapid screening")
 	cmd.Flags().BoolVar(&promoteOnPass, "promote-on-pass", false, "Automatically promote models that pass Tier 1 smoke gate to full 75-assignment qualification")
+	cmd.Flags().StringVar(&maxParamsStr, "max-parameters", "", "Filter queue to models with parameter count <= threshold (e.g. 12b, 8b)")
+	cmd.Flags().StringVar(&maxParamsStr, "params", "", "Alias for --max-parameters")
 	return cmd
 }
 

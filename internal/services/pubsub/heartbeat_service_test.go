@@ -9,8 +9,6 @@ package pubsub
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/json"
 	"sync"
 	"sync/atomic"
@@ -20,7 +18,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
-	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -49,6 +46,7 @@ func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, e
 type mockResultsPublisher struct {
 	publishHeartbeatCalled bool
 	publishHeartbeatError  error
+	heartbeats             []proto.Message
 
 	inferenceCompletions   []*operatorv1.InferenceCompletion
 	inferenceCompletionErr error
@@ -101,6 +99,7 @@ func (m *mockResultsPublisher) PublishExecutionStatus(ctx context.Context, statu
 
 func (m *mockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
 	m.publishHeartbeatCalled = true
+	m.heartbeats = append(m.heartbeats, heartbeat)
 	return m.publishHeartbeatError
 }
 
@@ -531,161 +530,46 @@ func TestHeartbeatService_HandleRequest(t *testing.T) {
 }
 
 func TestHeartbeatService_SendAutomatic(t *testing.T) {
-	t.Run("sends automatic heartbeat via actuator", func(t *testing.T) {
+	t.Run("publishes an automatic heartbeat directly", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		svc := NewHeartbeatService(cfg, logger, nil)
+		svc := NewHeartbeatService(cfg, testutil.NewTestLogger(), nil)
 		svc.SetContext(context.Background())
+		results := &mockResultsPublisher{}
+		svc.SetResultsPublisher(results)
 
-		// Create a mock execution handler that tracks execution
-		actuatorCalled := false
-		mockHandler := &mockExecutionHandler{
-			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-				actuatorCalled = true
-				return "test-receipt-id", nil
-			},
-		}
-		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-		mockActuator := &governance.L5Actuator{
-			Logger:           logger,
-			ExecutionHandler: mockHandler,
-			SigningKey:       privKey,
-			KeyID:            "test-key",
-		}
-		svc.SetActuator(mockActuator)
+		require.NoError(t, svc.SendAutomatic())
 
-		err := svc.SendAutomatic()
-		assert.NoError(t, err)
-		assert.True(t, actuatorCalled)
+		require.Len(t, results.heartbeats, 1, "automatic heartbeat must be published exactly once")
+		published, ok := results.heartbeats[0].(*operatorv1.HeartbeatResult)
+		require.True(t, ok, "published heartbeat must be a HeartbeatResult")
+		assert.Equal(t, string(models.HeartbeatTypeAutomatic), published.GetStatus(), "automatic heartbeat must not be labeled as a requested heartbeat")
+		assert.Equal(t, cfg.OperatorID, published.GetOperatorId())
+		assert.Equal(t, cfg.OperatorSessionId, published.GetOperatorSessionId())
 	})
 
-	t.Run("logs error when actuator execution fails", func(t *testing.T) {
+	t.Run("returns the publish failure", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		svc := NewHeartbeatService(cfg, logger, nil)
+		svc := NewHeartbeatService(cfg, testutil.NewTestLogger(), nil)
 		svc.SetContext(context.Background())
-
-		// Create a mock execution handler that returns an error
-		mockHandler := &mockExecutionHandler{
-			err: assert.AnError,
-		}
-		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-		mockActuator := &governance.L5Actuator{
-			Logger:           logger,
-			ExecutionHandler: mockHandler,
-			SigningKey:       privKey,
-			KeyID:            "test-key",
-		}
-		svc.SetActuator(mockActuator)
+		svc.SetResultsPublisher(&mockResultsPublisher{publishHeartbeatError: assert.AnError})
 
 		err := svc.SendAutomatic()
-		assert.Error(t, err)
-		// Should not panic, should log error
+		require.ErrorIs(t, err, assert.AnError)
 	})
 
-	t.Run("skips execution when actuator is nil", func(t *testing.T) {
+	t.Run("skips publication when no results publisher is set", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		svc := NewHeartbeatService(cfg, logger, nil)
+		svc := NewHeartbeatService(cfg, testutil.NewTestLogger(), nil)
 		svc.SetContext(context.Background())
 
-		err := svc.SendAutomatic()
-		assert.NoError(t, err)
-		// Should not panic, should log warning
-	})
+		var sinkCalled atomic.Bool
+		svc.RegisterSink(func(context.Context) { sinkCalled.Store(true) })
 
-	t.Run("propagates operator identity onto the governance envelope", func(t *testing.T) {
-		t.Parallel()
-		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		svc := NewHeartbeatService(cfg, logger, nil)
-		svc.SetContext(context.Background())
-
-		mockHandler := &mockExecutionHandler{
-			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-				return "heartbeat-receipt-id", nil
-			},
-		}
-		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-		capture := &capturingConsoleAuditStore{}
-		mockActuator := &governance.L5Actuator{
-			Logger:            logger,
-			ConsoleAuditStore: capture,
-			ExecutionHandler:  mockHandler,
-			SigningKey:        privKey,
-			KeyID:             "test-key",
-		}
-		svc.SetActuator(mockActuator)
-
-		err := svc.SendAutomatic()
-		require.NoError(t, err)
-
-		capture.mu.Lock()
-		records := capture.records
-		capture.mu.Unlock()
-		require.NotEmpty(t, records, "actuator must log at least one receipt document")
-
-		var record models.ActionReceiptRecord
-		require.NoError(t, json.Unmarshal(records[0], &record))
-
-		// Regression: SendAutomatic previously built the GovernanceEnvelope with
-		// only Id/TransactionHash/ActionType/Payload, leaving OperatorId and
-		// OperatorSessionId empty. buildReceiptRecord reads those envelope
-		// fields directly, so an empty OperatorSessionId produced a receipt
-		// violating the receipts.operator_session_id FOREIGN KEY constraint.
-		assert.Equal(t, cfg.OperatorID, record.OperatorID, "envelope must carry OperatorId from config")
-		assert.Equal(t, cfg.OperatorSessionId, record.OperatorSessionID, "envelope must carry OperatorSessionId from config")
-		assert.Equal(t, constants.ActionTypeHeartbeat, record.ActionType, "envelope must carry the heartbeat action type")
-	})
-}
-
-// TestNewOperatorPubSubService_HeartbeatActuatorWired asserts that
-// NewOperatorPubSubService wires the heartbeat service's actuator during
-// construction, without the caller needing to invoke SetActuator manually.
-//
-// Regression: previously SetActuator was called before initializeGovernance
-// assigned rs.actuator, so the heartbeat service received a nil actuator and
-// every automatic heartbeat was silently dropped (logged "Actuator service not
-// set, skipping receipted heartbeat dispatch") with no audit record or
-// pub/sub publish.
-func TestNewOperatorPubSubService_HeartbeatActuatorWired(t *testing.T) {
-	t.Run("heartbeat actuator is non-nil after construction", func(t *testing.T) {
-		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		db := pubsubtest.NewMockOperatorPubSubClient()
-
-		pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-		signerStore := &governance.FailClosedSignerStore{
-			Signers: map[string]ed25519.PublicKey{"test-key": pub},
-		}
-
-		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:             cfg,
-			Logger:             logger,
-			PubSubClient:       db,
-			ActuatorSigningKey: priv,
-			ActuatorKeyID:      "Actuator-key",
-		}, OutboundModeDeps{
-			GovernanceCoreDeps: GovernanceCoreDeps{
-				ReplayStore:       &testutil.MockReplayStore{},
-				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-				TransactionAudit:  &testutil.MockTransactionAudit{},
-				L3Notary:          &testutil.MockL3Notary{},
-				SignerStore:       signerStore,
-				Doctrine:          governance.NewL1Doctrine(),
-			},
-		})
-		require.NoError(t, err)
-		require.NotNil(t, svc)
-
-		// The heartbeat service must be wired with the same actuator instance
-		// the parent service constructed in initializeGovernance. No manual
-		// SetActuator call is performed here.
-		require.NotNil(t, svc.heartbeat.actuator, "heartbeat actuator must be wired by the constructor; automatic heartbeats are silently dropped when nil")
-		assert.Same(t, svc.actuator, svc.heartbeat.actuator, "heartbeat actuator must reference the parent service's actuator")
+		require.NoError(t, svc.SendAutomatic())
+		assert.True(t, sinkCalled.Load(), "sinks still run when there is nothing to publish")
 	})
 }
 

@@ -121,6 +121,7 @@ type InitCampaignQueueRequest struct {
 	InventoryRelDir             string
 	OutputQueuePath             string
 	Tags                        []string
+	MaxParameters               uint64
 	Materialize                 bool
 	MergeExisting               bool
 }
@@ -164,6 +165,9 @@ func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, 
 		if err != nil {
 			return nil, err
 		}
+	}
+	if req.MaxParameters > 0 {
+		variants = FilterVariantsByMaxParameters(variants, req.MaxParameters)
 	}
 	SortModelVariantsForRollout(variants)
 	variants = PrioritizeRolloutIntake(variants, loadRolloutIntakePriorityIDs())

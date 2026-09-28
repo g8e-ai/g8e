@@ -129,7 +129,7 @@ describe('ActiveCampaignBar', () => {
     expect(link).toHaveTextContent('8%');
     expect(link).not.toHaveTextContent('Semantic grading');
 
-    const primarySlot = screen.getByTitle('Primary: ministral-3-8b');
+    const primarySlot = screen.getByTitle('Primary: ministral-3-8b (8% complete)');
     expect(primarySlot).toBeInTheDocument();
     expect(primarySlot).toHaveClass('header-campaign-role-role-primary');
 
@@ -197,7 +197,7 @@ describe('ActiveCampaignBar', () => {
     expect(link).toHaveTextContent('Active');
     expect(link).toHaveTextContent('8%');
 
-    expect(screen.getByTitle('Primary: qwen3-8b')).toBeInTheDocument();
+    expect(screen.getByTitle('Primary: qwen3-8b (8% complete)')).toBeInTheDocument();
     expect(screen.getByTitle('Assistant: ministral-3-8b')).toBeInTheDocument();
     expect(screen.getByTitle('Lite: qwen3-4b')).toBeInTheDocument();
   });

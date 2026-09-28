@@ -43,6 +43,7 @@ func rolloutEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 	var outputPath string
 	var inventoryDir string
 	var tags string
+	var maxParamsStr string
 	var materialize bool
 	var mergeExisting bool
 	cmd := &cobra.Command{
@@ -63,6 +64,14 @@ Examples:
 			if err != nil {
 				return err
 			}
+			var maxParams uint64
+			if maxParamsStr != "" {
+				var parseErr error
+				maxParams, parseErr = evaluation.ParseParameterCount(maxParamsStr)
+				if parseErr != nil {
+					return parseErr
+				}
+			}
 			result, err := evaluation.InitCampaignQueue(evaluation.InitCampaignQueueRequest{
 				Context:                     cmd.Context(),
 				FileService:                 fileSvc,
@@ -71,6 +80,7 @@ Examples:
 				InventoryRelDir:             normalizeRuntimeEvalPath(inventoryDir),
 				OutputQueuePath:             normalizeRuntimeEvalPath(outputPath),
 				Tags:                        splitCSVModelTags(tags),
+				MaxParameters:               maxParams,
 				Materialize:                 materialize,
 				MergeExisting:               mergeExisting,
 			})
@@ -107,6 +117,8 @@ Examples:
 	cmd.Flags().StringVar(&outputPath, "output", "", "Queue manifest path (default: .g8e/eval/init-campaign-queue.json)")
 	cmd.Flags().StringVar(&inventoryDir, "inventory-dir", "", "Per-model inventory directory (default: .g8e/eval/inventories)")
 	cmd.Flags().StringVar(&tags, "tags", "", "Include only these served model tags (comma-separated)")
+	cmd.Flags().StringVar(&maxParamsStr, "max-parameters", "", "Filter inventory to models with parameter count <= threshold (e.g. 12b, 8b)")
+	cmd.Flags().StringVar(&maxParamsStr, "params", "", "Alias for --max-parameters")
 	cmd.Flags().BoolVar(&materialize, "materialize", false, "Write per-model inventory files before building the queue")
 	cmd.Flags().BoolVar(&mergeExisting, "merge", false, "Preserve verified status from an existing queue file")
 	return cmd

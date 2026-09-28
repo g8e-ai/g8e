@@ -33,7 +33,8 @@ import type {
   TerminalStatus,
   VerifierState,
 } from '../contract/types';
-import { formatLatency, formatNumber, formatPercent, formatThroughput, formatTokens } from '../utils/format';
+import { formatLatency, formatNumber, formatPercent, formatThroughput, formatTokens, abbreviateAssignmentId } from '../utils/format';
+export { abbreviateAssignmentId };
 
 const FAILURE_TERMINAL_STATUSES = new Set<TerminalStatus>([
   'model_failed',
@@ -260,11 +261,17 @@ export function assignmentLifecycleEvents(
  *  across the full filtered event set, then the feed tail is kept for display. */
 export function visibleStreamEvents(
   events: LiveEvent[],
-  options: { modelFilter: string; kindFilter: string; limit?: number },
+  options: { modelFilter: string; kindFilter: string; assignmentFilter?: string; limit?: number },
 ): LiveEvent[] {
   const filtered = events
     .filter((event) => options.modelFilter === 'all' || event.variant_id === options.modelFilter)
-    .filter((event) => options.kindFilter === 'all' || event.kind === options.kindFilter);
+    .filter((event) => options.kindFilter === 'all' || event.kind === options.kindFilter)
+    .filter(
+      (event) =>
+        !options.assignmentFilter ||
+        options.assignmentFilter === 'all' ||
+        event.assignment_id === options.assignmentFilter,
+    );
   const deduped = dedupeStreamEvents(filtered);
   const restamped = restampStreamProgress(deduped);
   const bounded =

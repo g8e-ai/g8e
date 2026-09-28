@@ -63,6 +63,8 @@ type PublicResourceSummary struct {
 type PublicAssignmentRecordExtensions struct {
 	BenchmarkObservations *PublicBenchmarkObservations `json:"benchmark_observations,omitempty"`
 	ResourceSummary       *PublicResourceSummary       `json:"resource_summary,omitempty"`
+	ModelResponse         string                       `json:"model_response,omitempty"`
+	FailureOutput         string                       `json:"failure_output,omitempty"`
 }
 
 type PublicAssignmentBuildInput struct {

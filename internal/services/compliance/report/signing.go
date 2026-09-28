@@ -48,6 +48,27 @@ func NewComplianceReportSigningIdentity(metadata *compliancev1.ComplianceReportS
 	}, nil
 }
 
+// Metadata returns a copy of the signing key metadata bound to this identity.
+func (i *ComplianceReportSigningIdentity) Metadata() *compliancev1.ComplianceReportSigningKeyMetadata {
+	if i == nil || i.metadata == nil {
+		return nil
+	}
+	return proto.Clone(i.metadata).(*compliancev1.ComplianceReportSigningKeyMetadata)
+}
+
+// PublicKeyHex returns the lowercase hex Ed25519 public key that verifies this
+// identity's signatures.
+func (i *ComplianceReportSigningIdentity) PublicKeyHex() (string, error) {
+	if i == nil || len(i.privateKey) != ed25519.PrivateKeySize {
+		return "", fmt.Errorf("%w: signing identity is unavailable", constants.ErrReportSignatureFailed)
+	}
+	publicKey, ok := i.privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return "", fmt.Errorf("%w: derive Ed25519 public key", constants.ErrReportSignatureFailed)
+	}
+	return hex.EncodeToString(publicKey), nil
+}
+
 func (i *ComplianceReportSigningIdentity) SignSHA256(digest string) (*compliancev1.ReportSignature, error) {
 	if i == nil || i.metadata == nil || len(i.privateKey) != ed25519.PrivateKeySize {
 		return nil, fmt.Errorf("%w: signing identity is unavailable", constants.ErrReportSignatureFailed)

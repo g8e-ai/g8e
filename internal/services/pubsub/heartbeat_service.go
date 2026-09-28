@@ -9,8 +9,6 @@ package pubsub
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -20,26 +18,20 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/system"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
-	"github.com/g8e-ai/g8e/v2/internal/uuid"
-	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // HeartbeatService owns all heartbeat logic for the g8eo operator:
 // building heartbeat payloads, handling inbound heartbeat requests,
 // sending automatic heartbeats, and managing the periodic scheduler.
 type HeartbeatService struct {
-	config   *config.Config
-	logger   *slog.Logger
-	results  ResultsPublisher
-	actuator *governance.L5Actuator
+	config  *config.Config
+	logger  *slog.Logger
+	results ResultsPublisher
 
 	sinks      []sinkEntry
 	nextSinkID int64
@@ -58,11 +50,6 @@ func NewHeartbeatService(cfg *config.Config, logger *slog.Logger, wg *sync.WaitG
 		logger: logger,
 		wg:     wg,
 	}
-}
-
-// SetActuator sets the L5Actuator for the HeartbeatService.
-func (hs *HeartbeatService) SetActuator(actuator *governance.L5Actuator) {
-	hs.actuator = actuator
 }
 
 // SetResultsPublisher sets the results publisher for the HeartbeatService.
@@ -364,49 +351,22 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg *PubSubComman
 }
 
 // SendAutomatic builds and publishes an automatic heartbeat immediately.
+//
+// An automatic heartbeat is Operator-originated liveness, not a governed
+// operation: it has no ingress, envelope, or L1 through L4 verification, so it
+// is published directly and produces no receipt or ledger commitment. Routing
+// it through the L5 actuator would fabricate execution evidence for a
+// transaction that was never verified.
 func (hs *HeartbeatService) SendAutomatic() error {
 	hs.logger.Info("[HEARTBEAT] Sending automatic heartbeat")
-	heartbeat := hs.Build(models.HeartbeatTypeAutomatic)
-
-	protoHeartbeat := hs.buildProtoHeartbeat(heartbeat)
-	data, err := proto.Marshal(protoHeartbeat)
-	if err != nil {
-		return fmt.Errorf("heartbeat: failed to marshal heartbeat: %w", err)
-	}
-
-	hash := sha256.Sum256(data)
-	hashStr := hex.EncodeToString(hash[:])
-
-	env := &govpkg.GovernanceEnvelope{
-		Id:                uuid.NewString(),
-		Timestamp:         timestamppb.Now(),
-		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
-		OperatorId:        hs.config.OperatorID,
-		OperatorSessionId: hs.config.OperatorSessionId,
-		TransactionHash:   hashStr,
-		EventType:         string(constants.Event.Operator.HeartbeatRequested),
-		ActionType:        string(constants.ActionTypeHeartbeat),
-		Payload:           data,
-	}
-
-	vt := &governance.VerifiedTransaction{
-		Envelope:   env,
-		ActionType: constants.ActionTypeHeartbeat,
-	}
-
-	cmdMsg := &PubSubCommandMessage{
-		ID:        env.Id,
-		Payload:   data,
-		EventType: constants.Event.Operator.HeartbeatRequested,
-	}
-
-	if hs.actuator != nil {
-		_, err := hs.actuator.Execute(hs.ctx, vt, cmdMsg)
-		if err != nil {
-			return fmt.Errorf("heartbeat: actuator execution failed: %w", err)
+	if hs.results == nil {
+		if hs.config.Gateway.Enabled {
+			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping heartbeat in gateway mode")
+		} else {
+			hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send heartbeat")
 		}
-	} else {
-		hs.logger.Warn("[HEARTBEAT] Actuator service not set, skipping receipted heartbeat dispatch")
+	} else if err := hs.results.PublishHeartbeat(hs.ctx, hs.buildProtoHeartbeat(hs.Build(models.HeartbeatTypeAutomatic))); err != nil {
+		return fmt.Errorf("heartbeat: publish automatic heartbeat: %w", err)
 	}
 
 	hs.notifySinks()

@@ -643,6 +643,8 @@ export interface AssignmentResult extends ViewRecordEnvelope {
   };
   verification_disposition?: VerifierState;
   verification_metadata?: PublicVerificationMetadata;
+  model_response?: string;
+  failure_output?: string;
 }
 
 /** 6. methodology_snapshot: metric definitions and user-facing explanation. */

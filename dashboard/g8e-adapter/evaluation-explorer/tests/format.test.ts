@@ -11,6 +11,7 @@ import {
   formatDuration,
   formatTimestamp,
   metricDisplay,
+  abbreviateAssignmentId,
 } from '../src/utils/format';
 
 describe('formatPercent', () => {
@@ -121,5 +122,25 @@ describe('metricDisplay', () => {
     expect(result.text).toBe('Unavailable');
     expect(result.unavailable).toBe(true);
     expect(result.reason).toBe('not observed');
+  });
+});
+
+describe('abbreviateAssignmentId', () => {
+  it('returns em-dash for undefined or empty or dash', () => {
+    expect(abbreviateAssignmentId(undefined)).toBe('—');
+    expect(abbreviateAssignmentId('')).toBe('—');
+    expect(abbreviateAssignmentId('—')).toBe('—');
+  });
+
+  it('leaves IDs of 6 or fewer characters unchanged', () => {
+    expect(abbreviateAssignmentId('asg-1')).toBe('asg-1');
+    expect(abbreviateAssignmentId('abxyzx')).toBe('abxyzx');
+  });
+
+  it('abbreviates IDs longer than 6 characters to first 6 chars followed by ellipsis', () => {
+    expect(abbreviateAssignmentId('assignment-1')).toBe('assign…');
+    expect(abbreviateAssignmentId('asg-live-001')).toBe('asg-li…');
+    expect(abbreviateAssignmentId('asg-ifeval-001')).toBe('asg-if…');
+    expect(abbreviateAssignmentId('abxyzx12345')).toBe('abxyzx…');
   });
 });

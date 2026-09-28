@@ -91,7 +91,7 @@ func validateResult(version string, raw json.RawMessage) error {
 		return schemaError(err.Error())
 	}
 	extensions := make(map[string]json.RawMessage)
-	for _, key := range []string{"benchmark_observations", "resource_summary"} {
+	for _, key := range []string{"benchmark_observations", "resource_summary", "model_response", "failure_output"} {
 		if value, ok := fields[key]; ok {
 			extensions[key] = value
 			delete(fields, key)
@@ -278,10 +278,33 @@ func walkStrings(value json.RawMessage) error {
 		if err := json.Unmarshal(trimmed, &fields); err != nil {
 			return err
 		}
-		for _, child := range fields {
+		for key, child := range fields {
+			if key == "model_response" || key == "failure_output" {
+				if err := walkModelText(child); err != nil {
+					return err
+				}
+				continue
+			}
 			if err := walkStrings(child); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func walkModelText(value json.RawMessage) error {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	if trimmed[0] == '"' {
+		var text string
+		if err := json.Unmarshal(trimmed, &text); err != nil {
+			return err
+		}
+		if len(text) > maxRecordBytes || strings.Contains(text, "BEGIN PRIVATE KEY") || strings.Contains(text, "spiffe://") {
+			return fmt.Errorf("restricted assignment text: %w", constants.ErrPublicFeedRestrictedField)
 		}
 	}
 	return nil

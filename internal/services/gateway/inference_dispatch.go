@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -234,6 +235,11 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		CliSessionID:            req.GetCliSessionId(),
 		Stream:                  req.GetStream(),
 		RetryCount:              req.GetRetryCount(),
+	}
+
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		c.logger.Warn("inference dispatch: failed to clear WriteTimeout, request may be killed by server deadline", "error", err)
 	}
 
 	if req.GetStream() {

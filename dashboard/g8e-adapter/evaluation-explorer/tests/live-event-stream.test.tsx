@@ -154,12 +154,17 @@ describe('LiveEventStream', () => {
     expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Category' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Task' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Assignment' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Pass' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Pass Rate' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Latency' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'security-policy-block-run' })).toHaveAttribute(
       'href',
       '/tasks/security-policy-block-run',
+    );
+    expect(screen.getByRole('link', { name: 'assign…' })).toHaveAttribute(
+      'href',
+      '/evaluations/ds-live-a/run-a/assignments/assignment-1',
     );
     expect(screen.getByText('Pass', { selector: '.stream-metric-value' })).toBeInTheDocument();
     expect(screen.getByText('780 ms')).toBeInTheDocument();
@@ -336,6 +341,7 @@ describe('LiveEventStream', () => {
       'Status',
       'Category',
       'Task',
+      'Assignment',
       'Pass',
       'Pass Rate',
       'Latency',
@@ -822,6 +828,81 @@ describe('LiveEventStream', () => {
 
     // In active run mode, all 120 events for eval-run-current are retained
     expect(screen.getByText(/Page 1 of 5 \(120 events\)/)).toBeInTheDocument();
+  });
+
+  it('renders an Assignment dropdown and filters events by assignment', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-asg-1',
+              assignment_id: 'asg-live-alpha',
+              task_id: 'task-alpha',
+              kind: 'assignment_started',
+              observed_at: '2026-09-17T08:02:00Z',
+            }),
+            liveEvent({
+              event_id: 'evt-asg-2',
+              assignment_id: 'asg-live-beta',
+              task_id: 'task-beta',
+              kind: 'assignment_completed',
+              observed_at: '2026-09-17T08:01:00Z',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const assignmentSelect = screen.getByRole('combobox', { name: 'Filter by assignment' });
+    expect(assignmentSelect).toBeInTheDocument();
+    expect(screen.getByText('task-alpha')).toBeInTheDocument();
+    expect(screen.getByText('task-beta')).toBeInTheDocument();
+
+    await user.selectOptions(assignmentSelect, 'asg-live-alpha');
+
+    expect(screen.getByText('task-alpha')).toBeInTheDocument();
+    expect(screen.queryByText('task-beta')).not.toBeInTheDocument();
+  });
+
+  it('renders an abbreviated Assignment ID linking to the Assignment Details view', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-link-check',
+              dataset_id: 'ds-eval-1',
+              run_id: 'run-eval-1',
+              assignment_id: 'asg-long-assignment-identifier-12345',
+              kind: 'assignment_completed',
+            }),
+            liveEvent({
+              event_id: 'evt-no-asg',
+              dataset_id: 'ds-eval-1',
+              run_id: 'run-eval-1',
+              kind: 'stage_updated',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole('link', { name: 'asg-lo…' });
+    expect(link).toHaveAttribute(
+      'href',
+      '/evaluations/ds-eval-1/run-eval-1/assignments/asg-long-assignment-identifier-12345',
+    );
+    expect(link).toHaveAttribute('title', 'asg-long-assignment-identifier-12345');
+
+    const rows = screen.getAllByRole('row');
+    const stageUpdatedRow = rows[2];
+    expect(stageUpdatedRow).toHaveTextContent('—');
   });
 });
 

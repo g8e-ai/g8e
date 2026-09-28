@@ -217,4 +217,56 @@ describe('AssignmentDetailView', () => {
     const siblingLinks = screen.getAllByRole('link').filter((link) => link.textContent?.startsWith('assignment-'));
     expect(siblingLinks.map((link) => link.textContent)).toEqual(['assignment-2', 'assignment-3']);
   });
+
+  it('renders model response inline when present on a completed assignment', () => {
+    renderAssignment([
+      assignmentResult({
+        terminal_status: 'completed',
+        model_response: '{"tool": "run_command", "args": {"command": "ls"}}',
+      }),
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'Model Response' })).toBeInTheDocument();
+    expect(screen.getByText("Model's Response")).toBeInTheDocument();
+    expect(screen.getByText('{"tool": "run_command", "args": {"command": "ls"}}')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('renders model response and failure diagnosis on a failed assignment', () => {
+    renderAssignment([
+      assignmentResult({
+        terminal_status: 'model_failed',
+        model_response: 'I am sorry, I cannot execute that command.',
+        failure_output: 'Command execution timed out after 30 seconds',
+        semantic_grade_summaries: [
+          { criterion_id: 'tool-execution', status: 'fail', grading_method: 'deterministic', explanation_code: 'criterion_failed' },
+        ],
+      }),
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'Model Response & Failure Output' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText(/Failure Diagnosis \(Model failed\)/)).toBeInTheDocument();
+    expect(screen.getByText('Command execution timed out after 30 seconds')).toBeInTheDocument();
+    expect(screen.getByText(/tool execution:/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Criterion failed/)).toHaveLength(2);
+    expect(screen.getByText("Model's Response (Resulted in Failure)")).toBeInTheDocument();
+    expect(screen.getByText('I am sorry, I cannot execute that command.')).toBeInTheDocument();
+  });
+
+  it('renders failure diagnosis and fallback trace note when failed without raw response', () => {
+    renderAssignment([
+      assignmentResult({
+        terminal_status: 'model_failed',
+        missingness_reason: 'no_scored_calls',
+      }),
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'Model Response & Failure Output' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getAllByText('no_scored_calls')).toHaveLength(2);
+    expect(screen.getByText(/No raw model response was captured/)).toBeInTheDocument();
+    expect(screen.getByText(/assignment-1-trace\.json/)).toBeInTheDocument();
+  });
 });
+
