@@ -530,5 +530,3 @@ func RemoveModelVariant(freeze *ModelInventoryFreeze, identifier string) (*Model
 	}
 	return updatedFreeze, removed, nil
 }
-
-

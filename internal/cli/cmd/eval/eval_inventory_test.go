@@ -44,17 +44,17 @@ func writeTestModelInventory(t *testing.T, root string, variants []*evalv1.Model
 	}
 
 	payload, err := json.MarshalIndent(struct {
-		CampaignID          string            `json:"campaign_id"`
-		ModelRegistryDigest string            `json:"model_registry_digest"`
-		HomogeneousCellCount uint64           `json:"homogeneous_cell_count"`
-		ModelCount          int               `json:"model_count"`
-		Variants            []json.RawMessage `json:"variants"`
+		CampaignID           string            `json:"campaign_id"`
+		ModelRegistryDigest  string            `json:"model_registry_digest"`
+		HomogeneousCellCount uint64            `json:"homogeneous_cell_count"`
+		ModelCount           int               `json:"model_count"`
+		Variants             []json.RawMessage `json:"variants"`
 	}{
-		CampaignID:          freeze.CampaignID,
-		ModelRegistryDigest: freeze.RegistryDigest,
+		CampaignID:           freeze.CampaignID,
+		ModelRegistryDigest:  freeze.RegistryDigest,
 		HomogeneousCellCount: freeze.HomogeneousCellCount,
-		ModelCount:          len(rawVariants),
-		Variants:            rawVariants,
+		ModelCount:           len(rawVariants),
+		Variants:             rawVariants,
 	}, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, payload, 0o644))
@@ -346,4 +346,3 @@ func TestModelsRemove_RemovesVariantAndUpdatesDigest(t *testing.T) {
 	assert.NotContains(t, listOut.String(), "gemma3:1b")
 	assert.Contains(t, listOut.String(), "granite4.2:8b")
 }
-

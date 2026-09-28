@@ -308,5 +308,3 @@ func TestRemoveModelVariant(t *testing.T) {
 	_, _, err = RemoveModelVariant(updated, "model-b:2b")
 	require.Error(t, err)
 }
-
-

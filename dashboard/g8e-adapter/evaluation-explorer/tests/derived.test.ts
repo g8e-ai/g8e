@@ -192,6 +192,24 @@ describe('visibleStreamEvents', () => {
     expect(visible.map((event) => event.event_id)).toEqual(['evt-2']);
   });
 
+  it('applies assignment filter when specified', () => {
+    const eventsWithAsg = [
+      ...events,
+      liveEvent({
+        event_id: 'evt-asg-filter',
+        kind: 'assignment_started',
+        assignment_id: 'target-asg',
+        observed_at: '2026-09-17T08:35:00Z',
+      }),
+    ];
+    const visible = visibleStreamEvents(eventsWithAsg, {
+      modelFilter: 'all',
+      kindFilter: 'all',
+      assignmentFilter: 'target-asg',
+    });
+    expect(visible.map((event) => event.event_id)).toEqual(['evt-asg-filter']);
+  });
+
   it('shows all matching events when no limit is set', () => {
     const many = Array.from({ length: 30 }, (_, index) =>
       liveEvent({

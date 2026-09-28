@@ -1294,7 +1294,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   border-radius: 6px; padding: 5px 8px; font-size: var(--overview-meta-size, var(--text-md));
 }
 .stream-state { display: inline-flex; align-items: center; gap: 6px; font-size: var(--overview-meta-size, var(--text-md)); font-weight: 600; }
-.stream-table { min-width: 1850px; }
+.stream-table { min-width: 1950px; }
 .stream-table, .lab-table { width: 100%; border-collapse: collapse; font-size: var(--overview-body-size, var(--text-lg)); }
 .stream-table th, .stream-table td, .lab-table th, .lab-table td {
   text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle;
@@ -1308,9 +1308,9 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .role-leader-empty td { color: var(--fg-muted); font-size: var(--text-lg); }
 .stream-time { color: var(--fg-dim); font-size: var(--overview-meta-size, var(--text-md)); white-space: nowrap; }
 .stream-role { display: inline-flex; align-items: center; gap: 6px; font-size: var(--overview-meta-size, var(--text-md)); font-weight: 600; }
-.stream-event-value, .stream-event-link, .stream-task-link, .stream-category-link { white-space: nowrap; }
-.stream-event-link { color: var(--fg-muted); }
-.stream-event-link:hover, .stream-task-link:hover, .stream-category-link:hover { color: var(--accent); }
+.stream-event-value, .stream-event-link, .stream-task-link, .stream-category-link, .stream-assignment-link { white-space: nowrap; }
+.stream-event-link, .stream-assignment-link { color: var(--fg-muted); font-size: var(--overview-meta-size, var(--text-md)); }
+.stream-event-link:hover, .stream-task-link:hover, .stream-category-link:hover, .stream-assignment-link:hover { color: var(--accent); }
 .stream-task-link { color: var(--fg); font-size: var(--overview-meta-size, var(--text-md)); font-weight: 500; }
 .stream-category-link { color: var(--fg-muted); font-size: var(--overview-meta-size, var(--text-md)); }
 .stream-metric-cell { white-space: nowrap; }
