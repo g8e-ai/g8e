@@ -1345,6 +1345,11 @@
         "_python_const": "GEMINI_3_1_PRO",
         "value": "gemini-3.1-pro-preview"
       },
+      "gemma4:12b": {
+        "_go_const": "LLMsOllamaGemma412b",
+        "_python_const": "OLLAMA_GEMMA4_12B",
+        "value": "gemma4:12b"
+      },
       "gemma4:e2b": {
         "_go_const": "LLMsOllamaGemma4E2b",
         "_python_const": "OLLAMA_GEMMA4_E2B",
@@ -1379,6 +1384,16 @@
         "_go_const": "LLMsOpenaiGpt54Pro",
         "_python_const": "OPENAI_GPT_5_4_PRO",
         "value": "gpt-5.4-pro"
+      },
+      "granite4.2:3b": {
+        "_go_const": "LLMsOllamaGranite423b",
+        "_python_const": "OLLAMA_GRANITE4_2_3B",
+        "value": "granite4.2:3b"
+      },
+      "granite4.2:8b": {
+        "_go_const": "LLMsOllamaGranite428b",
+        "_python_const": "OLLAMA_GRANITE4_2_8B",
+        "value": "granite4.2:8b"
       },
       "llama3.2:3b": {
         "_go_const": "LLMsOllamaLlama323b",

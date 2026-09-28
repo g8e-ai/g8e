@@ -9,8 +9,8 @@ const mirrorOrigin = 'http://127.0.0.1:8082';
 const sourceId = 'proof-bootstrap-source';
 const sliceHash = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
 
-function requestPath(input: RequestInfo | URL): string {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+function requestPath(input: Parameters<typeof fetch>[0]): string {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as { url: string }).url;
   return new URL(url, mirrorOrigin).pathname;
 }
 
@@ -33,7 +33,7 @@ describe('proof catalog bootstrap', () => {
   });
 
   it('indexes proof catalog entries during startup when artifacts are published', async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
       const path = requestPath(input);
       if (path === '/runtime.json') {
         return new Response(JSON.stringify({ schema_version: '1.0.0', mirror_origin: mirrorOrigin }), { status: 200 });
@@ -83,7 +83,7 @@ describe('proof catalog bootstrap', () => {
   });
 
   it('skips proof catalog fetch when bootstrap reports zero artifacts', async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
       const path = requestPath(input);
       if (path === '/runtime.json') {
         return new Response(JSON.stringify({ schema_version: '1.0.0', mirror_origin: mirrorOrigin }), { status: 200 });

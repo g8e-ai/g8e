@@ -790,7 +790,7 @@ function assertPublicResourceSummary(value: unknown, path: string): void {
 
 export function isAssignmentResult(value: unknown): asserts value is AssignmentResult {
   assertObject(value, 'assignment_result');
-  rejectUnknown(value, [...ENVELOPE_FIELDS, 'assignment_id', 'run_id', 'task_id', 'scenario_id', 'variant_id', 'role', 'repetition', 'scenario_category', 'evaluation_unit', 'stack_id', 'scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'benchmark_observations', 'terminal_status', 'metric_values', 'missingness_reason', 'stage_summary', 'resource_summary', 'verification_disposition', 'verification_metadata'], 'assignment_result');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'assignment_id', 'run_id', 'task_id', 'scenario_id', 'variant_id', 'role', 'repetition', 'scenario_category', 'evaluation_unit', 'stack_id', 'scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'benchmark_observations', 'terminal_status', 'metric_values', 'missingness_reason', 'stage_summary', 'resource_summary', 'verification_disposition', 'verification_metadata', 'model_response', 'failure_output'], 'assignment_result');
   assertEnvelope(value, 'assignment_result', ['assignment_result']);
   assertString(value.assignment_id, 'assignment_result.assignment_id');
   assertString(value.run_id, 'assignment_result.run_id');
@@ -821,6 +821,8 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
   assertObject(value.metric_values, 'assignment_result.metric_values');
   for (const [key, metric] of Object.entries(value.metric_values)) assertMetricValue(metric, `assignment_result.metric_values.${key}`);
   assertOptional(value.missingness_reason, 'assignment_result.missingness_reason', assertString);
+  assertOptional(value.model_response, 'assignment_result.model_response', assertString);
+  assertOptional(value.failure_output, 'assignment_result.failure_output', assertString);
   assert(Array.isArray(value.stage_summary), 'assignment_result.stage_summary', 'expected array');
   assert(value.stage_summary.length <= 128, 'assignment_result.stage_summary', 'expected at most 128 entries');
   for (let index = 0; index < value.stage_summary.length; index++) {

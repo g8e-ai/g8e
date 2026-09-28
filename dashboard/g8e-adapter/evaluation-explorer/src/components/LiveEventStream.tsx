@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import type { FeedConnectionState, StreamConnectionState } from '../utils/feed-state';
 import { recordKey, resolveModelSummary, useStoreState } from '../state/store';
 import {
+  abbreviateAssignmentId,
   assignmentMetricFormatter,
   roleLabel,
   streamProgressLabel,
@@ -197,7 +198,7 @@ type AssignmentMetricColumn =
   | 'thinking_tokens'
   | 'cache_tokens'
   | 'retries';
-type StreamSortField = 'time' | 'role' | keyof EventParts | AssignmentMetricColumn | 'model' | 'progress';
+type StreamSortField = 'time' | 'role' | 'assignment' | keyof EventParts | AssignmentMetricColumn | 'model' | 'progress';
 type StreamSortDirection = 'asc' | 'desc';
 
 const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: string }> = [
@@ -261,6 +262,7 @@ function streamSortValue(
 ): string | number {
   if (field === 'time') return event.observed_at;
   if (field === 'role') return (event.role ? roleLabel(event.role) : model ? roleLabel(model.role) : 'Platform').toLowerCase();
+  if (field === 'assignment') return (event.assignment_id ?? '').toLowerCase();
   if (field === 'model') return (model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0] ?? '').toLowerCase();
   if (field === 'progress') return event.total > 0 ? event.completed / event.total : '';
   const parts = eventParts(event, assignment);
@@ -321,6 +323,7 @@ export function LiveEventStream({
   const [modelFilter, setModelFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [assignmentFilter, setAssignmentFilter] = useState('all');
   const [runScope, setRunScope] = useState<'all' | 'active'>('all');
   const [sortField, setSortField] = useState<StreamSortField>();
   const [sortDirection, setSortDirection] = useState<StreamSortDirection>('asc');
@@ -375,9 +378,10 @@ export function LiveEventStream({
       visibleStreamEvents(targetEvents, {
         modelFilter,
         kindFilter,
+        assignmentFilter,
         limit: runScope === 'active' ? undefined : LIVE_EVENT_RETENTION_LIMIT,
       }),
-    [targetEvents, modelFilter, kindFilter, runScope],
+    [targetEvents, modelFilter, kindFilter, assignmentFilter, runScope],
   );
 
   const visible = useMemo(() => {
@@ -410,6 +414,15 @@ export function LiveEventStream({
     }
     return Array.from(categories).sort();
   }, [events, assignments]);
+  const assignmentOptions = useMemo(() => {
+    const ids = new Set<string>();
+    for (const event of events) {
+      if (event.assignment_id) {
+        ids.add(event.assignment_id);
+      }
+    }
+    return Array.from(ids).sort();
+  }, [events]);
 
   const sortedVisible = useMemo(() => {
     if (!sortField) return visible;
@@ -462,7 +475,7 @@ export function LiveEventStream({
 
   useEffect(() => {
     setPage(0);
-  }, [modelFilter, kindFilter, categoryFilter, runScope, sortField, sortDirection]);
+  }, [modelFilter, kindFilter, categoryFilter, assignmentFilter, runScope, sortField, sortDirection]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
@@ -524,6 +537,19 @@ export function LiveEventStream({
               </option>
             ))}
           </select>
+          <select
+            aria-label="Filter by assignment"
+            title="Assignment"
+            value={assignmentFilter}
+            onChange={(e) => setAssignmentFilter(e.target.value)}
+          >
+            <option value="all">All assignments</option>
+            {assignmentOptions.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
       {isReconciling ? <p className="panel-note">Syncing feed history…</p> : null}
@@ -533,7 +559,7 @@ export function LiveEventStream({
         ) : (
           <EmptyState
             hasRecords={events.length > 0}
-            hasFilters={modelFilter !== 'all' || kindFilter !== 'all' || categoryFilter !== 'all' || runScope !== 'all'}
+            hasFilters={modelFilter !== 'all' || kindFilter !== 'all' || categoryFilter !== 'all' || assignmentFilter !== 'all' || runScope !== 'all'}
             connection={connection}
           />
         )
@@ -548,6 +574,7 @@ export function LiveEventStream({
                 <SortHeader label="Status" field="status" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Category" field="category" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Task" field="task" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortHeader label="Assignment" field="assignment" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 {ASSIGNMENT_METRIC_COLUMNS.map(({ key, label }) => (
                   <SortHeader key={key} label={label} field={key} sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 ))}
@@ -587,7 +614,7 @@ export function LiveEventStream({
                   <Fragment key={event.event_id}>
                     {isNewRun ? (
                       <tr className="stream-run-divider-row" data-testid={`run-divider-${event.run_id}`}>
-                        <td colSpan={15} className="stream-run-divider-cell">
+                        <td colSpan={16} className="stream-run-divider-cell">
                           <div className="stream-run-divider">
                             <span className="stream-run-divider-badge">Run: {event.run_id}</span>
                             <span className="stream-run-divider-line" />
@@ -624,6 +651,19 @@ export function LiveEventStream({
                           </Link>
                         ) : (
                           parts.task
+                        )}
+                      </td>
+                      <td>
+                        {event.assignment_id ? (
+                          <Link
+                            to={`/evaluations/${event.dataset_id}/${event.run_id}/assignments/${event.assignment_id}`}
+                            className="stream-assignment-link"
+                            title={event.assignment_id}
+                          >
+                            {abbreviateAssignmentId(event.assignment_id)}
+                          </Link>
+                        ) : (
+                          '—'
                         )}
                       </td>
                       {ASSIGNMENT_METRIC_COLUMNS.map(({ key }) => {

@@ -91,6 +91,26 @@ func (r *ReadOnlyOperationalEvidence) Close() error {
 	return r.db.Close()
 }
 
+// LatestCommitmentAt returns the commit time of the newest ledger commitment.
+// It fails with constants.ErrNotFound when the ledger holds no commitment, so a
+// caller cannot derive an assessment window from an empty runtime.
+func (r *ReadOnlyOperationalEvidence) LatestCommitmentAt(ctx context.Context) (time.Time, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if r == nil || r.db == nil {
+		return time.Time{}, constants.ErrReportStoreUnavailable
+	}
+	var committedAtMs sql.NullInt64
+	if err := r.db.QueryRowContext(ctx, `SELECT MAX(committed_at_unix_ms) FROM commitment_ledger`).Scan(&committedAtMs); err != nil {
+		return time.Time{}, fmt.Errorf("operational evidence: query latest commitment: %w", err)
+	}
+	if !committedAtMs.Valid {
+		return time.Time{}, fmt.Errorf("%w: commitment ledger is empty", constants.ErrNotFound)
+	}
+	return time.UnixMilli(committedAtMs.Int64).UTC(), nil
+}
+
 // Snapshot reads receipts and commitments from one read-only transaction. The
 // query has no implicit pagination; exceeding MaxRows fails rather than
 // silently exporting a truncated population.

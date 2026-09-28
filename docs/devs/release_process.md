@@ -4,7 +4,7 @@ title: Release Process
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-09-27
-version: v2.2.1
+version: v2.2.2
 owners:
   - VERSION
   - Makefile
@@ -96,12 +96,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 5. **Sync Python package & protocol specs:** Update `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, `protocol/python/uv.lock`, and the `Version: vX.Y.Z` headers in `protocol/docs/a2a.md`, `protocol/docs/constants.md`, `protocol/docs/mcp.md`, and `protocol/docs/spec.md`.
 6. **Regenerate downstream lockfiles:** Run `make proto` to update `ensemble/uv.lock` and protobuf bindings.
 7. **Update CHANGELOG:** Add the release table row under `## vX.Y.x` in `CHANGELOG.md`.
-8. **Generate and verify compliance evidence:**
-   - Prepare protected scope with `ProductVersion = "X.Y.Z"`.
-   - Prepare signing identity metadata, hex private key, and external report/evidence trust policies.
-   - Run `./g8e compliance report generate --scope <scope> --report-id <id> --profile public ...`.
-   - Verify offline with `./g8e compliance report verify <manifest.json> --trust-policy <trust> ...`.
-   - Project evidence with `./g8e compliance release-evidence <manifest.json> --trust-policy <trust> ... --out docs/release_notes/vX.Y.x`.
+8. **Generate and verify compliance evidence:** Copy the running Gateway database to `<runtime-root>/.g8e/data/g8e.db` (`docker cp` the `g8e.db`, `-wal`, and `-shm` files from the Gateway container), then run `./g8e compliance release-prepare --project-root <runtime-root> --signing-metadata <path> --signing-private-key <path>` (add `--new-key` to create the signing key). The command derives the protected scope with `ProductVersion = "X.Y.Z"` from `VERSION`, git, and the Gateway image digest, exports the assessment window, builds the external report and evidence trust policies, generates a public bundle, verifies it offline, and projects the verified `report.md` and `report.csv` into `docs/release_notes/vX.Y.x/`. It stops before projection when verification fails. Run `./g8e compliance report generate`, `report verify`, and `release-evidence` individually only for a scope authored by hand. Record the bundle path, verification result, and checksum root that the command prints in the release notes.
 9. **Finalize document metadata:** Update `last_updated` and `version` on every audited document.
 10. **Verification checks:** Run `./g8e test lint` and focused package integration tests.
 

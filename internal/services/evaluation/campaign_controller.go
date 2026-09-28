@@ -550,14 +550,8 @@ func (c *CampaignController) publishQueuedAssignments(ctx context.Context, runID
 	if err != nil {
 		return err
 	}
-	for _, assignment := range assignments {
-		category, err := ScenarioCategoryForAssignment(catalog, assignment)
-		if err != nil {
-			return err
-		}
-		if err := c.publication.PublishAssignmentLifecycle(ctx, assignment, category, assignmentLifecycleObservedAt(assignment)); err != nil {
-			return err
-		}
+	if err := c.publication.PublishAssignmentLifecycles(ctx, runID, assignments, catalog); err != nil {
+		return err
 	}
 	_, err = c.publication.PublishRunAggregates(ctx, runID, c.now().UTC())
 	return err

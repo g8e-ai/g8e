@@ -306,7 +306,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	assert.Equal(t, "planned maintenance", <-shutdownObserved)
 	require.Eventually(t, func() bool { return handlerCount(infra.Pubsub, cmdChannel) == 0 }, time.Second, 10*time.Millisecond)
 	orderMu.Lock()
-	assert.Equal(t, []string{"receipt", "receipt", "result", "shutdown"}, order)
+	assert.Equal(t, []string{"receipt", "result", "shutdown"}, order)
 	orderMu.Unlock()
 }
 

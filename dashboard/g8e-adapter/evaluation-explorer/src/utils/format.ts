@@ -91,3 +91,10 @@ export function metricDisplay(
   }
   return { text: formatter(metric.value), unavailable: false };
 }
+
+/** Abbreviate an assignment ID to 6 characters followed by an ellipsis if longer than 6 characters. */
+export function abbreviateAssignmentId(id: string | undefined): string {
+  if (!id || id === '—') return '—';
+  if (id.length <= 6) return id;
+  return `${id.slice(0, 6)}…`;
+}

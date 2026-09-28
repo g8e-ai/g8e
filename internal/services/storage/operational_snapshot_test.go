@@ -87,3 +87,30 @@ func TestReadOnlyOperationalEvidence_SnapshotFailsInsteadOfTruncatingPopulation(
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactTooLarge)
 }
+
+func TestReadOnlyOperationalEvidence_LatestCommitmentAtReturnsNewestCommitTime(t *testing.T) {
+	dbPath := filepath.Join(testutil.TempDir(t), constants.TestReadOnlyDatabaseFilename)
+	writer, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
+	require.NoError(t, err)
+	_, err = writer.Exec(auditStoreSchema)
+	require.NoError(t, err)
+	reader := func() *ReadOnlyOperationalEvidence {
+		r, openErr := OpenReadOnlyOperationalEvidence(dbPath, testutil.NewTestLogger())
+		require.NoError(t, openErr)
+		t.Cleanup(func() { require.NoError(t, r.Close()) })
+		return r
+	}
+
+	_, err = reader().LatestCommitmentAt(context.Background())
+	require.ErrorIs(t, err, constants.ErrNotFound, "an empty ledger must not yield an assessment window")
+
+	for index, committedAtMs := range []int64{1_700_000_002_000, 1_700_000_009_500, 1_700_000_005_000} {
+		_, err = writer.Exec(`INSERT INTO commitment_ledger (transaction_id, transaction_hash, prior_commitment_hash, committed_at_unix_ms, hash, attestation_json) VALUES (?, ?, ?, ?, ?, ?)`, "tx", "hash", "", committedAtMs, "commitment-"+string(rune('a'+index)), []byte(`{}`))
+		require.NoError(t, err)
+	}
+	require.NoError(t, writer.Close())
+
+	latest, err := reader().LatestCommitmentAt(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, time.UnixMilli(1_700_000_009_500).UTC(), latest)
+}

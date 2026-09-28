@@ -9,12 +9,9 @@ package pubsub
 
 import (
 	"context"
-	"crypto/ed25519"
 	"sync/atomic"
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,20 +24,6 @@ func TestHeartbeatService_RegisterSink_FiresOnSendAutomatic(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	svc := NewHeartbeatService(cfg, logger, nil)
 	svc.SetContext(context.Background())
-
-	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-			return "test-receipt-id", nil
-		},
-	}
-	privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-	mockActuator := &governance.L5Actuator{
-		Logger:           logger,
-		ExecutionHandler: mockHandler,
-		SigningKey:       privKey,
-		KeyID:            "test-key",
-	}
-	svc.SetActuator(mockActuator)
 
 	var sinkCalled atomic.Bool
 	svc.RegisterSink(func(ctx context.Context) {
@@ -59,20 +42,6 @@ func TestHeartbeatService_RegisterSink_MultipleSinksFireInRegistrationOrder(t *t
 	logger := testutil.NewTestLogger()
 	svc := NewHeartbeatService(cfg, logger, nil)
 	svc.SetContext(context.Background())
-
-	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-			return "test-receipt-id", nil
-		},
-	}
-	privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-	mockActuator := &governance.L5Actuator{
-		Logger:           logger,
-		ExecutionHandler: mockHandler,
-		SigningKey:       privKey,
-		KeyID:            "test-key",
-	}
-	svc.SetActuator(mockActuator)
 
 	var order []int
 	var mu atomic.Int32
@@ -102,20 +71,6 @@ func TestHeartbeatService_SendAutomatic_NoPanicWhenSinkListIsEmpty(t *testing.T)
 	svc := NewHeartbeatService(cfg, logger, nil)
 	svc.SetContext(context.Background())
 
-	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-			return "test-receipt-id", nil
-		},
-	}
-	privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-	mockActuator := &governance.L5Actuator{
-		Logger:           logger,
-		ExecutionHandler: mockHandler,
-		SigningKey:       privKey,
-		KeyID:            "test-key",
-	}
-	svc.SetActuator(mockActuator)
-
 	err := svc.SendAutomatic()
 	require.NoError(t, err)
 }
@@ -127,20 +82,6 @@ func TestHeartbeatService_RegisterSink_PanickingSinkDoesNotCrashHeartbeatCycle(t
 	logger := testutil.NewTestLogger()
 	svc := NewHeartbeatService(cfg, logger, nil)
 	svc.SetContext(context.Background())
-
-	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-			return "test-receipt-id", nil
-		},
-	}
-	privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-	mockActuator := &governance.L5Actuator{
-		Logger:           logger,
-		ExecutionHandler: mockHandler,
-		SigningKey:       privKey,
-		KeyID:            "test-key",
-	}
-	svc.SetActuator(mockActuator)
 
 	var afterPanicCalled atomic.Bool
 	svc.RegisterSink(func(ctx context.Context) {
@@ -163,20 +104,6 @@ func TestHeartbeatService_UnregisterSink_RemovesSink(t *testing.T) {
 	svc := NewHeartbeatService(cfg, logger, nil)
 	svc.SetContext(context.Background())
 
-	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-			return "test-receipt-id", nil
-		},
-	}
-	privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-	mockActuator := &governance.L5Actuator{
-		Logger:           logger,
-		ExecutionHandler: mockHandler,
-		SigningKey:       privKey,
-		KeyID:            "test-key",
-	}
-	svc.SetActuator(mockActuator)
-
 	var sinkCalled atomic.Bool
 	id := svc.RegisterSink(func(ctx context.Context) {
 		sinkCalled.Store(true)
@@ -197,20 +124,6 @@ func TestHeartbeatService_UnregisterSink_NonexistentIDIsNoOp(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	svc := NewHeartbeatService(cfg, logger, nil)
 	svc.SetContext(context.Background())
-
-	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-			return "test-receipt-id", nil
-		},
-	}
-	privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
-	mockActuator := &governance.L5Actuator{
-		Logger:           logger,
-		ExecutionHandler: mockHandler,
-		SigningKey:       privKey,
-		KeyID:            "test-key",
-	}
-	svc.SetActuator(mockActuator)
 
 	var sinkCalled atomic.Bool
 	svc.RegisterSink(func(ctx context.Context) {

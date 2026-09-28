@@ -38,42 +38,38 @@ function RoleSlot({ slot }: { slot: RoleSlotState }) {
   const roleName = MODEL_ROLES.find((role) => role.wire === slot.role)?.name ?? roleLabel(slot.role);
   const modelLabel = slot.variantId ?? '—';
   const progressPercent = slot.progressPercent ?? 0;
+  const isRunning = slot.status === 'active';
 
   return (
     <div
       className={`header-campaign-role header-campaign-role-role-${slot.role} header-campaign-role-${slot.status}`}
       aria-label={roleSlotAriaLabel(slot)}
-      title={`${roleName}: ${modelLabel}`}
+      title={isRunning && slot.progressTotal ? `${roleName}: ${modelLabel} (${progressPercent}% complete)` : `${roleName}: ${modelLabel}`}
     >
       <span className="header-campaign-role-model">{modelLabel}</span>
       {slot.status === 'active' ? (
-        <span className="header-campaign-role-status">
-          <span className="status-dot" aria-hidden="true" />
-          Active
-        </span>
+        <span className="sr-only header-campaign-role-status">Active</span>
       ) : null}
       {slot.status === 'completed' ? (
-        <span className="header-campaign-role-status header-campaign-role-status-completed">Done</span>
+        <span className="sr-only header-campaign-role-status header-campaign-role-status-completed">Done</span>
       ) : null}
       {slot.status === 'failed' ? (
-        <span className="header-campaign-role-status header-campaign-role-status-failed">Failed</span>
+        <span className="sr-only header-campaign-role-status header-campaign-role-status-failed">Failed</span>
       ) : null}
       {slot.status === 'active' && slot.progressTotal && slot.progressTotal > 0 ? (
-        <div className="header-campaign-role-progress">
+        <div
+          className="header-campaign-role-bottom-progress"
+          role="progressbar"
+          aria-valuenow={slot.progressCompleted ?? 0}
+          aria-valuemin={0}
+          aria-valuemax={slot.progressTotal}
+          aria-label={`${roleName} campaign progress`}
+        >
           <div
-            className="header-campaign-role-progress-track"
-            role="progressbar"
-            aria-valuenow={slot.progressCompleted ?? 0}
-            aria-valuemin={0}
-            aria-valuemax={slot.progressTotal}
-            aria-label={`${roleName} campaign progress`}
-          >
-            <div
-              className="header-campaign-role-progress-fill"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <span className="header-campaign-role-progress-label">{progressPercent}%</span>
+            className="header-campaign-role-bottom-progress-fill"
+            style={{ width: `${progressPercent}%` }}
+          />
+          <span className="sr-only">{progressPercent}%</span>
         </div>
       ) : null}
     </div>

@@ -32,7 +32,7 @@ After credentials are available, the worker connects to the Gateway over mTLS, o
 cmd:<operator-id>:<operator-session-id>
 ```
 
-It publishes an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds. The worker retries a closed pub/sub connection with bounded backoff. It initializes encrypted local storage and execution services before accepting governed work. The execution vault is required by the outbound startup path; setting `--execution-vault=false` fails closed during initialization.
+It publishes an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds. An automatic heartbeat is Operator-originated liveness, not a governed operation: it is published directly and produces no receipt or ledger commitment, so it never appears in operational compliance evidence. The worker retries a closed pub/sub connection with bounded backoff. It initializes encrypted local storage and execution services before accepting governed work. The execution vault is required by the outbound startup path; setting `--execution-vault=false` fails closed during initialization.
 
 The main startup options are:
 

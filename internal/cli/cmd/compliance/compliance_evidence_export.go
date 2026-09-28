@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 func complianceEvidenceCmd() *cobra.Command {
@@ -58,41 +59,8 @@ func complianceEvidenceExportCmdWithConfig(fileSvcFactory func(string, *slog.Log
 			if err != nil {
 				return err
 			}
-			if len(scope.GetSourceAdmissions()) != 1 {
-				return fmt.Errorf("%w: operational export requires exactly one source admission", constants.ErrValidationFailed)
-			}
-			admission := scope.GetSourceAdmissions()[0]
 			dbPath := pathutil.ResolveDBPath(fileSvc.Resolve(constants.DataDirname), constants.DbFilename)
-			reader, err := storage.OpenReadOnlyOperationalEvidence(dbPath, slog.Default())
-			if err != nil {
-				return err
-			}
-			defer func() { _ = reader.Close() }()
-			snapshot, err := reader.Snapshot(ctx, storage.OperationalEvidenceQuery{
-				WindowStart: scope.GetAssessmentWindowStart().AsTime(),
-				WindowEnd:   scope.GetAssessmentWindowEnd().AsTime(),
-				MaxRows:     maxRows,
-			})
-			if err != nil {
-				return err
-			}
-			inventory, err := evidence.ExportOperationalEvidence(ctx, snapshot, evidence.OperationalExportRequest{
-				ScopeID:              scope.GetScopeId(),
-				AdmissionID:          admission.GetAdmissionId(),
-				SourceKind:           admission.GetSourceKind(),
-				SourceVersion:        admission.GetSourceVersion(),
-				SourceScopeID:        admission.GetSourceScopeId(),
-				OwnerRuntimeBoundary: admission.GetOwnerRuntimeBoundary(),
-				AcquisitionBoundary:  admission.GetAcquisitionBoundary(),
-				RunID:                admission.GetRunId(),
-				SnapshotID:           admission.GetSnapshotId(),
-				VerifierID:           admission.GetVerifierRef().GetId(),
-				VerifierVersion:      admission.GetVerifierRef().GetVersion(),
-				WindowStart:          scope.GetAssessmentWindowStart().AsTime(),
-				WindowEnd:            scope.GetAssessmentWindowEnd().AsTime(),
-				MaxRows:              maxRows,
-				OutputDir:            outputDir,
-			})
+			inventory, _, err := exportOperationalEvidence(ctx, dbPath, scope, outputDir, maxRows)
 			if err != nil {
 				return err
 			}
@@ -110,4 +78,49 @@ func complianceEvidenceExportCmdWithConfig(fileSvcFactory func(string, *slog.Log
 	cmd.Flags().StringVar(&outputDir, "out", "", "Output directory for the operational source package")
 	cmd.Flags().IntVar(&maxRows, "max-rows", constants.ComplianceOperationalExportDefaultMaxRows, "Maximum receipts and commitments to export")
 	return cmd
+}
+
+// exportOperationalEvidence reads the scope's single operational source
+// admission from a read-only database snapshot and writes its bounded source
+// package. It returns the snapshot so callers can derive signer trust from the
+// exact rows that were exported.
+func exportOperationalEvidence(ctx context.Context, dbPath string, scope *compliancev1.AssessmentScope, outputDir string, maxRows int) (*evidence.OperationalSourceInventory, *storage.OperationalEvidenceSnapshot, error) {
+	if len(scope.GetSourceAdmissions()) != 1 {
+		return nil, nil, fmt.Errorf("%w: operational export requires exactly one source admission", constants.ErrValidationFailed)
+	}
+	admission := scope.GetSourceAdmissions()[0]
+	reader, err := storage.OpenReadOnlyOperationalEvidence(dbPath, slog.Default())
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = reader.Close() }()
+	snapshot, err := reader.Snapshot(ctx, storage.OperationalEvidenceQuery{
+		WindowStart: scope.GetAssessmentWindowStart().AsTime(),
+		WindowEnd:   scope.GetAssessmentWindowEnd().AsTime(),
+		MaxRows:     maxRows,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	inventory, err := evidence.ExportOperationalEvidence(ctx, snapshot, evidence.OperationalExportRequest{
+		ScopeID:              scope.GetScopeId(),
+		AdmissionID:          admission.GetAdmissionId(),
+		SourceKind:           admission.GetSourceKind(),
+		SourceVersion:        admission.GetSourceVersion(),
+		SourceScopeID:        admission.GetSourceScopeId(),
+		OwnerRuntimeBoundary: admission.GetOwnerRuntimeBoundary(),
+		AcquisitionBoundary:  admission.GetAcquisitionBoundary(),
+		RunID:                admission.GetRunId(),
+		SnapshotID:           admission.GetSnapshotId(),
+		VerifierID:           admission.GetVerifierRef().GetId(),
+		VerifierVersion:      admission.GetVerifierRef().GetVersion(),
+		WindowStart:          scope.GetAssessmentWindowStart().AsTime(),
+		WindowEnd:            scope.GetAssessmentWindowEnd().AsTime(),
+		MaxRows:              maxRows,
+		OutputDir:            outputDir,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return inventory, snapshot, nil
 }
