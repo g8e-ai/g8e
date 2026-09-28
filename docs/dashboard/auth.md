@@ -1,113 +1,183 @@
-# Authentication
+---
+doc_id: dashboard-auth
+title: Dashboard Authentication
+audience: platform developers deploying or extending g8ed, platform security reviewers
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - dashboard/public/js/components/auth.js
+  - dashboard/services/infra/app-enrollment-service.js
+  - docs/dashboard/auth.md
+related:
+  - docs/dashboard/architecture.md
+  - docs/dashboard/gateway.md
+  - docs/dashboard/devs.md
+  - docs/architecture/auth.md
+  - docs/architecture/network.md
+  - docs/guides/build_frontend.md
+  - docs/ensemble/pki.md
+when_to_read: Building a frontend for g8e, deploying the g8ed dashboard in a new environment, understanding WebAuthn and workload enrollment flows, or debugging authentication issues.
+do_not_use_for:
+  - Dashboard host development (docs/dashboard/devs.md)
+  - Browser SPA component architecture (docs/dashboard/architecture.md)
+  - Gateway CORS and security headers (docs/dashboard/gateway.md)
+  - Platform-wide identity models (docs/architecture/auth.md)
+---
 
-## Identity Model
+# Dashboard Authentication
 
-g8ed has separate identities for the browser user and the dashboard container. These credentials are not interchangeable.
+## Purpose
 
-| Surface | Credential | Authority | Use |
-| --- | --- | --- | --- |
-| Browser | WebAuthn passkey and HttpOnly `g8e_web_session_cookie` | g8e Gateway | Gateway user authentication and authorization for browser-accessible routes |
-| Container | ECDSA P-256 certificate and private key issued for the `g8ed` workload | [g8e Gateway PKI](../ensemble/pki.md) | Required startup enrollment; the static host does not use the identity for outbound requests after startup |
+Describes how the g8ed dashboard establishes browser user identities via WebAuthn passkeys and workload identities via owner-approved platform enrollment. The dashboard does not authenticate requests itself; all authentication is delegated to the Gateway. This document covers the distinct credential models, deployment prerequisites, enrollment workflows, session handling, and security boundaries.
 
-The browser never receives the container certificate or private key. The Express host does not read, validate, or forward the browser session cookie.
+## Quick index
 
-## Deployment Requirements
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-Browser authentication requires all of the following:
+Sections: [Identity Model](#identity-model), [Deployment Requirements](#deployment-requirements), [Container Startup Enrollment](#container-startup-enrollment), [Browser Session Behavior](#browser-session-behavior), [Passkey Ceremonies](#passkey-ceremonies), [URL Hash Fragments](#url-hash-fragments), [Gateway Route Authorization](#gateway-route-authorization), [Logout and Expiry](#logout-and-expiry), [Security Boundaries](#security-boundaries).
 
-- `G8E_GATEWAY_URL` identifies an HTTPS Gateway origin that the user's browser can reach and trust.
-- The dashboard origin is an exact `--cors-origin` and `--passkey-rp-origin` on the Gateway.
-- `--passkey-rp-id` is the dashboard hostname or a valid registrable parent-domain suffix. It does not include a scheme or port.
-- The dashboard runs in a WebAuthn secure context (HTTPS or the browser's localhost exception for local development).
-- The browser supports WebAuthn and allows credentialed cross-origin requests.
+## Invariants
 
-The dashboard sends browser requests directly to `G8E_GATEWAY_URL` with credentials included. When the Gateway has one or more allowed cross-origin origins, it permits exact origin matches, allows credentials, and issues the session cookie with `SameSite=None`. Without cross-origin origins, the cookie uses `SameSite=Lax`. The cookie is always `Secure` and is sent only to the Gateway over HTTPS.
+### Browser authentication (`INV-DASHBOARD-BROWSER-AUTH`)
 
-Container enrollment separately requires `G8E_GATEWAY_HTTP_URL`, a writable and persistent `G8E_RUNTIME_DIR`, and network access from the container to the Gateway's plain-HTTP bootstrap surface.
+| ID | Rule |
+| --- | --- |
+| INV-DASHBOARD-BROWSER-AUTH-01 | Browser users authenticate via WebAuthn passkeys (`POST /api/v1/auth/passkeys/console/register/challenge`, `verify`, `authenticate/challenge`, `verify`) to the Gateway at `window.G8E_GATEWAY_URL` with `credentials: 'include'`. The authenticate challenge requires an explicit `user_id`. |
+| INV-DASHBOARD-BROWSER-AUTH-02 | The Gateway issues a Secure, HttpOnly `g8e_web_session_cookie` after successful passkey registration or authentication. Sessions expire in 24 hours. The browser never receives or can read the cookie value; it is sent automatically on all subsequent requests. |
+| INV-DASHBOARD-BROWSER-AUTH-03 | Browser deployment requires `G8E_GATEWAY_URL` (HTTPS origin), `--cors-origin` (exact match of the dashboard origin), and `--passkey-rp-id` (dashboard hostname or parent domain suffix) configured on the Gateway. The dashboard must run in a WebAuthn secure context (HTTPS or localhost exception). |
+| INV-DASHBOARD-BROWSER-AUTH-04 | When the Gateway has one or more allowed cross-origin origins configured, the session cookie uses `SameSite=None`; otherwise it uses `SameSite=Lax`. The cookie is always `Secure` and sent only over HTTPS to the Gateway origin. |
 
-## Container Startup Enrollment
+### Workload identity and enrollment (`INV-DASHBOARD-WORKLOAD-ENROLL`)
 
-The dashboard resolves its workload identity before Express begins listening:
+| ID | Rule |
+| --- | --- |
+| INV-DASHBOARD-WORKLOAD-ENROLL-01 | The dashboard generates an ECDSA P-256 key and certificate signing request (CSR) at startup via the enrollment service and submits it to `G8E_GATEWAY_HTTP_URL` (plain HTTP). The service loads a previously issued certificate if it exists, parses correctly, has > 7 days of validity remaining, and contains a URI subject alternative name. |
+| INV-DASHBOARD-WORKLOAD-ENROLL-02 | The enrollment request submission retries with bounded exponential backoff for up to 30 minutes to allow the Gateway bootstrap window before owner approval is available. Pending enrollment state (token, private key, request ID, CSR fingerprint, expiry) is persisted atomically with `0600` permissions and survives process restarts. |
+| INV-DASHBOARD-WORKLOAD-ENROLL-03 | After owner approval, the dashboard signs a completion transcript with the private key, submits it, validates the response (URI SAN containing `g8ed`, returned trust bundle), and installs certificates atomically. The Express server does not listen until enrollment succeeds or identity loading succeeds; startup failures exit with status 1. |
+| INV-DASHBOARD-WORKLOAD-ENROLL-04 | Installed identity reuse does not verify that the private key matches the certificate, validate the certificate chain against the trust bundle, require the trust bundle to exist, or enforce the URI SAN format `spiffe://g8e.local/app/g8ed`. Enrollment completion parsing requires a URI SAN containing the component name `g8ed` but does not validate the chain or public-key match before installation. |
 
-1. It checks for an installed certificate and private key under `G8E_RUNTIME_DIR`.
-2. It reuses the certificate when it can parse the certificate, find a URI subject alternative name, and confirm that more than seven days remain before expiry.
-3. Otherwise, it resumes an unexpired persisted enrollment request or creates a P-256 key and certificate signing request when no resumable request exists.
-4. It submits the request through the Gateway's plain-HTTP bootstrap surface and waits for owner approval. If the Gateway has no owner yet, submission retries for up to 30 minutes while bootstrap completes.
-5. After approval, it proves possession of the generated private key, receives the issued credential, and installs the certificate, key, and returned trust bundle.
-6. Express starts only after identity loading or enrollment succeeds. Unexpected identity-read failures, denied requests, and enrollment failures stop startup.
+### Session and cookie behavior (`INV-DASHBOARD-SESSION`)
 
-The approval page is provided by the Gateway console because the dashboard is not available while its own enrollment is pending. Unexpired pending state survives process restarts so the dashboard can continue the same request and instance identity without generating a new key. When persisted state has expired, the dashboard replaces it with a new request. A denied request remains on disk and requires operator intervention before a new request can be created.
+| ID | Rule |
+| --- | --- |
+| INV-DASHBOARD-SESSION-01 | On page load, the dashboard validates its session by calling the Gateway's current-user endpoint with the session cookie. Session metadata is held in memory (not persisted to local storage). Reloading the dashboard reconstructs display state from the Gateway. |
+| INV-DASHBOARD-SESSION-02 | The Gateway returns `401` for missing, unknown, expired, or invalid session cookies. The dashboard clears in-memory state on initial validation failure. Terminal event-stream failures after authentication are treated as session expiry, though transient network failures do not prove session loss. |
+| INV-DASHBOARD-SESSION-03 | Logout deletes the server-side session and expires the cookie. The dashboard disconnects the event client, clears in-memory user state, and returns to the home route. The logout endpoint is safe to call with a missing or invalid cookie. |
 
-Runtime files under `G8E_RUNTIME_DIR`:
+### Hash fragment routing (`INV-DASHBOARD-HASH-ROUTING`)
 
-| Relative path | Purpose | Permission |
+| ID | Rule |
+| --- | --- |
+| INV-DASHBOARD-HASH-ROUTING-01 | URL hash fragments (`#token=`, `#enroll=1&token=`, `#recovery=`, `#platform-enrollment=`, `#approve=`) are parsed and cleared via `history.replaceState` after authentication is validated. Fragment-triggered flows (passkey enrollment, recovery approval, platform enrollment decision, transaction approval) require an existing session or queue their actions until authentication succeeds. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
 | --- | --- | --- |
-| `pki/issued/apps/g8ed.crt` | App leaf certificate and returned certificate chain | `0600` |
-| `pki/issued/apps/g8ed.key` | App private key | `0600` |
-| `pki/trust/hub-bundle.pem` | Returned Gateway trust bundle | `0644` |
-| `pki/pending-enrollment/dashboard.json` | Resumable request token, private key, request metadata, and expiry | `0600` |
+| Browser authentication flow | `dashboard/public/js/components/auth.js` | AuthManager class, passkey ceremony routes, session validation |
+| Workload enrollment service | `dashboard/services/infra/app-enrollment-service.js` | Load-then-enroll logic, CSR generation, P-256 key, request submission, approval polling, completion validation |
+| API path builders | `dashboard/public/js/constants/api-paths.js` | Passkey challenge/verify routes, console routes, auth paths |
+| Session model and service | `dashboard/public/js/models/session-model.js`, `dashboard/public/js/utils/web-session-service.js` | Session metadata persistence in memory |
+| Startup entrypoint | `dashboard/server.js` | `runStartupEnrollment()` export, enrollment-before-listen guarantee |
+| Environment variables | `dashboard/package.json`, `dashboard/Dockerfile`, `dashboard/entrypoint.sh` | G8E_GATEWAY_URL, G8E_GATEWAY_HTTP_URL, G8E_RUNTIME_DIR requirements |
+| Credential file paths | `dashboard/services/infra/app-enrollment-service.js` | Paths under G8E_RUNTIME_DIR: `pki/issued/apps/g8ed.*`, `pki/trust/hub-bundle.pem`, `pki/pending-enrollment/dashboard.json` |
 
-Installed identity reuse checks that the certificate and key files exist, parses the certificate, rejects certificates with 7 days or less remaining, and extracts a URI subject alternative name. It does not verify that the private key matches the certificate, validate the certificate chain against the stored trust bundle, require the trust bundle to exist, or require the URI subject alternative name to equal `spiffe://g8e.local/app/g8ed`. Enrollment completion parses the returned certificate and requires a URI subject alternative name containing the component name `g8ed`; it does not validate the returned chain, trust bundle, or public-key match before installation. The static host retains the resolved file paths but does not construct an outbound mTLS client from them.
+## Procedures
 
-## Browser Session Behavior
+### Deploy dashboard with browser authentication
 
-On page startup, the dashboard asks the Gateway for the current user. If the Gateway accepts the session cookie, the dashboard also requests the public web-session identifier and keeps the returned user and session metadata in memory for display and event routing. JavaScript cannot read the HttpOnly cookie, and the dashboard does not add bearer tokens, session headers, API keys, or synthetic cookie headers to Gateway requests.
+Browser authentication requires:
+1. A bootstrapped Gateway accessible at `G8E_GATEWAY_URL` (HTTPS, no localhost without cert).
+2. The dashboard origin configured as an exact `--cors-origin` on the Gateway.
+3. The dashboard hostname (or a parent domain suffix) configured as `--passkey-rp-id` on the Gateway.
+4. The dashboard running in a secure context (HTTPS or `localhost` with browser's localhost exception).
 
-The Gateway creates a session after successful passkey registration or authentication. Sessions expire after 24 hours. On every protected browser request, the Gateway looks up the session, checks its expiry, and verifies that the associated user remains valid. Reloading the dashboard reconstructs local display state from the Gateway; no browser session is persisted in local storage.
+Verify connectivity:
+```bash
+# From the browser, verify window.G8E_GATEWAY_URL is set and reachable
+curl -k https://<G8E_GATEWAY_URL>/api/v1/health
+```
 
-## Passkey Ceremonies
+On first user access, the browser redirects to the Gateway's passkey registration page. After registration completes, the Gateway sets the session cookie and redirects back to the dashboard.
 
-The dashboard sign-in flow calls Gateway console passkey routes directly:
+### Enroll the dashboard workload at startup
 
-1. **Register:** `POST /api/v1/auth/passkeys/console/register/challenge` then `verify` with `options.publicKey` decoding.
-2. **Authenticate:** `POST /api/v1/auth/passkeys/console/authenticate/challenge` with a required `user_id`, then `verify`.
+The dashboard enrollment service runs during server startup before Express listens:
 
-The authenticate challenge requires an explicit g8e user ID. The dashboard collects `user_id` from the sign-in form and persists it in `localStorage` under `g8e_user_id` for returning users. Discoverable-credential sign-in without `user_id` is not supported by the Gateway.
+1. **Load existing identity** (if available):
+   - Reads `pki/issued/apps/g8ed.crt` and `g8ed.key` from `G8E_RUNTIME_DIR`.
+   - Parses the certificate and checks expiry (reuses only if > 7 days remain).
+   - Extracts the URI subject alternative name and uses it as `app_id`.
+   - On success, Express starts and the process continues.
 
-First-owner registration remains available while the Gateway has no users. Registration without a user ID is accepted only in that bootstrap state.
+2. **Enroll (if load fails or cert is near expiry)**:
+   - Generates ECDSA P-256 key and CSR (component name: `g8ed`).
+   - Submits enrollment request to `G8E_GATEWAY_HTTP_URL/api/v1/auth/platform-enrollments/request`.
+   - Retries on 403 "platform enrollment requires a bootstrapped gateway" for up to 30 minutes.
+   - Persists pending state (token, key, request ID, CSR fingerprint, expiry) with `0600` permissions.
+   - Polls status with bounded exponential backoff (initial delay: 2s, max delay: 30s).
+   - After approval, signs a completion transcript with the private key and calls the completion endpoint.
+   - Validates the response: URI SAN contains `g8ed`, trust bundle is readable.
+   - Atomically writes certificate, key, and trust bundle using temp-file-plus-rename.
+   - Removes the pending state file.
 
-For the Gateway's supported browser flow, see [Build a g8e-Compatible Frontend](../guides/build_frontend.md).
+3. **On failure**, the process exits with status 1. Operator approval is visible in the Gateway console at `/console/`. To check pending enrollments from the CLI:
+   ```bash
+   ./g8e auth enroll pending
+   ./g8e auth enroll approve <request-id> --yes
+   ```
 
-## URL Hash Fragments
+### Handle URL hash fragment actions
 
-After session validation, `auth.js` processes authenticated hash actions parsed from the page URL:
+The dashboard processes these URL hash fragments after session validation:
 
-| Fragment | Parameters | Action |
+| Fragment | Payload | Behavior |
 | --- | --- | --- |
-| `#recovery=` | `recovery=<token>` | CLI recovery approval flow |
-| `#enroll=1&token=` | `enroll=1`, `token=<token>` | Passkey enrollment with token |
-| `#token=` | `token=<token>` | Passkey enrollment (token only) |
-| `#platform-enrollment=` | `platform-enrollment=<id>` | Platform enrollment decision |
-| `#approve=` | `approve=<txHash>` | Approval ceremony for a pending transaction |
+| `#token=<enrollmentToken>` | Passkey enrollment token | Calls `/api/v1/auth/passkeys/enrollment/register/challenge` to start passkey enrollment (e.g., when invited by email) |
+| `#enroll=1&token=<token>` | Enrollment mode + token | Variant of `#token=`, processed the same way |
+| `#recovery=<token>` | CLI recovery token | Starts recovery approval flow (requires authenticated session; queued if not yet logged in) |
+| `#platform-enrollment=<requestId>` | Platform enrollment request ID | Prompts for decision on a pending platform enrollment (requires authenticated session; queued if not yet logged in) |
+| `#approve=<txHash>` | Transaction hash | Starts approval ceremony for a pending transaction (requires authenticated session; queued if not yet logged in) |
 
-Processed fragments are cleared from the URL with `history.replaceState`.
+Fragments are cleared from the URL with `history.replaceState` immediately after parsing.
 
-## Gateway Route Authorization
+### Inspect runtime files during enrollment
 
-The Gateway applies browser authentication. The console passkey registration and authentication ceremony routes are public Gateway routes because the ceremony itself establishes the browser session; registration without a user ID is accepted only when the Gateway has no users and is limited to the first credential. Logout is also public and safely handles a missing cookie.
+After enrollment completes, the dashboard stores credentials under `G8E_RUNTIME_DIR`:
 
-After a session exists, the Gateway's browser-session routes validate the cookie and derive the user and web-session IDs from the persisted session. These routes include the current-user and session-info endpoints, passkey management, browser approvals, observe API, ensemble browser proxy paths, operator list/bind/unbind routes, and audit read paths. mTLS-only routes, including workload producers, Operator dispatch commands, administrative APIs, PKI management, and direct governance-envelope submission, are not browser routes. The dashboard static host does not proxy them.
+```bash
+G8E_RUNTIME_DIR=/data
+ls -la $G8E_RUNTIME_DIR/pki/issued/apps/
+ls -la $G8E_RUNTIME_DIR/pki/trust/
+ls -la $G8E_RUNTIME_DIR/pki/pending-enrollment/ # Empty after successful enrollment
+```
 
-## Logout and Expiry
+Certificate files (`g8ed.crt`, `g8ed.key`) are readable only by the dashboard process (mode `0600`). The trust bundle (`hub-bundle.pem`) is readable by all but writable only by the owner (mode `0644`). Do not manually edit these files; let the enrollment service manage them.
 
-Logout asks the Gateway to delete the session referenced by the cookie and expire the cookie. The dashboard then disconnects its event client, clears its in-memory user state, and returns to the home route. The Gateway logout route is safe to call when no cookie exists.
+## Anti-patterns
 
-A protected request with a missing, unknown, expired, or otherwise invalid session receives an unauthorized response from the Gateway. The dashboard clears local state when its initial session check fails. It also treats a terminal event-stream failure after authentication as session expiry, although an event-stream routing or network failure does not itself prove that the Gateway session expired.
+- Deploying without `G8E_GATEWAY_URL` set or reachable; the dashboard fails closed at startup.
+- Configuring `--cors-origin` on the Gateway without also setting `--passkey-rp-id`; passkey registration will fail.
+- Hard-coding a fallback Gateway origin in the browser when `window.G8E_GATEWAY_URL` is undefined; this defeats the deployment configuration model.
+- Attempting cross-origin browser requests to the Gateway without `SameSite=None`; configure `--cors-origin` on the Gateway.
+- Manually editing installed credentials in `G8E_RUNTIME_DIR` instead of triggering re-enrollment via the enrollment service.
+- Treating transient network failures in the event stream as proof of session expiry; call the current-user endpoint to verify.
+- Persisting the session cookie to local storage; it is HttpOnly and cannot be read from JavaScript.
+- Skipping the enrollment phase at startup; the dashboard cannot serve traffic without a workload identity.
 
-## Security Boundaries
+## Links out
 
-- The Gateway, not the dashboard host, authenticates browser users and authorizes browser-accessible API requests.
-- The HttpOnly session cookie remains scoped to the Gateway origin and is not exposed to dashboard JavaScript.
-- The workload private key remains in the dashboard runtime volume and is not published through browser configuration or static assets.
-- The workload certificate does not grant the browser access to mTLS-only Gateway routes.
-- Content Security Policy restricts browser connections to the dashboard origin and configured Gateway origin.
-- Dashboard authentication does not bypass governance. Supported operations that enter a governed Gateway path remain subject to the active [five-layer verification pipeline](../architecture/governance.md).
-
-## Related
-
-- [Dashboard Architecture](architecture.md)
-- [Gateway Integration](gateway.md)
-- [Authentication and Authorization](../architecture/auth.md)
-- [PKI and Trust](../ensemble/pki.md)
-- [Build a g8e-Compatible Frontend](../guides/build_frontend.md)
-- [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md)
+- [Dashboard Architecture](architecture.md): Runtime boundaries, browser-to-gateway communication, component lifecycle.
+- [Dashboard Development Guide](devs.md): Setting up the dev environment, running enrollment, npm scripts.
+- [Gateway Integration](gateway.md): CORS configuration, Content Security Policy, certificate validation for mTLS.
+- [Platform Authentication](../architecture/auth.md): CLI and certificate session models, multi-layer verification, identity model overview.
+- [Network Architecture](../architecture/network.md): Trust boundaries, threat model, communication patterns.
+- [PKI and Trust](../ensemble/pki.md): Root CA, certificate issuance, trust bundle management.
+- [Build a g8e-Compatible Frontend](../guides/build_frontend.md): WebAuthn contract, passkey ceremony flow, credentials: 'include' requirements.

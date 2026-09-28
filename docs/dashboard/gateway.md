@@ -4,7 +4,7 @@ The dashboard separates static application delivery from Gateway access. A Node.
 
 ## Runtime Boundaries
 
-`G8E_GATEWAY_URL` is required before the dashboard starts. The dashboard publishes this browser-facing origin through the `/g8e-config.js` endpoint (served with `Cache-Control: no-cache`) and includes the same origin in the browser Content Security Policy. Browser requests to the configured Gateway are sent with `credentials: 'include'` so the browser can transmit the Gateway-issued HttpOnly session cookie.
+`G8E_GATEWAY_URL` is required before the dashboard starts. The dashboard publishes this browser-facing origin through the `/g8e-config.js` endpoint (served with `Cache-Control: no-cache, no-store, must-revalidate`) and includes the same origin in the browser Content Security Policy. Browser requests to the configured Gateway are sent with `credentials: 'include'` so the browser can transmit the Gateway-issued HttpOnly session cookie.
 
 The Node.js process is a static application host only. It does not mount Express routers for platform APIs, create bearer tokens, issue API keys, or generate session headers. All feature traffic from [dashboard/public/js/utils/service-client.js](../../dashboard/public/js/utils/service-client.js) uses `ServiceName.GATEWAY` and resolves request paths against `window.G8E_GATEWAY_URL`.
 
@@ -21,7 +21,7 @@ The Node.js process is a static application host only. It does not mount Express
 | Approvals and terminal direct commands | Gateway `/api/v1/operator/approval/respond` and `/api/v1/operator/direct-command` ensemble proxy. |
 | Audit log REST | Browser-readable audit endpoints: `/api/v1/audit/events`, `/api/v1/audit/summary`, `/api/v1/audit/verify`. |
 | Device links and Operator API keys | Not available from the browser. |
-| Operator binary download | Gateway `/.well-known/g8e/bin/{os}/{arch}` and corresponding `.../sha256` paths. |
+| Operator binary download | Gateway `/.well-known/g8e/bin/{filename}` serves both binary and checksum files. Filenames follow the pattern `g8e-{os}-{arch}[.exe]` (Linux: `g8e-linux-amd64`, Darwin: `g8e-darwin-arm64`, Windows: `g8e-windows-amd64.exe`). Checksums available at `g8e-{os}-{arch}[.exe].sha256`. |
 
 ## Deployment Requirements
 
