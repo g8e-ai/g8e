@@ -118,7 +118,7 @@ async function build() {
   ]);
   const html = renderWebsite(readme, template);
   if (process.argv.includes('--check')) {
-    if (!html.includes('id="why-g8e-exists"') || !html.includes('id="the-suite"') || !html.includes('id="how-g8e-works"') || !html.includes('id="quick-start"') || !html.includes('id="proof-not-promises"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
+    if (!html.includes('id="why-g8e-exists"') || !html.includes('id="how-it-works"') || !html.includes('id="the-platform-suite"') || !html.includes('id="what-the-platform-can-do"') || !html.includes('id="quick-start"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
     return;
   }
   await rm(OUTPUT_DIRECTORY, { recursive: true, force: true });
@@ -137,7 +137,7 @@ async function build() {
   }));
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   build().catch(error => {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

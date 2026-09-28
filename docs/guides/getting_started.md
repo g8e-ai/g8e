@@ -1,12 +1,29 @@
 ---
+doc_id: getting_started
 title: Getting Started
-parent: Guides
+audience: new users and platform evaluators
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/guides/getting_started.md
+  - docker-compose.yml
+  - Makefile
+related:
+  - docs/guides/unified_stack.md
+  - docs/guides/docker_gateway.md
+  - docs/guides/connect_operator_to_gateway.md
+  - docs/ensemble/index.md
+  - docs/dashboard/index.md
+  - docs/architecture/auth.md
+when_to_read: Setting up g8e for the first time, bootstrapping a demo environment, or understanding the platform's core execution model.
+do_not_use_for:
+  - Architecture details — see docs/architecture/gateway.md
+  - Production deployment — see docs/guides/unified_stack.md
+  - Authentication details — see docs/architecture/auth.md
 ---
 
 # Getting Started
-
-Last Updated: 2026-09-24
-Version: v2.1.13
 
 ---
 
@@ -27,7 +44,7 @@ The recommended path to launch g8e is the unified Docker Compose stack from the 
 
 The root image builds only the runtime binary for the image target platform (`linux/amd64` or `linux/arm64`). Run `make build-all` on the host when you need the full Linux, Windows, and macOS deployment matrix for remote Operator deployment. Linux binaries link the Go Cryptographic Module through `GOFIPS140=v1.0.0`; the FIPS 140-3 claim is scoped to linux/amd64, and strict runtime enforcement requires `GODEBUG=fips140=only`. Inspect the deployed binary with `g8e version --fips`; the build setting alone does not enable runtime enforcement.
 
-### 1. Clone and start the Gateway
+### 1. Clone and start the stack
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git
@@ -36,9 +53,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-The Compose file contains optional profiles whose services use the required `G8E_OLLAMA_ENDPOINT` interpolation. Compose therefore requires that variable even when those profiles are inactive; the copied `.env.example` supplies a placeholder value. Replace it with the approved remote Ollama URL before enabling the `evaluation` or `g8ellama` profile. Do not treat `localhost` as a remote provider unless Ollama is reachable from the relevant container network.
-
-`docker compose up -d` starts only the unprofiled Gateway service. It publishes port 8080 for limited plain-HTTP health, bootstrap, PKI discovery, and enrollment flows, and port 8443 for the HTTPS APIs, MCP, A2A, pub/sub, and Web Console. The `bootstrapped` profile adds the Data Operator, ensemble, and dashboard after owner enrollment. The `evaluation` profile adds the Inference Operator and requires an approved remote Ollama endpoint. See the [Unified Docker Stack Guide](unified_stack.md) for profiles, volumes, network namespaces, and evaluation topology.
+`docker compose up -d` starts the entire platform stack: Gateway (PDP), Data Operator (PEP), Inference Operator, Agentic Ensemble (g8ee), and Dashboard (g8ed). The Gateway publishes port 8080 for plain-HTTP health, bootstrap, PKI discovery, and enrollment flows; port 8443 for HTTPS/mTLS APIs, MCP, A2A, pub/sub, and Web Console. All workloads start in the default profile and submit enrollment requests to the Gateway. See the [Unified Docker Stack Guide](unified_stack.md) for network topology, volumes, and stack health details.
 
 ### 2. Get the CLI binary
 
@@ -78,15 +93,7 @@ Authenticate the CLI to bootstrap the gateway PKI hierarchy, install the root CA
 
 By default, the command installs the Gateway Root CA in the workstation's OS trust store before opening the browser. Follow the browser prompt to create the passkey. Once enrollment completes, the CLI holds mTLS credentials bound to the first-owner identity. For a CLI-only owner, use `--headless`; it skips the browser and OS trust installation and cannot authenticate to the Web Console. Use `--no-system-trust` only when an administrator has already installed the Root CA. See [Authentication and Authorization](../architecture/auth.md) for recovery, rotation, and identity details.
 
-### 4. Start the platform workloads
-
-With the owner identity established, bring up the Operator, Agentic Ensemble (g8ee), and Dashboard (g8ed). See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for component details:
-
-```bash
-docker compose --profile bootstrapped up -d
-```
-
-### 5. Review platform workload enrollments
+### 4. Review platform workload enrollments
 
 List pending platform enrollment requests and approve or deny each workload using your authenticated CLI session:
 
@@ -94,10 +101,13 @@ List pending platform enrollment requests and approve or deny each workload usin
 # List pending enrollment requests
 ./g8e auth enroll pending
 
-# Approve the operator, dashboard, and ensemble
+# Approve the Data Operator, Dashboard, and Ensemble
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
+
+# Approve the Inference Operator
+./g8e auth enroll approve <inference-operator-request-id> --yes
 
 # Reject a request instead of approving it
 ./g8e auth enroll deny <request-id> --yes
@@ -105,7 +115,7 @@ List pending platform enrollment requests and approve or deny each workload usin
 
 You can also view and decide pending enrollments in your browser via the Gateway Web Console at `https://localhost:8443/console/`.
 
-### 6. Verify stack health
+### 5. Verify stack health
 
 ```bash
 docker compose ps
@@ -114,7 +124,7 @@ docker compose ps
 
 Service endpoints:
 - **Gateway bootstrap, health, and PKI discovery:** `http://localhost:8080`
-- **Gateway HTTPS/mTLS API, MCP, and A2A:** `https://localhost:8443` (`https://localhost:8443/mcp` for MCP)
+- **Gateway HTTPS/mTLS API, MCP, and A2A:** `https://localhost:8443` (MCP at `https://localhost:8443/mcp`)
 - **Gateway Web Console:** `https://localhost:8443/console/`
 - **Dashboard static host:** `http://localhost:3000`
 - **Ensemble API:** `http://localhost:8000`
@@ -126,7 +136,7 @@ The Dashboard is a static browser host; the browser authenticates directly to th
 
 ### CLI-managed alternative
 
-If a current `g8e` binary is already available on the workstation, `./g8e docker start --full` starts the `bootstrapped` profile, enrolls or reuses the CLI owner interactively, and prompts for platform workload approvals. It does not start the `evaluation` profile. Use `./g8e docker start --full --skip-enroll` only when enrollment and approvals are managed separately. For automated evaluation bootstrap, use `./g8e docker init` with `G8E_OLLAMA_ENDPOINT` set in the repository-root `.env`; see the [Unified Docker Stack Guide](unified_stack.md).
+If a current `g8e` binary is already available on the workstation, `./g8e docker start --full` starts the default stack, enrolls or reuses the CLI owner interactively, and prompts for platform workload approvals. Use `./g8e docker start --full --skip-enroll` only when enrollment and approvals are managed separately. For automated evaluation bootstrap with a remote Ollama provider, use `./g8e docker init` with `G8E_OLLAMA_ENDPOINT` set in the repository-root `.env`; see the [Unified Docker Stack Guide](unified_stack.md).
 
 ---
 
@@ -180,7 +190,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.13
+go get github.com/g8e-ai/g8e/v2@v2.2.3
 ```
 
 Import the protocol packages in your Go code:
@@ -207,7 +217,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==2.1.13
+pip install g8e==2.2.3
 ```
 
 The package provides:
@@ -264,13 +274,13 @@ GOOS=windows GOARCH=amd64 make build
 
 Requires only Docker 24.0+. No local Go installation needed.
 
-Build the images and start the gateway phase of the unified stack:
+Build the images and start the unified stack:
 
 ```bash
 make up
 ```
 
-After owner enrollment, start the remaining workloads with `docker compose --profile bootstrapped up -d`, as shown in the [Quick Start](#quick-start-docker-compose).
+This runs `docker compose up -d --build`, which starts all platform services. See the [Quick Start](#quick-start-docker-compose) section for enrollment and approval steps.
 
 To obtain a host-side CLI binary without a local Go toolchain, copy it out of the running gateway container:
 
@@ -419,24 +429,24 @@ When `--endpoint` (or `-e`) is provided, the Operator automatically initiates pl
 
 ### Run the gateway and operator in Docker
 
-The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-operator` (PEP), `ensemble` (g8ee), and `dashboard` (g8ed). See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for the first-party component details. The stack uses a two-phase startup model in which `docker compose up -d` starts only the unprofiled gateway service. After enrolling the first owner, start the remaining platform workloads under the `bootstrapped` profile and approve all three enrollment requests:
+The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-operator` (PEP), `g8e-inference-operator`, `ensemble` (g8ee), and `dashboard` (g8ed). See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for component details. The stack starts all services in a single `docker compose up -d`:
 
 ```bash
-# Phase 1: Start the gateway
+# Start the full stack
 docker compose up -d
 
-# Phase 2: Enroll the first owner
+# Enroll the first owner
 ./g8e auth enroll user -e localhost
 
-# Phase 3: Start workloads and approve every enrollment request
-docker compose --profile bootstrapped up -d
+# Approve all enrollment requests
 ./g8e auth enroll pending
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
+./g8e auth enroll approve <inference-operator-request-id> --yes
 ```
 
-The gateway exposes plain-HTTP bootstrap and discovery on port 8080 and HTTPS/mTLS APIs and MCP on port 8443. The operator resolves the gateway through the internal Docker network alias `g8e.local`. See [Unified Docker Stack Guide](unified_stack.md) and [Docker Gateway Guide](docker_gateway.md) for full configuration options.
+The gateway exposes plain-HTTP bootstrap and discovery on port 8080 and HTTPS/mTLS APIs and MCP on port 8443. The operators resolve the gateway through the internal Docker network alias `g8e.local`. See [Unified Docker Stack Guide](unified_stack.md) and [Docker Gateway Guide](docker_gateway.md) for full configuration options.
 
 ---
 
@@ -529,17 +539,26 @@ Run `./g8e demos run <demo> --help` for current scenario names and `./g8e demos 
 
 ---
 
+## Optional profiles
+
+The root `docker-compose.yml` defines two optional profiles for specialized deployment topologies:
+
+- **`cross-enrollment`**: A secondary gateway that enrolls as an Operator of the primary gateway, demonstrating cross-enrollment governance boundaries. Start with `docker compose --profile cross-enrollment up -d`.
+- **`g8ellama`**: A User Gateway and Inference Node for governed inference against a remote approved Ollama provider. Requires `G8E_OLLAMA_ENDPOINT` set in `.env`. Start with `docker compose --profile g8ellama up -d`.
+
+See [Unified Docker Stack Guide](unified_stack.md) for evaluation topology and remote Ollama provider integration details.
+
 ## Stop, restart, or reset the Compose stack
 
 Stop the stack while preserving named volumes, credentials, and component-local state:
 
 ```bash
-docker compose --profile bootstrapped --profile evaluation down
+docker compose down
 ```
 
-Start it again with the profiles required by the deployment. After a volume-preserving stop, approved workload identities normally remain available; check `docker compose ps` and `./g8e auth enroll pending` if a workload is not ready.
+Start it again with `docker compose up -d`. After a volume-preserving stop, approved workload identities normally remain available; check `docker compose ps` and `./g8e auth enroll pending` if a workload is not ready.
 
-`docker compose down -v` removes the named volumes and therefore destroys Gateway, Operator, Ensemble, and Dashboard local state, including credentials and enrollment state. Use it only for an intentional cold reset; the workloads must enroll again. The CLI equivalent `./g8e docker clean` is also destructive. See [Docker Gateway Guide](docker_gateway.md) for lifecycle options and [Unified Docker Stack Guide](unified_stack.md) for profile-specific state ownership.
+`docker compose down -v` removes the named volumes and therefore destroys all local state, including credentials and enrollment state. Use it only for an intentional cold reset; the workloads must enroll again. The CLI equivalent `./g8e docker clean` is also destructive. See [Docker Gateway Guide](docker_gateway.md) for lifecycle options and [Unified Docker Stack Guide](unified_stack.md) for stack configuration.
 
 ## Post-Bootstrap Actions
 

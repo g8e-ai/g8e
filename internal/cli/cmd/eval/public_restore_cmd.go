@@ -37,9 +37,12 @@ func PublicRestoreCmdWithConfig(configLoader func(string) (*config.Config, error
 	var runTimeout time.Duration
 	var projectRoot string
 	cmd := &cobra.Command{
-		Use:   "restore",
+		Use:   "restore [run-id]",
 		Short: "Restore missing campaign datasets to the public mirror",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if runID == "" && len(args) > 0 {
+				runID = args[0]
+			}
 			if !queue && runID == "" {
 				return fmt.Errorf("public restore: specify --queue or --run-id")
 			}

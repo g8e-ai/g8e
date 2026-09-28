@@ -295,7 +295,7 @@ func TestCampaignImporterRejectsTamperedPersistedScenarioBody(t *testing.T) {
 	require.NoError(t, err)
 
 	reference := req.Catalog.GetScenarios()[0].GetInputFixtureRef()
-	artifactPath, err := scenarioArtifactPath(req.CampaignID, reference)
+	artifactPath, err := activeEvalLayout().scenarioArtifactPath(req.CampaignID, reference)
 	require.NoError(t, err)
 	require.NoError(t, files.WriteFile(context.Background(), artifactPath, []byte("{}"), constants.PermFileReadOnly))
 
@@ -384,7 +384,7 @@ func TestStoreListRunInventory_ClassifiesEveryPersistedCandidate(t *testing.T) {
 		},
 	}))
 	require.NoError(t, files.WriteFile(ctx, filepath.Join(evaluationRunDir("incomplete-run"), constants.EvaluationVerificationFilename), []byte("{}"), constants.PermFileReadOnly))
-	require.NoError(t, files.WriteFile(ctx, runStatePath("malformed-run"), []byte("{}"), constants.PermFileReadOnly))
+	require.NoError(t, files.WriteFile(ctx, activeEvalLayout().runStatePath("malformed-run"), []byte("{}"), constants.PermFileReadOnly))
 	require.NoError(t, store.SaveReport(ctx, &evalv1.EvaluationReport{
 		SchemaVersion: RegistryVersion,
 		Run: &evalv1.EvaluationRun{

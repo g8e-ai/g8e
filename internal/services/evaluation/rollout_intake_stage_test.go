@@ -17,6 +17,9 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 type stagingOllamaModelCommandDispatcher struct {
@@ -108,21 +111,21 @@ func TestStageFormationCatalogIntake_PullsMissingLibraryTag(t *testing.T) {
 		Context:            context.Background(),
 		Dispatcher:         dispatcher,
 		InferenceSessionID: "infer-session",
-		VariantIDs:         []string{"gemma2-2b"},
+		VariantIDs:         []string{"gemma3-1b"},
 		NewID:              func(prefix string) string { return prefix },
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, []string{"gemma2:2b-instruct-q4_K_M"}, result.Pulled)
+	assert.Equal(t, []string{"gemma3:1b"}, result.Pulled)
 	require.Len(t, dispatcher.commands, 1)
-	assert.True(t, strings.Contains(dispatcher.commands[0], "gemma2:2b-instruct-q4_K_M"))
+	assert.True(t, strings.Contains(dispatcher.commands[0], "gemma3:1b"))
 }
 
 func writeRolloutIntakeCatalog(t *testing.T, catalog RolloutIntakeCatalog) string {
 	t.Helper()
-	path := t.TempDir() + "/rollout-intake-hf.json"
+	path := testutil.TempDir(t) + "/rollout-intake-hf.json"
 	payload, err := json.Marshal(catalog)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(path, payload, 0o644))
+	require.NoError(t, os.WriteFile(path, payload, constants.PermFilePublic))
 	return path
 }

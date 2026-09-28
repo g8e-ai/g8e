@@ -14,8 +14,13 @@ import (
 )
 
 // CampaignRunStatus derives a human-readable campaign run status from canonical
-// assignment counts and an optional persisted verification report.
-func CampaignRunStatus(summary *CampaignRunSummary, verification *evalv1.EvaluationVerificationReport) string {
+// assignment counts, an optional persisted verification report, and whether a
+// live process holds the run's lease.
+//
+// A run is "running" only while its lease holder is alive. An assignment left
+// running with no live holder, as after a crash or a restored backup, reports
+// "interrupted".
+func CampaignRunStatus(summary *CampaignRunSummary, verification *evalv1.EvaluationVerificationReport, executing bool) string {
 	if summary == nil {
 		return "unknown"
 	}
@@ -33,8 +38,14 @@ func CampaignRunStatus(summary *CampaignRunSummary, verification *evalv1.Evaluat
 	if scheduled == 0 {
 		return "initialized"
 	}
-	if summary.RunningCount > 0 {
+	if executing {
 		return "running"
+	}
+	if summary.StoppedCount > 0 && summary.QueuedCount == 0 && summary.RunningCount == 0 {
+		return "cancelled"
+	}
+	if summary.RunningCount > 0 {
+		return "interrupted"
 	}
 	if summary.ExpectedAssignment > 0 && uint64(summary.TerminalCount) >= summary.ExpectedAssignment {
 		return "completed"

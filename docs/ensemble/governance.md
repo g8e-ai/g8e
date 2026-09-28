@@ -1,87 +1,117 @@
-# Governance
+---
+doc_id: ensemble-governance
+title: Ensemble Governance
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - ensemble/app/services/operator/
+  - internal/services/gateway/
+  - internal/services/governance/
+  - internal/services/pubsub/
+related:
+  - ../architecture/governance.md
+  - ../architecture/gateway.md
+  - ../architecture/operator.md
+  - agents.md
+  - architecture.md
+  - protocol.md
+  - storage.md
+when_to_read: Understanding ensemble integration with the platform governance boundary, posture behavior, dispatch and envelope paths, and how application-layer intent flows through the five-layer verification model.
+do_not_use_for:
+  - Protocol-layer governance (docs/architecture/governance.md)
+  - Platform gateway architecture (docs/architecture/gateway.md)
+  - Operator substrate and deployment (docs/architecture/operator.md)
+  - Agent personas and command generation (ensemble/agents.md)
+  - Consensus deliberation and L2 signing (docs/architecture/consensus.md)
+---
 
-## Scope
+# Ensemble Governance
 
-The g8e Agentic Ensemble (`g8ee`) is an optional first-party client of the g8e governance platform. It generates and evaluates operational intent, but it remains outside the trusted execution boundary. Tribunal agreement, Auditor review, application risk classification, and user approval inside g8ee do not authorize a platform transaction by themselves.
+## Purpose
 
-An operation becomes governed when g8ee submits typed intent through a g8e ingress. The Gateway constructs or accepts a canonical `GovernanceEnvelope`, and the executing L4 Warden and L5 Actuator apply the verification required by the envelope's posture. Native client tools, direct filesystem access, network access, and other paths that do not traverse a g8e ingress are outside this boundary.
+Documents how the g8e Agentic Ensemble (`g8ee`) submits typed intent to the platform governance boundary, where the Gateway and Operator enforce the five-layer verification model. Application-layer Tribunal voting, Marshal risk analysis, and Auditor review express intent and reasoning; they do not authorize host or platform mutations. An operation becomes governed when g8ee submits typed intent through a platform ingress. The Gateway constructs or accepts a canonical `GovernanceEnvelope`, applies authentication and transport authorization, and the executing Operator locally verifies and executes the transaction through the L4 Warden and L5 Actuator.
 
-See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for all supported agent integration paths and their limits.
+Native client tools, direct filesystem access, and operations that do not traverse a platform ingress remain outside this governance boundary.
 
-## Trust and Execution Boundaries
+## Quick index
 
-The **Governance Gateway** is the Policy Decision Point. It authenticates clients, enforces transport and channel authorization, owns the active governance posture and current state root, constructs envelopes for intent-based client protocols, coordinates L2 consensus and L3 approval on supported ingress paths, and routes work to an execution site.
+- [Purpose](#purpose)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-The **Governed Operator** is the Policy Execution Point on a managed host. It opens an outbound mTLS connection to the Gateway, receives envelopes for its exact Operator session, verifies each envelope locally, and executes accepted operations through the L5 Actuator. The Gateway also has an in-process Operator substrate for locally executed MCP, A2A, and direct-envelope operations.
+Invariant groups: [Verification layers](#verification-layers-inv-verify), [Governance postures](#governance-postures-inv-posture), [Ingress paths](#ingress-paths-inv-ingress), [Envelope construction](#envelope-construction-inv-envelope).
 
-The posture is embedded in each envelope so the executing L4 Warden applies the Gateway-selected policy. Missing or invalid posture metadata fails closed.
+## Invariants
 
-## Application Controls Before Governance
+### Verification layers (`INV-VERIFY`)
 
-For host command generation, g8ee applies application-level controls before publishing intent to the platform. These controls improve command quality and reduce unsafe proposals, but they are not protocol governance proofs.
+| ID | Rule |
+| --- | --- |
+| INV-VERIFY-01 | L1 Doctrine decodes the typed protobuf payload, applies field constraints and forbidden-pattern rules, and runs MITRE ATT&CK-oriented threat detection. L1 is mandatory in every posture. |
+| INV-VERIFY-02 | L2 Consensus verifies Ed25519 votes over the transaction hash and decision against an enabled policy and trusted member keys. Application Tribunal votes have no authority at L2; required postures enforce quorum from distinct affirmative signers. |
+| INV-VERIFY-03 | L3 Notary verifies human authorization for mutation-classified actions under `ratify` and `notary` postures. Read-only actions do not require L3. |
+| INV-VERIFY-04 | L4 Warden reserves the nonce, checks expiry, validates action type and payload, recomputes the transaction hash, verifies the current state root, runs L1, and evaluates posture-required L2 and L3 evidence. A failed universal check prevents dispatch. |
+| INV-VERIFY-05 | L5 Actuator signs and persists an `EXECUTING` receipt before invoking the action handler, appends a signed commitment when the SQL commitment ledger is active, rehydrates scrubbed payload data, mints a transaction-bound capability, invokes the handler, and signs and persists the final result. |
 
-### Intent and command separation
+### Governance postures (`INV-POSTURE`)
 
-Sage describes the requested outcome without supplying shell syntax. Five Tribunal members independently generate candidate commands from that intent and the available Operator context. Each candidate is normalized and passes deterministic command-safety checks before voting.
+| ID | Rule |
+| --- | --- |
+| INV-POSTURE-01 | The Gateway posture is selected at startup with `--posture <doctrine\|consensus\|ratify\|notary>`. L1 and universal L4 checks remain mandatory in every posture. |
+| INV-POSTURE-02 | `doctrine` posture requires only L1 and universal L4 checks; L2 and L3 are not required. |
+| INV-POSTURE-03 | `consensus` posture requires L1, universal L4 checks, and L2 verification for mutation and sensitive read-only actions. L3 is not required. |
+| INV-POSTURE-04 | `ratify` posture requires L1, universal L4 checks, and L3 verification for mutations. L2 is not required. |
+| INV-POSTURE-05 | `notary` posture requires L1, universal L4 checks, L2 verification, and L3 authorization. Both are mandatory. |
+| INV-POSTURE-06 | Optional L2 and L3 evidence is verified when present and recorded when valid, but its absence does not gate a posture that does not require it. The ingress path matters: a posture does not cause every transport to acquire missing proofs automatically. |
 
-### Tribunal voting
+### Ingress paths (`INV-INGRESS`)
 
-Tribunal members have equal vote weight. A candidate reaches the minimum threshold when at least two members produce the same normalized command. If multiple candidates tie, voting first prefers the shortest command and then a candidate without Nemesis support. A remaining tie or a round with no two matching commands triggers a second generation round using anonymized first-round clusters; failure to reach agreement in the second round stops command generation.
+| ID | Rule |
+| --- | --- |
+| INV-INGRESS-01 | Host-command dispatch through `POST /api/v1/operators/commands` authenticates the app caller over mTLS, adds the current state root and posture, computes the canonical transaction hash, and publishes the resulting `GovernanceEnvelope` to the Operator. This path cannot mint L3 human proofs; mutations requiring L3 are rejected early. |
+| INV-INGRESS-02 | Direct governance-envelope submission through `POST /api/v1/governance/envelopes` over enrolled g8ee app mTLS identity submits a complete envelope to the Gateway. The client serializes submissions to reduce state-root races. The direct mutation path succeeds only when the active posture does not require proofs absent from the envelope. |
+| INV-INGRESS-03 | Gateway MCP and A2A flows coordinate protocol consensus and can suspend a transaction for WebAuthn approval. These paths require explicit configuration and are distinct from direct relay and dispatch flows. |
 
-Tribunal voting is application-level model agreement. It does not produce the Ed25519 signatures required by platform L2 Consensus and cannot satisfy a `consensus` or `notary` posture.
+### Envelope construction (`INV-ENVELOPE`)
 
-### Command risk and audit
+| ID | Rule |
+| --- | --- |
+| INV-ENVELOPE-01 | The canonical transaction hash binds action type, target resource, typed payload, state root, nonce, expiry, structured intent, requestor identity, and acting-app identity. Both the envelope ID and transaction hash must equal the recomputed SHA-256 digest. |
+| INV-ENVELOPE-02 | Gateway construction (via `BuildGovernanceEnvelope` in [dispatch_service.go](internal/services/gateway/dispatch_service.go)) runs L1 doctrine screening, verifies the current state root, generates replay and expiry fields, and fails closed on missing L3 proofs for mutations. |
+| INV-ENVELOPE-03 | An envelope expiry is 5 minutes from construction. A dispatched request has 30 seconds to complete the round-trip from in-process publish through operator L4/L5 execution and back. |
 
-When a response analyzer is configured, Marshal evaluates the winning command before the Auditor. An unavailable lite model, empty response, analysis error, or inconclusive command-risk result becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback so Sage can propose a safer alternative; a second high-risk result for the same investigation reports an agent conflict and requires human intervention. If no response analyzer is configured, g8ee skips this stage.
+## Owned surfaces
 
-When enabled, the Auditor reviews the winning command and anonymized alternatives after Marshal risk analysis. It can accept the winner, revise it, or select another candidate, and it validates a selected or revised command against the deterministic safety rules. A passing audit creates a reputation commitment; failure to create that commitment stops the verdict. When the Auditor is disabled, g8ee accepts the Tribunal winner without this model-review stage or reputation commitment.
+| Claim | Path | Verify |
+| --- | --- | --- |
+| Five-layer verification | `internal/services/governance/l4_warden.go`, `internal/services/governance/l5_actuator.go` | `NewL4Warden`, `NewL5Actuator`, verify `VerifiedTransaction` and `ActionReceipt` |
+| Posture definitions and requirements | `internal/constants/platform.go` | `PostureDoctrine`, `PostureConsensus`, `PostureRatify`, `PostureNotary`, `GetGovernancePostureRequirements` |
+| Host-command dispatch endpoint | `internal/services/gateway/dispatch_service.go` | `BuildGovernanceEnvelope`, `DispatchService.HandleDispatch` handles `POST /api/v1/operators/commands` |
+| Envelope submission endpoint | `internal/services/gateway/governance_controller.go` | `POST /api/v1/governance/envelopes`, mTLS identity binding, `EnvelopeProcessor` interface |
+| Application dispatch client | `ensemble/app/clients/gateway_operator_client.py` | `GatewayOperatorClient` class, `dispatch()` method |
+| Application execution service | `ensemble/app/services/operator/execution_service.py` | `OperatorExecutionService` submits through `GatewayOperatorClient` with registered `EventType` |
+| Governance envelope protobuf | `protocol/proto/g8e/common/v1/governance.proto` | `GovernanceEnvelope` message, transaction hash fields, identity binding |
+| Operator command protobuf | `protocol/proto/g8e/operator/v1/operator.proto` | `OperatorCommandRequest`, action-type payload unions, `ActionReceipt` |
+| Receipt verification | `internal/services/governance/l5_actuator.go` | `ActionReceipt` signature field, public-key export via `ActuatorPublicKeyExport` |
 
-File writes and replacements use a separate file-risk analysis and g8ee approval flow before dispatch. A file-risk analysis failure is logged and the operation continues to the approval gate; an analysis that marks the operation unsafe blocks it. Error analysis classifies failed commands and controls bounded retry or escalation. These application approval and retry decisions are distinct from L3 Notary authorization.
+## Procedures
 
-See [Agents](agents.md) for the complete persona roster and [Architecture](architecture.md) for the ensemble workflow.
+### Host-command dispatch through gateway
 
-## Platform Verification
+1. The application submits typed Operator protobuf payload by calling `POST /api/v1/operators/commands` with the registered request `event_type`, delegated Operator session, and application context.
+2. The Gateway authenticates the app caller over mTLS, validates the event against the registry, derives `action_type` from the event-type mapping, and checks that the Operator session is active.
+3. The Gateway constructs a canonical `GovernanceEnvelope` via `BuildGovernanceEnvelope`. The builder runs L1 doctrine screening on the decoded typed payload, generates nonce and expiry (5 minutes), computes the canonical transaction hash, and adds the current state root and posture. If the posture requires L3 and the action is a mutation, the builder rejects the envelope early with `ErrTxL3ProofUnmintable`.
+4. The Gateway publishes the resulting `GovernanceEnvelope` to the Operator through the mTLS transport (WebSocket or HTTP). The transport carries application context (CaseID, InvestigationID, TaskID).
+5. The Operator runs L4 Warden verification locally. The L4 Warden checks the action type, decodes the payload, recomputes the transaction hash, verifies the current state root, checks expiry and nonce, runs L1, and evaluates posture-required L2 and L3 evidence. Accepted operations proceed to L5 Actuator execution; rejected operations do not reach the action handler.
+6. The L5 Actuator signs an `EXECUTING` receipt before invoking the handler, executes the handler, and signs and persists the final result with a signed `ActionReceipt`.
+7. The Gateway receives the correlated result envelope containing the signed receipt in the HTTP response. The Operator's signed receipt is authoritative; the Gateway mirror is best-effort for correlation and audit.
 
-Every governed operation reaches the same L4 and L5 boundary. The logical interlock is:
-
-```text
-L1 Doctrine -> L2 Consensus -> L3 Notary -> L4 Warden -> L5 Actuator
-```
-
-- **L1 Doctrine** decodes the typed protobuf payload, applies field constraints and forbidden-pattern rules, and runs MITRE ATT&CK-oriented threat detection. L1 is mandatory in every posture and executes as part of Warden verification.
-- **L2 Consensus** verifies Ed25519 votes over the transaction hash and decision against an enabled policy and trusted member keys. Required postures enforce quorum from distinct affirmative signers. Application Tribunal votes have no authority at this layer.
-- **L3 Notary** verifies human authorization for mutation-classified actions under `ratify` and `notary`. Supported Gateway MCP and A2A flows can suspend a transaction for WebAuthn approval. Outbound execution verifies the corresponding approved suspended transaction and Ed25519 proof. Read-only actions do not require L3.
-- **L4 Warden** reserves the nonce for replay prevention, checks expiry, validates the action type and payload, recomputes the transaction hash, verifies the current state root, runs L1, and evaluates posture-required L2 and L3 evidence. A failed universal check or required proof prevents dispatch.
-- **L5 Actuator** signs and persists an `EXECUTING` receipt before invoking the action handler, appends a signed commitment when the SQL commitment ledger is active, rehydrates scrubbed payload data at the execution site, mints a transaction-bound capability, invokes the handler, dissolves the capability, and signs and persists the final result and persistence attestation.
-
-See [Governance Pipeline](../architecture/governance.md) for the full platform transaction flow.
-
-## Governance Postures
-
-The Gateway posture is selected at startup with `--posture <doctrine|consensus|ratify|notary>`. L1 and the universal L4 checks remain mandatory in every posture.
-
-| Posture | L1 | Protocol L2 | L3 for mutations |
-| --- | --- | --- | --- |
-| `doctrine` | Required | Not required | Not required |
-| `consensus` | Required | Required | Not required |
-| `ratify` | Required | Not required | Required |
-| `notary` | Required | Required | Required |
-
-Optional L2 and L3 evidence is verified when present and recorded when valid, but its absence does not gate a posture that does not require it. This distinction applies to platform verification; g8ee's direct envelope builder does not create protocol L2 votes or a valid L3 authorization proof.
-
-The ingress path matters. A posture does not cause every transport to acquire missing proofs automatically. g8ee must use a path that coordinates the required proofs or submit an envelope that already contains them.
-
-## Host Operations Through Gateway Dispatch
-
-The ensemble dispatches host commands, file operations, filesystem reads, log and history queries, port checks, and other outbound Operator work through `GatewayOperatorClient`:
-
-1. g8ee serializes the typed Operator protobuf payload and calls `POST /api/v1/operators/commands` with the registered request `event_type`, delegated Operator session, and application context.
-2. The Gateway authenticates the app caller over mTLS, validates the event against the registry, derives `action_type`, and checks that the Operator session is active.
-3. The Gateway adds the current state root, posture, nonce, expiry, transport-derived app identity, requestor identity, and application context, then computes the canonical transaction hash and publishes the resulting `GovernanceEnvelope` to the Operator.
-4. The Operator runs L1 and L4 verification locally. Accepted operations execute through L5, while rejected operations do not reach the action handler.
-5. The Gateway returns the correlated result envelope in the HTTP response. The Operator's signed receipt is authoritative; the Gateway mirror is best-effort.
-
-The governed dispatch path does not perform protocol L2 deliberation or L3 suspension and does not attach L2 votes or an L3 proof. Consequently:
+Because the dispatch path cannot coordinate protocol L2 deliberation or mint L3 human proofs, postures behave as follows:
 
 - `doctrine` accepts otherwise valid read and mutation intents without L2 or L3.
 - `consensus` rejects ordinary relayed intents because they do not contain protocol L2 votes.
@@ -90,43 +120,51 @@ The governed dispatch path does not perform protocol L2 deliberation or L3 suspe
 
 Use Gateway MCP or A2A when the Gateway must coordinate protocol consensus or human approval. See [Build Apps](../guides/build_apps.md) for integration-path selection.
 
-## Direct Governance Envelopes
+### Direct governance-envelope submission
 
-For governed platform records such as cases, investigations, memories, and agent activity, g8ee uses its `GovernanceClient` to submit a complete envelope to `POST /api/v1/governance/envelopes` over the enrolled g8ee app mTLS identity. The Gateway binds transport identity to envelope fields and applies the active posture.
+1. The application calls `POST /api/v1/governance/envelopes` over enrolled g8ee app mTLS identity, submitting a complete `GovernanceEnvelope` in canonical protojson form.
+2. The Gateway extracts the mTLS certificate's URI SANs and verifies they match the envelope's internal identity claims (cli_session_id, operator_session_id, operator_id, acting_app_id, source_component). This prevents an app cert from impersonating another workload's envelope.
+3. The Gateway binds the envelope's identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process L4 Warden and L5 Actuator.
+4. The L4 Warden verifies L1, universal checks, and posture-required L2 and L3 evidence. The L5 Actuator executes and returns a signed `ActionReceipt`.
+5. A successful submission returns a signed `ActionReceipt`. The client exposes receipt-signature verification using the configured Actuator public key, but submission does not invoke that verification automatically.
 
-The client obtains the current state root when the caller does not provide one, serializes the typed payload, generates replay and expiry fields, binds requestor, acting-app, Operator, session, and application identifiers into the transaction hash, and submits canonical JSON over mTLS. The Gateway binds the envelope identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process L4 Warden and L5 Actuator.
+The client serializes submissions to reduce state-root races. If the Gateway rejects a submission because another transaction changed the state root, the client fetches the new root, rebuilds the envelope, and retries up to three times after the initial attempt. This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. The optional `agent_ids` argument only populates the envelope's `consensus_set_id`; it does not turn application personas into enrolled protocol signers or attach votes.
 
-The client serializes submissions to reduce state-root races. If the Gateway rejects a submission because another transaction changed the state root, the client fetches the new root, rebuilds the envelope, and retries up to three times after the initial attempt.
+Platform-record submissions (cases, investigations, memories, agent activity) run under `doctrine` posture in the default unified deployment. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path succeeds only when the active posture does not require proofs absent from the envelope.
 
-This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. The optional `agent_ids` argument only populates the envelope's `consensus_set_id`; it does not turn Tribunal members into enrolled protocol signers or attach votes. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path succeeds only when the active posture does not require proofs absent from the envelope. Platform-record submissions run under `doctrine` in the default unified deployment.
+### Application-layer controls before governance
 
-A successful submission returns a signed `ActionReceipt`. `GovernanceClient` exposes receipt-signature verification using the configured Actuator public key, but submission does not invoke that verification automatically.
+The application applies independent quality and safety checks before publishing intent to the platform. These controls improve command quality and reduce unsafe proposals, but they are not protocol governance proofs.
 
-## Transaction Integrity
+**Intent and command separation.** The application represents the requested outcome (via `SageOperatorRequest`) without supplying shell syntax. The Tribunal generates multiple candidate commands from that intent and available Operator context.
 
-The canonical transaction hash binds action type, target resource, typed payload, state root, nonce, expiry, structured intent, requestor identity, and acting-app identity. Both the envelope ID and transaction hash must equal the recomputed SHA-256 digest. L3 proof and posture metadata are outside this hash because L2 signs the transaction before human authorization and the Gateway supplies posture as policy metadata.
+**Tribunal voting.** Five Tribunal members independently generate candidates. Each candidate is normalized and passes deterministic command-safety checks before voting. Tribunal members have equal vote weight. A candidate reaches consensus when at least two members produce the same normalized command. Ties prefer the shortest command, then a candidate without Nemesis support. Failure to reach consensus in the initial round triggers a second generation round using anonymized first-round clusters. Tribunal voting is application-level model agreement; it does not produce the Ed25519 signatures required by platform L2 Consensus and cannot satisfy a `consensus` or `notary` posture.
 
-The L4 Warden also requires a known action type, a decodable payload, a current state root, a live expiry, and a nonce that is neither reserved nor previously consumed. These checks fail closed in every posture. See [Protocol](protocol.md) for the canonical envelope and hashing rules.
+**Command risk and audit.** When a response analyzer is configured, Marshal evaluates the winning command before the Auditor. An unavailable analyzer, empty response, analysis error, or inconclusive result becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback; a second consecutive high-risk result for the same investigation reports an agent conflict and requires human intervention. If no analyzer is configured, the application skips this stage.
 
-## Security Properties and Limits
+When enabled, the Auditor reviews the winning command and anonymized alternatives after Marshal risk analysis. The Auditor can accept the winner, revise it, or select another candidate, and validates a selected or revised command against deterministic safety rules. A passing audit creates a reputation commitment; failure to create that commitment stops the verdict. When the Auditor is disabled, the application accepts the Tribunal winner without this model-review stage or reputation commitment.
 
-- g8ee model output has no authority to bypass L1, replay protection, state binding, or posture-required proofs.
-- Application Tribunal voting is independent of protocol L2 and cannot substitute for trusted signer votes.
-- g8ee approval prompts are independent of L3 and cannot substitute for a valid Notary proof.
-- Operator command channels bind work to one authenticated Operator session; mismatched targets are dropped.
-- A remote Operator independently verifies each envelope before changing its host.
-- L5 signs and persists admitted execution outcomes, and the executing Operator retains the authoritative local receipt. A transaction rejected before execution does not produce an L5 receipt on the synchronous direct-envelope path.
-- Signed receipts attest only to operations that traversed the governed path. They do not attest to activity performed through native tools or other client side channels.
+File writes and replacements use a separate file-risk analysis and application approval flow before dispatch. A file-risk analysis failure is logged and the operation continues to the approval gate; an analysis that marks the operation unsafe blocks it. Error analysis classifies failed commands and controls bounded retry or escalation. These application approval and retry decisions are distinct from L3 Notary authorization.
 
-## Related
+## Anti-patterns
 
-- [AI Agents and the g8e Governance Boundary](../architecture/agents.md): Agent ingress paths, launcher behavior, and governance limits.
-- [Governance Pipeline](../architecture/governance.md): Platform verification, postures, transaction flow, and receipts.
-- [Gateway Architecture](../architecture/gateway.md): Gateway ingress, identity binding, consensus coordination, and approval suspension.
-- [Operator Architecture](../architecture/operator.md): Outbound Operator transport, local verification, execution, and audit storage.
-- [Authentication and Authorization](../architecture/auth.md): mTLS identities, delegated credentials, sessions, and WebAuthn.
-- [Consensus](../architecture/consensus.md): Protocol L2 policy, enrollment, deliberation, and vote verification.
-- [Agents](agents.md): g8ee personas, Tribunal members, Auditor, and Marshal.
-- [Architecture](architecture.md): Ensemble components, protocol surfaces, and runtime flow.
-- [Protocol](protocol.md): Ensemble-facing protocol models and transaction hashing.
-- [Storage](storage.md): Ensemble data services and governed platform records.
+- Treating application Tribunal voting as platform L2 consensus. Tribunal voting is independent reasoning; it does not authorize platform mutations.
+- Assuming application approval prompts replace L3 Notary authorization. Application approvals are distinct from platform verification and cannot satisfy `ratify` or `notary` postures.
+- Dispatching mutations through `POST /api/v1/operators/commands` under `ratify` or `notary` postures without pre-acquired L3 proof. The dispatch path cannot mint L3 proofs; early rejection is guaranteed.
+- Mismatching transport identity to envelope fields. The Gateway verifies mTLS certificate URI SANs against envelope identity claims; mismatches are rejected at the transport boundary.
+- Relying on unsigned application SSE events for proof of execution. Signed receipts from the Operator (L5) are authoritative; application telemetry is best-effort.
+- Updating envelope metadata or payload after signature. The transaction hash binds all identity, payload, and state-root fields; modifications invalidate the hash.
+- Confusing Operator-side receipt verification with Gateway-side result acceptance. The Operator's signed receipt is authoritative; the Gateway mirror is for correlation and audit only.
+
+## Links out
+
+- [Platform Governance Pipeline](../architecture/governance.md) — Five-layer verification, posture behavior, and transaction flow.
+- [Platform Gateway Architecture](../architecture/gateway.md) — Gateway ingress, identity binding, consensus coordination, and approval suspension.
+- [Platform Operator Architecture](../architecture/operator.md) — Operator substrate, outbound transport, local verification, and execution.
+- [Platform Agents and Boundaries](../architecture/agents.md) — Agent ingress paths, launcher behavior, and governance limits.
+- [Consensus and L2 Signing](../architecture/consensus.md) — Protocol L2 policy, enrollment, deliberation, and vote verification.
+- [Agent Personas](agents.md) — Sage, Tribunal, Marshal, Auditor, and Nemesis personalities and consensus mechanism.
+- [Ensemble Architecture](architecture.md) — Application runtime, services, and model hierarchy.
+- [Protocol Definitions](protocol.md) — Ensemble-facing protocol models and envelope hashing rules.
+- [Data and Storage](storage.md) — Ensemble data services and governed platform records.
+- [Documentation Guide](../devs/docs.md) — Documentation audit and ownership rules.

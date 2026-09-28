@@ -1,12 +1,96 @@
-# Protocol
+---
+doc_id: protocol
+title: g8ee Protocol and Governance Paths
+audience: developers implementing g8e clients or integrations
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - ensemble/app/clients/
+  - protocol/python/g8e/models/governance.py
+related:
+  - architecture.md
+  - governance.md
+  - ../architecture/protocol.md
+  - ../architecture/governance.md
+when_to_read: Understanding how g8ee submits commands through Gateway dispatch, constructs and submits governance envelopes, and verifies the five-layer governance interlock.
+do_not_use_for:
+  - Application workflow and Tribunal decisions (docs/ensemble/agents.md)
+  - Gateway architecture and consensus coordination (docs/architecture/gateway.md)
+  - Operator transport and execution (docs/architecture/operator.md)
+---
 
-## Scope
+# g8ee Protocol and Governance Paths
+
+## Purpose
 
 g8ee is an optional application client of the g8e protocol library. It uses typed protobuf payloads, protojson-compatible JSON, SPIFFE workload identity, registered request `event_type` values, `GovernanceEnvelope`, and signed `ActionReceipt` values. Its governed outbound paths are Gateway HTTP dispatch for host work (`POST /api/v1/operators/commands`), direct envelope submission for protected application-record writes, and audit ingest for LFAA records (`POST /api/v1/audit/records`). Gateway MCP and A2A are separate client ingress paths; g8ee does not use them for these internal operations. g8ee does not publish to Gateway pub/sub.
 
 g8ee remains outside the trusted execution boundary. Model output, Tribunal agreement, Auditor and Marshal decisions, application approval, memory, and event telemetry express application intent or status. They do not replace Gateway or Operator verification, protocol L2 signatures, L3 human authorization, or signed execution evidence. See [Platform Protocol](../architecture/protocol.md) for the protocol packages and canonical wire contracts.
 
-## Transport Identity and Enrollment
+## Quick index
+
+- [Purpose](#purpose)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Governance paths](#governance-paths)
+- [Links out](#links-out)
+
+## Invariants
+
+None beyond those in [Governance](governance.md) and [Platform Protocol](../architecture/protocol.md).
+
+## Owned surfaces
+
+| Surface | Path | Verify |
+| --- | --- | --- |
+| Operator dispatch client | [ensemble/app/clients/gateway_operator_client.py](../../ensemble/app/clients/gateway_operator_client.py) | `GatewayOperatorClient.dispatch()` posts to `/api/v1/operators/commands` |
+| Governance envelope client | [ensemble/app/clients/governance_client.py](../../ensemble/app/clients/governance_client.py) | `GovernanceClient.submit_envelope()` posts to `/api/v1/governance/envelopes` |
+| Gateway result decoding | [ensemble/app/utils/gateway_decoding/gateway_dispatch_result.py](../../ensemble/app/utils/gateway_decoding/gateway_dispatch_result.py) | Decodes base64 payloads and maps result event types to result protos |
+| Governance model and hashing | [protocol/python/g8e/models/governance.py](../../protocol/python/g8e/models/governance.py) | `compute_transaction_hash()` and `GovernanceEnvelope` schema |
+
+## Procedures
+
+### Verifying Dispatch Client Behavior
+
+The dispatch client does not construct envelopes or fetch the state root:
+
+```bash
+grep -n "def dispatch" ensemble/app/clients/gateway_operator_client.py
+```
+
+Verify the client base64-encodes the payload and posts to `/api/v1/operators/commands` with mTLS authentication.
+
+### Verifying Governance Envelope Construction
+
+The governance client constructs envelopes with transaction hash and nonce:
+
+```bash
+grep -n "def submit_envelope\|compute_transaction_hash" ensemble/app/clients/governance_client.py
+```
+
+Verify the client fetches the state root if not provided, handles `TX_STATE_MISMATCH` with up to three retries, and verifies receipt signatures using the actuator public key.
+
+### Auditing Protocol Compliance
+
+Verify canonical envelope construction matches [Platform Protocol](../architecture/protocol.md):
+
+```bash
+grep -n "GovernanceEnvelope\|transaction_hash" protocol/python/g8e/models/governance.py
+```
+
+## Anti-patterns
+
+- Constructing `GovernanceEnvelope` directly instead of calling [ensemble/app/clients/governance_client.py](../../ensemble/app/clients/governance_client.py) builders (leads to incorrect transaction hash).
+- Hardcoding target resource instead of accepting it as a parameter (breaks request routing).
+- Caching state root across multiple submissions without retry logic (causes `TX_STATE_MISMATCH` failures).
+- Skipping receipt signature verification when the actuator public key is available (loses verification of successful execution).
+
+## Governance paths
+
+### Transport Identity and Enrollment
 
 g8ee enrolls as the owner-approved platform application `spiffe://g8e.local/app/g8ee`. Startup loads a valid app certificate or completes platform enrollment before creating the DB, KV, blob, event, and HTTP clients. The app certificate and its private key are used for those Gateway-facing mTLS connections, including governed dispatch, governance submission, and audit ingest. The Gateway derives the authenticated app identity from the certificate's SPIFFE URI SAN rather than trusting a caller-supplied identity field.
 
@@ -14,7 +98,7 @@ The app certificate is not an Operator certificate and does not grant unrestrict
 
 Platform enrollment is owner-approved. g8ee generates a P-256 key and CSR, persists resumable pending state, polls the Gateway enrollment status, signs the completion transcript after approval, validates the issued chain and expected SANs, and atomically installs the credentials. The FastAPI process does not become ready while enrollment is pending or invalid. See [PKI and Trust](pki.md) for the enrollment and trust model.
 
-## Operator Gateway Dispatch
+### Operator Gateway Dispatch
 
 g8ee dispatches shell commands, file operations, filesystem inspection, history and log queries, port checks, and other work executed by a bound Operator through `GatewayOperatorClient`. The application-side sequence is:
 
@@ -29,7 +113,7 @@ The dispatch path does not require g8ee to construct the envelope, fetch the sta
 
 The Gateway rejects unknown events, malformed payloads, unauthorized callers, inactive sessions, and unavailable dispatch dependencies without constructing an envelope. A successful HTTP response establishes Gateway acceptance and carries the correlated result or rejection evidence.
 
-## Direct Governance Envelopes
+### Direct Governance Envelopes
 
 g8ee uses `GovernanceClient` for protected application-record writes such as cases, investigations, conversation history, memories, agent activity, reputation, and stake-resolution data. Reads remain Gateway-backed data-service operations; they do not become governed mutations merely because the app connection is authenticated.
 
@@ -45,13 +129,13 @@ The client may include an mTLS certificate fingerprint in the envelope's L3 meta
 
 Submissions are serialized with an async lock to reduce state-root races. If the Gateway returns `TX_STATE_MISMATCH`, the client fetches a fresh state root, rebuilds the envelope, and retries up to three times after the initial attempt. Other governance rejections, malformed-envelope responses, Gateway-not-ready responses, and transport failures propagate as typed g8ee errors. A receipt returned after the Actuator is reached is the cryptographic outcome of that execution attempt.
 
-## Canonical Envelope and Hashing
+### Canonical Envelope and Hashing
 
-`GovernanceEnvelope` carries protocol version, ID, timestamps, expiry, source component, event and action types, target resource, typed payload, structured intent data, state Merkle root, nonce, governance metadata, requestor and acting-app attribution, delegated Operator/session context, optional case and investigation context, posture, and transaction hash. g8ee dispatch callers supply only the registered request `event_type`, serialized protobuf payload bytes, and delegated Operator session; the Gateway constructs the envelope and derives `action_type` from the event registry.
+`GovernanceEnvelope` carries protocol version, ID, timestamps, expiry, source component, event and action types, target resource, typed payload, structured intent data, state Merkle root, nonce, governance metadata, requestor and acting-app attribution, delegated Operator and session context, optional case and investigation context, posture, and transaction hash. g8ee dispatch callers supply only the registered request `event_type`, serialized protobuf payload bytes, and delegated Operator session; the Gateway constructs the envelope and derives `action_type` from the event registry.
 
-The transaction hash uses SHA-256 over the non-empty fields in protocol order: action type, target resource, base64 payload, state root, nonce, normalized expiry, canonicalized intent data, requestor user ID, acting app ID, Operator ID, Operator session ID, case ID, investigation ID, task ID, web session ID, and CLI session ID. Each present field is followed by `|`. L3 proof and posture metadata are excluded from the hash: L2 must be able to sign the transaction before a human notary proof is obtained, and posture is policy metadata supplied by the Gateway.
+The transaction hash uses SHA-256 over non-empty fields in protocol order: action type, target resource, base64 payload, state root, nonce, normalized expiry (fixed 6-digit microsecond UTC), canonicalized intent data, requestor user ID, acting app ID, Operator ID, Operator session ID, case ID, investigation ID, task ID, web session ID, and CLI session ID. Each present field is followed by `|`; empty or null fields are omitted entirely. L3 proof and posture metadata are excluded from the hash: L2 must be able to sign the transaction before a human notary proof is obtained, and posture is policy metadata supplied by the Gateway.
 
-## Five-Layer Interlock
+### Five-Layer Interlock
 
 Both outbound paths terminate at the platform's five-layer governance boundary, although the Gateway constructs the envelope for governed dispatch while g8ee constructs it for direct application-record writes:
 
@@ -70,22 +154,22 @@ Both outbound paths terminate at the platform's five-layer governance boundary, 
 
 The active posture determines required L2 and L3 gates. It does not cause the command relay or direct envelope client to acquire missing proofs automatically. See [Governance](../architecture/governance.md) for canonical posture behavior and rejection semantics.
 
-## Events, Results, and Ownership
+### Events, Results, and Ownership
 
 g8ee publishes progress, clarification, approval, model-output, tool-result, reputation, and background events through the Gateway event bridge. `EventService` routes events using web or CLI session fields; events without a web or CLI routing target are skipped. These events are delivery telemetry, not governance proofs, durable execution evidence, or state-root mutations.
 
 The Gateway-backed document, KV, and blob services own durable application records. g8ee owns process-local active turns, background tasks, pending application approvals, and command-result correlations. Restarting g8ee interrupts operations waiting for a result and does not replace the executing Operator's authoritative local receipt, audit record, replay state, or file-mutation evidence. Gateway receipt mirroring and g8ee result handling are secondary copies of execution evidence.
 
-## Failure Behavior
+### Failure Behavior
 
 The command relay and direct submission fail closed on malformed protojson, invalid typed payloads, unauthorized channels or transports, identity or target mismatch, unknown actions, inactive sessions, expired envelopes, replayed nonces, stale state roots, and missing posture-required proofs. The relay drops invalid intents before Operator delivery. Direct submission returns a validation, governance, readiness, or transport error unless execution reaches the Actuator, in which case the signed receipt reports the execution attempt's outcome.
 
 Application-level validation and approval failures occur before either protocol path and are distinct from platform L1-L5 rejection. Native client tools, unrestricted provider behavior, direct filesystem or network access, and other side channels do not become governed because g8ee also uses a governed connection.
 
-## Related
+## Links out
 
-- [Architecture](architecture.md): g8ee relationships, identity startup, state ownership, and request flow.
-- [Governance](governance.md): Application controls, protocol postures, direct envelopes, and command relay behavior.
+- [Ensemble Architecture](architecture.md): g8ee relationships, identity startup, state ownership, and request flow.
+- [Ensemble Governance](governance.md): Application controls, protocol postures, direct envelopes, and command relay behavior.
 - [Platform Protocol](../architecture/protocol.md): Protocol packages, schemas, constants, and conformance testing.
 - [AI Agents and the Governance Boundary](../architecture/agents.md): Platform ingress paths and their governance limits.
 - [PKI and Trust](pki.md): Enrollment, certificates, SPIFFE identities, and trust bundles.

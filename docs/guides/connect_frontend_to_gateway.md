@@ -1,61 +1,115 @@
 ---
+doc_id: connect_frontend_to_gateway
 title: Connect Frontend to Gateway
-parent: Guides
+audience: frontend developers integrating with g8e
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/guides/connect_frontend_to_gateway.md
+  - internal/services/gateway/
+related:
+  - docs/guides/build_frontend.md
+  - docs/guides/lovable.md
+  - docs/guides/cloudflare_tunnel.md
+  - docs/architecture/auth.md
+  - docs/architecture/gateway.md
+when_to_read: Connecting a browser-based frontend application to the g8e Gateway via WebAuthn passkeys, CORS, SSE, and session authentication.
+do_not_use_for:
+  - Building a frontend from scratch (see build_frontend.md)
+  - Gateway deployment topology (see build_gateway.md)
+  - Application-to-gateway connectivity (see connect_apps_to_gateway.md)
 ---
 
-# Connect an Existing Frontend to g8e Gateway
+# Connect Frontend to Gateway
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+## Purpose
 
----
+This guide enables frontend applications (browser-hosted, JavaScript-based) to authenticate with the g8e Gateway via WebAuthn passkeys, establish HTTPS connections, receive server-sent events (SSE), approve suspended transactions, and manage passkeys through the browser's native credential APIs.
 
-## Overview
+For single-origin local development, the `./g8e gw connect <frontend-origin>` workflow automates CORS and passkey configuration, certificate trust installation, and HTTPS verification. Advanced deployments use `./g8e gw start` flags for multi-origin and public-tunnel scenarios.
 
-This guide connects an **existing** frontend UI to the g8e Gateway. If you are building a frontend from scratch, see [Build a g8e-Compatible Frontend](./build_frontend.md) for the full reference. This guide covers gateway configuration, WebAuthn authentication, SSE streaming, approval flows, and passkey management.
+## Quick index
 
-For a browser-hosted frontend on the same computer as the Gateway, `./g8e gw connect <frontend-origin>` is the guided one-command workflow: it validates the origin, derives the RP ID, starts or restarts the Gateway with the correct CORS and passkey settings when needed, installs local trust with consent, and verifies HTTPS and CORS against the running process. The advanced `gw start` flags below remain available for multi-origin and public deployments.
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-### Architecture
+Invariant groups: [API routing and authentication](#api-routing-and-authentication-inv-fe-auth), [Cookie and CORS behavior](#cookie-and-cors-behavior-inv-fe-cors), [WebAuthn flows](#webauthn-flows-inv-fe-wa), [Error handling](#error-handling-inv-fe-err).
 
+## Invariants
+
+Ids are stable. Append the next free number in a topic. Do not renumber.
+
+### API routing and authentication (`INV-FE-AUTH`)
+
+| ID | Rule |
+| --- | --- |
+| INV-FE-AUTH-01 | Browser-accessible routes (web session required) MUST use `GET /api/v1/users/me`, `GET /api/v1/auth/sessions/me`, `GET /api/v1/auth/passkeys`, `DELETE /api/v1/auth/passkeys/{credentialId}`, `GET /api/v1/approvals`, `GET /api/v1/approvals/{txHash}/challenge`, `POST /api/v1/approvals/{txHash}/verify`, `GET /api/v1/sse/stream`, and `GET /api/v1/sse/events` as the canonical set. Additional routes may exist for infrastructure or observability; consult OpenAPI spec at `/swagger/doc.json` before exposing unlisted operations. |
+| INV-FE-AUTH-02 | Public endpoints (no auth required) MUST include passkey registration and authentication challenges, bootstrap status, enrollment token validation, logout, and CLI recovery approval routes. Consult [gateway_http_router.go:23-141](internal/services/gateway/gateway_http_router.go#L23-L141) for the complete canonical list. |
+| INV-FE-AUTH-03 | Every session-authenticated call MUST include `credentials: 'include'` in the fetch options so the gateway's `g8e_web_session_cookie` is sent. CORS-restricted browsers block cookies without this flag. |
+| INV-FE-AUTH-04 | API responses MUST be interpreted through their HTTP status code: 200 (success), 401 (not authenticated, redirect to login), 403 (forbidden by policy), 404 (resource not found), 409 (conflict, e.g. token already used), 410 (gone, e.g. token expired), 5xx (server error). |
+
+### Cookie and CORS behavior (`INV-FE-CORS`)
+
+| ID | Rule |
+| --- | --- |
+| INV-FE-CORS-01 | The gateway sets `g8e_web_session_cookie` after successful passkey registration or authentication. The cookie is always `HttpOnly` (no JavaScript access) and `Secure` (HTTPS-only). |
+| INV-FE-CORS-02 | When no cross-origin origins are configured (single-origin deployment), the cookie uses `SameSite=Lax`. When `AllowedOrigins` is non-empty (`--cors-origin` flag or `G8E_ALLOWED_ORIGINS` env var), the cookie uses `SameSite=None` and requires browser support for same-site cookies across origins. |
+| INV-FE-CORS-03 | The gateway CORS middleware reflects exact-match origins in `Access-Control-Allow-Origin` and sets `Access-Control-Allow-Credentials: true` when the request origin is in the allowed set. Trailing slashes and case are normalized before matching. |
+| INV-FE-CORS-04 | The CORS-origin list is set at gateway startup via `--cors-origin` (repeatable) or `G8E_ALLOWED_ORIGINS` (comma-separated). Changes require a gateway restart. |
+
+### WebAuthn flows (`INV-FE-WA`)
+
+| ID | Rule |
+| --- | --- |
+| INV-FE-WA-01 | WebAuthn challenges are base64url-encoded by the gateway; the frontend MUST decode them to `ArrayBuffer` before calling `navigator.credentials.create()` and `navigator.credentials.get()`. Responses MUST be re-encoded before sending to the gateway's verify endpoints. |
+| INV-FE-WA-02 | Registration and authentication challenges contain `options.publicKey`; decode `challenge` and all `allowCredentials[].id` values. The RP ID is derived from the frontend origin via `--passkey-rp-id` and MUST match the registrable domain of the page's origin or the ceremony fails in the browser. |
+| INV-FE-WA-03 | The console registration route (bootstrap) permits only the first credential per user. Once the owner has a passkey, additional credentials MUST be added via the CLI token-gated enrollment flow (`g8e auth enroll user`). |
+| INV-FE-WA-04 | Approval WebAuthn ceremonies (for suspended transactions) do NOT create a new session; they issue an `ActionReceipt` that resumes execution. Treat approval ceremonies as a distinct flow from initial authentication. |
+
+### Error handling (`INV-FE-ERR`)
+
+| ID | Rule |
+| --- | --- |
+| INV-FE-ERR-01 | Enrollment token errors MUST be handled distinctly: 410 Gone (token expired, 5-minute TTL), 409 Conflict (token consumed, one-time-use), 401 Unauthorized (invalid token). Expired or consumed tokens require a new `g8e auth enroll user` request. |
+| INV-FE-ERR-02 | WebAuthn API unavailability (non-compliant browser or secure context not available) MUST surface a compatibility warning and offer recovery instructions. Fallback to password-based auth is not part of this flow. |
+| INV-FE-ERR-03 | SSE stream disconnection (network error, browser tab backgrounded) MUST trigger automatic reconnection via `EventSource` native behavior or a custom exponential-backoff loop with `Last-Event-ID` support. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
+| --- | --- | --- |
+| Browser credential flows | [internal/services/gateway/passkey_service_http.go](internal/services/gateway/passkey_service_http.go) | Register and authenticate challenges, enrollment token validation, WebAuthn response verification. |
+| CORS and session cookie behavior | [internal/services/gateway/passkey_service_http.go:47-61](internal/services/gateway/passkey_service_http.go#L47-L61) | Cookie attributes (`HttpOnly`, `Secure`, `SameSite` selection based on `crossOrigin` flag). |
+| Web session routes (browser-accessible) | [internal/services/gateway/gateway_http_router.go:245-251](internal/services/gateway/gateway_http_router.go#L245-L251) | Unified middleware validates cookie before handler invocation. |
+| SSE stream and poll endpoints | [internal/services/gateway/gateway_http_router.go:203-205](internal/services/gateway/gateway_http_router.go#L203-L205) | Event delivery, cursor tracking, streaming vs. polling fallback. |
+| API paths and constants | [internal/constants/api_paths.go:98-319](internal/constants/api_paths.go#L98-L319) | Canonical endpoint paths for auth, users, approvals, and observability routes. |
+
+## Procedures
+
+### Configure the Gateway for Your Frontend Origin
+
+For a single-origin local frontend, use the guided workflow:
+
+```bash
+./g8e gw connect https://localhost:3000
 ```
-[Frontend App] → https://gateway-host:8443 → [g8e Gateway]
-      ↑                                          ↓
- credentials: 'include'              WebAuthn + Session Cookie + SSE
-```
 
-The frontend communicates with the g8e Gateway over HTTPS. Authentication is via WebAuthn passkeys (no passwords, no API keys). The gateway issues an `HttpOnly` session cookie after successful passkey verification. All authenticated API calls must include `credentials: 'include'` so the cookie is sent cross-origin. Real-time telemetry is delivered via Server-Sent Events (SSE), not WebSockets (the WebSocket endpoint requires mTLS and is not available to browsers).
+This command validates the origin, derives the RP ID, starts or restarts the Gateway with the correct CORS and passkey settings when needed, installs local certificate trust with consent, and verifies HTTPS and CORS against the running process.
 
-The gateway's embedded SPA at `/console/` implements passkey registration and authentication, approvals, SSE audit streaming, passkey management, CLI recovery approval, workload enrollment approval, and URL-fragment handling. Use it as the browser reference implementation.
-
----
-
-## Prerequisites
-
-- An existing frontend application served from a known top-level origin (e.g., `https://your-app.example.com`, `http://localhost:3003`)
-- Either a healthy Gateway already configured for that origin, or permission to let `./g8e gw connect <frontend-origin>` start or restart the local Gateway
-- Browser support for WebAuthn (all modern Chrome, Firefox, Safari, and Edge)
-- A browser that trusts the Gateway's HTTPS certificate; the session cookie is always `Secure`
-- A WebAuthn secure context for the frontend (HTTPS, or the browser's localhost exception for local development)
-
-For direct browser integration, the browser calls the Gateway's absolute HTTPS origin. Do not route requests through an edge function, server-side proxy, service worker, or iframe relay unless the deployment intentionally changes the browser origin and authentication model. The frontend must be open in a top-level browser tab; an embedded builder preview or iframe can block loopback and WebAuthn permissions. `gw connect` verifies Gateway HTTPS and CORS, but cannot verify browser-controlled local-network permission or third-party-cookie acceptance.
-
----
-
-## Step 1: Configure the Gateway for Your Frontend Origin
-
-This step uses the advanced `gw start` flags for multi-origin and public deployments. For a single-origin local frontend, run `./g8e gw connect <frontend-origin>` instead; it derives the CORS and passkey settings automatically. Use the flags below only when you need multiple origins, a public tunnel, or custom ports.
-
-The gateway starts with CORS and passkey RP settings that match the frontend app's origin. WebAuthn ceremonies execute in the frontend page, so the RP ID is the frontend hostname or a registrable domain suffix of it, not necessarily the gateway hostname. An RP ID contains only a hostname or domain; it never includes a scheme or port. The browser rejects ceremonies when the RP ID is not valid for the page's origin.
-
-Start the gateway with CORS and passkey RP flags matching your frontend origin:
+For multi-origin or public deployments, use explicit `gw start` flags:
 
 ```bash
 ./g8e gw start \
   --passkey-rp-id example.com \
   --passkey-rp-name "g8e Console" \
-  --passkey-rp-origin https://your-app.example.com \
-  --cors-origin https://your-app.example.com
+  --passkey-rp-origin https://app.example.com \
+  --cors-origin https://app.example.com
 ```
 
 Or via environment variables:
@@ -63,294 +117,229 @@ Or via environment variables:
 ```bash
 export G8E_PASSKEY_RP_ID=example.com
 export G8E_PASSKEY_RP_NAME="g8e Console"
-export G8E_PASSKEY_RP_ORIGINS=https://your-app.example.com
-export G8E_ALLOWED_ORIGINS=https://your-app.example.com
+export G8E_PASSKEY_RP_ORIGINS=https://app.example.com
+export G8E_ALLOWED_ORIGINS=https://app.example.com
 export G8E_PUBLIC_BASE_URL=https://gateway.example.com
 ```
 
-Key flags:
+Key flags and env vars:
 
-- `--passkey-rp-id`: The WebAuthn Relying Party ID. Use the frontend app's hostname or a registrable domain suffix so passkeys work across subdomains.
-- `--passkey-rp-origin`: The exact origin where WebAuthn ceremonies execute, including scheme and port when non-default. Repeat for each origin.
-- `--cors-origin`: The frontend app origin. Allows cross-origin requests with credentials. Repeat for each origin (preview URLs, production URLs, custom domains).
-- `--public-base-url`: The public URL of the gateway (for example, a tunnel hostname). The gateway uses it for approval links and redirect host validation.
+- `--passkey-rp-id` / `G8E_PASSKEY_RP_ID`: WebAuthn Relying Party ID. Use the frontend app's hostname or a registrable domain suffix so passkeys work across subdomains (e.g., `example.com` for `https://app.example.com`).
+- `--passkey-rp-origin` / `G8E_PASSKEY_RP_ORIGINS`: Exact origin(s) where WebAuthn ceremonies execute. Repeat or comma-separate for each origin. The browser matches this against the page's current origin.
+- `--cors-origin` / `G8E_ALLOWED_ORIGINS`: Frontend app origin(s) for cross-origin fetch requests. Triggers `SameSite=None` cookie behavior.
+- `--public-base-url` / `G8E_PUBLIC_BASE_URL`: Public URL of the gateway (for approval links and host validation). Required for tunneled or multi-region deployments.
 
-The origins environment variables accept comma-separated values. Add every origin the frontend may use. The gateway reflects exact-match origins in CORS headers and sets `SameSite=None` on session cookies whenever the allowed-origin list is non-empty.
+See `./g8e gw start --help` for the full list of flags.
 
-### How CORS Works
+### API Configuration
 
-When `AllowedOrigins` is non-empty, whether populated by `--cors-origin` or `G8E_ALLOWED_ORIGINS`, the gateway CORS middleware:
+Create a centralized fetch wrapper that includes `credentials: 'include'` for all requests:
 
-1. Checks the request `Origin` header against the allowed set (case-insensitive, trailing slashes trimmed).
-2. If matched, sets `Access-Control-Allow-Origin` to the exact origin and `Access-Control-Allow-Credentials: true`.
-3. Handles `OPTIONS` preflight requests with `204 No Content` and the appropriate `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, and `Access-Control-Max-Age` headers.
-4. Adds `Vary: Origin` to all responses so caches respect per-origin differences.
-5. When `AllowedOrigins` is empty (same-origin only), the middleware is a pass-through and no CORS headers are set.
+```javascript
+const API_BASE = 'https://gateway-host:8443';
 
-### Session Cookie Behavior
+async function gatewayFetch(path, options = {}) {
+  const url = new URL(path, API_BASE);
+  const mergedOptions = {
+    ...options,
+    credentials: 'include', // Always include session cookie
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  };
+  const response = await fetch(url, mergedOptions);
+  if (response.status === 401) {
+    // Clear auth state and redirect to login
+    window.location.href = '/login';
+  }
+  return response;
+}
+```
 
-The gateway sets a `g8e_web_session_cookie` cookie after successful passkey registration or authentication:
+### Initialize Authentication State on App Mount
 
-- **`HttpOnly`**: Always true (prevents JavaScript access).
-- **`Secure`**: Always true (requires HTTPS).
-- **`SameSite=Lax`**: Default when no cross-origin origins are configured.
-- **`SameSite=None`**: Automatically set when `AllowedOrigins` is non-empty (required for cross-origin cookie delivery).
+1. Call `GET /api/v1/auth/bootstrap/status` to check whether an owner user exists (this does not count existing passkeys).
+2. Call `GET /api/v1/users/me` with `credentials: 'include'` to verify the browser has a valid session.
+3. If the UI displays or coordinates by session ID, call `GET /api/v1/auth/sessions/me`. The SSE stream derives the session ID from the cookie automatically.
 
-The cookie has a 24-hour TTL. The gateway validates it on every session-authenticated request by looking up the session ID in its database and checking expiry. Browser privacy policies can still block third-party cookies even with `SameSite=None`; deploy the frontend and gateway on the same site or proxy the gateway through the frontend origin when cross-site cookies are blocked.
+```javascript
+async function initAuth() {
+  const bootstrapResp = await gatewayFetch('/api/v1/auth/bootstrap/status');
+  const bootstrap = await bootstrapResp.json();
+  const hasOwner = bootstrap.bootstrapped;
 
----
+  try {
+    const userResp = await gatewayFetch('/api/v1/users/me');
+    if (userResp.status === 200) {
+      const user = await userResp.json();
+      // User is authenticated
+      return { authenticated: true, user, hasOwner };
+    }
+  } catch (e) {
+    // Not authenticated
+  }
+  return { authenticated: false, hasOwner };
+}
+```
 
-## Step 2: Add the API Configuration
+### Implement WebAuthn Registration (First-Time Setup)
 
-Define the API configuration directly. The key elements are:
+1. Confirm `GET /api/v1/auth/bootstrap/status` returns `{ "bootstrapped": false }`.
+2. POST `/api/v1/auth/passkeys/console/register/challenge` with:
+   ```json
+   { "user_name": "Display name", "cli_session_id": "browser" }
+   ```
+   (Omit `user_id` for initial bootstrap; the gateway creates the user.)
+3. Decode the response's `options.publicKey` and call `navigator.credentials.create({ publicKey })`.
+4. POST `/api/v1/auth/passkeys/console/register/verify` with the flat-structure attestation response (see [Encoding WebAuthn Responses](#encoding-webauthn-responses)).
+5. On success (200), the gateway sets `g8e_web_session_cookie`. Load the current user from `GET /api/v1/users/me`.
 
-### API Base URL and Fetch Wrapper
+The console registration route enforces first-credential-only; once an owner has a passkey, additional credentials require CLI token-gated enrollment.
 
-Every session-authenticated API call includes `credentials: 'include'` so the cookie is sent cross-origin. Create a centralized fetch wrapper that sets credentials on every request and sets `Content-Type: application/json` when a request has a JSON body. The base URL is the gateway HTTPS address (for example, `https://gateway-host:8443`).
+### Implement WebAuthn Authentication (Returning User)
 
-### Key Endpoint Paths
-
-Public endpoints (no auth required):
-
-- `GET /api/v1/health` - Health check
-- `GET /api/v1/auth/bootstrap/status` - Report whether an owner user exists; this does not count passkeys
-- `POST /api/v1/auth/passkeys/console/register/challenge` - Begin console passkey registration
-- `POST /api/v1/auth/passkeys/console/register/verify` - Complete console passkey registration
-- `POST /api/v1/auth/passkeys/console/authenticate/challenge` - Begin console passkey authentication
-- `POST /api/v1/auth/passkeys/console/authenticate/verify` - Complete console passkey authentication
-- `POST /api/v1/auth/passkeys/enrollment/register/challenge` - Begin token-gated passkey registration
-- `POST /api/v1/auth/passkeys/enrollment/register/verify` - Complete token-gated passkey registration
-- `POST /api/v1/auth/logout` - Clear session cookie
-- `POST /api/v1/auth/enrollment-token/validate` - Validate a CLI-generated enrollment token without consuming it; this call is optional because the registration challenge validates the token too
-
-Browser-accessible authenticated endpoints (session cookie required for browser calls):
-
-- `GET /api/v1/users/me` - Get current authenticated user
-- `GET /api/v1/auth/sessions/me` - Get current user ID and web session ID
-- `GET /api/v1/auth/passkeys` - List registered passkeys
-- `DELETE /api/v1/auth/passkeys/{credentialId}` - Revoke a passkey
-- `GET /api/v1/approvals` - List pending suspended transactions
-- `GET /api/v1/approvals/{txHash}/challenge` - Get WebAuthn challenge for approval
-- `POST /api/v1/approvals/{txHash}/verify` - Verify WebAuthn assertion to approve transaction
-- `GET /api/v1/sse/stream` - SSE live event stream (web session derived from cookie)
-- `GET /api/v1/sse/events?since_id={n}&limit={n}` - Poll SSE events (web session derived from cookie)
-- `POST /api/v1/auth/cli/recovery/approve` - Approve or deny a token-scoped CLI recovery request
-- `GET /api/v1/auth/platform-enrollments/pending` - List owner-visible pending workload enrollments
-- `POST /api/v1/auth/platform-enrollments/decision` - Approve or deny a workload enrollment
-
-The gateway also serves a full OpenAPI/Swagger specification at `/swagger/doc.json` and a browsable UI at `/swagger/`. Browser clients use public routes and routes classified for web-session or dual authentication. Unknown routes fail closed to mTLS, so consult Swagger and the route authentication registry before exposing additional gateway operations in a browser UI.
-
----
-
-## Step 3: Wire Up WebAuthn Authentication
-
-The frontend implements WebAuthn passkey flows with the browser's `navigator.credentials` API. The gateway sends binary WebAuthn values as unpadded base64url strings, while the browser API requires `ArrayBuffer` values. Decode `challenge`, registration `user.id`, and every credential descriptor `id` before calling the browser API. Encode `rawId`, `clientDataJSON`, `attestationObject`, `authenticatorData`, `signature`, and `userHandle` before verification.
-
-Gateway verification bodies use flat credential models. Registration's `attestation_response` contains `id`, `rawId`, `clientDataJSON`, `attestationObject`, and optional `transports`. Authentication's `assertion_response`, and the entire approval verification body, contain `id`, `rawId`, `clientDataJSON`, `authenticatorData`, `signature`, and optional `userHandle`. Libraries such as `@simplewebauthn/browser` perform binary conversion but return their own response shape; map that output to these flat gateway models.
-
-### Registration Flow (First-Time Setup)
-
-1. Confirm that `GET /api/v1/auth/bootstrap/status` returns `{ "bootstrapped": false }`. This means no owner user exists; it does not count passkeys.
-2. POST `/api/v1/auth/passkeys/console/register/challenge` with `{ "user_name": "Display name", "cli_session_id": "browser" }`, omitting `user_id` only for this initial bootstrap.
-3. Save the top-level `user_id` returned by the gateway. Decode `options.publicKey` and call `navigator.credentials.create({ publicKey })`.
-4. POST `/api/v1/auth/passkeys/console/register/verify` with `{ "user_id": <saved user_id>, "cli_session_id": "browser", "attestation_response": <flat encoded attestation> }`.
-5. On success, the gateway sets `g8e_web_session_cookie`. Load the current user from `/api/v1/users/me` rather than relying on a user object in the verify response.
-
-The public console registration route permits only the user's first credential. Once an owner has a passkey, add passkeys through the CLI token-gated enrollment flow.
-
-### Authentication Flow (Returning User)
-
-1. Collect the g8e user ID and POST `/api/v1/auth/passkeys/console/authenticate/challenge` with `{ "user_id": <user_id> }`. The endpoint requires a user ID and does not implement discoverable-credential login without it.
-2. If the response has `success: false` and `needs_setup: true`, that user has no registered passkey. Direct the user to CLI token-gated enrollment rather than anonymous registration.
+1. Collect the g8e user ID. POST `/api/v1/auth/passkeys/console/authenticate/challenge` with `{ "user_id": <user_id> }`.
+2. If the response contains `success: false` and `needs_setup: true`, the user has no registered passkey; direct them to CLI token-gated enrollment.
 3. Decode `options.publicKey`, including `challenge` and each `allowCredentials[].id`, and call `navigator.credentials.get({ publicKey })`.
-4. POST `/api/v1/auth/passkeys/console/authenticate/verify` with `{ "user_id": <user_id>, "assertion_response": <flat encoded assertion> }`.
-5. On success, the gateway sets `g8e_web_session_cookie`. Load `/api/v1/users/me` to establish application state.
+4. POST `/api/v1/auth/passkeys/console/authenticate/verify` with the flat-structure assertion response (see [Encoding WebAuthn Responses](#encoding-webauthn-responses)).
+5. On success (200), the gateway sets `g8e_web_session_cookie`. Load `GET /api/v1/users/me` to establish application state.
 
-### Auth Context Initialization
+### Encoding WebAuthn Responses
 
-On app mount, check auth state:
+The gateway sends WebAuthn values as unpadded base64url strings; the browser API requires `ArrayBuffer` values.
 
-1. Call `GET /api/v1/auth/bootstrap/status` to check whether an owner user exists.
-2. Call `GET /api/v1/users/me` with `credentials: 'include'` to check whether the browser already has a valid session.
-3. If the UI displays or coordinates by session ID, call `GET /api/v1/auth/sessions/me`. SSE routing itself derives the session ID from the cookie.
+**Decoding for ceremonies:**
+- Registration challenge: `base64url-decode(challenge)` → `ArrayBuffer`
+- Authentication challenge: `base64url-decode(challenge)` → `ArrayBuffer`
+- Credential descriptors: `base64url-decode(id)` → `ArrayBuffer` for each `allowCredentials[].id`
 
-### Enrollment Token Flow
+**Encoding for gateway verification:**
+- Registration: `{ "id", "rawId": base64url(rawId), "clientDataJSON": base64url(...), "attestationObject": base64url(...), "transports": [...] }`
+- Authentication & Approval: `{ "id", "rawId": base64url(rawId), "clientDataJSON": base64url(...), "authenticatorData": base64url(...), "signature": base64url(...), "userHandle": base64url(...) }`
 
-`g8e auth enroll user` generates a token and opens the gateway's embedded console at `/console/#enroll=1&token=<token>`. An external frontend does not receive this redirect automatically. If the application intentionally accepts the same token-bearing fragment, it implements this flow:
+Use a library like `@simplewebauthn/browser` to handle binary conversion; map the output to the flat gateway model.
 
-1. Read the token from the URL hash (`window.location.hash`).
-2. Immediately clear the token from the URL via `history.replaceState`.
-3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ enrollment_token: <token> }` in the JSON body. The gateway validates the token without consuming it and derives `user_id` and `cli_session_id` from it; there is no need to send those identifiers or expose them in the DOM. The separate `/api/v1/auth/enrollment-token/validate` endpoint is optional and also does not consume the token.
-4. Perform the WebAuthn ceremony with the challenge response (`navigator.credentials.create`).
-5. POST the flat encoded attestation and token to `/api/v1/auth/passkeys/enrollment/register/verify` with `{ "enrollment_token": <token>, "attestation_response": <flat encoded attestation> }`. The verify handler atomically consumes the token before verifying the attestation, so a failed verify attempt requires a new token. A successful verify sets the web session cookie.
+### Implement Enrollment Token Flow (CLI-Initiated)
 
-Do not treat `/api/v1/auth/enrollment-token/validate` as a required preliminary step. Calling it is safe but redundant; the registration challenge validates the token and the verify endpoint consumes it.
+The CLI command `g8e auth enroll user` generates a token and opens the gateway console at `#enroll=1&token=<token>`. An external frontend can implement this flow:
 
-Handle error responses from the challenge and verify endpoints:
-- **`410 Gone`**: Token has expired (5-minute TTL).
-- **`409 Conflict`**: Token has already been used (one-time-use).
-- **`401 Unauthorized`**: Invalid token.
+1. Read the token from `window.location.hash`.
+2. Clear it immediately via `history.replaceState`.
+3. POST `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ "enrollment_token": <token> }`. The gateway validates without consuming.
+4. Perform the WebAuthn ceremony with `navigator.credentials.create()`.
+5. POST `/api/v1/auth/passkeys/enrollment/register/verify` with `{ "enrollment_token": <token>, "attestation_response": {...} }`. The verify endpoint atomically consumes the token before checking the attestation.
+6. On success, the gateway sets the web session cookie.
 
----
+Handle errors:
+- **410 Gone**: Token expired (5-minute TTL).
+- **409 Conflict**: Token already consumed (one-time-use).
+- **401 Unauthorized**: Invalid token.
 
-## Step 4: Wire Up the SSE Live Audit Stream
+The optional `/api/v1/auth/enrollment-token/validate` endpoint confirms a token's validity without consuming it; calling it before the challenge is safe but redundant.
 
-### Connection
+### Wire Up SSE Live Event Stream
 
-- Connect to `GET /api/v1/sse/stream` using `EventSource` with `withCredentials: true`.
-- The `web_session_id` and `user_id` are derived from the authenticated session cookie by the gateway; do NOT pass them in the URL.
-- The browser's native `EventSource` reconnects automatically and sends `Last-Event-ID`. A custom loop can close the failed source and reconnect with exponential backoff.
-- The stream replays stored events by default. Use `since_id=<last durable ID>` for an explicit cursor. An explicit `since_id=0` requests live events only, while omitting the parameter replays from the beginning.
+Connect to `GET /api/v1/sse/stream` using the native `EventSource` API:
 
-### Event Handling
+```javascript
+const source = new EventSource('/api/v1/sse/stream', { withCredentials: true });
 
-- Parse each `message` event's `data` as an SSE push envelope. It contains `user_id`, exactly one session ID, and an `event` value. Producers may encode the nested `event` as an object or a JSON string, so handle both forms.
-- Read the durable event ID from `MessageEvent.lastEventId`. The nested event normally supplies its own type and timestamp.
-- Display events in a scrollable log with color-coded type badges.
-- Cap the in-memory event list at 500 entries (drop oldest).
-- Provide a filter input (case-insensitive filter by event type), auto-scroll checkbox, clear button, and event count display.
+source.addEventListener('message', (event) => {
+  const envelope = JSON.parse(event.data);
+  const { user_id, event } = envelope;
+  // Handle event
+});
 
-### Polling Fallback
+source.addEventListener('error', () => {
+  // EventSource reconnects automatically; handle as needed
+  console.error('SSE connection error');
+});
+```
 
-When streaming is unavailable or blocked by deployment infrastructure, poll `GET /api/v1/sse/events?since_id={lastId}&limit={limit}` with `credentials: 'include'`. The JSON response is `{ "events": [...], "count": n }`; each row contains `id`, `event_type`, `payload`, and `created_at`. `payload` is the stored push envelope serialized as a JSON string. Advance the cursor to the highest returned row ID.
+Key points:
 
-### WebSocket Note
+- The `web_session_id` and `user_id` are derived from the cookie; do NOT pass them in the URL.
+- The gateway replays stored events by default. Use `?since_id=<lastId>` for an explicit cursor; omit the parameter to replay from the beginning.
+- `MessageEvent.lastEventId` provides the durable event ID for cursor tracking.
+- The nested `event` may be an object or a JSON string; handle both.
 
-The gateway also exposes an mTLS-authenticated WebSocket pub/sub endpoint at `/ws/pubsub`, but it is not available to browser clients without a client certificate. Use SSE for browser-based real-time telemetry.
+For polling fallback (when SSE is blocked by infrastructure), use `GET /api/v1/sse/events?since_id={lastId}&limit={limit}` with `credentials: 'include'`. The response is `{ "events": [...], "count": n }`; each row contains `id`, `event_type`, `payload`, and `created_at`.
 
----
+### Implement Approval Flows (Suspended Transactions)
 
-## Step 5: Wire Up Approval Flows
+Fetch pending transactions via `GET /api/v1/approvals` with `credentials: 'include'`. Display each showing: tool name, transaction hash (truncated, monospace), created date, expiry countdown.
 
-### Pending Approvals
-
-Fetch pending suspended transactions via `GET /api/v1/approvals` with `credentials: 'include'`.
-
-Display each transaction showing: tool name, transaction hash (truncated, monospace), created date, expiry countdown.
-
-### Approval Flow (Suspended Transaction)
-
-When user clicks "Approve" on a transaction:
+When the user approves a transaction:
 
 1. GET `/api/v1/approvals/{txHash}/challenge` with `credentials: 'include'`.
-2. Decode the response's top-level `publicKey` object, including `challenge` and each `allowCredentials[].id`, then call `navigator.credentials.get({ publicKey })`.
-3. POST `/api/v1/approvals/{txHash}/verify` with the flat encoded assertion as the entire JSON body, not nested under `assertion_response`.
-4. A `200` response contains the canonical protojson `ActionReceipt` and means execution resumed. Refresh the approval list.
-5. A `403` response can contain either an error or an `ActionReceipt` describing rejection; preserve and display it. A `404` means the transaction is missing or expired.
+2. Decode `publicKey` (including `challenge` and `allowCredentials[].id`) and call `navigator.credentials.get({ publicKey })`.
+3. POST `/api/v1/approvals/{txHash}/verify` with the flat-structure assertion as the entire JSON body (NOT nested).
+4. A 200 response contains the canonical `ActionReceipt` and means execution resumed. Refresh the approval list.
+5. A 403 response can contain either an error or an `ActionReceipt` describing rejection. A 404 means the transaction is missing or expired.
 
-### L3 Approval Redirect and URL Hash Handling
-
-The gateway's public approval URL is `{publicBaseURL}/api/v1/approve/{txHash}`. It redirects to `/console/#approve={txHash}` on the embedded gateway console. An external frontend can approve inline with the endpoints above or implement its own fragment convention.
+### Handle URL Fragments for Approval and Enrollment
 
 On app load, check `window.location.hash` for:
 
-- **`#approve={txHash}`**: If user is logged in, auto-trigger the approval flow for this transaction. If not logged in, store it and trigger after login.
-- **`#enroll=1&token={enrollmentToken}`**: If the external frontend supports token-gated enrollment, clear the fragment immediately, then post the token to the enrollment registration challenge and verify endpoints. The separate enrollment-token validation endpoint is optional and does not consume the token.
+- `#approve={txHash}`: If logged in, trigger the approval flow for this transaction. If not logged in, store it and trigger after login. Clear the fragment with `history.replaceState`.
+- `#enroll=1&token={enrollmentToken}`: If the frontend supports token-gated enrollment, read and clear the token immediately, then post to the enrollment challenge endpoint.
 
-Clear secret-bearing enrollment tokens with `history.replaceState` immediately after reading them. Transaction hashes are not credentials; the frontend can retain or remove approval fragments according to its routing behavior.
+Transaction hashes are not credentials; the frontend can retain or remove approval fragments per its routing behavior.
 
----
+### Implement Passkey Management
 
-## Step 6: Add Passkey Management
+**List passkeys:**
 
-### List Passkeys
+```javascript
+const resp = await gatewayFetch('/api/v1/auth/passkeys');
+const passkeys = await resp.json();
+// Display: credential ID (truncated), creation date, last-used date
+```
 
-Fetch registered passkeys via `GET /api/v1/auth/passkeys` with `credentials: 'include'`.
+**Revoke a passkey:**
 
-Display each passkey with credential ID (truncated, monospace), creation date, last used date.
+```javascript
+await gatewayFetch(`/api/v1/auth/passkeys/{credentialId}`, { method: 'DELETE' });
+// Use a confirmation dialog before revoking
+```
 
-### Revoke a Passkey
+**Register another passkey:**
 
-Send `DELETE /api/v1/auth/passkeys/{credentialId}` with `credentials: 'include'`.
+Run `g8e auth enroll user`. The CLI opens the embedded gateway console, which completes token-gated registration. The public console registration endpoints reject users who already have a passkey.
 
-Use a confirmation dialog before revoking.
-
-### Register Another Passkey
-
-Run `g8e auth enroll user`. The CLI opens the embedded gateway console, which completes token-gated registration for that user. The public console registration endpoints are first-credential-only and reject a user who already has a passkey.
-
----
-
-## Step 7: Handle Errors and Edge Cases
-
-- **401 from session-authenticated routes**: Clear user state and show the sign-in flow; handle token-gated route failures within their own flow.
-- **`needs_setup: true`** on authenticate challenge: Tell the user that the supplied user ID has no passkey and direct them to CLI token-gated enrollment.
-- **Enrollment token registration**: Handle 410 (expired), 409 (already used), and 401 (invalid) with specific error messages.
-- **WebAuthn API not available**: Show a browser compatibility warning.
-- **Network errors**: Show a retry-able error state.
-
----
-
-## Step 8: Verify the Integration
-
-For a browser-hosted frontend on the same computer as the Gateway, `./g8e gw connect <frontend-origin>` performs HTTPS health and CORS verification against the running process automatically. For multi-origin or public deployments, verify manually in the browser:
+### Verify the Integration Manually
 
 - [ ] **CORS headers**: Open browser DevTools, Network tab. Make any API call and confirm `Access-Control-Allow-Origin` reflects your frontend origin and `Access-Control-Allow-Credentials: true` is present.
-- [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with `204 No Content` before actual POST requests.
+- [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with 204 No Content before actual POST requests.
 - [ ] **Passkey registration**: Trigger registration and confirm the browser's WebAuthn dialog appears with the correct RP ID.
 - [ ] **Passkey authentication**: Trigger authentication and confirm the WebAuthn dialog appears and login succeeds.
 - [ ] **Session cookie**: After login, check DevTools for the HttpOnly, Secure `g8e_web_session_cookie`. It uses `SameSite=None` when any CORS origin is configured and `SameSite=Lax` otherwise.
 - [ ] **Authenticated API calls**: Confirm `GET /api/v1/users/me` returns user data (not 401) after login.
 - [ ] **SSE stream**: Connect to the SSE stream and confirm live events appear.
 - [ ] **Approvals**: If a suspended transaction exists, confirm the approval flow triggers WebAuthn and the transaction is approved.
-- [ ] **Enrollment token (if supported by the external frontend)**: Navigate to `#enroll=1&token={token}` and confirm registration uses the token-gated challenge and verify endpoints without first calling `/api/v1/auth/enrollment-token/validate`. The CLI normally opens this fragment on the embedded gateway console.
+- [ ] **Enrollment token**: Navigate to `#enroll=1&token={token}` and confirm registration uses the token-gated challenge and verify endpoints without first calling `/api/v1/auth/enrollment-token/validate`.
 - [ ] **URL hash approval**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
-- [ ] **Logout**: Sign out and confirm redirect to login page and cookie cleared.
+- [ ] **Logout**: Sign out via `POST /api/v1/auth/logout` and confirm redirect to login page and cookie cleared.
 
----
+## Anti-patterns
 
-## Troubleshooting
+- Not including `credentials: 'include'` on authenticated API calls, causing CORS cookie delivery to fail and 401 responses.
+- Hard-coding the gateway URL as a path relative to the frontend app (e.g., `/api/`) instead of an absolute HTTPS origin; the gateway is a separate service and browser CORS blocks same-path requests.
+- Ignoring 401 responses from session-authenticated routes and continuing to make requests; re-authenticate immediately.
+- Treating `needs_setup: true` on an authentication challenge as a recoverable error; direct the user to CLI token-gated enrollment instead.
+- Reusing enrollment tokens across failed registration attempts; each consume attempt invalidates the token and requires `g8e auth enroll user` to generate a new one.
+- Relying on WebAuthn `publicKey.timeout` without implementing a UX timeout message; browsers may not surface timeout errors visibly.
+- Storing or relaying WebAuthn challenges in localStorage or URL parameters across page reloads; challenges expire and browsers reject reuse.
+- Hardcoding flag values or API paths in the frontend instead of deriving them from gateway help text (`./g8e gw start --help`) or OpenAPI spec (`/swagger/doc.json`).
+- Calling `/api/v1/auth/enrollment-token/validate` as a mandatory prerequisite; the registration challenge validates the token and the verify endpoint consumes it, making a separate validation call redundant.
 
-### CORS Errors in Browser Console
+## Links out
 
-**Symptom**: `Access-Control-Allow-Origin` header missing or does not match your frontend origin.
-
-**Cause**: The gateway was not started with `--cors-origin` matching your frontend origin.
-
-**Fix**: Restart the gateway with the correct flags: `./g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com`
-
-For a guided one-command workflow on a local Gateway, run `./g8e gw connect https://your-app.example.com`, which validates the origin, derives the RP ID, restarts the Gateway with the correct CORS and passkey settings when needed, installs local trust with consent, and verifies HTTPS and CORS against the running process.
-
-### Passkey RP Mismatch
-
-**Symptom**: WebAuthn ceremony fails with "RP ID is not a valid domain" or similar.
-
-**Cause**: The `--passkey-rp-id` does not match your frontend app's registrable domain.
-
-**Fix**: Set `--passkey-rp-id` to your frontend app's domain (e.g., `example.com` for `https://app.example.com`). The RP ID must be a registrable domain suffix of the current page's origin.
-
-### SSE Connection Refused
-
-**Symptom**: `EventSource` fails to connect or returns 401.
-
-**Cause**: No authenticated session, or `withCredentials: true` not set on `EventSource`.
-
-**Fix**: Authenticate first via the passkey flow and use `new EventSource(url, { withCredentials: true })`. Verify the session through `GET /api/v1/users/me`. The gateway derives the SSE route from the cookie; do not add `web_session_id` or `user_id` to the stream URL.
-
-### Session Cookie Not Sent Cross-Origin
-
-**Symptom**: Authenticated API calls return 401 despite being logged in.
-
-**Cause**: `credentials: 'include'` is absent, the gateway does not allow the frontend origin, the browser does not trust the gateway certificate, or browser policy blocks the gateway cookie as a third-party cookie.
-
-**Fix**: Include `credentials: 'include'`, verify the gateway was started with `--cors-origin` for the exact frontend origin, and trust the gateway certificate. If browser policy still blocks the cookie, deploy both origins on the same site or proxy gateway requests through the frontend origin.
-
-### Enrollment Token Errors
-
-**Symptom**: Registration via `#enroll=1&token={token}` fails.
-
-**Cause**: Token expired (5-minute TTL), was already used by a completed or failed verify attempt, or is invalid.
-
-**Fix**: Generate a new token with `g8e auth enroll user`. Send it directly to the token-gated registration challenge and verify endpoints, and handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing messages.
-
----
-
-## See Also
-
-- [Build a g8e-Compatible Frontend](./build_frontend.md) - Full reference for building a frontend from scratch
-- [Connect a Lovable App](./lovable.md) - Connect a browser-hosted Lovable app directly to a local Gateway
-- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Expose the gateway via a public tunnel
-- [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
-- [Authentication & Authorization](../architecture/auth.md) - WebAuthn passkey authentication architecture
-- [Gateway Architecture](../architecture/gateway.md) - Gateway service architecture
-- [SSE Streaming](../architecture/sse.md) - SSE push, poll, and stream endpoints for agentic ensembles
+- [Build a g8e-Compatible Frontend](./build_frontend.md) — Full reference for building a frontend from scratch.
+- [Connect a Lovable App](./lovable.md) — Connect a browser-hosted Lovable app directly to a local Gateway.
+- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) — Expose the gateway via a public tunnel.
+- [Connect Apps to Gateway](./connect_apps_to_gateway.md) — Application-to-gateway mTLS and token-based connectivity.
+- [Authentication & Authorization](../architecture/auth.md) — WebAuthn passkey authentication architecture.
+- [Gateway Architecture](../architecture/gateway.md) — Gateway service architecture and posture definitions.
+- [SSE Streaming](../architecture/sse.md) — SSE push, poll, and stream endpoints for real-time events.

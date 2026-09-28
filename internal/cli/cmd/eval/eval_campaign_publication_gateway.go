@@ -12,7 +12,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/spf13/cobra"
+
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/gwremote"
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -90,6 +94,46 @@ func (s *gatewayCampaignPublicationStateStore) Save(_ context.Context, state *ev
 		return fmt.Errorf("evaluation: save publication state: %w", err)
 	}
 	return nil
+}
+
+// NewCampaignPublicationCoordinator wires the host-side publication of run
+// lifecycle projections to the Gateway mirror.
+func NewCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (*evaluation.CampaignPublicationCoordinator, error) {
+	projectRoot, err := cmd.Flags().GetString("project-root")
+	if err != nil {
+		return nil, fmt.Errorf("campaign publication: read project root: %w", err)
+	}
+	cfg, err := shared.LoadConfig(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("campaign publication: load config: %w", err)
+	}
+	exporter, err := gwremote.NewCampaignFeedExporter(shared.CommandContext(cmd), fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	proofPublisher, err := gwremote.NewCampaignProofPublisher(shared.CommandContext(cmd), fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	remote, err := gwremote.NewProviderObservationRemote(fileSvc, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("campaign publication: provider observation remote: %w", err)
+	}
+	publicationState, err := newGatewayCampaignPublicationStateStoreFromConfig(fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	coordinator := evaluation.NewCampaignPublicationCoordinator(
+		evaluation.NewStore(fileSvc),
+		fileSvc,
+		publicationState,
+		exporter,
+		remote,
+	).WithProofPublisher(proofPublisher)
+	if gwremote.IsGatewayHealthy() {
+		coordinator.WithMirrorProbe(gwremote.NewHTTPCampaignMirrorProbe(shared.CommandContext(cmd)))
+	}
+	return coordinator, nil
 }
 
 func newGatewayCampaignPublicationStateStoreFromConfig(fileSvc fs.RuntimeFileService, cfg *config.Config) (evaluation.CampaignPublicationStateStore, error) {

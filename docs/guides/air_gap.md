@@ -1,92 +1,174 @@
 ---
-title: Air Gap
-parent: Guides
+doc_id: air_gap
+title: Air-Gapped Deployment
+audience: platform operators and infrastructure teams
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/guides/air_gap.md
+  - Dockerfile
+  - docker-compose.yml
+  - Makefile
+  - go.mod
+  - protocol/python/pyproject.toml
+related:
+  - docs/guides/unified_stack.md
+  - docs/guides/docker_gateway.md
+  - docs/guides/connect_operator_to_gateway.md
+  - docs/architecture/network.md
+  - docs/architecture/encryption.md
+  - demos/README.md
+when_to_read: Deploying g8e inside a network-isolated environment; staging binaries, containers, and protocol libraries for offline transfer.
+do_not_use_for:
+  - Runtime encryption and vault mechanics (docs/architecture/encryption.md)
+  - Network identity, PKI, and TLS configuration (docs/architecture/network.md)
+  - Docker image and container port configuration (docs/guides/docker_gateway.md)
+  - Operator enrollment and cross-gateway connectivity (docs/guides/connect_operator_to_gateway.md)
 ---
 
 # Air-Gapped Deployment
 
-Last Updated: 2026-09-24
-Version: v2.1.13
+## Purpose
 
-g8e runs without internet access when its binaries, container images, configuration, and any optional downstream services are staged inside the isolated environment. The Gateway and Operator do not require a hosted g8e service, and the repository vendors the Go modules required to build the `g8e` binary.
+Documents how to stage g8e for deployment in network-isolated environments using native binaries, source builds, or prebuilt container images. Covers media transfer, offline build procedures, workload enrollment, and air-gap verification.
 
-This guide covers three transfer models: a prebuilt native binary, a source build using the checked-in Go vendor tree, and prebuilt Docker images. It does not make the repository's Dockerfiles or developer setup scripts offline installers; those build paths must be completed on a connected host or supplied with separately staged package repositories and caches.
+## Quick index
 
-## Prerequisites
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+  - [Supported deployment forms](#supported-deployment-forms)
+  - [Runtime network behavior in air-gap](#runtime-network-behavior-in-air-gap)
+  - [Local assets and persistence](#local-assets-and-persistence)
+  - [Prepare a native binary](#prepare-a-native-binary)
+  - [Prepare container images](#prepare-container-images)
+  - [Protocol libraries and generation](#protocol-libraries-and-generation)
+  - [Verification and isolation checklist](#verification-and-isolation-checklist)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-Before transfer, identify the target operating system and architecture, the Gateway and Operator topology, the required doctrine and consensus configuration, and every service the deployment must reach. Stage the `g8e` host CLI as well as the Gateway/Operator executable or images: enrollment, approval, status, and operational commands run from a client environment and are not provided by the Gateway container.
+Key invariant groups: [Isolation Properties](#isolation-properties-inv-air-iso), [Build and Transfer](#build-and-transfer-inv-air-build), [Runtime Behavior](#runtime-behavior-inv-air-runtime).
 
-For a native source build, stage Go 1.26.6, GNU Make, the complete repository including `vendor/`, and the already-built evaluation-explorer asset required by `make build`. For Docker deployment, stage Docker Engine with the Compose v2 plugin, the final application images, the Compose files, and all bind-mounted configuration and demo data. For a Python protocol package, stage the wheel and all dependency wheels or provide an approved internal package index.
+## Invariants
 
-Air-gap isolation is an infrastructure property, not a g8e runtime mode. The CLI has no `--air-gap` switch, and the default Docker bridge networks do not block internet egress. Enforce the boundary with host, firewall, container-runtime, and network controls, and configure every optional integration to use an approved internal endpoint or remain disabled.
+Ids are stable. Append the next free number in a group. Do not renumber.
 
-## Supported Deployment Forms
+### Isolation Properties (`INV-AIR-ISO`)
 
-| Deployment form | Stage on the connected host | Requirements in the air gap |
+| ID | Rule |
+| --- | --- |
+| INV-AIR-ISO-01 | Air-gap isolation is an infrastructure property enforced by host, firewall, container-runtime, and network controls. The CLI has no `--air-gap` switch and the default Docker bridge networks do not block internet egress. |
+| INV-AIR-ISO-02 | Every optional integration (JWKS, MCP/A2A proxies, consensus, LLM providers) MUST use an approved internal endpoint or remain unset (empty configuration). Public endpoints such as OpenAI, Anthropic, Gemini, or other internet-facing services MUST NOT be configured inside the air gap. |
+| INV-AIR-ISO-03 | Governance admits tool operations; network policy controls reachability. Operations that perform DNS, HTTP, SSH, cloud metadata, or other network operations require governance authorization. Network controls do not supplement governance — they enforce the boundary that governance defines. |
+
+### Build and Transfer (`INV-AIR-BUILD`)
+
+| ID | Rule |
+| --- | --- |
+| INV-AIR-BUILD-01 | Native binary builds MUST use `GOTOOLCHAIN=local GOFLAGS=-mod=vendor` to ensure the checked-in vendor tree provides all dependencies. Go 1.26.6 must already be installed; automatic toolchain selection is prohibited. |
+| INV-AIR-BUILD-02 | Container image builds on a connected host MUST complete fully (including `apt-get`, `pip`, and `npm` install steps) before transfer. Pre-pulling base images alone does not make Dockerfile builds offline. Final images MUST preserve exact repository names and tags for offline loading. |
+| INV-AIR-BUILD-03 | The evaluation-explorer asset at `dashboard/g8e-adapter/evaluation-explorer/dist/index.html` MUST be built on the connected host before executing `make build`. `make build` refuses to proceed without this asset. |
+| INV-AIR-BUILD-04 | `make test-airgap` verifies vendor tree presence, vendored build success, demo manifest existence, and demo image pin patterns, but does NOT verify container build offline-capability, image completeness, runtime egress blocking, or endpoint configuration. |
+
+### Runtime Behavior (`INV-AIR-RUNTIME`)
+
+| ID | Rule |
+| --- | --- |
+| INV-AIR-RUNTIME-01 | The Gateway listens on HTTP port 8080 (bootstrap, CA discovery, token-scoped enrollment) and HTTPS port 8443 (authenticated APIs, console, WebSocket pub/sub). Remaining unhandled HTTP paths redirect to HTTPS. Port values are derived from `internal/constants/ports.go`. |
+| INV-AIR-RUNTIME-02 | The Operator opens no inbound service port. It initiates an outbound-only mTLS WebSocket connection to the Gateway's pub/sub endpoint and pulls work from its operator-specific channel. |
+| INV-AIR-RUNTIME-03 | The platform does not send product analytics or error reports to any hosted service. It records local operational events, SSE events, audit records, and model-call telemetry. |
+| INV-AIR-RUNTIME-04 | Gateway and Operator each maintain separate `.g8e/` runtime trees on their host or container volume. The Gateway is not a central database server for remote Operator execution. Operator state is local and authoritative to that host. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
 | --- | --- | --- |
-| Native binary | A `g8e` binary and its `.sha256` file for the target OS and architecture; custom doctrine files when used | The binary and access to the private hosts on which the Gateway and Operators run |
-| Offline source build | The complete source tree, including `vendor/`, plus `dashboard/g8e-adapter/evaluation-explorer/dist/` when using `make build` | Go 1.26.6 and local build tools; set `GOTOOLCHAIN=local` and `GOFLAGS=-mod=vendor` |
-| Containers | Fully built application images, the image archive or registry export, Compose files, and bind-mounted configuration or demo data | Docker Engine and Docker Compose v2; start with pulling and building disabled |
+| Makefile air-gap target | `Makefile` | `make test-airgap` target at line ~1800 |
+| Go vendor build support | `go.mod`, `vendor/` | `go build -mod=vendor ./...` succeeds |
+| Container image build | `Dockerfile`, `docker-compose.yml` | `docker compose build` completes without external registry access on connected host |
+| Python wheel build | `protocol/python/pyproject.toml`, `Makefile` | `make python-build` produces `protocol/python/dist/g8e-2.2.3-py3-none-any.whl` |
+| Demo manifest and images | `demos/images.json`, `demos/*/compose.yml` | `./g8e demos pull`, `./g8e demos export` |
+| Gateway port defaults | `internal/constants/ports.go` | HTTP 8080, HTTPS 8443 |
 
-A normal native Gateway deployment does not need the `protocol/` source tree at runtime. The Go protocol types and built-in compliance catalogs are compiled into the binary. Transfer external doctrine files passed through `--doctrine-dir`, consensus bootstrap files passed through `--consensus-bootstrap`, model assets, and any reference data required by a specific compliance command. Keep the host-side `g8e` CLI available for enrollment and administration.
+## Procedures
 
-## Runtime Network Behavior
+### Supported deployment forms
 
-The Gateway listens on two ports by default:
+Three offline transfer models are supported:
 
-- **8080 HTTP** provides health and state checks, initial bootstrap, CA bundle and fingerprint discovery, token-scoped CLI recovery, token-scoped platform enrollment, deploy scripts, and binary downloads. Other paths redirect to HTTPS.
-- **8443 HTTPS** provides authenticated APIs, the embedded browser console, WebAuthn ceremonies, governance envelopes, MCP and A2A ingress, WebSocket pub/sub, SSE, audit APIs, and data services. Authentication varies by route: mTLS, a browser web session, JWT when JWKS is configured, or a scoped bootstrap or enrollment token.
+1. **Native binary**: Transfer a prebuilt `g8e` binary and its `.sha256` checksum sidecar for the target OS and architecture. No runtime compiler or build tools required. Simplest form factor for isolated hosts.
 
-The Operator opens no inbound service port for normal operation. It initiates an mTLS WebSocket connection to the Gateway and pulls work from its operator-specific channel. Gateway, Operator, CLI, dashboard, ensemble, consensus, and downstream traffic can cross a private network; air-gapped does not mean localhost-only.
+2. **Offline source build**: Transfer the complete source tree including `vendor/`, the built evaluation-explorer asset, and a connected host where Go 1.26.6 is available. Allows rebuilds inside the air gap without external network access.
 
-The platform does not send product analytics or error reports to a hosted g8e service. It does record local operational events, SSE events, audit records, and model-call telemetry. Optional features can initiate network connections and must be reviewed before deployment:
+3. **Container images**: Transfer fully built Docker images, `docker-compose.yml`, and the host-side `g8e` CLI. Enables multi-service deployments with automatic workload orchestration.
 
-- `--jwks-url` fetches keys from the configured identity provider.
-- `--mcp-downstream-url` and `--a2a-downstream-url` proxy to configured services.
-- Consensus and Operator endpoints connect to their configured private addresses.
-- The ensemble calls the selected LLM provider. Use the built-in `fake` provider for deterministic operation without a model server, or point Ollama, llama.cpp, or another supported provider at an internal endpoint. Do not configure public OpenAI, Anthropic, Gemini, or other internet endpoints inside the air gap.
-- Native network, HTTP probe, DNS, cloud metadata, SSH, copy, deploy, and streaming tools access destinations requested by admitted operations. Governance controls admission; network policy controls reachability.
+For native deployments, the `protocol/` source tree, Dockerfiles, and developer scripts are not required at runtime. Transfer external doctrine files passed through `--doctrine-dir`, consensus bootstrap files via `--consensus-bootstrap`, model assets, and any reference data required by compliance commands. Keep the host-side `g8e` CLI available for enrollment and operational commands.
 
-WebAuthn passkeys do not require an external identity provider. Leave JWKS configuration empty when local passkeys and mTLS are the only identity mechanisms.
+### Runtime network behavior in air-gap
 
-## Local Assets and Persistence
+The Gateway exposes a consolidated two-port topology as default:
 
-The Gateway browser console is embedded in the `g8e` binary and is served locally. The Gateway creates its runtime tree under `.g8e/` by default. Runtime state is not confined to one SQLite database:
+- **HTTP port 8080**: Health checks, initial bootstrap, CA bundle and fingerprint discovery, token-scoped CLI recovery, token-scoped platform enrollment, and binary downloads. All other paths return HTTP 301 redirect to HTTPS.
+- **HTTPS port 8443**: Authenticated APIs, embedded browser console, WebAuthn ceremonies, governance envelopes, MCP and A2A ingress, WebSocket pub/sub, SSE, audit APIs, and data services. Authentication per route: mTLS, browser web session, JWT when JWKS is configured, or scoped bootstrap or enrollment token.
 
-- `data/` contains `g8e.db`, the suspended-transaction database, and Operator-specific execution and replay stores. Gateway and Operator databases are local to the runtime that opens them; the Gateway is not a central database for remote Operator execution.
-- `data/ledger/` contains optional file-ledger repositories, while evaluation and other component-specific artifacts use subdirectories under `data/`.
-- `pki/` contains generated authorities, serving certificates, workload identities, revocation data, and trust bundles.
-- `secrets/` contains platform secret material managed by the local keystore.
-- `vault/` contains the vault key and related vault state.
-- `logs/`, `pids/`, and other runtime directories contain operational state.
+Port configuration is derived from [internal/constants/ports.go](internal/constants/ports.go). Modify with `--http-port` and `--https-port` flags to `gw start`.
 
-The vault is mandatory for the audit and execution-vault services. Sensitive audit content fields, including event content and command standard output and error, are encrypted before storage. The suspended-transaction database, structured metadata, SQLite files as a whole, and not every field or file in `.g8e/` are encrypted. The file ledger can contain plaintext current copies when the vault is locked. Protect the runtime directory with restrictive filesystem permissions, full-disk or volume encryption, controlled backups, and physical access controls. Back up the vault key with the encrypted data; storing only one makes the backup unusable.
+The Operator initiates an outbound-only mTLS WebSocket connection to the Gateway and pulls work from its operator-specific channel. No inbound service port is opened. Gateway, Operator, CLI, dashboard, ensemble, consensus, and downstream service traffic can cross private networks; air-gapped does not mean localhost-only.
 
-The Gateway and each Operator have separate runtime trees. An Operator is authoritative for its host-local audit and execution state, while the Gateway stores platform, identity, routing, and mirrored audit state. Container deployments persist these trees in separate named volumes.
+Outbound network integrations that require review before deployment:
 
-## Prepare a Native Binary
+- `--jwks-url`: Fetches identity provider keys. Leave empty if using local passkeys and mTLS only.
+- `--mcp-downstream-url` and `--a2a-downstream-url`: Proxy to configured services. Must point to approved internal endpoints.
+- Consensus and Operator endpoints: Connect to their configured private addresses.
+- LLM provider: The ensemble calls the selected provider. Use the built-in `fake` provider for deterministic operation without a model server, or configure an internal Ollama, llama.cpp, or compatible endpoint. Do not configure public OpenAI, Anthropic, Gemini, or internet-facing services.
+- Tool operations: Native network, HTTP, DNS, cloud metadata, SSH, copy, deploy, and streaming tools access destinations requested by admitted operations. Governance controls admission; network policy controls reachability.
+
+### Local assets and persistence
+
+The Gateway browser console is embedded in the `g8e` binary and served locally without external CDN access. The Gateway creates its runtime tree under `.g8e/` by default. Runtime state is organized as follows:
+
+- **data/**: Contains `g8e.db` (main state), suspended-transaction databases, and Operator-specific execution and replay stores. Gateway and Operator databases are local to their runtime; the Gateway is not a central database for remote Operator execution.
+- **data/ledger/**: Optional file-ledger repositories. Evaluation and component-specific artifacts use subdirectories under `data/`.
+- **pki/**: Generated Root CA, intermediates, serving certificates, workload identities, revocation data, and trust bundles.
+- **secrets/**: Platform secret material managed by the local keystore.
+- **vault/**: Vault encryption key and related state. Mandatory for the audit and execution-vault services.
+- **logs/**, **pids/**: Operational runtime state.
+
+The vault is mandatory for audit and execution-vault services. Sensitive audit fields (event content, command stdout/stderr) are encrypted before storage. The suspended-transaction database, structured metadata, and SQLite files as a whole are not uniformly encrypted; only vault-covered fields are encrypted. The file ledger can contain plaintext copies when the vault is locked.
+
+Protect the runtime directory with restrictive filesystem permissions, full-disk or volume encryption, controlled backups, and physical access controls. Back up the vault key alongside encrypted data; storing only one makes the backup unusable.
+
+Gateway and Operator have separate runtime trees. Operators are authoritative for their host-local audit and execution state. The Gateway stores platform, identity, routing, and mirrored audit state. Container deployments persist these trees in separate named Docker volumes, defined in [docker-compose.yml](docker-compose.yml).
+
+### Prepare a native binary
 
 Run these commands on a connected build host from the repository root:
 
 ```bash
-# Verify that the checked-in vendor tree supports a vendored build and run the repository's static air-gap checks.
+# Verify the checked-in vendor tree and run static air-gap checks.
 GOTOOLCHAIN=local GOFLAGS=-mod=vendor make test-airgap
 
 # If the evaluation-explorer asset is not already staged, build it while connected.
-# The asset requires the dashboard's Node dependencies to be staged or available.
 cd dashboard/g8e-adapter/evaluation-explorer && npm run build
 cd ../../../
 
-# Build for the connected host's OS and architecture without toolchain or module downloads.
+# Build for the connected host's OS and architecture.
 GOTOOLCHAIN=local GOFLAGS=-mod=vendor make build
 
-# For other supported targets, build all supported platform binaries instead.
+# Or build all supported platforms (Linux, Windows, Darwin with multiple architectures).
 GOTOOLCHAIN=local GOFLAGS=-mod=vendor make build-all
 ```
 
-`make build` requires `dashboard/g8e-adapter/evaluation-explorer/dist/index.html`, writes `bin/g8e-<os>-<arch>` (with `.exe` on Windows), writes a neighboring `.sha256` file, and copies the host binary to `./g8e`. `make build-all` writes binaries and portable checksum sidecars for Linux amd64, arm64, and 386; Windows amd64 and arm64; and Darwin amd64 and arm64, then publishes `bin/g8e-binaries.json` only after the complete matrix validates. Go 1.26.6 must already be installed when `GOTOOLCHAIN=local` is set; this prevents Go's automatic toolchain selection from downloading another toolchain. `make test-airgap` runs `go build -mod=vendor ./...` and static checks for the demo manifest, demo image pin patterns, and demo Python references; it does not verify image completeness, runtime egress, or offline Docker builds.
+Build commands produce:
+- `make build`: Writes `bin/g8e-<os>-<arch>` (with `.exe` on Windows), a neighboring `.sha256` file, and copies the host binary to `./g8e`.
+- `make build-all`: Writes binaries and checksums for Linux (amd64, arm64, 386), Windows (amd64, arm64), and Darwin (amd64, arm64). Publishes `bin/g8e-binaries.json` only after the complete matrix validates.
 
-Transfer the target binary, its checksum, the complete manifest when using a full matrix, and any custom doctrine directory through the approved media-transfer process. The checksum sidecars produced by `make build-all` name artifact basenames, so verify them from the directory containing the transferred artifacts before installation:
+Go 1.26.6 must already be installed before running with `GOTOOLCHAIN=local`; this prevents Go from automatically downloading another toolchain version.
+
+Transfer the target binary, its checksum, the complete manifest when using a full matrix, and any custom doctrine directory through the approved media-transfer process. Verify checksums from the directory containing the transferred artifacts:
 
 ```bash
 cd bin
@@ -94,78 +176,90 @@ sha256sum -c g8e-linux-amd64.sha256
 install -m 0755 g8e-linux-amd64 ../g8e
 ```
 
-Start and enroll a local-only Gateway with:
+Start a local-only Gateway:
 
 ```bash
 ./g8e gw start --cert-mode localhost
-./g8e auth enroll user -e localhost
+./g8e auth enroll user
 ```
 
-Omit `--cert-mode localhost` when clients or Operators connect over a private network. The default `full` certificate mode detects host identities; ensure the selected private hostname or address is present in the serving certificate and pass the Gateway endpoint to enrollment and Operator commands. Use `./g8e auth enroll user --headless -e <gateway>` for a CLI-only owner when no browser is available. Headless enrollment does not create a passkey and therefore cannot authenticate to the browser console or provide WebAuthn approval.
+For private-network deployments, omit `--cert-mode localhost`. The default `full` certificate mode detects network hostnames and IPs; ensure the selected private hostname or address is present in the serving certificate and pass the Gateway endpoint to enrollment and Operator commands using `-e <hostname>` or `-e <hostname:port>`.
 
-## Prepare Container Images
+For a CLI-only owner when no browser is available:
+
+```bash
+./g8e auth enroll user --headless
+```
+
+Headless enrollment produces an mTLS-only identity without a passkey, preventing authentication to the browser console. Recovery or approval of platform workloads must be delegated to an already-enrolled CLI via `./g8e auth approve-recovery <token>`.
+
+### Prepare container images
 
 Build container images on the connected host. The repository Dockerfiles are not offline build recipes:
 
-- The Gateway/Operator Dockerfile runs `apt-get` in both build and runtime stages.
-- The ensemble Dockerfile installs Python packages with `pip`.
-- The dashboard Dockerfile installs packages with `npm` and `apk`.
+- **Dockerfile**: Runs `apt-get` in both build and runtime stages to install g8e, Ollama integration tools, and runtime dependencies.
+- **Ensemble Dockerfile**: Installs Python packages with `pip`.
+- **Dashboard Dockerfile**: Installs packages with `npm` and `apk`.
 
-Pre-pulling only the base images does not make these Docker builds offline. Build the final images before transfer, then preserve their exact repository names and tags in the exported archive.
+Pre-pulling only base images does not make these Dockerfiles offline-capable. Build the final images completely while connected, then preserve their exact repository names and tags in the exported archive.
 
-### Unified stack
+#### Unified stack
+
+Build all images for the default stack (Gateway, Operator, Ensemble, Dashboard, Inference Operator):
 
 ```bash
-# Build the Gateway/Operator, ensemble, and dashboard images while connected.
-docker compose --profile bootstrapped build
+docker compose build
 
-# Record the exact image names that Compose expects.
-docker compose --profile bootstrapped config --images
+# Record exact image names.
+docker compose config --images
 
-# Save each unique image name shown by the preceding command.
+# Export each unique image.
 docker save -o /tmp/g8e-unified-images.tar <image-ref> [<image-ref> ...]
 ```
 
-Transfer the image archive, the repository's `docker-compose.yml`, the host-side `g8e` CLI, and any `.env` or Compose override needed for private endpoints. On the isolated host:
+Transfer the image archive, `docker-compose.yml`, the host-side `g8e` CLI, and any `.env` or Compose override for private endpoints. On the isolated host:
 
 ```bash
 docker load -i /media/g8e-unified-images.tar
 
-# Start only the Gateway without pulling or building.
+# Start only the Gateway.
 docker compose up -d --no-build --pull never
-./g8e auth enroll user -e localhost
+./g8e auth enroll user
 
-# Start the enrolled workloads, then approve or deny their pending requests.
-docker compose --profile bootstrapped up -d --no-build --pull never
-# Add --profile evaluation only when G8E_OLLAMA_ENDPOINT points to a staged,
-# approved internal Ollama service.
-# docker compose --profile bootstrapped --profile evaluation up -d --no-build --pull never
+# Start all workloads.
+docker compose up -d --no-build --pull never
+
+# List and approve pending enrollment requests.
 ./g8e auth enroll pending
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
-# ./g8e auth enroll deny <request-id> --yes
+./g8e auth enroll approve <inference-operator-request-id> --yes
 ```
 
-Before sending model requests, configure every model role in use through platform settings or a Compose override. For deterministic operation without a model server, pass both `G8E_LLM_PRIMARY_PROVIDER=fake` and a primary model name such as `G8E_LLM_PRIMARY_MODEL=fake`; the root Compose file does not forward these host variables unless they are added to the ensemble service's `environment` list. Otherwise configure a supported provider with an approved internal endpoint. The `evaluation` profile starts a separate inference Operator only when `G8E_OLLAMA_ENDPOINT` is set; stage the selected model files and provider runtime on that approved internal endpoint before enabling the profile. Do not assume that staging the g8e images stages Ollama or any model weights. See [Unified Docker Stack](unified_stack.md) for identity, volume, hostname, and port configuration.
+Configure model roles before sending model requests. For deterministic operation without a model server, set `G8E_LLM_PRIMARY_PROVIDER=fake` and `G8E_LLM_PRIMARY_MODEL=fake` in the environment or `.env` file. The root Compose file must include these in the ensemble service's `environment` list. Otherwise configure a supported provider with an approved internal endpoint. Model weights and Ollama runtime must be staged separately; do not assume that g8e images include model files or Ollama.
 
-### Demo stacks
+See [Unified Docker Stack](unified_stack.md) for identity, volume, hostname, and port configuration.
 
-The demo image manifest contains the digest-pinned external images referenced by the four per-demo Compose files plus the Gateway/Operator build-stage and runtime bases. On the connected host:
+#### Demo stacks
+
+The demo image manifest contains digest-pinned external images referenced by the per-demo Compose files plus build-stage and runtime bases. On the connected host:
 
 ```bash
 ./g8e demos pull
 ./g8e demos export /tmp/g8e-external-images
 
-# Build the source-based images for each demo that will be transferred.
+# Build source-based images for the selected demos.
 docker compose -f demos/<org>/compose.yml build
 docker compose -f demos/<org>/compose.yml config --images
 
-# Save the unique source-built image names from the list; digest references are already in the external-image export.
+# Export unique source-built image names (digest references are in the external export).
 docker save -o /tmp/g8e-<org>-built-images.tar <built-image-ref> [<built-image-ref> ...]
 ```
 
-`g8e demos export` saves only the images listed in `demos/images.json`; it does not save locally built Gateway/Operator images. Transfer both archives, the selected `demos/<org>/` tree, and `demos/images.json`. On the isolated host:
+`./g8e demos export` saves only images listed in [demos/images.json](demos/images.json); it does not save locally built Gateway/Operator images. Transfer both archives, the selected `demos/<org>/` tree, and `demos/images.json`.
+
+On the isolated host:
 
 ```bash
 ./g8e demos import /media/g8e-external-images
@@ -173,63 +267,67 @@ docker load -i /media/g8e-<org>-built-images.tar
 docker compose -f demos/<org>/compose.yml up -d --no-build --pull never
 ```
 
-Use direct Compose commands with `--no-build --pull never` for strict offline startup. `./g8e demos start <org>` runs `docker compose up -d` without those explicit controls. Complete owner and Operator enrollment using the Gateway ports printed for the selected demo; see [Demos README](../../demos/README.md) for the per-demo port map and bootstrap sequence.
+Use direct Compose commands with `--no-build --pull never` for strict offline startup. `./g8e demos start <org>` runs `docker compose up` without explicit controls. Complete owner and Operator enrollment using the Gateway ports printed for the selected demo; see [Demos README](../../demos/README.md) for per-demo port maps and bootstrap sequences.
 
-## Protocol Libraries and Generation
+### Protocol libraries and generation
 
-The root `vendor/` directory makes this repository buildable with `-mod=vendor`. It does not make `go get github.com/g8e-ai/g8e/v2@<version>` work offline in an unrelated Go module. Downstream Go applications need their own staged source and vendor tree, a pre-populated module cache, or an internal Go module proxy.
+The root `vendor/` directory makes the repository buildable with `-mod=vendor`. It does not enable `go get github.com/g8e-ai/g8e/v2@<version>` to work offline in an unrelated Go module. Downstream Go applications need their own staged source tree, vendor tree, pre-populated module cache, or internal Go module proxy.
 
-Build a Python wheel and collect its transitive dependencies on the connected host:
+Build the Python protocol wheel and collect its transitive dependencies on the connected host:
 
 ```bash
 make python-build
-pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.1.12-py3-none-any.whl
+pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.2.3-py3-none-any.whl
 ```
 
 Transfer the complete wheel directory, then install without an index:
 
 ```bash
-pip install --no-index --find-links /media/g8e-python-wheels g8e==2.1.13
+pip install --no-index --find-links /media/g8e-python-wheels g8e==2.2.3
 ```
 
-The Python package includes its JSON constants under `g8e/_data`; there is no `G8E_PROTOCOL_DIR` runtime setting.
+The Python package includes JSON constants at `g8e/_data`; there is no `G8E_PROTOCOL_DIR` runtime setting.
 
-Generated Go, Python, and Node protocol sources are already present in the repository. Protocol regeneration is not required on a runtime host. `make proto` is not inherently offline because its setup paths can install Buf, Python, and Node tooling and can update lock files. To regenerate inside an isolated build environment, stage the pinned generator binaries and all Python and Node package dependencies first. The cross-platform scripts under `scripts/` bootstrap developer workspaces and can invoke operating-system package managers; they are not air-gap installers.
+Generated Go, Python, and Node protocol sources are already present in the repository. Protocol regeneration is not required at runtime. `make proto` is not inherently offline; its setup paths can install Buf, Python, and Node tooling and update lock files. To regenerate inside an isolated build environment, stage the pinned generator binaries and all Python and Node dependencies first.
 
-## Verification and Isolation Checklist
+Cross-platform scripts under `scripts/` bootstrap developer workspaces and invoke operating-system package managers; they are not air-gap installers.
 
-Run `make test-airgap` in the staged source tree before transfer. The target currently verifies:
+### Verification and isolation checklist
+
+Run `make test-airgap` in the staged source tree before transfer. This target verifies:
 
 1. `vendor/` exists.
 2. `go build -mod=vendor ./...` succeeds.
 3. `demos/images.json` exists.
-4. Demo Compose files contain none of the tag patterns checked as unpinned by the target.
+4. Demo Compose files contain no unpinned image tags (no `:latest`, `:alpine`, `:slim`, `:bookworm`).
 5. Demo Python files contain no `pip install` or `import requests` references.
 
-This target is a build and static-reference check. It does not prove that container builds work offline, that every required image was exported, that runtime egress is blocked, or that configured integrations use only internal endpoints. Verify those properties separately:
+This is a build and static-reference check. It does NOT verify container build offline-capability, image completeness, runtime egress blocking, or endpoint configuration. Verify those properties separately:
 
-- Deny outbound traffic at the host firewall and network perimeter, and test the denial.
-- If containers must have no egress beyond approved peers, apply container-network firewall policy; the repository's bridge networks are not egress-deny boundaries.
+- Deny outbound traffic at the host firewall and network perimeter, then test the denial.
+- Apply container-network firewall policy if containers must have no egress beyond approved peers. (Repository bridge networks are not egress-deny boundaries.)
 - Start containers with `--no-build --pull never` and confirm all services become ready without registry or package-repository access.
-- Keep `--jwks-url`, public LLM endpoints, and public downstream MCP or A2A URLs unset.
+- Keep `--jwks-url`, public LLM endpoints, and public downstream MCP/A2A URLs unset.
 - Point consensus, Gateway, Operator, model, DNS, NTP, and other required services at approved private endpoints.
 - Verify transferred binary and image digests through the organization's media-transfer process.
-- Persist and back up each `.g8e/` runtime tree or named volume according to local retention policy.
+- Persist and back up each `.g8e/` runtime tree or named Docker volume according to local retention policy.
 - Monitor firewall and DNS logs for attempted external connections during acceptance testing.
 
-## Security Boundaries
+## Anti-patterns
 
-- g8e authenticates Gateway-to-Operator and privileged client traffic with locally issued certificates, but bootstrap HTTP and browser web-session routes are not mTLS traffic.
-- The Gateway can call configured JWKS, downstream MCP/A2A, consensus, and private service endpoints. Network controls, not the Gateway process, enforce destination reachability.
-- Governance decides whether a requested tool operation is admitted. It does not replace firewall rules for tools that perform DNS, HTTP, SSH, cloud metadata, or other network operations.
-- Sensitive audit fields use the local vault, while host or volume encryption protects complete databases, PKI files, logs, and other runtime artifacts.
-- Missing posture-required proofs and unavailable required local security services fail closed. Optional network integrations remain disabled when their endpoint settings are empty.
+- Starting container builds with only base images pre-pulled, expecting Dockerfile package installs to work offline (INV-AIR-BUILD-02).
+- Building `make build` without first building the evaluation-explorer asset (INV-AIR-BUILD-03).
+- Using `GOTOOLCHAIN=auto` or installing Go 1.26.6 on-demand during offline builds; always use `GOTOOLCHAIN=local` with pre-installed toolchain (INV-AIR-BUILD-01).
+- Configuring public LLM endpoints, identity providers, or MCP/A2A proxies inside the air gap (INV-AIR-ISO-02).
+- Relying on `make test-airgap` to prove offline runtime operation; verify network controls and endpoint configuration separately (INV-AIR-BUILD-04).
+- Storing vault backup keys separately from encrypted data; restore usability requires both (INV-AIR-RUNTIME-04).
+- Sharing `.g8e/` runtime trees between Gateway and Operator or between multiple Operator instances (INV-AIR-RUNTIME-04).
 
-## See Also
+## Links out
 
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Operator enrollment and private-network management.
-- **[Docker Gateway](docker_gateway.md)**: Gateway and Operator image, ports, identity, and persistence.
-- **[Unified Docker Stack](unified_stack.md)**: Four-service Compose deployment and bootstrap flow.
-- **[Demos README](../../demos/README.md)**: Demo image manifest, export/import commands, and per-demo startup.
-- **[Network Architecture](../architecture/network.md)**: Listener, mTLS, certificate, and network identity design.
-- **[Encryption](../architecture/encryption.md)**: Vault encryption, scrubbing, and rehydration boundaries.
+- **[Unified Docker Stack](unified_stack.md)**: Multi-service Compose deployment, bootstrap flow, and environment configuration.
+- **[Docker Gateway](docker_gateway.md)**: Container image details, port mapping, identity configuration, and volume persistence.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Operator enrollment and private-network connectivity.
+- **[Network Architecture](../architecture/network.md)**: PKI hierarchy, SPIFFE identities, TLS/mTLS enforcement, and port topology.
+- **[Encryption](../architecture/encryption.md)**: Vault encryption, sensitive field scrubbing, and rehydration boundaries.
+- **[Demos README](../../demos/README.md)**: Demo environments, image manifest, export/import procedures, and per-demo startup sequences.

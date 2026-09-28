@@ -139,7 +139,9 @@ class MemoryDataService(MemoryDataServiceProtocol):
             return InvestigationMemory.model_validate(data)
         return None
 
-    async def get_user_memories(self, user_id: str) -> list[InvestigationMemory]:
+    async def get_user_memories(
+        self, user_id: str, limit: int = 10
+    ) -> list[InvestigationMemory]:
         try:
             docs = await self._cache_aside.query_documents(
                 collection=self.memories_collection,
@@ -147,6 +149,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
                     FieldFilter(field="user_id", op="==", value=user_id).model_dump(mode="json")
                 ],
                 order_by={"created_at": "desc"},
+                limit=limit,
             )
         except Exception as exc:
             raise DatabaseError(

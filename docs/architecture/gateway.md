@@ -1,435 +1,222 @@
 ---
-title: g8e Gateway
+doc_id: gateway
+title: Gateway Architecture
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - internal/services/gateway/
+  - internal/cli/cmd/gw/
+  - protocol/proto/g8e/common/v1/
+related:
+  - network.md
+  - operator.md
+  - evals.md
+  - public_spectator.md
+  - sse.md
+  - storage.md
+when_to_read: Understanding the Governance Gateway architecture, operational modes, MCP endpoint implementation, governance layers, HTTP routing, and session management.
+do_not_use_for:
+  - Network topology and PKI hierarchy (see network.md)
+  - Operator architecture and cross-gateway enrollment (see operator.md)
+  - Storage and persistence details (see storage.md)
 ---
 
-# g8e Gateway
+# Gateway Architecture
 
-Last Updated: 2026-09-23
-Version: v2.1.12
+## Purpose
 
-The g8e Protocol platform is implemented as a single static binary that operates in two modes:
+Documents the g8e Governance Gateway (g8eg) architecture: its operational modes, 5-layer governance enforcement, MCP endpoint, HTTP routing, session types, and agent integration. The Gateway is the protocol hub and policy decision point (PDP) that coordinates L1-L3 governance, manages PKI, runs pub/sub, and owns local audit evidence. This document maps architecture to implementation in [internal/services/gateway/](internal/services/gateway/) and [internal/cli/cmd/gw/](internal/cli/cmd/gw/).
 
-1.  **Governance Gateway** (Policy Decision Point / PDP): The binary run in Gateway mode (`gw start`, with `--posture doctrine`, `--posture consensus`, `--posture ratify`, or `--posture notary`). The Gateway owns the policy decision layers (L1 Doctrine, L2 Consensus, L3 Notary) and serves as the platform's central coordination and persistence service, pub/sub broker, PKI authority, and governance envelope entry point. The Gateway is governed by protocol L2 K-of-N Ed25519 votes when the active posture requires them; this is not Byzantine consensus. An in-process Operator substrate (PEP) runs L4 Warden and L5 Actuator locally within the Gateway runtime.
-2.  **Governed Operator** (Policy Execution Point / PEP): The same binary run in Standard Mode (`operator start`). It runs in the runtime where that process executes as the sovereign execution boundary, handling L4 Warden (pre-dispatch verification) and L5 Actuator (execution and signed receipt production) for operations on its own runtime. It connects to the Gateway outbound-only; it is not an inbound server managed by the Gateway.
+## Quick index
 
----
+- [Purpose](#purpose)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
 
-## Core Principles
+## Invariants
 
-- **5-Layer Governance Bedrock**: Every governed operation traverses the applicable fail-closed verification and execution layers. L1 is universal; L2 and L3 become required gates according to the active posture, while L4 and L5 enforce and execute the admitted operation:
-    - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis.
-    - **L2 Consensus**: Consensus-based deliberation producing L2 votes (Ed25519 signatures) over the transaction hash. The gateway delegates L2 deliberation to an enrolled Consensus rather than self-signing.
-    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn passkey proofs with optional CLI mTLS session verification).
-    - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root).
-    - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production.
-- **Authenticated transport boundary**: Governed API and Operator traffic requires verified mTLS identities, while bootstrap and discovery use a deliberately limited plain-HTTP surface. Browser sessions and, when configured, JWTs are separate authentication paths on the HTTPS surface. No inbound ports are required on managed Operators; they open outbound connections to the Gateway. The platform uses `g8e.local` as its canonical SPIFFE trust domain for workload identities. See [Network Architecture](./network.md) for detailed transport, PKI hierarchy, and identity management.
-- **Local-First Audit Architecture (LFAA)**: The runtime that executes an action remains authoritative for its local execution evidence. A remote Operator owns its local command history and file mutations; the Gateway owns coordination state and its own local evidence and may mirror remote signed receipts on a best-effort basis. The embedded Operator's evidence is local to the Gateway runtime.
-- **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
-- **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
-- **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the Governance Gateway and Governed Operator enforce these invariants.
-- **Sovereign Authority (PKI)**: The Governance Gateway owns the platform's PKI and is the only entity permitted to sign certificates. PKI files are stored under a platform-managed directory. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
-- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the Governance Gateway. Identities are encoded as SPIFFE URI SANs. See [Network Architecture](./network.md) for detailed enrollment procedures.
+| ID | Rule |
+| --- | --- |
+| INV-GW-01 | The Gateway runs in one of four postures: `doctrine` (L1 enforced, L2/L3 audited), `consensus` (L1/L2 enforced, L3 audited), `ratify` (L1/L3 enforced, L2 audited), `notary` (L1/L2/L3 strictly enforced). Posture is set once at `gw start` via `--posture` flag with no runtime change. |
+| INV-GW-02 | The Gateway exposes two logical protocol surfaces with distinct authentication requirements. HTTP port 8080 carries plain-text bootstrap, PKI discovery, health, and CLI recovery flows; HTTPS port 8443 carries MCP, API, console, and pub/sub traffic with optional or required client certificates per route. |
+| INV-GW-03 | Every transaction dispatched to `POST /api/v1/governance/envelopes` passes through all five governance layers (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator). The Gateway owns L1-L3; the Operator substrate (in-process or remote) owns L4-L5. |
+| INV-GW-04 | The Gateway maintains a native MCP tool registry in [internal/services/mcp/native_tool_registry.go](internal/services/mcp/native_tool_registry.go) containing 31 tools across database, filesystem, network, process, system, cloud, and audit categories. All tools enforce fail-closed input validation per category (SQL, URL, path, protocol, hostname, cloud metadata). |
+| INV-GW-05 | Session types are immutable bindings: `operator_session_id` (mTLS Operator certificate), `cli_session_id` (mTLS CLI certificate), `web_session_id` (WebAuthn passkey), `sub` (JWT user ID from external IdP). A single request carries exactly one session identifier. |
+| INV-GW-06 | Launch profiles written by `gw start` to `.g8e/pids/operator-launch-profile.json` are versioned and mandatory for `gw restart`. Restart fails closed if the profile is missing, malformed, or unknown-version rather than falling back to defaults. |
+| INV-GW-07 | The Gateway's HTTP router assigns each route to one of four auth modes: public (health, PKI, bootstrap), mTLS-only (governance, operator, audit, pub/sub), web-session-only (user profile, approvals, credential management), dual (SSE accepts mTLS or web session). Auth mode mismatches are routing errors. |
 
----
+## Owned surfaces
 
-## Architecture Overview
+| Surface | Path | Verify |
+| --- | --- | --- |
+| Gateway binary (Linux) | `bin/g8e` | SHA256 in release notes; distributed via HTTP from `/download/bin/g8e/<version>/` |
+| Gateway startup command | `internal/cli/cmd/gw/gateway.go` | `gw start`, `--posture` flag with four values, launch profile write to `.g8e/pids/` |
+| HTTP/HTTPS port constants | `internal/constants/network.go` | `GatewayHTTPPort = "8080"`, `GatewayHTTPSPort = "8443"` |
+| Governance layers | `internal/services/governance/` | Five files: `l1_doctrine.go`, `l3_notary.go`, `l4_warden.go`, `l5_actuator.go`; L2 Consensus delegated to enrolled service |
+| MCP native tools | `internal/services/mcp/native_tool_registry.go` | All 31 tools registered at startup; input validation per category enforced |
+| HTTP router and auth | `internal/services/gateway/router.go` | Routes classified as public, mTLS-only, web-session-only, dual |
+| Session types | `protocol/proto/g8e/common/v1/common.proto` | `operator_session_id`, `web_session_id`, `cli_session_id` fields in GovernanceEnvelope |
+| Interactive wizard | `internal/cli/cmd/gw/gateway_setup.go` | `gw setup`, `gw start -i` launch TUI; output merged with resolved CLI flags |
 
-The g8e platform is built on the g8e Protocol. Conforming gateway and Operator implementations make that protocol live.
+## Procedures
 
-- **Governance Gateway** (PDP): The binary run in **Gateway mode** (`gw start`, with `--posture doctrine`, `--posture consensus`, `--posture ratify`, or `--posture notary`). It acts as the platform's backbone: protocol hub, policy decision point, SQLite persistence owner, pub/sub broker, PKI authority, and audit coordinator. The Gateway constructs or admits governed transactions and owns L1-L3 policy decisions. Its in-process Operator substrate handles L4-L5 locally against the Gateway runtime, not the Docker host or any other runtime.
-- **Governed Operator** (PEP): The binary run in **Standard Mode** (`operator start`). It is the sovereign execution boundary for the runtime where that process runs. It opens an outbound-only mTLS connection to the Gateway, receives commands on its bound session, re-verifies the envelope and required proofs, and handles L4-L5 locally. The Gateway's unified MCP endpoint is the client-facing ingress; remote Operators do not receive inbound connections from the Gateway.
+### Operating Modes
 
-The same five layers run across the applicable execution boundary. The Gateway applies or coordinates L1-L3, then either its embedded Operator or a remote Governed Operator applies L4-L5. The embedded Operator executes only within the Gateway process runtime. Each remote Operator independently re-verifies the envelope, including L1-L3 evidence required by the active posture, before changing its own runtime.
+**Gateway Mode (`gw start`)**
 
-A gateway can also enroll as an operator of another gateway. Because the gateway binary runs the same `operator start` path as any standalone operator, it submits an operator CSR through the platform enrollment protocol, the upstream owner approves it through the same pending-list and operator-registry surfaces, and the enrolling gateway receives an operator identity signed by the upstream gateway's Operator intermediate CA. The enrolled gateway-as-operator then dials out over outbound-only mTLS and re-verifies the upstream gateway's L1-L3 proofs before its Actuator executes. This enables cascading outbound-only topologies: a gateway at the absolute edge enrolls outbound-only to an upstream gateway, which may itself enroll outbound-only further in, so every hop is an outbound mTLS connection and no edge device opens an inbound port. See [Network Architecture](./network.md#cross-gateway-enrollment) and [Operator Architecture](./operator.md#cross-gateway-enrollment-cascading-outbound-topologies).
+Starts the Governance Gateway with a specified posture. The binary runs as the platform's central backbone: protocol hub, policy decision point, SQLite persistence owner, pub/sub broker, PKI authority, and audit coordinator. The Gateway constructs or admits governed transactions, owns L1-L3 policy decisions, and runs an in-process Operator substrate for L4-L5 enforcement against its own runtime.
 
-For a detailed view of the Gateway service stack and its relationship to the Operator substrate, see the [Gateway Service Stack Diagram](../diagrams/graph-gateway-services.md).
+Commands:
+- `g8e gw start [--posture doctrine|consensus|ratify|notary] [--http-port 8080] [--https-port 8443]` — Starts Gateway with optional port overrides.
+- `g8e gw status` — Reports health and Docker Compose stack status (if running in Compose).
+- `g8e gw restart` — Reads persisted launch profile from `.g8e/pids/operator-launch-profile.json` and re-runs network identity detection before restart. Fails closed if profile is missing or malformed.
+- `g8e gw stop` — Gracefully shuts down the Gateway.
 
----
+**Operator Mode (`operator start`)**
 
-## Runtime and Deployment Boundaries
+The same binary run in Standard Mode becomes a Governed Operator (g8eo), the sovereign execution boundary for its runtime. It opens an outbound-only mTLS connection to the Gateway, receives commands on its bound session, re-verifies the envelope and required L1-L3 proofs, and handles L4-L5 locally. The Gateway's unified MCP endpoint is the client-facing ingress; remote Operators do not receive inbound connections.
 
-Gateway mode and Operator mode can run in separate processes, containers, or hosts. A Gateway's embedded Operator is in-process and executes only against the filesystem, processes, services, network, and container runtime visible to that Gateway process. A remote Operator has a separate process and runtime tree and is authoritative only for evidence produced in that Operator runtime. In the root Compose deployment, `g8e-gateway` and `g8e-operator` are separate containers with separate network namespaces and named volumes; neither has Docker-socket or host-root access by default.
+### Configuration and Enrollment
 
-The root `docker-compose.yml` starts `g8e-gateway` by default and places `g8e-operator`, `ensemble`, and `dashboard` in the `bootstrapped` profile. The `evaluation` profile adds `g8e-inference-operator`; `cross-enrollment` adds a secondary gateway running as an outbound Operator; `g8ellama` is a separate user-gateway/inference topology. The Gateway publishes host ports 8080 and 8443 for its two primary listeners. Public spectator listeners and the evaluation explorer are additional, loopback-published services when enabled. Workload containers enroll through the Gateway and remain dependent on owner approval; a container being started or healthy does not authorize it to govern mutations.
+**Interactive Setup Wizard**
 
-The Gateway runtime volume owns its SQLite database, PKI, secrets, vault, suspended-transaction store, and Gateway-local audit evidence. The Operator, Ensemble, Dashboard, and Inference Operator use separate named volumes unless Compose explicitly mounts a path read-only, such as the ensemble's `/operator-state` view. See [Docker Gateway Guide](../guides/docker_gateway.md), [Unified Docker Stack Guide](../guides/unified_stack.md), [Network Architecture](./network.md), and [Storage Architecture](./storage.md).
+- `g8e gw setup` — Launches an interactive TUI without starting the Gateway, producing a resolved configuration for inspection.
+- `g8e gw start -i` (or `--interactive`) — Launches the same wizard, then starts the Gateway with the configuration.
 
----
+The wizard guides users through: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, and Review & Confirm. Output is merged into resolved CLI flags, preserving non-wizard flags (ports, log level, rate limits). Cancellation returns without starting.
 
-## Operating Modes: Gateway Mode (PDP)
+**Frontend Connection**
 
-Running `gw start` starts the Gateway mode; `--posture` selects `doctrine` (the default), `consensus`, `ratify`, or `notary`. In this mode the binary provides the platform's central backbone.
+- `g8e gw connect <frontend-origin>` — One-command workflow for connecting a browser-hosted frontend on the same computer. Validates and normalizes origin, derives exact-host WebAuthn RP ID, starts or restarts Gateway with matching CORS and passkey settings when needed (with explicit consent), installs or refreshes local gateway root trust, verifies HTTPS and CORS, and prints a frontend handoff prompt.
 
-- **Role**: Reference hub for the bundled deployment.
-- **Governance Posture**:
-    - **Doctrine** (`--posture doctrine`): L1 Doctrine enforced, L2 Consensus / L3 Notary audited.
-    - **Consensus** (`--posture consensus`): L1 Doctrine / L2 Consensus enforced, L3 Notary audited.
-    - **Ratify** (`--posture ratify`): L1 Doctrine / L3 Notary enforced, L2 Consensus audited.
-    - **Notary** (`--posture notary`): L1 Doctrine / L2 Consensus / L3 Notary strictly enforced.
-- **Capabilities**:
-    - **Gateway API**: The client-facing mutation and coordination entry point; route authentication and the governance path determine what each principal may do.
-    - **Document Store**: JSON document CRUD on a Collection/ID pattern.
-    - **KV Store**: TTL-aware ephemeral state with GLOB pattern scanning.
-    - **Blob Store**: Binary persistence for attachments and certificate material.
-    - **Pub/Sub Broker**: WebSocket fan-out with governed mutation channels.
-    - **Root CA / PKI**: Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
-    - **Audit Authority**: Local SQL audit events, signed ActionReceipts, file-mutation references, and commitment evidence. Selected event content and execution output use vault encryption; structured metadata and complete databases are not uniformly encrypted.
-    - **Unified MCP Endpoint**: Single-URL JSON-RPC dispatch contract for MCP protocol communication.
-    - **CLI Operator Dispatch**: `POST /api/v1/operators/commands` builds governed envelopes for enrolled CLI callers and fans out `EXECUTE_BASH` (and other typed actions) to explicit operator sessions, blocking until a terminal result per target.
+### Governance Postures
 
-### Port Topology
+All postures enforce L1 Doctrine (forbidden-pattern matching and MITRE threat detection). Posture differences control L2 Consensus and L3 Notary requirements:
 
-The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
+| Posture | L1 | L2 Consensus | L3 Notary | Typical Use |
+| --- | --- | --- | --- | --- |
+| `doctrine` | Enforced | Audited | Audited | Development, testing, local deployments |
+| `consensus` | Enforced | Enforced | Audited | Team coordination requiring consensus votes |
+| `ratify` | Enforced | Audited | Enforced | Human authorization required; consensus optional |
+| `notary` | Enforced | Enforced | Enforced | Strict multi-signature governance with human approval |
 
-**HTTP Port (8080)**: Plain HTTP for health and state checks, bootstrap and PKI discovery, token-scoped CLI recovery and platform-enrollment request/status/complete flows, deploy scripts, and g8e binary distribution. Other paths redirect to HTTPS after validating the requested host. The old trust-script routes and legacy CLI enrollment handler are removed; trust installation is handled by `auth enroll user` directly. No MCP or governed API routes are available on this port.
+### HTTP Router
 
-**HTTPS Port (8443)**: The primary TLS surface. Client certificates are optional at the TLS handshake so public browser and bootstrap assets can load, but application middleware requires a verified mTLS identity for governed routes classified as mTLS-only. Web-session routes use the browser session cookie, SSE consumer routes accept mTLS or a web session, and MCP/A2A accept JWT as an alternative only when JWKS is configured. The HTTPS router also serves the Console SPA, WebAuthn endpoints, Swagger UI, and OpenAPI specification; public assets are not uniformly mTLS-protected.
+The Gateway exposes two logical protocol surfaces:
 
-### Configuration Propagation
+**HTTP (Plain Text, Port 8080)**
 
-Vault and rate-limit settings flow from CLI flags through the gateway configuration loader. Vault paths default to platform infrastructure directories when not explicitly specified. Rate limiting is disabled when the requests-per-second value is zero.
+Routes: health checks, bootstrap and PKI discovery, token-scoped CLI recovery, platform-enrollment request/status/complete, g8e binary download, deploy scripts, and catch-all redirect to HTTPS. No mTLS, MCP, or governed API routes.
 
-The `--doctrine-dir` flag (env: `G8E_DOCTRINE_DIR`) specifies a directory of JSON doctrine files loaded at startup. File-loaded threat detectors are appended after hardcoded MITRE patterns. The loaded doctrine instance is shared between the MCP Gateway threat scanner (field-value scanning) and L4 Warden (payload validation). Defaults to empty (hardcoded patterns only) for backward compatibility.
+**HTTPS (TLS + Application Auth, Port 8443)**
 
-### Onboarding Wizard
+Client certificates are optional at the TLS handshake (allowing public browser and bootstrap assets) but application middleware requires verified mTLS identity for governance routes. The router classifies routes into four auth modes:
 
-`g8e gw start --interactive` (or `-i`) launches an interactive TUI wizard before gateway startup. The `g8e gw setup` command launches the same wizard without starting the gateway, producing a resolved configuration for inspection. The wizard guides users through four steps: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, and Review & Confirm. The wizard produces a focused configuration containing only wizard-owned fields; the gateway startup process merges the result into resolved CLI flags, preserving non-wizard flags (ports, directories, log level, rate limits). Cancellation returns without starting the gateway. The wizard is explicit opt-in only; existing flags and automation continue to work unchanged.
+| Auth Mode | Routes | Identity |
+| --- | --- | --- |
+| **Public** | Health, state, PKI discovery, landing, logout, Console SPA, browser passkey registration, bootstrap/device enrollment, token-scoped CLI recovery | None required |
+| **mTLS-only** | Data, blob, and KV stores, operator management, governance, consensus, audit, pub/sub, SSE push, PKI management, passkey CLI status, enrollment token generation, CLI rotation, CLI recovery approval via headless `approve-cli` endpoint | Client certificate verified |
+| **Web-session-only** | User profile, approvals, passkey credential management, CLI recovery approval via browser Console SPA | Web session cookie with active user |
+| **Dual** | SSE stream and event endpoints | Either valid client certificate or web-session cookie |
 
-### Frontend Connection and Launch Profiles
+The full route list and auth assignments are part of the wire contract in [protocol/docs/spec.md](../../protocol/docs/spec.md).
 
-`./g8e gw connect <frontend-origin>` is the guided one-command workflow for connecting a browser-hosted frontend on the same computer as the Gateway. It validates and normalizes the origin, derives the exact-host WebAuthn RP ID, starts or restarts the Gateway with matching CORS and passkey settings when needed (with explicit consent), installs or refreshes local gateway root trust when required, verifies HTTPS and CORS against the running process, and prints a frontend handoff prompt. It replaces the removed `auth enroll gui` command family. See [Connect a Lovable App](../guides/lovable.md) and [Build a g8e-Compatible Frontend](../guides/build_frontend.md).
+### 5-Layer Verification Sequence
 
-Every successful background `g8e gw start` writes a versioned launch profile to `.g8e/pids/operator-launch-profile.json`. `g8e gw restart` reads that profile, re-runs network identity detection, and starts the child with the complete persisted configuration (posture, ports, CORS origins, passkey settings, downstream URLs, consensus bootstrap, and public-spectator flags). Restart fails closed when the profile is missing, malformed, or unknown-version rather than falling back to doctrine defaults.
+Every transaction to `POST /api/v1/governance/envelopes` passes through all five layers. The Gateway (PDP) owns or coordinates L1-L3. The Operator substrate (PEP) owns L4-L5 enforcement. Remote Governed Operators independently re-verify L1-L3 proofs before L4-L5.
 
----
+**L1 Doctrine (Technical Bedrock) — Gateway**
 
-## HTTP Router Architecture
+Enforced by [internal/services/governance/l1_doctrine.go](internal/services/governance/l1_doctrine.go). Validates forbidden patterns (such as `sudo`, `rm -rf /`), blacklists, whitelists, and performs MITRE threat detection on incoming payloads. Configuration loaded from `--doctrine-dir` (env: `G8E_DOCTRINE_DIR`); defaults to hardcoded patterns only.
 
-The Gateway exposes two logical HTTP surfaces.
+**L2 Consensus (Consensus Deliberation) — Gateway**
 
-- **HTTP surface (plain text)**: Used for health and state checks, initial bootstrap, PKI discovery, token-scoped CLI recovery and platform-enrollment request/status/complete flows, g8e binary download, deploy scripts, and a catch-all redirect to HTTPS. It does not serve mTLS, MCP, or governed API routes.
-- **HTTPS surface (hybrid TLS/application auth)**: Carries API, console, passkey, MCP/A2A, and Operator management traffic. Client certificates are verified when presented, while the auth registry applies mTLS, web-session, dual, public, and optional JWT requirements per route.
+Implemented in [internal/services/governance/](internal/services/governance/). The Gateway delegates L2 deliberation to an enrolled Consensus service (not self-signing). The Consensus evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over transaction hash) from its member agents. Under `consensus` and `notary` postures, the Gateway calls the Consensus's `Deliberate` endpoint and attaches returned votes to the envelope. L4 Warden verifies quorum of valid signatures against `ConsensusPolicy` in the consensus store.
 
-The HTTPS router classifies each route into one of four auth modes:
+**L3 Notary (Human Authorization) — Gateway**
 
-- **Public**: health, state, PKI discovery, landing, logout, Console SPA and browser passkey registration, bootstrap/device enrollment, and token-scoped CLI recovery. CSR signing is mTLS-only.
-- **mTLS only**: data, blob, and KV stores, operator management, governance, consensus, audit, pub/sub, SSE push, PKI management, passkey CLI status, enrollment token generation, CLI rotation, and CLI recovery approval via the headless `approve-cli` endpoint.
-- **Web session only**: user profile, approvals, passkey credential management, and CLI recovery approval via the browser Console SPA.
-- **Dual**: SSE stream and event endpoints accept either a valid client certificate or a web-session cookie.
+Enforced by [internal/services/governance/l3_notary.go](internal/services/governance/l3_notary.go). Layered model: WebAuthn passkeys provide human authorization, CLI mTLS session verification additionally binds CLI proofs when `mtls_cert_fingerprint` is present, and Operator proof path uses mTLS identity only (passkey unavailable for operators). JWT sessions use JIT user provisioning with JWT signature validation at the Gateway; the Operator receives pre-validated enriched metadata only.
 
-Application certificates are blocked from privileged governance and query paths. Exact paths and auth mode assignments are part of the wire contract; see the [g8e Protocol specification](../../protocol/docs/spec.md) for the full list.
+**L4 Warden (Pre-Dispatch Gating) — Operator**
 
-### Console SPA
+Runs on Operator substrate (in-process for gateway-host operations, remote for managed-host operations). Implemented in [internal/services/governance/l4_warden.go](internal/services/governance/l4_warden.go). Enforces final pre-execution gates: transaction hash match, expiry check, nonce/replay prevention (sliding-window via replay store), state root validation (if provided), and L2/L3 signature verification against trusted signer keys.
 
-The console SPA is an embedded single-page application served at `/console/`. The SPA provides browser-based passkey registration, authentication, credential management, OOB transaction approval, and a live audit stream. The SPA auto-detects approval hash fragments in the URL and triggers the WebAuthn approval flow after successful authentication.
+**L5 Actuator (Execution and Receipt) — Operator**
 
-### Observe Read API and Producers
+Runs on Operator substrate. Implemented in [internal/services/governance/l5_actuator.go](internal/services/governance/l5_actuator.go). Fails closed across evidence, persistence, commitment, and dispatch: (1) signs and persists complete protojson `ActionReceipt` with L4 stage evidence before side effect, (2) builds and appends signed `CommitmentAttestation` against SQLite chain head under write lock, records chain hashes in receipt evidence, (3) dispatches verified payload through scoped capability to downstream execution handler (MCP server or similar), (4) adds L5 outcome evidence and state transitions, signs and persists final receipt, attaches signed `ReceiptPersistenceAttestation` proving audit-record association.
 
-The Gateway exposes a browser-scoped, read-only observe API under `/api/v1/observe/` for credentialed web sessions: bootstrap snapshot, paginated runs and evals, and content-addressed downloads. These routes derive user identity from the web-session cookie and return projections without ownership fields on the wire.
+### MCP Endpoint and Native Tools
 
-Two mTLS producer endpoints accept typed state from enrolled app workloads (primarily g8ee):
+The Gateway implements a unified MCP (Model Context Protocol) endpoint at `/api/v1/mcp/` accepting POST requests with JSON-RPC 2.0 messages and dispatching by method field. Methods include: `initialize`, `ping`, `tools/list`, `tools/call`, `resources/list`, `resources/templates/list`, `resources/read`, `prompts/list`, `prompts/get`, `a2a/call`. GET requests support SSE for streaming.
 
-- `POST /api/v1/observe/producer/agent-state` persists agent projections and emits `app.agent.status.updated`.
-- `POST /api/v1/observe/producer/run-state` persists run projections and emits `app.run.status.updated`.
+The native tool registry ([internal/services/mcp/native_tool_registry.go](internal/services/mcp/native_tool_registry.go)) maintains 31 tools across eight categories, all registered at startup via explicit registration. All tools enforce fail-closed input validation: SQL queries reject empty queries and trailing semicolons; URLs reject localhost/loopback/private IPs to prevent SSRF; paths prevent directory traversal; protocols validate against (tcp, udp, tcp6, udp6, raw) to prevent injection; hostnames prevent shell injection; operators validate binary paths and arguments.
 
-The Gateway derives `user_id` from the mTLS peer certificate; producer requests carry exactly one routing target (`web_session_id` or `cli_session_id`). The in-process `ObserveProducerService` also implements persist-before-publish for the full `g8e.v1.ai.eval.*` campaign event family (`ai.eval.cycle.started`, `ai.eval.assignment.completed`, `ai.eval.publication.completed`, and related types). Gateway live tests verify those emissions; campaign `--publish` additionally exports signed public-safe projections through `POST /api/v1/public-feed/batches` for the anonymous mirror. See [SSE Streaming](./sse.md), [Evaluations](./evals.md), and [Public Spectator Architecture](./public_spectator.md).
+Tool categories:
 
-### Public Spectator Mirror
+- **Database**: `db_discover_topology`, `db_index_triage`, `db_isolated_read`, `db_query_validate`
+- **Filesystem**: `fs_disk_profile`, `fs_disk_usage`, `fs_file_checksum`, `read_file`, `log_stream_filter`
+- **Network**: `net_endpoint_ping`, `net_http_probe`, `net_socket_audit`, `net_dns_resolve`, `net_ssh_known_hosts`, `tls_cert_inspect`
+- **Process**: `proc_metric_top`, `proc_signal_safe`, `proc_tree`
+- **System**: `sys_oom_detect`, `sys_info`, `sys_env_vars`, `sys_service_status`, `sys_container_status`, `sys_time_clock`
+- **Configuration**: `config_diff_mask`
+- **Cloud**: `cloud_metadata`
+- **Kubernetes**: `k8s_inspect`
+- **Git**: `git_ops`
+- **Operator**: `operator_deploy`
+- **Execution**: `run_shell_command`
+- **Audit**: `audit_receipt_list`, `audit_receipt_get`
 
-When started with `--public-spectator` (Docker Compose default), the Gateway runs an in-process `PublicSpectatorRuntime` with two loopback listeners over the same durable state in the gateway volume: a private ingest listener (authenticated batch and proof ingest) and a public read listener (anonymous bootstrap, history, SSE, and content-addressed proof downloads). Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-feed/batches`; it does not expose anonymous routes on the primary HTTPS surface. See [Public Spectator Operations Guide](../guides/public_spectator.md).
+### Agent Integration
 
----
+The Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, OpenAI Codex, Goose, Gemini CLI, Devin CLI) via MCP agent subcommands. Each agent has its native tools disabled at launch, forcing all I/O through the g8e MCP gateway for full L1-L5 governance enforcement.
 
-## MCP Endpoint Architecture
+Commands:
 
-The Governance Gateway (g8eg) implements a unified MCP (Model Context Protocol) endpoint. This endpoint provides a single-URL JSON-RPC dispatch contract that standard MCP clients expect.
+- `g8e mcp agent list` — Lists supported agent binaries: Claude Code, OpenAI Codex, Devin CLI, Goose, Gemini CLI.
+- `g8e mcp agent show <agent>` — Prints MCP client configuration (g8e.local mTLS, IP address mTLS, stdio transport).
+- `g8e mcp agent run [--url <url>] [--verify] [-- <command> [args...]]` — Launches an agent with automatic MCP configuration and native tool disabling. The stdio proxy bridges stdio MCP transport to gateway mTLS HTTPS endpoint. Runtime verification (`--verify`, enabled by default) checks that tool-disabling configuration was written correctly; use `--verify=false` to skip for pre-validated configs.
 
-### Unified Endpoint Contract
+When the Gateway returns an L3 approval response, the stdio proxy auto-opens a browser, subscribes to SSE stream (`GET /api/v1/sse/stream`), waits for the `approval.completed` event (3-minute timeout; Gateway approval request TTL is 2 minutes), and re-sends the original request.
 
-The unified endpoint accepts POST requests containing JSON-RPC 2.0 messages and dispatches by the `method` field. The endpoint implements the MCP protocol handshake via the `initialize` method and negotiates protocol version with clients.
+### Incremental State Tracking
 
-### Supported Methods
+The Gateway's SQLite state-root service uses incremental state tracking to avoid unnecessary full recomputation. A monotonically increasing `state_version` counter tracks changes across data stores. Triggers automatically increment this counter on document, KV store, and blob mutations. The Gateway queries the current version before expensive state-root calculations, skipping computation when version unchanged.
 
-The unified endpoint dispatches the following MCP methods:
-- `initialize`: Protocol handshake and capability negotiation
-- `ping`: Liveness probe
-- `tools/list`: Tool catalog discovery
-- `tools/call`: Tool execution
-- `resources/list`: Resource catalog discovery
-- `resources/templates/list`: Resource template discovery
-- `resources/read`: Resource content retrieval
-- `prompts/list`: Prompt catalog discovery
-- `prompts/get`: Prompt content retrieval
-- `a2a/call`: Agent-to-agent communication
+Two state tiers for Merkle root computation:
 
-The endpoint also supports SSE (Server-Sent Events) via GET requests for streaming capabilities.
+- **Bound State** (authoritative): documents, bound KV entries, bound blobs, token keymap. Bound state root gates transaction admission and is the freshness root in-flight envelopes depend on.
+- **Observed State** (telemetry): observed KV entries and blobs. Hashed into separate observed state root chained into audit ledger but does not gate transaction admission. Prevents telemetry churn from invalidating in-flight envelopes.
 
-### Native Tool Registry
+### Health Endpoints
 
-The gateway maintains a centralized tool registry. The tool registry provides thread-safe tool registration and lookup, enforcing tool name validation and input schema compliance. All native tools implement a common interface providing name, description, input schema, and execution capabilities.
+**Main Health Check (HTTPS, port 8443)**
 
-### Input Validation Framework
+Full readiness check: optional readiness callback, platform settings document availability, state root calculation success. Response includes `status`, `mode`, `version`, `pid` (OS process ID), `governance_ready` (whether governance pipeline initialized), `state_merkle_root` (current state root). Unauthenticated to bypass auth middleware.
 
-The gateway implements an input validation system with fail-closed security principles:
-- **SQL Query Validation**: Rejects empty queries, trailing semicolons to prevent statement chaining
-- **URL Validation**: Parses and validates URLs, restricting to http/https schemes, rejecting localhost and loopback addresses, and blocking private IP ranges to prevent SSRF attacks
-- **Protocol Validation**: Validates network protocol strings (tcp, udp, tcp6, udp6, raw) for socket audit operations to prevent path traversal
-- **Git Path Validation**: Validates repository paths and references to prevent path traversal and command injection
-- **Kubernetes Validation**: Validates resource names and namespaces against K8s naming conventions
-- **Cloud Metadata Validation**: Validates cloud metadata operation types
-- **File Path Validation**: Validates file paths to prevent directory traversal and null byte injection
-- **SSH Path Validation**: Validates SSH config and known hosts paths
-- **Hostname Validation**: Validates hostnames to prevent shell injection
-- **Operator Validation**: Validates operator binary paths and arguments to prevent command injection
+**Bootstrap Health Check (HTTP, port 8080)**
 
-### Native Tool Ecosystem
+Lighter check: readiness callback only, skipping platform settings and state root. Response includes `status`, `mode`, `version`, `pid`, `governance_ready`. Suitable for initialization monitoring before database fully configured.
 
-The gateway provides a set of native tools covering database operations, filesystem analysis, network diagnostics, process management, and system monitoring. All tools are registered at startup via explicit registration.
+## Anti-patterns
 
-**Database Tools**:
-- `db_discover_topology`: Database schema discovery
-- `db_index_triage`: Index analysis and optimization recommendations
-- `db_isolated_read`: Isolated database read operations with query validation
-- `db_query_validate`: SQL query validation and analysis
+- Running `gw restart` when the launch profile in `.g8e/pids/operator-launch-profile.json` is missing, malformed, or unknown-version without first fixing the underlying cause (INV-GW-06).
+- Changing auth mode assignments in the HTTP router without updating the wire contract documentation in [protocol/docs/spec.md](../../protocol/docs/spec.md) (INV-GW-07).
+- Adding new native tools to the registry without implementing fail-closed input validation matching its category (SQL, URL, path, protocol, hostname, cloud metadata) (INV-GW-04).
+- Running posture changes at runtime; posture must be set once at `gw start` and cannot be changed without restart (INV-GW-01).
+- Dispatching transactions directly to L4/L5 without L1 Doctrine enforcement, even if L2/L3 are disabled by posture (INV-GW-03).
+- Serving MCP, governance, or pub/sub routes on the plain-text HTTP port 8080 (INV-GW-02).
 
-**Filesystem Tools**:
-- `fs_disk_profile`: Disk usage and filesystem profiling
-- `fs_disk_usage`: Disk usage analysis
-- `fs_file_checksum`: File integrity verification via checksum
-- `read_file`: Read file contents with validation
-- `log_stream_filter`: Log stream filtering and analysis
+## Links out
 
-**Network Tools**:
-- `net_endpoint_ping`: Network endpoint reachability testing
-- `net_http_probe`: HTTP endpoint probing with SSRF protection
-- `net_socket_audit`: Socket state auditing with protocol validation
-- `net_dns_resolve`: DNS resolution and query
-- `net_ssh_known_hosts`: SSH known hosts management
-- `tls_cert_inspect`: TLS certificate inspection and validation
-
-**Process Tools**:
-- `proc_metric_top`: Process resource metrics and top-like analysis
-- `proc_signal_safe`: Safe process signal handling
-- `proc_tree`: Process tree visualization and analysis
-
-**System Tools**:
-- `sys_oom_detect`: Out-of-memory detection and analysis
-- `sys_info`: System information gathering
-- `sys_env_vars`: Environment variable inspection
-- `sys_service_status`: System service status checking
-- `sys_container_status`: Container status monitoring
-- `sys_time_clock`: System time and clock information
-
-**Configuration Tools**:
-- `config_diff_mask`: Configuration diffing with sensitive data masking
-
-**Cloud Tools**:
-- `cloud_metadata`: Cloud provider metadata retrieval
-
-**Kubernetes Tools**:
-- `k8s_inspect`: Kubernetes resource inspection
-
-**Git Tools**:
-- `git_ops`: Git repository operations
-
-**Operator Tools**:
-- `operator_deploy`: Operator deployment and management
-
-**Execution Tools**:
-- `run_shell_command`: Safe shell command execution
-
-**Audit Tools**:
-- `audit_receipt_list`: Lists signed ActionReceipt records from the operator audit vault, scoped to an operator session, with optional action_type and not_before filtering and limit/offset pagination
-- `audit_receipt_get`: Retrieves a single signed ActionReceipt by transaction_id from the operator audit vault
-
----
-
-## Incremental State Tracking
-
-The Gateway's canonical SQLite state-root service uses incremental state tracking to avoid unnecessary full recomputation. The database schema includes:
-
-### State Version Table
-
-A monotonically increasing counter (`state_version`) tracks changes across all data stores. Triggers automatically increment this counter on document, KV store, and blob mutations. This allows the gateway to detect when state has changed without scanning entire tables.
-
-### Change Tracking Mechanisms
-
-Triggers on the `documents`, `kv_store`, and `blobs` tables increment the state version on insert, update, and delete operations. The gateway queries the current version before performing expensive state root calculations, skipping computation when the version has not changed.
-
-### Bound vs Observed State Tiering
-
-The gateway distinguishes between two state tiers for Merkle root computation:
-
-- **Bound State**: Authoritative state (documents, bound KV entries, bound blobs, token keymap) that gates transaction admission. The bound state root is the freshness root that in-flight envelopes depend on.
-- **Observed State**: Telemetry and environmental readings stored as observed KV entries and blobs. These are hashed into a separate observed state root that is chained into the audit ledger but does not gate transaction admission.
-
-This tiering prevents observed-state churn (continuous telemetry updates) from invalidating in-flight envelopes, which would degrade fail-closed into fail-always.
-
----
-
-## Health Endpoint Consolidation
-
-The gateway exposes two health endpoints, one per protocol surface:
-
-### Main Health Check (HTTPS)
-
-The main health endpoint on the HTTPS port performs full readiness checks:
-- Service readiness via an optional readiness callback
-- Platform settings document availability
-- State root calculation success
-
-The response includes `status`, `mode`, `version`, `pid` (OS process ID), `governance_ready` (whether the governance pipeline is initialized), and `state_merkle_root` (the current state root). This endpoint is unauthenticated to bypass authentication middleware for monitoring purposes.
-
-### Bootstrap Health Check (HTTP)
-
-The bootstrap health endpoint on the HTTP port is a lighter check that verifies only the readiness callback. It skips platform settings and state root verification, making it suitable for initialization monitoring before the database is fully configured. The response includes `status`, `mode`, `version`, `pid`, and `governance_ready`.
-
-### Operational Status (`g8e gw status`)
-
-`g8e gw status` reports the health of both the localhost Gateway and the Docker Compose stack in a single command. When the Gateway is running in Docker Compose, the command probes the containerized gateway endpoint in addition to the localhost endpoint and surfaces the Docker Compose service status. The TUI diagnoses Docker gateway state when its configured endpoint is unreachable, suppresses duplicate usage output on errors, and records machine-observable scenario success, failure, and cancellation checkpoints.
-
----
-
-## 5-Layer Verification Sequence
-
-Every transaction submitted to `POST /api/v1/governance/envelopes` passes through the universal checks and the posture-required layers. The Gateway (PDP) owns or coordinates L1-L3 policy decisions. The Operator substrate (PEP), whether embedded in the Gateway process or remote in a separate runtime, owns L4-L5 enforcement and execution. Remote Governed Operators independently re-verify the envelope and required L1-L3 proofs before running L4-L5 locally (see [Operator Architecture](./operator.md)).
-
-### L1 Doctrine (Technical Bedrock) - Gateway (PDP)
-Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
-
-### L2 Consensus (Consensus Deliberation) - Gateway (PDP)
-The gateway delegates L2 deliberation to an enrolled Consensus service rather than self-signing votes. The Consensus evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` and `notary` postures, the gateway calls the Consensus's `Deliberate` endpoint (via in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `ConsensusPolicy` stored in the consensus store.
-
-### L3 Notary (Human Authorization) - Gateway (PDP)
-The gateway notary enforces human-in-the-loop authorization using a layered model: WebAuthn passkeys provide human authorization, CLI mTLS session verification additionally binds CLI proofs when `mtls_cert_fingerprint` is present, and the Operator proof path uses mTLS identity because an Operator cannot perform passkey authentication.
-- **Web Sessions**: Use WebAuthn passkey proofs (FIDO2).
-- **CLI Sessions**: Use WebAuthn passkey proofs with additional mTLS certificate fingerprint verification. The CLI session verifier checks user active status, session ownership, fingerprint match (constant-time compare), session active and expiry, and certificate revocation.
-- **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
-- **JWT Sessions**: Use JWT tokens validated at the gateway with JIT user provisioning.
-
-### L4 Warden (Pre-Dispatch Gating) - Operator (PEP)
-Runs on the Operator substrate (in-process for gateway-host operations, remote for managed-host operations). Enforces final pre-execution verification gates:
-- **Transaction Hash**: The `envelope.id` must match the deterministic transaction hash computed from its content.
-- **Expiry**: The `expires_at` timestamp must be in the future.
-- **Nonce/Replay**: The `nonce` must not have been used previously (sliding-window protection) via the replay store.
-- **State Root**: The `state_merkle_root` (if provided) must match the current authoritative state root available to the executing Operator; the Gateway binds that root when it constructs or admits the envelope.
-- **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys in the signer store.
-
-### L5 Actuator (Execution and Receipt) - Operator (PEP)
-Runs on the Operator substrate and fails closed across evidence, persistence, commitment, and dispatch:
-- **Pre-execution evidence**: Signs and persists the complete protojson `ActionReceipt` with deterministic L4 stage evidence before any side effect.
-- **Commitment**: Builds and appends a signed `CommitmentAttestation` against the current SQLite chain head under the write lock, then records both chain hashes in receipt evidence.
-- **Execution**: Dispatches the verified payload through a scoped capability to the downstream execution handler (such as an MCP server).
-- **Final evidence**: Adds L5 outcome evidence and state transitions, signs and persists the final receipt, and attaches a signed `ReceiptPersistenceAttestation` proving its durable audit-record association.
-
----
-
-## Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
-
-When a standard AI client (such as Claude Code, Codex, Goose, Gemini CLI, or Devin CLI) requests a mutation under a posture that requires L3, it typically cannot generate the human proof itself.
-
-1.  **Suspension**: The gateway detects missing L3 Notary proof and suspends the transaction in the SQLite `suspended_transactions` store.
-2.  **Challenge**: The gateway returns an OOB WebAuthn challenge URL to the AI client.
-3.  **Approval**: The human opens the URL, authenticates with a passkey, and approves the specific transaction.
-4.  **Resumption**: The gateway attaches the resulting WebAuthn proof to the envelope and resumes the L4 Warden and L5 Actuator flow.
-
----
-
-## JWT Authentication & JIT User Provisioning
-
-The Governance Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user provisioning flows that fully isolate the downstream Governed Operator (g8eo) from Identity Providers (IdP). The Governance Gateway (g8eg) acts as the authentication brain, while the Governed Operator (g8eo) receives a pre-validated, enriched payload via the pub/sub pipe.
-
-### 4-Step JWT Flow
-The JWT authentication logic is implemented in the gateway auth middleware.
-
-**Step 1: Inbound HTTPS Handshake and JWT Verification** When JWKS is configured, the Governance Gateway (g8eg) accepts inbound `Authorization: Bearer <JWT>` tokens on the MCP/A2A routes classified as public by the route registry before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates the `exp`, `nbf`, `iat`, `iss`, and `aud` claims (temporal claims enforced with a centralized `JWTClockSkew` allowance, including rejection of tokens whose `iat` is more than the skew in the future), and extracts identity claims (`sub`, `tenant_id`, `roles`).
-
-**Step 2: Edge Validation and JIT Account Management** Following successful token validation, the Governance Gateway (g8eg) ensures the user exists locally and maps their roles:
-- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID). If the user does not exist, creates an active JWT-provider user locally. This JIT path is controlled by JWT authentication configuration and is distinct from owner-approved platform enrollment.
-- **Persona Mapping**: Loads declarative Persona definitions (e.g., `security-analyst`, `admin`) from the `personas` collection in the document store. Evaluates the JWT `roles` against these persona definitions to determine the active `binding_persona`.
-- **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
-
-**Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)** The Governance Gateway (g8eg) strips the heavy JWT and injects the evaluated security requirements directly into the canonical mutation envelope before passing it to the pub/sub broker:
-- The `GovernanceEnvelope` carries `tenant_id` and `binding_persona` as typed fields.
-- The pub/sub payload is strictly a canonical `GovernanceEnvelope` carrying typed payloads (e.g., `McpCallRequested`) alongside the validated security metadata.
-- The heavy JWT is discarded, reducing payload size.
-
-**Step 4: Native Execution and Data Scrubbing (Governed Operator)** When the outbound Governed Operator (g8eo) pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the Governance Gateway (g8eg):
-- The Governed Operator (g8eo) decodes the `GovernanceEnvelope` and extracts `tenant_id` and `binding_persona`.
-- These fields propagate into the execution context.
-- Native tool isolation applies column masks or data redaction (e.g., stripping `password_hash`, masking emails) directly based on the Persona before returning results.
-
-### Operator Isolation from IdP
-
-This architecture ensures the Governed Operator (g8eo) never requires outbound internet access to verify tokens or manage user state. The Governance Gateway (g8eg) handles all IdP communication, JWT validation, and user lifecycle management. The Governed Operator (g8eo) receives only the pre-validated, enriched security metadata needed for execution.
-
----
-
-## Session Types
-
-| Session Type | Identifier | Purpose | Authentication |
-|---|---|---|---|
-| **Operator Session** | `operator_session_id` | Authenticates a specific **Governed Operator (g8eo)** (PEP). | mTLS (Operator Cert) |
-| **CLI Session** | `cli_session_id` | Authenticates a **BYO/CLI client**. | mTLS (CLI Cert) |
-| **Web Session** | `web_session_id` | Authenticates a **browser-based client**. | Passkey (WebAuthn) |
-| **JWT Session** | `sub` (User ID) | Authenticates via external IdP JWT. | JWT (validated at Gateway) |
-
----
-
-## Agent Integration
-
-The Governance Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, OpenAI Codex, Goose, Gemini CLI, Devin CLI) through the MCP agent subcommands. Each supported agent has its native/built-in tools disabled at launch, forcing all I/O through the g8e MCP gateway for full L1-L5 governance enforcement.
-
-### Agent Subcommands
-
-The agent integration provides the following subcommands:
-
-**`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration: Claude Code, OpenAI Codex, Devin CLI, Goose, and Gemini CLI.
-
-**`g8e mcp agent show <agent>`**: Prints MCP client configuration for connecting to the Governance Gateway from local coding tools. Displays three configuration matrices:
-- g8e.local (mTLS): For production environments with DNS configured
-- IP Address (mTLS): For environments without DNS or direct IP access
-- Stdio Transport: For direct native tool access without gateway
-
-**`g8e mcp agent run [--url <url>] [--verify] [-- <command> [args...]]`**: Launches an AI agent or wraps an external MCP server with g8e governance. Supports:
-- Launching supported agents (claude, codex, devin, goose, gemini) with automatic MCP configuration and native tool disabling
-- Wrapping external MCP servers via HTTP or subprocess for governance reverse proxy
-- Forwarding extra arguments to the agent binary
-- Runtime verification (`--verify`, enabled by default): before launching the agent, g8e verifies that the agent's tool-disabling configuration was correctly written, checking MCP config files, CLI flags, and agent-specific settings (e.g., `tools.core: []` for Gemini, `--disallowed-tools` for Claude/Codex, `--no-profile` for Goose). Use `--verify=false` to skip verification (e.g., for CI/CD pipelines where the config is pre-validated).
-
-### Stdio Proxy
-
-The stdio proxy bridges stdio MCP transport to the gateway mTLS HTTPS endpoint:
-- Accepts JSON-RPC 2.0 requests over stdin/stdout
-- Proxies requests to the gateway HTTPS endpoint with mTLS
-- Identity is carried in the delegated mTLS certificate's URI SANs (no session headers needed)
-- Detects L3 approval responses and subscribes to SSE for completion
-- Auto-opens browser for L3 approval URLs
-- Re-sends the original request once the approval.completed SSE event arrives
-
-### L3 Approval SSE Notification
-
-When the gateway returns an L3 approval response, the stdio proxy:
-1. Extracts the approval URL from the response (structured field or text content)
-2. Opens the browser automatically using the cross-platform browser utility
-3. Subscribes to the gateway's SSE stream (`GET /api/v1/sse/stream`) scoped to the user
-4. Waits for the `approval.completed` SSE event with a matching transaction hash
-5. Re-sends the original request and returns the result
-
-CLI credentials (mTLS) are required for L3 approval flows. The SSE wait has a 3-minute timeout (the gateway's approval request TTL is 2 minutes).
-
-### Browser Utility
-
-The browser utility provides cross-platform browser opening for L3 approval URLs, supporting macOS, Linux, and Windows.
-
----
-
-## Related Documentation
-
-- [**g8e Protocol**](../../protocol/docs/spec.md) - The wire contract and governance hierarchy.
-- [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
-- [**Getting Started**](../guides/getting_started.md) - CLI commands, agent integration, and setup guides.
-- [**Build a g8e-Compatible Frontend**](../guides/build_frontend.md) - Browser integration and `gw connect`.
-- [**Evaluations**](./evals.md) - Native execution-boundary suite and model campaign orchestration.
-- [**Public Spectator Architecture**](./public_spectator.md) - Anonymous mirror observation mode.
+- [g8e Protocol Specification](../../protocol/docs/spec.md) — Wire contract, governance hierarchy, route auth assignments.
+- [Network Architecture](./network.md) — Transport, PKI hierarchy, identity management, SPIFFE trust domain, certificate enrollment.
+- [Operator Architecture](./operator.md) — Sovereign host-side execution agent, MCP server, cross-gateway enrollment, cascading outbound-only topologies.
+- [Storage Architecture](./storage.md) — SQLite persistence, audit vault, named volumes, runtime evidence ownership.
+- [SSE Streaming](./sse.md) — Server-sent events, live audit streams, approval notifications.
+- [Public Spectator Architecture](./public_spectator.md) — Anonymous mirror observation mode, private ingest listener, public read listener.
+- [Evaluations](./evals.md) — Native execution-boundary suite, model campaign orchestration, agent state and run state producers.

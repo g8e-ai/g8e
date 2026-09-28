@@ -157,8 +157,16 @@ async def lifespan(app: FastAPI):
         enrollment_service = AppEnrollmentService()
         try:
             app_identity = enrollment_service.load_identity()
-        except ConfigurationError:
-            app_identity = await enrollment_service.enroll()
+        except ConfigurationError as exc:
+            # If cert and key exist but CA bundle is missing, pull bundle via HTTP like the operator does
+            if "gateway CA bundle not found" in str(exc):
+                try:
+                    await enrollment_service.fetch_ca_bundle()
+                    app_identity = enrollment_service.load_identity()
+                except Exception:
+                    app_identity = await enrollment_service.enroll()
+            else:
+                app_identity = await enrollment_service.enroll()
         logger.info(
             "App identity ready (app_id=%s, cert=%s)",
             app_identity.app_id,

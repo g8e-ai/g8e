@@ -27,6 +27,9 @@ type FormationCatalogStackGenerationRequest struct {
 	CampaignID string
 	Seed       uint64
 	Variants   []*evalv1.ModelVariant
+	// FormationIDs names the catalog formations to materialize. Empty means
+	// every catalog formation.
+	FormationIDs []string
 }
 
 // GenerateFormationCatalogStackSet materializes one heterogeneous stack per
@@ -36,11 +39,10 @@ func GenerateFormationCatalogStackSet(req FormationCatalogStackGenerationRequest
 	if req.CampaignID == "" {
 		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: %w", constants.ErrMissingRequiredField)
 	}
-	topologies, err := NewExecutionTopologies()
+	formations, err := selectFormations(req.FormationIDs)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: %w", err)
 	}
-	formations := topologies.Formations()
 	if len(formations) == 0 {
 		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: catalog is empty")
 	}
@@ -48,7 +50,7 @@ func GenerateFormationCatalogStackSet(req FormationCatalogStackGenerationRequest
 	stacks := make([]*evalv1.HeterogeneousStackDefinition, 0, len(formations))
 	registryVariantIDs := make(map[string]struct{})
 	for _, formation := range formations {
-		if err := ensureFormationRegistryCoverage(formation, registry); err != nil {
+		if err := validateFormationRegistryCoverage(formation, registry); err != nil {
 			return nil, err
 		}
 		stack, err := formation.ToStackDefinition()
@@ -91,7 +93,7 @@ func GenerateFormationCatalogStackSet(req FormationCatalogStackGenerationRequest
 	return set, nil
 }
 
-func ensureFormationRegistryCoverage(formation Formation, registry formationVariantRegistry) error {
+func validateFormationRegistryCoverage(formation Formation, registry formationVariantRegistry) error {
 	for _, role := range formation.Roles() {
 		model, err := formation.Model(role)
 		if err != nil {
@@ -138,8 +140,8 @@ func validateFormationCatalogStackSet(set *HeterogeneousStackSet) error {
 	for _, formation := range topologies.Formations() {
 		expectedFormations[formation.ID] = struct{}{}
 	}
-	if len(set.Stacks) != len(expectedFormations) {
-		return fmt.Errorf("evaluation: validate formation catalog stack set: expected %d stacks, got %d", len(expectedFormations), len(set.Stacks))
+	if len(set.Stacks) == 0 || len(set.Stacks) > len(expectedFormations) {
+		return fmt.Errorf("evaluation: validate formation catalog stack set: expected between 1 and %d stacks, got %d", len(expectedFormations), len(set.Stacks))
 	}
 	seenStackIDs := make(map[string]struct{}, len(set.Stacks))
 	for _, stack := range set.Stacks {

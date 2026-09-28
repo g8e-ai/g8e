@@ -19,141 +19,141 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func ultraLightSpeedsterRegistryVariants() []*evalv1.ModelVariant {
+func ultraEfficientSpeedsterRegistryVariants() []*evalv1.ModelVariant {
 	return []*evalv1.ModelVariant{
 		{
-			VariantId:      "phi35-mini-38b-speed",
+			VariantId:      "qwen35-4b",
 			ProviderClass:  "ollama",
-			ServedModelTag: "phi3.5:3.8b-mini-instruct-q4_K_M",
+			ServedModelTag: "qwen3.5:4b",
 			ModelDigest:    repeatHex('a', 64),
-			ModelFamily:    "Phi-3.5",
-			ParameterCount: 3_800_000_000,
+			ModelFamily:    "Qwen 3.5",
+			ParameterCount: 4_000_000_000,
 			Quantization:   "Q4_K_M",
 		},
 		{
-			VariantId:      "gemma2-2b-speed",
+			VariantId:      "gemma4-e2b",
 			ProviderClass:  "ollama",
-			ServedModelTag: "gemma2:2b-instruct-q4_K_M",
+			ServedModelTag: "gemma4:e2b",
 			ModelDigest:    repeatHex('b', 64),
-			ModelFamily:    "Gemma 2",
-			ParameterCount: 2_000_000_000,
+			ModelFamily:    "Gemma 4",
+			ParameterCount: 5_100_000_000,
 			Quantization:   "Q4_K_M",
 		},
 		{
-			VariantId:      "qwen25-05b-speed",
+			VariantId:      "llama32-1b-speed",
 			ProviderClass:  "ollama",
-			ServedModelTag: "qwen2.5:0.5b-instruct-q4_K_M",
+			ServedModelTag: "llama3.2:1b",
 			ModelDigest:    repeatHex('c', 64),
-			ModelFamily:    "Qwen 2.5",
-			ParameterCount: 500_000_000,
-			Quantization:   "Q4_K_M",
+			ModelFamily:    "Llama 3.2",
+			ParameterCount: 1_200_000_000,
+			Quantization:   "Q8_0",
 		},
 	}
 }
 
-func ultraLightSpeedsterBindingRequest(t *testing.T) FormationBindingRequest {
+func ultraEfficientSpeedsterBindingRequest(t *testing.T) FormationBindingRequest {
 	t.Helper()
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
-	formation, err := topologies.Formation("ultra-light-speedster")
+	formation, err := topologies.Formation("ultra-efficient-speedster")
 	require.NoError(t, err)
 	stack, err := formation.ToStackDefinition()
 	require.NoError(t, err)
 	return FormationBindingRequest{
 		Stack:    stack,
-		Variants: ultraLightSpeedsterRegistryVariants(),
+		Variants: ultraEfficientSpeedsterRegistryVariants(),
 	}
 }
 
-func TestFormationBindingFromCatalog_MaterializesUltraLightSpeedsterStack(t *testing.T) {
-	binding, err := FormationBindingFromCatalog("ultra-light-speedster", ultraLightSpeedsterRegistryVariants())
+func TestFormationBindingFromCatalog_MaterializesUltraEfficientSpeedsterStack(t *testing.T) {
+	binding, err := FormationBindingFromCatalog("ultra-efficient-speedster", ultraEfficientSpeedsterRegistryVariants())
 	require.NoError(t, err)
-	assert.Equal(t, "ultra-light-speedster", binding.FormationID)
-	assert.Equal(t, "ultra-light-speedster", binding.Stack.GetStackId())
+	assert.Equal(t, "ultra-efficient-speedster", binding.FormationID)
+	assert.Equal(t, "ultra-efficient-speedster", binding.Stack.GetStackId())
 	require.NoError(t, ValidateHeterogeneousStackDigest(binding.Stack))
 }
 
-func TestBindFormation_BindsUltraLightSpeedsterDigestsFromFrozenRegistry(t *testing.T) {
-	req := ultraLightSpeedsterBindingRequest(t)
+func TestBindFormation_BindsUltraEfficientSpeedsterDigestsFromFrozenRegistry(t *testing.T) {
+	req := ultraEfficientSpeedsterBindingRequest(t)
 
 	formation, err := BindFormation(req)
 	require.NoError(t, err)
 	assert.Equal(t, repeatHex('a', 64), formation.Primary.ModelDigest)
 	assert.Equal(t, repeatHex('b', 64), formation.Assistant.ModelDigest)
 	assert.Equal(t, repeatHex('c', 64), formation.Lite.ModelDigest)
-	assert.Equal(t, "phi3.5:3.8b-mini-instruct-q4_K_M", formation.Primary.ServedModelTag)
+	assert.Equal(t, "qwen3.5:4b", formation.Primary.ServedModelTag)
 }
 
 func TestBindFormation_PrefersServedTagOverCollidingVariantID(t *testing.T) {
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
-	formation, err := topologies.Formation("code-logic-edge")
+	formation, err := topologies.Formation("gemma-cascade")
 	require.NoError(t, err)
 	stack, err := formation.ToStackDefinition()
 	require.NoError(t, err)
 
 	variants := formationCatalogTestVariants()
 	variants = append(variants, &evalv1.ModelVariant{
-		VariantId:      "gemma2-9b",
+		VariantId:      "gemma4-e4b",
 		ProviderClass:  "ollama",
-		ServedModelTag: "gemma2:9b",
+		ServedModelTag: "gemma4:e4b-other",
 		ModelDigest:    repeatHex('x', 64),
-		ModelFamily:    "gemma2",
+		ModelFamily:    "gemma4",
 		Quantization:   "Q4_0",
 	})
 
 	bound, err := BindFormation(FormationBindingRequest{
-		FormationID: "code-logic-edge",
+		FormationID: "gemma-cascade",
 		Stack:       stack,
 		Variants:    variants,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "gemma2:9b-instruct-q4_K_M", bound.Primary.ServedModelTag)
-	assert.Equal(t, repeatHex('7', 64), bound.Primary.ModelDigest)
+	assert.Equal(t, "gemma4:e4b", bound.Primary.ServedModelTag)
+	assert.Equal(t, repeatHex('6', 64), bound.Primary.ModelDigest)
 }
 
-func TestBindFormation_BindsUltraLightSpeedsterByServedTagWhenFreezeVariantIDsDiffer(t *testing.T) {
-	req := ultraLightSpeedsterBindingRequest(t)
+func TestBindFormation_BindsUltraEfficientSpeedsterByServedTagWhenFreezeVariantIDsDiffer(t *testing.T) {
+	req := ultraEfficientSpeedsterBindingRequest(t)
 	req.Variants = []*evalv1.ModelVariant{
 		{
-			VariantId:      "phi3-5-3-8b-mini-instruct-q4-k-m",
+			VariantId:      "qwen3-5-4b",
 			ProviderClass:  "ollama",
-			ServedModelTag: "phi3.5:3.8b-mini-instruct-q4_K_M",
+			ServedModelTag: "qwen3.5:4b",
 			ModelDigest:    repeatHex('a', 64),
-			ModelFamily:    "Phi-3.5",
-			ParameterCount: 3_800_000_000,
+			ModelFamily:    "Qwen 3.5",
+			ParameterCount: 4_000_000_000,
 			Quantization:   "Q4_K_M",
 		},
 		{
-			VariantId:      "gemma2-2b-instruct-q4-k-m",
+			VariantId:      "gemma4-e2b-q4-k-m",
 			ProviderClass:  "ollama",
-			ServedModelTag: "gemma2:2b-instruct-q4_K_M",
+			ServedModelTag: "gemma4:e2b",
 			ModelDigest:    repeatHex('b', 64),
-			ModelFamily:    "Gemma 2",
-			ParameterCount: 2_000_000_000,
+			ModelFamily:    "Gemma 4",
+			ParameterCount: 5_100_000_000,
 			Quantization:   "Q4_K_M",
 		},
 		{
-			VariantId:      "qwen2-5-0-5b-instruct-q4-k-m",
+			VariantId:      "llama3-2-1b-q8-0",
 			ProviderClass:  "ollama",
-			ServedModelTag: "qwen2.5:0.5b-instruct-q4_K_M",
+			ServedModelTag: "llama3.2:1b",
 			ModelDigest:    repeatHex('c', 64),
-			ModelFamily:    "Qwen 2.5",
-			ParameterCount: 500_000_000,
-			Quantization:   "Q4_K_M",
+			ModelFamily:    "Llama 3.2",
+			ParameterCount: 1_200_000_000,
+			Quantization:   "Q8_0",
 		},
 	}
 
 	formation, err := BindFormation(req)
 	require.NoError(t, err)
-	assert.Equal(t, "phi3-5-3-8b-mini-instruct-q4-k-m", formation.Primary.VariantID)
+	assert.Equal(t, "qwen3-5-4b", formation.Primary.VariantID)
 	assert.Equal(t, repeatHex('a', 64), formation.Primary.ModelDigest)
-	assert.Equal(t, "gemma2-2b-instruct-q4-k-m", formation.Assistant.VariantID)
-	assert.Equal(t, "qwen2-5-0-5b-instruct-q4-k-m", formation.Lite.VariantID)
+	assert.Equal(t, "gemma4-e2b-q4-k-m", formation.Assistant.VariantID)
+	assert.Equal(t, "llama3-2-1b-q8-0", formation.Lite.VariantID)
 }
 
 func TestBindFormation_RejectsMissingRegistryVariant(t *testing.T) {
-	req := ultraLightSpeedsterBindingRequest(t)
+	req := ultraEfficientSpeedsterBindingRequest(t)
 	req.Variants = req.Variants[:2]
 
 	_, err := BindFormation(req)
@@ -162,7 +162,7 @@ func TestBindFormation_RejectsMissingRegistryVariant(t *testing.T) {
 }
 
 func TestBindFormation_RejectsEmptySovereignDigest(t *testing.T) {
-	req := ultraLightSpeedsterBindingRequest(t)
+	req := ultraEfficientSpeedsterBindingRequest(t)
 	req.Variants[0].ModelDigest = ""
 
 	_, err := BindFormation(req)
@@ -171,7 +171,7 @@ func TestBindFormation_RejectsEmptySovereignDigest(t *testing.T) {
 }
 
 func TestBindFormation_RejectsServedTagMismatch(t *testing.T) {
-	req := ultraLightSpeedsterBindingRequest(t)
+	req := ultraEfficientSpeedsterBindingRequest(t)
 	req.Variants[0].ServedModelTag = "wrong:tag"
 
 	_, err := BindFormation(req)
@@ -180,7 +180,7 @@ func TestBindFormation_RejectsServedTagMismatch(t *testing.T) {
 }
 
 func TestBindFormation_RejectsInvalidStackDigest(t *testing.T) {
-	req := ultraLightSpeedsterBindingRequest(t)
+	req := ultraEfficientSpeedsterBindingRequest(t)
 	req.Stack.StackDigest = "invalid"
 
 	_, err := BindFormation(req)
@@ -188,7 +188,7 @@ func TestBindFormation_RejectsInvalidStackDigest(t *testing.T) {
 }
 
 func TestBindFormation_RejectsUnknownFormationID(t *testing.T) {
-	req := ultraLightSpeedsterBindingRequest(t)
+	req := ultraEfficientSpeedsterBindingRequest(t)
 	req.FormationID = "missing-formation"
 
 	_, err := BindFormation(req)
@@ -197,10 +197,10 @@ func TestBindFormation_RejectsUnknownFormationID(t *testing.T) {
 }
 
 func TestBindHeterogeneousStack_BindsSchedulerStackFromRegistry(t *testing.T) {
-	variants := ultraLightSpeedsterRegistryVariants()
+	variants := ultraEfficientSpeedsterRegistryVariants()
 	topologies, err := NewExecutionTopologies()
 	require.NoError(t, err)
-	catalogFormation, err := topologies.Formation("ultra-light-speedster")
+	catalogFormation, err := topologies.Formation("ultra-efficient-speedster")
 	require.NoError(t, err)
 	stack, err := catalogFormation.ToStackDefinition()
 	require.NoError(t, err)
@@ -216,8 +216,8 @@ func TestBindHeterogeneousStack_BindsSchedulerStackFromRegistry(t *testing.T) {
 	assert.Equal(t, repeatHex('c', 64), formation.Lite.ModelDigest)
 }
 
-func TestFormationHarness_RunsBoundUltraLightSpeedsterFormation(t *testing.T) {
-	formation, err := BindFormation(ultraLightSpeedsterBindingRequest(t))
+func TestFormationHarness_RunsBoundUltraEfficientSpeedsterFormation(t *testing.T) {
+	formation, err := BindFormation(ultraEfficientSpeedsterBindingRequest(t))
 	require.NoError(t, err)
 
 	harness, err := NewFormationHarness(
@@ -230,7 +230,7 @@ func TestFormationHarness_RunsBoundUltraLightSpeedsterFormation(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Passed)
 	assert.Equal(t, FormationSchemaVersion, result.SchemaVersion)
-	assert.Equal(t, "ultra-light-speedster", result.FormationID)
+	assert.Equal(t, "ultra-efficient-speedster", result.FormationID)
 	assert.Len(t, result.Roles, 3)
 	assert.Equal(t, 1, harness.Policy.Calls)
 	assert.Equal(t, []string{
@@ -239,11 +239,11 @@ func TestFormationHarness_RunsBoundUltraLightSpeedsterFormation(t *testing.T) {
 		"primary:initial/lite/assistant",
 	}, harness.Executor.States)
 	assert.Equal(t, []string{
-		"allocate:phi35-mini-38b-speed",
-		"allocate:gemma2-2b-speed",
-		"allocate:qwen25-05b-speed",
-		"release:qwen25-05b-speed",
-		"release:gemma2-2b-speed",
-		"release:phi35-mini-38b-speed",
+		"allocate:qwen35-4b",
+		"allocate:gemma4-e2b",
+		"allocate:llama32-1b-speed",
+		"release:llama32-1b-speed",
+		"release:gemma4-e2b",
+		"release:qwen35-4b",
 	}, harness.Allocator.Events)
 }

@@ -31,12 +31,29 @@ type EvidenceScope struct {
 	TransactionID string
 }
 
+// Store persists evaluation records beneath one evaluation layout.
 type Store struct {
-	files fs.RuntimeFileService
+	files  fs.RuntimeFileService
+	layout evalLayout
 }
 
+// NewStore returns a store over the active evaluation layout.
 func NewStore(files fs.RuntimeFileService) *Store {
-	return &Store{files: files}
+	return &Store{files: files, layout: activeEvalLayout()}
+}
+
+// NewArchivedStore returns a store over the archive layout for archived
+// campaigns and the runs archived with them. Archived campaigns and runs keep
+// their internal structure, so every read works against this store exactly as
+// it does against the active one.
+func NewArchivedStore(files fs.RuntimeFileService) *Store {
+	return &Store{files: files, layout: archivedEvalLayout()}
+}
+
+// NewArchivedRunStore returns a store for runs that were archived on their own:
+// run records come from the archive while their campaign is still active.
+func NewArchivedRunStore(files fs.RuntimeFileService) *Store {
+	return &Store{files: files, layout: archivedRunLayout()}
 }
 
 // SaveTargetState persists one canonical EvaluationTargetState observation
@@ -184,6 +201,25 @@ func (s *Store) LoadVerification(ctx context.Context, runID string) (*compliance
 		return nil, fmt.Errorf("%w: verification report run ID does not match requested run", constants.ErrEvidenceScopeMismatch)
 	}
 	return report, nil
+}
+
+// ListReports returns a list of all run IDs with saved reports.
+func (s *Store) ListReports(ctx context.Context) ([]string, error) {
+	if s == nil || s.files == nil {
+		return nil, fmt.Errorf("%w: file service is required", constants.ErrEvidenceArtifactMalformed)
+	}
+	runsDir := filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname)
+	entries, err := s.files.ReadDir(ctx, runsDir)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: read runs directory: %w", err)
+	}
+	var runIDs []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			runIDs = append(runIDs, entry.Name())
+		}
+	}
+	return runIDs, nil
 }
 
 func evaluationRunDir(runID string) string {

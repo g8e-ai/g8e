@@ -30,7 +30,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 const chatAcceptTracePollInterval = 2 * time.Second
@@ -65,37 +64,17 @@ type chatAcceptanceOutput struct {
 	Cases             []chatAcceptanceCaseResult `json:"cases"`
 }
 
-func gateChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
-	shared := chatEvalDeps{
-		configLoader:         deps.configLoader,
-		fileSvcFactory:       deps.fileSvcFactory,
-		authLoader:           deps.authLoader,
-		clientFactory:        deps.clientFactory,
-		refreshClientFactory: authcmd.DefaultRefreshClientFactory,
-		now:                  deps.now,
-		newID:                deps.newID,
-	}
-	cmd := &cobra.Command{Use: "chat", Short: "Production chat-path vertical acceptance"}
-	cmd.AddCommand(gateChatEvalRunCmd(shared))
-	return cmd
-}
-
-func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
-	var operatorSessionID string
-	var dataOperatorSessionID string
+func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var model string
-	var campaignID string
-	var registryDigest string
-	var registryFile string
 	var ensembleURL string
 	var casesCSV string
 	var noAutoRefresh bool
 	cmd := &cobra.Command{
-		Use:   "run",
-		Short: "Run the chat-path vertical acceptance matrix through production POST /api/v1/chat",
+		Use:   "chat",
+		Short: "Chat-path vertical acceptance through production POST /api/v1/chat",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
-				return fmt.Errorf("evaluation: chat accept: --model is required")
+				return fmt.Errorf("evaluation: gates chat: --model is required")
 			}
 			caseIDs, err := parseChatAcceptanceCases(casesCSV)
 			if err != nil {
@@ -103,49 +82,43 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 			}
 			cases, err := evaluation.SelectChatAcceptanceCases(caseIDs)
 			if err != nil {
+				return fmt.Errorf("evaluation: gates chat: %w", err)
+			}
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			authContext, err := deps.authLoader(fileSvc, cfg)
+			if err != nil {
+				return fmt.Errorf("evaluation: load CLI identity: %w", err)
+			}
+			gatewayClient, err := deps.clientFactory(nativeEvalClientConfig(cfg, authContext))
+			if err != nil {
+				return fmt.Errorf("evaluation: initialize gateway client: %w", err)
+			}
+			operators, _, err := gatewayClient.ListOperators(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("evaluation: list operators: %w", err)
+			}
+			selectedInference, err := evaluation.SelectInferenceOperator(operators, "")
+			if err != nil {
 				return fmt.Errorf("evaluation: chat accept: %w", err)
 			}
-			cfg, fileSvc, authContext, err := chatEvalEnvironment(cmd, deps)
-			if err != nil {
-				return err
-			}
-			registry, err := chatEvalLoadRegistry(campaignID, registryDigest, registryFile, model)
-			if err != nil {
-				return err
-			}
-			operators, err := chatEvalListOperators(cmd, deps, cfg, authContext)
-			if err != nil {
-				return err
-			}
-			if !noAutoRefresh {
-				authContext, err = chatEvalEnsureOperatorBinding(cmd, deps, cfg, fileSvc, authContext, operators, dataOperatorSessionID)
-				if err != nil {
-					return fmt.Errorf("evaluation: chat accept: %w", err)
-				}
-			}
-			selected, err := evaluation.SelectInferenceOperator(operators, operatorSessionID)
-			if err != nil {
-				return err
-			}
-			dataOperator, err := chatEvalResolveDataOperator(operators, authContext, dataOperatorSessionID)
+			selectedData, err := evaluation.SelectDataOperator(operators, "")
 			if err != nil {
 				return fmt.Errorf("evaluation: chat accept: %w", err)
 			}
 			resolvedEnsembleURL := resolveChatEvalEnsembleURL(ensembleURL)
-			ensembleClient, err := chatEvalEnsembleClient(cfg, authContext, resolvedEnsembleURL, deps)
-			if err != nil {
-				return err
-			}
 			persona := harnessclient.Persona{
 				ID:                "g8e-chat-acceptance",
 				UserAgent:         "g8e-eval-chat-acceptance",
 				UserID:            authContext.UserID,
 				CLISessionID:      authContext.CLISessionID,
-				OperatorID:        dataOperator.OperatorID,
-				OperatorSessionID: dataOperator.OperatorSessionID,
+				OperatorID:        selectedData.OperatorID,
+				OperatorSessionID: selectedData.OperatorSessionID,
 			}
 			reporter := newChatAcceptReporter(cmd.OutOrStdout(), output.JSONEnabled(cmd))
-			reporter.writeSetup(len(cases), model, selected.OperatorSessionID, dataOperator.OperatorSessionID, resolvedEnsembleURL)
+			reporter.writeSetup(len(cases), model, selectedInference.OperatorSessionID, selectedData.OperatorSessionID, resolvedEnsembleURL)
 
 			results := make([]chatAcceptanceCaseResult, 0, len(cases))
 			failures := 0
@@ -155,17 +128,14 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 				baseReq := evaluation.ChatProbeRequest{
 					AssignmentID:            assignmentID,
 					EvaluationAttemptID:     attemptID,
-					CampaignID:              registry.CampaignID,
+					CampaignID:              "chat-accept",
 					RunID:                   "chat-accept-run",
 					ScenarioID:              string(acceptanceCase.ID),
 					Model:                   model,
-					ModelDigest:             registry.ModelDigest,
-					TargetOperatorSessionID: selected.OperatorSessionID,
-					ModelRegistryDigest:     registry.Digest,
-					ModelRegistry:           registry.Variants,
+					TargetOperatorSessionID: selectedInference.OperatorSessionID,
 				}
 				probeReq := acceptanceCase.Apply(baseReq)
-				chatReq, err := evaluation.BuildChatProbeRequest(probeReq, dataOperator.OperatorID, dataOperator.OperatorSessionID)
+				chatReq, err := evaluation.BuildChatProbeRequest(probeReq, selectedData.OperatorID, selectedData.OperatorSessionID)
 				if err != nil {
 					return fmt.Errorf("evaluation: chat accept: %w", err)
 				}
@@ -174,7 +144,7 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 
 				reporter.caseStart(caseIndex+1, len(cases), string(acceptanceCase.ID), probeReq.AssignmentID, probeReq.EvaluationAttemptID)
 				ctx, cancel := context.WithTimeout(cmd.Context(), 8*time.Minute)
-				chatResp, runErr := ensembleClient.EnsembleChat(ctx, persona, chatReq)
+				chatResp, runErr := gatewayClient.EnsembleChat(ctx, persona, chatReq)
 				if runErr == nil && chatResp != nil {
 					reporter.chatSubmitted(chatResp.CaseID, chatResp.InvestigationID)
 				} else if runErr != nil {
@@ -183,7 +153,7 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 				var trace evaluation.EvaluationTrace
 				if runErr == nil {
 					trace, runErr = chatEvalWaitForTrace(ctx, func(pollCtx context.Context) (evaluation.EvaluationTrace, error) {
-						rawTrace, err := ensembleClient.GetEvaluationTrace(pollCtx, persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
+						rawTrace, err := gatewayClient.GetEvaluationTrace(pollCtx, persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
 						if err != nil {
 							return nil, err
 						}
@@ -230,7 +200,7 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 			}
 			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(chatAcceptanceOutput{
-					OperatorSessionID: selected.OperatorSessionID,
+					OperatorSessionID: selectedInference.OperatorSessionID,
 					Model:             model,
 					Passed:            len(cases) - failures,
 					Failed:            failures,
@@ -252,15 +222,10 @@ func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&operatorSessionID, "inference-session", "", "Pin acceptance to one exact inference Operator session")
-	cmd.Flags().StringVar(&dataOperatorSessionID, "data-session", "", "Pin chat binding to one exact data Operator session")
-	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before acceptance")
-	cmd.Flags().StringVar(&model, "model", "", "Frozen campaign model tag for all chat roles")
-	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
-	cmd.Flags().StringVar(&registryDigest, "registry-digest", "", "Frozen campaign model registry digest")
-	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval models freeze --output --json")
+	cmd.Flags().StringVar(&model, "model", "", "Requested provider model tag")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A chat matrix)")
+	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings")
 	return cmd
 }
 
@@ -413,36 +378,6 @@ func chatEvalWaitForTraceWithPoll(
 		case <-ticker.C:
 		}
 	}
-}
-
-type chatRegistrySelection struct {
-	CampaignID  string
-	Digest      string
-	Variants    []*operatorv1.InferenceModelVariant
-	ModelDigest string
-}
-
-func chatEvalLoadRegistry(campaignID, registryDigest, registryFile, model string) (*chatRegistrySelection, error) {
-	if registryFile != "" {
-		freeze, err := loadRegistryFreezeFile(registryFile)
-		if err != nil {
-			return nil, err
-		}
-		variant, err := freeze.LookupModelVariant(model)
-		if err != nil {
-			return nil, fmt.Errorf("evaluation: chat accept: lookup model variant: %w", err)
-		}
-		return &chatRegistrySelection{
-			CampaignID:  freeze.CampaignID,
-			Digest:      freeze.Digest,
-			Variants:    freeze.Variants,
-			ModelDigest: variant.GetDigest(),
-		}, nil
-	}
-	if campaignID == "" || registryDigest == "" {
-		return nil, fmt.Errorf("evaluation: chat accept: set --registry-file or both --campaign-id and --registry-digest")
-	}
-	return nil, fmt.Errorf("evaluation: chat accept: model digest lookup requires --registry-file")
 }
 
 func chatEvalEnvironment(cmd *cobra.Command, deps chatEvalDeps) (*config.Config, fs.RuntimeFileService, *auth.ClientAuthContext, error) {

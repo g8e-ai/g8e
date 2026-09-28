@@ -8,11 +8,8 @@
 package eval
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
-	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
@@ -23,42 +20,23 @@ type governedModelMaintenanceEnv struct {
 	ProbeRunner         evaluation.GovernedCapabilityProbeRunner
 }
 
-func resolveGovernedModelMaintenance(
-	cmd *cobra.Command,
-	deps nativeEvalDeps,
-	inferenceSessionID string,
-	dataSessionID string,
-) (governedModelMaintenanceEnv, error) {
-	if inferenceSessionID == "" {
-		return governedModelMaintenanceEnv{}, fmt.Errorf("evaluation: models maintenance: --inference-session is required")
-	}
-	if dataSessionID == "" {
-		return governedModelMaintenanceEnv{}, fmt.Errorf("evaluation: models maintenance: --data-session is required")
-	}
-	cfg, fileSvc, authContext, err := chatEvalEnvironment(cmd, chatEvalDeps{
-		configLoader:         deps.configLoader,
-		fileSvcFactory:       deps.fileSvcFactory,
-		authLoader:           deps.authLoader,
-		clientFactory:        deps.clientFactory,
-		refreshClientFactory: authcmd.DefaultRefreshClientFactory,
-		now:                  deps.now,
-		newID:                deps.newID,
-	})
+// resolveGovernedModelMaintenance binds provider maintenance to the resolved
+// inference and data operator sessions.
+func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (governedModelMaintenanceEnv, error) {
+	inferencePin, dataPin, err := sessionPinsFromFlags(cmd)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	operators, err := chatEvalListOperators(cmd, chatEvalDeps{
-		configLoader:   deps.configLoader,
-		fileSvcFactory: deps.fileSvcFactory,
-		authLoader:     deps.authLoader,
-		clientFactory:  deps.clientFactory,
-		now:            deps.now,
-		newID:          deps.newID,
-	}, cfg, authContext)
+	chatDeps := deps.chatDeps()
+	cfg, fileSvc, authContext, err := chatEvalEnvironment(cmd, chatDeps)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	sessions, err := resolveCampaignOperatorSessions(cmd, deps, cfg, inferenceSessionID, dataSessionID)
+	operators, err := chatEvalListOperators(cmd, chatDeps, cfg, authContext)
+	if err != nil {
+		return governedModelMaintenanceEnv{}, err
+	}
+	sessions, err := resolveOperatorSessionsFrom(operators, inferencePin, dataPin, operatorRoleInference, operatorRoleData)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
@@ -70,14 +48,7 @@ func resolveGovernedModelMaintenance(
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
-		configLoader:   deps.configLoader,
-		fileSvcFactory: deps.fileSvcFactory,
-		authLoader:     deps.authLoader,
-		clientFactory:  deps.clientFactory,
-		now:            deps.now,
-		newID:          deps.newID,
-	})
+	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatDeps)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}

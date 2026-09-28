@@ -85,7 +85,7 @@ func validCommitmentBinding(binding CommitmentImportBinding) bool {
 }
 
 func validCommitmentAttestation(attestation *operatorv1.CommitmentAttestation) bool {
-	return attestation.GetTransactionId() != "" && attestation.GetTransactionHash() != "" && attestation.GetStateRootAtCommit() != "" && attestation.GetWardenIntentSignatureDigest() != "" && attestation.GetActionType() != "" && attestation.GetTargetResource() != "" && attestation.GetCommittedAtUnixMs() > 0 && attestation.GetAuditorKeyId() != "" && attestation.GetSignature() != "" && attestation.GetHash() != ""
+	return attestation.GetTransactionId() != "" && attestation.GetTransactionHash() != "" && attestation.GetStateRootAtCommit() != "" && attestation.GetWardenIntentSignatureDigest() != "" && attestation.GetActionType() != "" && attestation.GetCommittedAtUnixMs() > 0 && attestation.GetAuditorKeyId() != "" && attestation.GetSignature() != "" && attestation.GetHash() != ""
 }
 
 func verifyAssessedCommitment(ctx context.Context, trust AssessedSignerSource, attestation *operatorv1.CommitmentAttestation, verifiedAt time.Time) (VerificationStatus, string, string, time.Time, error) {

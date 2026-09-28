@@ -119,24 +119,28 @@ def build_triage_context_section(triage_result: TriageResult | None) -> str:
 def build_learned_context_section(
     user_memories: list[InvestigationMemory], case_memories: list[InvestigationMemory]
 ) -> str:
-    """Build learned context from user preferences and past investigations."""
+    """Build learned context from user preferences and past investigations.
+
+    User memory represents an evolving interaction state unique to the user,
+    not an archival historical log. Only the latest user memory is injected.
+    """
     context_parts = []
 
     if user_memories:
-        for mem in user_memories:
-            prefs = []
-            if mem.communication_preferences:
-                prefs.append(f"Communication: {mem.communication_preferences}")
-            if mem.technical_background:
-                prefs.append(f"Technical background: {mem.technical_background}")
-            if mem.response_style:
-                prefs.append(f"Response style: {mem.response_style}")
-            if mem.problem_solving_approach:
-                prefs.append(f"Problem-solving: {mem.problem_solving_approach}")
-            if mem.interaction_style:
-                prefs.append(f"Interaction style: {mem.interaction_style}")
-            if prefs:
-                context_parts.extend(prefs)
+        latest = user_memories[0]
+        prefs = []
+        if latest.communication_preferences:
+            prefs.append(f"Communication: {latest.communication_preferences}")
+        if latest.technical_background:
+            prefs.append(f"Technical background: {latest.technical_background}")
+        if latest.response_style:
+            prefs.append(f"Response style: {latest.response_style}")
+        if latest.problem_solving_approach:
+            prefs.append(f"Problem-solving: {latest.problem_solving_approach}")
+        if latest.interaction_style:
+            prefs.append(f"Interaction style: {latest.interaction_style}")
+        if prefs:
+            context_parts.extend(prefs)
 
     if case_memories:
         for mem in case_memories:

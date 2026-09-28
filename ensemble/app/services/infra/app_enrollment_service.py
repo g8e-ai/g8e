@@ -368,6 +368,21 @@ class AppEnrollmentService:
         resp.raise_for_status()
         return resp.text
 
+    async def fetch_ca_bundle(self) -> str:
+        """Fetch the gateway CA bundle via HTTP and persist it to disk."""
+        base_url = self._resolve_gateway_http_url()
+        ca_cert_path = PATHS["infra"]["ca_cert_path"]
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
+            bundle_pem = await self._fetch_ca_bundle(client, base_url)
+        ca_dir = Path(ca_cert_path).parent
+        ca_dir.mkdir(parents=True, exist_ok=True)
+        _atomic_write_file(ca_cert_path, bundle_pem, 0o644)
+        logger.info(
+            "AppEnrollmentService: CA bundle fetched via HTTP and saved to %s",
+            ca_cert_path,
+        )
+        return bundle_pem
+
     async def _submit_enrollment_request(
         self, client: httpx.AsyncClient, base_url: str, csr_pem: str
     ) -> dict[str, Any]:
@@ -634,6 +649,17 @@ class AppEnrollmentService:
         cert_path, key_path = get_app_cert_paths(self._app_name)
         pending_path = self._resolve_pending_path()
 
+        # Step 1: Pull gateway CA bundle via HTTP.
+        ca_bundle_pem = ""
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
+            try:
+                ca_bundle_pem = await self._fetch_ca_bundle(client, base_url)
+            except Exception as exc:
+                logger.warning(
+                    "AppEnrollmentService: failed to fetch CA bundle via HTTP in step 1: %s",
+                    exc,
+                )
+
         # Step 2: Load persisted pending attempt if it exists.
         pending = self._load_pending_state(pending_path)
         if pending and pending.get("expires_at"):
@@ -768,7 +794,16 @@ class AppEnrollmentService:
             )
 
         # Step 8: Write credentials atomically, then remove pending state.
-        trust_bundle = app_creds.get("trust_bundle", "")
+        trust_bundle = app_creds.get("trust_bundle") or ca_bundle_pem
+        if not trust_bundle:
+            try:
+                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
+                    trust_bundle = await self._fetch_ca_bundle(client, base_url)
+            except Exception as exc:
+                logger.warning(
+                    "AppEnrollmentService: failed to fetch CA bundle via HTTP in step 8: %s",
+                    exc,
+                )
         self._write_credentials_atomic(
             app_creds["app_cert"],
             app_creds.get("cert_chain", ""),

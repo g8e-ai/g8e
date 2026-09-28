@@ -766,6 +766,9 @@ const (
 	EvaluationInventoriesDirname                  = "inventories"
 	EvaluationCampaignsDirname                    = "campaigns"
 	EvaluationRunsDirname                         = "runs"
+	EvaluationArchiveDirname                      = "archive"
+	EvaluationArchiveManifestSuffix               = ".archive.json"
+	EvaluationRunLeaseFilename                    = "lease.json"
 	EvaluationAssignmentsDirname                  = "assignments"
 	EvaluationActiveRunFilename                   = "active-run.json"
 	EvaluationActiveRunPath                       = DataDirname + "/" + EvaluationDirname + "/" + EvaluationActiveRunFilename
