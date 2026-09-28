@@ -160,13 +160,18 @@ func TestCampaignQueueSetEntryStatus(t *testing.T) {
 
 func TestLoadRolloutIntakePriorityIDs_ReadsProjectRoot(t *testing.T) {
 	root := testutil.TempDir(t)
-	assert.Nil(t, LoadRolloutIntakePriorityIDs(root))
+	ids, err := LoadRolloutIntakePriorityIDs(root)
+	require.NoError(t, err)
+	assert.Nil(t, ids)
 
 	path := filepath.Join(root, DefaultRolloutIntakePriorityRelPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), constants.PermDirStandard))
 	require.NoError(t, os.WriteFile(path, []byte(`["b","a"]`), constants.PermFilePublic))
-	assert.Equal(t, []string{"b", "a"}, LoadRolloutIntakePriorityIDs(root))
+	ids, err = LoadRolloutIntakePriorityIDs(root)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"b", "a"}, ids)
 
 	require.NoError(t, os.WriteFile(path, []byte(`not json`), constants.PermFilePublic))
-	assert.Nil(t, LoadRolloutIntakePriorityIDs(root))
+	_, err = LoadRolloutIntakePriorityIDs(root)
+	assert.Error(t, err)
 }

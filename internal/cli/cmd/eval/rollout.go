@@ -126,7 +126,11 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("evaluation: rollout add: %w", err)
 			}
-			added, err := queue.AddVariants(selected, evaluation.LoadRolloutIntakePriorityIDs(cfg.ProjectRoot))
+			priority, err := evaluation.LoadRolloutIntakePriorityIDs(cfg.ProjectRoot)
+			if err != nil {
+				return fmt.Errorf("evaluation: rollout add: %w", err)
+			}
+			added, err := queue.AddVariants(selected, priority)
 			if err != nil {
 				return fmt.Errorf("evaluation: rollout add: %w", err)
 			}

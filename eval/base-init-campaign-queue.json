@@ -2,7 +2,7 @@
   "pattern": "eval-init-\u003cvariant_id\u003e (legacy init-campaign for gemma4:e4b)",
   "cells_per_run": 75,
   "inventory_dir": ".g8e/eval/inventories",
-  "generate_command": "./g8e eval rollout init --from eval/base-model-inventory.json --materialize --merge",
+  "generate_command": "./g8e eval rollout add --all",
   "models": [
     {
       "variant_id": "qwen3-8-27b",

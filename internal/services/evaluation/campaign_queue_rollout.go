@@ -62,17 +62,20 @@ func SaveRolloutQueue(ctx context.Context, fileSvc fs.RuntimeFileService, queue 
 }
 
 // LoadRolloutIntakePriorityIDs reads the rollout ordering from the project
-// root. A missing or malformed file means no priority.
-func LoadRolloutIntakePriorityIDs(projectRoot string) []string {
+// root. A missing file means no priority. A malformed file returns an error.
+func LoadRolloutIntakePriorityIDs(projectRoot string) ([]string, error) {
 	data, err := os.ReadFile(filepath.Join(projectRoot, DefaultRolloutIntakePriorityRelPath))
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("evaluation: load rollout intake priority: %w", err)
 	}
 	var priority []string
 	if err := json.Unmarshal(data, &priority); err != nil {
-		return nil
+		return nil, fmt.Errorf("evaluation: load rollout intake priority: %w", err)
 	}
-	return priority
+	return priority, nil
 }
 
 // NewCampaignQueueModel builds the pending queue entry for one registry model.

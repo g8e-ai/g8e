@@ -130,58 +130,53 @@ Rules:
 
 ### Init campaign inventory (one model per campaign)
 
-Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 75 cells**. Keeps runs tidy and isolates failures. Use `g8e eval campaign start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
+Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 75 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
 
 Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/examples/README.md) for the public/private boundary.
 
 ```bash
 # Freeze your provider's model registry (once per provider snapshot)
-INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
 DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
 ./g8e eval models freeze \
-  --campaign-id eval-genesis-homogeneous \
   --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --output .g8e/eval/model-inventory.json
+  --data-session "$DATA_SESSION"
 
-# Single model — materializes .g8e/eval/inventories/eval-init-<variant>.json automatically
-./g8e eval campaign start --model qwen3:4b \
+# Single model — create campaign and start execution
+./g8e eval campaigns create eval-init-qwen3-4b qwen3:4b
+./g8e eval runs start eval-init-qwen3-4b \
   --publish --daemon \
   --verify \
-  --require-provider-observation \
-  --require-model-provenance
+  --require-witness
 ```
 
 Optional rollout queue (multi-model tracking):
 
 ```bash
-# After inventory freeze, materialize per-model inventories and build the queue
-./g8e eval rollout init --materialize --merge
+# After inventory freeze, add models to build the queue
+./g8e eval rollout add --all
 
 # Unattended strict-witness rollout (replaces private batch shell scripts).
 # Defaults: --require-witness, --verify, --publish, --daemon, and --skip-verified are all true.
 ./g8e eval rollout run
 
 # Exclude specific variants or re-run verified entries:
-./g8e eval rollout run --skip-variant granite3-3-2b
+./g8e eval rollout skip granite3-3-2b
 ./g8e eval rollout run --skip-verified=false
 
-# Or one model at a time (campaign start still requires --require-witness explicitly)
+# Or one model at a time:
 ./g8e eval rollout next
-./g8e eval campaign start --queue next --publish --daemon --require-witness
+./g8e eval rollout run --until 1
 ```
 
-List variants or materialize subsets without a queue:
+List variants or create custom campaigns without a queue:
 
 ```bash
 ./g8e eval models list
-./g8e eval models materialize --tag qwen3:4b
-./g8e eval models materialize --all
 
-# Mini smoke combined inventory (3 models → 225 cells)
-./g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
-  --campaign-id eval-smoke-mini \
-  --output .g8e/eval/inventories/eval-smoke-mini.json
+# Mini smoke combined campaign (3 models → 225 cells)
+./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
+./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
 Track per-model verification progress in `.g8e/eval/init-campaign-queue.json` (`status: verified` or `pending`, plus `verified_run_id` when complete).
@@ -197,18 +192,15 @@ Build a three-model smoke inventory from your own provider freeze. Tags below ar
 | `gemma3:4b` | larger |
 
 ```bash
-# Full provider freeze, then build a three-model smoke inventory:
-INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+# Full provider freeze, then create a three-model smoke campaign:
+INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
 DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
 ./g8e eval models freeze \
-  --campaign-id eval-genesis-homogeneous \
   --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --output .g8e/eval/model-inventory.json
+  --data-session "$DATA_SESSION"
 
-./g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
-  --campaign-id eval-smoke-mini \
-  --output .g8e/eval/inventories/eval-smoke-mini.json
+./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
+./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
 Matrix size for three models: **225** assignments (3 × 3 roles × 25 scenarios).
@@ -221,7 +213,7 @@ Copy `.env.example` to `.env`, remove or comment out its sample campaign binding
 G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 ```
 
-`g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are **not** startup `.env` bindings for the campaign workflow — `g8e eval campaign start` resolves them from the queue or `--model` flag and the campaign controller attaches them to each governed dispatch. Setting either startup binding causes the Inference Operator to reject governed campaign requests that do not match that static binding; leave both unset for per-dispatch campaign authority.
+`g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are **not** startup `.env` bindings for the campaign workflow — `g8e eval runs start` resolves them from the campaign definition and the campaign controller attaches them to each governed dispatch. Setting either startup binding causes the Inference Operator to reject governed campaign requests that do not match that static binding; leave both unset for per-dispatch campaign authority.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
@@ -334,12 +326,12 @@ Identify requests by instance ID: `operator-<container-id>` is the **Data** Oper
 # Pure Docker:
 until curl -fsS http://127.0.0.1:8000/health >/dev/null; do sleep 3; done
 docker compose exec g8e-gateway /g8e operator list
-docker compose exec g8e-gateway /g8e eval gate inference status --json
+docker compose exec g8e-gateway /g8e operator session list --json
 
 # Host CLI:
 until curl -fsS http://127.0.0.1:8000/health >/dev/null; do sleep 3; done
 ./g8e operator list
-./g8e eval gate inference status --json
+./g8e operator session list --json
 ```
 
 Expect **two** remote Operators (data + inference) plus one embedded Gateway operator, and an active inference session ID.
@@ -456,11 +448,11 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 1. Gateway sends `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) on the observer's pub/sub cmd channel when scored inference starts and ends.
 2. Observer samples GPU VRAM, utilization, temperature, power, clocks, and system RAM between BEGIN and FINALIZE.
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
-4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
+4. Gateway ingests windows for `g8e eval runs verify --require-observation`.
 
 The Observer only samples provider-boundary telemetry between BEGIN and FINALIZE. It does not manage Ollama, restart the daemon, unload models, or execute generic commands. Model residency is owned by Ollama, and campaign model release uses an approved command dispatched to the exact Inference Operator after scored work completes.
 
-The legacy filesystem runner `g8e eval dev provider-observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
+The legacy filesystem runner `g8e eval observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. That is expected. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
@@ -533,67 +525,27 @@ If ensemble was re-enrolled, repeat the copy so the host CLI uses the current ap
 
 ### Build formation inventory
 
-Freeze the provider, then materialize a three-model inventory with exact served tags:
+Pull and freeze the catalog models:
 
 ```bash
-INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
 DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
 
-./g8e eval models stage \
-  --formation-catalog \
+./g8e eval models pull --formations \
   --inference-session "$INFERENCE_SESSION" \
   --data-session "$DATA_SESSION"
 
 ./g8e eval models freeze \
-  --campaign-id eval-formations-smoke \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --output .g8e/eval/inventories/eval-formations-provider-freeze.json
-
-./g8e eval models materialize \
-  --from .g8e/eval/inventories/eval-formations-provider-freeze.json \
-  --tags phi3.5:3.8b-mini-instruct-q4_K_M,gemma2:2b-instruct-q4_K_M,qwen2.5:0.5b-instruct-q4_K_M \
-  --campaign-id eval-formations-smoke \
-  --output .g8e/eval/inventories/eval-formations-smoke.json
-```
-
-For the four-formation sovereign benchmark (eight unique served tags), stage every catalog tag through the governed Inference Operator, freeze, then materialize with `--formation-catalog`.
-
-```bash
-./g8e eval models stage \
-  --formation-catalog \
   --inference-session "$INFERENCE_SESSION" \
   --data-session "$DATA_SESSION"
-
-./g8e eval models freeze \
-  --campaign-id eval-formations-benchmark \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --output .g8e/eval/inventories/eval-formations-provider-freeze.json
-
-./g8e eval models materialize \
-  --from .g8e/eval/inventories/eval-formations-provider-freeze.json \
-  --formation-catalog \
-  --campaign-id eval-formations-benchmark \
-  --output .g8e/eval/inventories/eval-formations-benchmark.json
 ```
 
-Use `g8e eval campaign formations list` to inspect the four formations and their eight unique sovereign served tags. Tags must match the catalog exactly (including `-instruct-q4_K_M` suffixes where listed).
-
-Catalog formation variant IDs (`phi35-mini-38b-speed`, etc.) differ from freeze variant IDs; binding resolves frozen digests by **served model tag**.
+Use `g8e eval formations list` to inspect the formations and their served tags.
 
 ### Run formation smoke
 
 ```bash
-INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-
-./g8e eval campaign formations run \
-  --formation-id ultra-light-speedster \
-  --registry-file .g8e/eval/inventories/eval-formations-smoke.json \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --json
+./g8e eval formations smoke ultra-efficient-speedster
 ```
 
 Expect `"passed": true` with three role entries (lite, assistant, primary), per-role attestation, generation throughput, and peak VRAM. Observer evidence is loaded from the gateway volume via mTLS (`/api/v1/inference/provider-observations/{attempt_id}`); host `.g8e/data` does not mirror gateway witness stores.
@@ -601,43 +553,24 @@ Expect `"passed": true` with three role entries (lite, assistant, primary), per-
 Inspect the catalog without running:
 
 ```bash
-./g8e eval campaign formations list
-./g8e eval campaign formations show ultra-light-speedster
+./g8e eval formations list
+./g8e eval formations show ultra-efficient-speedster
 ```
 
 ### Heterogeneous campaign assignment (Phase 2)
 
-After formation smoke passes, run one assignment through the full campaign lifecycle:
+After formation smoke passes, run through the full campaign lifecycle:
 
 ```bash
-RUN_ID=formation-live-$(date +%s)
-INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
+./g8e eval campaigns create eval-formations-smoke --formations ultra-efficient-speedster
 
-./g8e eval campaign init \
-  --campaign-id eval-formations-smoke \
-  --run-id "$RUN_ID" \
-  --inventory-file .g8e/eval/inventories/eval-formations-smoke.json \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --system-lane
-
-./g8e eval campaign stacks generate --campaign-id eval-formations-smoke --seed 17
-./g8e eval campaign schedule --heterogeneous --run-id "$RUN_ID"
-
-./g8e eval campaign execute \
-  --run-id "$RUN_ID" \
-  --limit 1 \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
-
-./g8e eval campaign verify \
-  --run-id "$RUN_ID" \
-  --require-provider-observation \
-  --require-model-provenance
+./g8e eval runs start eval-formations-smoke \
+  --publish --daemon \
+  --verify \
+  --require-witness
 ```
 
-With three models this schedules 200 assignments (8 hypothesis stacks × 25 scenarios). Use `--limit 1` for a single smoke cell. Formation-run evidence is persisted at `.g8e/data/eval/runs/<run-id>/assignments/<assignment-id>-formation-run.json`.
+Formation-run evidence is persisted at `.g8e/data/eval/runs/<run-id>/assignments/<assignment-id>-formation-run.json`.
 
 ## Mini smoke campaign workflow
 
@@ -658,37 +591,41 @@ For a normal restart that preserves the public feed and all credentials, use `do
 
 Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is up. Build static assets once with `cd dashboard/g8e-adapter/evaluation-explorer && npm run build` if the explorer listener logs that dist is missing. Do **not** run `npm run dev:real` for campaign acceptance — that path is legacy local supervisor only.
 
-### Phase B — Initialize and schedule
+### Phase B — Create campaign and start run
 
 ```bash
-RUN_ID=smoke-mini-$(date +%s)
-INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
 DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
 
-./g8e eval campaign init \
-  --campaign-id eval-smoke-mini \
-  --run-id "$RUN_ID" \
-  --inventory-file .g8e/eval/inventories/eval-smoke-mini.json \
+# Single model — create campaign and start execution
+./g8e eval campaigns create eval-smoke-mini qwen3:4b
+
+# Start execution (binds sessions, schedules matrix, and executes continuously)
+./g8e eval runs start eval-smoke-mini \
   --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
-
-./g8e eval campaign schedule --run-id "$RUN_ID" --publish
-```
-
-Wait for schedule publish to finish (~1 min for 225 cells). **Do not** start execute until schedule exits successfully.
-
-### Phase C — Execute (serial daemon)
-
-```bash
-./g8e eval campaign execute \
-  --run-id "$RUN_ID" \
+  --data-session "$DATA_SESSION" \
   --publish --daemon
 ```
+
+Alternatively, to schedule first and execute separately:
+
+```bash
+# Persist run and assignments without executing immediately
+./g8e eval runs start eval-smoke-mini \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION" \
+  --prepare-only
+
+# Resume/execute the prepared run
+./g8e eval runs resume <run-id> --publish --daemon
+```
+
+### Phase C — Execute (serial daemon)
 
 - `--daemon` runs the full matrix in one process.
 - Consecutive assignments keep the provider daemon running; no reset or stable-body `/api/ps` wait occurs between cells.
 - After the queue is exhausted, the controller dispatches governed residency reads and the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. The Operator-owned client uses the endpoint from that session's enrolled `runtime_config` to issue `/api/generate` with `keep_alive: 0`, then governed residency reads confirm the campaign-owned tags are absent. No campaign-host provider call or external Ollama CLI is used.
-- **Never** run `g8e eval campaign publish` concurrently with `execute --publish`.
+- **Never** run `g8e eval runs publish` concurrently with `runs start --publish` or `runs resume --publish`.
 
 ### Phase D — Monitor
 
@@ -699,22 +636,22 @@ Wait for schedule publish to finish (~1 min for 225 cells). **Do not** start exe
 | Public mirror bootstrap | `http://127.0.0.1:8082/bootstrap?source=opendevops-local` |
 
 ```bash
-./g8e eval campaign status --run-id "$RUN_ID"
-./g8e eval campaign account --run-id "$RUN_ID" --json
+./g8e eval runs show "$RUN_ID"
+./g8e eval runs verify "$RUN_ID" --coverage
 cd dashboard/g8e-adapter/evaluation-explorer && npm run health
 ```
 
 After the Observer Operator is enrolled, verify hardware coverage:
 
 ```bash
-./g8e eval campaign verify --run-id "$RUN_ID" --require-provider-observation
+./g8e eval runs verify "$RUN_ID" --require-observation
 ```
 
 ### Hard rules
 
 1. **Never** call Ollama at `127.0.0.1:11434` on the campaign host for scored work when the approved provider is remote.
 2. **Always** rediscover Operator session IDs after a volume wipe.
-3. **Always** use `g8e eval campaign start` (or ensure dispatch-carried campaign authority matches the inventory) — do not rebind `.env` per model.
+3. **Always** use `g8e eval runs start` (or ensure dispatch-carried campaign authority matches the inventory) — do not rebind `.env` per model.
 4. **Never** resume archived or abandoned run IDs from prior checkpoints.
 
 ## Public spectator feed
@@ -774,17 +711,17 @@ docker compose logs <service>
 
 ### Inference dispatch returns 403 / campaign binding invalid
 
-Usually means the inference operator was started with a **stale startup campaign binding** (`G8E_INFERENCE_CAMPAIGN_ID` / `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` set in `.env`) that no longer matches the run. Clear those keys in `.env`, recreate the operator, and use `g8e eval campaign start` so g8ee carries campaign authority on each dispatch:
+Usually means the inference operator was started with a **stale startup campaign binding** (`G8E_INFERENCE_CAMPAIGN_ID` / `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` set in `.env`) that no longer matches the run. Clear those keys in `.env`, recreate the operator, and use `g8e eval runs start` so g8ee carries campaign authority on each dispatch:
 
 ```bash
 # .env: only G8E_OLLAMA_ENDPOINT required; leave campaign keys unset
 docker compose up -d --force-recreate g8e-inference-operator
-./g8e eval campaign start --queue next --publish --daemon
+./g8e eval runs start eval-init-qwen3-4b --publish --daemon
 ```
 
 ### Observer not receiving commands
 
-- Confirm Observer enrolled with `--provider-boundary-observer-enabled` (not the filesystem `eval dev provider-observer run` path).
+- Confirm Observer enrolled with `--provider-boundary-observer-enabled` (not the filesystem `eval observer run` path).
 - Confirm Gateway can reach the Observer session (`./g8e operator list`).
 - Confirm the provider host can reach Gateway ports 8080/8443 and `g8e.local` resolves to the campaign host.
 
@@ -803,8 +740,8 @@ docker compose up -d --force-recreate g8e-inference-operator
 
 ### Public feed drift or out-of-order batches
 
-- Stop execute and any concurrent `campaign publish`.
-- Do not run `campaign publish` and `execute --publish` at the same time.
+- Stop execute and any concurrent `runs publish`.
+- Do not run `runs publish` and `runs resume --publish` at the same time.
 - Reset public feed (Phase A above) before a new run.
 
 ### Mirror empty after `docker init --clean` but host run artifacts remain
@@ -820,7 +757,7 @@ Restore every verified queue entry to the gateway-owned mirror:
 Or one run:
 
 ```bash
-./g8e public restore --run-id <run-id>
+./g8e public restore <run-id>
 ```
 
 `docker init` attempts `--queue` restore automatically when the queue and run artifacts exist. Queue entries whose `verified_run_id` directory is missing are reported as host-absent and must be re-executed — mirror restore cannot recreate inference evidence.
@@ -828,7 +765,7 @@ Or one run:
 A plain catch-up publish now probes the gateway-owned dataset. When the dataset is absent while host `public-projection-state.json` under `.g8e/data/eval/runs/<run-id>/` still lists `published_idempotency_keys`, it clears that stale state and republishes the canonical lifecycle, result, and aggregate projections without editing JSON manually.
 
 ```bash
-./g8e eval campaign publish --run-id <run-id>
+./g8e eval runs publish <run-id>
 ```
 
 Use `--force` only when the mirror was wiped or is known to be missing records and the drift-aware path is not sufficient. It clears host idempotency keys and republishes the run; mirror restore cannot recreate missing inference evidence or make an inapplicable verification report valid.

@@ -171,7 +171,7 @@ Live group list: `./g8e --help`. Group placement: INV-CLI-01. Name exceptions: I
 | `tui` | `tuicmd` | `internal/cli/cmd/tui/` | | Tactical Governance Console. |
 | `version` | `version` | `internal/cli/cmd/version/` | | Build metadata. Optional FIPS module status is `./g8e version --help`. |
 | `compliance` | `compliancecmd` | `internal/cli/cmd/compliance/` | | `ksi`, `ksi-history`, `overlay`, `demo-run`, `release-evidence`, `release-prepare`, `evidence`, `evidence-graph`, and `report`. |
-| `eval` | `eval` | `internal/cli/cmd/eval/` | `evals` | `boundary`, `campaign`, `models`, `rollout`, `gate`, and `dev`. Also constructs `public restore`. |
+| `eval` | `eval` | `internal/cli/cmd/eval/` | `evals` | `models`, `campaigns`, `runs`, `rollout`, `formations`, `gates`, `boundary`, and `observer`. Also constructs `public restore`. |
 
 Files at `internal/cli/cmd/` root are the root command, its tests, and shared file-service and config-load tests. Factory-error tests live beside the group they cover (`factory_error_<group>_test.go`). The factory rule is INV-FS-08.
 

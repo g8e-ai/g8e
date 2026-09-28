@@ -29,10 +29,10 @@ Campaign publication emits public-safe assignment records with the enriched `1.1
 For an existing run, use verified catch-up after the report is persisted so assignment and model-summary revisions are restored together:
 
 ```bash
-./g8e eval campaign publish --run-id <run-id>
+./g8e eval runs publish <run-id>
 ```
 
-The publication coordinator probes the gateway-owned dataset during catch-up. If the dataset is absent while host publication idempotency still lists records, it clears that stale state and republishes the canonical run without requiring manual JSON edits. Use `--force` only when the mirror was wiped or is known to be missing records and the normal drift-aware path is not sufficient; it resets publication idempotency state and republishes the run. Neither path recreates missing inference evidence or makes an inapplicable verification report valid. Do not run catch-up concurrently with `execute --publish`.
+The publication coordinator probes the gateway-owned dataset during catch-up. If the dataset is absent while host publication idempotency still lists records, it clears that stale state and republishes the canonical run without requiring manual JSON edits. Use `--force` only when the mirror was wiped or is known to be missing records and the normal drift-aware path is not sufficient; it resets publication idempotency state and republishes the run. Neither path recreates missing inference evidence or makes an inapplicable verification report valid. Do not run catch-up concurrently with `runs resume --publish`.
 
 The mirror is a visibility and publication boundary, not a Policy Decision Point or Policy Execution Point. It does not authorize a governed mutation, and its availability is not execution evidence. The Operator whose L4/L5 boundary produced an underlying governed result retains authoritative local execution evidence.
 

@@ -10,7 +10,7 @@ Checked-in evaluation program data and templates live here. **Runtime** campaign
 | `eval/base-init-campaign-queue.json` | Template rollout queue (`status: pending`); currently 47 entries and does not yet list `gemma4:12b`, `glm-5.3-air`, or `qwen2.5:1b-rlcd` |
 | `eval/examples/init-campaign-queue.example.json` | Minimal queue shape reference |
 
-The base inventory is the canonical 50-model genesis program set. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code. `eval/rollout-intake-priority.json` lists variant IDs that `g8e eval rollout init --materialize` orders ahead of the rest of the backlog; it is currently empty, so materialization uses the default ordering.
+The base inventory is the canonical 50-model genesis program set. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code. `eval/rollout-intake-priority.json` lists variant IDs that `g8e eval rollout add` orders ahead of the rest of the backlog; it is currently empty, so adding uses the default ordering.
 
 The optional Hugging Face rollout intake (`eval/rollout-intake-hf.json`) also tracks the small text-generation trend candidate Qwen 2.5 1B RLCD. Larger trend entries are intentionally excluded from this 16 GiB-provider intake; classification, image, audio, and image-text-to-text repositories from the same trend snapshot are also not added to the text-generation queue.
 
@@ -47,42 +47,36 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 ## Typical workflow
 
 ```bash
-# Resolve the exact governed maintenance sessions.
-INFERENCE_SESSION=$(./g8e eval gate inference status --json | jq -r .operator_session_id)
+# Resolve the exact governed maintenance sessions (optional if single active sessions exist).
+INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
 DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
 
-# 0. (Optional) Stage trending Hugging Face GGUF models through governed Operator dispatch.
+# 0. (Optional) Pull trending Hugging Face GGUF models through governed Operator dispatch.
 #    Catalog: eval/rollout-intake-hf.json. Applies canonical served-model aliases
 #    (for example qwen3.8:27b, glm-5.3-flash) after pull/copy.
-./g8e eval models stage \
+./g8e eval models pull --all \
   --inference-session "$INFERENCE_SESSION" \
   --data-session "$DATA_SESSION"
 # Manual-create entries (sharded GGUF, pending single-file) are skipped until a
 # governed provider-side alias-creation workflow is available.
 
-# 1. Freeze provider inventory (recommended before scored runs on release code)
+# 1. Freeze provider inventory into runtime registry
 ./g8e eval models freeze \
-  --campaign-id eval-genesis-homogeneous \
   --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --output .g8e/eval/model-inventory.json
+  --data-session "$DATA_SESSION"
 
 ./g8e eval models list
 
-# 2. Build rollout queue from the base program inventory (default)
-./g8e eval rollout init --materialize --merge
-
-# Or reconcile live digests: freeze first, then filter runtime to base program tags
-./g8e eval rollout init --from .g8e/eval/model-inventory.json --materialize --merge
+# 2. Build rollout queue from catalog models (default)
+./g8e eval rollout add --all
 
 # rollout run defaults: witness, verify, publish, daemon, and skip-verified are all true
 ./g8e eval rollout run
-# ./g8e eval rollout run --skip-variant granite3-3-2b
+# ./g8e eval rollout run --until 5
 
-# Or materialize one combined inventory for a multi-model smoke campaign
-./g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
-  --campaign-id eval-smoke-mini \
-  --output .g8e/eval/inventories/eval-smoke-mini.json
+# Or create a custom campaign for a multi-model smoke run
+./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
+./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
 Regenerate checked-in base files after changing the program model set:
@@ -95,19 +89,21 @@ go run ./.local.dev/tools/gen-base-model-inventory
 
 | Command | Purpose |
 | --- | --- |
-| `g8e eval models freeze` | Discover and freeze provider models through an exact Inference Operator session |
-| `g8e eval models list` | List variants in a frozen inventory file; `--max-parameters` (alias `--params`) and `--family` filter, and `--detailed` adds parameters, family, quantization, and digest columns |
-| `g8e eval models add` | Add or update one variant in a frozen inventory and recompute its registry digest and homogeneous cell count; `--sync-base` mirrors the change into the checked-in and runtime inventories |
-| `g8e eval models remove` | Remove one variant by served tag or variant ID and recompute the registry digest; `--sync-base` mirrors the removal |
-| `g8e eval models import` | Copy variants from a source inventory (default `eval/base-model-inventory.json`) into the runtime inventory by `--tags`, `--family`, `--max-parameters`, or `--all` |
-| `g8e eval models stage` | Dispatch governed pull/copy maintenance to the exact Inference Operator session |
-| `g8e eval models materialize` | Write per-model or combined campaign inventory files |
-| `g8e eval rollout init` | Build `.g8e/eval/init-campaign-queue.json` |
-| `g8e eval rollout run` | Unattended rollout: start → strict-witness verify for every queued model (`--require-witness`, `--verify`, `--publish`, `--daemon`, and `--skip-verified` default true) |
+| `g8e eval models freeze` | Discover and freeze provider models into the runtime registry |
+| `g8e eval models list` | List variants in the catalog or registry; `--max-params` and `--family` filter, and `--detailed` adds parameters, family, quantization, and digest columns |
+| `g8e eval models add` | Add or update one variant in the registry (or `--catalog`) |
+| `g8e eval models remove` | Remove one variant by selector from the registry (or `--catalog`) |
+| `g8e eval models import` | Copy variants from the catalog into the runtime registry |
+| `g8e eval models pull` | Dispatch governed pull/copy maintenance to the exact Inference Operator session |
+| `g8e eval campaigns create` | Create a frozen campaign definition from model selector or formations |
+| `g8e eval runs start` | Start a campaign run with witness, verify, and publish flags |
+| `g8e eval runs export` | Export one run to a directory you choose (`--output-dir`) |
+| `g8e eval rollout add` | Add models to `.g8e/eval/init-campaign-queue.json` |
+| `g8e eval rollout run` | Unattended rollout: start → strict-witness verify for queued models |
 | `g8e eval rollout list` | Inspect queue entries |
 | `g8e eval rollout next` | Show the next pending model |
-| `g8e eval rollout mark` | Manually record verify progress for one entry |
-| `g8e eval campaign export` | Export one run to a directory you choose (`--output-dir`) |
+| `g8e eval rollout retry` | Reset entries back to pending |
+| `g8e eval rollout skip` | Skip queue entries |
 | `g8e public restore` | Republish verified runs to the gateway-owned public mirror |
 
 See [Unified Docker Stack Guide](../../docs/guides/unified_stack.md) and [Evaluations architecture](../../docs/architecture/evals.md) for full campaign operations.
@@ -123,7 +119,7 @@ What survives depends on what you wipe:
 
 ### After gateway volume wipe (most common)
 
-Host evidence and queue remain. Restore the public mirror from verified queue entries:
+Host evidence and queue remain. Restore the public mirror from verified run store:
 
 ```bash
 curl -sf http://127.0.0.1:8082/bootstrap | jq '{freshness: .source_freshness, high_water: .snapshot.high_water_sequence}'
@@ -131,19 +127,20 @@ curl -sf http://127.0.0.1:8082/bootstrap | jq '{freshness: .source_freshness, hi
 ./g8e public restore --queue
 ```
 
-`docker init` runs this automatically when the queue and run artifacts are present. For one run:
+`docker init` runs this automatically when verified runs are present in the store. For one run:
 
 ```bash
-./g8e public restore --run-id eval-init-granite3-3-2b-1789754079
+./g8e public restore eval-init-granite3-3-2b-1789754079
 ```
 
-If `campaign publish` exports zero records after a mirror wipe (host `public-projection-state.json` still lists old idempotency keys), use `--force` on publish instead — see [Unified Docker Stack Guide](../../docs/guides/unified_stack.md#mirror-empty-after-docker-init---clean-but-host-run-artifacts-remain).
+If `runs publish` exports zero records after a mirror wipe (host `public-projection-state.json` still lists old idempotency keys), use `--force` on publish instead — see [Unified Docker Stack Guide](../../docs/guides/unified_stack.md#mirror-empty-after-docker-init---clean-but-host-run-artifacts-remain).
 
 Runs marked `verified` in the queue but missing under `.g8e/data/eval/runs/<verified_run_id>/` cannot be mirror-restored. Mark them pending and re-run:
 
 ```bash
-./g8e eval rollout mark --variant-id qwen3-0-6b --status pending --notes "redo after host artifact loss"
-./g8e eval campaign start --queue qwen3-0-6b --publish --daemon --require-witness
+./g8e eval rollout retry qwen3-0-6b
+./g8e eval campaigns create eval-init-qwen3-0-6b qwen3:0.6b
+./g8e eval runs start eval-init-qwen3-0-6b --publish --daemon --require-witness
 ```
 
 ### Archive evidence to a directory you choose
@@ -151,19 +148,10 @@ Runs marked `verified` in the queue but missing under `.g8e/data/eval/runs/<veri
 Canonical evidence stays under `.g8e/data/eval/runs/` during execution. Export a portable bundle any time:
 
 ```bash
-./g8e eval campaign export --output-dir ./my-eval-archive/granite-reference eval-init-granite3-3-2b-1789754079
+./g8e eval runs export eval-init-granite3-3-2b-1789754079 --output-dir ./my-eval-archive/granite-reference
 ```
 
 Back up `.g8e/data/eval/runs/` and `.g8e/eval/` together before a full platform wipe if you want to resume without re-executing inference.
-
-### Custom queue or inventory paths
-
-Rollout flags accept repo-relative or absolute paths:
-
-```bash
-./g8e eval rollout init --output /data/my-queue.json --inventory-dir /data/my-inventories --materialize --merge
-./g8e eval rollout run --queue-file /data/my-queue.json
-```
 
 ## License
 

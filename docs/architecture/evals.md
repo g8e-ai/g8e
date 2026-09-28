@@ -151,26 +151,26 @@ The evaluation programs below instantiate this topology on the reference stack. 
 | **Execution-boundary** | `core-execution-boundary@1.0.0` | One allowed governed mutation and one doctrine-prohibited equivalent through the real Gateway and remote Operator | g8ee, model providers, campaigns, synthetic simulators |
 | **Model campaign** | `north-star-25@1.0.0` (standard scenario catalog) | Governed model-role scoring through production inference, tool scenarios, optional heterogeneous system-lane formations, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from the campaign CLI or g8ee |
 
-Both programs persist canonical, content-addressed run evidence beneath `.g8e/data/eval/runs/`. Campaign definitions and frozen scenario artifacts are stored separately beneath `.g8e/data/eval/campaigns/<campaign-id>/`, while campaign assignments, traces, results, reports, and exports are run-scoped. Verification is independent of scored execution: `g8e eval boundary verify` and `g8e eval campaign verify` recompute bindings and signatures without executing another scored action. Campaign verification also persists its report and, by default, may publish disclosure-safe projections through the Gateway public mirror.
+Both programs persist canonical, content-addressed run evidence beneath `.g8e/data/eval/runs/`. Campaign definitions and frozen scenario artifacts are stored separately beneath `.g8e/data/eval/campaigns/<campaign-id>/`, while campaign assignments, traces, results, reports, and exports are run-scoped. Verification is independent of scored execution: `g8e eval boundary verify` and `g8e eval runs verify` recompute bindings and signatures without executing another scored action. Run verification also persists its report and, by default, may publish disclosure-safe projections through the Gateway public mirror.
 
 ---
 
 ## CLI surface
 
-The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands:
+The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across eight top-level groups:
 
 | Command group | Purpose |
 | --- | --- |
-| `g8e eval boundary run` | Run the native execution-boundary suite |
-| `g8e eval boundary verify <run-id>` / `g8e eval boundary show <run-id>` | Verify or inspect a native run |
-| `g8e eval campaign …` | Initialize, schedule, execute, publish, verify, and export evaluation model campaigns |
-| `g8e eval gate inference …` | Inference-operator status, probe, and acceptance gates |
-| `g8e eval gate chat run` | Chat-path vertical acceptance through production `POST /api/v1/chat` |
-| `g8e eval models …` | Provider inventory freeze/list, inventory `add`/`remove`/`import` edits, Hugging Face rollout staging (`stage`), and campaign inventory materialize helpers |
-| `g8e eval rollout …` | Campaign rollout queue init, run, list, next, and mark helpers |
-| `g8e eval dev provider-observer run` | Legacy co-located dev observer only; production uses the enrolled Observer Operator |
+| `g8e eval boundary …` | Run, list, verify, and show native execution-boundary test suites |
+| `g8e eval models …` | Catalog and registry management (`list`, `show`, `add`, `remove`, `import`, `freeze`, `pull`, `diff`) |
+| `g8e eval campaigns …` | Campaign definitions (`list`, `show`, `create`, `archive`, `unarchive`) |
+| `g8e eval runs …` | Campaign execution and lifecycle (`list`, `show`, `start`, `resume`, `cancel`, `logs`, `verify`, `publish`, `export`, `repair`, `compare`, `archive`, `unarchive`) |
+| `g8e eval rollout …` | Rollout qualification queue (`list`, `add`, `remove`, `next`, `retry`, `skip`, `run`) |
+| `g8e eval formations …` | Heterogeneous multi-model stacks (`list`, `show`, `smoke`) |
+| `g8e eval gates …` | Pre-campaign acceptance gates (`chat`, `inference`, `probe`) |
+| `g8e eval observer …` | Provider-boundary hardware observer (`run`, `verify`) |
 
-Campaign lifecycle commands include `start`, `init`, `list`, `schedule`, `stacks generate`, `execute`, `publish`, `verify`, `account`, `status`, `show`, `export`, `trace-digests`, `results`, and repair helpers. Public mirror restore is `g8e public restore`. Use `./g8e eval campaign --help` as the command-surface reference. On `g8e eval campaign start`, verification and witness flags are optional by default; use `--require-provider-observation`, `--require-model-provenance`, or the `--require-witness` preset when those witness requirements are part of the acceptance scope. On `g8e eval rollout run`, strict witness verification is the default (`--require-witness`, `--verify`, `--publish`, `--daemon`, and `--skip-verified` all default true).
+Public mirror restore is `g8e public restore`. Use `./g8e eval --help` as the command-surface reference. On `g8e eval runs start`, verification and witness flags are optional by default; use `--require-observation`, `--require-provenance`, or the `--require-witness` preset when those witness requirements are part of the acceptance scope. On `g8e eval rollout run`, strict witness verification is the default (`--gate-smoke` and `--promote-on-pass` provide fast candidate screening).
 
 ---
 
@@ -232,11 +232,11 @@ See [Model Provenance](model-provenance.md) for the zero-trust weight attestatio
 
 Model campaigns bind scored inference to frozen `served_model_tag` and `model_digest` pairs in the campaign registry. The checked-in genesis program inventory (`eval/base-model-inventory.json`) is a reference snapshot; scored runs on a live provider should re-freeze digests from that provider before execute.
 
-**Hugging Face staging.** `g8e eval models stage --inference-session <session> --data-session <session>` reads the rollout intake catalog (`eval/rollout-intake-hf.json`) and dispatches governed pull and copy commands to that exact Inference Operator. The Operator-owned Ollama client uses deep Hugging Face compatibility to pull GGUF models (for example `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M`) and applies canonical served-model aliases (for example `qwen3.8:27b`). Use `--formation-catalog` to stage the eight sovereign ExecutionTopologies library tags through the same governed path. Catalog entries marked `manual_create` (sharded GGUF) or `pending` are skipped until a governed provider-side workflow can create the alias. The intake only adds small text-generation trend candidates suitable for the 16 GiB provider, currently including Qwen 2.5 1B RLCD; larger trend entries are intentionally excluded. Classification, image, audio, and image-text-to-text repositories are also excluded from this text-generation queue. Trending untagged aliases such as `glm-5.3-flash` and `glm-5.3-air` are first-class served tags once present on the provider.
+**Hugging Face staging.** `g8e eval models pull --all` reads the rollout intake catalog (`eval/rollout-intake-hf.json`) and dispatches governed pull and copy commands to the exact Inference Operator. The Operator-owned Ollama client uses deep Hugging Face compatibility to pull GGUF models (for example `huggingface.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M`) and applies canonical served-model aliases (for example `qwen3.8:27b`). Use `--formations` to pull the sovereign ExecutionTopologies library tags through the same governed path. Catalog entries marked `manual_create` (sharded GGUF) or `pending` are skipped until a governed provider-side workflow can create the alias. The intake only adds small text-generation trend candidates suitable for the 16 GiB provider, currently including Qwen 2.5 1B RLCD; larger trend entries are intentionally excluded. Classification, image, audio, and image-text-to-text repositories are also excluded from this text-generation queue. Trending untagged aliases such as `glm-5.3-flash` and `glm-5.3-air` are first-class served tags once present on the provider.
 
-**Freeze and materialize.** After staging, `g8e eval models freeze --inference-session <session> --data-session <session>` discovers live provider inventory through a governed Inference Operator command. Optional `--probe-capabilities` requests bounded, unscored inference through the same session rather than constructing a campaign-host provider backend. `g8e eval models materialize` and `g8e eval rollout init --materialize` then write per-model campaign inventories and the rollout queue with provider-accurate digests. Placeholder digests in the checked-in base inventory are not valid attestation authorities.
+**Freeze and registry.** After pulling, `g8e eval models freeze` discovers live provider inventory through a governed Inference Operator command and writes the frozen registry to `.g8e/eval/model-inventory.json`. Optional `--probe-capabilities` requests bounded, unscored inference through the same session rather than constructing a campaign-host provider backend. `g8e eval campaigns create` and `g8e eval rollout add` then bind campaigns and the rollout queue with provider-accurate digests. Placeholder digests in the checked-in base inventory are not valid attestation authorities.
 
-**Inventory edits.** `g8e eval models add` inserts or replaces one variant (served tag, family, parameter count, quantization, digest) in the runtime freeze when present, otherwise in `eval/base-model-inventory.json`, and recomputes the registry digest and homogeneous cell count. When `--digest` is omitted, `add` derives a placeholder digest from the provider class and tag, which is not an attestation authority; re-freeze from the provider before scored runs. `g8e eval models remove` deletes one variant by served tag or variant ID and recomputes the same values. `g8e eval models import` copies selected variants from a source inventory into the runtime freeze. `--sync-base` on `add` and `remove` applies the change to both the checked-in and runtime inventories. `g8e eval models list`, `g8e eval rollout init`, and `g8e eval rollout run` accept `--max-parameters` (alias `--params`, for example `12b` or `700m`) to restrict work to variants at or below a parameter count; variants without a recorded parameter count are not excluded by the rollout-run filter.
+**Inventory edits.** `g8e eval models add` inserts or replaces one variant (served tag, family, parameter count, quantization, digest) in the runtime registry, or with `--catalog` in `eval/base-model-inventory.json`, and recomputes the registry digest and homogeneous cell count. When `--digest` is omitted, `add` derives a placeholder digest from the provider class and tag, which is not an attestation authority; re-freeze from the provider before scored runs. `g8e eval models remove` deletes one variant by served tag or variant ID and recomputes the same values. `g8e eval models import` copies selected variants from the catalog into the runtime registry. `g8e eval models list`, `g8e eval rollout add`, and `g8e eval rollout run` accept `--max-params` (for example `12b` or `700m`) to restrict work to variants at or below a parameter count; variants without a recorded parameter count are not excluded by the rollout-run filter.
 
 **Execute-time provenance preflight.** Before consuming scored assignments, campaign execute and `g8e eval rollout run` call Gateway preflight endpoints that verify provenance command delivery and run a per-model storage attestation probe for each frozen binding. The probe fails fast when the Provenance Operator cannot resolve or attest the served tag, rather than completing assignments with missing windows. See [Model Provenance](model-provenance.md) for manifest layout and preflight API detail.
 
@@ -278,7 +278,7 @@ Each persona is wrapped in the production modular system prompt stack: Core Safe
 
 ### Campaign lanes and formations
 
-The default campaign lane is `model_role`: a homogeneous matrix schedules each frozen model variant against the catalog scenarios and records role-specific results. Campaigns can also use the `system` lane. The CLI generates a deterministic, persisted heterogeneous stack set with `g8e eval campaign stacks generate --campaign-id <id> --seed <seed>` and schedules it with `g8e eval campaign schedule --heterogeneous`; heterogeneous runs are separate from homogeneous model-role aggregates.
+The default campaign lane is `model_role`: a homogeneous matrix schedules each frozen model variant against the catalog scenarios and records role-specific results. Campaigns can also use the `system` lane. The CLI creates a deterministic, persisted heterogeneous stack set with `g8e eval campaigns create <id> --formations <id>... --seed <seed>` and starts execution with `g8e eval runs start <id>`; heterogeneous runs are separate from homogeneous model-role aggregates.
 
 A formation contains `primary`, `assistant`, and `lite` model bindings. The runner allocates all sovereign local models only after storage-side provenance attestation, brackets each role with provider-boundary observation, executes roles in `lite → assistant → primary` order while passing state forward, and routes a role's mutation candidate through the governed policy gate before accepting the formation. The checked-in catalog currently contains four sovereign formations; the delegated-primary hybrid remains deferred until a governed delegated-provider executor exists. Formation validation rejects provider or model-family overlap and excessive estimated local VRAM. Campaign execution imports each role's reported prompt and completion usage into canonical `ModelInferenceRecord` evidence; unavailable provider usage remains unavailable rather than becoming an observed zero.
 
@@ -297,7 +297,7 @@ The Inference Operator, Observer Operator, and Provenance Operator all use the s
 - `ProviderBoundaryObservationCoordinator` → Observer Operator → `ProviderBoundaryObservationWindow`
 - `ModelProvenanceObservationCoordinator` → Provenance Operator → `ModelProvenanceAttestationWindow`
 
-Campaigns without observer coverage remain explicitly incomplete for hardware-efficiency claims. `g8e eval campaign verify --require-provider-observation` makes provider-observation coverage a fail-closed verification requirement. Model provenance is similarly interim by default and becomes fail-closed when `g8e eval campaign verify --require-model-provenance` is used. On `g8e eval rollout run`, `--require-witness` defaults true and enables both strict witness requirements; on `g8e eval campaign start` it remains opt-in.
+Campaigns without observer coverage remain explicitly incomplete for hardware-efficiency claims. `g8e eval runs verify --require-observation` makes provider-observation coverage a fail-closed verification requirement. Model provenance is similarly interim by default and becomes fail-closed when `g8e eval runs verify --require-provenance` is used. On `g8e eval rollout run`, `--require-witness` defaults true and enables both strict witness requirements; on `g8e eval runs start` it remains opt-in.
 
 **5. Same pattern as tool scenarios.** Governed tool assignments require an independent observer that cannot mutate the target. Provider-boundary observation and model provenance apply the same separation to inference-side hardware telemetry and storage-side weight attestation.
 
@@ -322,7 +322,7 @@ What the Observer does:
 1. Gateway sends `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) on the observer's pub/sub cmd channel when scored inference starts and ends.
 2. Observer samples GPU VRAM, utilization, temperature, power, clocks, and system RAM between BEGIN and FINALIZE.
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
-4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
+4. Gateway ingests windows for `g8e eval runs verify --require-observation`.
 
 The Observer has no Ollama management capability. Ollama owns its daemon and runner processes. Consecutive scored assignments keep the daemon resident; after a completed queue, the controller reads typed `/api/ps` residency and dispatches the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. That governed command uses the existing `OllamaBackend` HTTP client to send an empty `/api/generate` request with `keep_alive: 0` to the Operator's approved endpoint, after which the controller confirms the campaign-owned tags are absent. No external Ollama CLI is installed or required. The Observer continues to provide only independent BEGIN/FINALIZE telemetry.
 
@@ -443,12 +443,12 @@ See [Model Provenance](model-provenance.md) for the full zero-trust weight attes
 | Artifact | Path | Owner |
 | --- | --- | --- |
 | Native run report and verification | `.g8e/data/eval/runs/<run-id>/report.json`, `verification.json`, digest-named evidence | `g8e eval boundary run` / `g8e eval boundary verify` |
-| Campaign definitions and frozen scenario artifacts | `.g8e/data/eval/campaigns/<campaign-id>/` | `g8e eval campaign init` / `stacks generate` |
-| Campaign run state and results | `.g8e/data/eval/runs/<run-id>/` (campaign-scoped lifecycle, assignment, trace, and aggregate records) | `g8e eval campaign …` |
+| Campaign definitions and frozen scenario artifacts | `.g8e/data/eval/campaigns/<campaign-id>/` | `g8e eval campaigns create` |
+| Campaign run state and results | `.g8e/data/eval/runs/<run-id>/` (campaign-scoped lifecycle, assignment, trace, and aggregate records) | `g8e eval runs …` |
 | Provider observation windows (ingested) | Gateway volume under `data/inference/provider-observer/windows/` | Gateway ingest from Observer Operator results |
 | Model provenance attestation windows (ingested) | Gateway volume under `data/inference/model-provenance/windows/` | Gateway ingest from Provenance Operator results |
 
-Native verification is owned by `g8e eval boundary verify`. Campaign verification is owned by `g8e eval campaign verify`, with `--require-provider-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing. Model provenance attestation windows are verified through the campaign assignment verifier when strict provenance policy is enabled (see [Model Provenance](model-provenance.md)).
+Native verification is owned by `g8e eval boundary verify`. Campaign verification is owned by `g8e eval runs verify`, with `--require-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing. Model provenance attestation windows are verified through the campaign assignment verifier when strict provenance policy is enabled (see [Model Provenance](model-provenance.md)).
 
 ### Public spectator projection
 

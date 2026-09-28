@@ -241,14 +241,12 @@ The native suite selects one exact remote Operator, performs one allowed governe
 Model campaigns use the production g8ee chat path, a Data Operator, an Inference Operator, and optional provider-side Observer and Provenance Operators. These are separate sessions and evidence owners: the inference executor does not attest its own GPU telemetry or model-weight integrity.
 
 ```bash
-./g8e eval models freeze \
-  --campaign-id eval-genesis-homogeneous \
-  --output .g8e/eval/model-inventory.json
+./g8e eval models freeze
 
-./g8e eval campaign start --model qwen3:4b \
+./g8e eval campaigns create eval-qwen3-4b qwen3:4b
+./g8e eval runs start eval-qwen3-4b \
   --publish --daemon --verify \
-  --require-provider-observation \
-  --require-model-provenance
+  --require-witness
 ```
 
 Scored inference reaches the approved remote Ollama provider only through the governed Inference Operator path. See [Evaluations](docs/architecture/evals.md), [Model Provenance](docs/architecture/model-provenance.md), and the [Unified Docker Stack guide](docs/guides/unified_stack.md).
