@@ -300,3 +300,50 @@ func TestRolloutRun_MaxParametersFilter(t *testing.T) {
 	assert.Contains(t, outStr, "granite4.2:8b")
 	assert.NotContains(t, outStr, "glm-4.7-flash")
 }
+
+func TestModelsRemove_RemovesVariantAndUpdatesDigest(t *testing.T) {
+	root := t.TempDir()
+	writeTestModelInventory(t, root, []*evalv1.ModelVariant{
+		{
+			VariantId:      "gemma3-1b",
+			ProviderClass:  "ollama",
+			ServedModelTag: "gemma3:1b",
+			ModelDigest:    "1111111111111111111111111111111111111111111111111111111111111111",
+			ModelFamily:    "gemma3",
+			ParameterCount: 1_000_000_000,
+		},
+		{
+			VariantId:      "granite4-2-8b",
+			ProviderClass:  "ollama",
+			ServedModelTag: "granite4.2:8b",
+			ModelDigest:    "2222222222222222222222222222222222222222222222222222222222222222",
+			ModelFamily:    "granite",
+			ParameterCount: 8_000_000_000,
+		},
+	})
+
+	deps := testDeps(root)
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{
+		"models", "remove", "gemma3:1b",
+		"--project-root", root,
+	})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "Removed gemma3:1b (gemma3-1b)")
+	assert.Contains(t, output.String(), "models=1")
+
+	// Verify the remaining inventory
+	listCmd := evalCmdWithConfig(deps)
+	var listOut bytes.Buffer
+	listCmd.SetOut(&listOut)
+	listCmd.SetArgs([]string{
+		"models", "list",
+		"--project-root", root,
+	})
+	require.NoError(t, listCmd.Execute())
+	assert.NotContains(t, listOut.String(), "gemma3:1b")
+	assert.Contains(t, listOut.String(), "granite4.2:8b")
+}
+

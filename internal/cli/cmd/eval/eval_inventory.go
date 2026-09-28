@@ -41,6 +41,7 @@ func modelsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		modelsEvalImportCmd(deps),
 		modelsEvalListCmd(deps),
 		modelsEvalMaterializeCmd(deps),
+		modelsEvalRemoveCmd(deps),
 		modelsEvalStageCmd(deps),
 	)
 	return cmd
@@ -344,6 +345,115 @@ Examples:
 	cmd.Flags().BoolVar(&syncBase, "sync-base", false, "Synchronize addition across both runtime and checked-in base inventories")
 	return cmd
 }
+
+func modelsEvalRemoveCmd(deps nativeEvalDeps) *cobra.Command {
+	var tag string
+	var variantID string
+	var fromPath string
+	var syncBase bool
+	cmd := &cobra.Command{
+		Use:     "remove [tag-or-variant-id]",
+		Aliases: []string{"rm", "delete"},
+		Short:   "Remove a model variant from the model inventory",
+		Long: `Remove a model variant from the model inventory freeze, recalculating
+the registry digest and homogeneous matrix size.
+
+Examples:
+  g8e eval models remove glm-5.3-air
+  g8e eval models remove --tag qwen3.8:27b --sync-base
+  g8e eval models remove --variant-id glm-5-3-air --from eval/base-model-inventory.json`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			identifier := ""
+			if len(args) > 0 {
+				identifier = strings.TrimSpace(args[0])
+			}
+			if identifier == "" {
+				if tag != "" {
+					identifier = strings.TrimSpace(tag)
+				} else if variantID != "" {
+					identifier = strings.TrimSpace(variantID)
+				}
+			}
+			if identifier == "" {
+				return fmt.Errorf("evaluation: models remove: model tag or variant ID is required (as argument or via --tag/--variant-id)")
+			}
+
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+
+			targetPath := fromPath
+			if targetPath == "" {
+				runtimeFull := filepath.Join(cfg.ProjectRoot, constants.RuntimeDirname, evaluation.DefaultModelInventoryRelPath)
+				if exists, _ := fileSvc.FileExists(cmd.Context(), evaluation.DefaultModelInventoryRelPath); exists {
+					targetPath = runtimeFull
+				} else {
+					targetPath = filepath.Join(cfg.ProjectRoot, evaluation.DefaultBaseModelInventoryRelPath)
+				}
+			} else if !filepath.IsAbs(targetPath) {
+				targetPath = filepath.Join(cfg.ProjectRoot, targetPath)
+			}
+
+			freeze, err := evaluation.LoadModelInventoryFreezeFile(targetPath)
+			if err != nil {
+				return fmt.Errorf("evaluation: models remove: load target freeze: %w", err)
+			}
+
+			updatedFreeze, removed, err := evaluation.RemoveModelVariant(freeze, identifier)
+			if err != nil {
+				return fmt.Errorf("evaluation: models remove: %w", err)
+			}
+
+			if err := writeModelInventoryFreezeFile(targetPath, updatedFreeze); err != nil {
+				return err
+			}
+
+			if syncBase {
+				basePath := filepath.Join(cfg.ProjectRoot, evaluation.DefaultBaseModelInventoryRelPath)
+				if targetPath != basePath {
+					baseFreeze, baseErr := evaluation.LoadModelInventoryFreezeFile(basePath)
+					if baseErr == nil {
+						if updatedBase, _, err := evaluation.RemoveModelVariant(baseFreeze, identifier); err == nil {
+							_ = writeModelInventoryFreezeFile(basePath, updatedBase)
+						}
+					}
+				}
+				runtimePath := filepath.Join(cfg.ProjectRoot, constants.RuntimeDirname, evaluation.DefaultModelInventoryRelPath)
+				if targetPath != runtimePath {
+					if exists, _ := fileSvc.FileExists(cmd.Context(), evaluation.DefaultModelInventoryRelPath); exists {
+						runtimeFreeze, rErr := evaluation.LoadModelInventoryFreezeFile(runtimePath)
+						if rErr == nil {
+							if updatedRuntime, _, err := evaluation.RemoveModelVariant(runtimeFreeze, identifier); err == nil {
+								_ = writeModelInventoryFreezeFile(runtimePath, updatedRuntime)
+							}
+						}
+					}
+				}
+			}
+
+			if output.JSONEnabled(cmd) {
+				payload, err := protojson.Marshal(removed)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Removed %s (%s) from %s (digest=%s, models=%d)\n",
+				removed.GetServedModelTag(), removed.GetVariantId(), filepath.Base(targetPath), updatedFreeze.RegistryDigest, len(updatedFreeze.Variants))
+			return err
+		},
+	}
+	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Served model tag to remove")
+	cmd.Flags().StringVar(&variantID, "variant-id", "", "Variant ID to remove")
+	cmd.Flags().StringVar(&fromPath, "from", "", "Target inventory JSON file (default: runtime freeze if present, else eval/base-model-inventory.json)")
+	cmd.Flags().BoolVar(&syncBase, "sync-base", false, "Synchronize removal across both runtime and checked-in base inventories")
+	return cmd
+}
+
 
 func modelsEvalImportCmd(deps nativeEvalDeps) *cobra.Command {
 	var fromPath string

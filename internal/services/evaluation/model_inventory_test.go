@@ -264,3 +264,49 @@ func TestAddOrUpdateModelVariant_And_Merge(t *testing.T) {
 	assert.Equal(t, "model-c:3b", merged.Variants[1].ServedModelTag)
 }
 
+func TestRemoveModelVariant(t *testing.T) {
+	t.Parallel()
+	freeze, err := MaterializeModelRegistry("campaign-1", []*evalv1.ModelVariant{
+		{
+			VariantId:      "model-a-1b",
+			ProviderClass:  "ollama",
+			ServedModelTag: "model-a:1b",
+			ModelDigest:    repeatHex('a', 64),
+			ModelFamily:    "test",
+		},
+		{
+			VariantId:      "model-b-2b",
+			ProviderClass:  "ollama",
+			ServedModelTag: "model-b:2b",
+			ModelDigest:    repeatHex('b', 64),
+			ModelFamily:    "test",
+		},
+	})
+	require.NoError(t, err)
+
+	// Remove by served tag
+	updated, removed, err := RemoveModelVariant(freeze, "model-a:1b")
+	require.NoError(t, err)
+	require.NotNil(t, removed)
+	assert.Equal(t, "model-a:1b", removed.ServedModelTag)
+	require.Len(t, updated.Variants, 1)
+	assert.Equal(t, "model-b:2b", updated.Variants[0].ServedModelTag)
+
+	// Remove by variant ID
+	updated2, removed2, err := RemoveModelVariant(freeze, "model-b-2b")
+	require.NoError(t, err)
+	require.NotNil(t, removed2)
+	assert.Equal(t, "model-b:2b", removed2.ServedModelTag)
+	require.Len(t, updated2.Variants, 1)
+	assert.Equal(t, "model-a:1b", updated2.Variants[0].ServedModelTag)
+
+	// Non-existent model fails
+	_, _, err = RemoveModelVariant(freeze, "non-existent:1b")
+	require.Error(t, err)
+
+	// Removing the last model fails
+	_, _, err = RemoveModelVariant(updated, "model-b:2b")
+	require.Error(t, err)
+}
+
+

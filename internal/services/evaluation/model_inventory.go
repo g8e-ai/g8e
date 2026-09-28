@@ -481,3 +481,54 @@ func MergeModelVariants(targetFreeze *ModelInventoryFreeze, sourceVariants []*ev
 	return newFreeze, nil
 }
 
+// RemoveModelVariant removes a model variant matching served model tag or variant ID,
+// recalculating the registry digest and homogeneous matrix size.
+func RemoveModelVariant(freeze *ModelInventoryFreeze, identifier string) (*ModelInventoryFreeze, *evalv1.ModelVariant, error) {
+	if freeze == nil {
+		return nil, nil, fmt.Errorf("evaluation: remove model variant: %w", constants.ErrMissingRequiredField)
+	}
+	id := strings.TrimSpace(identifier)
+	if id == "" {
+		return nil, nil, fmt.Errorf("evaluation: remove model variant: identifier is required")
+	}
+
+	normalizedID := inference.NormalizeProviderModelVariantID(id)
+
+	var removed *evalv1.ModelVariant
+	remaining := make([]*evalv1.ModelVariant, 0, len(freeze.Variants))
+	for _, v := range freeze.Variants {
+		if v == nil {
+			continue
+		}
+		if removed == nil && (strings.EqualFold(v.GetServedModelTag(), id) ||
+			strings.EqualFold(v.GetVariantId(), id) ||
+			strings.EqualFold(v.GetVariantId(), normalizedID)) {
+			removed = v
+			continue
+		}
+		remaining = append(remaining, v)
+	}
+
+	if removed == nil {
+		return nil, nil, fmt.Errorf("evaluation: remove model variant: model %q not found in inventory", id)
+	}
+
+	if len(remaining) == 0 {
+		return nil, nil, fmt.Errorf("evaluation: remove model variant: cannot remove last variant from inventory")
+	}
+
+	sort.Slice(remaining, func(i, j int) bool {
+		return remaining[i].GetServedModelTag() < remaining[j].GetServedModelTag()
+	})
+
+	updatedFreeze, err := MaterializeModelRegistry(freeze.CampaignID, remaining)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := ValidateModelRegistry(updatedFreeze); err != nil {
+		return nil, nil, err
+	}
+	return updatedFreeze, removed, nil
+}
+
+
