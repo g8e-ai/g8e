@@ -245,13 +245,18 @@ func (e *runEnv) run(t *testing.T, args ...string) (string, error) {
 func (e *runEnv) runJSON(t *testing.T, payload any, args ...string) error {
 	t.Helper()
 	rootCmd := cmdtest.GlobalJSONRoot(t, evalCmdWithConfig(e.deps))
-	var out bytes.Buffer
+	var out, errOut bytes.Buffer
 	rootCmd.SetOut(&out)
+	rootCmd.SetErr(&errOut)
 	rootCmd.SetArgs(append(append([]string{"eval"}, args...), "--project-root", e.root))
-	if err := rootCmd.Execute(); err != nil {
-		return err
+	cmdErr := rootCmd.Execute()
+	if out.Len() > 0 {
+		decoder := json.NewDecoder(&out)
+		require.NoError(t, decoder.Decode(payload), out.String())
 	}
-	require.NoError(t, json.Unmarshal(out.Bytes(), payload), out.String())
+	if cmdErr != nil {
+		return cmdErr
+	}
 	return nil
 }
 

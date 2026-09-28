@@ -124,7 +124,7 @@ func verifyRunCoverage(cmd *cobra.Command, deps nativeEvalDeps, store *evaluatio
 		return fmt.Errorf("evaluation: runs verify: %w", err)
 	}
 	if output.JSONEnabled(cmd) {
-		return output.WriteJSON(cmd.OutOrStdout(), runCoverageJSON{
+		if err := output.WriteJSON(cmd.OutOrStdout(), runCoverageJSON{
 			RunID:                 runID,
 			Complete:              report.Complete,
 			ExpectedCells:         report.ExpectedCells,
@@ -141,7 +141,13 @@ func verifyRunCoverage(cmd *cobra.Command, deps nativeEvalDeps, store *evaluatio
 			ResultWithoutTerminal: report.ResultWithoutTerminal,
 			FailureReasons:        report.FailureReasons,
 			AccountedAt:           report.AccountedAt.Format(time.RFC3339),
-		})
+		}); err != nil {
+			return err
+		}
+		if !report.Complete {
+			return constants.ErrEvalRunVerificationFailed
+		}
+		return nil
 	}
 	state := "incomplete"
 	if report.Complete {

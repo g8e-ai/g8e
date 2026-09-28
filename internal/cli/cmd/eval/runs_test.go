@@ -27,6 +27,18 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+func markFirstAssignmentRunning(t *testing.T, env *runEnv) {
+	t.Helper()
+	ctx := context.Background()
+	store := env.store(t)
+	assignments, err := store.ListAssignments(ctx, "run-a-1")
+	require.NoError(t, err)
+	require.NotEmpty(t, assignments)
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING
+	assignments[0].StartedAt = timestamppb.New(env.deps.now())
+	require.NoError(t, store.SaveAssignment(ctx, assignments[0]))
+}
+
 func TestRunsList_EmptyProject(t *testing.T) {
 	env := setupRunEnv(t)
 
@@ -100,10 +112,7 @@ func TestRunsShow_RejectsMissingRun(t *testing.T) {
 func TestRunsShow_ReportsInterruptedWhenNoProcessHoldsARunningAssignment(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	controller := evaluation.NewCampaignController(env.store(t), nil, env.deps.now, func(prefix string) string { return prefix + "-id" })
-	_, ok, err := controller.ResumeNextAssignment(context.Background(), "run-a-1")
-	require.NoError(t, err)
-	require.True(t, ok)
+	markFirstAssignmentRunning(t, env)
 
 	var payload runShowJSON
 	require.NoError(t, env.runJSON(t, &payload, "runs", "show", "run-a-1"))
@@ -114,10 +123,8 @@ func TestRunsShow_ReportsInterruptedWhenNoProcessHoldsARunningAssignment(t *test
 func TestRunsShow_ReportsRunningOnlyWhileALiveProcessHoldsTheLease(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
-	controller := evaluation.NewCampaignController(env.store(t), nil, env.deps.now, func(prefix string) string { return prefix + "-id" })
-	_, _, err := controller.ResumeNextAssignment(context.Background(), "run-a-1")
-	require.NoError(t, err)
-	_, err = env.store(t).AcquireRunLease(context.Background(), evaluation.RunLease{RunID: "run-a-1", PID: testPID, Host: testHost, StartedAt: env.deps.now(), LogPath: "eval/logs/run-a-1/execution-1.txt"}, nil)
+	markFirstAssignmentRunning(t, env)
+	_, err := env.store(t).AcquireRunLease(context.Background(), evaluation.RunLease{RunID: "run-a-1", PID: testPID, Host: testHost, StartedAt: env.deps.now(), LogPath: "eval/logs/run-a-1/execution-1.txt"}, nil)
 	require.NoError(t, err)
 
 	var payload runShowJSON
@@ -130,9 +137,10 @@ func TestRunsShow_ReportsRunningOnlyWhileALiveProcessHoldsTheLease(t *testing.T)
 	assert.Contains(t, out, "Held by: process 4242 on test-host")
 
 	env.control.setAlive(testPID, false)
-	require.NoError(t, env.runJSON(t, &payload, "runs", "show", "run-a-1"))
-	assert.Equal(t, "interrupted", payload.Status, "a lease whose process is gone no longer counts as running")
-	assert.Nil(t, payload.Holder)
+	var stalePayload runShowJSON
+	require.NoError(t, env.runJSON(t, &stalePayload, "runs", "show", "run-a-1"))
+	assert.Equal(t, "interrupted", stalePayload.Status, "a lease whose process is gone no longer counts as running")
+	assert.Nil(t, stalePayload.Holder)
 }
 
 func TestRunsVerify_CoverageReportsIncompleteScheduledRun(t *testing.T) {
@@ -399,10 +407,9 @@ func TestRunsResume_DefaultsLimitToOne(t *testing.T) {
 func TestRunsResume_RejectsMissingRunWithoutLeavingALease(t *testing.T) {
 	env := setupRunEnv(t)
 
-	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: "missing-run-id", Limit: 1})
+	_, err := env.run(t, "runs", "resume", "missing-run-id")
 	require.Error(t, err)
-	assert.Zero(t, executed)
-	assert.Contains(t, err.Error(), "run execute")
+	assert.Contains(t, err.Error(), "not found")
 
 	runIDs, listErr := env.store(t).ListRunIDs(context.Background())
 	require.NoError(t, listErr)

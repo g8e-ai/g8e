@@ -148,13 +148,15 @@ func TestRunsCancel_RejectsMissingAndArchivedRuns(t *testing.T) {
 
 func TestRunsResume_DoesNotResumeAStoppedRun(t *testing.T) {
 	env := setupRunEnv(t)
-	env.enableWitnessGateway(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
 	env.mustRun(t, "runs", "cancel", "run-a-1")
 
-	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: "run-a-1", Limit: 1, NoAutoRefresh: true})
-	require.NoError(t, err)
-	assert.Zero(t, executed, "cancelled assignments are not queued")
+	store := env.store(t)
+	controller := evaluation.NewCampaignController(store, nil, env.deps.now, func(prefix string) string { return prefix + "-id" })
+	assignment, ok, err := controller.ResumeNextAssignment(context.Background(), "run-a-1")
+	assert.False(t, ok, "cancelled run has no queued assignments to resume")
+	assert.Nil(t, assignment)
+	assert.NoError(t, err)
 }
 
 func TestRunsShow_WatchReturnsForASettledRun(t *testing.T) {
