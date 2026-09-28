@@ -438,35 +438,35 @@ func buildCampaignFormationProductionRunner(
 	return evaluation.NewCampaignFormationProductionRunner(productionDeps), nil
 }
 
-func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts formationRunOptions) (*evaluation.FormationRunResult, campaignOperatorSessions, *evaluation.ModelInventoryFreeze, error) {
+func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts formationRunOptions) (*evaluation.FormationRunResult, operatorSessions, *evaluation.ModelInventoryFreeze, error) {
 	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, err
+		return nil, operatorSessions{}, nil, err
 	}
 	freeze, err := loadFormationInventoryFreeze(cmd, deps, opts.RegistryFile, opts.InventoryFile)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	if len(freeze.Variants) == 0 || freeze.RegistryDigest == "" || freeze.CampaignID == "" {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", constants.ErrFormationRegistryBinding)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", constants.ErrFormationRegistryBinding)
 	}
-	sessions, err := resolveCampaignOperatorSessions(cmd, deps, cfg, opts.InferenceSessionID, opts.DataSessionID)
+	sessions, err := resolveOperatorSessions(cmd, deps, operatorRoleInference, operatorRoleData)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	if err := gwremote.PreflightProviderObservationDelivery(fileSvc, cfg); err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	binding, err := evaluation.FormationBindingFromCatalog(opts.FormationID, freeze.Variants)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	formation, err := evaluation.BindFormation(binding)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	if err := gwremote.PreflightCampaignModelProvenance(fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation)); err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	chatDeps := chatEvalDeps{
 		configLoader:   deps.configLoader,
@@ -478,11 +478,11 @@ func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts fo
 	}
 	_, _, authContext, err := chatEvalEnvironment(cmd, chatDeps)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	operators, err := chatEvalListOperators(cmd, chatDeps, cfg, authContext)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	appClient, err := inferenceEvalAppClient(cfg, fileSvc, authContext, inferenceEvalDeps{
 		configLoader:     deps.configLoader,
@@ -494,11 +494,11 @@ func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts fo
 		newID:            deps.newID,
 	})
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	dataOperator, err := evaluation.SelectCampaignDataOperator(operators, sessions.DataSessionID)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
 		configLoader:   deps.configLoader,
@@ -509,15 +509,15 @@ func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts fo
 		newID:          deps.newID,
 	})
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	endpoint, err := resolveCampaignOllamaEndpoint(operators, sessions.InferenceSessionID)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	observationLoader, err := gwremote.NewCampaignFormationObservationLoader(fileSvc, cfg)
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	runID := opts.RunID
 	if runID == "" {
@@ -551,7 +551,7 @@ func runFormationProductionFlow(cmd *cobra.Command, deps nativeEvalDeps, opts fo
 	defer cancel()
 	result, err := evaluation.RunFormationProduction(ctx, binding, productionDeps, []byte(opts.InitialState))
 	if err != nil {
-		return nil, campaignOperatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
+		return nil, operatorSessions{}, nil, fmt.Errorf("evaluation: formations run: %w", err)
 	}
 	opts.RunID = runID
 	return result, sessions, freeze, nil
@@ -603,7 +603,7 @@ func (d *harnessFormationInferenceDispatcher) DispatchInference(ctx context.Cont
 	return response, nil
 }
 
-func formationRunResultJSON(result *evaluation.FormationRunResult, sessions campaignOperatorSessions, campaignID, runID string) formationRunJSON {
+func formationRunResultJSON(result *evaluation.FormationRunResult, sessions operatorSessions, campaignID, runID string) formationRunJSON {
 	roles := make([]formationRunRoleJSON, 0, len(result.Roles))
 	for _, role := range result.Roles {
 		roles = append(roles, formationRunRoleJSON{

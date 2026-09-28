@@ -185,12 +185,13 @@ func ValidateFormationRunEvidenceDigest(evidence *FormationRunEvidence) error {
 	return nil
 }
 
-// LoadAssignmentFormationRunEvidence reads one persisted formation-run envelope.
-func LoadAssignmentFormationRunEvidence(ctx context.Context, reader complianceevidence.ArtifactReader, runID, assignmentID string) (*FormationRunEvidence, error) {
+// loadAssignmentFormationRunEvidence reads one persisted formation-run envelope
+// from the layout's path for the assignment.
+func loadAssignmentFormationRunEvidence(ctx context.Context, reader complianceevidence.ArtifactReader, layout evalLayout, runID, assignmentID string) (*FormationRunEvidence, error) {
 	if reader == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {
 		return nil, fmt.Errorf("evaluation: load assignment formation run evidence: %w", constants.ErrMissingRequiredField)
 	}
-	path := assignmentFormationRunPath(runID, assignmentID)
+	path := layout.assignmentFormationRunPath(runID, assignmentID)
 	body, err := reader.ReadFile(ctx, path)
 	if err != nil {
 		return nil, err

@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -160,38 +159,6 @@ func TestSortModelVariantsForRolloutOrdersByParameterCountAndTag(t *testing.T) {
 	}, servedModelTags(variants))
 }
 
-func TestVariantsByTagsPreservesRequestedOrderAndRejectsMissingTags(t *testing.T) {
-	variants := []*evalv1.ModelVariant{
-		{VariantId: "small", ServedModelTag: "model:small"},
-		{VariantId: "large", ServedModelTag: "model:large"},
-	}
-
-	tests := []struct {
-		name    string
-		tags    []string
-		wantIDs []string
-		wantErr error
-	}{
-		{name: "requested order", tags: []string{" model:large ", "model:small"}, wantIDs: []string{"large", "small"}},
-		{name: "missing tag", tags: []string{"model:missing"}, wantErr: constants.ErrInferenceModelNotFound},
-		{name: "blank tags", tags: []string{"  "}, wantErr: constants.ErrMissingRequiredField},
-		{name: "no tags", wantErr: constants.ErrMissingRequiredField},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			picked, err := VariantsByTags(variants, test.tags)
-			if test.wantErr != nil {
-				require.Error(t, err)
-				assert.ErrorIs(t, err, test.wantErr)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, test.wantIDs, variantIDs(picked))
-		})
-	}
-}
-
 func TestQueueLogDirAcceptsOneSafeRunName(t *testing.T) {
 	tests := []struct {
 		name string
@@ -208,98 +175,6 @@ func TestQueueLogDirAcceptsOneSafeRunName(t *testing.T) {
 			assert.Equal(t, test.want, QueueLogDir(test.name))
 		})
 	}
-}
-
-func TestResolveCampaignStartPlanFromQueueBuildsDeterministicRun(t *testing.T) {
-	fileSvc := newCampaignQueueFileService()
-	queue := &CampaignQueue{Models: []CampaignQueueModel{{
-		VariantID:            "gemma3-4b",
-		ServedModelTag:       "gemma3:4b",
-		CampaignID:           "eval-init-gemma3-4b",
-		InventoryFile:        "eval/inventories/eval-init-gemma3-4b.json",
-		ModelRegistryDigest:  "digest",
-		HomogeneousCellCount: 75,
-		Status:               "pending",
-	}}}
-	writeCampaignQueue(t, fileSvc, DefaultInitCampaignQueueRelPath, queue)
-
-	plan, err := ResolveCampaignStartPlan(CampaignStartPlanRequest{
-		Context:     context.Background(),
-		FileService: fileSvc,
-		QueueRef:    "next",
-		Now:         time.Unix(1789669555, 0).UTC(),
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "eval-init-gemma3-4b", plan.CampaignID)
-	assert.Equal(t, "eval-init-gemma3-4b-1789669555", plan.RunID)
-	assert.Equal(t, []string{"gemma3:4b"}, plan.ModelTags)
-	assert.Equal(t, "digest", plan.RegistryDigest)
-	assert.Equal(t, uint64(75), plan.HomogeneousCellCount)
-	assert.Equal(t, "eval/inventories/eval-init-gemma3-4b.json", plan.InventoryPath)
-}
-
-func TestResolveCampaignStartPlanFromQueueNormalizesRuntimePrefixedInventoryPath(t *testing.T) {
-	fileSvc := newCampaignQueueFileService()
-	queue := &CampaignQueue{Models: []CampaignQueueModel{{
-		VariantID:      "qwen3-4b",
-		ServedModelTag: "qwen3:4b",
-		CampaignID:     "eval-init-qwen3-4b",
-		InventoryFile:  constants.RuntimeDirname + "/eval/inventories/eval-init-qwen3-4b.json",
-		Status:         "pending",
-	}}}
-	writeCampaignQueue(t, fileSvc, DefaultInitCampaignQueueRelPath, queue)
-
-	plan, err := ResolveCampaignStartPlan(CampaignStartPlanRequest{
-		Context:     context.Background(),
-		FileService: fileSvc,
-		QueueRef:    "next",
-		Now:         time.Unix(1789669555, 0).UTC(),
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "eval/inventories/eval-init-qwen3-4b.json", plan.InventoryPath)
-}
-
-func TestInitCampaignQueueIncludesAllSourceInventoryVariants(t *testing.T) {
-	fileSvc := newCampaignQueueFileService()
-	writeQueueFrozenVariants(t, fileSvc, DefaultBaseModelInventoryRelPath,
-		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "d1", ProviderClass: "ollama"},
-	)
-	writeQueueFrozenVariants(t, fileSvc, DefaultModelInventoryRelPath,
-		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "d1", ProviderClass: "ollama"},
-		&evalv1.ModelVariant{VariantId: "extra-model", ServedModelTag: "extra:model", ModelDigest: "d2", ProviderClass: "ollama"},
-	)
-
-	result, err := InitCampaignQueue(InitCampaignQueueRequest{
-		Context:              context.Background(),
-		FileService:          fileSvc,
-		RuntimeInventoryPath: DefaultModelInventoryRelPath,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 2, result.ModelCount)
-	assert.Equal(t, []string{"extra-model", "qwen3-4b"}, queueVariantIDs(result.Queue))
-}
-
-func TestResolveCampaignStartPlanForModelTagMaterializesInventory(t *testing.T) {
-	fileSvc := newCampaignQueueFileService()
-	writeQueueFrozenVariants(t, fileSvc, DefaultModelInventoryRelPath, &evalv1.ModelVariant{
-		VariantId:      "qwen3-4b",
-		ServedModelTag: "qwen3:4b",
-		ModelDigest:    "digest",
-		ProviderClass:  "ollama",
-	})
-
-	plan, err := ResolveCampaignStartPlan(CampaignStartPlanRequest{
-		Context:     context.Background(),
-		FileService: fileSvc,
-		ModelTag:    "qwen3:4b",
-		Now:         time.Unix(1789657337, 0).UTC(),
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "eval-init-qwen3-4b", plan.CampaignID)
-	assert.Equal(t, "eval-init-qwen3-4b-1789657337", plan.RunID)
-	exists, err := fileSvc.FileExists(context.Background(), "eval/inventories/eval-init-qwen3-4b.json")
-	require.NoError(t, err)
-	assert.True(t, exists)
 }
 
 func TestSaveAndLoadInitCampaignQueueRoundTrip(t *testing.T) {

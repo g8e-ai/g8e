@@ -8,42 +8,17 @@
 package eval
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
-
-func TestWriteInventoryMaterializeResult_TextAndJSON(t *testing.T) {
-	lines := []inventoryMaterializeLine{{
-		CampaignID:     "eval-init-qwen3-4b",
-		ServedModelTag: "qwen3:4b",
-		RegistryDigest: "digest-1",
-		CellCount:      3,
-		InventoryFile:  "eval/inventories/eval-init-qwen3-4b.json",
-	}}
-	command := &cobra.Command{}
-	var output bytes.Buffer
-	command.SetOut(&output)
-	require.NoError(t, writeInventoryMaterializeResult(command, lines, false))
-	assert.Contains(t, output.String(), "qwen3:4b")
-
-	command = evalCmdWithConfig(testNativeEvalDeps(t.TempDir()))
-	rootCmd := cmdtest.GlobalJSONRoot(t, command)
-	output.Reset()
-	rootCmd.SetOut(&output)
-	require.NoError(t, writeInventoryMaterializeResult(command, lines, true))
-	assert.Contains(t, output.String(), `"inventories"`)
-}
 
 func TestModelInventoryFreezeJSON_AndWriteFile(t *testing.T) {
 	freeze := &evaluation.ModelInventoryFreeze{

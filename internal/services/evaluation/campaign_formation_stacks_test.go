@@ -92,6 +92,48 @@ func TestGenerateFormationCatalogStackSet_RejectsMissingRegistryVariant(t *testi
 	assert.ErrorIs(t, err, constants.ErrFormationRegistryBinding)
 }
 
+func TestGenerateFormationCatalogStackSet_SelectsNamedFormations(t *testing.T) {
+	set, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
+		CampaignID:   "eval-formations-subset",
+		Seed:         3,
+		Variants:     testFormationCatalogVariants(),
+		FormationIDs: []string{"heavy-reasoner", "ultra-light-speedster", "heavy-reasoner"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, ValidateHeterogeneousStackSet(set))
+	assert.Equal(t, 2, set.Coverage.HypothesisStackCount)
+
+	stackIDs := make([]string, 0, len(set.Stacks))
+	for _, stack := range set.Stacks {
+		stackIDs = append(stackIDs, stack.GetStackId())
+	}
+	assert.ElementsMatch(t, []string{"heavy-reasoner", "ultra-light-speedster"}, stackIDs)
+	assert.Less(t, len(set.VariantIDs), 8, "only the named formations' models are bound")
+}
+
+func TestGenerateFormationCatalogStackSet_RejectsUnknownFormation(t *testing.T) {
+	_, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
+		CampaignID:   "eval-formations-subset",
+		Variants:     testFormationCatalogVariants(),
+		FormationIDs: []string{"no-such-formation"},
+	})
+	require.ErrorIs(t, err, constants.ErrFormationInvalid)
+}
+
+func TestValidateFormationCatalogStackSet_AcceptsSubsetsAndRejectsEmptySets(t *testing.T) {
+	set, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
+		CampaignID:   "eval-formations-subset",
+		Variants:     testFormationCatalogVariants(),
+		FormationIDs: []string{"code-logic-edge"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, validateFormationCatalogStackSet(set))
+
+	empty := *set
+	empty.Stacks = nil
+	require.Error(t, validateFormationCatalogStackSet(&empty))
+}
+
 func TestGenerateFormationCatalogStackSet_RejectsEmptySovereignDigest(t *testing.T) {
 	variants := testFormationCatalogVariants()
 	for _, variant := range variants {
@@ -187,7 +229,7 @@ func TestCampaignController_GenerateFormationCatalogStackSet_PersistsStacks(t *t
 	run, err := controller.InitializeCampaign(context.Background(), req)
 	require.NoError(t, err)
 
-	stackSet, err := controller.GenerateFormationCatalogStackSet(context.Background(), run.GetCampaignBinding().GetCampaignId(), 17)
+	stackSet, err := controller.GenerateFormationCatalogStackSet(context.Background(), run.GetCampaignBinding().GetCampaignId(), 17, nil)
 	require.NoError(t, err)
 	require.NotNil(t, stackSet)
 	assert.Equal(t, FormationCatalogStackGenerationRule, stackSet.GenerationRule)

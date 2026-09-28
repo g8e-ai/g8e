@@ -137,7 +137,7 @@ func TestCampaignController_ScheduleAndExecuteFormationCatalogAssignment(t *test
 
 	run, err := controller.InitializeCampaign(context.Background(), req)
 	require.NoError(t, err)
-	stackSet, err := controller.GenerateFormationCatalogStackSet(context.Background(), run.GetCampaignBinding().GetCampaignId(), 17)
+	stackSet, err := controller.GenerateFormationCatalogStackSet(context.Background(), run.GetCampaignBinding().GetCampaignId(), 17, nil)
 	require.NoError(t, err)
 	assert.Equal(t, FormationCatalogStackGenerationRule, stackSet.GenerationRule)
 	assert.Len(t, stackSet.Stacks, 4)

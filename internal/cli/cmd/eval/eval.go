@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -60,8 +61,22 @@ type nativeEvalDeps struct {
 	storeFactory               func(fs.RuntimeFileService) nativeEvalStore
 	verifierFactory            func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier
 	campaignPublicationFactory campaignVerificationPublicationFactory
+	runControl                 runControlDeps
 	now                        func() time.Time
 	newID                      func() string
+}
+
+// chatDeps projects the shared dependencies onto the operator-facing helpers.
+func (d nativeEvalDeps) chatDeps() chatEvalDeps {
+	return chatEvalDeps{
+		configLoader:         d.configLoader,
+		fileSvcFactory:       d.fileSvcFactory,
+		authLoader:           d.authLoader,
+		clientFactory:        d.clientFactory,
+		refreshClientFactory: authcmd.DefaultRefreshClientFactory,
+		now:                  d.now,
+		newID:                d.newID,
+	}
 }
 
 func Cmd() *cobra.Command {
@@ -85,8 +100,9 @@ func Cmd() *cobra.Command {
 		campaignPublicationFactory: func(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (campaignVerificationPublication, error) {
 			return NewCampaignPublicationCoordinator(cmd, fileSvc)
 		},
-		now:   time.Now,
-		newID: uuid.NewString,
+		runControl: defaultRunControlDeps(),
+		now:        time.Now,
+		newID:      uuid.NewString,
 	})
 }
 
@@ -97,19 +113,22 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		Short:   "Run and verify g8e evaluation programs",
 		Long: `Platform evaluation programs and their supporting workflows.
 
-  boundary   Native execution-boundary suite (no models)
-  campaign   Model scoring through production chat/inference
-  models     Provider inventory freeze and materialize
-  rollout    Per-model init qualification queue
-  gate       Pre-campaign acceptance gates
-  dev        Local development utilities`,
+  models      Model catalog and registry
+  campaigns   Frozen evaluation definitions
+  runs        Executions of a campaign
+  rollout     Per-model init qualification queue
+  boundary    Native execution-boundary suite (no models)
+  gate        Pre-campaign acceptance gates
+  dev         Local development utilities`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
+	bindSessionFlags(cmd)
 	cmd.AddCommand(
-		boundaryEvalCmd(deps),
-		campaignEvalCmd(deps),
 		modelsEvalCmd(deps),
+		campaignsEvalCmd(deps),
+		runsEvalCmd(deps),
 		rolloutEvalCmd(deps),
+		boundaryEvalCmd(deps),
 		gateEvalCmd(deps),
 		devEvalCmd(deps),
 	)

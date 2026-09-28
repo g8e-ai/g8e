@@ -8,17 +8,13 @@
 package evaluation
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -75,30 +71,6 @@ type CampaignQueue struct {
 	Models          []CampaignQueueModel `json:"models"`
 }
 
-// CampaignStartPlan is the resolved input for one homogeneous campaign start.
-type CampaignStartPlan struct {
-	CampaignID           string
-	RunID                string
-	InventoryPath        string
-	ModelTags            []string
-	RegistryDigest       string
-	HomogeneousCellCount uint64
-	QueueEntry           *CampaignQueueModel
-}
-
-// CampaignStartPlanRequest carries user intent for campaign start resolution.
-type CampaignStartPlanRequest struct {
-	Context       context.Context
-	FileService   fs.RuntimeFileService
-	ModelTag      string
-	ModelTags     []string
-	QueueRef      string
-	CampaignID    string
-	InventoryFile string
-	RunID         string
-	Now           time.Time
-}
-
 // LoadInitCampaignQueueFromRuntime reads the rollout manifest through the runtime file service.
 func LoadInitCampaignQueueFromRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string) (*CampaignQueue, error) {
 	if fileSvc == nil || relPath == "" {
@@ -139,7 +111,7 @@ func (queue *CampaignQueue) NextPending() (*CampaignQueueModel, error) {
 		return nil, fmt.Errorf("evaluation: init campaign queue next pending: %w", constants.ErrMissingRequiredField)
 	}
 	for _, entry := range queue.Models {
-		if strings.EqualFold(entry.Status, "pending") {
+		if strings.EqualFold(entry.Status, QueueStatusPending) {
 			selected := entry
 			return &selected, nil
 		}
@@ -291,47 +263,6 @@ func PrioritizeRolloutIntake(variants []*evalv1.ModelVariant, priorityIDs []stri
 	return append(ordered, rest...)
 }
 
-func loadRolloutIntakePriorityIDs() []string {
-	data, err := os.ReadFile(DefaultRolloutIntakePriorityRelPath)
-	if err != nil {
-		return nil
-	}
-	var priority []string
-	if err := json.Unmarshal(data, &priority); err != nil {
-		return nil
-	}
-	return priority
-}
-
-// VariantsByTags returns frozen variants for the requested served model tags.
-func VariantsByTags(variants []*evalv1.ModelVariant, tags []string) ([]*evalv1.ModelVariant, error) {
-	if len(tags) == 0 {
-		return nil, fmt.Errorf("evaluation: variants by tags: %w", constants.ErrMissingRequiredField)
-	}
-	picked := make([]*evalv1.ModelVariant, 0, len(tags))
-	for _, tag := range tags {
-		tag = strings.TrimSpace(tag)
-		if tag == "" {
-			continue
-		}
-		found := false
-		for _, variant := range variants {
-			if variant != nil && variant.GetServedModelTag() == tag {
-				picked = append(picked, variant)
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("evaluation: variants by tags: %w: %s", constants.ErrInferenceModelNotFound, tag)
-		}
-	}
-	if len(picked) == 0 {
-		return nil, fmt.Errorf("evaluation: variants by tags: %w", constants.ErrMissingRequiredField)
-	}
-	return picked, nil
-}
-
 // CampaignIDForVariant returns the canonical campaign ID for one model.
 func CampaignIDForVariant(variant *evalv1.ModelVariant) string {
 	if variant == nil {
@@ -341,203 +272,6 @@ func CampaignIDForVariant(variant *evalv1.ModelVariant) string {
 		return "init-campaign"
 	}
 	return "eval-init-" + variant.GetVariantId()
-}
-
-// ResolveCampaignStartPlan resolves one homogeneous campaign start plan.
-func ResolveCampaignStartPlan(req CampaignStartPlanRequest) (*CampaignStartPlan, error) {
-	if req.FileService == nil {
-		return nil, fmt.Errorf("evaluation: resolve campaign start plan: %w", constants.ErrMissingRequiredField)
-	}
-	if req.Context == nil {
-		req.Context = context.Background()
-	}
-	now := req.Now
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-
-	switch strings.TrimSpace(req.QueueRef) {
-	case "":
-		tags := normalizeModelTags(req.ModelTag, req.ModelTags)
-		if len(tags) == 0 {
-			return nil, fmt.Errorf("evaluation: resolve campaign start plan: specify --model, --models, or --queue")
-		}
-		return resolveCampaignStartPlanForTags(req, tags, now)
-	case "next":
-		queue, err := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, DefaultInitCampaignQueueRelPath)
-		if err != nil {
-			return nil, err
-		}
-		entry, err := queue.NextPending()
-		if err != nil {
-			return nil, err
-		}
-		return planFromQueueEntry(req, entry, now)
-	default:
-		queue, err := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, DefaultInitCampaignQueueRelPath)
-		if err != nil {
-			return nil, err
-		}
-		entry, err := queue.FindByTagOrVariantID(req.QueueRef)
-		if err != nil {
-			return nil, err
-		}
-		return planFromQueueEntry(req, entry, now)
-	}
-}
-
-func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string, now time.Time) (*CampaignStartPlan, error) {
-	if req.InventoryFile != "" {
-		inventoryPath := filepath.ToSlash(strings.TrimSpace(req.InventoryFile))
-		if filepath.IsAbs(inventoryPath) {
-			return nil, fmt.Errorf("evaluation: resolve campaign start plan: inventory path must be runtime-relative")
-		}
-		inventoryPath = normalizeRuntimeInventoryPath(inventoryPath)
-		freeze, err := LoadModelInventoryFreezeFromRuntime(req.Context, req.FileService, inventoryPath)
-		if err != nil {
-			return nil, err
-		}
-		campaignID := req.CampaignID
-		if campaignID == "" {
-			campaignID = freeze.CampaignID
-		}
-		runID := req.RunID
-		if runID == "" {
-			runID = campaignID + "-" + fmt.Sprintf("%d", now.Unix())
-		}
-		return &CampaignStartPlan{
-			CampaignID:           campaignID,
-			RunID:                runID,
-			InventoryPath:        inventoryPath,
-			ModelTags:            tags,
-			RegistryDigest:       freeze.RegistryDigest,
-			HomogeneousCellCount: freeze.HomogeneousCellCount,
-		}, nil
-	}
-
-	if len(tags) == 1 {
-		if queue, err := LoadInitCampaignQueueFromRuntime(req.Context, req.FileService, DefaultInitCampaignQueueRelPath); err == nil {
-			if entry, err := queue.FindByTagOrVariantID(tags[0]); err == nil {
-				return planFromQueueEntry(req, entry, now)
-			}
-		}
-	}
-
-	inventoryPath := DefaultModelInventoryRelPath
-	variants, err := LoadFrozenVariantsFromRuntime(req.Context, req.FileService, inventoryPath)
-	if err != nil {
-		return nil, err
-	}
-	picked, err := VariantsByTags(variants, tags)
-	if err != nil {
-		return nil, err
-	}
-
-	campaignID := req.CampaignID
-	if campaignID == "" {
-		if len(picked) == 1 {
-			campaignID = CampaignIDForVariant(picked[0])
-		} else {
-			campaignID = "eval-batch-" + fmt.Sprintf("%d", now.Unix())
-		}
-	}
-	freeze, err := MaterializeModelRegistry(campaignID, picked)
-	if err != nil {
-		return nil, err
-	}
-	if err := ValidateModelRegistry(freeze); err != nil {
-		return nil, err
-	}
-	if req.Context == nil || req.FileService == nil {
-		return nil, fmt.Errorf("evaluation: resolve campaign start plan: %w", constants.ErrMissingRequiredField)
-	}
-	inventoryRelPath := campaignInventoryPath(DefaultCampaignInventoryRelDirname, campaignID)
-	if err := materializeImmutableModelInventory(req.Context, req.FileService, inventoryRelPath, freeze); err != nil {
-		return nil, err
-	}
-	inventoryPath = inventoryRelPath
-	runID := req.RunID
-	if runID == "" {
-		runID = campaignID + "-" + fmt.Sprintf("%d", now.Unix())
-	}
-	return &CampaignStartPlan{
-		CampaignID:           campaignID,
-		RunID:                runID,
-		InventoryPath:        inventoryPath,
-		ModelTags:            tags,
-		RegistryDigest:       freeze.RegistryDigest,
-		HomogeneousCellCount: freeze.HomogeneousCellCount,
-	}, nil
-}
-
-func planFromQueueEntry(req CampaignStartPlanRequest, entry *CampaignQueueModel, now time.Time) (*CampaignStartPlan, error) {
-	if entry == nil {
-		return nil, fmt.Errorf("evaluation: resolve campaign start plan: %w", constants.ErrMissingRequiredField)
-	}
-	inventoryPath := normalizeRuntimeInventoryPath(entry.InventoryFile)
-	if filepath.IsAbs(inventoryPath) {
-		return nil, fmt.Errorf("evaluation: resolve campaign start plan: inventory path must be runtime-relative")
-	}
-	campaignID := req.CampaignID
-	if campaignID == "" {
-		campaignID = entry.CampaignID
-	}
-	runID := req.RunID
-	if runID == "" {
-		runID = campaignID + "-" + fmt.Sprintf("%d", now.Unix())
-	}
-	selected := *entry
-	return &CampaignStartPlan{
-		CampaignID:           campaignID,
-		RunID:                runID,
-		InventoryPath:        inventoryPath,
-		ModelTags:            []string{entry.ServedModelTag},
-		RegistryDigest:       entry.ModelRegistryDigest,
-		HomogeneousCellCount: entry.HomogeneousCellCount,
-		QueueEntry:           &selected,
-	}, nil
-}
-
-func normalizeRuntimeInventoryPath(rawPath string) string {
-	path := filepath.ToSlash(strings.TrimSpace(rawPath))
-	return strings.TrimPrefix(path, constants.RuntimeDirname+"/")
-}
-
-func normalizeModelTags(modelTag string, modelTags []string) []string {
-	tags := make([]string, 0, len(modelTags)+1)
-	if strings.TrimSpace(modelTag) != "" {
-		tags = append(tags, strings.TrimSpace(modelTag))
-	}
-	for _, tag := range modelTags {
-		for _, part := range strings.Split(tag, ",") {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				tags = append(tags, part)
-			}
-		}
-	}
-	return tags
-}
-
-func materializeImmutableModelInventory(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, freeze *ModelInventoryFreeze) error {
-	payload, err := marshalModelInventoryFreeze(freeze)
-	if err != nil {
-		return err
-	}
-	existing, err := fileSvc.ReadFile(ctx, relPath)
-	if err == nil {
-		if bytes.Equal(existing, payload) {
-			return nil
-		}
-		return fmt.Errorf("evaluation: materialize immutable model inventory: %w", constants.ErrImmutableInventoryConflict)
-	}
-	if !errors.Is(err, constants.ErrNotFound) {
-		return fmt.Errorf("evaluation: materialize immutable model inventory: read existing: %w", err)
-	}
-	if err := fileSvc.WriteFile(ctx, relPath, payload, constants.PermFileReadOnly); err != nil {
-		return fmt.Errorf("evaluation: materialize immutable model inventory: write: %w", err)
-	}
-	return nil
 }
 
 func marshalModelInventoryFreeze(freeze *ModelInventoryFreeze) ([]byte, error) {

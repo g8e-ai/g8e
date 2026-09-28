@@ -40,7 +40,10 @@ type CampaignRunSummary struct {
 	QueuedCount        uint32
 	RunningCount       uint32
 	TerminalCount      uint32
-	NextAssignmentID   string
+	// StoppedCount counts assignments stopped by a cancel before reaching a
+	// terminal result. They are included in TerminalCount.
+	StoppedCount     uint32
+	NextAssignmentID string
 }
 
 // CampaignStore is the canonical persistence surface used by the campaign controller.
@@ -99,16 +102,47 @@ func (c *CampaignController) WithPublication(publication *CampaignPublicationCoo
 	return c
 }
 
-// InitializeCampaign persists the frozen campaign spec, catalog, and run record.
-func (c *CampaignController) InitializeCampaign(ctx context.Context, req CampaignInitRequest) (*evalv1.EvaluationRun, error) {
+// CampaignCreateRequest carries the inputs that define one frozen campaign.
+type CampaignCreateRequest struct {
+	CampaignID        string
+	Catalog           *evalv1.EvaluationScenarioCatalog
+	Inventory         *ModelInventoryFreeze
+	ScenarioArtifacts map[string]ScenarioArtifacts
+	RepetitionCount   uint32
+}
+
+// RunStartRequest binds one new run to an existing campaign.
+type RunStartRequest struct {
+	CampaignID                 string
+	RunID                      string
+	InferenceOperatorSessionID string
+	DataOperatorSessionID      string
+	Deployment                 *evalv1.EvaluationDeploymentIdentity
+	Lane                       evalv1.EvaluationLane
+}
+
+// CreateCampaign persists the frozen campaign spec, scenario catalog, and
+// scenario artifacts. Creating a campaign that already exists with the same
+// frozen spec is a no-op. A different spec under the same ID is a conflict.
+func (c *CampaignController) CreateCampaign(ctx context.Context, req CampaignCreateRequest) (*evalv1.EvaluationCampaignSpec, error) {
 	if c == nil || c.store == nil {
-		return nil, fmt.Errorf("evaluation: initialize campaign: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("evaluation: create campaign: %w", constants.ErrMissingRequiredField)
 	}
-	if req.CampaignID == "" || req.RunID == "" || req.Catalog == nil || req.Inventory == nil {
-		return nil, fmt.Errorf("evaluation: initialize campaign: %w", constants.ErrMissingRequiredField)
+	if req.CampaignID == "" || req.Catalog == nil || req.Inventory == nil {
+		return nil, fmt.Errorf("evaluation: create campaign: %w", constants.ErrMissingRequiredField)
 	}
 	spec, err := MaterializeCampaignSpec(req.CampaignID, req.Catalog, req.Inventory, req.RepetitionCount)
 	if err != nil {
+		return nil, err
+	}
+	existing, err := c.store.LoadCampaignSpec(ctx, req.CampaignID)
+	switch {
+	case err == nil:
+		if existing.GetCampaignDigest() != spec.GetCampaignDigest() {
+			return nil, fmt.Errorf("evaluation: create campaign %q: %w", req.CampaignID, constants.ErrEvaluationCampaignConflict)
+		}
+		return existing, nil
+	case !isNotFound(err):
 		return nil, err
 	}
 	if err := c.store.SaveCampaignSpec(ctx, spec); err != nil {
@@ -120,6 +154,30 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 	if err := c.store.SaveScenarioArtifacts(ctx, req.CampaignID, req.Catalog, req.ScenarioArtifacts); err != nil {
 		return nil, err
 	}
+	return spec, nil
+}
+
+// StartRun persists a new run record bound to an existing campaign.
+func (c *CampaignController) StartRun(ctx context.Context, req RunStartRequest) (*evalv1.EvaluationRun, error) {
+	if c == nil || c.store == nil {
+		return nil, fmt.Errorf("evaluation: start run: %w", constants.ErrMissingRequiredField)
+	}
+	if req.CampaignID == "" || req.RunID == "" {
+		return nil, fmt.Errorf("evaluation: start run: %w", constants.ErrMissingRequiredField)
+	}
+	spec, err := c.store.LoadCampaignSpec(ctx, req.CampaignID)
+	if err != nil {
+		return nil, err
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, req.CampaignID)
+	if err != nil {
+		return nil, err
+	}
+	if exists, err := c.store.RunExists(ctx, req.RunID); err != nil {
+		return nil, err
+	} else if exists {
+		return nil, fmt.Errorf("evaluation: start run %q: run already exists", req.RunID)
+	}
 	lane := req.Lane
 	if lane == evalv1.EvaluationLane_EVALUATION_LANE_UNSPECIFIED {
 		lane = evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE
@@ -127,7 +185,7 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 	run := &evalv1.EvaluationRun{
 		SchemaVersion: CampaignSchemaVersion,
 		RunId:         req.RunID,
-		SuiteRef:      req.Catalog.GetCatalogRef(),
+		SuiteRef:      catalog.GetCatalogRef(),
 		Deployment:    req.Deployment,
 		ActivePosture: spec.GetGovernancePosture(),
 		Lane:          lane,
@@ -135,9 +193,9 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 		CampaignBinding: &evalv1.ModelCampaignBinding{
 			CampaignId:                 req.CampaignID,
 			CampaignDigest:             spec.GetCampaignDigest(),
-			CatalogRef:                 req.Catalog.GetCatalogRef(),
-			CatalogDigest:              req.Catalog.GetCatalogDigest(),
-			ModelRegistryDigest:        req.Inventory.RegistryDigest,
+			CatalogRef:                 catalog.GetCatalogRef(),
+			CatalogDigest:              catalog.GetCatalogDigest(),
+			ModelRegistryDigest:        spec.GetModelRegistryDigest(),
 			InferenceOperatorSessionId: req.InferenceOperatorSessionID,
 			DataOperatorSessionId:      req.DataOperatorSessionID,
 		},
@@ -146,6 +204,63 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 		return nil, err
 	}
 	return run, nil
+}
+
+// InitializeCampaign creates a campaign and starts its first run.
+func (c *CampaignController) InitializeCampaign(ctx context.Context, req CampaignInitRequest) (*evalv1.EvaluationRun, error) {
+	if req.RunID == "" {
+		return nil, fmt.Errorf("evaluation: initialize campaign: %w", constants.ErrMissingRequiredField)
+	}
+	if _, err := c.CreateCampaign(ctx, CampaignCreateRequest{
+		CampaignID:        req.CampaignID,
+		Catalog:           req.Catalog,
+		Inventory:         req.Inventory,
+		ScenarioArtifacts: req.ScenarioArtifacts,
+		RepetitionCount:   req.RepetitionCount,
+	}); err != nil {
+		return nil, err
+	}
+	return c.StartRun(ctx, RunStartRequest{
+		CampaignID:                 req.CampaignID,
+		RunID:                      req.RunID,
+		InferenceOperatorSessionID: req.InferenceOperatorSessionID,
+		DataOperatorSessionID:      req.DataOperatorSessionID,
+		Deployment:                 req.Deployment,
+		Lane:                       req.Lane,
+	})
+}
+
+// CancelRun stops every assignment of a run that has no terminal record: queued
+// assignments, and a running assignment whose executor is gone. It returns the
+// number of assignments stopped. The caller must have drained any live
+// executor first, so a running assignment here is unresolved.
+func (c *CampaignController) CancelRun(ctx context.Context, runID string) (int, error) {
+	if c == nil || c.store == nil {
+		return 0, fmt.Errorf("evaluation: cancel run: %w", constants.ErrMissingRequiredField)
+	}
+	assignments, err := c.store.ListAssignments(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	stopped := 0
+	for _, assignment := range assignments {
+		if exists, err := c.store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId()); err != nil {
+			return stopped, err
+		} else if exists {
+			continue
+		}
+		switch assignment.GetLifecycleStatus() {
+		case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED,
+			evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING:
+			assignment.LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED
+			assignment.CompletedAt = timestamppb.New(c.now().UTC())
+			if err := c.store.SaveAssignment(ctx, assignment); err != nil {
+				return stopped, err
+			}
+			stopped++
+		}
+	}
+	return stopped, nil
 }
 
 // ScheduleHomogeneousRun materializes and persists the complete queued assignment
@@ -205,8 +320,9 @@ func (c *CampaignController) ScheduleHomogeneousRun(ctx context.Context, runID s
 }
 
 // GenerateFormationCatalogStackSet materializes and persists one heterogeneous
-// stack per checked-in ExecutionTopologies formation.
-func (c *CampaignController) GenerateFormationCatalogStackSet(ctx context.Context, campaignID string, seed uint64) (*HeterogeneousStackSet, error) {
+// stack per named ExecutionTopologies formation, or per checked-in formation
+// when formationIDs is empty.
+func (c *CampaignController) GenerateFormationCatalogStackSet(ctx context.Context, campaignID string, seed uint64, formationIDs []string) (*HeterogeneousStackSet, error) {
 	if c == nil || c.store == nil {
 		return nil, fmt.Errorf("evaluation: generate formation catalog stack set: %w", constants.ErrMissingRequiredField)
 	}
@@ -215,9 +331,10 @@ func (c *CampaignController) GenerateFormationCatalogStackSet(ctx context.Contex
 		return nil, err
 	}
 	stackSet, err := GenerateFormationCatalogStackSet(FormationCatalogStackGenerationRequest{
-		CampaignID: campaignID,
-		Seed:       seed,
-		Variants:   spec.GetModelRegistry(),
+		CampaignID:   campaignID,
+		Seed:         seed,
+		Variants:     spec.GetModelRegistry(),
+		FormationIDs: formationIDs,
 	})
 	if err != nil {
 		return nil, err
@@ -365,6 +482,9 @@ func (c *CampaignController) RunSummary(ctx context.Context, runID string) (*Cam
 			if nextID == "" {
 				nextID = assignment.GetAssignmentId()
 			}
+		case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED:
+			summary.StoppedCount++
+			summary.TerminalCount++
 		default:
 			summary.TerminalCount++
 		}

@@ -149,7 +149,7 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 				formationRunEvidence = nil
 			}
 		} else {
-			trace, err = LoadAssignmentTraceEvidence(ctx, store.files, runID, assignment.GetAssignmentId())
+			trace, err = store.LoadAssignmentTrace(ctx, runID, assignment.GetAssignmentId())
 			if err != nil {
 				failures = append(failures, fmt.Sprintf("assignment %s trace load failed: %v", assignment.GetAssignmentId(), err))
 				continue
@@ -425,7 +425,7 @@ func (s *Store) LoadCampaignVerification(ctx context.Context, runID string) (*ev
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
 		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	path := filepath.Join(evaluationRunDir(runID), constants.CampaignVerificationFilename)
+	path := s.layout.campaignVerificationPath(runID)
 	body, err := s.files.ReadFile(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: read campaign verification report: %w", err)
@@ -449,7 +449,7 @@ func (s *Store) SaveCampaignVerification(ctx context.Context, runID string, repo
 	if err != nil {
 		return fmt.Errorf("%w: canonicalize campaign verification report: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := filepath.Join(evaluationRunDir(runID), constants.CampaignVerificationFilename)
+	path := s.layout.campaignVerificationPath(runID)
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create campaign verification directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}

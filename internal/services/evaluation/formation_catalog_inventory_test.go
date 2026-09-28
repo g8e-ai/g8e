@@ -62,6 +62,29 @@ func TestMaterializeFormationCatalogVariants_SelectsAllSovereignCatalogTags(t *t
 	require.NoError(t, err)
 }
 
+func TestMaterializeFormationVariants_SelectsOnlyTheNamedFormationsModels(t *testing.T) {
+	source := FormationCatalogFixtureVariants(func(string) string { return repeatHex('a', 64) })
+
+	selected, err := MaterializeFormationVariants(source, []string{"heavy-reasoner"})
+	require.NoError(t, err)
+	tags := make([]string, 0, len(selected))
+	for _, variant := range selected {
+		tags = append(tags, variant.GetServedModelTag())
+	}
+	assert.Equal(t, []string{
+		"gemma2:2b-instruct-q4_K_M",
+		"llama3.2:1b-instruct-q4_K_M",
+		"qwen2.5:14b-instruct-q4_K_M",
+	}, tags)
+
+	all, err := MaterializeFormationVariants(source, nil)
+	require.NoError(t, err)
+	assert.Len(t, all, 8)
+
+	_, err = MaterializeFormationVariants(source, []string{"no-such-formation"})
+	require.ErrorIs(t, err, constants.ErrFormationInvalid)
+}
+
 func TestFormationCatalogFixtureVariants_MatchesCatalogServedTags(t *testing.T) {
 	variants := FormationCatalogFixtureVariants(func(string) string { return repeatHex('b', 64) })
 	require.Len(t, variants, 8)

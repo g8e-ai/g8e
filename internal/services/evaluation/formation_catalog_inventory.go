@@ -49,13 +49,46 @@ func FormationCatalogServedTags() []string {
 // present in the source; delegated catalog models missing from the source receive
 // deterministic placeholder digests for registry binding.
 func MaterializeFormationCatalogVariants(sourceVariants []*evalv1.ModelVariant) ([]*evalv1.ModelVariant, error) {
+	return MaterializeFormationVariants(sourceVariants, nil)
+}
+
+// selectFormations returns the named catalog formations in the order given,
+// or the whole catalog when no ID is named.
+func selectFormations(formationIDs []string) ([]Formation, error) {
 	topologies, err := NewExecutionTopologies()
+	if err != nil {
+		return nil, err
+	}
+	if len(formationIDs) == 0 {
+		return topologies.Formations(), nil
+	}
+	seen := make(map[string]struct{}, len(formationIDs))
+	formations := make([]Formation, 0, len(formationIDs))
+	for _, id := range formationIDs {
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		formation, err := topologies.Formation(id)
+		if err != nil {
+			return nil, err
+		}
+		formations = append(formations, formation)
+	}
+	return formations, nil
+}
+
+// MaterializeFormationVariants selects the registry variants the named
+// formations require, or every catalog formation when none is named. It has the
+// same sovereign and delegated rules as MaterializeFormationCatalogVariants.
+func MaterializeFormationVariants(sourceVariants []*evalv1.ModelVariant, formationIDs []string) ([]*evalv1.ModelVariant, error) {
+	formations, err := selectFormations(formationIDs)
 	if err != nil {
 		return nil, err
 	}
 	registry := indexFormationVariants(sourceVariants)
 	selected := make(map[string]*evalv1.ModelVariant)
-	for _, formation := range topologies.Formations() {
+	for _, formation := range formations {
 		for _, model := range formation.Models() {
 			if _, exists := selected[model.ServedModelTag]; exists {
 				continue
@@ -73,14 +106,14 @@ func MaterializeFormationCatalogVariants(sourceVariants []*evalv1.ModelVariant) 
 			selected[model.ServedModelTag] = proto.Clone(variant).(*evalv1.ModelVariant)
 		}
 	}
-	tags := FormationCatalogServedTags()
+	tags := make([]string, 0, len(selected))
+	for tag := range selected {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
 	picked := make([]*evalv1.ModelVariant, 0, len(tags))
 	for _, tag := range tags {
-		variant := selected[tag]
-		if variant == nil {
-			return nil, fmt.Errorf("evaluation: formation catalog inventory: served tag %q: %w", tag, constants.ErrInferenceModelNotFound)
-		}
-		picked = append(picked, variant)
+		picked = append(picked, selected[tag])
 	}
 	return picked, nil
 }

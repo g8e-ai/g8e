@@ -39,7 +39,7 @@ func (s *Store) SaveCampaignSpec(ctx context.Context, spec *evalv1.EvaluationCam
 	if err != nil {
 		return fmt.Errorf("%w: canonicalize campaign spec: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := campaignSpecPath(spec.GetCampaignId())
+	path := s.layout.campaignSpecPath(spec.GetCampaignId())
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create campaign directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
@@ -54,7 +54,7 @@ func (s *Store) LoadCampaignSpec(ctx context.Context, campaignID string) (*evalv
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(campaignID) {
 		return nil, fmt.Errorf("%w: file service and campaign ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	body, err := s.files.ReadFile(ctx, campaignSpecPath(campaignID))
+	body, err := s.files.ReadFile(ctx, s.layout.campaignSpecPath(campaignID))
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: read campaign spec: %w", err)
 	}
@@ -86,7 +86,7 @@ func (s *Store) SaveScenarioCatalog(ctx context.Context, campaignID string, cata
 	if err != nil {
 		return fmt.Errorf("%w: canonicalize scenario catalog: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := scenarioCatalogPath(campaignID)
+	path := s.layout.scenarioCatalogPath(campaignID)
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create campaign directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
@@ -101,7 +101,7 @@ func (s *Store) LoadScenarioCatalog(ctx context.Context, campaignID string) (*ev
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(campaignID) {
 		return nil, fmt.Errorf("%w: file service and campaign ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	body, err := s.files.ReadFile(ctx, scenarioCatalogPath(campaignID))
+	body, err := s.files.ReadFile(ctx, s.layout.scenarioCatalogPath(campaignID))
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: read scenario catalog: %w", err)
 	}
@@ -133,7 +133,7 @@ func (s *Store) SaveScenarioArtifacts(ctx context.Context, campaignID string, ca
 			if err := validateFrozenScenarioArtifact(artifact.Reference, artifact.Body); err != nil {
 				return fmt.Errorf("%w: scenario %s: %w", constants.ErrEvaluationReportPersistFailed, scenarioID, err)
 			}
-			artifactPath, err := scenarioArtifactPath(campaignID, artifact.Reference)
+			artifactPath, err := s.layout.scenarioArtifactPath(campaignID, artifact.Reference)
 			if err != nil {
 				return fmt.Errorf("%w: scenario %s: %w", constants.ErrEvaluationReportPersistFailed, scenarioID, err)
 			}
@@ -204,7 +204,7 @@ func validateFrozenScenarioArtifacts(catalog *evalv1.EvaluationScenarioCatalog, 
 }
 
 func (s *Store) loadScenarioArtifact(ctx context.Context, campaignID string, reference *compliancev1.ComplianceEvidenceReference) (ScenarioArtifactPair, error) {
-	artifactPath, err := scenarioArtifactPath(campaignID, reference)
+	artifactPath, err := s.layout.scenarioArtifactPath(campaignID, reference)
 	if err != nil {
 		return ScenarioArtifactPair{}, err
 	}
@@ -247,7 +247,7 @@ func (s *Store) SaveRun(ctx context.Context, run *evalv1.EvaluationRun) error {
 	if err != nil {
 		return fmt.Errorf("%w: canonicalize run: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := runStatePath(run.GetRunId())
+	path := s.layout.runStatePath(run.GetRunId())
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create run directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
@@ -262,7 +262,7 @@ func (s *Store) RunExists(ctx context.Context, runID string) (bool, error) {
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
 		return false, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	exists, err := s.files.FileExists(ctx, runStatePath(runID))
+	exists, err := s.files.FileExists(ctx, s.layout.runStatePath(runID))
 	if err != nil {
 		return false, fmt.Errorf("evaluation: run exists: %w", err)
 	}
@@ -274,7 +274,7 @@ func (s *Store) LoadRun(ctx context.Context, runID string) (*evalv1.EvaluationRu
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
 		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	body, err := s.files.ReadFile(ctx, runStatePath(runID))
+	body, err := s.files.ReadFile(ctx, s.layout.runStatePath(runID))
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: read run: %w", err)
 	}
@@ -293,7 +293,7 @@ func (s *Store) CountAssignments(ctx context.Context, runID string) (int, error)
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
 		return 0, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	dir := filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname)
+	dir := s.layout.assignmentsDir(runID)
 	entries, err := s.files.ReadDir(ctx, dir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
@@ -316,7 +316,7 @@ func (s *Store) ListAssignments(ctx context.Context, runID string) ([]*evalv1.Ev
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
 		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	dir := filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname)
+	dir := s.layout.assignmentsDir(runID)
 	entries, err := s.files.ReadDir(ctx, dir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
@@ -355,7 +355,7 @@ func (s *Store) LoadAssignmentResults(ctx context.Context, runID string, assignm
 		if !complianceevidence.ValidPathElement(assignmentID) {
 			return nil, fmt.Errorf("%w: assignment ID is required", constants.ErrEvidenceArtifactMalformed)
 		}
-		exists, err := s.files.FileExists(ctx, assignmentResultPath(runID, assignmentID))
+		exists, err := s.files.FileExists(ctx, s.layout.assignmentResultPath(runID, assignmentID))
 		if err != nil {
 			return nil, fmt.Errorf("evaluation: load assignment results: %w", err)
 		}
@@ -376,7 +376,7 @@ func (s *Store) AssignmentResultExists(ctx context.Context, runID, assignmentID 
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {
 		return false, fmt.Errorf("%w: file service, run ID, and assignment ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	exists, err := s.files.FileExists(ctx, assignmentResultPath(runID, assignmentID))
+	exists, err := s.files.FileExists(ctx, s.layout.assignmentResultPath(runID, assignmentID))
 	if err != nil {
 		return false, fmt.Errorf("evaluation: assignment result exists: %w", err)
 	}
@@ -409,7 +409,7 @@ func (s *Store) SaveAssignment(ctx context.Context, assignment *evalv1.Evaluatio
 	if err != nil {
 		return fmt.Errorf("%w: canonicalize assignment: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := assignmentPath(assignment.GetRunId(), assignment.GetAssignmentId())
+	path := s.layout.assignmentPath(assignment.GetRunId(), assignment.GetAssignmentId())
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create assignment directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
@@ -424,7 +424,7 @@ func (s *Store) LoadAssignment(ctx context.Context, runID, assignmentID string) 
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {
 		return nil, fmt.Errorf("%w: file service, run ID, and assignment ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	body, err := s.files.ReadFile(ctx, assignmentPath(runID, assignmentID))
+	body, err := s.files.ReadFile(ctx, s.layout.assignmentPath(runID, assignmentID))
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: read assignment: %w", err)
 	}
@@ -453,7 +453,7 @@ func (s *Store) SaveAssignmentTrace(ctx context.Context, runID, assignmentID str
 	if err := complianceevidence.ValidateCanonicalJSON(body); err != nil {
 		return fmt.Errorf("%w: assignment trace is not canonical JSON: %v", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := assignmentTracePath(runID, assignmentID)
+	path := s.layout.assignmentTracePath(runID, assignmentID)
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create assignment trace directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
@@ -472,7 +472,7 @@ func (s *Store) SaveAssignmentFormationRun(ctx context.Context, runID, assignmen
 	if err := complianceevidence.ValidateCanonicalJSON(body); err != nil {
 		return fmt.Errorf("%w: assignment formation run is not canonical JSON: %v", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := assignmentFormationRunPath(runID, assignmentID)
+	path := s.layout.assignmentFormationRunPath(runID, assignmentID)
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create assignment formation run directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
@@ -487,7 +487,7 @@ func (s *Store) LoadAssignmentFormationRun(ctx context.Context, runID, assignmen
 	if s == nil || s.files == nil {
 		return nil, fmt.Errorf("evaluation: load assignment formation run: %w", constants.ErrMissingRequiredField)
 	}
-	return LoadAssignmentFormationRunEvidence(ctx, s.files, runID, assignmentID)
+	return loadAssignmentFormationRunEvidence(ctx, s.files, s.layout, runID, assignmentID)
 }
 
 // SaveAssignmentResult persists one terminal assignment result.
@@ -505,7 +505,7 @@ func (s *Store) SaveAssignmentResult(ctx context.Context, result *evalv1.Evaluat
 	if err != nil {
 		return fmt.Errorf("%w: canonicalize assignment result: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := assignmentResultPath(result.GetRunId(), result.GetAssignmentId())
+	path := s.layout.assignmentResultPath(result.GetRunId(), result.GetAssignmentId())
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create assignment result directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
@@ -520,7 +520,7 @@ func (s *Store) LoadAssignmentTrace(ctx context.Context, runID, assignmentID str
 	if s == nil || s.files == nil {
 		return nil, fmt.Errorf("evaluation: load assignment trace: %w", constants.ErrMissingRequiredField)
 	}
-	return LoadAssignmentTraceEvidence(ctx, s.files, runID, assignmentID)
+	return loadAssignmentTraceEvidence(ctx, s.files, s.layout, runID, assignmentID)
 }
 
 // LoadAssignmentResult reads one persisted terminal assignment result.
@@ -528,7 +528,7 @@ func (s *Store) LoadAssignmentResult(ctx context.Context, runID, assignmentID st
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {
 		return nil, fmt.Errorf("%w: file service, run ID, and assignment ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	body, err := s.files.ReadFile(ctx, assignmentResultPath(runID, assignmentID))
+	body, err := s.files.ReadFile(ctx, s.layout.assignmentResultPath(runID, assignmentID))
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: read assignment result: %w", err)
 	}
@@ -543,18 +543,6 @@ func (s *Store) LoadAssignmentResult(ctx context.Context, runID, assignmentID st
 		return nil, fmt.Errorf("%w: %v", constants.ErrEvidenceArtifactMalformed, err)
 	}
 	return result, nil
-}
-
-func campaignDir(campaignID string) string {
-	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationCampaignsDirname, campaignID)
-}
-
-func campaignsRootDir() string {
-	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationCampaignsDirname)
-}
-
-func evaluationRunsRootDir() string {
-	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname)
 }
 
 type RunKind string
@@ -578,11 +566,11 @@ func (s *Store) InspectRun(ctx context.Context, runID string) (RunInventoryEntry
 		return RunInventoryEntry{}, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
 	entry := RunInventoryEntry{RunID: runID}
-	nativeMarker, err := s.files.FileExists(ctx, filepath.Join(evaluationRunDir(runID), constants.EvaluationReportFilename))
+	nativeMarker, err := s.files.FileExists(ctx, filepath.Join(s.layout.runDir(runID), constants.EvaluationReportFilename))
 	if err != nil {
 		return RunInventoryEntry{}, fmt.Errorf("evaluation: inspect native run marker: %w", err)
 	}
-	campaignMarker, err := s.files.FileExists(ctx, runStatePath(runID))
+	campaignMarker, err := s.files.FileExists(ctx, s.layout.runStatePath(runID))
 	if err != nil {
 		return RunInventoryEntry{}, fmt.Errorf("evaluation: inspect campaign run marker: %w", err)
 	}
@@ -631,7 +619,7 @@ func (s *Store) ListRunInventory(ctx context.Context) ([]RunInventoryEntry, erro
 	if s == nil || s.files == nil {
 		return nil, fmt.Errorf("%w: file service is required", constants.ErrEvidenceArtifactMalformed)
 	}
-	entries, err := s.files.ReadDir(ctx, evaluationRunsRootDir())
+	entries, err := s.files.ReadDir(ctx, s.layout.runsRootDir())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
 			return nil, nil
@@ -675,7 +663,7 @@ func (s *Store) ListCampaigns(ctx context.Context) ([]CampaignListEntry, error) 
 	if err != nil {
 		return nil, err
 	}
-	entries, err := s.files.ReadDir(ctx, campaignsRootDir())
+	entries, err := s.files.ReadDir(ctx, s.layout.campaignsRootDir())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
 			return nil, nil
@@ -691,7 +679,7 @@ func (s *Store) ListCampaigns(ctx context.Context) ([]CampaignListEntry, error) 
 		if err != nil {
 			continue
 		}
-		hasStacks, err := s.files.FileExists(ctx, heterogeneousStackSetPath(entry.Name()))
+		hasStacks, err := s.files.FileExists(ctx, s.layout.heterogeneousStackSetPath(entry.Name()))
 		if err != nil {
 			return nil, fmt.Errorf("evaluation: list campaigns: %w", err)
 		}
@@ -713,7 +701,7 @@ func (s *Store) ListCampaigns(ctx context.Context) ([]CampaignListEntry, error) 
 }
 
 func (s *Store) listRunIDsByCampaign(ctx context.Context) (map[string][]string, error) {
-	entries, err := s.files.ReadDir(ctx, evaluationRunsRootDir())
+	entries, err := s.files.ReadDir(ctx, s.layout.runsRootDir())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
 			return map[string][]string{}, nil
@@ -753,7 +741,7 @@ func (s *Store) SaveHeterogeneousStackSet(ctx context.Context, campaignID string
 	if err != nil {
 		return fmt.Errorf("%w: canonicalize heterogeneous stack set: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := heterogeneousStackSetPath(campaignID)
+	path := s.layout.heterogeneousStackSetPath(campaignID)
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create campaign directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
@@ -768,7 +756,7 @@ func (s *Store) LoadHeterogeneousStackSet(ctx context.Context, campaignID string
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(campaignID) {
 		return nil, fmt.Errorf("%w: file service and campaign ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	body, err := s.files.ReadFile(ctx, heterogeneousStackSetPath(campaignID))
+	body, err := s.files.ReadFile(ctx, s.layout.heterogeneousStackSetPath(campaignID))
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: read heterogeneous stack set: %w", err)
 	}
@@ -844,47 +832,4 @@ func unmarshalHeterogeneousStackSet(body []byte) (*HeterogeneousStackSet, error)
 		Stacks:         stacks,
 		Coverage:       payload.Coverage,
 	}, nil
-}
-
-func campaignSpecPath(campaignID string) string {
-	return filepath.Join(campaignDir(campaignID), constants.EvaluationCampaignSpecFilename)
-}
-
-func heterogeneousStackSetPath(campaignID string) string {
-	return filepath.Join(campaignDir(campaignID), constants.EvaluationHeterogeneousStackSetFilename)
-}
-
-func scenarioCatalogPath(campaignID string) string {
-	return filepath.Join(campaignDir(campaignID), constants.EvaluationScenarioCatalogFilename)
-}
-
-func scenarioArtifactPath(campaignID string, reference *compliancev1.ComplianceEvidenceReference) (string, error) {
-	if reference == nil {
-		return "", fmt.Errorf("%w: frozen scenario artifact reference is missing", constants.ErrEvidenceArtifactMalformed)
-	}
-	_, digest, ok := complianceevidence.ParseContentAddress(reference.GetArtifactId())
-	if !ok || digest != reference.GetSha256() {
-		return "", fmt.Errorf("%w: frozen scenario artifact reference is invalid", constants.ErrEvidenceArtifactMalformed)
-	}
-	return filepath.Join(campaignDir(campaignID), constants.EvaluationScenarioArtifactsDirname, digest+constants.FileExtJSON), nil
-}
-
-func assignmentPath(runID, assignmentID string) string {
-	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+constants.FileExtJSON)
-}
-
-func assignmentResultPath(runID, assignmentID string) string {
-	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+"-result"+constants.FileExtJSON)
-}
-
-func assignmentTracePath(runID, assignmentID string) string {
-	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+"-trace"+constants.FileExtJSON)
-}
-
-func assignmentFormationRunPath(runID, assignmentID string) string {
-	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+"-formation-run"+constants.FileExtJSON)
-}
-
-func runStatePath(runID string) string {
-	return filepath.Join(evaluationRunDir(runID), constants.EvaluationRunStateFilename)
 }

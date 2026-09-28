@@ -31,12 +31,29 @@ type EvidenceScope struct {
 	TransactionID string
 }
 
+// Store persists evaluation records beneath one evaluation layout.
 type Store struct {
-	files fs.RuntimeFileService
+	files  fs.RuntimeFileService
+	layout evalLayout
 }
 
+// NewStore returns a store over the active evaluation layout.
 func NewStore(files fs.RuntimeFileService) *Store {
-	return &Store{files: files}
+	return &Store{files: files, layout: activeEvalLayout()}
+}
+
+// NewArchivedStore returns a store over the archive layout for archived
+// campaigns and the runs archived with them. Archived campaigns and runs keep
+// their internal structure, so every read works against this store exactly as
+// it does against the active one.
+func NewArchivedStore(files fs.RuntimeFileService) *Store {
+	return &Store{files: files, layout: archivedEvalLayout()}
+}
+
+// NewArchivedRunStore returns a store for runs that were archived on their own:
+// run records come from the archive while their campaign is still active.
+func NewArchivedRunStore(files fs.RuntimeFileService) *Store {
+	return &Store{files: files, layout: archivedRunLayout()}
 }
 
 // SaveTargetState persists one canonical EvaluationTargetState observation
