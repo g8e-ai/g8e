@@ -50,7 +50,7 @@ func GenerateFormationCatalogStackSet(req FormationCatalogStackGenerationRequest
 	stacks := make([]*evalv1.HeterogeneousStackDefinition, 0, len(formations))
 	registryVariantIDs := make(map[string]struct{})
 	for _, formation := range formations {
-		if err := ensureFormationRegistryCoverage(formation, registry); err != nil {
+		if err := validateFormationRegistryCoverage(formation, registry); err != nil {
 			return nil, err
 		}
 		stack, err := formation.ToStackDefinition()
@@ -93,7 +93,7 @@ func GenerateFormationCatalogStackSet(req FormationCatalogStackGenerationRequest
 	return set, nil
 }
 
-func ensureFormationRegistryCoverage(formation Formation, registry formationVariantRegistry) error {
+func validateFormationRegistryCoverage(formation Formation, registry formationVariantRegistry) error {
 	for _, role := range formation.Roles() {
 		model, err := formation.Model(role)
 		if err != nil {

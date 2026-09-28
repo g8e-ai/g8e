@@ -9,7 +9,6 @@ package eval
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -329,13 +328,13 @@ func rolloutLogDir(requested string, deps nativeEvalDeps) (string, error) {
 	if requested == "" {
 		logDir := evaluation.QueueLogDir("rollout-" + deps.now().UTC().Format("20060102-150405"))
 		if logDir == "" {
-			return "", errors.New("evaluation: rollout run: invalid log directory")
+			return "", constants.ErrEvaluationRolloutLogDirInvalid
 		}
 		return logDir, nil
 	}
 	logDir := strings.TrimPrefix(filepath.ToSlash(requested), constants.RuntimeDirname+"/")
 	if filepath.IsAbs(logDir) || strings.HasPrefix(logDir, "../") || logDir == ".." || logDir == "" {
-		return "", errors.New("evaluation: rollout run: log directory must be runtime-relative")
+		return "", constants.ErrEvaluationRolloutLogDirNotRelative
 	}
 	return logDir, nil
 }
