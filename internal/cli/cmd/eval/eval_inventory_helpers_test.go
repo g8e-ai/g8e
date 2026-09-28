@@ -17,6 +17,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -40,7 +41,7 @@ func TestModelInventoryFreezeJSON_AndWriteFile(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
 
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	path := filepath.Join(root, "inventory.json")
 	require.NoError(t, writeModelInventoryFreezeFile(path, freeze))
 	data, err := os.ReadFile(path)

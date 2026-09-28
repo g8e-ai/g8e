@@ -17,6 +17,9 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 type stagingOllamaModelCommandDispatcher struct {
@@ -120,9 +123,9 @@ func TestStageFormationCatalogIntake_PullsMissingLibraryTag(t *testing.T) {
 
 func writeRolloutIntakeCatalog(t *testing.T, catalog RolloutIntakeCatalog) string {
 	t.Helper()
-	path := t.TempDir() + "/rollout-intake-hf.json"
+	path := testutil.TempDir(t) + "/rollout-intake-hf.json"
 	payload, err := json.Marshal(catalog)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(path, payload, 0o644))
+	require.NoError(t, os.WriteFile(path, payload, constants.PermFilePublic))
 	return path
 }

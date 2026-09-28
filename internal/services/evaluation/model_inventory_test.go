@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -89,7 +90,7 @@ func TestLoadModelInventoryFreezeFile_RoundTrip(t *testing.T) {
 		Variants:            rawVariants,
 	})
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(path, payload, 0o644))
+	require.NoError(t, os.WriteFile(path, payload, constants.PermFilePublic))
 
 	loaded, err := LoadModelInventoryFreezeFile(path)
 	require.NoError(t, err)
@@ -100,9 +101,9 @@ func TestLoadModelInventoryFreezeFile_RoundTrip(t *testing.T) {
 
 func TestLoadModelInventoryFreezeFile_RejectsMissingDigest(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	path := filepath.Join(dir, "inventory.json")
-	require.NoError(t, os.WriteFile(path, []byte(`{"campaign_id":"c1","variants":[]}`), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(`{"campaign_id":"c1","variants":[]}`), constants.PermFilePublic))
 	_, err := LoadModelInventoryFreezeFile(path)
 	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }

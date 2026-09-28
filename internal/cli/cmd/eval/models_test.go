@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -78,7 +79,7 @@ func seedModelScopes(t *testing.T, root string) {
 }
 
 func TestModelsList_ScopesAndFilters(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
 	out, err := runModelsCmd(t, root, "list", "--detailed")
@@ -111,7 +112,7 @@ func TestModelsList_ScopesAndFilters(t *testing.T) {
 }
 
 func TestModelsList_JSONReportsScopes(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
 	out, err := runModelsJSON(t, root, "list")
@@ -128,7 +129,7 @@ func TestModelsList_JSONReportsScopes(t *testing.T) {
 }
 
 func TestModelsList_ReadsRegistryWithoutDigest(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath,
 		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest", ProviderClass: "ollama"},
 	)
@@ -140,13 +141,13 @@ func TestModelsList_ReadsRegistryWithoutDigest(t *testing.T) {
 }
 
 func TestModelsList_EmptyProject(t *testing.T) {
-	out, err := runModelsCmd(t, t.TempDir(), "list")
+	out, err := runModelsCmd(t, testutil.TempDir(t), "list")
 	require.NoError(t, err)
 	assert.Contains(t, out, "No models found")
 }
 
 func TestModelsShow(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
 	out, err := runModelsCmd(t, root, "show", "granite4-2-8b")
@@ -176,7 +177,7 @@ func TestModelsShow(t *testing.T) {
 }
 
 func TestModelsAdd_DefaultsToRegistryAndCreatesIt(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 
 	out, err := runModelsCmd(t, root, "add", "gemma4:12b", "--parameters", "12b", "--family", "gemma4", "--context", "8192")
 	require.NoError(t, err)
@@ -205,7 +206,7 @@ func TestModelsAdd_DefaultsToRegistryAndCreatesIt(t *testing.T) {
 }
 
 func TestModelsAdd_CatalogFlagTargetsCatalogOnly(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
 	_, err := runModelsCmd(t, root, "add", "granite4.2:3b", "--family", "granite", "--parameters", "3b", "--catalog")
@@ -220,7 +221,7 @@ func TestModelsAdd_CatalogFlagTargetsCatalogOnly(t *testing.T) {
 }
 
 func TestModelsAdd_RejectsBadInput(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	_, err := runModelsCmd(t, root, "add")
 	require.Error(t, err)
 	_, err = runModelsCmd(t, root, "add", "gemma4:12b", "--parameters", "lots")
@@ -232,7 +233,7 @@ func TestModelsAdd_RejectsBadInput(t *testing.T) {
 }
 
 func TestModelsRemove(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
 	out, err := runModelsCmd(t, root, "remove", "gemma3:1b")
@@ -251,7 +252,7 @@ func TestModelsRemove(t *testing.T) {
 }
 
 func TestModelsRemove_ByFilterAndLastModelClearsRegistry(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
 	_, err := runModelsCmd(t, root, "remove", "--all")
@@ -267,8 +268,8 @@ func TestModelsRemove_ByFilterAndLastModelClearsRegistry(t *testing.T) {
 	assert.Contains(t, out, "granite4.2:8b")
 }
 
-func TestModelsRemove_EmptySelectionIsAnError(t *testing.T) {
-	root := t.TempDir()
+func TestModelsRemove_RejectsEmptySelection(t *testing.T) {
+	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
 	_, err := runModelsCmd(t, root, "remove")
@@ -280,7 +281,7 @@ func TestModelsRemove_EmptySelectionIsAnError(t *testing.T) {
 }
 
 func TestModelsImport_CatalogToRegistry(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	writeTestCatalogInventory(t, root, []*evalv1.ModelVariant{
 		variantFixture("granite4.2:3b", "granite4-2-3b", "granite", 3_000_000_000, digestOne),
 		variantFixture("granite4.2:8b", "granite4-2-8b", "granite", 8_000_000_000, digestTwo),
@@ -307,7 +308,7 @@ func TestModelsImport_CatalogToRegistry(t *testing.T) {
 }
 
 func TestModelsImport_CreatesRegistryAndRejectsBadSelections(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	writeTestCatalogInventory(t, root, []*evalv1.ModelVariant{
 		variantFixture("granite4.2:3b", "granite4-2-3b", "granite", 3_000_000_000, digestOne),
 	})
@@ -331,7 +332,7 @@ func TestModelsImport_CreatesRegistryAndRejectsBadSelections(t *testing.T) {
 }
 
 func TestModelsImport_MissingCatalogFails(t *testing.T) {
-	_, err := runModelsCmd(t, t.TempDir(), "import", "--all")
+	_, err := runModelsCmd(t, testutil.TempDir(t), "import", "--all")
 	require.ErrorIs(t, err, constants.ErrNotFound)
 }
 
@@ -373,7 +374,7 @@ func TestShortDigest(t *testing.T) {
 }
 
 func TestModelsDiff_RequiresOneProviderSession(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
 	// A second inference session makes the provider ambiguous.
@@ -391,7 +392,7 @@ func TestModelsDiff_RequiresOneProviderSession(t *testing.T) {
 }
 
 func TestModelsPull_SelectorAndFormationsAreExclusive(t *testing.T) {
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	_, err := runModelsCmd(t, root, "pull", "qwen3:4b", "--formations")
 	require.ErrorContains(t, err, "--formations cannot be combined")
 	_, err = runModelsCmd(t, root, "pull", "--family", "qwen3", "--formations")
@@ -399,12 +400,12 @@ func TestModelsPull_SelectorAndFormationsAreExclusive(t *testing.T) {
 }
 
 func TestModelsPull_SelectionIsResolvedAgainstIntakeCatalog(t *testing.T) {
-	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "eval"), 0o755))
+	root := testutil.TempDir(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "eval"), constants.PermDirStandard))
 	catalog := `{"models":[
 		{"variant_id":"glm-5-3-air","served_model_tag":"glm-5.3-air","model_family":"glm53","parameter_count":"9000000000","staging":{"method":"pending"}},
 		{"variant_id":"qwen3-8-27b","served_model_tag":"qwen3.8:27b","model_family":"qwen38","parameter_count":"27000000000","staging":{"method":"pending"}}]}`
-	require.NoError(t, os.WriteFile(filepath.Join(root, evaluation.DefaultRolloutIntakeCatalogRelPath), []byte(catalog), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, evaluation.DefaultRolloutIntakeCatalogRelPath), []byte(catalog), constants.PermFilePublic))
 
 	_, err := runModelsCmd(t, root, "pull")
 	require.ErrorIs(t, err, constants.ErrEvaluationSelectionEmpty)

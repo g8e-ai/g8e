@@ -163,10 +163,10 @@ func TestLoadRolloutIntakePriorityIDs_ReadsProjectRoot(t *testing.T) {
 	assert.Nil(t, LoadRolloutIntakePriorityIDs(root))
 
 	path := filepath.Join(root, DefaultRolloutIntakePriorityRelPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte(`["b","a"]`), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), constants.PermDirStandard))
+	require.NoError(t, os.WriteFile(path, []byte(`["b","a"]`), constants.PermFilePublic))
 	assert.Equal(t, []string{"b", "a"}, LoadRolloutIntakePriorityIDs(root))
 
-	require.NoError(t, os.WriteFile(path, []byte(`not json`), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(`not json`), constants.PermFilePublic))
 	assert.Nil(t, LoadRolloutIntakePriorityIDs(root))
 }

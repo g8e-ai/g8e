@@ -84,7 +84,7 @@ Examples:
   g8e eval rollout run --until 1
   g8e eval rollout run --gate-smoke --promote-on-pass
   g8e eval rollout run --dry-run
-  g8e eval rollout run --skip-verified=false --log-dir .g8e/eval/logs/batch-001`,
+  g8e eval rollout run --skip-verified=false --log-dir eval/logs/batch-001`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Until < 0 {
@@ -101,7 +101,7 @@ Examples:
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Print the rollout plan without executing")
 	cmd.Flags().BoolVar(&opts.GateSmoke, "gate-smoke", false, "Screen each model with the fast smoke campaign before any full run")
 	cmd.Flags().BoolVar(&opts.PromoteOnPass, "promote-on-pass", false, "Run the full campaign for models that pass the smoke gate")
-	cmd.Flags().StringVar(&opts.LogDir, "log-dir", "", "Directory for per-model logs (default: .g8e/eval/logs/rollout-<timestamp>)")
+	cmd.Flags().StringVar(&opts.LogDir, "log-dir", "", "Directory for per-model logs (default: "+constants.RuntimeDirname+"/"+constants.EvaluationQueueLogsDirname+"/rollout-<timestamp>)")
 	cmd.Flags().StringVar(&opts.EnsembleHealthURL, "ensemble-health-url", "http://127.0.0.1:8000/health", "Preflight g8ee health URL")
 	cmd.Flags().StringVar(&opts.MirrorBootstrapURL, "mirror-bootstrap-url", "http://127.0.0.1:8082/bootstrap", "Preflight public mirror bootstrap URL")
 	return cmd
@@ -332,7 +332,8 @@ func rolloutLogDir(requested string, deps nativeEvalDeps) (string, error) {
 		}
 		return logDir, nil
 	}
-	logDir := strings.TrimPrefix(filepath.ToSlash(requested), constants.RuntimeDirname+"/")
+	runtimePrefix := filepath.ToSlash(constants.RuntimeDirname) + "/"
+	logDir := strings.TrimPrefix(filepath.ToSlash(requested), runtimePrefix)
 	if filepath.IsAbs(logDir) || strings.HasPrefix(logDir, "../") || logDir == ".." || logDir == "" {
 		return "", constants.ErrEvaluationRolloutLogDirNotRelative
 	}
