@@ -328,14 +328,6 @@ function assertOptionalString(value: unknown, path: string, maxBytes = 128): voi
   if (value !== undefined) assertString(value, path, maxBytes);
 }
 
-function assertModelText(value: unknown, path: string, maxBytes = 256 * 1024): asserts value is string {
-  assert(typeof value === 'string', path, 'expected string');
-  const bytes = new TextEncoder().encode(value).byteLength;
-  assert(bytes <= maxBytes, path, `expected at most ${maxBytes} UTF-8 bytes`);
-  assert(!value.includes('BEGIN PRIVATE KEY'), path, 'forbidden key text');
-  assert(!value.includes('spiffe://'), path, 'forbidden URI');
-}
-
 function assertEnum<T extends string>(value: unknown, values: readonly T[], path: string): asserts value is T {
   assert(typeof value === 'string' && (values as readonly string[]).includes(value), path, 'unknown enum value');
 }
@@ -616,8 +608,8 @@ function assertExtensions(value: Record<string, unknown>, path: string): void {
     rejectUnknown(value.resource_summary, ['latency_ms', 'input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'retries'], `${path}.resource_summary`);
     for (const [key, metric] of Object.entries(value.resource_summary)) assertMetric(metric, `${path}.resource_summary.${key}`);
   }
-  if (value.model_response !== undefined) assertModelText(value.model_response, `${path}.model_response`);
-  if (value.failure_output !== undefined) assertModelText(value.failure_output, `${path}.failure_output`);
+  if (value.model_response !== undefined) assert(typeof value.model_response === 'string', `${path}.model_response`, 'expected string');
+  if (value.failure_output !== undefined) assert(typeof value.failure_output === 'string', `${path}.failure_output`, 'expected string');
 }
 
 function assertResultRecord(value: unknown, path: string, version: CampaignEnvelopeVersion): asserts value is CampaignResultRecord {

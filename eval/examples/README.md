@@ -6,15 +6,15 @@ Checked-in evaluation program data and templates live here. **Runtime** campaign
 
 | Path | Purpose |
 | --- | --- |
-| `eval/base-model-inventory.json` | **Default genesis program inventory** — 45 init-campaign models (3 roles × 25 scenarios = **3375** cells when run homogeneously) |
-| `eval/base-init-campaign-queue.json` | Template rollout queue for all 45 models (`status: pending`) |
+| `eval/base-model-inventory.json` | **Default genesis program inventory** — 50 init-campaign models (3 roles × 25 scenarios = **3750** cells when run homogeneously) |
+| `eval/base-init-campaign-queue.json` | Template rollout queue (`status: pending`); currently 47 entries and does not yet list `gemma4:12b`, `glm-5.3-air`, or `qwen2.5:1b-rlcd` |
 | `eval/examples/init-campaign-queue.example.json` | Minimal queue shape reference |
 
-The base inventory is the canonical 45-model genesis program set. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code. The rollout queue places the current Granite 4.2 and Qwen 3.5 small-model intake ahead of the alphabetical backlog.
+The base inventory is the canonical 50-model genesis program set. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code. `eval/rollout-intake-priority.json` lists variant IDs that `g8e eval rollout init --materialize` orders ahead of the rest of the backlog; it is currently empty, so materialization uses the default ordering.
 
 The optional Hugging Face rollout intake (`eval/rollout-intake-hf.json`) also tracks the small text-generation trend candidate Qwen 2.5 1B RLCD. Larger trend entries are intentionally excluded from this 16 GiB-provider intake; classification, image, audio, and image-text-to-text repositories from the same trend snapshot are also not added to the text-generation queue.
 
-### 45-model program set
+### 50-model program set
 
 | Family | Models |
 | --- | --- |
@@ -27,7 +27,7 @@ The optional Hugging Face rollout intake (`eval/rollout-intake-hf.json`) also tr
 | Llama | `llama3.1:8b`, `llama3.2:1b`, `llama3.2:3b`, `tinyllama:1.1b` |
 | Mistral | `mistral:7b`, `ministral-3:3b`, `ministral-3:8b` |
 | Phi | `phi4-mini:3.8b`, `phi4-mini-reasoning:3.8b` |
-| Qwen | `pdevine/qwen3.6:27b-mtp-q4_K_M`, `qwen3:30b`, `qwen3.5:0.8b`, `qwen3.5:2b`, `qwen3.5:4b`, `qwen3.5:9b`, `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b`, `qwen2.5:0.5b`, `qwen2.5:1b-rlcd`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5-coder:7b` |
+| Qwen | `pdevine/qwen3.6:27b-mtp-q4_K_M`, `qwen3:30b`, `qwen3.5:0.8b`, `qwen3.5:2b`, `qwen3.5:4b`, `qwen3.5:9b`, `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b`, `qwen2.5:0.5b`, `qwen2.5:1b-rlcd`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5-coder:7b`, `qwen3.6:35b-a3b`, `qwen3.8:27b` |
 | SmolLM | `smollm2:135m`, `smollm2:360m`, `smollm2:1.7b`, `Impulse2000/smollm3:3b-q4_k_m` |
 | Other | `Randomblock1/nemotron-nano:8b`, `sam860/LFM2:350m`, `sam860/LFM2:700m`, `sam860/LFM2:2.6b` |
 
@@ -96,7 +96,10 @@ go run ./.local.dev/tools/gen-base-model-inventory
 | Command | Purpose |
 | --- | --- |
 | `g8e eval models freeze` | Discover and freeze provider models through an exact Inference Operator session |
-| `g8e eval models list` | List variants in a frozen inventory file |
+| `g8e eval models list` | List variants in a frozen inventory file; `--max-parameters` (alias `--params`) and `--family` filter, and `--detailed` adds parameters, family, quantization, and digest columns |
+| `g8e eval models add` | Add or update one variant in a frozen inventory and recompute its registry digest and homogeneous cell count; `--sync-base` mirrors the change into the checked-in and runtime inventories |
+| `g8e eval models remove` | Remove one variant by served tag or variant ID and recompute the registry digest; `--sync-base` mirrors the removal |
+| `g8e eval models import` | Copy variants from a source inventory (default `eval/base-model-inventory.json`) into the runtime inventory by `--tags`, `--family`, `--max-parameters`, or `--all` |
 | `g8e eval models stage` | Dispatch governed pull/copy maintenance to the exact Inference Operator session |
 | `g8e eval models materialize` | Write per-model or combined campaign inventory files |
 | `g8e eval rollout init` | Build `.g8e/eval/init-campaign-queue.json` |

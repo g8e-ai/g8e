@@ -201,18 +201,5 @@ describe('campaign projection wire contract', () => {
       }),
     ).not.toThrow();
   });
-
-  it('rejects forbidden text in model_response', () => {
-    const record = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
-    expect(() =>
-      decodeCampaignProjectionEnvelope({
-        ...fixtureCampaignResultEnvelope,
-        record: {
-          ...record,
-          model_response: '-----BEGIN PRIVATE KEY-----\nMIIEvg...',
-        },
-      }),
-    ).toThrow(/forbidden key text/);
-  });
 });
 

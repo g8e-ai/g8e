@@ -162,9 +162,9 @@ func TestComplianceCmd_Structure(t *testing.T) {
 	assert.Equal(t, "compliance", cmd.Use)
 
 	subcommands := cmd.Commands()
-	assert.Len(t, subcommands, 8)
+	assert.Len(t, subcommands, 9)
 
-	names := make(map[string]bool, 8)
+	names := make(map[string]bool, 9)
 	for _, sub := range subcommands {
 		names[sub.Name()] = true
 	}
@@ -177,6 +177,7 @@ func TestComplianceCmd_Structure(t *testing.T) {
 	assert.True(t, names["evidence-graph"], "compliance should have 'evidence-graph' subcommand")
 	assert.True(t, names["report"], "compliance should have 'report' subcommand")
 	assert.True(t, names["release-evidence"], "compliance should have 'release-evidence' subcommand")
+	assert.True(t, names["release-prepare"], "compliance should have 'release-prepare' subcommand")
 }
 
 // TestComplianceKSICmd_FileSvcFactoryError asserts that the ksi subcommand
