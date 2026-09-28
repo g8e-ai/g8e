@@ -1,13 +1,72 @@
+---
+doc_id: unified_stack
+title: Unified Docker Stack Guide
+audience: platform operators and evaluators
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docker-compose.yml
+  - docs/guides/
+related:
+  - docs/guides/docker_gateway.md
+  - docs/guides/build_operator.md
+  - docs/guides/connect_operator_to_gateway.md
+  - docs/architecture/evals.md
+  - docs/architecture/model-provenance.md
+  - docs/ensemble/index.md
+  - docs/dashboard/index.md
+  - docs/architecture/auth.md
+when_to_read: Running the g8e platform end-to-end in Docker Compose, bootstrapping evaluation campaigns with witness Operators, or troubleshooting stack health.
+do_not_use_for:
+  - CLI flag inventory — use ./g8e <command> --help
+  - Evaluation execution details — see docs/architecture/evals.md
+  - Authentication protocol details — see docs/architecture/auth.md
+---
+
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-25
-Version: v2.1.13
-
-This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.
+Explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). Also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.
 
 Run all commands from the repository root unless noted otherwise.
 
-## Prerequisites
+## Purpose
+
+This guide covers the unified evaluation stack — how to bootstrap it, enroll operator sessions, run campaigns, and observe execution. It assumes familiarity with Docker Compose and the g8e platform's governance model. For a quick start, see `./g8e docker init`. For standalone gateway operation without Docker, see [Docker Gateway Guide](docker_gateway.md).
+
+## Quick index
+
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
+
+## Invariants
+
+| ID | Rule |
+| --- | --- |
+| INV-STACK-01 | The root docker-compose.yml defines the core unified stack (gateway, data operator, inference operator, ensemble, dashboard) on the `g8e-net` bridge at subnet `172.28.0.0/16`. |
+| INV-STACK-02 | Service health is determined by service-specific health checks defined in docker-compose.yml, not by simple container running state. |
+| INV-STACK-03 | The Inference Operator must enroll with `--inference-enabled` before any scored campaign dispatch reaches the provider. |
+| INV-STACK-04 | Observer and Provenance Operators enroll as separate sessions on the provider host and must not share the same session. |
+| INV-STACK-05 | Campaign identity (campaign ID and registry digest) travels on each governed dispatch from ensemble when `--inference-campaign-id` and `--inference-model-registry-digest` are unset in startup `.env`. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
+| --- | --- | --- |
+| Root stack service definitions | docker-compose.yml | `docker compose config` |
+| Binary precedence and mounts | docker-compose.yml volumes, Dockerfile | Host `./bin:/opt/g8e/bin:ro` takes precedence |
+| Service health checks | docker-compose.yml healthcheck blocks | Service-specific endpoints in [Health checks and resources](#health-checks-and-resources) |
+| Environment variable schema | .env.example | `--help` for service flags and defaults |
+| Profiles (cross-enrollment, g8ellama) | docker-compose.yml profiles section | `docker compose --profile <name> config` |
+
+## Procedures
+
+### Prerequisites
 
 - Docker Engine with the Docker Compose v2 plugin. **Note: Local Go or `make` are NOT required on the host** — all builds can run inside Docker.
 - Optional: Host Go toolchain and `make` (when developing locally and using `make build`).
@@ -502,17 +561,17 @@ After approval, confirm the provenance operator appears in `./g8e operator list`
 
 For architecture detail and example console output, see [Evaluations — Storage-side Provenance Operator](../architecture/evals.md#storage-side-provenance-operator) and [Model Provenance](../architecture/model-provenance.md).
 
-## Formation smoke (`ultra-light-speedster`)
+## Formation smoke (`ultra-efficient-speedster`)
 
 Use this after the evaluation stack, Inference Operator, and **both** witness Operators (Observer + Provenance) are enrolled. It validates the three-model execution-topology path (Lite → Assistant → Primary) without scheduling a full campaign matrix.
 
 ### Prerequisites
 
 1. Observer and Provenance Operators enrolled on the provider host **before** the run (see sections above).
-2. All three formation served tags present on the approved Ollama endpoint, staged through the exact Inference Operator session:
-   - `phi3.5:3.8b-mini-instruct-q4_K_M`
-   - `gemma2:2b-instruct-q4_K_M`
-   - `qwen2.5:0.5b-instruct-q4_K_M`
+2. All three formation served tags present on the approved Ollama endpoint, staged through the exact Inference Operator session. The ultra-efficient-speedster formation uses:
+   - `llama3.2:1b` (Lite role)
+   - `gemma4:e2b` (Assistant role)
+   - `qwen3.5:4b` (Primary role)
 3. Valid delegated **g8ee** app credentials on the campaign host. Copy from the ensemble volume after enrollment (not the image-baked `/app/.g8e` tree):
 
 ```bash
@@ -689,7 +748,7 @@ Workloads remain unhealthy while enrollment is pending.
 
 | Service | CPU limit | Memory limit |
 | --- | --- | --- |
-| `g8e-gateway` | 2 | 2G |
+| `g8e-gateway` | 2 | 4G |
 | `g8e-operator` | 2 | 1G |
 | `g8e-inference-operator` | 4 | 4G |
 | `ensemble` | 2 | 2G |

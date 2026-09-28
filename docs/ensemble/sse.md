@@ -1,10 +1,106 @@
-# Server-Sent Events (SSE)
+---
+doc_id: ensemble_sse
+title: Server-Sent Events (SSE) Architecture
+audience: developers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.3
+owners:
+  - docs/ensemble/sse.md
+  - ensemble/app/services/infra/event_service.py
+  - ensemble/app/services/infra/internal_http_client.py
+  - ensemble/app/services/ai/agent_sse.py
+  - ensemble/app/services/ai/tribunal/emitter.py
+  - ensemble/app/services/operator/approval_service.py
+related:
+  - architecture.md
+  - agents.md
+  - governance.md
+  - protocol.md
+  - ../architecture/sse.md
+  - ../dashboard/sse.md
+when_to_read: Understanding real-time event delivery, SSE infrastructure, stream lifecycle, approval workflows, and observe producer lifecycle projections in g8ee.
+do_not_use_for:
+  - Ensemble architecture and chat pipeline (architecture.md)
+  - AI personas and Tribunal consensus (agents.md)
+  - Governance and verification layers (governance.md)
+  - Wire protocols and Gateway schemas (protocol.md)
+---
+
+# Server-Sent Events (SSE) Architecture
+
+## Purpose
+
+Defines how g8ee publishes real-time event streams to the Governance Gateway and consuming clients, covering event routing, infrastructure layers, lifecycle transitions, and delivery guarantees.
+
+## Quick index
+
+- [Purpose](#purpose)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
+
+Invariant groups: [Event routing](#event-routing-inv-sse-routing), [Infrastructure](#infrastructure-inv-sse-infra), [Observability](#observability-inv-sse-observe).
+
+## Invariants
+
+### Event routing (`INV-SSE-ROUTING`)
+
+| ID | Rule |
+| --- | --- |
+| INV-SSE-ROUTING-01 | Every SSE event published to the Gateway must carry exactly one routing target: `web_session_id` (browser clients) or `cli_session_id` (CLI/BYO clients), never both or neither. Events without a target are skipped before transmission to prevent 400 Bad Request responses that trip the circuit breaker. |
+| INV-SSE-ROUTING-02 | SessionEvent and BackgroundEvent envelopes are converted to wire models (SessionEventWire, BackgroundEventWire) before HTTP transmission. Wire models embed payloads in an `_SSEEventBody` structure containing canonical `type` and nested `data` dictionary. |
+| INV-SSE-ROUTING-03 | The Gateway's `/api/v1/sse/push` endpoint persists accepted events before publishing, then emits `app.agent.status.updated` or `app.run.status.updated` after persistence (persist-before-publish ordering for observe projections). History is retained approximately one hour; live queues are bounded, so SSE is not an audit record. |
+
+### Infrastructure (`INV-SSE-INFRA`)
+
+| ID | Rule |
+| --- | --- |
+| INV-SSE-INFRA-01 | InternalHttpClient establishes mTLS on demand via `_ensure_mtls()`, caching certificate paths and refreshing only when paths change, before every request. Credentials are mounted from settings and never embedded in code. |
+| INV-SSE-INFRA-02 | Circuit breaker is configured with failure threshold of 5 consecutive failures and recovery timeout of 15 seconds. Failure to publish an SSE event raises NetworkError and fails closed for terminal events (Tribunal terminal events re-raise) but logs and continues for progress events. |
+| INV-SSE-INFRA-03 | Approval registration happens before SSE publication to avoid race conditions in fast-response environments (auto-approvers, CI). If publication fails, the pending approval record is removed. |
+
+### Observability (`INV-SSE-OBSERVE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-SSE-OBSERVE-01 | Agent and run state projections are best-effort: projection failures log a warning and return without raising (except asyncio.CancelledError, which propagates). Targetless projections (no `web_session_id` and no `cli_session_id`) are skipped. Projection failures do not abort primary workload behavior. |
+| INV-SSE-OBSERVE-02 | Investigation run state is kept non-terminal (`running`) during ordinary multi-turn chat. Only authoritative investigation closure establishes `completed`. Task documents and APP_TASK_* events are not implemented; observe run projections report zero task counts. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
+| --- | --- | --- |
+| EventService public interface | `ensemble/app/services/infra/event_service.py` | `publish()`, `publish_investigation_event()`, `publish_reputation_event()`, `publish_agent_state()`, `publish_run_state()` methods and their routing validation |
+| HTTP client transport | `ensemble/app/services/infra/internal_http_client.py` | `push_sse_event()`, `push_agent_state()`, `push_run_state()` and circuit breaker configuration |
+| Stream chunk translation | `ensemble/app/services/ai/agent_sse.py` | `deliver_via_sse()` function and chunk type mapping to event types |
+| Tribunal event lifecycle | `ensemble/app/services/ai/tribunal/emitter.py` | Terminal vs progress event classification and error handling |
+| Approval workflow | `ensemble/app/services/operator/approval_service.py` | Registration-before-publish invariant and approval event types |
+
+## Procedures
+
+### End-to-End Event Audit
+
+1. Identify the event type constant in `app.constants.EventType`.
+2. Locate the call site(s) that emit the event via `EventService` or domain service methods.
+3. Trace the payload model to its definition in `app.models.events` (for SSE payloads) or the protocol package (for wire payloads).
+4. Verify the event carries required routing dimensions: `user_id` and exactly one of `web_session_id` or `cli_session_id`.
+5. Confirm the event matches a registered entry in `protocol/test-fixtures/sse-events.json` (payload type and transport field).
+6. Run contract integration tests: `ensemble/tests/integration/test_sse_event_contract_integration.py` and `ensemble/tests/unit/models/test_sse_wire_contract.py`.
+
+## Anti-patterns
+
+- Publishing an SSE event without validating that exactly one routing target exists (INV-SSE-ROUTING-01).
+- Calling `InternalHttpClient.push_*` directly instead of routing through `EventService` (breaks centralized failure handling).
+- Treating observe projection failures as fatal — they are best-effort and must not abort primary work (INV-SSE-OBSERVE-01).
+- Hard-coding event paths or response field names instead of using typed models and protocol constants.
+- Attempting to register pending approvals after publishing the SSE event (race condition in fast environments).
 
 ## Overview
 
-The g8e Agentic Ensemble (`g8ee`) uses Server-Sent Events (SSE) as a real-time delivery side channel for live progress, intermediate reasoning, tool lifecycle transitions, Tribunal deliberations, human-in-the-loop approval challenges, and operator telemetry. `g8ee` does not maintain consumer connections to browsers or CLI clients. It publishes typed event envelopes over mTLS to the Governance Gateway's `POST /api/v1/sse/push` endpoint.
-
-The Gateway authenticates the app workload, authorizes the target session, persists accepted events in its SQLite event history, and publishes them to the target session's live channel. Consumers use `GET /api/v1/sse/stream` for replay plus live delivery or `GET /api/v1/sse/events` for finite polling. The first-party ensemble identity (`spiffe://g8e.local/app/g8ee`) is allowed to publish to authorized targets, but the Gateway does not provide user-wide fan-out: every accepted event must identify exactly one web or CLI session.
+The g8ee Agentic Ensemble publishes real-time event streams over mTLS to the Governance Gateway's `POST /api/v1/sse/push` endpoint. The Gateway authenticates the app workload, authorizes the target session, persists accepted events in SQLite, and publishes them to the target session's live channel. Consumers use `GET /api/v1/sse/stream` for replay plus live delivery or `GET /api/v1/sse/events` for finite polling. Every accepted event identifies exactly one web or CLI session; the Gateway does not provide user-wide fan-out.
 
 ```mermaid
 flowchart TD
@@ -82,12 +178,12 @@ The SSE subsystem in `g8ee` is built on two primary infrastructure layers: `Even
 
 ### EventService
 
-The `EventService` class (`app/services/infra/event_service.py`) implements `EventServiceProtocol` and provides the high-level publishing interface consumed across the ensemble. Its publishing methods are:
+The `EventService` class implements `EventServiceProtocol` and provides the high-level publishing interface consumed across the ensemble. Its publishing methods are:
 
 - **`publish(event)`** — Validates routing targets and delegates the wire model transmission to `InternalHttpClient.push_sse_event()`.
 - **`publish_investigation_event(investigation_id, event_type, payload, web_session_id, case_id, user_id, *, cli_session_id)`** — Constructs a `RequestContext` and publishes a targeted `SessionEvent` containing investigation and case correlation metadata.
 - **`publish_reputation_event(event_type, payload, g8e_context)`** — Converts the application context into a targeted `SessionEvent` and publishes reputation updates through the same route.
-- **`publish_agent_state(request)` / `publish_run_state(request)`** — Sends typed observe projections to the Gateway's separate mTLS producer endpoints. These calls are best-effort, skip targetless requests, swallow transport failures, and preserve cancellation.
+- **`publish_agent_state(request)` / `publish_run_state(request)`** — Send typed observe projections to the Gateway's separate mTLS producer endpoints. These calls are best-effort, skip targetless requests, swallow transport failures except `asyncio.CancelledError`, and preserve cancellation semantics.
 
 ### Observe State Producers
 
@@ -113,20 +209,20 @@ Pure helpers in `app/services/observe/` construct deterministic producer payload
 
 ### InternalHttpClient Transport and Resiliency
 
-The `InternalHttpClient` class (`app/services/infra/internal_http_client.py`) executes the HTTP transport over mTLS:
+The `InternalHttpClient` class executes the HTTP transport over mTLS:
 
 - **mTLS Credential Management** — Mounts the ensemble's app certificate and private key. It calls `_ensure_mtls()` before dispatching requests, caching on-disk certificate paths and refreshing credentials dynamically if paths change.
-- **Circuit Breaker Protection** — Uses an integrated circuit breaker configured with a threshold of 5 consecutive failures and a 15-second recovery timeout. This prevents runaway network storms if the Gateway SSE ingestion pipeline becomes temporarily unavailable.
+- **Circuit Breaker Protection** — Uses an integrated circuit breaker configured with a failure threshold of 5 consecutive failures and a 15-second recovery timeout. This prevents runaway network storms if the Gateway SSE ingestion pipeline becomes temporarily unavailable.
 - **Delivery Confirmation** — Deserializes the Gateway's response into `SSEPushResponse` (`app.models.internal_api.SSEPushResponse`). The response acknowledges one accepted event with `success: true` and `delivered: 1`; it is not a count of connected listeners.
 
 ## AI Chat Streaming and Turn Lifecycle
 
-The streaming delivery pipeline in `app/services/ai/agent_sse.py` (`deliver_via_sse`) bridges the core agent ReAct loop (`g8eEnsemble.stream_response()`) and the SSE publishing layer.
+The streaming delivery pipeline in `deliver_via_sse()` bridges the core agent ReAct loop and the SSE publishing layer.
 
 ```mermaid
 sequenceDiagram
     participant Agent as g8eEnsemble (ReAct Loop)
-    participant SSE as agent_sse.deliver_via_sse
+    participant SSE as deliver_via_sse
     participant EventSvc as EventService
     participant Gateway as Governance Gateway (g8eg)
 
@@ -157,41 +253,41 @@ sequenceDiagram
 
 ### Stream Chunk Translation
 
-Before consuming chunks, `deliver_via_sse` emits an initial iteration start event (`EventType.AI_LLM_CHAT_ITERATION_STARTED`). As `g8eEnsemble` yields `StreamChunkFromModel` objects, `deliver_via_sse` translates each chunk type into its corresponding protocol event and typed payload:
+Before consuming chunks, `deliver_via_sse()` emits an initial iteration start event (`EventType.AI_LLM_CHAT_ITERATION_STARTED`). As `g8eEnsemble` yields `StreamChunkFromModel` objects, the function translates each chunk type into its corresponding protocol event and typed payload. The COMPLETE chunk is special: it saves token usage and finish reason to state but does not emit an event itself. The completion event is emitted after the loop exits, capturing all accumulated state.
 
 | Model Chunk Type / Phase | Emitted SSE Event Type | Payload Class | Description |
 | --- | --- | --- | --- |
 | Iteration Start | `g8e.v1.ai.llm.chat.iteration.started` | `ChatProcessingStartedPayload` | Signals processing has started for the active turn and records the current agent mode. |
 | `TEXT` | `g8e.v1.ai.llm.chat.iteration.text.chunk.received` | `ChatResponseChunkPayload` | Incremental visible text token from the model. |
-| `THINKING` | `g8e.v1.ai.llm.chat.iteration.thinking.started` | `ChatThinkingPayload` | Thinking reasoning chunk with action type (`START` or `UPDATE`). |
-| `THINKING_END` | `g8e.v1.ai.llm.chat.iteration.thinking.started` | `ChatThinkingPayload` | End of model reasoning phase (`action_type="END"`). |
+| `THINKING` | `g8e.v1.ai.llm.chat.iteration.thinking.started` | `ChatThinkingPayload` | Thinking reasoning chunk with phase type (`START`, `UPDATE`, or `END`). |
+| `THINKING_END` | `g8e.v1.ai.llm.chat.iteration.thinking.started` | `ChatThinkingPayload` | End of model reasoning phase (emitted with `phase="END"`). |
 | `RETRY` | `g8e.v1.ai.llm.chat.iteration.retry` | `ChatRetryPayload` | Provider error retry notification with attempt number and maximum retries. |
 | `TOOL_CALL` | `g8e.v1.ai.llm.tool.g8e.*.requested` | `AIToolLifecyclePayload` | Universal tool invocation start (`status="STARTED"`) carrying display metadata, icon, and execution ID. |
 | `TOOL_RESULT` | `g8e.v1.ai.llm.tool.g8e.*.completed` | `AIToolLifecyclePayload` | Universal tool completion (`status="COMPLETED"`) with tool output content or search results. |
 | `TOOL_RESULT` | `g8e.v1.ai.llm.chat.iteration.completed` | `ChatTurnCompletePayload` | Turn completion marker indicating tool results were folded into context. |
 | `CITATIONS` | `g8e.v1.ai.llm.chat.iteration.citations.received` | `ChatCitationsReadyPayload` | Grounding and search citation metadata for web search tools. |
-| `COMPLETE` | `g8e.v1.ai.llm.chat.iteration.text.completed` | `ChatResponseCompletePayload` | Final turn completion event carrying total response text, token usage, finish reason, and citation status. |
+| `COMPLETE` | Saved to state; event emitted after loop | `ChatResponseCompletePayload` | Completion data (token usage, finish reason) is saved to state. Final `AI_LLM_CHAT_ITERATION_TEXT_COMPLETED` event is emitted after the loop exits with accumulated response text, token usage, finish reason, and citation status. |
 | `ERROR` | `g8e.v1.ai.llm.chat.iteration.failed` | `ChatErrorPayload` | Provider execution failure. Suppresses subsequent text completion events. |
 | `CancelledError` | `g8e.v1.ai.llm.chat.iteration.stopped` | `AiProcessingStoppedPayload` | User cancellation signal emitted when the background turn task is cancelled. |
 
-For universal tools (`query_investigation_context`, `get_command_constraints`, `g8e_search_web`), `deliver_via_sse` emits dedicated lifecycle events: `g8e.v1.ai.llm.tool.g8e.investigation.query.requested` and `...completed`, `g8e.v1.ai.llm.tool.g8e.command.constraints.requested` and `...completed`, and `g8e.v1.ai.llm.tool.g8e.web.search.requested` and `...completed`.
+For universal tools (`query_investigation_context`, `get_command_constraints`, `g8e_search_web`), `deliver_via_sse()` emits dedicated lifecycle events: `g8e.v1.ai.llm.tool.g8e.investigation.query.requested` and `...completed`, `g8e.v1.ai.llm.tool.g8e.command.constraints.requested` and `...completed`, and `g8e.v1.ai.llm.tool.g8e.web.search.requested` and `...completed`.
 
 ### Stream State and Narrative Persistence
 
-The streaming consumer maintains state in `AgentStreamState` (`app.models.agent.AgentStreamState`), accumulating visible text, token usage counts, finish reasons, tool usage metrics, and grounding metadata. When a tool iteration completes (`TOOL_RESULT`), `deliver_via_sse` invokes the `on_iteration_text` callback with the accumulated text before clearing the text buffer. This ensures intermediate narrative reasoning produced by the model prior to invoking a tool is persisted to the database and preserved across conversation history.
+The streaming consumer maintains state in `AgentStreamState`, accumulating visible text, token usage counts, finish reasons, tool usage metrics, and grounding metadata. When a tool iteration completes (`TOOL_RESULT` chunk), `deliver_via_sse()` invokes the `on_iteration_text` callback with the accumulated text before clearing the text buffer. This ensures intermediate narrative reasoning produced by the model prior to invoking a tool is persisted to the database and preserved across conversation history.
 
 ## AI Interrogation and Clarification Protocol
 
 When reasoning agents (Sage or Dash) encounter underspecified requests or missing host context, they emit an interrogation block containing three binary questions.
 
-`ChatPipelineService` evaluates completed responses using `extract_interrogation_questions()` (`app/utils/interrogation.py`). If clarifying questions are detected, it emits an `AI_TRIAGE_CLARIFICATION_QUESTIONS` event (`g8e.v1.ai.triage.clarification.questions`):
+`ChatPipelineService` evaluates completed responses using `extract_interrogation_questions()`. If clarifying questions are detected, it emits an `AI_TRIAGE_CLARIFICATION_QUESTIONS` event:
 
 - **Payload** — `TriageClarificationQuestionsPayload` containing the question list, triage complexity classification, intent summary, request posture, and associated confidence scores.
 - **Workflow State** — Halts automatic tool dispatch and presents the questions to the user in the frontend UI. User responses are ingested via the chat API (`AI_TRIAGE_CLARIFICATION_ANSWERED`, `AI_TRIAGE_CLARIFICATION_SKIPPED`, or `AI_TRIAGE_CLARIFICATION_TIMEOUT`), resuming the investigation.
 
 ## AI Tribunal Consensus Lifecycle
 
-The 5-member AI Tribunal (Axiom, Concord, Variance, Pragma, Nemesis), Marshal, and the Auditor emit fine-grained SSE events during command derivation and consensus deliberation. Events are managed by `TribunalEmitter` (`app/services/ai/tribunal/emitter.py`).
+The 5-member AI Tribunal (Axiom, Concord, Variance, Pragma, Nemesis), Marshal, and the Auditor emit fine-grained SSE events during command derivation and consensus deliberation. Events are managed by `TribunalEmitter`.
 
 ### Fail-Closed Terminal vs. Progress Events
 
@@ -221,7 +317,7 @@ The ensemble wires authoritative lifecycle transitions through the `EventService
 
 ### Chat and Tool Lifecycle
 
-`deliver_via_sse` in `app/services/ai/agent_sse.py` pushes agent and run state projections adjacent to the authoritative state change. The projection call does not replace the existing SSE narrative event.
+`deliver_via_sse()` pushes agent and run state projections adjacent to the authoritative state change. The projection call does not replace the existing SSE narrative event.
 
 Agent state transitions:
 
@@ -256,7 +352,7 @@ A first-round no-consensus followed by round two is not a terminal run failure. 
 
 ### Investigation Lifecycle
 
-`InvestigationService` in `app/services/investigation/investigation_service.py` injects `EventServiceProtocol | None` and pushes run projections after authoritative status mutations:
+`InvestigationService` injects `EventServiceProtocol | None` and pushes run projections after authoritative status mutations:
 
 - After successful governed creation persistence, pushes a `queued` run projection. If creation fails, no projection is pushed.
 - After an authoritative status update persists, maps `InvestigationStatus.OPEN`/`ESCALATED` to `running`, `CLOSED`/`RESOLVED` to `completed`. Only pushes when status actually changed.
@@ -273,7 +369,7 @@ Operator dispatch does not have an authoritative persona projection. `DispatchRe
 
 ## Human-in-the-Loop Approvals
 
-State-changing operations requiring human authorization trigger interactive approval events managed by `OperatorApprovalService` (`app/services/operator/approval_service.py`).
+State-changing operations requiring human authorization trigger interactive approval events managed by `OperatorApprovalService`.
 
 ### Pre-Publish Registration Invariant
 
@@ -306,15 +402,15 @@ The SSE architecture in `g8ee` incorporates several defensive concurrency patter
 
 - **Non-Blocking UI Side-Channel** — SSE streaming is treated as an informative telemetry side-channel. Network failures during streaming event publication log warnings but do not abort core execution pipelines or database transactions. The database remains the primary durable record of truth.
 - **Coroutine Context Isolation** — In `g8eEnsemble.run_with_sse()`, context token lifecycles are owned by a standard coroutine rather than an async generator. This avoids Python `ContextVar.reset()` exceptions caused by Python dispatching async-generator cleanup across distinct asyncio execution contexts.
-- **Task Lifecycle and Stop Interlocks** — `BackgroundTaskManager` (`app/services/ai/chat_task_manager.py`) tracks active background chat tasks by investigation ID. When a user requests a stop, the manager cancels the active asyncio task and publishes `AI_LLM_CHAT_ITERATION_STOPPED` to notify the UI immediately.
+- **Task Lifecycle and Stop Interlocks** — `BackgroundTaskManager` tracks active background chat tasks by investigation ID. When a user requests a stop, the manager cancels the active asyncio task and publishes `AI_LLM_CHAT_ITERATION_STOPPED` to notify the UI immediately.
 
 ## Contract Testing and Verification
 
-To prevent schema drift across platform components, `g8ee` includes contract integration test suites in `ensemble/tests/integration/test_sse_event_contract_integration.py` and `ensemble/tests/unit/models/test_sse_wire_contract.py`. These tests validate that every event type and payload emitted by `deliver_via_sse`, `TribunalEmitter`, and `OperatorApprovalService` conforms strictly to the protocol fixture definitions in `protocol/test-fixtures/sse-events.json`.
+To prevent schema drift across platform components, g8ee includes contract integration test suites in `ensemble/tests/integration/test_sse_event_contract_integration.py` and `ensemble/tests/unit/models/test_sse_wire_contract.py`. These tests validate that every event type and payload emitted by `deliver_via_sse()`, `TribunalEmitter`, and `OperatorApprovalService` conforms strictly to the protocol fixture definitions in `protocol/test-fixtures/sse-events.json`.
 
 Tests verify required routing dimensions, payload type safety, error event suppression behavior, and fixture constant alignment.
 
-## Related Documentation
+## Links out
 
 - [Architecture](architecture.md) — Overall ensemble architecture, protocol surfaces, and model hierarchy.
 - [Agents](agents.md) — Persona architecture, reasoning agents, and Tribunal structure.

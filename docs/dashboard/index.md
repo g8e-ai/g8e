@@ -76,7 +76,7 @@ g8ed is the first-party browser interface for g8e. The dashboard serves a single
 
 ### Application Delivery
 
-Express serves checked-in assets from [dashboard/public/](dashboard/public/) and injects the Gateway origin through [/g8e-config.js](dashboard/server.js#L86-L89). The browser loads this configuration before any other script, so the Gateway origin is available immediately for platform requests.
+Express serves checked-in assets from [dashboard/public/](dashboard/public/) and injects the Gateway origin through `/g8e-config.js` (implemented in [dashboard/server.js](dashboard/server.js)). The browser loads this configuration before any other script, so the Gateway origin is available immediately for platform requests.
 
 The dashboard host applies security headers:
 - Content-Security-Policy restricts connections to the dashboard and configured Gateway origins

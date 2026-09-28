@@ -1,19 +1,100 @@
+---
+doc_id: ensemble-evals
+title: Ensemble Evaluations
+audience: maintainers and coding agents
+status: current
+last_updated: 2026-09-28
+version: v2.2.0
+owners:
+  - ensemble/app/services/evaluation/
+  - protocol/python/g8e/models/internal_api.py
+related:
+  - ../architecture/evals.md
+  - ../architecture/agents.md
+  - tests.md
+  - agents.md
+when_to_read: Understanding g8ee evaluation pipeline, campaign request handling, trace persistence, role control, and semantic grading implementation.
+do_not_use_for:
+  - Platform evaluation programs and campaign orchestration (../architecture/evals.md)
+  - AI Agents and the governance boundary (../architecture/agents.md)
+  - Release process and evidence artifacts (../devs/release_process.md)
+---
+
 # Ensemble Evaluations
 
-## Scope and ownership
+## Purpose
 
-g8ee is the production chat application used by g8e model campaigns. It accepts a typed `EvaluationInferenceContext` on `POST /api/v1/chat`, runs the normal ensemble pipeline, records application-owned trace evidence, and exposes the completed trace to the Go campaign controller. It does not own campaign definitions, scheduling, assignment lifecycle, platform evidence, or final verification.
+Describes the g8ee evaluation pipeline: how campaign controllers submit scored chat assignments, how g8ee records assignment traces, applies homogeneous role control, and invokes semantic judges. Establishes the boundary between g8ee's application-owned trace evidence and the platform's campaign verification and proof retrieval.
 
-The platform evaluation programs, campaign topology, Operator roles, evidence layout, and verification commands are documented in [Evaluations](../architecture/evals.md). This page documents only the g8ee contribution to the model-campaign chat path. The native `core-execution-boundary@1.0.0` suite does not use g8ee.
+## Quick index
 
-| Concern | Owner | g8ee contribution |
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
+
+## Invariants
+
+### Evaluation ownership and scope (`INV-EVAL-SCOPE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-SCOPE-01 | g8ee runs the normal `ChatPipelineService` for scored chat evaluations; it does not implement a separate evaluation-only inference path. Production triage, model selection, tool-loop, and governed-Operator behavior remain unchanged. |
+| INV-EVAL-SCOPE-02 | g8ee does not own campaign definitions, scheduling, assignment lifecycle aggregates, platform evidence binding, or final verification. The Go evaluation services retrieve the trace and compute the campaign result. |
+| INV-EVAL-SCOPE-03 | Model output, Tribunal agreement, semantic judge results, and application approvals remain outside the platform authorization boundary. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md). |
+
+### Evaluation context and request contract (`INV-EVAL-CONTEXT`)
+
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-CONTEXT-01 | Campaign controllers send a typed `EvaluationInferenceContext` object in the `POST /api/v1/chat` request body. The protocol model in [protocol/python/g8e/models/internal_api.py](../../protocol/python/g8e/models/internal_api.py) is the contract source. |
+| INV-EVAL-CONTEXT-02 | The `campaign_id`, `run_id`, `assignment_id`, and `evaluation_attempt_id` fields identify the campaign and assignment. The `scenario_id` identifies the frozen scenario. |
+| INV-EVAL-CONTEXT-03 | The `model_registry_digest` and non-empty `model_registry` bind the request to the campaign's frozen model registry. Each registry variant contains a model tag (unique within the registry) and a 64-character lowercase SHA-256 digest. |
+| INV-EVAL-CONTEXT-04 | The `target_operator_session_id` identifies the intended governed-Operator execution session. The `evaluation_lane` is `model_role` or `system` (defaults to `system`). |
+| INV-EVAL-CONTEXT-05 | For the `model_role` lane, `designated_model_role` is required and MUST be `primary`, `assistant`, or `lite`. For the `system` lane, `designated_model_role` MUST NOT be present. |
+| INV-EVAL-CONTEXT-06 | The `grading_method` is `deterministic` or `semantic_judge` (defaults to `deterministic`). The `gold_summary` is required for `semantic_judge` and carries the user prompt, expected behavior, required and forbidden concepts, and expected and forbidden tools. |
+
+### Trace schema and persistence (`INV-EVAL-TRACE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-TRACE-01 | `EvaluationTraceService` persists one immutable JSON trace per assignment and evaluation attempt at `$G8E_RUNTIME_DIR/data/evaluation/traces/<assignment-id>/<evaluation-attempt-id>.json`. When `G8E_RUNTIME_DIR` is unset, g8ee uses `.g8e` in the project root. |
+| INV-EVAL-TRACE-02 | Assignment and attempt IDs are validated as safe filenames before filesystem access. Trace writes use canonical JSON and atomic temporary-file replacement (write to `.json.tmp`, then replace). |
+| INV-EVAL-TRACE-03 | Trace schema version is `2`. Digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch. |
+| INV-EVAL-TRACE-04 | The authenticated, read-only lookup is `GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}`. The response is `{ "trace": <typed trace> }`. Missing traces return not-found. Unsafe path parameters are rejected. |
+
+### Role control and model selection (`INV-EVAL-ROLE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-ROLE-01 | For the `model_role` lane, `apply_homogeneous_role_control` runs after triage and records the designated role, the natural role from triage, whether they agree, and the triage complexity. The designated role overrides normal triage routing. |
+| INV-EVAL-ROLE-02 | The `primary` role activates `ReasoningAgent.SAGE` with `SagePersona`. The `assistant` and `lite` roles activate `ReasoningAgent.DASH` with `DashPersona`, with model resolution taken from the designated tier and request overrides. |
+| INV-EVAL-ROLE-03 | A `lite` assignment always resolves the lite tier; the normal simple/complex routing rule does not override that assignment. The `system` lane does not apply homogeneous role control and follows normal triage routing. |
+
+### Semantic grading (`INV-EVAL-GRADE`)
+
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-GRADE-01 | For `grading_method: "semantic_judge"`, g8ee invokes `EvalJudge` after the interaction completes, before finalizing the trace. Deterministic assignments do not invoke the judge. |
+| INV-EVAL-GRADE-02 | The judge model comes from `eval_judge.model` when configured and otherwise falls back to the resolved lite model. Judge calls are retried up to 3 times with exponential backoff (2s initial, 2x multiplier) on transient failures. |
+| INV-EVAL-GRADE-03 | The judge must return JSON with an integer score from 1 through 5 and non-empty reasoning. Scores of 3 or higher pass. Invalid or empty responses and failures after all retries produce an `unavailable` semantic grade rather than a fabricated score. |
+| INV-EVAL-GRADE-04 | The semantic judge is a grader, not a policy gate. Its score is persisted for the Go campaign verifier and aggregate projections; it cannot approve a tool call or substitute for required governance proof. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
 | --- | --- | --- |
-| Campaign definitions, frozen registries, scheduling, assignment lifecycle, and aggregates | `g8e eval campaign` | Receives the assignment context and executes the chat turn |
-| Production model inference and tool-loop behavior | `ensemble/app/` | Runs the normal triage, model, tool, and governed-Operator path |
-| Assignment trace | `EvaluationTraceService` in g8ee | Persists a canonical, digest-bound trace and serves it through an authenticated read-only endpoint |
-| Platform evidence binding and verification | Go evaluation services | Retrieves the trace, binds it to the assignment, and computes the campaign result |
+| Evaluation request model | [protocol/python/g8e/models/internal_api.py](../../protocol/python/g8e/models/internal_api.py) | `EvaluationInferenceContext`, `EvaluationLane`, `DesignatedModelRole`, `EvaluationGoldSummary` |
+| Trace service implementation | [ensemble/app/services/evaluation/trace_service.py](../../ensemble/app/services/evaluation/trace_service.py) | `EvaluationTraceService.begin()`, `finalize()`, `load()` |
+| Role control implementation | [ensemble/app/services/evaluation/role_control.py](../../ensemble/app/services/evaluation/role_control.py) | `apply_homogeneous_role_control()`, `resolve_role_outcome()` |
+| Semantic grader implementation | [ensemble/app/services/evaluation/semantic_grader.py](../../ensemble/app/services/evaluation/semantic_grader.py) | `grade_campaign_assignment_semantically()` |
+| Chat pipeline integration | [ensemble/app/services/ai/chat_pipeline.py](../../ensemble/app/services/ai/chat_pipeline.py) | Trace begin/finalize in `_finalize_evaluation_assignment()` |
+| Evaluation trace tests | [ensemble/tests/integration/test_evaluation_trace_digest_integration.py](../../ensemble/tests/integration/test_evaluation_trace_digest_integration.py) | Trace digest validation |
 
-Model output, Tribunal agreement, semantic judge results, and application approvals remain outside the platform authorization boundary. A tool request changes host state only when it enters the governed g8e path and the Gateway and executing Operator accept it under the active posture. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md).
+## Procedures
 
 ## Campaign request contract
 

@@ -34,6 +34,65 @@ The g8e Agentic Ensemble (`g8ee`) represents provider-specific reasoning using a
 
 Thinking is an application-level model capability. It does not authorize a governed operation, substitute for protocol L2 consensus or L3 notary authorization, or attest to provider behavior outside the g8ee path. See [Governance](governance.md) and [Architecture: AI Agents and the g8e Governance Boundary](../architecture/agents.md).
 
+## Quick index
+
+- [Purpose](#purpose)
+- [Quick index](#quick-index)
+- [Invariants](#invariants)
+- [Owned surfaces](#owned-surfaces)
+- [When Thinking Runs](#when-thinking-runs)
+- [Canonical Levels and Model Profiles](#canonical-levels-and-model-profiles)
+- [Provider Translation](#provider-translation)
+- [Reasoning Output and Tool Context](#reasoning-output-and-tool-context)
+- [Thought Signatures](#thought-signatures)
+- [Streaming Events](#streaming-events)
+- [Memory and Telemetry](#memory-and-telemetry)
+- [Procedures](#procedures)
+- [Anti-patterns](#anti-patterns)
+- [Links out](#links-out)
+
+## Invariants
+
+Ids are stable. Append the next free number in each group; do not renumber.
+
+### Thinking Configuration and Behavior (`INV-ENS-THINK-CONFIG`)
+
+| ID | Rule |
+| --- | --- |
+| INV-ENS-THINK-CONFIG-01 | `LLModelConfig.supported_thinking_levels` is the canonical source of truth for each model's reasoning capability. Providers MUST NOT accept thinking requests for levels not in this list. |
+| INV-ENS-THINK-CONFIG-02 | `clamp_thinking_level()` MUST resolve any requested level to the highest supported intensity at or below it. If the request is lower than all supported levels, it returns the lowest supported level. An `off` request returns `off` when supported; for always-on models it returns the lowest supported intensity. |
+| INV-ENS-THINK-CONFIG-03 | Primary generation calls MUST carry `ThinkingConfig` built by `_build_thinking_config()` with a default request of `high` and `include_thoughts=true`. Assistant and lite call shapes MUST NOT carry thinking configuration. |
+| INV-ENS-THINK-CONFIG-04 | Provider adapters MUST omit all reasoning-related request fields (thinking_config, reasoning, think parameter, etc.) when the resolved level is `off`. Sending unsupported level names is prohibited. |
+
+### Streaming and State Management (`INV-ENS-THINK-STREAM`)
+
+| ID | Rule |
+| --- | --- |
+| INV-ENS-THINK-STREAM-01 | Thought chunks MUST transition the turn state from INACTIVE → ACTIVE on first chunk, emit `THINKING`, and emit `THINKING_END` on transition to visible text, tool execution, or stream end. |
+| INV-ENS-THINK-STREAM-02 | Thought parts MUST be preserved in the in-memory ReAct loop history to satisfy provider multi-turn tool-call protocol requirements. Consolidation MUST NOT merge thought parts with non-thought content. |
+| INV-ENS-THINK-STREAM-03 | Durable memory generation MUST skip conversation messages marked `is_thinking`. This filter does not apply to turn-local provider history. |
+
+### Provider Translation (`INV-ENS-THINK-PROVIDER`)
+
+| ID | Rule |
+| --- | --- |
+| INV-ENS-THINK-PROVIDER-01 | Provider translators in `ensemble/app/llm/thinking.py` are pure functions returning typed translation results. Each provider adapter interprets the result according to its own wire protocol. |
+| INV-ENS-THINK-PROVIDER-02 | Gemini adapters MUST send `thinking_config.thinking_level` (string enum) and `include_thoughts` boolean. Thought byte signatures MUST be normalized to base64 strings. |
+| INV-ENS-THINK-PROVIDER-03 | Anthropic adapters MUST send thinking as `{"type": "enabled", "budget_tokens": N}` when enabled. When thinking is active, adapters MUST omit `top_k` and `top_p`. Max tokens MUST be uplifted by `thinking_output_reserve` to preserve visible-output headroom. |
+| INV-ENS-THINK-PROVIDER-04 | OpenAI-compatible adapters MUST send `reasoning.effort` with the resolved level string. When off, the `reasoning` object MUST be omitted. |
+| INV-ENS-THINK-PROVIDER-05 | Ollama adapters MUST respect the model's `thinking_dialect`. Native-toggle models send `think=true` when enabled, `think=false` when off. Models with dialect `none` MUST NOT send a `think` parameter. |
+
+## Owned surfaces
+
+| Claim | Path | Verify |
+| --- | --- | --- |
+| Thinking translators | `ensemble/app/llm/thinking.py` | Provider-specific functions return typed translation results |
+| Model capability registry | `ensemble/app/models/model_configs.py` | `LLModelConfig` defines `supported_thinking_levels` for each model |
+| Clamping logic | `ensemble/app/models/model_configs.py` line 451 | `clamp_thinking_level()` resolves requests to supported levels |
+| ThinkingConfig builder | `ensemble/app/services/ai/generation_config_builder.py` | `_build_thinking_config()` produces configuration for primary calls |
+| Stream state machine | `ensemble/app/services/ai/agent_turn.py` | `TurnState` and `_handle_*_chunk()` functions maintain INACTIVE ↔ ACTIVE transitions |
+| Provider adapters | `ensemble/app/llm/providers/*.py` | Gemini, Anthropic, OpenAI, Ollama, G8E, and Fake implementations apply translations |
+
 ## When Thinking Runs
 
 The primary generation call shape carries `ThinkingConfig`, tools, and system instructions. The production generation builder in [ensemble/app/services/ai/generation_config_builder.py](../../ensemble/app/services/ai/generation_config_builder.py) requests `high` with `include_thoughts=true` for primary calls, then clamps that request to the selected model's registered capability via [clamp_thinking_level()](../../ensemble/app/models/model_configs.py#L451). This call shape is used for both complex and simple chat turns because either route can enter the tool loop; a simple turn selects the assistant model while still using the primary call shape.
@@ -121,6 +180,41 @@ These events are session-targeted delivery telemetry. They are not governance st
 Durable memory generation in [ensemble/app/services/ai/memory_service.py](../../ensemble/app/services/ai/) skips conversation messages marked `is_thinking`. This prevents a thinking-only message from becoming a user preference or investigation summary. The filter does not remove thought parts from the turn-local provider history, where they can be required for multi-turn tool calling.
 
 The agent accumulates provider-reported input, output, cache, total, and thinking token counts in turn results and includes them in model-call telemetry and completed response metadata. Gemini supplies a separate thought-token count, and the governed `g8e` provider can propagate one from the inference response. The Anthropic, OpenAI-compatible, and Ollama adapters do not populate a separate thinking-token field, so `thinking_tokens` remains zero for those calls even when their responses contain reasoning. A provider that omits usage leaves the usage fields at zero with `usage_reported=false`.
+
+## Procedures
+
+### Adding a New Model with Thinking Support
+
+1. Define the model's `supported_thinking_levels` in the appropriate model config section of [ensemble/app/models/model_configs.py](../../ensemble/app/models/model_configs.py).
+2. For Anthropic models, optionally override `thinking_budgets` per level; otherwise the default table is used.
+3. For Ollama models, set `thinking_dialect` to either `NATIVE_TOGGLE` or `NONE`.
+4. For Anthropic Opus-class models, consider increasing `thinking_output_reserve` to 8,192.
+5. Run `./g8e test lint` to validate the configuration.
+
+### Debugging Streaming Thought Events
+
+1. Check `TurnState.thinking_active` in [ensemble/app/services/ai/agent_turn.py](../../ensemble/app/services/ai/agent_turn.py) to confirm the state machine is transitioning correctly.
+2. Verify that `THINKING` chunks are being emitted for all thought content before `THINKING_END`.
+3. Confirm that thought parts are preserved in `response.parts` for the ReAct loop history.
+4. For provider-specific issues, check the corresponding adapter's normalization logic in [ensemble/app/llm/providers/](../../ensemble/app/llm/providers/).
+
+### Tracing a Thinking Request End-to-End
+
+1. Verify the model has thinking support via `clamp_thinking_level()` returning non-`off`.
+2. Check the call shape: primary calls carry `ThinkingConfig`; assistant/lite calls do not.
+3. Trace the provider translator output (Gemini: thinking_level + include_thoughts; Anthropic: budget_tokens; OpenAI: reasoning.effort; Ollama: think boolean).
+4. Inspect the provider response for normalized thought parts.
+5. Verify thought parts are emitted as `THINKING` / `THINKING_END` chunks in the stream.
+
+## Anti-patterns
+
+- Hand-editing provider adapter translations instead of updating the canonical translator function in [ensemble/app/llm/thinking.py](../../ensemble/app/llm/thinking.py).
+- Requesting thinking on assistant or lite call shapes, which do not carry `thinking_config`.
+- Registering an Ollama model without declaring its `thinking_dialect`, which causes a runtime ValueError.
+- Merging thought parts with non-thought content during consolidation, which breaks provider multi-turn protocol requirements.
+- Including thinking-marked messages in durable memory generation, which pollutes the memory update context.
+- Sending unsupported thinking levels directly to providers instead of clamping via `clamp_thinking_level()`.
+- Hard-coding line numbers in cross-references to thinking-related code instead of using repository-relative paths.
 
 ## Links out
 
