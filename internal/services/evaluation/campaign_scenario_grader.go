@@ -72,6 +72,117 @@ func GradeHomogeneousScenario(req ScenarioGradingRequest) (*ScenarioGradingResul
 	return result, nil
 }
 
+// RoleTrace pairs one formation role with its imported g8ee trace for
+// heterogeneous scenario grading.
+type RoleTrace struct {
+	Role  FormationRole
+	Trace EvaluationTrace
+}
+
+// HeterogeneousScenarioGradingRequest carries one heterogeneous assignment's
+// per-role traces and catalog gold criteria for deterministic scenario
+// grading. Lifecycle is the whole-assignment lifecycle status (not per-role)
+// and is used identically for every role-scoped grading pass.
+type HeterogeneousScenarioGradingRequest struct {
+	AssignmentID  string
+	ScenarioID    string
+	GradingMethod evalv1.EvaluationGradingMethod
+	ScenarioInput ScenarioInputFixture
+	ScenarioGold  ScenarioGoldCriteria
+	ScenarioTools ScenarioToolExpectations
+	RoleTraces    []RoleTrace
+	Lifecycle     evalv1.EvaluationAssignmentLifecycleStatus
+}
+
+// GradeHeterogeneousScenario evaluates one heterogeneous formation assignment
+// against its frozen catalog gold criteria and each role's imported g8ee
+// trace. It runs the same granular per-criterion helpers
+// GradeHomogeneousScenario uses, once per role (role-scoped, with grade IDs
+// namespaced by role so criteria that repeat across roles never collide),
+// plus one pipeline-scoped pass that grades the heterogeneous-pipeline
+// catalog criterion exactly once for the whole assignment.
+func GradeHeterogeneousScenario(req HeterogeneousScenarioGradingRequest) (*ScenarioGradingResult, error) {
+	if req.AssignmentID == "" || req.ScenarioID == "" || len(req.RoleTraces) == 0 {
+		return nil, fmt.Errorf("evaluation: grade heterogeneous scenario: assignment, scenario, and role traces are required")
+	}
+	result := &ScenarioGradingResult{
+		DeterministicGrades: []*evalv1.DeterministicGrade{},
+		SemanticGrades:      []*evalv1.SemanticGrade{},
+		DecomposedScores:    []*evalv1.DecomposedScoreRecord{},
+	}
+	for _, roleTrace := range req.RoleTraces {
+		roleReq := ScenarioGradingRequest{
+			AssignmentID:   req.AssignmentID + ":" + string(roleTrace.Role),
+			ScenarioID:     req.ScenarioID,
+			DesignatedRole: string(roleTrace.Role),
+			GradingMethod:  req.GradingMethod,
+			ScenarioInput:  req.ScenarioInput,
+			ScenarioGold:   req.ScenarioGold,
+			ScenarioTools:  req.ScenarioTools,
+			Trace:          roleTrace.Trace,
+			Lifecycle:      req.Lifecycle,
+		}
+		roleInvoked := traceRoleInvoked(roleReq.Trace, roleReq.DesignatedRole)
+		result.DeterministicGrades = append(result.DeterministicGrades, newDeterministicGrade(roleReq.AssignmentID, "role-invoked", roleInvokedGradeStatus(roleInvoked, roleReq.Lifecycle), roleInvokedDetail(roleInvoked, roleReq.Lifecycle), roleInvokedScore(roleInvoked, roleReq.Lifecycle)))
+		result.DeterministicGrades = append(result.DeterministicGrades, gradeRoutingAgreement(roleReq.AssignmentID, roleReq.Trace))
+		result.DeterministicGrades = append(result.DeterministicGrades, gradeGovernedInference(roleReq.AssignmentID, roleReq.Trace))
+		result.DeterministicGrades = append(result.DeterministicGrades, gradeRoleCriteria(roleReq)...)
+		// Deliberately not calling gradePipelineCriteria here: a single role's leg
+		// of a heterogeneous pipeline is not "the homogeneous pipeline," and the
+		// heterogeneous-pipeline criterion is graded once below, not per role.
+		result.DeterministicGrades = append(result.DeterministicGrades, gradeRequiredEvidenceTypes(roleReq)...)
+		if toolGrade := gradeToolSelection(roleReq); toolGrade != nil {
+			result.DeterministicGrades = append(result.DeterministicGrades, toolGrade)
+		}
+		if policyGrade := gradePolicyExpectation(roleReq); policyGrade != nil {
+			result.DeterministicGrades = append(result.DeterministicGrades, policyGrade)
+		}
+		if contentGrade := gradeScenarioContent(roleReq); contentGrade != nil {
+			result.DeterministicGrades = append(result.DeterministicGrades, contentGrade)
+		}
+		result.SemanticGrades = append(result.SemanticGrades, semanticGradesForRequest(roleReq)...)
+	}
+	result.DeterministicGrades = append(result.DeterministicGrades, gradeHeterogeneousPipelineCriteria(req)...)
+	result.DecomposedScores = deriveScenarioDecomposedScores(req.AssignmentID, result.DeterministicGrades)
+	return result, nil
+}
+
+// gradeHeterogeneousPipelineCriteria grades the heterogeneous-lane pipeline
+// catalog criterion exactly once per assignment (not per role): PASS when
+// every role's trace shows it was invoked and the assignment as a whole
+// reached the COMPLETED lifecycle.
+func gradeHeterogeneousPipelineCriteria(req HeterogeneousScenarioGradingRequest) []*evalv1.DeterministicGrade {
+	criteria := make([]ScenarioCriterion, 0)
+	for _, pipeline := range req.ScenarioGold.PipelineCriteria {
+		if pipeline.Lane != "heterogeneous" {
+			continue
+		}
+		criteria = append(criteria, pipeline.Criteria...)
+	}
+	if len(criteria) == 0 {
+		return nil
+	}
+	allInvoked := len(req.RoleTraces) == 3
+	for _, roleTrace := range req.RoleTraces {
+		if !traceRoleInvoked(roleTrace.Trace, string(roleTrace.Role)) {
+			allInvoked = false
+		}
+	}
+	status := evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
+	detail := "heterogeneous pipeline did not complete with all three role handoffs"
+	score := 0.0
+	if allInvoked && req.Lifecycle == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED {
+		status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
+		detail = "heterogeneous pipeline completed Lite → Assistant → Primary with role handoff evidence"
+		score = 1
+	}
+	grades := make([]*evalv1.DeterministicGrade, 0, len(criteria))
+	for _, criterion := range criteria {
+		grades = append(grades, newDeterministicGrade(req.AssignmentID, criterion.CriterionID, status, detail, score))
+	}
+	return grades
+}
+
 func gradeRoleCriteria(req ScenarioGradingRequest) []*evalv1.DeterministicGrade {
 	grades := make([]*evalv1.DeterministicGrade, 0, len(req.ScenarioGold.RoleCriteria))
 	for _, roleCriteria := range req.ScenarioGold.RoleCriteria {

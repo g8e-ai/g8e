@@ -468,6 +468,10 @@ type FormationRoleTelemetry struct {
 	PolicyValidation        FormationPolicyValidation
 	ObserverEvidence        *FormationObserverEvidence
 	ProvenanceEvidence      *FormationAttestation
+	// Trace is the full g8ee trace for this role, present when execution routed
+	// through g8ee's chat/trace pipeline instead of the direct-dispatch runner.
+	// Nil for the direct-dispatch runner.
+	Trace EvaluationTrace
 }
 
 // FormationRunResult is the benchmark output for one formation.
