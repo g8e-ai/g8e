@@ -258,6 +258,41 @@ describe('AssignmentDetailView', () => {
     expect(screen.getByText('I am sorry, I cannot execute that command.')).toBeInTheDocument();
   });
 
+  it('renders tool activity summary when a completed assignment has no raw response', () => {
+    renderAssignment([
+      assignmentResult({
+        terminal_status: 'completed',
+        verification_disposition: 'not_run',
+        activity_summary: {
+          model_activity: { availability: 'not_applicable' },
+          tool_decisions: {
+            availability: 'observed',
+            records: [
+              {
+                tool_label: 'run_commands_with_operator',
+                recognized: true,
+                selected: false,
+                permission_compliant: true,
+                unnecessary: false,
+                outcome: 'pass',
+                evidence_source: 'application_reported',
+              },
+            ],
+          },
+          tool_calls: { availability: 'not_applicable' },
+          policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured' },
+          governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured' },
+        },
+      }),
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'What the model did' })).toBeInTheDocument();
+    expect(screen.getByText('No free-text reply — the model acted via tool calls')).toBeInTheDocument();
+    expect(screen.getByText(/Considered but did not select run_commands_with_operator — Pass/)).toBeInTheDocument();
+    expect(screen.getByText(/Result: Completed · not verified/)).toBeInTheDocument();
+    expect(screen.queryByText(/No free-text response or tool activity was captured/)).not.toBeInTheDocument();
+  });
+
   it('renders failure diagnosis and fallback trace note when failed without raw response', () => {
     renderAssignment([
       assignmentResult({
@@ -269,8 +304,8 @@ describe('AssignmentDetailView', () => {
     expect(screen.getByRole('heading', { name: 'What the model did' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getAllByText('no_scored_calls')).toHaveLength(2);
-    expect(screen.getByText(/No raw model response was captured/)).toBeInTheDocument();
-    expect(screen.getByText(/assignment-1-trace\.json/)).toBeInTheDocument();
+    expect(screen.getByText(/No free-text response or tool activity was captured/)).toBeInTheDocument();
+    expect(screen.getByText(/Result: Model failed\./)).toBeInTheDocument();
   });
 
   it('renders What the model is asked, What the model was provided, and What the model did in order', () => {

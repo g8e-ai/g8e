@@ -3,8 +3,8 @@ doc_id: unified_stack
 title: Unified Docker Stack Guide
 audience: platform operators and evaluators
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - docker-compose.yml
   - docs/guides/

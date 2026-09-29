@@ -114,14 +114,35 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
+function toolActionSummaries(activity: AssignmentResult['activity_summary']): string[] {
+  if (!activity) return [];
+  const lines: string[] = [];
+
+  if (activity.tool_calls.availability === 'observed') {
+    for (const record of activity.tool_calls.records) {
+      lines.push(`Called ${record.tool_label || 'an unlabeled tool'} — ${observationLabel(record.semantic_outcome)}`);
+    }
+  }
+  if (activity.tool_decisions.availability === 'observed') {
+    for (const record of activity.tool_decisions.records) {
+      lines.push(
+        `${record.selected ? 'Selected' : 'Considered but did not select'} ${record.tool_label || 'an unlabeled tool'} — ${observationLabel(record.outcome)}`,
+      );
+    }
+  }
+  if (lines.length === 0 && activity.policy_decisions.availability === 'observed') {
+    for (const record of activity.policy_decisions.records) {
+      lines.push(`Policy ${observationLabel(record.outcome)} for ${record.tool_label || 'an unlabeled tool'}`);
+    }
+  }
+  return lines;
+}
+
 function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) {
   const isFailure = assignment.terminal_status !== 'completed';
   const hasResponse = Boolean(assignment.model_response);
   const hasFailureOutput = Boolean(assignment.failure_output);
-
-  if (!hasResponse && !hasFailureOutput && !isFailure) {
-    return null;
-  }
+  const toolActions = hasResponse ? [] : toolActionSummaries(assignment.activity_summary);
 
   const failingChips = assignmentGradeChips(assignment).filter(
     (g) => g.status === 'fail' || g.status === 'invalid_evidence',
@@ -164,9 +185,25 @@ function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) 
           </div>
           <pre className="model-response-text"><code>{assignment.model_response}</code></pre>
         </div>
-      ) : isFailure && !hasFailureOutput ? (
+      ) : toolActions.length > 0 ? (
+        <div className="model-response-block model-response-tool-only">
+          <div className="model-response-header">
+            <span className="model-response-label">No free-text reply — the model acted via tool calls</span>
+            <span className="model-response-variant">{assignment.variant_id}</span>
+          </div>
+          <ul className="model-response-tool-list">
+            {toolActions.map((line, index) => (
+              <li key={index}>{line}</li>
+            ))}
+          </ul>
+          <p className="model-response-tool-verdict">
+            Result: {assignmentVerdictLabel(assignment.terminal_status, assignment.verification_disposition)}
+          </p>
+        </div>
+      ) : !hasFailureOutput ? (
         <p className="model-response-empty">
-          No raw model response was captured in this assignment projection. Check local trace: <code>{assignment.assignment_id}-trace.json</code>
+          No free-text response or tool activity was captured for this assignment. Result:{' '}
+          {assignmentVerdictLabel(assignment.terminal_status, assignment.verification_disposition)}.
         </p>
       ) : null}
     </section>
@@ -253,11 +290,12 @@ export function AssignmentDetailView() {
         <>
           <TaskPromptSection task={task} className="assignment-task-prompt" />
           <TaskProvidedSection task={task} className="assignment-task-provided" />
-          <TaskExpectationSection task={task} className="assignment-task-expected" />
         </>
       ) : null}
 
       <ModelResponseSection assignment={assignment} />
+
+      {task ? <TaskExpectationSection task={task} className="assignment-task-expected" /> : null}
 
       {hasResources ? (
         <section className="assignment-resources" aria-label="Measured values">

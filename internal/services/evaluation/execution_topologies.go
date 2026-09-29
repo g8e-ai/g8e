@@ -357,6 +357,9 @@ type FormationRoleResult struct {
 	GenerationTokens        uint32
 	GenerationDurationNanos uint64
 	PeakVRAMMiB             uint64
+	FinishReason            string
+	LoadState               evalv1.EvaluationLoadState
+	RetryCount              uint32
 }
 
 // FormationRoleExecutor invokes the role through the governed model path.
@@ -400,6 +403,9 @@ type FormationRoleTelemetry struct {
 	GenerationTokens        uint32
 	GenerationDurationNanos uint64
 	GenerationTokensPerSec  float64
+	FinishReason            string
+	LoadState               evalv1.EvaluationLoadState
+	RetryCount              uint32
 	StateMutation           bool
 	PolicyValidation        FormationPolicyValidation
 	ObserverEvidence        *FormationObserverEvidence
@@ -571,6 +577,9 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 			TTFTNanos:               roleResult.TTFTNanos,
 			GenerationTokens:        roleResult.GenerationTokens,
 			GenerationDurationNanos: roleResult.GenerationDurationNanos, StateMutation: roleResult.StateMutation,
+			FinishReason:       roleResult.FinishReason,
+			LoadState:          roleResult.LoadState,
+			RetryCount:         roleResult.RetryCount,
 			ObserverEvidence:   observation,
 			ProvenanceEvidence: bindFormationProvenanceEvidence(attestationForRole(attestations, role), roleResult.ProviderAttemptID),
 		}

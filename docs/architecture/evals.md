@@ -3,8 +3,8 @@ doc_id: evals
 title: Evaluation Programs
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - internal/services/evaluation/
   - internal/cli/cmd/eval/

@@ -10,13 +10,75 @@
     "qwen3-8-27b",
     "qwen3-6-35b-a3b",
     "gpt-oss-20b",
-    "qwen25-1b-rlcd"
+    "qwen25-1b-rlcd",
+    "qwen3-8b",
+    "llama-xlam-2-8b-fc-r",
+    "toolace-8b",
+    "watt-tool-8b",
+    "granite-3.3-8b-instruct",
+    "qwen2.5-coder-7b-instruct",
+    "mistral-7b-instruct-v0.3",
+    "qwen3-4b",
+    "phi-4-mini-instruct",
+    "smollm3-3b",
+    "xlam-2-3b-fc-r",
+    "gemma-3-4b-it",
+    "granite-3.3-2b-instruct",
+    "qwen3-1.7b",
+    "xlam-2-1b-fc-r",
+    "smollm2-1.7b-instruct",
+    "gemma-3-1b-it",
+    "qwen3-0.6b",
+    "qwen2.5-0.5b-instruct",
+    "smollm2-360m-instruct",
+    "nemotron-nano-2-9b",
+    "nemotron-3-nano-30b-a3b",
+    "nemotron-3-nano-omni-30b-a3b",
+    "nemotron-nano-12b-v2-vl",
+    "mistral-nemotron",
+    "gemma4-12b-it",
+    "gemma4-e2b",
+    "gemma4-e4b",
+    "granite-4.2-8b",
+    "granite-4.2-3b",
+    "qwen3.5-9b",
+    "qwen3.5-4b",
+    "qwen3.5-2b",
+    "qwen3.5-0.8b",
+    "glm-4-9b-0414",
+    "glm-4.7-flash",
+    "deepseek-r1-7b",
+    "gemma2-9b",
+    "gemma2-2b-instruct",
+    "gemma3-270m",
+    "gemma3n-e2b",
+    "gemma3n-e4b",
+    "hermes3-8b",
+    "llama-3.1-8b",
+    "llama-3.2-1b",
+    "llama-3.2-3b",
+    "ministral-3-3b",
+    "ministral-3-8b",
+    "nemotron-3-nano-4b",
+    "ornith-1.5-9b",
+    "phi3.5-mini-instruct",
+    "phi4-mini-reasoning",
+    "qwen2.5-1.5b-instruct",
+    "qwen2.5-14b-instruct",
+    "qwen2.5-3b",
+    "qwen2.5-7b",
+    "lfm2-2.6b",
+    "lfm2-700m",
+    "lfm2-350m",
+    "smollm2-135m",
+    "tinyllama-1.1b",
+    "randomblock1-nemotron-nano-8b"
   ],
   "models": [
     {
       "variant_id": "glm-5-3-air",
       "served_model_tag": "glm-5.3-air",
-      "model_family": "glm53",
+      "model_family": "zhipu",
       "parameter_count": "9000000000",
       "quantization": "Q4_K_M",
       "notes": "Single-GPU cut; pipe into g8e first once a single-file GGUF lands. No public Ollama library tag yet.",
@@ -31,7 +93,7 @@
     {
       "variant_id": "glm-5-3-flash",
       "served_model_tag": "glm-5.3-flash",
-      "model_family": "glm53",
+      "model_family": "zhipu",
       "parameter_count": "30000000000",
       "quantization": "Q4_K_M",
       "notes": "Agentic-coding buzz leader; Unsloth publish is sharded — use manual create until single-file quant exists.",
@@ -47,7 +109,7 @@
     {
       "variant_id": "qwen3-8-27b",
       "served_model_tag": "qwen3.8:27b",
-      "model_family": "qwen38",
+      "model_family": "alibaba",
       "parameter_count": "27000000000",
       "quantization": "Q4_K_M",
       "context_limit": 262144,
@@ -64,7 +126,7 @@
     {
       "variant_id": "qwen3-6-35b-a3b",
       "served_model_tag": "qwen3.6:35b-a3b",
-      "model_family": "qwen36moe",
+      "model_family": "alibaba",
       "parameter_count": "35000000000",
       "quantization": "Q4_K_M",
       "context_limit": 262144,
@@ -81,7 +143,7 @@
     {
       "variant_id": "gpt-oss-20b",
       "served_model_tag": "gpt-oss:20b",
-      "model_family": "gptoss",
+      "model_family": "openai",
       "parameter_count": "20914757184",
       "quantization": "MXFP4",
       "context_limit": 131072,
@@ -98,7 +160,7 @@
     {
       "variant_id": "qwen25-1b-rlcd",
       "served_model_tag": "qwen2.5:1b-rlcd",
-      "model_family": "qwen2.5",
+      "model_family": "alibaba",
       "parameter_count": "1000000000",
       "quantization": "unknown",
       "notes": "Hugging Face Text Generation trend entry; verify artifact format and license before provider staging.",
@@ -106,6 +168,943 @@
         "method": "pending",
         "status": "awaiting_provider_adapter",
         "hf_repo": "harshatheg/Qwen-2.5-1B-RLCD"
+      }
+    },
+    {
+      "variant_id": "qwen3-8b",
+      "served_model_tag": "qwen3:8b",
+      "model_family": "alibaba",
+      "parameter_count": "8000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 40960,
+      "notes": "Dense Qwen3; in the official Ollama library, no HF deep pull needed. Confirmed present on 192.168.1.2 (context_length 40960 per live /api/tags).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen3-8B",
+        "ollama_pull": "qwen3:8b"
+      }
+    },
+    {
+      "variant_id": "llama-xlam-2-8b-fc-r",
+      "served_model_tag": "xlam2:8b-fc-r",
+      "model_family": "salesforce",
+      "parameter_count": "8000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Salesforce tool-calling fine-tune on Llama-3.1-8B (BFCL/tau-bench leader). Confirmed present on 192.168.1.2 as hf.co/Salesforce/Llama-xLAM-2-8b-fc-r-gguf:latest (Q4_K_M, ctx 131072).",
+      "staging": {
+        "method": "ollama_hf_pull",
+        "status": "ready",
+        "hf_repo": "Salesforce/Llama-xLAM-2-8b-fc-r",
+        "hf_gguf_repo": "Salesforce/Llama-xLAM-2-8b-fc-r-gguf",
+        "ollama_pull": "hf.co/Salesforce/Llama-xLAM-2-8b-fc-r-gguf:latest",
+        "alias": "xlam2:8b-fc-r"
+      }
+    },
+    {
+      "variant_id": "toolace-8b",
+      "served_model_tag": "toolace:8b",
+      "model_family": "toolace",
+      "parameter_count": "8000000000",
+      "quantization": "Q8_0",
+      "context_limit": 131072,
+      "notes": "BFCL tool-calling fine-tune on Llama-3.1-8B-Instruct. Confirmed present on 192.168.1.2 as hf.co/Nekuromento/ToolACE-8B-Q8_0-GGUF:latest — a community quant, not an official Team-ACE release; license/provenance still worth a second look.",
+      "staging": {
+        "method": "ollama_hf_pull",
+        "status": "ready",
+        "hf_repo": "Team-ACE/ToolACE-8B",
+        "hf_gguf_repo": "Nekuromento/ToolACE-8B-Q8_0-GGUF",
+        "ollama_pull": "hf.co/Nekuromento/ToolACE-8B-Q8_0-GGUF:latest",
+        "alias": "toolace:8b"
+      }
+    },
+    {
+      "variant_id": "watt-tool-8b",
+      "served_model_tag": "watttool:8b",
+      "model_family": "wattai",
+      "parameter_count": "8000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "BFCL tool-calling fine-tune on Llama-3.1-8B-Instruct. Confirmed present on 192.168.1.2 as kitsonk/watt-tool-8B:latest — pulled from the Ollama community registry directly (not hf.co), not an HF GGUF pull.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "watt-ai/watt-tool-8B",
+        "ollama_pull": "kitsonk/watt-tool-8B:latest",
+        "alias": "watttool:8b"
+      }
+    },
+    {
+      "variant_id": "granite-3.3-8b-instruct",
+      "served_model_tag": "granite3.3:8b",
+      "model_family": "ibm",
+      "parameter_count": "8000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "In the official Ollama library, no HF deep pull needed.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "ibm-granite/granite-3.3-8b-instruct",
+        "ollama_pull": "granite3.3:8b"
+      }
+    },
+    {
+      "variant_id": "qwen2.5-coder-7b-instruct",
+      "served_model_tag": "qwen2.5-coder:7b",
+      "model_family": "alibaba",
+      "parameter_count": "7000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "In the official Ollama library, no HF deep pull needed. Confirmed present on 192.168.1.2 (context_length 32768 per live /api/tags). Sibling tag qwen2.5-coder:7b-instruct-q4_K_M is also resident on 192.168.1.2 (same weights, explicit quant suffix).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen2.5-Coder-7B-Instruct",
+        "ollama_pull": "qwen2.5-coder:7b"
+      }
+    },
+    {
+      "variant_id": "mistral-7b-instruct-v0.3",
+      "served_model_tag": "mistral:7b",
+      "model_family": "mistral",
+      "parameter_count": "7000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "In the official Ollama library (Ollama's plain mistral:7b tag is v0.3 upstream, not a separate \"v0.3\" tag). Confirmed present on 192.168.1.2 as mistral:7b.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "mistralai/Mistral-7B-Instruct-v0.3",
+        "ollama_pull": "mistral:7b"
+      }
+    },
+    {
+      "variant_id": "qwen3-4b",
+      "served_model_tag": "qwen3:4b",
+      "model_family": "alibaba",
+      "parameter_count": "4000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Dense Qwen3; in the official Ollama library, no HF deep pull needed. Confirmed present on 192.168.1.2 (context_length 262144 per live /api/tags — wider than the 40960 reported for qwen3:8b on the same box).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen3-4B",
+        "ollama_pull": "qwen3:4b"
+      }
+    },
+    {
+      "variant_id": "phi-4-mini-instruct",
+      "served_model_tag": "phi4-mini:3.8b",
+      "model_family": "microsoft",
+      "parameter_count": "3800000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 128000,
+      "notes": "In the official Ollama library, no HF deep pull needed. Alias tag phi4-mini:latest is also resident on 192.168.1.2, pointing at the same weights.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "microsoft/Phi-4-mini-instruct",
+        "ollama_pull": "phi4-mini:3.8b"
+      }
+    },
+    {
+      "variant_id": "smollm3-3b",
+      "served_model_tag": "smollm3:3b",
+      "model_family": "huggingface",
+      "parameter_count": "3000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 65536,
+      "notes": "Not in the official Ollama library. Confirmed present on 192.168.1.2 as Impulse2000/smollm3:3b-q4_k_m — a community push to the Ollama registry (not hf.co), not the unsloth GGUF repo originally assumed. Alias tag Impulse2000/smollm3:latest is also resident on 192.168.1.2, pointing at the same weights.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "HuggingFaceTB/SmolLM3-3B",
+        "ollama_pull": "Impulse2000/smollm3:3b-q4_k_m",
+        "alias": "smollm3:3b"
+      }
+    },
+    {
+      "variant_id": "xlam-2-3b-fc-r",
+      "served_model_tag": "xlam2:3b-fc-r",
+      "model_family": "salesforce",
+      "parameter_count": "3000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Salesforce tool-calling fine-tune. Confirmed present on 192.168.1.2 as hf.co/Salesforce/xLAM-2-3b-fc-r-gguf:latest (Q4_K_M, ctx 32768).",
+      "staging": {
+        "method": "ollama_hf_pull",
+        "status": "ready",
+        "hf_repo": "Salesforce/xLAM-2-3b-fc-r",
+        "hf_gguf_repo": "Salesforce/xLAM-2-3b-fc-r-gguf",
+        "ollama_pull": "hf.co/Salesforce/xLAM-2-3b-fc-r-gguf:latest",
+        "alias": "xlam2:3b-fc-r"
+      }
+    },
+    {
+      "variant_id": "gemma-3-4b-it",
+      "served_model_tag": "gemma3:4b",
+      "model_family": "google",
+      "parameter_count": "4000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Multimodal (text+image); in the official Ollama library, no HF deep pull needed.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "google/gemma-3-4b-it",
+        "ollama_pull": "gemma3:4b"
+      }
+    },
+    {
+      "variant_id": "granite-3.3-2b-instruct",
+      "served_model_tag": "granite3.3:2b",
+      "model_family": "ibm",
+      "parameter_count": "2000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "In the official Ollama library, no HF deep pull needed.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "ibm-granite/granite-3.3-2b-instruct",
+        "ollama_pull": "granite3.3:2b"
+      }
+    },
+    {
+      "variant_id": "qwen3-1.7b",
+      "served_model_tag": "qwen3:1.7b",
+      "model_family": "alibaba",
+      "parameter_count": "1700000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 40960,
+      "notes": "Dense Qwen3; in the official Ollama library, no HF deep pull needed. Confirmed present on 192.168.1.2 (context_length 40960 per live /api/tags).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen3-1.7B",
+        "ollama_pull": "qwen3:1.7b"
+      }
+    },
+    {
+      "variant_id": "xlam-2-1b-fc-r",
+      "served_model_tag": "xlam2:1b-fc-r",
+      "model_family": "salesforce",
+      "parameter_count": "1000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Salesforce tool-calling fine-tune. Confirmed present on 192.168.1.2 as hf.co/Salesforce/xLAM-2-1b-fc-r-gguf:latest (Q4_K_M, ctx 32768).",
+      "staging": {
+        "method": "ollama_hf_pull",
+        "status": "ready",
+        "hf_repo": "Salesforce/xLAM-2-1b-fc-r",
+        "hf_gguf_repo": "Salesforce/xLAM-2-1b-fc-r-gguf",
+        "ollama_pull": "hf.co/Salesforce/xLAM-2-1b-fc-r-gguf:latest",
+        "alias": "xlam2:1b-fc-r"
+      }
+    },
+    {
+      "variant_id": "smollm2-1.7b-instruct",
+      "served_model_tag": "smollm2:1.7b",
+      "model_family": "huggingface",
+      "parameter_count": "1700000000",
+      "quantization": "Q8_0",
+      "context_limit": 8192,
+      "notes": "In the official Ollama library, no HF deep pull needed. Confirmed present on 192.168.1.2 (quantization_level Q8_0 per live /api/tags, not Q4_K_M).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+        "ollama_pull": "smollm2:1.7b"
+      }
+    },
+    {
+      "variant_id": "gemma-3-1b-it",
+      "served_model_tag": "gemma3:1b",
+      "model_family": "google",
+      "parameter_count": "1000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Text-only at 1B (no image tower); in the official Ollama library, no HF deep pull needed.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "google/gemma-3-1b-it",
+        "ollama_pull": "gemma3:1b"
+      }
+    },
+    {
+      "variant_id": "qwen3-0.6b",
+      "served_model_tag": "qwen3:0.6b",
+      "model_family": "alibaba",
+      "parameter_count": "600000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 40960,
+      "notes": "Dense Qwen3; in the official Ollama library, no HF deep pull needed. Confirmed present on 192.168.1.2 (context_length 40960 per live /api/tags).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen3-0.6B",
+        "ollama_pull": "qwen3:0.6b"
+      }
+    },
+    {
+      "variant_id": "qwen2.5-0.5b-instruct",
+      "served_model_tag": "qwen2.5:0.5b-instruct",
+      "model_family": "alibaba",
+      "parameter_count": "500000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "In the official Ollama library (verified live on ollama.com/library/qwen2.5); not yet pulled on 192.168.1.2, though close variants qwen2.5:0.5b and qwen2.5:0.5b-instruct-q4_K_M are already resident there and could be reused instead of a fresh download.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen2.5-0.5B-Instruct",
+        "ollama_pull": "qwen2.5:0.5b-instruct"
+      }
+    },
+    {
+      "variant_id": "smollm2-360m-instruct",
+      "served_model_tag": "smollm2:360m",
+      "model_family": "huggingface",
+      "parameter_count": "360000000",
+      "quantization": "F16",
+      "context_limit": 8192,
+      "notes": "In the official Ollama library, no HF deep pull needed. Confirmed present on 192.168.1.2 (quantization_level F16 per live /api/tags — this tiny model wasn't worth quantizing).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "HuggingFaceTB/SmolLM2-360M-Instruct",
+        "ollama_pull": "smollm2:360m"
+      }
+    },
+    {
+      "variant_id": "nemotron-nano-2-9b",
+      "served_model_tag": "nemotron-nano2:9b",
+      "model_family": "nvidia",
+      "parameter_count": "9000000000",
+      "quantization": "unknown",
+      "context_limit": 131072,
+      "notes": "Hybrid Mamba2/MLP backbone with 4 attention layers. No NVIDIA-published GGUF, only community quants (bartowski, Jackrong, et al.) — verify llama.cpp/Ollama support for the hybrid architecture before staging. NOTE: 192.168.1.2 already has a tag named Randomblock1/nemotron-nano:8b, but its live family reports as \"llama\" rather than the hybrid Nemotron architecture family seen on nemotron-3-nano:4b below — it is likely a different/mislabeled model, not this one. Do not treat it as equivalent without checking its model card.",
+      "staging": {
+        "method": "pending",
+        "status": "awaiting_provider_adapter",
+        "hf_repo": "nvidia/NVIDIA-Nemotron-Nano-9B-v2",
+        "ollama_pull": null
+      }
+    },
+    {
+      "variant_id": "nemotron-3-nano-30b-a3b",
+      "served_model_tag": "nemotron3-nano:30b-a3b",
+      "model_family": "nvidia",
+      "parameter_count": "30000000000",
+      "quantization": "unknown",
+      "notes": "31B-param hybrid Mamba2-Transformer MoE, ~3B active. Unsloth publishes a GGUF repo, but hybrid MoE/Mamba2 runtime support in Ollama and the exact quant tag both need verification before staging. NOTE: 192.168.1.2 already has nemotron-3-nano:4b (family nemotron_h, 4.0B params, Q4_K_M, ctx 262144) — a smaller dense/different-size Nemotron-3-Nano than this 30B-A3B MoE target. Confirm with the requester whether the 4B already on the box satisfies the need before staging the larger MoE variant.",
+      "staging": {
+        "method": "pending",
+        "status": "awaiting_provider_adapter",
+        "hf_repo": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+        "hf_gguf_repo": "unsloth/Nemotron-3-Nano-30B-A3B-GGUF",
+        "ollama_pull": null
+      }
+    },
+    {
+      "variant_id": "nemotron-3-nano-omni-30b-a3b",
+      "served_model_tag": "nemotron3-nano-omni:30b-a3b",
+      "model_family": "nvidia",
+      "parameter_count": "30000000000",
+      "quantization": "unknown",
+      "notes": "Omni (multimodal reasoning) variant of Nemotron-3-Nano. Needs manual multimodal setup (mmproj/audio tower) beyond a single-file GGUF pull.",
+      "staging": {
+        "method": "manual_create",
+        "status": "requires_local_merge",
+        "hf_repo": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16",
+        "hf_gguf_repo": "unsloth/NVIDIA-Nemotron-3-Nano-Omni-30B-A3B-Reasoning-GGUF",
+        "ollama_pull": null,
+        "ollama_pull_error": "omni multimodal model — needs mmproj/audio-tower assets beyond a single GGUF; verify Ollama multimodal support before staging"
+      }
+    },
+    {
+      "variant_id": "nemotron-nano-12b-v2-vl",
+      "served_model_tag": "nemotron-nano2-vl:12b",
+      "model_family": "nvidia",
+      "parameter_count": "12000000000",
+      "quantization": "unknown",
+      "notes": "Vision-language variant of Nemotron-Nano-12B-v2 (multi-image/document reasoning). Needs a vision-tower/mmproj asset alongside the text GGUF; Ollama support for the hybrid Mamba2 VL architecture is unverified.",
+      "staging": {
+        "method": "manual_create",
+        "status": "requires_local_merge",
+        "hf_repo": "nvidia/NVIDIA-Nemotron-Nano-12B-v2-VL-BF16",
+        "ollama_pull": null,
+        "ollama_pull_error": "vision-language model — needs mmproj/vision-tower assets beyond a single GGUF; verify Ollama support before staging"
+      }
+    },
+    {
+      "variant_id": "mistral-nemotron",
+      "served_model_tag": "mistral-nemotron:latest",
+      "model_family": "nvidia",
+      "parameter_count": "unknown",
+      "quantization": "unknown",
+      "notes": "Ambiguous source: NVIDIA's NIM catalog lists a Mistral-AI-built 'mistral-nemotron' model (build.nvidia.com/mistralai/mistral-nemotron), but no open-weights HF repo of that exact name was confirmed. May be conflated with mistralai/Mistral-Nemo-Instruct-2407 or nvidia/Mistral-NeMo-Minitron-8B-Instruct. Needs research to confirm the correct open-weights source before any staging plan.",
+      "staging": {
+        "method": "pending",
+        "status": "awaiting_provider_adapter",
+        "hf_repo": null,
+        "ollama_pull": null
+      }
+    },
+    {
+      "variant_id": "gemma4-12b-it",
+      "served_model_tag": "gemma4:12b",
+      "model_family": "google",
+      "parameter_count": "11900000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2. Also resident as hf.co/unsloth/gemma-4-12b-it-GGUF:Q4_K_M (same weights, HF-pull path). Already tracked in the runtime registry as OLLAMA_GEMMA4_12B (ensemble/app/constants/config.py).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "google/gemma-4-12b-it",
+        "hf_gguf_repo": "unsloth/gemma-4-12b-it-GGUF",
+        "ollama_pull": "gemma4:12b"
+      }
+    },
+    {
+      "variant_id": "gemma4-e2b",
+      "served_model_tag": "gemma4:e2b",
+      "model_family": "google",
+      "parameter_count": "5100000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2. Already tracked in the runtime registry as OLLAMA_GEMMA4_E2B (ensemble/app/constants/config.py). Upstream HF org/repo for this MatFormer-style 'e2b' cut is unconfirmed.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "ollama_pull": "gemma4:e2b"
+      }
+    },
+    {
+      "variant_id": "gemma4-e4b",
+      "served_model_tag": "gemma4:e4b",
+      "model_family": "google",
+      "parameter_count": "8000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2. Already tracked in the runtime registry as OLLAMA_GEMMA4_E4B and OLLAMA_DEFAULT_MODEL (ensemble/app/constants/config.py). Upstream HF org/repo for this MatFormer-style 'e4b' cut is unconfirmed.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "ollama_pull": "gemma4:e4b"
+      }
+    },
+    {
+      "variant_id": "granite-4.2-8b",
+      "served_model_tag": "granite4.2:8b",
+      "model_family": "ibm",
+      "parameter_count": "8790000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2. Also resident as hf.co/ibm-granite/granite-4.2-8b-GGUF:Q4_K_M (same weights). Already tracked in the runtime registry as OLLAMA_GRANITE4_2_8B (ensemble/app/constants/config.py).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "ibm-granite/granite-4.2-8b",
+        "hf_gguf_repo": "ibm-granite/granite-4.2-8b-GGUF",
+        "ollama_pull": "granite4.2:8b"
+      }
+    },
+    {
+      "variant_id": "granite-4.2-3b",
+      "served_model_tag": "granite4.2:3b",
+      "model_family": "ibm",
+      "parameter_count": "3660000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2. Also resident as hf.co/ibm-granite/granite-4.2-3b-GGUF:Q4_K_M (same weights). Already tracked in the runtime registry as OLLAMA_GRANITE4_2_3B (ensemble/app/constants/config.py).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "ibm-granite/granite-4.2-3b",
+        "hf_gguf_repo": "ibm-granite/granite-4.2-3b-GGUF",
+        "ollama_pull": "granite4.2:3b"
+      }
+    },
+    {
+      "variant_id": "qwen3.5-9b",
+      "served_model_tag": "qwen3.5:9b",
+      "model_family": "alibaba",
+      "parameter_count": "8950000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2. Also resident as hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M. Upstream Qwen org repo name is unconfirmed (Qwen3.5 line postdates this assistant's training data); not yet in the runtime registry either.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_gguf_repo": "unsloth/Qwen3.5-9B-GGUF",
+        "ollama_pull": "qwen3.5:9b"
+      }
+    },
+    {
+      "variant_id": "qwen3.5-4b",
+      "served_model_tag": "qwen3.5:4b",
+      "model_family": "alibaba",
+      "parameter_count": "4210000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2. Also resident as hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M. Upstream Qwen org repo name is unconfirmed; not yet in the runtime registry either.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_gguf_repo": "unsloth/Qwen3.5-4B-GGUF",
+        "ollama_pull": "qwen3.5:4b"
+      }
+    },
+    {
+      "variant_id": "qwen3.5-2b",
+      "served_model_tag": "qwen3.5:2b",
+      "model_family": "alibaba",
+      "parameter_count": "1880000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2. Also resident as hf.co/unsloth/Qwen3.5-2B-GGUF:Q4_K_M. Already tracked in the runtime registry as OLLAMA_QWEN3_5_2B (ensemble/app/constants/config.py) — confirms the tag matches.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_gguf_repo": "unsloth/Qwen3.5-2B-GGUF",
+        "ollama_pull": "qwen3.5:2b"
+      }
+    },
+    {
+      "variant_id": "qwen3.5-0.8b",
+      "served_model_tag": "qwen3.5:0.8b",
+      "model_family": "alibaba",
+      "parameter_count": "752000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2. Also resident as hf.co/unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M. Upstream Qwen org repo name is unconfirmed; not yet in the runtime registry either.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_gguf_repo": "unsloth/Qwen3.5-0.8B-GGUF",
+        "ollama_pull": "qwen3.5:0.8b"
+      }
+    },
+    {
+      "variant_id": "glm-4-9b-0414",
+      "served_model_tag": "milkey/GLM-4-9B-0414:Q4_K_M",
+      "model_family": "zhipu",
+      "parameter_count": "9400000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Discovered live on 192.168.1.2, pulled via community namespace 'milkey'. Also resident as hf.co/unsloth/GLM-4-9B-0414-GGUF:Q4_K_M (same weights).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "zai-org/GLM-4-9B-0414",
+        "hf_gguf_repo": "unsloth/GLM-4-9B-0414-GGUF",
+        "ollama_pull": "milkey/GLM-4-9B-0414:Q4_K_M"
+      }
+    },
+    {
+      "variant_id": "glm-4.7-flash",
+      "served_model_tag": "huggingface.co/unsloth/GLM-4.7-Flash-GGUF:Q4_K_M",
+      "model_family": "zhipu",
+      "parameter_count": "29900000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 202752,
+      "notes": "Discovered live on 192.168.1.2. Live /api/tags reports its architecture family as 'deepseek2' rather than a GLM-specific tag — worth a sanity check that this is genuinely GLM-4.7-Flash and not a mislabeled DeepSeek variant. Upstream org repo unconfirmed.",
+      "staging": {
+        "method": "ollama_hf_pull",
+        "status": "ready",
+        "hf_gguf_repo": "unsloth/GLM-4.7-Flash-GGUF",
+        "ollama_pull": "huggingface.co/unsloth/GLM-4.7-Flash-GGUF:Q4_K_M"
+      }
+    },
+    {
+      "variant_id": "deepseek-r1-7b",
+      "served_model_tag": "deepseek-r1:7b",
+      "model_family": "deepseek",
+      "parameter_count": "7600000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2. DeepSeek-R1 distilled onto a Qwen2 7B backbone (architecture family reports as qwen2).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        "ollama_pull": "deepseek-r1:7b"
+      }
+    },
+    {
+      "variant_id": "gemma2-9b",
+      "served_model_tag": "gemma2:9b",
+      "model_family": "google",
+      "parameter_count": "9200000000",
+      "quantization": "Q4_0",
+      "context_limit": 8192,
+      "notes": "Discovered live on 192.168.1.2. Sibling tag gemma2:9b-instruct-q4_K_M (Q4_K_M quant) is also resident.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "google/gemma-2-9b-it",
+        "ollama_pull": "gemma2:9b"
+      }
+    },
+    {
+      "variant_id": "gemma2-2b-instruct",
+      "served_model_tag": "gemma2:2b-instruct-q4_K_M",
+      "model_family": "google",
+      "parameter_count": "2600000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 8192,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "google/gemma-2-2b-it",
+        "ollama_pull": "gemma2:2b-instruct-q4_K_M"
+      }
+    },
+    {
+      "variant_id": "gemma3-270m",
+      "served_model_tag": "gemma3:270m",
+      "model_family": "google",
+      "parameter_count": "268100000",
+      "quantization": "Q8_0",
+      "context_limit": 32768,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "google/gemma-3-270m",
+        "ollama_pull": "gemma3:270m"
+      }
+    },
+    {
+      "variant_id": "gemma3n-e2b",
+      "served_model_tag": "gemma3n:e2b",
+      "model_family": "google",
+      "parameter_count": "4500000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "google/gemma-3n-E2B-it",
+        "ollama_pull": "gemma3n:e2b"
+      }
+    },
+    {
+      "variant_id": "gemma3n-e4b",
+      "served_model_tag": "gemma3n:e4b",
+      "model_family": "google",
+      "parameter_count": "6900000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "google/gemma-3n-E4B-it",
+        "ollama_pull": "gemma3n:e4b"
+      }
+    },
+    {
+      "variant_id": "hermes3-8b",
+      "served_model_tag": "hermes3:8b",
+      "model_family": "nousresearch",
+      "parameter_count": "8000000000",
+      "quantization": "Q4_0",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "NousResearch/Hermes-3-Llama-3.1-8B",
+        "ollama_pull": "hermes3:8b"
+      }
+    },
+    {
+      "variant_id": "llama-3.1-8b",
+      "served_model_tag": "llama3.1:8b",
+      "model_family": "meta",
+      "parameter_count": "8000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2. Sibling tag llama3.1:8b-instruct-q4_K_M is also resident (same weights, explicit quant suffix).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "meta-llama/Llama-3.1-8B-Instruct",
+        "ollama_pull": "llama3.1:8b"
+      }
+    },
+    {
+      "variant_id": "llama-3.2-1b",
+      "served_model_tag": "llama3.2:1b",
+      "model_family": "meta",
+      "parameter_count": "1200000000",
+      "quantization": "Q8_0",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2. Sibling tags llama3.2:1b-instruct-q4_K_M and hf.co/bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M (both Q4_K_M) are also resident — this bare tag is the higher-precision Q8_0 pull.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "meta-llama/Llama-3.2-1B-Instruct",
+        "ollama_pull": "llama3.2:1b"
+      }
+    },
+    {
+      "variant_id": "llama-3.2-3b",
+      "served_model_tag": "llama3.2:3b",
+      "model_family": "meta",
+      "parameter_count": "3200000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2. Already tracked in the runtime registry as OLLAMA_LLAMA_3_2_3B (ensemble/app/constants/config.py) — confirms the tag matches.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "meta-llama/Llama-3.2-3B-Instruct",
+        "ollama_pull": "llama3.2:3b"
+      }
+    },
+    {
+      "variant_id": "ministral-3-3b",
+      "served_model_tag": "ministral-3:3b",
+      "model_family": "mistral",
+      "parameter_count": "3800000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2. Upstream HF org/repo unconfirmed (Ministral 3 line postdates this assistant's training data) — verify before relying on this as a source of truth.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "ollama_pull": "ministral-3:3b"
+      }
+    },
+    {
+      "variant_id": "ministral-3-8b",
+      "served_model_tag": "ministral-3:8b",
+      "model_family": "mistral",
+      "parameter_count": "8900000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2. Upstream HF org/repo unconfirmed (Ministral 3 line postdates this assistant's training data) — verify before relying on this as a source of truth.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "ollama_pull": "ministral-3:8b"
+      }
+    },
+    {
+      "variant_id": "nemotron-3-nano-4b",
+      "served_model_tag": "nemotron-3-nano:4b",
+      "model_family": "nvidia",
+      "parameter_count": "4000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2 — correctly reports the hybrid 'nemotron_h' architecture family. This is a smaller/different cut than the nemotron-3-nano-30b-a3b MoE target catalogued above; confirm which size is actually wanted before assuming they're interchangeable. Upstream HF repo unconfirmed.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "ollama_pull": "nemotron-3-nano:4b"
+      }
+    },
+    {
+      "variant_id": "ornith-1.5-9b",
+      "served_model_tag": "ornith-1.5:9b",
+      "model_family": "ornith",
+      "parameter_count": "9000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 262144,
+      "notes": "Discovered live on 192.168.1.2; user-downloaded/published model (Ornith 1.5), built on a Qwen3.5-9B backbone (architecture family reports as qwen35).",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "ollama_pull": "ornith-1.5:9b"
+      }
+    },
+    {
+      "variant_id": "phi3.5-mini-instruct",
+      "served_model_tag": "phi3.5:3.8b-mini-instruct-q4_K_M",
+      "model_family": "microsoft",
+      "parameter_count": "3800000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "microsoft/Phi-3.5-mini-instruct",
+        "ollama_pull": "phi3.5:3.8b-mini-instruct-q4_K_M"
+      }
+    },
+    {
+      "variant_id": "phi4-mini-reasoning",
+      "served_model_tag": "phi4-mini-reasoning:3.8b",
+      "model_family": "microsoft",
+      "parameter_count": "3800000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "microsoft/Phi-4-mini-reasoning",
+        "ollama_pull": "phi4-mini-reasoning:3.8b"
+      }
+    },
+    {
+      "variant_id": "qwen2.5-1.5b-instruct",
+      "served_model_tag": "qwen2.5:1.5b-instruct-q4_K_M",
+      "model_family": "alibaba",
+      "parameter_count": "1500000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen2.5-1.5B-Instruct",
+        "ollama_pull": "qwen2.5:1.5b-instruct-q4_K_M"
+      }
+    },
+    {
+      "variant_id": "qwen2.5-14b-instruct",
+      "served_model_tag": "qwen2.5:14b-instruct-q4_K_M",
+      "model_family": "alibaba",
+      "parameter_count": "14800000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen2.5-14B-Instruct",
+        "ollama_pull": "qwen2.5:14b-instruct-q4_K_M"
+      }
+    },
+    {
+      "variant_id": "qwen2.5-3b",
+      "served_model_tag": "qwen2.5:3b",
+      "model_family": "alibaba",
+      "parameter_count": "3100000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen2.5-3B-Instruct",
+        "ollama_pull": "qwen2.5:3b"
+      }
+    },
+    {
+      "variant_id": "qwen2.5-7b",
+      "served_model_tag": "qwen2.5:7b",
+      "model_family": "alibaba",
+      "parameter_count": "7600000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 32768,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "Qwen/Qwen2.5-7B-Instruct",
+        "ollama_pull": "qwen2.5:7b"
+      }
+    },
+    {
+      "variant_id": "lfm2-2.6b",
+      "served_model_tag": "sam860/LFM2:2.6b",
+      "model_family": "liquidai",
+      "parameter_count": "2570000000",
+      "quantization": "Q5_K_M",
+      "context_limit": 128000,
+      "notes": "Discovered live on 192.168.1.2, pulled via community namespace 'sam860'.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "LiquidAI/LFM2-2.6B",
+        "ollama_pull": "sam860/LFM2:2.6b"
+      }
+    },
+    {
+      "variant_id": "lfm2-700m",
+      "served_model_tag": "sam860/LFM2:700m",
+      "model_family": "liquidai",
+      "parameter_count": "742000000",
+      "quantization": "Q8_0",
+      "context_limit": 128000,
+      "notes": "Discovered live on 192.168.1.2, pulled via community namespace 'sam860'.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "LiquidAI/LFM2-700M",
+        "ollama_pull": "sam860/LFM2:700m"
+      }
+    },
+    {
+      "variant_id": "lfm2-350m",
+      "served_model_tag": "sam860/LFM2:350m",
+      "model_family": "liquidai",
+      "parameter_count": "354000000",
+      "quantization": "Q8_0",
+      "context_limit": 128000,
+      "notes": "Discovered live on 192.168.1.2, pulled via community namespace 'sam860'.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "LiquidAI/LFM2-350M",
+        "ollama_pull": "sam860/LFM2:350m"
+      }
+    },
+    {
+      "variant_id": "smollm2-135m",
+      "served_model_tag": "smollm2:135m",
+      "model_family": "huggingface",
+      "parameter_count": "134520000",
+      "quantization": "F16",
+      "context_limit": 8192,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "HuggingFaceTB/SmolLM2-135M-Instruct",
+        "ollama_pull": "smollm2:135m"
+      }
+    },
+    {
+      "variant_id": "tinyllama-1.1b",
+      "served_model_tag": "tinyllama:1.1b",
+      "model_family": "tinyllama",
+      "parameter_count": "1000000000",
+      "quantization": "Q4_0",
+      "context_limit": 2048,
+      "notes": "Discovered live on 192.168.1.2.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "hf_repo": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        "ollama_pull": "tinyllama:1.1b"
+      }
+    },
+    {
+      "variant_id": "randomblock1-nemotron-nano-8b",
+      "served_model_tag": "Randomblock1/nemotron-nano:8b",
+      "model_family": "unverified",
+      "parameter_count": "8000000000",
+      "quantization": "Q4_K_M",
+      "context_limit": 131072,
+      "notes": "Discovered live on 192.168.1.2, pulled via community namespace 'Randomblock1'. Its architecture family reports as 'llama', NOT NVIDIA's hybrid Nemotron-H family (compare nemotron-3-nano-4b above, which correctly reports 'nemotron_h') — this is likely a Llama-backbone model mislabeled 'nemotron-nano', not genuine NVIDIA Nemotron-Nano-9B-v2. Do not conflate with nemotron-nano-2-9b catalogued above; verify its actual model card before using it as a Nemotron stand-in. model_family is deliberately \"unverified\" rather than \"nvidia\" given the architecture mismatch above.",
+      "staging": {
+        "method": "ollama_library_pull",
+        "status": "ready",
+        "ollama_pull": "Randomblock1/nemotron-nano:8b"
       }
     }
   ]

@@ -412,6 +412,9 @@ func formationRoleResultFromInference(req FormationRoleRequest, result *operator
 		UsageAvailability: usageAvailability,
 		PromptTokens:      uint32(result.GetPromptTokens()),
 		GenerationTokens:  uint32(result.GetCompletionTokens()),
+		FinishReason:      result.GetFinishReason(),
+		LoadState:         operatorLoadStateToEvaluation(result.GetLoadState()),
+		RetryCount:        result.GetRetryCount(),
 	}
 	if result.TimeToFirstTokenNs != nil {
 		roleResult.TTFTNanos = uint64(*result.TimeToFirstTokenNs)
@@ -420,6 +423,23 @@ func formationRoleResultFromInference(req FormationRoleRequest, result *operator
 		roleResult.GenerationDurationNanos = uint64(*result.GenerationDurationNs)
 	}
 	return roleResult, nil
+}
+
+// operatorLoadStateToEvaluation maps the operator-layer model load
+// classification onto the evaluation domain's equivalent enum so formation
+// role telemetry can report a real load state instead of always falling
+// back to unavailable.
+func operatorLoadStateToEvaluation(state operatorv1.InferenceLoadState) evalv1.EvaluationLoadState {
+	switch state {
+	case operatorv1.InferenceLoadState_INFERENCE_LOAD_STATE_COLD:
+		return evalv1.EvaluationLoadState_EVALUATION_LOAD_STATE_COLD
+	case operatorv1.InferenceLoadState_INFERENCE_LOAD_STATE_WARM:
+		return evalv1.EvaluationLoadState_EVALUATION_LOAD_STATE_WARM
+	case operatorv1.InferenceLoadState_INFERENCE_LOAD_STATE_UNAVAILABLE:
+		return evalv1.EvaluationLoadState_EVALUATION_LOAD_STATE_UNAVAILABLE
+	default:
+		return evalv1.EvaluationLoadState_EVALUATION_LOAD_STATE_UNSPECIFIED
+	}
 }
 
 func formationCollectInferenceText(result *operatorv1.InferenceResult) string {

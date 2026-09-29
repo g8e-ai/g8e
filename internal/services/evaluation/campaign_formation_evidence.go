@@ -72,6 +72,9 @@ type persistedFormationRoleTelemetry struct {
 	GenerationTokens            uint32  `json:"generation_tokens,omitempty"`
 	GenerationDurationNanos     uint64  `json:"generation_duration_nanos,omitempty"`
 	GenerationTokensPerSec      float64 `json:"generation_tokens_per_sec,omitempty"`
+	FinishReason                string  `json:"finish_reason,omitempty"`
+	LoadState                   string  `json:"load_state,omitempty"`
+	RetryCount                  uint32  `json:"retry_count,omitempty"`
 }
 
 // CampaignFormationRunStore persists canonical formation-run evidence for one
@@ -299,6 +302,9 @@ func formationRunResultToPersisted(result *FormationRunResult) persistedFormatio
 			GenerationTokens:            role.GenerationTokens,
 			GenerationDurationNanos:     role.GenerationDurationNanos,
 			GenerationTokensPerSec:      role.GenerationTokensPerSec,
+			FinishReason:                role.FinishReason,
+			LoadState:                   role.LoadState.String(),
+			RetryCount:                  role.RetryCount,
 		})
 	}
 	return out
@@ -330,6 +336,9 @@ func persistedFormationRunResultToDomain(result persistedFormationRunResult) *Fo
 			GenerationTokens:        role.GenerationTokens,
 			GenerationDurationNanos: role.GenerationDurationNanos,
 			GenerationTokensPerSec:  role.GenerationTokensPerSec,
+			FinishReason:            role.FinishReason,
+			LoadState:               persistedFormationLoadState(role.LoadState),
+			RetryCount:              role.RetryCount,
 		}
 		if role.ObserverObservationDigest != "" {
 			telemetry.ObserverEvidence = &FormationObserverEvidence{
@@ -360,6 +369,14 @@ func persistedFormationUsageAvailability(value string) evalv1.EvaluationUsageAva
 		return evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNSPECIFIED
 	}
 	return evalv1.EvaluationUsageAvailability(number)
+}
+
+func persistedFormationLoadState(value string) evalv1.EvaluationLoadState {
+	number, ok := evalv1.EvaluationLoadState_value[value]
+	if !ok {
+		return evalv1.EvaluationLoadState_EVALUATION_LOAD_STATE_UNSPECIFIED
+	}
+	return evalv1.EvaluationLoadState(number)
 }
 
 func formationModelFromPersisted(role persistedFormationRoleTelemetry) FormationModel {

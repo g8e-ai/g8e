@@ -352,6 +352,9 @@ func modelInferenceRecordsFromFormationRun(assignment *evalv1.EvaluationAssignme
 			PromptTokens:            role.PromptTokens,
 			CompletionTokens:        role.GenerationTokens,
 			GenerationDurationNanos: role.GenerationDurationNanos,
+			FinishReason:            role.FinishReason,
+			LoadState:               role.LoadState,
+			RetryCount:              &role.RetryCount,
 		}
 		if role.ObserverEvidence != nil && role.ObserverEvidence.Window != nil {
 			record.ProviderBoundaryObservationRef = providerBoundaryObservationRef(role.ObserverEvidence.Window)
