@@ -50,8 +50,10 @@ func (r *CampaignFormationWitnessReader) persistRoleWitnessEvidence(ctx context.
 		if r.providerObservation == nil {
 			return fmt.Errorf("evaluation: persist formation observer evidence: %w", constants.ErrMissingRequiredField)
 		}
-		if err := r.providerObservation.ImportObservationWindow(ctx, role.ObserverEvidence.Window); err != nil {
-			return fmt.Errorf("evaluation: persist formation observer evidence: %w", err)
+		for _, window := range append([]*evalv1.ProviderBoundaryObservationWindow{role.ObserverEvidence.Window}, role.ObserverEvidence.AdditionalWindows...) {
+			if err := r.providerObservation.ImportObservationWindow(ctx, window); err != nil {
+				return fmt.Errorf("evaluation: persist formation observer evidence: %w", err)
+			}
 		}
 	}
 	if role.ProvenanceEvidence != nil && role.ProvenanceEvidence.Window != nil {
@@ -113,11 +115,24 @@ func VerifyFormationWitnessEvidence(
 		if window.GetObservationDigest() != role.ObserverObservationDigest {
 			failures = append(failures, fmt.Sprintf("formation role %s observer digest mismatch", role.Role))
 		}
-		if role.PeakVRAMMiB > 0 {
-			observed := observedPeakVRAMMiB(window)
-			if observed > 0 && observed != role.PeakVRAMMiB {
-				failures = append(failures, fmt.Sprintf("formation role %s peak vram mismatch", role.Role))
+		observed := observedPeakVRAMMiB(window)
+		if len(role.Trace) > 0 {
+			// A g8ee-routed role spans every provider attempt in its trace; each
+			// one must have its own window, and role peak VRAM is their maximum.
+			for _, extraID := range traceProviderAttemptIDs(role.Trace) {
+				if extraID == role.ProviderAttemptID {
+					continue
+				}
+				extra, err := providerReader.LoadObservationWindow(ctx, extraID)
+				if err != nil {
+					failures = append(failures, fmt.Sprintf("formation role %s observer window %s load failed: %v", role.Role, extraID, err))
+					continue
+				}
+				observed = max(observed, observedPeakVRAMMiB(extra))
 			}
+		}
+		if role.PeakVRAMMiB > 0 && observed > 0 && observed != role.PeakVRAMMiB {
+			failures = append(failures, fmt.Sprintf("formation role %s peak vram mismatch", role.Role))
 		}
 		if role.ProvenanceAttestationDigest == "" {
 			if role.AttestationStatus != string(FormationAttestationNotNeeded) && provenancePolicy == ModelProvenancePolicyStrict {

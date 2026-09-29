@@ -39,11 +39,12 @@ type runExecuteOptions struct {
 	ResultOutput             func(*evalv1.EvaluationAssignmentResult)
 }
 
-// Formation runner choices. g8ee routes every formation role through the
-// production chat/trace pipeline, so role transcripts, tool calls, and
-// scenario grades come from digest-bound g8ee traces. direct dispatches roles
-// straight to the Inference Operator for storage attestation and VRAM
-// telemetry, without scenario grading.
+// Formation runner choices. Both attest model storage before allocation, keep
+// the formation co-resident, bracket every role with provider-boundary
+// observation (peak VRAM), and release afterward. g8ee executes each role
+// through the production chat/trace pipeline, so role transcripts, tool calls,
+// and scenario grades come from digest-bound g8ee traces. direct dispatches
+// each role straight to the Inference Operator, without scenario grading.
 const (
 	formationRunnerG8ee   = "g8ee"
 	formationRunnerDirect = "direct"
@@ -241,11 +242,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		newID,
 	)
 	formationExecutor := evaluation.NewLazyCampaignFormationExecutor(func() (evaluation.CampaignAssignmentExecutor, error) {
-		if opts.FormationRunner != formationRunnerDirect {
-			runner := evaluation.NewCampaignFormationChatRunner(chatClient, persona, dataOperator.OperatorID, waitForTrace, fileWriter)
-			return evaluation.NewCampaignFormationExecutor(spec.GetModelRegistry(), runner, store, deps.now, newID), nil
-		}
-		formationRunner, err := buildCampaignFormationProductionRunner(
+		productionDeps, err := buildCampaignFormationProductionDeps(
 			cmd,
 			deps,
 			cfg,
@@ -261,7 +258,13 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 			},
 		)
 		if err != nil {
-			return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+			return nil, err
+		}
+		// Both runners share attestation, allocation, observation, and release;
+		// g8ee only replaces how each role executes.
+		formationRunner := evaluation.NewCampaignFormationProductionRunner(productionDeps)
+		if opts.FormationRunner != formationRunnerDirect {
+			formationRunner = evaluation.NewCampaignFormationChatRunner(chatClient, persona, dataOperator.OperatorID, waitForTrace, fileWriter, productionDeps)
 		}
 		observationReader, err := gwremote.NewCampaignProviderObservationReader(fileSvc, cfg)
 		if err != nil {

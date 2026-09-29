@@ -783,7 +783,10 @@ type campaignFormationProductionOptions struct {
 	DataSessionID      string
 }
 
-func buildCampaignFormationProductionRunner(
+// buildCampaignFormationProductionDeps wires the governed provenance,
+// observation, allocation, and release dependencies every campaign formation
+// run uses, whichever runner executes the roles.
+func buildCampaignFormationProductionDeps(
 	cmd *cobra.Command,
 	deps nativeEvalDeps,
 	cfg *config.Config,
@@ -794,7 +797,7 @@ func buildCampaignFormationProductionRunner(
 	variants []*evalv1.ModelVariant,
 	registryDigest string,
 	opts campaignFormationProductionOptions,
-) (evaluation.CampaignFormationRunner, error) {
+) (evaluation.FormationProductionDependencies, error) {
 	appClient, err := inferenceEvalAppClient(cfg, fileSvc, authContext, inferenceEvalDeps{
 		configLoader:     deps.configLoader,
 		fileSvcFactory:   deps.fileSvcFactory,
@@ -805,7 +808,7 @@ func buildCampaignFormationProductionRunner(
 		newID:            deps.newID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+		return evaluation.FormationProductionDependencies{}, fmt.Errorf("evaluation: campaign formation dependencies: %w", err)
 	}
 	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
 		configLoader:   deps.configLoader,
@@ -816,17 +819,17 @@ func buildCampaignFormationProductionRunner(
 		newID:          deps.newID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+		return evaluation.FormationProductionDependencies{}, fmt.Errorf("evaluation: campaign formation dependencies: %w", err)
 	}
 	endpoint, err := resolveCampaignOllamaEndpoint(operators, opts.InferenceSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+		return evaluation.FormationProductionDependencies{}, fmt.Errorf("evaluation: campaign formation dependencies: %w", err)
 	}
 	observationLoader, err := gwremote.NewCampaignFormationObservationLoader(fileSvc, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: campaign formation runner: %w", err)
+		return evaluation.FormationProductionDependencies{}, fmt.Errorf("evaluation: campaign formation dependencies: %w", err)
 	}
-	productionDeps := evaluation.FormationProductionDependencies{
+	return evaluation.FormationProductionDependencies{
 		Variants:               variants,
 		ProvenancePreflight:    gatewayFormationProvenancePreflight{fileSvc: fileSvc, cfg: cfg},
 		ObservationLoader:      observationLoader,
@@ -840,6 +843,5 @@ func buildCampaignFormationProductionRunner(
 			InferenceSessionID:  opts.InferenceSessionID,
 			DataSessionID:       opts.DataSessionID,
 		},
-	}
-	return evaluation.NewCampaignFormationProductionRunner(productionDeps), nil
+	}, nil
 }

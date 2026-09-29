@@ -495,6 +495,9 @@ type FormationAttestation struct {
 // FormationObserverEvidence carries the typed provider-boundary witness.
 type FormationObserverEvidence struct {
 	Window *evalv1.ProviderBoundaryObservationWindow
+	// AdditionalWindows are the windows for a role's further provider attempts
+	// (FormationRoleResult.AdditionalProviderAttemptIDs), in the same order.
+	AdditionalWindows []*evalv1.ProviderBoundaryObservationWindow
 }
 
 // FormationProvenanceOperator attests sovereign model weights at their storage boundary.
@@ -770,6 +773,7 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 				return result, fmt.Errorf("formation: observer evidence %s attempt %s: %w", role, extraID, constants.ErrFormationWitnessUnavailable)
 			}
 			observedPeak = max(observedPeak, observedPeakVRAMMiB(extra.Window))
+			observation.AdditionalWindows = append(observation.AdditionalWindows, extra.Window)
 		}
 		telemetry := FormationRoleTelemetry{
 			Role: role, Model: model, AttemptID: attemptID,

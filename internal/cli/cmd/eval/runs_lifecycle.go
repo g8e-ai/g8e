@@ -294,7 +294,7 @@ Examples:
 	return cmd
 }
 
-const formationRunnerFlagUsage = `Formation role execution: "g8ee" routes each role through the g8ee chat pipeline (graded, full transcripts); "direct" dispatches to the Inference Operator (storage attestation and VRAM telemetry, ungraded)`
+const formationRunnerFlagUsage = `Formation role execution: "g8ee" runs each role through the g8ee chat pipeline (graded, full transcripts); "direct" dispatches each role to the Inference Operator (ungraded). Both record storage attestation, observer windows, and peak VRAM`
 
 func verificationStatusString(report *evalv1.EvaluationVerificationReport) string {
 	if report == nil {

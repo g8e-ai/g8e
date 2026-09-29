@@ -121,3 +121,24 @@ func TestCampaignAssignmentVerifier_RejectsTamperedFormationRoleTrace(t *testing
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
 	assert.Contains(t, report.GetFailureReasons(), "formation grade recomputation failed: role primary: evaluation: validate chat probe trace: trace digest mismatch")
 }
+
+func TestCampaignAssignmentVerifier_StrictWitnessRejectsG8eeRoutedFormationWithoutWitnessEvidence(t *testing.T) {
+	fixture := newG8eeRoutedFormationFixture(t)
+
+	report, err := NewCampaignAssignmentVerifier(func() time.Time { return time.Unix(1_700_000_100, 0) }).Verify(context.Background(), CampaignAssignmentVerificationRequest{
+		Assignment:                fixture.req.Assignment,
+		Result:                    fixture.result,
+		ScenarioInput:             fixture.req.ScenarioInput,
+		ScenarioGold:              fixture.req.ScenarioGold,
+		ScenarioTools:             fixture.req.ScenarioTools,
+		GradingMethod:             fixture.req.GradingMethod,
+		FormationRunEvidence:      fixture.evidence,
+		ProviderObservationPolicy: ProviderObservationPolicyStrict,
+		ModelProvenancePolicy:     ModelProvenancePolicyStrict,
+	})
+	require.NoError(t, err)
+
+	// Routing roles through g8ee never waives formation witness requirements.
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
+	assert.Contains(t, report.GetFailureReasons(), "formation role lite missing observer observation digest")
+}

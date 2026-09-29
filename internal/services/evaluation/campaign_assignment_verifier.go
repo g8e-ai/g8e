@@ -141,19 +141,14 @@ func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(ctx context.C
 		if err := VerifyFormationRunEvidenceMatchesResult(req.Assignment, req.FormationRunEvidence, req.Result); err != nil {
 			failures = append(failures, "formation run evidence mismatch: "+err.Error())
 		}
-		// g8ee-routed runs are proven by their digest-bound role traces (checked
-		// during recomputation below); storage attestation and observer witness
-		// evidence exist only for direct-dispatch runs.
-		if _, traceRouted := formationEvidenceRoleTraces(req.FormationRunEvidence); !traceRouted {
-			failures = append(failures, VerifyFormationWitnessEvidence(
-				ctx,
-				req.FormationRunEvidence,
-				req.ProviderObservationReader,
-				req.ModelProvenanceReader,
-				req.ProviderObservationPolicy,
-				req.ModelProvenancePolicy,
-			)...)
-		}
+		failures = append(failures, VerifyFormationWitnessEvidence(
+			ctx,
+			req.FormationRunEvidence,
+			req.ProviderObservationReader,
+			req.ModelProvenanceReader,
+			req.ProviderObservationPolicy,
+			req.ModelProvenancePolicy,
+		)...)
 	}
 	recomputedGrades, err := RecomputeFormationAssignmentGrades(AssignmentExecutionRequest{
 		Assignment:    req.Assignment,

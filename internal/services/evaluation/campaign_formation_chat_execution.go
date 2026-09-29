@@ -12,41 +12,45 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-// CampaignFormationChatRunner executes one heterogeneous formation by routing
-// each role (Lite, then Assistant, then Primary) through g8ee's production
-// chat/trace pipeline — the same POST /api/v1/chat + GET
-// /api/v1/evaluation/trace round trip CampaignChatExecutor already uses once
-// per homogeneous assignment — instead of dispatching directly to the
-// Inference Operator. It is a drop-in alternative implementation of
-// CampaignFormationRunner alongside campaignFormationProductionRunner
-// (formation_production_adapter.go); which one a given campaign uses is a
-// construction-time choice made by the caller.
+// CampaignFormationChatRunner executes one heterogeneous formation through the
+// same governed FormationRunner as the direct-dispatch runner — storage-side
+// provenance attestation before allocation, co-resident allocation and
+// release, provider-boundary observation per role, and the mutation policy
+// gate — but executes each role (Lite, then Assistant, then Primary) through
+// g8ee's production chat/trace pipeline instead of a bare Inference Operator
+// dispatch. Roles therefore make real tool calls and produce digest-bound
+// traces that are graded, while every per-formation witness metric the
+// direct runner records is still recorded.
 type CampaignFormationChatRunner struct {
 	client         CampaignChatClient
 	persona        harnessclient.Persona
 	dataOperatorID string
 	waitForTrace   CampaignTraceWaiter
 	fileWriter     SimulatedFileWriter
+	production     FormationProductionDependencies
 }
 
 // NewCampaignFormationChatRunner wires the g8ee-routed heterogeneous formation
-// runner. fileWriter may be nil for a deployment with no scenario that sets
-// ScenarioInputFixture.SimulatedFiles; RunHeterogeneousFormation fails closed
-// if a scenario needs one and none is configured.
-func NewCampaignFormationChatRunner(client CampaignChatClient, persona harnessclient.Persona, dataOperatorID string, waitForTrace CampaignTraceWaiter, fileWriter SimulatedFileWriter) *CampaignFormationChatRunner {
+// runner. production supplies the same provenance, observation, allocation,
+// and release dependencies the direct-dispatch runner uses; its RoleExecutor
+// is set per run. fileWriter may be nil for a deployment with no scenario that
+// sets ScenarioInputFixture.SimulatedFiles; RunHeterogeneousFormation fails
+// closed if a scenario needs one and none is configured.
+func NewCampaignFormationChatRunner(client CampaignChatClient, persona harnessclient.Persona, dataOperatorID string, waitForTrace CampaignTraceWaiter, fileWriter SimulatedFileWriter, production FormationProductionDependencies) *CampaignFormationChatRunner {
 	return &CampaignFormationChatRunner{
 		client:         client,
 		persona:        persona,
 		dataOperatorID: dataOperatorID,
 		waitForTrace:   waitForTrace,
 		fileWriter:     fileWriter,
+		production:     production,
 	}
 }
 
@@ -57,102 +61,102 @@ type formationRoleOutput struct {
 	Output string
 }
 
-// RunHeterogeneousFormation implements CampaignFormationRunner. It stops on
-// the first role that fails to submit, fails to produce a terminal trace, or
-// produces a "failed" trace — returning whatever roles completed so far
-// alongside the error, mirroring FormationRunner.Run's existing contract
-// (execution_topologies.go). A trace that is terminal with status
-// "completed" but role_outcome other than "invoked" is not treated as a hard
-// failure: telemetry is still recorded for that role and the pipeline
-// continues, the same class of non-fatal outcome homogeneous assignments
-// already classify as a PARTIAL lifecycle rather than an execution error.
+// RunHeterogeneousFormation implements CampaignFormationRunner. initialState
+// is the JSON ScenarioInputFixture. FormationRunner stops on the first role
+// that fails to submit, fails to produce a terminal trace, produces a
+// "failed" trace, or lacks witness evidence, returning the roles completed so
+// far. A trace that completed with a role_outcome other than "invoked" is not
+// a hard failure; it clears Passed instead, the same class of non-fatal
+// outcome homogeneous assignments classify as PARTIAL.
 func (r *CampaignFormationChatRunner) RunHeterogeneousFormation(ctx context.Context, binding FormationBindingRequest, runContext FormationRunContext, initialState []byte) (*FormationRunResult, error) {
-	if r == nil || r.client == nil {
-		return nil, fmt.Errorf("evaluation: run heterogeneous formation: chat runner is required")
-	}
-	formation, err := ResolveFormationBinding(binding)
-	if err != nil {
-		return nil, err
+	if r == nil || r.client == nil || r.waitForTrace == nil {
+		return nil, fmt.Errorf("evaluation: run heterogeneous formation: chat client and trace waiter are required")
 	}
 	var input ScenarioInputFixture
 	if err := json.Unmarshal(initialState, &input); err != nil {
 		return nil, fmt.Errorf("evaluation: run heterogeneous formation: decode initial state: %w", err)
 	}
-	result := &FormationRunResult{SchemaVersion: FormationSchemaVersion, FormationID: formation.ID, Roles: make([]FormationRoleTelemetry, 0, 3)}
 	if err := r.materializeSimulatedFiles(ctx, runContext, input); err != nil {
-		return result, fmt.Errorf("evaluation: run heterogeneous formation: materialize simulated files: %w", err)
+		return nil, fmt.Errorf("evaluation: run heterogeneous formation: materialize simulated files: %w", err)
 	}
-	modelRegistry := InferenceVariantsFromEvalRegistry(binding.Variants)
-	priorOutputs := make([]formationRoleOutput, 0, 3)
-	for _, role := range formation.Roles() {
-		model, err := formation.Model(role)
-		if err != nil {
-			return result, err
-		}
-		if runContext.OnRoleStarting != nil {
-			if err := runContext.OnRoleStarting(ctx, role); err != nil {
-				return result, fmt.Errorf("evaluation: run heterogeneous formation: role starting: %w", err)
-			}
-		}
-		probeReq := ChatProbeRequest{
-			AssignmentID:            runContext.AssignmentID,
-			EvaluationAttemptID:     runContext.EvaluationAttemptID + ":" + string(role),
-			CampaignID:              runContext.CampaignID,
-			RunID:                   runContext.RunID,
-			ScenarioID:              runContext.ScenarioID,
-			Model:                   model.ServedModelTag,
-			ModelDigest:             model.ModelDigest,
-			TargetOperatorSessionID: runContext.InferenceSessionID,
-			ModelRegistryDigest:     runContext.ModelRegistryDigest,
-			ModelRegistry:           modelRegistry,
-			EvaluationLane:          "model_role",
-			DesignatedModelRole:     string(role),
-			Message:                 formationRoleChatMessage(input, priorOutputs),
-			GradingMethod:           evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
-		}
-		chatReq, err := BuildChatProbeRequest(probeReq, r.dataOperatorID, runContext.DataSessionID)
-		if err != nil {
-			return result, fmt.Errorf("evaluation: run heterogeneous formation: build chat request %s: %w", role, err)
-		}
-		chatReq.Context.UserID = r.persona.UserID
-		chatReq.Context.CLISessionID = r.persona.CLISessionID
-		if _, err := r.client.EnsembleChat(ctx, r.persona, chatReq); err != nil {
-			return result, fmt.Errorf("evaluation: run heterogeneous formation: submit chat %s: %w", role, err)
-		}
-		if r.waitForTrace == nil {
-			return result, fmt.Errorf("evaluation: run heterogeneous formation: trace waiter is required")
-		}
-		fetchTrace := func(pollCtx context.Context) (EvaluationTrace, error) {
-			return r.client.GetEvaluationTrace(pollCtx, r.persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
-		}
-		trace, err := r.waitForTrace(ctx, fetchTrace)
-		if err != nil {
-			return result, fmt.Errorf("evaluation: run heterogeneous formation: wait for trace %s: %w", role, err)
-		}
-		status, _ := trace["status"].(string)
-		if status != "completed" && status != "failed" {
-			return result, fmt.Errorf("evaluation: run heterogeneous formation: role %s trace status %q is not terminal", role, status)
-		}
-		if status == "failed" {
-			return result, fmt.Errorf("evaluation: run heterogeneous formation: role %s trace failed", role)
-		}
-		result.Roles = append(result.Roles, formationRoleTelemetryFromTrace(role, model, probeReq.EvaluationAttemptID, trace))
-		if output := designatedRoleOutput(trace); output != "" {
-			priorOutputs = append(priorOutputs, formationRoleOutput{Role: role, Output: output})
-		}
-		if runContext.OnRoleProgress != nil {
-			if err := runContext.OnRoleProgress(ctx, result); err != nil {
-				return result, fmt.Errorf("evaluation: run heterogeneous formation: role progress: %w", err)
-			}
-		}
+	deps := r.production
+	deps.RunContext = runContext
+	deps.RoleExecutor = &formationChatRoleExecutor{
+		runner:     r,
+		runContext: runContext,
+		input:      input,
+		registry:   InferenceVariantsFromEvalRegistry(binding.Variants),
 	}
-	allInvoked := len(result.Roles) == 3
+	result, err := RunHeterogeneousFormationProduction(ctx, binding, deps, nil)
+	if err != nil || result == nil {
+		return result, err
+	}
 	for _, role := range result.Roles {
 		if !traceRoleInvoked(role.Trace, string(role.Role)) {
-			allInvoked = false
+			result.Passed = false
 		}
 	}
-	result.Passed = allInvoked
+	return result, nil
+}
+
+// formationChatRoleExecutor executes one formation role as one g8ee chat
+// turn. FormationRunner calls it sequentially, so priorOutputs needs no lock.
+type formationChatRoleExecutor struct {
+	runner       *CampaignFormationChatRunner
+	runContext   FormationRunContext
+	input        ScenarioInputFixture
+	registry     []*operatorv1.InferenceModelVariant
+	priorOutputs []formationRoleOutput
+}
+
+func (e *formationChatRoleExecutor) ExecuteRole(ctx context.Context, req FormationRoleRequest) (FormationRoleResult, error) {
+	r := e.runner
+	probeReq := ChatProbeRequest{
+		AssignmentID:            e.runContext.AssignmentID,
+		EvaluationAttemptID:     e.runContext.EvaluationAttemptID + ":" + string(req.Role),
+		CampaignID:              e.runContext.CampaignID,
+		RunID:                   e.runContext.RunID,
+		ScenarioID:              e.runContext.ScenarioID,
+		Model:                   req.Model.ServedModelTag,
+		ModelDigest:             req.Model.ModelDigest,
+		TargetOperatorSessionID: e.runContext.InferenceSessionID,
+		ModelRegistryDigest:     e.runContext.ModelRegistryDigest,
+		ModelRegistry:           e.registry,
+		EvaluationLane:          "model_role",
+		DesignatedModelRole:     string(req.Role),
+		Message:                 formationRoleChatMessage(e.input, e.priorOutputs),
+		GradingMethod:           evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+	}
+	chatReq, err := BuildChatProbeRequest(probeReq, r.dataOperatorID, e.runContext.DataSessionID)
+	if err != nil {
+		return FormationRoleResult{}, fmt.Errorf("evaluation: formation role %s: build chat request: %w", req.Role, err)
+	}
+	chatReq.Context.UserID = r.persona.UserID
+	chatReq.Context.CLISessionID = r.persona.CLISessionID
+	if _, err := r.client.EnsembleChat(ctx, r.persona, chatReq); err != nil {
+		return FormationRoleResult{}, fmt.Errorf("evaluation: formation role %s: submit chat: %w", req.Role, err)
+	}
+	trace, err := r.waitForTrace(ctx, func(pollCtx context.Context) (EvaluationTrace, error) {
+		return r.client.GetEvaluationTrace(pollCtx, r.persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
+	})
+	if err != nil {
+		return FormationRoleResult{}, fmt.Errorf("evaluation: formation role %s: wait for trace: %w", req.Role, err)
+	}
+	switch status, _ := trace["status"].(string); status {
+	case "completed":
+	case "failed":
+		return FormationRoleResult{}, fmt.Errorf("evaluation: formation role %s: trace failed", req.Role)
+	default:
+		return FormationRoleResult{}, fmt.Errorf("evaluation: formation role %s: trace status %q is not terminal", req.Role, status)
+	}
+	output := designatedRoleOutput(trace)
+	if output != "" {
+		e.priorOutputs = append(e.priorOutputs, formationRoleOutput{Role: req.Role, Output: output})
+	}
+	result := formationRoleResultFromTrace(trace)
+	result.OutputState = formationAppendRoleState(req.InputState, req.Role, output)
+	result.MutationCandidate = append([]byte(nil), result.OutputState...)
+	result.StateMutation = req.Role == FormationRolePrimary
 	return result, nil
 }
 
@@ -194,78 +198,95 @@ func formationRoleChatMessage(input ScenarioInputFixture, priorOutputs []formati
 	return b.String()
 }
 
-// formationRoleTelemetryFromTrace extracts the FormationRoleTelemetry fields
-// available from one role's g8ee trace, the same fields
-// modelInferenceRecordsFromTrace (campaign_trace_import.go) extracts for
-// homogeneous assignments. AttestationStatus/AttestationVerified/
-// AttestationDigest/PeakVRAMMiB/ObserverEvidence/ProvenanceEvidence stay at
-// zero value: no direct provenance/observer operator interaction happens on
-// this path, an accepted consequence of routing through g8ee instead of the
-// direct-dispatch runner. TTFTNanos also stays 0: it is populated in the
-// direct-dispatch path from the Inference Operator's dispatch response,
-// which a g8ee chat trace does not carry.
-func formationRoleTelemetryFromTrace(role FormationRole, model FormationModel, attemptID string, trace EvaluationTrace) FormationRoleTelemetry {
-	telemetry := FormationRoleTelemetry{
-		Role:      role,
-		Model:     model,
-		AttemptID: attemptID,
-		Trace:     trace,
+// formationRoleResultFromTrace aggregates every scored G8EProvider call in one
+// role's trace into the role's formation telemetry: the first call names the
+// role's provider attempt (its bound observer window) and load state; the rest
+// are AdditionalProviderAttemptIDs. Tokens, durations, and retries are summed;
+// TTFT comes from the first call and the finish reason from the last. Usage is
+// reported only when every call reported it.
+func formationRoleResultFromTrace(trace EvaluationTrace) FormationRoleResult {
+	result := FormationRoleResult{Trace: trace}
+	calls := scoredProviderCalls(trace)
+	if len(calls) == 0 {
+		result.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE
+		return result
 	}
+	result.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
+	for index, call := range calls {
+		attemptID := stringValue(call["provider_attempt_id"])
+		if index == 0 {
+			result.ProviderAttemptID = attemptID
+			if raw, present := call["time_to_first_token_seconds"]; present && raw != nil {
+				if converted, err := durationSecondsToNanosChecked(raw); err == nil {
+					result.TTFTNanos = converted
+				}
+			}
+			if raw, present := call["load_duration_seconds"]; present && raw != nil {
+				if converted, err := durationSecondsToNanosChecked(raw); err == nil {
+					nanos := int64(converted)
+					result.LoadState = operatorLoadStateToEvaluation(models.ClassifyLoadState(&nanos))
+				}
+			}
+		} else {
+			result.AdditionalProviderAttemptIDs = append(result.AdditionalProviderAttemptIDs, attemptID)
+		}
+		result.FinishReason = stringValue(call["finish_reason"])
+		if reported, ok := call["usage_reported"].(bool); ok && reported {
+			if promptTokens, err := requiredUint32FromTraceCall(call, "input_tokens"); err == nil {
+				result.PromptTokens += promptTokens
+			}
+			if completionTokens, err := requiredUint32FromTraceCall(call, "output_tokens"); err == nil {
+				result.GenerationTokens += completionTokens
+			}
+		} else {
+			result.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE
+		}
+		if retry, present := call["retry_count"]; present {
+			if converted, err := uint32Value(retry); err == nil {
+				result.RetryCount += converted
+			}
+		}
+		if raw, present := call["generation_duration_seconds"]; present && raw != nil {
+			if converted, err := durationSecondsToNanosChecked(raw); err == nil {
+				result.GenerationDurationNanos += converted
+			}
+		}
+	}
+	return result
+}
+
+// scoredProviderCalls returns the trace's successful G8EProvider model calls
+// that carry a provider attempt ID, in call order — the same selection
+// modelInferenceRecordsFromTrace applies for homogeneous assignments.
+func scoredProviderCalls(trace EvaluationTrace) []EvaluationTrace {
 	modelCalls, _ := trace["model_calls"].([]any)
+	calls := make([]EvaluationTrace, 0, len(modelCalls))
 	for _, rawCall := range modelCalls {
 		call, ok := evaluationTrace(rawCall)
 		if !ok {
 			continue
 		}
-		provider, _ := call["provider"].(string)
-		if !strings.EqualFold(provider, "G8EProvider") {
+		if provider, _ := call["provider"].(string); !strings.EqualFold(provider, "G8EProvider") {
 			continue
 		}
 		if succeeded, ok := call["succeeded"].(bool); ok && !succeeded {
 			continue
 		}
-		providerAttemptID := stringValue(call["provider_attempt_id"])
-		if providerAttemptID == "" {
+		if stringValue(call["provider_attempt_id"]) == "" {
 			continue
 		}
-		telemetry.ProviderAttemptID = providerAttemptID
-		telemetry.FinishReason = stringValue(call["finish_reason"])
-		if reported, ok := call["usage_reported"].(bool); ok && reported {
-			telemetry.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
-			if promptTokens, err := requiredUint32FromTraceCall(call, "input_tokens"); err == nil {
-				telemetry.PromptTokens = promptTokens
-			}
-			if completionTokens, err := requiredUint32FromTraceCall(call, "output_tokens"); err == nil {
-				telemetry.GenerationTokens = completionTokens
-			}
-		} else {
-			telemetry.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE
-		}
-		if retry, present := call["retry_count"]; present {
-			if converted, err := uint32Value(retry); err == nil {
-				telemetry.RetryCount = converted
-			}
-		}
-		if raw, present := call["generation_duration_seconds"]; present && raw != nil {
-			if converted, err := durationSecondsToNanosChecked(raw); err == nil {
-				telemetry.GenerationDurationNanos = converted
-			}
-		}
-		if raw, present := call["time_to_first_token_seconds"]; present && raw != nil {
-			if converted, err := durationSecondsToNanosChecked(raw); err == nil {
-				telemetry.TTFTNanos = converted
-			}
-		}
-		if raw, present := call["load_duration_seconds"]; present && raw != nil {
-			if converted, err := durationSecondsToNanosChecked(raw); err == nil {
-				nanos := int64(converted)
-				telemetry.LoadState = operatorLoadStateToEvaluation(models.ClassifyLoadState(&nanos))
-			}
-		}
-		break
+		calls = append(calls, call)
 	}
-	if telemetry.GenerationDurationNanos > 0 {
-		telemetry.GenerationTokensPerSec = float64(telemetry.GenerationTokens) / (float64(telemetry.GenerationDurationNanos) / float64(time.Second))
+	return calls
+}
+
+// traceProviderAttemptIDs lists every scored provider attempt in one role
+// trace, in call order.
+func traceProviderAttemptIDs(trace EvaluationTrace) []string {
+	calls := scoredProviderCalls(trace)
+	ids := make([]string, 0, len(calls))
+	for _, call := range calls {
+		ids = append(ids, stringValue(call["provider_attempt_id"]))
 	}
-	return telemetry
+	return ids
 }
