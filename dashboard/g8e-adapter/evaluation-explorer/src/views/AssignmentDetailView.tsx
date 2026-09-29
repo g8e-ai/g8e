@@ -6,14 +6,17 @@
 // names and durations, resource observations, verification disposition,
 // task prompt from scenario catalog, and captured model response.
 
+import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { activityFamilyHasObservedRecords } from '../contract/activity-family';
 import type { AssignmentResult } from '../contract/types';
+import { TOOL_SCORE_DIMENSIONS } from '../contract/types';
 import { AssignmentActivitySummary } from '../components/AssignmentActivitySummary';
 import { AssignmentAuditProofRow, filterNonAuditEvidenceBindings } from '../components/AssignmentAuditProofRow';
 import { EvidenceBindingsPanel } from '../components/EvidenceBindingsPanel';
 import { ScenarioContextCard } from '../components/ScenarioContextCard';
 import { TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
+import { UnifiedGradeBadges } from '../components/UnifiedGradeBadges';
 import { SCENARIO_TASK_BY_ID } from '../content/scenario-catalog';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
@@ -21,6 +24,9 @@ import {
   EmptyState,
   ErrorState,
   SectionHeading,
+  StatTile,
+  Timeline,
+  UnavailableValue,
   formatDuration,
   formatLatency,
   formatThroughput,
@@ -36,7 +42,6 @@ import {
   roleLabel,
   resourceObservationMissing,
   siblingRepetitions,
-  streamProgressLabel,
 } from './derived';
 
 function lookupTask(id?: string) {
@@ -55,6 +60,23 @@ function formatBytes(value: number): string {
   return `${formatNumber(value)} B`;
 }
 
+function formatPercent(value: number): string {
+  return `${formatNumber(value, 1)}%`;
+}
+
+function formatTemperature(value: number): string {
+  return `${formatNumber(value, 1)}°C`;
+}
+
+function formatPower(value: number): string {
+  return `${formatNumber(value, 1)}W`;
+}
+
+function formatClockSpeed(value: number): string {
+  if (value >= 1000) return `${formatNumber(value / 1000, 1)}GHz`;
+  return `${formatNumber(value)}MHz`;
+}
+
 function metricValue(metric: { value?: number } | undefined): number | undefined {
   return metric?.value;
 }
@@ -65,6 +87,31 @@ function terminalLabel(status: AssignmentResult['terminal_status']): string {
 
 function hasObservedActivity(activity: AssignmentResult['activity_summary']): boolean {
   return Boolean(activity && Object.values(activity).some((family) => activityFamilyHasObservedRecords(family)));
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="copy-button"
+      title={`Copy ${label}`}
+      aria-label={`Copy ${label}`}
+    >
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
 }
 
 function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) {
@@ -113,6 +160,7 @@ function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) 
               {isFailure ? "Model's Response (Resulted in Failure)" : "Model's Response"}
             </span>
             <span className="model-response-variant">{assignment.variant_id}</span>
+            <CopyButton text={assignment.model_response!} label="model response" />
           </div>
           <pre className="model-response-text"><code>{assignment.model_response}</code></pre>
         </div>
@@ -154,13 +202,6 @@ export function AssignmentDetailView() {
     lookupTask(assignment.scenario_id) ??
     lookupTask(assignment.scenario_summary?.scenario_id);
 
-  const toolScorecard = assignment.benchmark_observations?.tool_scorecard;
-  const toolScorecardEntries = toolScorecard
-    ? Object.entries(toolScorecard).filter(
-        ([, metric]) => metric.value !== undefined && !isScenarioNotApplicableMetric(metric),
-      )
-    : [];
-  const gradeChips = assignmentGradeChips(assignment);
   const resource = assignment.resource_summary;
   const timing = assignment.benchmark_observations?.timing;
   const outputTokens = resource?.output_tokens?.value;
@@ -170,22 +211,8 @@ export function AssignmentDetailView() {
       ? outputTokens / (generationMs / 1000)
       : undefined;
   const gpu = assignment.benchmark_observations?.gpu;
-  const measured = [
-    metricValue(timing?.model_load_ms) !== undefined ? ['Load', formatLatency(timing!.model_load_ms!.value!)] : undefined,
-    metricValue(timing?.generation_ms) !== undefined ? ['Generation', formatLatency(timing!.generation_ms!.value!)] : undefined,
-    metricValue(timing?.whole_task_ms) !== undefined ? ['Task', formatLatency(timing!.whole_task_ms!.value!)] : undefined,
-    metricValue(gpu?.vram_before_bytes) !== undefined ? ['VRAM before', formatBytes(gpu!.vram_before_bytes!.value!)] : undefined,
-    metricValue(gpu?.vram_peak_bytes) !== undefined ? ['VRAM peak', formatBytes(gpu!.vram_peak_bytes!.value!)] : undefined,
-    metricValue(gpu?.system_ram_peak_bytes) !== undefined ? ['RAM peak', formatBytes(gpu!.system_ram_peak_bytes!.value!)] : undefined,
-    metricValue(resource?.latency_ms) !== undefined ? ['Latency', formatLatency(resource!.latency_ms!.value!)] : undefined,
-    metricValue(resource?.input_tokens) !== undefined ? ['Input', formatTokens(resource!.input_tokens!.value!)] : undefined,
-    metricValue(resource?.output_tokens) !== undefined ? ['Output', formatTokens(resource!.output_tokens!.value!)] : undefined,
-    tokensPerSecond !== undefined ? ['Tokens/s', formatThroughput(tokensPerSecond)] : undefined,
-    metricValue(resource?.thinking_tokens) !== undefined ? ['Thinking', formatTokens(resource!.thinking_tokens!.value!)] : undefined,
-    metricValue(resource?.cache_tokens) !== undefined ? ['Cache', formatTokens(resource!.cache_tokens!.value!)] : undefined,
-    metricValue(resource?.retries) !== undefined ? ['Retries', formatNumber(resource!.retries!.value!)] : undefined,
-  ].filter((entry): entry is [string, string] => entry !== undefined);
-  const hasResources = !resourceObservationMissing(assignment) || tokensPerSecond !== undefined;
+  const toolScorecard = assignment.benchmark_observations?.tool_scorecard;
+  const hasResources = !resourceObservationMissing(assignment) || tokensPerSecond !== undefined || metricValue(timing?.time_to_first_token_ms) !== undefined || metricValue(gpu?.utilization_percent) !== undefined || metricValue(gpu?.temperature_celsius) !== undefined || metricValue(gpu?.power_watts) !== undefined || metricValue(gpu?.clock_mhz) !== undefined;
   const otherEvidenceBindings = filterNonAuditEvidenceBindings(assignment.evidence_bindings);
   const hasEvidence = Boolean(
     otherEvidenceBindings?.length || assignment.verification_metadata,
@@ -219,12 +246,7 @@ export function AssignmentDetailView() {
         <span className={`terminal-pill terminal-${assignment.terminal_status}`}>
           {assignmentVerdictLabel(assignment.terminal_status, assignment.verification_disposition)}
         </span>
-        {gradeChips.map((grade) => (
-          <span className={`grade-chip grade-${grade.status}`} key={grade.criterion_id}>
-            {grade.criterion_id.replace(/-/g, ' ')} · {observationLabel(grade.status)}
-            {grade.explanation ? ` · ${grade.explanation}` : ''}
-          </span>
-        ))}
+        <UnifiedGradeBadges assignment={assignment} />
       </div>
 
       {task ? (
@@ -237,35 +259,157 @@ export function AssignmentDetailView() {
       <ModelResponseSection assignment={assignment} />
 
       {hasResources ? (
-        <div className="assignment-measured" aria-label="Measured values">
-          {measured.map(([label, value]) => <span key={label}><b>{label}</b> {value}</span>)}
-        </div>
+        <section className="assignment-resources" aria-label="Measured values">
+          {metricValue(timing?.model_load_ms) !== undefined || metricValue(timing?.generation_ms) !== undefined || metricValue(timing?.whole_task_ms) !== undefined || metricValue(timing?.time_to_first_token_ms) !== undefined || metricValue(resource?.latency_ms) !== undefined ? (
+            <>
+              <h3 className="resource-group-heading">Timing</h3>
+              <div className="stat-tile-grid">
+                {metricValue(timing?.model_load_ms) !== undefined ? (
+                  <StatTile label="Load" value={formatLatency(timing!.model_load_ms!.value!)} />
+                ) : null}
+                {metricValue(timing?.generation_ms) !== undefined ? (
+                  <StatTile label="Generation" value={formatLatency(timing!.generation_ms!.value!)} />
+                ) : null}
+                {metricValue(timing?.whole_task_ms) !== undefined ? (
+                  <StatTile label="Task" value={formatLatency(timing!.whole_task_ms!.value!)} />
+                ) : null}
+                {metricValue(timing?.time_to_first_token_ms) !== undefined ? (
+                  <StatTile label="TTFT" value={formatLatency(timing!.time_to_first_token_ms!.value!)} />
+                ) : null}
+                {metricValue(resource?.latency_ms) !== undefined ? (
+                  <StatTile label="Latency" value={formatLatency(resource!.latency_ms!.value!)} />
+                ) : null}
+              </div>
+            </>
+          ) : null}
+
+          {metricValue(gpu?.vram_before_bytes) !== undefined || metricValue(gpu?.vram_peak_bytes) !== undefined || metricValue(gpu?.system_ram_peak_bytes) !== undefined || metricValue(gpu?.utilization_percent) !== undefined || metricValue(gpu?.temperature_celsius) !== undefined || metricValue(gpu?.power_watts) !== undefined || metricValue(gpu?.clock_mhz) !== undefined ? (
+            <>
+              <h3 className="resource-group-heading">Memory & GPU</h3>
+              <div className="stat-tile-grid">
+                {metricValue(gpu?.vram_before_bytes) !== undefined ? (
+                  <StatTile label="VRAM before" value={formatBytes(gpu!.vram_before_bytes!.value!)} />
+                ) : null}
+                {metricValue(gpu?.vram_peak_bytes) !== undefined ? (
+                  <StatTile label="VRAM peak" value={formatBytes(gpu!.vram_peak_bytes!.value!)} />
+                ) : null}
+                {metricValue(gpu?.system_ram_peak_bytes) !== undefined ? (
+                  <StatTile label="RAM peak" value={formatBytes(gpu!.system_ram_peak_bytes!.value!)} />
+                ) : null}
+                {metricValue(gpu?.utilization_percent) !== undefined ? (
+                  <StatTile label="GPU utilization" value={formatPercent(gpu!.utilization_percent!.value!)} />
+                ) : null}
+                {metricValue(gpu?.temperature_celsius) !== undefined ? (
+                  <StatTile label="GPU temperature" value={formatTemperature(gpu!.temperature_celsius!.value!)} />
+                ) : null}
+                {metricValue(gpu?.power_watts) !== undefined ? (
+                  <StatTile label="GPU power" value={formatPower(gpu!.power_watts!.value!)} />
+                ) : null}
+                {metricValue(gpu?.clock_mhz) !== undefined ? (
+                  <StatTile label="GPU clock" value={formatClockSpeed(gpu!.clock_mhz!.value!)} />
+                ) : null}
+              </div>
+            </>
+          ) : null}
+
+          {metricValue(resource?.input_tokens) !== undefined || metricValue(resource?.output_tokens) !== undefined || tokensPerSecond !== undefined || metricValue(resource?.thinking_tokens) !== undefined || metricValue(resource?.cache_tokens) !== undefined ? (
+            <>
+              <h3 className="resource-group-heading">Throughput</h3>
+              <div className="stat-tile-grid">
+                {metricValue(resource?.input_tokens) !== undefined ? (
+                  <StatTile label="Input" value={formatTokens(resource!.input_tokens!.value!)} />
+                ) : null}
+                {metricValue(resource?.output_tokens) !== undefined ? (
+                  <StatTile label="Output" value={formatTokens(resource!.output_tokens!.value!)} />
+                ) : null}
+                {tokensPerSecond !== undefined ? (
+                  <StatTile label="Tokens/s" value={formatThroughput(tokensPerSecond)} />
+                ) : null}
+                {metricValue(resource?.thinking_tokens) !== undefined ? (
+                  <StatTile label="Thinking" value={formatTokens(resource!.thinking_tokens!.value!)} />
+                ) : null}
+                {metricValue(resource?.cache_tokens) !== undefined ? (
+                  <StatTile label="Cache" value={formatTokens(resource!.cache_tokens!.value!)} />
+                ) : null}
+              </div>
+            </>
+          ) : null}
+
+          {metricValue(resource?.retries) !== undefined ? (
+            <>
+              <h3 className="resource-group-heading">Reliability</h3>
+              <div className="stat-tile-grid">
+                <StatTile label="Retries" value={formatNumber(resource!.retries!.value!)} />
+              </div>
+            </>
+          ) : null}
+        </section>
       ) : null}
-      {toolScorecardEntries.length > 0 ? (
+
+      {toolScorecard ? (
         <section className="assignment-scores">
           <h2>Scores</h2>
-          <div className="compact-stat-row">
-            {toolScorecardEntries.map(([key, metric]) => (
-              <span key={key}><b>{observationLabel(key)}</b> {formatNumber(metric.value!)}</span>
-            ))}
+          <div className="stat-tile-grid">
+            {TOOL_SCORE_DIMENSIONS.map((dimension) => {
+              const metric = toolScorecard[dimension];
+              const scenarioDimension = assignment.scenario_summary?.tool_score_dimensions?.find(
+                (req) => req.dimension === dimension,
+              );
+
+              if (metric && isScenarioNotApplicableMetric(metric)) {
+                return null;
+              }
+
+              if (metric?.value !== undefined) {
+                return (
+                  <StatTile
+                    key={dimension}
+                    label={observationLabel(dimension)}
+                    value={formatNumber(metric.value)}
+                  />
+                );
+              }
+
+              if (scenarioDimension) {
+                if (scenarioDimension.required && metric?.value === undefined) {
+                  return (
+                    <StatTile
+                      key={dimension}
+                      label={observationLabel(dimension)}
+                      value={<UnavailableValue reason="required but not observed" />}
+                    />
+                  );
+                }
+                return (
+                  <StatTile
+                    key={dimension}
+                    label={observationLabel(dimension)}
+                    value={<span className="score-not-applicable">Not scored for this scenario</span>}
+                  />
+                );
+              }
+
+              return null;
+            })}
           </div>
         </section>
       ) : null}
       {hasObservedActivity(assignment.activity_summary) ? <AssignmentActivitySummary activity={assignment.activity_summary} /> : null}
 
       {lifecycleEvents.length > 0 ? (
-        <ol className="assignment-feed-timeline" aria-label="Feed timeline">
-          {lifecycleEvents.map((event) => (
-            <li key={event.event_id}>
-              <span className="feed-time">{formatRelativeTime(event.observed_at)}</span>
-              <span className="feed-kind">{event.kind.replace(/_/g, ' ')}</span>
-              {event.feed_sequence !== undefined ? (
-                <span className="feed-sequence">#{event.feed_sequence}</span>
-              ) : null}
-              <span className="feed-progress">{streamProgressLabel(event)}</span>
-            </li>
-          ))}
-        </ol>
+        <section className="assignment-feed-timeline" aria-label="Feed timeline">
+          <h2>Timeline</h2>
+          <Timeline events={lifecycleEvents.map((event) => ({
+            observed_at: event.observed_at,
+            kind: event.kind,
+            stage_label: event.stage_label,
+            completed: event.completed,
+            total: event.total,
+            assignment_id: event.assignment_id,
+            run_id: event.run_id,
+            dataset_id: activeDatasetId,
+          }))} />
+        </section>
       ) : null}
 
       <AssignmentAuditProofRow bindings={assignment.evidence_bindings} />

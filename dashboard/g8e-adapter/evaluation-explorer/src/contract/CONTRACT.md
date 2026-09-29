@@ -43,10 +43,10 @@ The fixtures currently use `ds-exploratory-baseline-20260914-r2`, `ds-legacy-pub
 
 ## Routes
 
-The application uses a hash router so local static serving and the gateway-owned public origin require no server-side route rewriting.
+The application uses `BrowserRouter` for client-side routing, which relies on server-side route rewriting to serve the SPA for all non-asset paths. The gateway's public read listener is configured to serve the evaluation explorer at its root path with appropriate rewrite rules.
 
-- `#/` overview: feed state, live panel, dataset selector, aggregate counts, role leaders, recent runs.
-- `#/models` models: model catalog with search, filters, sorting, and comparison.
+- `/` overview: feed state, live panel, dataset selector, aggregate counts, role leaders, recent runs.
+- `/models` models: model catalog with search, filters, sorting, and comparison.
 - `#/models/:variantId` model-detail: per-model identity, metrics, suite results, repeatability, performance, tokens, outcomes, source runs.
 - `#/evaluations` evaluations: evaluation list with dataset, suite, status, quality, model, role, and date filters.
 - `#/evaluations/:runId` evaluation-detail: run status, progress, quality, model-role map, metrics, verification, resources, assignment table.

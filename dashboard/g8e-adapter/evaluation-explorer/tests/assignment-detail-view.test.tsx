@@ -83,13 +83,15 @@ describe('AssignmentDetailView', () => {
     ]);
 
     expect(screen.getByLabelText('Assignment verdict')).toHaveTextContent('Completed · not verified');
-    expect(screen.getByText('scenario content · Fail')).toBeInTheDocument();
-    expect(screen.getByText('role invoked · Pass')).toBeInTheDocument();
+    expect(screen.getByText('scenario content')).toBeInTheDocument();
+    expect(screen.getByText('Fail', { selector: '.badge-status' })).toBeInTheDocument();
+    expect(screen.getByText('role invoked')).toBeInTheDocument();
+    expect(screen.getByText('Pass', { selector: '.badge-status' })).toBeInTheDocument();
     expect(screen.queryByText('Stage timeline not published for this assignment.')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Resource observations' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Assignment context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'What happened' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Lifecycle timeline' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Timeline' })).not.toBeInTheDocument();
   });
 
   it('shows tokens per second from output tokens and generation time', () => {
@@ -105,7 +107,8 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Tokens/s 230.8 tok/s');
+    expect(screen.getByText('Tokens/s')).toBeInTheDocument();
+    expect(screen.getByText('230.8 tok/s')).toBeInTheDocument();
   });
 
   it('preserves explicit zero resource observations', () => {
@@ -120,10 +123,12 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Latency 0 ms');
-    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Input 0 tok');
-    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Output 0 tok');
-    expect(screen.getByLabelText('Measured values')).toHaveTextContent('Retries 0');
+    expect(screen.getByTestId('stat-latency')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-input')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-output')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-retries')).toBeInTheDocument();
+    expect(screen.getByText('0 ms')).toBeInTheDocument();
+    expect(screen.getAllByText('0 tok')).toHaveLength(2);
   });
 
   it('omits an all-unavailable resource summary', () => {
@@ -187,13 +192,12 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.queryByRole('heading', { name: 'Assignment context' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Public criteria')).toHaveTextContent('Tool choice · required');
+    expect(screen.getByText('Tool choice')).toBeInTheDocument();
     expect(screen.getByText('<b>Choose</b> the approved tool.')).toBeInTheDocument();
     expect(screen.queryByText('Choose', { selector: 'b' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What happened' })).toBeInTheDocument();
     expect(screen.getByText('1 observed')).toBeInTheDocument();
-    expect(screen.getByText(/selection · Pass · Criterion passed/)).toBeInTheDocument();
+    expect(screen.getByText('Criterion passed')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Evidence and methodology' })).toBeInTheDocument();
     expect(screen.getByText('Evaluation projection')).toBeInTheDocument();
     expect(screen.queryByText('private')).not.toBeInTheDocument();
@@ -326,6 +330,231 @@ describe('AssignmentDetailView', () => {
     expect(screen.queryByRole('heading', { name: 'What the model is asked' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'What the model was provided' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What the model did' })).toBeInTheDocument();
+  });
+
+  it('displays TTFT tile when time_to_first_token_ms is present', () => {
+    renderAssignment([
+      assignmentResult({
+        benchmark_observations: {
+          timing: { time_to_first_token_ms: { value: 350 } },
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.getByTestId('stat-ttft')).toBeInTheDocument();
+    expect(screen.getByText('350 ms')).toBeInTheDocument();
+  });
+
+  it('omits TTFT tile when time_to_first_token_ms is absent', () => {
+    renderAssignment([
+      assignmentResult({
+        benchmark_observations: {
+          timing: { model_load_ms: { value: 100 } },
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.queryByTestId('stat-ttft')).not.toBeInTheDocument();
+  });
+
+  it('displays GPU utilization, temperature, power, and clock tiles when present', () => {
+    renderAssignment([
+      assignmentResult({
+        benchmark_observations: {
+          gpu: {
+            utilization_percent: { value: 85.5 },
+            temperature_celsius: { value: 72.3 },
+            power_watts: { value: 250.8 },
+            clock_mhz: { value: 2100 },
+          },
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.getByTestId('stat-gpu-utilization')).toBeInTheDocument();
+    expect(screen.getByText('85.5%')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-gpu-temperature')).toBeInTheDocument();
+    expect(screen.getByText('72.3°C')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-gpu-power')).toBeInTheDocument();
+    expect(screen.getByText('250.8W')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-gpu-clock')).toBeInTheDocument();
+    expect(screen.getByText('2.1GHz')).toBeInTheDocument();
+  });
+
+  it('omits GPU tiles when not present', () => {
+    renderAssignment([
+      assignmentResult({
+        benchmark_observations: {
+          gpu: {},
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.queryByTestId('stat-gpu-utilization')).not.toBeInTheDocument();
+  });
+
+  it('shows all 10 tool score dimensions with populated values', () => {
+    renderAssignment([
+      assignmentResult({
+        benchmark_observations: {
+          tool_scorecard: {
+            tool_recognition: { value: 0.9 },
+            tool_selection: { value: 0.85 },
+            argument_schema: { value: 0.95 },
+            argument_semantics: { value: 0.88 },
+            permission_compliance: { value: 1.0 },
+            result_interpretation: { value: 0.92 },
+            follow_up_decision: { value: 0.87 },
+            unnecessary_tool_calls: { value: 0.98 },
+            looping: { value: 0.99 },
+            recovery: { value: 0.80 },
+          },
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.getByTestId('stat-tool-recognition')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-tool-selection')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-argument-schema')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-argument-semantics')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-permission-compliance')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-result-interpretation')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-follow-up-decision')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-unnecessary-tool-calls')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-looping')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-recovery')).toBeInTheDocument();
+  });
+
+  it('marks required-but-missing score dimensions as unavailable', () => {
+    renderAssignment([
+      assignmentResult({
+        scenario_summary: {
+          scenario_id: 'scenario-1',
+          scenario_version: '1.0.0',
+          category: 'tool_selection',
+          public_description: 'Test scenario',
+          grading_method: 'deterministic',
+          allowed_tools: [],
+          expected_tools: [],
+          forbidden_tools: [],
+          criteria: [],
+          tool_score_dimensions: [
+            { dimension: 'tool_recognition', required: true },
+            { dimension: 'tool_selection', required: true },
+            { dimension: 'argument_schema', required: false },
+          ],
+        },
+        benchmark_observations: {
+          tool_scorecard: {
+            argument_schema: { value: 0.95 },
+          },
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.getByTestId('stat-tool-recognition')).toBeInTheDocument();
+    const requiredUnavailables = screen.getAllByTitle('required but not observed');
+    expect(requiredUnavailables.length).toBe(2);
+    expect(requiredUnavailables[0]).toHaveTextContent('Unavailable');
+
+    expect(screen.getByTestId('stat-tool-selection')).toBeInTheDocument();
+    const argSchemaTile = screen.getByTestId('stat-argument-schema');
+    expect(argSchemaTile).toBeInTheDocument();
+    expect(argSchemaTile).toHaveTextContent('Argument schema');
+  });
+
+  it('shows not-applicable text for optional scenario dimensions without values', () => {
+    renderAssignment([
+      assignmentResult({
+        scenario_summary: {
+          scenario_id: 'scenario-1',
+          scenario_version: '1.0.0',
+          category: 'tool_selection',
+          public_description: 'Test scenario',
+          grading_method: 'deterministic',
+          allowed_tools: [],
+          expected_tools: [],
+          forbidden_tools: [],
+          criteria: [],
+          tool_score_dimensions: [
+            { dimension: 'argument_schema', required: false },
+          ],
+        },
+        benchmark_observations: {
+          tool_scorecard: {},
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.getByTestId('stat-argument-schema')).toBeInTheDocument();
+    expect(screen.getByText('Not scored for this scenario')).toBeInTheDocument();
+  });
+
+  it('renders unified grade badges with criterion labels from scenario summary', () => {
+    renderAssignment([
+      assignmentResult({
+        scenario_summary: {
+          scenario_id: 'scenario-1', scenario_version: '1.0.0', category: 'tool_selection',
+          public_description: 'Scenario description', grading_method: 'deterministic',
+          allowed_tools: [], expected_tools: [], forbidden_tools: [],
+          criteria: [
+            { criterion_id: 'tool-choice', public_label: 'Tool Selection', public_description: 'Select the right tool', grading_method: 'deterministic', required: true },
+          ],
+          tool_score_dimensions: [],
+        },
+        semantic_grade_summaries: [
+          { criterion_id: 'tool-choice', status: 'pass', grading_method: 'deterministic', explanation_code: 'criterion_passed' },
+        ],
+      }),
+    ]);
+
+    expect(screen.getByLabelText('Grade badges')).toBeInTheDocument();
+    const badge = screen.getByText('Tool Selection');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass('badge-label');
+  });
+
+  it('shows all 5 status values with distinct styling', () => {
+    renderAssignment([
+      assignmentResult({
+        scenario_summary: {
+          scenario_id: 'scenario-1', scenario_version: '1.0.0', category: 'tool_selection',
+          public_description: 'Scenario', grading_method: 'deterministic',
+          allowed_tools: [], expected_tools: [], forbidden_tools: [],
+          criteria: [
+            { criterion_id: 'pass-test', public_label: 'Pass Test', public_description: '', grading_method: 'deterministic', required: true },
+            { criterion_id: 'fail-test', public_label: 'Fail Test', public_description: '', grading_method: 'deterministic', required: true },
+            { criterion_id: 'unavailable-test', public_label: 'Unavailable Test', public_description: '', grading_method: 'deterministic', required: true },
+            { criterion_id: 'unsupported-test', public_label: 'Unsupported Test', public_description: '', grading_method: 'deterministic', required: false },
+            { criterion_id: 'invalid-test', public_label: 'Invalid Test', public_description: '', grading_method: 'deterministic', required: false },
+          ],
+          tool_score_dimensions: [],
+        },
+        benchmark_observations: {
+          grade_summaries: [
+            { criterion_id: 'pass-test', status: 'pass' },
+            { criterion_id: 'fail-test', status: 'fail' },
+            { criterion_id: 'unavailable-test', status: 'unavailable' },
+            { criterion_id: 'unsupported-test', status: 'unsupported' },
+            { criterion_id: 'invalid-test', status: 'invalid_evidence' },
+          ],
+          unavailable_reasons: [],
+        },
+      }),
+    ]);
+
+    expect(screen.getByText('Pass Test')).toBeInTheDocument();
+    expect(screen.getByText('Fail Test')).toBeInTheDocument();
+    expect(screen.getByText('Unavailable Test')).toBeInTheDocument();
+    expect(screen.getByText('Unsupported Test')).toBeInTheDocument();
+    expect(screen.getByText('Invalid Test')).toBeInTheDocument();
   });
 });
 

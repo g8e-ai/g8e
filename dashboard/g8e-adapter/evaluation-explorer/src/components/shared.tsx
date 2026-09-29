@@ -21,7 +21,7 @@ import {
   type StreamConnectionState,
 } from '../utils/feed-state';
 import { metricDisplay, formatPercent, formatNumber, formatLatency, formatThroughput, formatTokens, formatDuration, formatTimestamp, formatRelativeTime } from '../utils/format';
-const toneClass: Record<string, string> = {
+export const toneClass: Record<string, string> = {
   ok: 'tone-ok',
   info: 'tone-info',
   warn: 'tone-warn',
