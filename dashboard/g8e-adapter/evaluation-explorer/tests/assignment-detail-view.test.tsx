@@ -226,7 +226,7 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.getByRole('heading', { name: 'Model Response' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What the model did' })).toBeInTheDocument();
     expect(screen.getByText("Model's Response")).toBeInTheDocument();
     expect(screen.getByText('{"tool": "run_command", "args": {"command": "ls"}}')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -244,7 +244,7 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.getByRole('heading', { name: 'Model Response & Failure Output' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What the model did' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByText(/Failure Diagnosis \(Model failed\)/)).toBeInTheDocument();
     expect(screen.getByText('Command execution timed out after 30 seconds')).toBeInTheDocument();
@@ -262,11 +262,70 @@ describe('AssignmentDetailView', () => {
       }),
     ]);
 
-    expect(screen.getByRole('heading', { name: 'Model Response & Failure Output' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What the model did' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getAllByText('no_scored_calls')).toHaveLength(2);
     expect(screen.getByText(/No raw model response was captured/)).toBeInTheDocument();
     expect(screen.getByText(/assignment-1-trace\.json/)).toBeInTheDocument();
+  });
+
+  it('renders What the model is asked, What the model was provided, and What the model did in order', () => {
+    renderAssignment([
+      assignmentResult({
+        task_id: 'tech-network-summary',
+        terminal_status: 'completed',
+        model_response: 'Reported HTTP 503',
+      }),
+    ]);
+
+    const askedHeading = screen.getByRole('heading', { name: 'What the model is asked' });
+    const providedHeading = screen.getByRole('heading', { name: 'What the model was provided' });
+    const didHeading = screen.getByRole('heading', { name: 'What the model did' });
+
+    expect(askedHeading).toBeInTheDocument();
+    expect(screen.getByText('User prompt sent to the agent.')).toBeInTheDocument();
+    expect(screen.getByText('Report the HTTP status code from the attached synthetic curl summary.')).toBeInTheDocument();
+
+    expect(providedHeading).toBeInTheDocument();
+    expect(screen.getByText('synthetic-curl-summary')).toBeInTheDocument();
+    expect(screen.getByText(/curl -s -o \/dev\/null -w '%\{http_code\}'/)).toBeInTheDocument();
+
+    expect(didHeading).toBeInTheDocument();
+    expect(screen.getByText('Reported HTTP 503')).toBeInTheDocument();
+
+    // Verify DOM sequence: asked -> provided -> did
+    expect(askedHeading.compareDocumentPosition(providedHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(providedHeading.compareDocumentPosition(didHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('renders task system context and attachments when present on the task definition', () => {
+    renderAssignment([
+      assignmentResult({
+        task_id: 'instruction-classify-severity',
+        terminal_status: 'completed',
+        model_response: 'ERROR',
+      }),
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'What the model is asked' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What the model was provided' })).toBeInTheDocument();
+    expect(screen.getByText('synthetic-app-log')).toBeInTheDocument();
+    expect(screen.getByText(/checkout payment gateway timeout after 30s/)).toBeInTheDocument();
+    expect(screen.getByText(/Use only the synthetic attachment\. Do not invent external context\./)).toBeInTheDocument();
+  });
+
+  it('does not render task prompt or provided sections when task is unrecognized', () => {
+    renderAssignment([
+      assignmentResult({
+        task_id: 'unknown-custom-task',
+        terminal_status: 'completed',
+        model_response: 'Custom response',
+      }),
+    ]);
+
+    expect(screen.queryByRole('heading', { name: 'What the model is asked' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'What the model was provided' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What the model did' })).toBeInTheDocument();
   });
 });
 

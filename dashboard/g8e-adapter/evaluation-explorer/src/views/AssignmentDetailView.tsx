@@ -3,8 +3,8 @@
 
 // Assignment detail view. Shows task ID, variant, role, repetition,
 // lifecycle status, eligible metric values, missingness reason, safe stage
-// names and durations, resource observations, and verification disposition.
-// Never shows raw prompts, outputs, trails, or credentials.
+// names and durations, resource observations, verification disposition,
+// task prompt from scenario catalog, and captured model response.
 
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { activityFamilyHasObservedRecords } from '../contract/activity-family';
@@ -13,6 +13,8 @@ import { AssignmentActivitySummary } from '../components/AssignmentActivitySumma
 import { AssignmentAuditProofRow, filterNonAuditEvidenceBindings } from '../components/AssignmentAuditProofRow';
 import { EvidenceBindingsPanel } from '../components/EvidenceBindingsPanel';
 import { ScenarioContextCard } from '../components/ScenarioContextCard';
+import { TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
+import { SCENARIO_TASK_BY_ID } from '../content/scenario-catalog';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import {
@@ -36,6 +38,12 @@ import {
   siblingRepetitions,
   streamProgressLabel,
 } from './derived';
+
+function lookupTask(id?: string) {
+  if (!id) return undefined;
+  const base = id.split('@')[0];
+  return SCENARIO_TASK_BY_ID.get(id) ?? (base ? SCENARIO_TASK_BY_ID.get(base) : undefined);
+}
 
 function observationLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
@@ -73,8 +81,8 @@ function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) 
   );
 
   return (
-    <section className="assignment-model-response" aria-label="Model response and failure output">
-      <h2>{isFailure ? 'Model Response & Failure Output' : 'Model Response'}</h2>
+    <section className="assignment-model-response" aria-label="What the model did">
+      <h2>What the model did</h2>
 
       {isFailure && (hasFailureOutput || failingChips.length > 0 || assignment.missingness_reason) ? (
         <div className="assignment-failure-callout" role="alert">
@@ -140,6 +148,11 @@ export function AssignmentDetailView() {
 
   if (!assignmentId || !runId) return <ErrorState message="No assignment selected." />;
   if (!assignment) return <EmptyState hasRecords={false} hasFilters={false} connection={connection} />;
+
+  const task =
+    lookupTask(assignment.task_id) ??
+    lookupTask(assignment.scenario_id) ??
+    lookupTask(assignment.scenario_summary?.scenario_id);
 
   const toolScorecard = assignment.benchmark_observations?.tool_scorecard;
   const toolScorecardEntries = toolScorecard
@@ -213,6 +226,13 @@ export function AssignmentDetailView() {
           </span>
         ))}
       </div>
+
+      {task ? (
+        <>
+          <TaskPromptSection task={task} className="assignment-task-prompt" />
+          <TaskProvidedSection task={task} className="assignment-task-provided" />
+        </>
+      ) : null}
 
       <ModelResponseSection assignment={assignment} />
 

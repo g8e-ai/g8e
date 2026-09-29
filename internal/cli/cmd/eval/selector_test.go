@@ -48,18 +48,19 @@ func TestModelSelectorResolve(t *testing.T) {
 		{name: "positional order preserved", selector: ModelSelector{IDs: []string{"gemma3:12b", "qwen3-0-6b"}}, want: []string{"gemma3:12b", "qwen3:0.6b"}},
 		{name: "tag and variant dedupe", selector: ModelSelector{IDs: []string{"qwen3:4b", "qwen3-4b"}}, want: []string{"qwen3:4b"}},
 		{name: "unknown positional", selector: ModelSelector{IDs: []string{"nope:1b"}}, wantErr: constants.ErrInferenceModelNotFound},
-		{name: "family", selector: ModelSelector{Family: "qwen3"}, want: []string{"qwen3:0.6b", "qwen3:4b"}},
-		{name: "family narrowed by max params", selector: ModelSelector{Family: "qwen3", MaxParams: "1b"}, want: []string{"qwen3:0.6b"}},
+		{name: "family", selector: ModelSelector{Family: []string{"qwen3"}}, want: []string{"qwen3:0.6b", "qwen3:4b"}},
+		{name: "multiple families", selector: ModelSelector{Family: []string{"qwen3", "gemma3"}}, want: []string{"qwen3:0.6b", "qwen3:4b", "gemma3:12b"}},
+		{name: "family narrowed by max params", selector: ModelSelector{Family: []string{"qwen3"}, MaxParams: "1b"}, want: []string{"qwen3:0.6b"}},
 		{name: "max params alone keeps unknown size", selector: ModelSelector{MaxParams: "4b"}, want: []string{"qwen3:0.6b", "qwen3:4b", "mystery:latest"}},
 		{name: "max params fractional", selector: ModelSelector{MaxParams: "1.5B"}, want: []string{"qwen3:0.6b", "mystery:latest"}},
-		{name: "max params millions narrows to nothing", selector: ModelSelector{MaxParams: "350m", Family: "qwen3"}, wantErr: constants.ErrEvaluationSelectionEmpty},
+		{name: "max params millions narrows to nothing", selector: ModelSelector{MaxParams: "350m", Family: []string{"qwen3"}}, wantErr: constants.ErrEvaluationSelectionEmpty},
 		{name: "all", selector: ModelSelector{All: true}, want: []string{"qwen3:0.6b", "qwen3:4b", "gemma3:12b", "mystery:latest"}},
 		{name: "empty selector", selector: ModelSelector{}, wantErr: constants.ErrEvaluationSelectionEmpty},
-		{name: "no match is an error", selector: ModelSelector{Family: "llama"}, wantErr: constants.ErrEvaluationSelectionEmpty},
-		{name: "positional with family", selector: ModelSelector{IDs: []string{"qwen3:4b"}, Family: "qwen3"}, wantMsg: "cannot be combined"},
+		{name: "no match is an error", selector: ModelSelector{Family: []string{"llama"}}, wantErr: constants.ErrEvaluationSelectionEmpty},
+		{name: "positional with family", selector: ModelSelector{IDs: []string{"qwen3:4b"}, Family: []string{"qwen3"}}, wantMsg: "cannot be combined"},
 		{name: "positional with max params", selector: ModelSelector{IDs: []string{"qwen3:4b"}, MaxParams: "8b"}, wantMsg: "cannot be combined"},
 		{name: "positional with all", selector: ModelSelector{IDs: []string{"qwen3:4b"}, All: true}, wantMsg: "cannot be combined"},
-		{name: "all with family", selector: ModelSelector{All: true, Family: "qwen3"}, wantMsg: "--all cannot be combined"},
+		{name: "all with family", selector: ModelSelector{All: true, Family: []string{"qwen3"}}, wantMsg: "--all cannot be combined"},
 		{name: "all with max params", selector: ModelSelector{All: true, MaxParams: "8b"}, wantMsg: "--all cannot be combined"},
 		{name: "zero max params", selector: ModelSelector{MaxParams: "0"}, wantMsg: "greater than zero"},
 		{name: "malformed max params", selector: ModelSelector{MaxParams: "big"}, wantMsg: "parse parameter count"},
@@ -85,11 +86,11 @@ func TestModelSelectorFilterAllowsUnsetAndEmptyResults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, all, 4)
 
-	none, err := ModelSelector{Family: "llama"}.Filter(selectorFixture())
+	none, err := ModelSelector{Family: []string{"llama"}}.Filter(selectorFixture())
 	require.NoError(t, err)
 	assert.Empty(t, none)
 
-	_, err = ModelSelector{All: true, Family: "qwen3"}.Filter(selectorFixture())
+	_, err = ModelSelector{All: true, Family: []string{"qwen3"}}.Filter(selectorFixture())
 	require.Error(t, err)
 }
 
@@ -106,7 +107,7 @@ func TestModelSelectorBindFlags(t *testing.T) {
 	selector.bindFlags(cmd)
 	cmd.SetArgs([]string{"--family", "qwen3", "--max-params", "8b"})
 	require.NoError(t, cmd.Execute())
-	assert.Equal(t, "qwen3", selector.Family)
+	assert.Equal(t, []string{"qwen3"}, selector.Family)
 	assert.Equal(t, "8b", selector.MaxParams)
 	assert.False(t, selector.All)
 	assert.Nil(t, cmd.Flags().Lookup("params"), "--params is removed")

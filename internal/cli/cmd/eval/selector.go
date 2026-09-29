@@ -27,14 +27,14 @@ import (
 // --family and may also stand alone.
 type ModelSelector struct {
 	IDs       []string
-	Family    string
+	Family    []string
 	MaxParams string
 	All       bool
 }
 
 // bindFlags registers the filter flags on cmd.
 func (s *ModelSelector) bindFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&s.Family, "family", "", "Select models by family (for example gemma4, granite)")
+	cmd.Flags().StringSliceVar(&s.Family, "family", nil, "Select models by family (for example gemma4, granite); comma-separated or repeat the flag for multiple")
 	cmd.Flags().StringVar(&s.MaxParams, "max-params", "", "Select models with at most this many parameters (for example 12b, 1.5B, 350m)")
 	cmd.Flags().BoolVar(&s.All, "all", false, "Select every model in scope")
 }
@@ -47,11 +47,30 @@ func (s ModelSelector) withArgs(args []string) ModelSelector {
 
 // IsSet reports whether the selector names anything.
 func (s ModelSelector) IsSet() bool {
-	return len(s.IDs) > 0 || s.Family != "" || s.MaxParams != "" || s.All
+	return len(s.IDs) > 0 || len(s.Family) > 0 || s.MaxParams != "" || s.All
+}
+
+// describe renders whatever the selector carries, for error messages that
+// need to say what was unexpectedly set rather than just that it was set.
+func (s ModelSelector) describe() string {
+	var parts []string
+	if len(s.IDs) > 0 {
+		parts = append(parts, fmt.Sprintf("model ID(s) %q", s.IDs))
+	}
+	if len(s.Family) > 0 {
+		parts = append(parts, fmt.Sprintf("--family %q", s.Family))
+	}
+	if s.MaxParams != "" {
+		parts = append(parts, fmt.Sprintf("--max-params %q", s.MaxParams))
+	}
+	if s.All {
+		parts = append(parts, "--all")
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (s ModelSelector) validate() error {
-	hasFilter := s.Family != "" || s.MaxParams != ""
+	hasFilter := len(s.Family) > 0 || s.MaxParams != ""
 	if len(s.IDs) > 0 && (hasFilter || s.All) {
 		return fmt.Errorf("evaluation: model selector: positional models cannot be combined with --family, --max-params, or --all")
 	}
@@ -115,13 +134,32 @@ func (s ModelSelector) apply(variants []*evalv1.ModelVariant) ([]*evalv1.ModelVa
 		return nil, err
 	}
 	selected := append([]*evalv1.ModelVariant(nil), variants...)
-	if s.Family != "" {
-		selected = evaluation.FilterVariantsByFamily(selected, s.Family)
+	if len(s.Family) > 0 {
+		selected = filterVariantsByFamilies(selected, s.Family)
 	}
 	if maxParams > 0 {
 		selected = evaluation.FilterVariantsByMaxParameters(selected, maxParams)
 	}
 	return selected, nil
+}
+
+// filterVariantsByFamilies unions evaluation.FilterVariantsByFamily across
+// every requested family, preserving the original variant order and
+// deduplicating variants matched by more than one family.
+func filterVariantsByFamilies(variants []*evalv1.ModelVariant, families []string) []*evalv1.ModelVariant {
+	matched := make(map[*evalv1.ModelVariant]struct{})
+	for _, family := range families {
+		for _, v := range evaluation.FilterVariantsByFamily(variants, family) {
+			matched[v] = struct{}{}
+		}
+	}
+	selected := make([]*evalv1.ModelVariant, 0, len(matched))
+	for _, v := range variants {
+		if _, ok := matched[v]; ok {
+			selected = append(selected, v)
+		}
+	}
+	return selected
 }
 
 func selectVariantsByID(variants []*evalv1.ModelVariant, ids []string) ([]*evalv1.ModelVariant, error) {

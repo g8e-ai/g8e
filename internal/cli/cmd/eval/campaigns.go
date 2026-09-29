@@ -445,7 +445,7 @@ Examples:
   g8e eval campaigns create eval-qwen qwen3:4b qwen3:8b --reps 3
   g8e eval campaigns create eval-small --max-params 4b
   g8e eval campaigns create eval-formations --all-formations --seed 17
-  g8e eval campaigns create eval-two --formations qwen-powerhouse ultra-efficient-speedster`,
+  g8e eval campaigns create eval-two --formations qwen-powerhouse,ultra-efficient-speedster`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			campaignID := args[0]
@@ -457,8 +457,15 @@ Examples:
 			if lane != campaignLaneModelRole && lane != campaignLaneSystem {
 				return fmt.Errorf("evaluation: campaigns create: --lane must be %s or %s (got %q)", campaignLaneModelRole, campaignLaneSystem, lane)
 			}
-			if formationCampaign && (selector.IsSet() || cmd.Flags().Changed("lane") && lane != campaignLaneSystem) {
-				return fmt.Errorf("evaluation: campaigns create: formations run in the system lane and take no model selector")
+			if formationCampaign && cmd.Flags().Changed("lane") && lane != campaignLaneSystem {
+				return fmt.Errorf("evaluation: campaigns create: --lane %s is incompatible with --formations/--all-formations, which always run in the system lane", lane)
+			}
+			if formationCampaign && selector.IsSet() {
+				msg := fmt.Sprintf("evaluation: campaigns create: formations run in the system lane and take no model selector, but got %s", selector.describe())
+				if len(selector.IDs) > 0 {
+					msg += "; if you meant to pass multiple --formations, separate them with a comma (--formations a,b) or repeat the flag (--formations a --formations b) — space-separated values after a flag are parsed as extra positional arguments"
+				}
+				return errors.New(msg)
 			}
 			if !formationCampaign && !selector.IsSet() {
 				return fmt.Errorf("evaluation: campaigns create: name models, pass --family, --max-params, or --all, or use --formations or --all-formations: %w", constants.ErrEvaluationSelectionEmpty)

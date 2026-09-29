@@ -20,6 +20,7 @@ import {
 } from '../content/scenario-catalog';
 import { G8E_REPO_URL } from '../content/platform';
 import { SCENARIO_CATEGORIES, type ScenarioCategory } from '../contract/types';
+import { TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
 
 function categoryAnchor(category: ScenarioCategory): string {
   return `category-${category}`;
@@ -97,21 +98,8 @@ function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
       </header>
 
       <div className="task-detail-body">
-        <section className="task-detail-section">
-          <h2>What the model is asked</h2>
-          <p className="task-section-note">
-            User prompt sent to the agent.
-            {task.systemContext
-              ? ' System context is additional background supplied outside the user message.'
-              : null}
-          </p>
-          <blockquote className="task-prompt">{task.userPrompt}</blockquote>
-          {task.systemContext ? (
-            <p className="task-system-context">
-              <strong>System context:</strong> {task.systemContext}
-            </p>
-          ) : null}
-        </section>
+        <TaskPromptSection task={task} />
+        <TaskProvidedSection task={task} />
 
         <section className="task-detail-section">
           <h2>Pass criteria</h2>
