@@ -15,9 +15,16 @@ const CATALOG_SOURCE_PATH = 'internal/services/evaluation/scenario_catalog_defin
 
 export type ScenarioGradingMethod = 'deterministic' | 'semantic_judge';
 
-export type ScenarioAttachment = {
+export type ScenarioInlineContent = {
   kind: string;
   label: string;
+  content: string;
+};
+
+export type ScenarioSimulatedFile = {
+  kind: string;
+  label: string;
+  path: string;
   content: string;
 };
 
@@ -28,7 +35,8 @@ export type ScenarioTaskDefinition = {
   gradingMethod: ScenarioGradingMethod;
   userPrompt: string;
   systemContext?: string;
-  attachments?: readonly ScenarioAttachment[];
+  inlineContext?: readonly ScenarioInlineContent[];
+  simulatedFiles?: readonly ScenarioSimulatedFile[];
   expectedBehavior: string;
   requiredConcepts: readonly string[];
   tinyTask?: boolean;
@@ -120,9 +128,9 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'instruction_adherence',
     publicDescription: 'Classify one synthetic log line into INFO, WARN, or ERROR.',
     gradingMethod: 'deterministic',
-    userPrompt: 'Classify the attached log line as INFO, WARN, or ERROR. Reply with only the label.',
-    systemContext: 'Use only the synthetic attachment. Do not invent external context.',
-    attachments: [
+    userPrompt: 'Classify the log line below as INFO, WARN, or ERROR. Reply with only the label.',
+    systemContext: 'Use only the synthetic content below. Do not invent external context.',
+    inlineContext: [
       { kind: 'log', label: 'synthetic-app-log', content: '2026-09-16T08:00:01Z ERROR checkout payment gateway timeout after 30s' },
     ],
     expectedBehavior: 'The model labels the synthetic log line as ERROR.',
@@ -164,8 +172,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     gradingMethod: 'deterministic',
     userPrompt: 'Read /synthetic/eval/retry-config.env on the operator and report the value of retry_limit.',
     systemContext: 'The answer is available by reading the named file directly.',
-    attachments: [
-      { kind: 'file', label: 'synthetic-retry-config', content: 'retry_limit=3\nbackoff_seconds=5' },
+    simulatedFiles: [
+      { kind: 'file', label: 'synthetic-retry-config', path: '/synthetic/eval/retry-config.env', content: 'retry_limit=3\nbackoff_seconds=5' },
     ],
     expectedBehavior: 'The model selects file_read_on_operator to inspect the synthetic config.',
     requiredConcepts: ['tool-selection', 'file-read'],
@@ -224,8 +232,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     publicDescription: 'Provide the correct synthetic file path semantics for a read operation.',
     gradingMethod: 'deterministic',
     userPrompt: 'Read /synthetic/eval/network-summary.txt and report the upstream host.',
-    attachments: [
-      { kind: 'file', label: 'network-summary', content: 'upstream_host=payments.internal.example\nstatus=degraded' },
+    simulatedFiles: [
+      { kind: 'file', label: 'network-summary', path: '/synthetic/eval/network-summary.txt', content: 'upstream_host=payments.internal.example\nstatus=degraded' },
     ],
     expectedBehavior: 'The model requests the synthetic network summary path rather than an invented location.',
     requiredConcepts: ['tool-arguments', 'file-path'],
@@ -241,8 +249,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     gradingMethod: 'deterministic',
     userPrompt:
       'Run one read-only governed command to print the synthetic health marker HEALTHY from /synthetic/eval/health.txt.',
-    attachments: [
-      { kind: 'file', label: 'health-marker', content: 'HEALTHY' },
+    simulatedFiles: [
+      { kind: 'file', label: 'health-marker', path: '/synthetic/eval/health.txt', content: 'HEALTHY' },
     ],
     expectedBehavior: 'The model proposes one bounded read-only command and binds to governed operator evidence.',
     requiredConcepts: ['tool-arguments', 'governed-command'],
@@ -257,8 +265,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'technical_analysis',
     publicDescription: 'Extract the failing service from a synthetic error log.',
     gradingMethod: 'semantic_judge',
-    userPrompt: 'Identify the failing service named in the attached synthetic log excerpt.',
-    attachments: [
+    userPrompt: 'Identify the failing service named in the synthetic log excerpt below.',
+    inlineContext: [
       { kind: 'log', label: 'synthetic-service-log', content: '2026-09-16T08:05:11Z ERROR service=checkout-api upstream=payments.internal.example reason=timeout' },
     ],
     expectedBehavior: 'The answer identifies checkout-api as the failing service.',
@@ -270,8 +278,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'technical_analysis',
     publicDescription: 'Interpret a synthetic curl summary and report the HTTP status.',
     gradingMethod: 'deterministic',
-    userPrompt: 'Report the HTTP status code from the attached synthetic curl summary.',
-    attachments: [
+    userPrompt: 'Report the HTTP status code from the synthetic curl summary below.',
+    inlineContext: [
       { kind: 'network', label: 'synthetic-curl-summary', content: "curl -s -o /dev/null -w '%{http_code}' https://payments.internal.example/health -> 503" },
     ],
     expectedBehavior: 'The answer reports HTTP status 503.',
@@ -283,8 +291,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'technical_analysis',
     publicDescription: 'Spot the mismatched timeout value between two synthetic configs.',
     gradingMethod: 'deterministic',
-    userPrompt: 'Compare the attached synthetic configs and report which file sets timeout_seconds to 30.',
-    attachments: [
+    userPrompt: 'Compare the synthetic configs below and report which file sets timeout_seconds to 30.',
+    inlineContext: [
       { kind: 'config', label: 'service-a', content: 'timeout_seconds=30\nretries=2' },
       { kind: 'config', label: 'service-b', content: 'timeout_seconds=5\nretries=2' },
     ],
@@ -297,8 +305,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'technical_analysis',
     publicDescription: 'Diagnose the exit code from synthetic command output.',
     gradingMethod: 'deterministic',
-    userPrompt: 'Explain why the attached synthetic command exited with code 127.',
-    attachments: [
+    userPrompt: 'Explain why the synthetic command below exited with code 127.',
+    inlineContext: [
       { kind: 'log', label: 'synthetic-command-output', content: 'sh: deploy-healthcheck: not found\nexit_code=127' },
     ],
     expectedBehavior: 'The answer states the command failed because deploy-healthcheck was not found.',
@@ -310,8 +318,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'routing_delegation',
     publicDescription: 'Keep straightforward ownership in Primary without unnecessary handoff.',
     gradingMethod: 'deterministic',
-    userPrompt: 'Summarize the attached synthetic incident in one sentence for the on-call primary owner.',
-    attachments: [
+    userPrompt: 'Summarize the synthetic incident below in one sentence for the on-call primary owner.',
+    inlineContext: [
       { kind: 'log', label: 'synthetic-incident', content: 'checkout-api timeout rate elevated to 18 percent during deploy' },
     ],
     expectedBehavior: 'Primary completes the summary without unnecessary delegation.',
@@ -325,7 +333,7 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     gradingMethod: 'semantic_judge',
     userPrompt:
       'Primary should delegate detailed log correlation to Assistant and state the handoff reason explicitly.',
-    attachments: [
+    inlineContext: [
       { kind: 'log', label: 'synthetic-correlation-log', content: 'auth failures spike after certificate rotation' },
     ],
     expectedBehavior: 'The pipeline records a justified handoff from Primary to Assistant.',
@@ -337,8 +345,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     category: 'routing_delegation',
     publicDescription: 'Handle a tiny triage label in Lite without over-escalating.',
     gradingMethod: 'deterministic',
-    userPrompt: 'Assign the attached synthetic alert one label: noise or action. Reply with only the label.',
-    attachments: [
+    userPrompt: 'Assign the synthetic alert below one label: noise or action. Reply with only the label.',
+    inlineContext: [
       { kind: 'log', label: 'synthetic-alert', content: 'disk usage at 61 percent on dev-runner-03' },
     ],
     expectedBehavior: 'Lite labels the alert as noise and does not over-escalate.',
@@ -352,8 +360,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     publicDescription: 'Confirm synthetic evidence satisfies the stated acceptance criterion.',
     gradingMethod: 'deterministic',
     userPrompt:
-      "Verify whether the attached synthetic evidence satisfies the criterion 'upstream_host=payments.internal.example'. Reply yes or no.",
-    attachments: [
+      "Verify whether the synthetic evidence below satisfies the criterion 'upstream_host=payments.internal.example'. Reply yes or no.",
+    inlineContext: [
       { kind: 'network', label: 'synthetic-evidence', content: 'upstream_host=payments.internal.example\nlatency_ms=42' },
     ],
     expectedBehavior:
@@ -367,8 +375,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     publicDescription: 'Detect contradicting statements in synthetic evidence.',
     gradingMethod: 'deterministic',
     userPrompt:
-      'Do the attached synthetic records contradict each other about service health? Reply yes or no and name the contradiction.',
-    attachments: [
+      'Do the synthetic records below contradict each other about service health? Reply yes or no and name the contradiction.',
+    inlineContext: [
       { kind: 'log', label: 'synthetic-health-a', content: 'service=checkout-api health=healthy' },
       { kind: 'log', label: 'synthetic-health-b', content: 'service=checkout-api health=degraded' },
     ],
@@ -425,8 +433,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
     publicDescription: 'Handle malformed synthetic resource output without hallucinating success.',
     gradingMethod: 'deterministic',
     userPrompt:
-      'Interpret the attached malformed synthetic resource and state that the resource is unavailable if it cannot be parsed.',
-    attachments: [
+      'Interpret the malformed synthetic resource below and state that the resource is unavailable if it cannot be parsed.',
+    inlineContext: [
       { kind: 'network', label: 'malformed-resource', content: '{status: degraded, upstream_host=payments.internal.example' },
     ],
     expectedBehavior:
@@ -442,8 +450,8 @@ export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
       'Deliver an evidence-backed diagnosis with confidence, action, and customer-safe communication.',
     gradingMethod: 'semantic_judge',
     userPrompt:
-      'Using only the attached synthetic evidence, provide diagnosis, confidence, recommended action, and a customer-safe summary.',
-    attachments: [
+      'Using only the synthetic evidence below, provide diagnosis, confidence, recommended action, and a customer-safe summary.',
+    inlineContext: [
       { kind: 'log', label: 'synthetic-customer-impact', content: 'checkout-api timeout rate 18 percent; upstream_host=payments.internal.example; customer checkout failures confirmed' },
     ],
     expectedBehavior:

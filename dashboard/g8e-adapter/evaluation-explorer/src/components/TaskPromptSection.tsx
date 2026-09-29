@@ -45,7 +45,9 @@ export function TaskProvidedSection({
   task: ScenarioTaskDefinition;
   className?: string;
 }) {
-  const hasAttachments = Boolean(task.attachments && task.attachments.length > 0);
+  const hasInlineContext = Boolean(task.inlineContext && task.inlineContext.length > 0);
+  const hasSimulatedFiles = Boolean(task.simulatedFiles && task.simulatedFiles.length > 0);
+  const hasAttachments = hasInlineContext || hasSimulatedFiles;
   const hasTools = Boolean(task.allowedTools && task.allowedTools.length > 0);
   const hasSystemContext = Boolean(task.systemContext);
 
@@ -56,12 +58,12 @@ export function TaskProvidedSection({
     >
       <h2>What the model was provided</h2>
       <p className="task-section-note">
-        Context, synthetic attachments, and tool boundaries supplied with the task.
+        Context, synthetic content, and tool boundaries supplied with the task.
       </p>
 
-      {hasAttachments ? (
+      {hasInlineContext ? (
         <div className="task-attachments-list">
-          {task.attachments!.map((att, idx) => (
+          {task.inlineContext!.map((att, idx) => (
             <div key={`${att.label}-${idx}`} className="task-attachment-item">
               <div className="task-attachment-header">
                 <span className="task-attachment-label">{att.label}</span>
@@ -71,9 +73,26 @@ export function TaskProvidedSection({
             </div>
           ))}
         </div>
-      ) : (
-        <p className="task-provided-none">No synthetic attachments provided (raw prompt only).</p>
-      )}
+      ) : null}
+
+      {hasSimulatedFiles ? (
+        <div className="task-attachments-list">
+          {task.simulatedFiles!.map((file, idx) => (
+            <div key={`${file.label}-${idx}`} className="task-attachment-item">
+              <div className="task-attachment-header">
+                <span className="task-attachment-label">{file.label}</span>
+                <span className="task-attachment-kind">{file.kind}</span>
+                <span className="task-attachment-path">{file.path}</span>
+              </div>
+              <pre className="task-attachment-content"><code>{file.content}</code></pre>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {!hasAttachments ? (
+        <p className="task-provided-none">No synthetic content provided (raw prompt only).</p>
+      ) : null}
 
       {hasSystemContext ? (
         <p className="task-system-context">

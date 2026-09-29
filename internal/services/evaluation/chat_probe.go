@@ -17,6 +17,29 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
+// renderScenarioMessage composes the outgoing chat message text from the
+// frozen user prompt and any inline synthetic content. Content is appended
+// beneath the prompt, each block introduced by its label, so the model
+// receives it as literal message text rather than through any attachment
+// mechanism.
+func renderScenarioMessage(userPrompt string, inlineContext []ScenarioInlineContent) string {
+	if len(inlineContext) == 0 {
+		return userPrompt
+	}
+	var b strings.Builder
+	b.WriteString(userPrompt)
+	b.WriteString("\n\nBelow:")
+	for _, item := range inlineContext {
+		b.WriteString("\n\n")
+		if item.Label != "" {
+			b.WriteString(item.Label)
+			b.WriteString(":\n")
+		}
+		b.WriteString(item.Content)
+	}
+	return b.String()
+}
+
 func chatGradingMethodLabel(method evalv1.EvaluationGradingMethod) string {
 	if method == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE {
 		return "semantic_judge"

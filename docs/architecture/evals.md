@@ -236,6 +236,8 @@ To accelerate high-throughput qualification, `g8e eval rollout run` supports a t
 
 Each persona wraps in the production modular system prompt stack: Core Safety, Core Loyalty, Core Dissent, Mode Execution/Capabilities, Tool Schemas, Response Constraints, System Context, and Sentinel Mode.
 
+**Simulated operator files:** A tool-selection or tool-argument scenario can pin a `ScenarioInputFixture.SimulatedFiles` entry to a synthetic operator path (e.g. `/synthetic/eval/network-summary.txt`) that the model is expected to reach with `file_read_on_operator` or `run_commands_with_operator`. Before the scenario's chat request is sent, `CampaignChatExecutor` dispatches a governed file write through the same bound Data Operator session, so the tool call resolves against real content rather than a missing path. This content is never sent to the model directly; only a real tool call can surface it.
+
 **Campaign lanes and formations:** The default campaign lane is `model_role`, which schedules each frozen model variant against catalog scenarios and records role-specific results. Campaigns can also use the `system` lane. The CLI creates deterministic, persisted heterogeneous stacks with `g8e eval campaigns create <id> --formations <id>... --seed <seed>` and starts execution with `g8e eval runs start <id>`.
 
 A formation contains primary, assistant, and lite model bindings. The runner allocates all sovereign local models only after storage-side provenance attestation, brackets each role with provider-boundary observation, executes roles in `lite → assistant → primary` order while passing state forward, and routes a role's mutation candidate through the governed policy gate.

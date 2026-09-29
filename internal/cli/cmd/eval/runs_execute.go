@@ -193,6 +193,11 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		OperatorID:        dataOperator.OperatorID,
 		OperatorSessionID: dataOperator.OperatorSessionID,
 	}
+	gatewayClient, err := chatDeps.clientFactory(nativeEvalClientConfig(cfg, authContext))
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: run execute: %w", err)
+	}
+	fileWriter := evaluation.NewCommandLane(gatewayClient, store, persona, 0, 0)
 	chatExecutor := evaluation.NewCampaignChatExecutor(
 		&campaignChatHarnessClient{client: ensembleClient},
 		persona,
@@ -202,6 +207,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		func(ctx context.Context, fetch func(context.Context) (evaluation.EvaluationTrace, error)) (evaluation.EvaluationTrace, error) {
 			return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), opts.JSONOutput))
 		},
+		fileWriter,
 		deps.now,
 		func(prefix string) string { return prefix + "-" + deps.newID() },
 	)

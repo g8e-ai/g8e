@@ -68,8 +68,19 @@ func baseGold(expectedBehavior string, rolePrimary, roleAssistant, roleLite, hom
 	}
 }
 
-func syntheticAttachment(kind, label, content string) ScenarioAttachment {
-	return ScenarioAttachment{Kind: kind, Label: label, Content: content}
+// syntheticInlineContent builds content that is rendered directly into the
+// outgoing chat message below the user prompt (see renderScenarioMessage).
+func syntheticInlineContent(kind, label, content string) ScenarioInlineContent {
+	return ScenarioInlineContent{Kind: kind, Label: label, Content: content}
+}
+
+// syntheticSimulatedFile builds frozen fixture data for a synthetic operator
+// file path referenced by a tool-selection/tool-argument scenario. path must
+// match the operator path named in the scenario's UserPrompt so
+// CampaignChatExecutor materializes content where the model's tool call will
+// actually look. It is not sent to the model; see ScenarioSimulatedFile.
+func syntheticSimulatedFile(kind, label, path, content string) ScenarioSimulatedFile {
+	return ScenarioSimulatedFile{Kind: kind, Label: label, Path: path, Content: content}
 }
 
 func instructionExactFormat() ScenarioBlueprint {
@@ -127,10 +138,10 @@ func instructionClassifySeverity() ScenarioBlueprint {
 		RequiredConcepts:  []string{"classification", "severity"},
 		TinyTask:          true,
 		Input: ScenarioInputFixture{
-			UserPrompt:    "Classify the attached log line as INFO, WARN, or ERROR. Reply with only the label.",
-			SystemContext: "Use only the synthetic attachment. Do not invent external context.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-app-log", "2026-09-16T08:00:01Z ERROR checkout payment gateway timeout after 30s"),
+			UserPrompt:    "Classify the log line below as INFO, WARN, or ERROR. Reply with only the label.",
+			SystemContext: "Use only the synthetic content below. Do not invent external context.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-app-log", "2026-09-16T08:00:01Z ERROR checkout payment gateway timeout after 30s"),
 			},
 		},
 		Gold: baseGold(
@@ -208,8 +219,8 @@ func toolSelectFileRead() ScenarioBlueprint {
 		Input: ScenarioInputFixture{
 			UserPrompt:    "Read /synthetic/eval/retry-config.env on the operator and report the value of retry_limit.",
 			SystemContext: "The answer is available by reading the named file directly.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("file", "synthetic-retry-config", "retry_limit=3\nbackoff_seconds=5"),
+			SimulatedFiles: []ScenarioSimulatedFile{
+				syntheticSimulatedFile("file", "synthetic-retry-config", "/synthetic/eval/retry-config.env", "retry_limit=3\nbackoff_seconds=5"),
 			},
 		},
 		Gold: withToolGold(baseGold(
@@ -317,8 +328,8 @@ func toolArgFilePath() ScenarioBlueprint {
 		RequiresToolDecision: true,
 		Input: ScenarioInputFixture{
 			UserPrompt: "Read /synthetic/eval/network-summary.txt and report the upstream host.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("file", "network-summary", "upstream_host=payments.internal.example\nstatus=degraded"),
+			SimulatedFiles: []ScenarioSimulatedFile{
+				syntheticSimulatedFile("file", "network-summary", "/synthetic/eval/network-summary.txt", "upstream_host=payments.internal.example\nstatus=degraded"),
 			},
 		},
 		Gold: withToolGold(baseGold(
@@ -350,8 +361,8 @@ func toolArgRunCommands() ScenarioBlueprint {
 		RequiresGovernedAction: true,
 		Input: ScenarioInputFixture{
 			UserPrompt: "Run one read-only governed command to print the synthetic health marker HEALTHY from /synthetic/eval/health.txt.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("file", "health-marker", "HEALTHY"),
+			SimulatedFiles: []ScenarioSimulatedFile{
+				syntheticSimulatedFile("file", "health-marker", "/synthetic/eval/health.txt", "HEALTHY"),
 			},
 		},
 		Gold: withGovernedGold(withToolGold(baseGold(
@@ -378,9 +389,9 @@ func techLogParse() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
 		RequiredConcepts:  []string{"log-analysis"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Identify the failing service named in the attached synthetic log excerpt.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-service-log", "2026-09-16T08:05:11Z ERROR service=checkout-api upstream=payments.internal.example reason=timeout"),
+			UserPrompt: "Identify the failing service named in the synthetic log excerpt below.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-service-log", "2026-09-16T08:05:11Z ERROR service=checkout-api upstream=payments.internal.example reason=timeout"),
 			},
 		},
 		Gold: baseGold(
@@ -403,9 +414,9 @@ func techNetworkSummary() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"network-summary"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Report the HTTP status code from the attached synthetic curl summary.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("network", "synthetic-curl-summary", "curl -s -o /dev/null -w '%{http_code}' https://payments.internal.example/health -> 503"),
+			UserPrompt: "Report the HTTP status code from the synthetic curl summary below.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("network", "synthetic-curl-summary", "curl -s -o /dev/null -w '%{http_code}' https://payments.internal.example/health -> 503"),
 			},
 		},
 		Gold: baseGold(
@@ -428,10 +439,10 @@ func techConfigDiff() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"configuration-analysis"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Compare the attached synthetic configs and report which file sets timeout_seconds to 30.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("config", "service-a", "timeout_seconds=30\nretries=2"),
-				syntheticAttachment("config", "service-b", "timeout_seconds=5\nretries=2"),
+			UserPrompt: "Compare the synthetic configs below and report which one sets timeout_seconds to 30.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("config", "service-a", "timeout_seconds=30\nretries=2"),
+				syntheticInlineContent("config", "service-b", "timeout_seconds=5\nretries=2"),
 			},
 		},
 		Gold: baseGold(
@@ -454,9 +465,9 @@ func techErrorDiagnosis() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"error-diagnosis"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Explain why the attached synthetic command exited with code 127.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-command-output", "sh: deploy-healthcheck: not found\nexit_code=127"),
+			UserPrompt: "Explain why the synthetic command output below exited with code 127.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-command-output", "sh: deploy-healthcheck: not found\nexit_code=127"),
 			},
 		},
 		Gold: baseGold(
@@ -479,9 +490,9 @@ func routePrimaryOwnership() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"primary-ownership", "handoff"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Summarize the attached synthetic incident in one sentence for the on-call primary owner.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-incident", "checkout-api timeout rate elevated to 18 percent during deploy"),
+			UserPrompt: "Summarize the synthetic incident below in one sentence for the on-call primary owner.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-incident", "checkout-api timeout rate elevated to 18 percent during deploy"),
 			},
 		},
 		Gold: withEscalation(baseGold(
@@ -504,9 +515,9 @@ func routeHandoffAssistant() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
 		RequiredConcepts:  []string{"assistant-handoff", "delegation"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Primary should delegate detailed log correlation to Assistant and state the handoff reason explicitly.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-correlation-log", "auth failures spike after certificate rotation"),
+			UserPrompt: "Primary should delegate detailed correlation of the synthetic log below to Assistant and state the handoff reason explicitly.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-correlation-log", "auth failures spike after certificate rotation"),
 			},
 		},
 		Gold: withEscalation(baseGold(
@@ -530,9 +541,9 @@ func routeLiteTriage() ScenarioBlueprint {
 		RequiredConcepts:  []string{"lite-triage", "routing"},
 		TinyTask:          true,
 		Input: ScenarioInputFixture{
-			UserPrompt: "Assign the attached synthetic alert one label: noise or action. Reply with only the label.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-alert", "disk usage at 61 percent on dev-runner-03"),
+			UserPrompt: "Assign the synthetic alert below one label: noise or action. Reply with only the label.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-alert", "disk usage at 61 percent on dev-runner-03"),
 			},
 		},
 		Gold: withEscalation(baseGold(
@@ -555,9 +566,9 @@ func verifyEvidenceSatisfies() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"verification", "evidence"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Verify whether the attached synthetic evidence satisfies the criterion 'upstream_host=payments.internal.example'. Reply yes or no.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("network", "synthetic-evidence", "upstream_host=payments.internal.example\nlatency_ms=42"),
+			UserPrompt: "Verify whether the synthetic evidence below satisfies the criterion 'upstream_host=payments.internal.example'. Reply yes or no.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("network", "synthetic-evidence", "upstream_host=payments.internal.example\nlatency_ms=42"),
 			},
 		},
 		Gold: baseGold(
@@ -580,10 +591,10 @@ func verifyContradiction() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"verification", "contradiction"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Do the attached synthetic records contradict each other about service health? Reply yes or no and name the contradiction.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-health-a", "service=checkout-api health=healthy"),
-				syntheticAttachment("log", "synthetic-health-b", "service=checkout-api health=degraded"),
+			UserPrompt: "Do the synthetic records below contradict each other about service health? Reply yes or no and name the contradiction.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-health-a", "service=checkout-api health=healthy"),
+				syntheticInlineContent("log", "synthetic-health-b", "service=checkout-api health=degraded"),
 			},
 		},
 		Gold: baseGold(
@@ -682,9 +693,9 @@ func recoveryMalformedResource() ScenarioBlueprint {
 		RequiredConcepts:            []string{"recovery", "malformed-output"},
 		ExpectsFailureOrUnavailable: true,
 		Input: ScenarioInputFixture{
-			UserPrompt: "Interpret the attached malformed synthetic resource and state that the resource is unavailable if it cannot be parsed.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("network", "malformed-resource", "{status: degraded, upstream_host=payments.internal.example"),
+			UserPrompt: "Interpret the malformed synthetic resource below and state that the resource is unavailable if it cannot be parsed.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("network", "malformed-resource", "{status: degraded, upstream_host=payments.internal.example"),
 			},
 		},
 		Gold: withRecovery(baseGold(
@@ -707,9 +718,9 @@ func finalResponseDiagnosis() ScenarioBlueprint {
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
 		RequiredConcepts:  []string{"final-response", "diagnosis", "customer-communication"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Using only the attached synthetic evidence, provide diagnosis, confidence, recommended action, and a customer-safe summary.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-customer-impact", "checkout-api timeout rate 18 percent; upstream_host=payments.internal.example; customer checkout failures confirmed"),
+			UserPrompt: "Using only the synthetic evidence below, provide diagnosis, confidence, recommended action, and a customer-safe summary.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-customer-impact", "checkout-api timeout rate 18 percent; upstream_host=payments.internal.example; customer checkout failures confirmed"),
 			},
 		},
 		Gold: baseGold(

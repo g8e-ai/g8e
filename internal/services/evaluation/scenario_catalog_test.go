@@ -74,6 +74,23 @@ func TestBuildScenarioCatalog_DigestIsStableAndBound(t *testing.T) {
 	require.NoError(t, ValidateScenarioCatalogDigest(first))
 }
 
+// TestScenarioBlueprints_SimulatedFilesHavePathsMatchingTheirPrompt guards
+// against a scenario's SimulatedFiles.Path drifting from the operator path
+// named in its own UserPrompt: CampaignChatExecutor materializes content at
+// Path, so a mismatch would write the fixture somewhere the model's tool call
+// never looks, silently recreating the "no executor backs this fixture" gap.
+func TestScenarioBlueprints_SimulatedFilesHavePathsMatchingTheirPrompt(t *testing.T) {
+	found := 0
+	for _, blueprint := range scenarioBlueprints() {
+		for _, file := range blueprint.Input.SimulatedFiles {
+			found++
+			require.NotEmpty(t, file.Path, "scenario %s: simulated file %s has no path", blueprint.ScenarioID, file.Label)
+			assert.Contains(t, blueprint.Input.UserPrompt, file.Path, "scenario %s: prompt does not reference simulated file path %s", blueprint.ScenarioID, file.Path)
+		}
+	}
+	assert.Equal(t, 3, found, "expected exactly the three known tool-selection/tool-argument scenarios to carry simulated files")
+}
+
 func TestBuildScenarioCatalog_FixtureReferencesMatchEmbeddedBodies(t *testing.T) {
 	catalog, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
