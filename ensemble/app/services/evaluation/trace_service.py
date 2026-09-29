@@ -37,7 +37,10 @@ logger = logging.getLogger(__name__)
 
 # 3: tool_calls carry arguments_json/command/result_json, and arguments_hash
 # is now sha256(arguments_json) rather than a hash of the command or result.
-_TRACE_SCHEMA_VERSION = "3"
+# 4: adds the optional `error` field carrying the terminal stream error message
+# for a failed assignment, so failure diagnosis no longer depends on ensemble
+# server logs that outlive the run.
+_TRACE_SCHEMA_VERSION = "4"
 
 
 def _trace_root() -> Path:
@@ -122,6 +125,7 @@ class EvaluationTraceService:
         grader_calls: list[EvaluationGraderCallRecord] | None = None,
         finish_reason: str | None,
         status: EvaluationTraceStatus,
+        error: str | None = None,
     ) -> EvaluationAssignmentTrace:
         evaluation = g8e_context.evaluation_context
         if evaluation is None:
@@ -144,6 +148,7 @@ class EvaluationTraceService:
             semantic_grades=list(semantic_grades or []),
             grader_calls=list(grader_calls or []),
             finish_reason=finish_reason,
+            error=error,
             completed_at=now().isoformat(),
         )
         trace = trace.model_copy(update={"trace_digest": compute_trace_digest(trace)})

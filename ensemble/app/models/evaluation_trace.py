@@ -125,5 +125,6 @@ class EvaluationAssignmentTrace(G8eBaseModel):
     semantic_grades: list[EvaluationSemanticGradeRecord] = Field(default_factory=list)
     grader_calls: list[EvaluationGraderCallRecord] = Field(default_factory=list)
     finish_reason: str | None = None
+    error: str | None = None
     trace_digest: str = Field(default="", pattern=r"^[0-9a-f]{64}$|^$")
     completed_at: str | None = None

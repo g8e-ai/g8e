@@ -332,6 +332,12 @@ func gradeScenarioContent(req ScenarioGradingRequest) *evalv1.DeterministicGrade
 			return newDeterministicGrade(req.AssignmentID, "scenario-content", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "designated role output labels the synthetic log as ERROR", 1)
 		}
 		return newDeterministicGrade(req.AssignmentID, "scenario-content", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "designated role output does not label the synthetic log as ERROR", 0)
+	case "route-lite-triage":
+		label := strings.ToLower(strings.TrimSpace(output))
+		if label == "noise" {
+			return newDeterministicGrade(req.AssignmentID, "scenario-content", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "designated role labels the synthetic alert as noise and does not over-escalate", 1)
+		}
+		return newDeterministicGrade(req.AssignmentID, "scenario-content", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "designated role output \""+output+"\" does not label the synthetic alert as noise", 0)
 	case "instruction-constraint-json":
 		payload := extractJSONObject(output)
 		if len(payload) == 0 {

@@ -455,6 +455,13 @@ async def deliver_via_sse(
                     extra=error_extra,
                 )
 
+                # Preserve telemetry for turns that completed before the failing
+                # turn - the ERROR chunk carries the same accumulated model_calls
+                # the COMPLETE chunk would have, and dropping it here erases
+                # governed-inference evidence for every turn that already ran.
+                if chunk.data.model_calls:
+                    state.model_calls = chunk.data.model_calls
+
                 # Publish the error event and continue - don't raise exception
                 await _publish(
                     EventType.AI_LLM_CHAT_ITERATION_FAILED,
@@ -463,6 +470,7 @@ async def deliver_via_sse(
                 # Agent enters failed state on a terminal model error.
                 await _push_agent_state("failed")
                 state.stream_failed = True
+                state.error = error_message
                 error_occurred = True
                 break  # Break instead of return to ensure post-loop code executes
 
@@ -528,4 +536,5 @@ async def deliver_via_sse(
         )
         # Agent enters failed on an unexpected terminal exception.
         state.stream_failed = True
+        state.error = str(e)
         await _push_agent_state("failed")
