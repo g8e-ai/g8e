@@ -1983,7 +1983,8 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .evidence-binding-list code, .assignment-evidence code { font-family: var(--mono); font-size: var(--text-md); overflow-wrap: anywhere; }
 
 .assignment-task-prompt,
-.assignment-task-provided {
+.assignment-task-provided,
+.assignment-task-expected {
   margin: 16px 0;
 }
 

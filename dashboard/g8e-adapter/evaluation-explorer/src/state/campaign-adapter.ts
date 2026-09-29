@@ -603,6 +603,7 @@ function mapGradeSummaries(value: unknown): BenchmarkObservations['grade_summari
       return {
         criterion_id: criterionId,
         status,
+        explanation_code: mapExplanationCode(optionalString(summary.explanation_code) ?? 'evidence_unavailable'),
         detail: optionalString(summary.detail),
       };
     })

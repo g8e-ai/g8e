@@ -15,7 +15,7 @@ import { AssignmentActivitySummary } from '../components/AssignmentActivitySumma
 import { AssignmentAuditProofRow, filterNonAuditEvidenceBindings } from '../components/AssignmentAuditProofRow';
 import { EvidenceBindingsPanel } from '../components/EvidenceBindingsPanel';
 import { ScenarioContextCard } from '../components/ScenarioContextCard';
-import { TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
+import { TaskExpectationSection, TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
 import { UnifiedGradeBadges } from '../components/UnifiedGradeBadges';
 import { SCENARIO_TASK_BY_ID } from '../content/scenario-catalog';
 import { useActiveDatasetId } from '../state/dataset';
@@ -253,6 +253,7 @@ export function AssignmentDetailView() {
         <>
           <TaskPromptSection task={task} className="assignment-task-prompt" />
           <TaskProvidedSection task={task} className="assignment-task-provided" />
+          <TaskExpectationSection task={task} className="assignment-task-expected" />
         </>
       ) : null}
 

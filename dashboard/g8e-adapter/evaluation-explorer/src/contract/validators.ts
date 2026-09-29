@@ -251,9 +251,10 @@ function assertGradeSummaries(value: unknown, path: string): void {
   for (let i = 0; i < value.length; i++) {
     const summary: unknown = value[i];
     assertObject(summary, `${path}[${i}]`);
-    rejectUnknown(summary, ['criterion_id', 'status', 'detail'], `${path}[${i}]`);
+    rejectUnknown(summary, ['criterion_id', 'status', 'explanation_code', 'detail'], `${path}[${i}]`);
     assertString(summary.criterion_id, `${path}[${i}].criterion_id`);
     assertString(summary.status, `${path}[${i}].status`);
+    assertString(summary.explanation_code, `${path}[${i}].explanation_code`);
     assertOptional(summary.detail, `${path}[${i}].detail`, assertString);
   }
 }

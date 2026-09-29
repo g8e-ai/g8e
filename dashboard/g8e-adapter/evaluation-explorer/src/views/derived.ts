@@ -385,6 +385,7 @@ export function deterministicGradeChips(assignment: AssignmentResult): Assignmen
     .map((grade) => ({
       criterion_id: grade.criterion_id,
       status: grade.status.toLowerCase(),
+      explanation: publicGradeExplanationLabel(grade.explanation_code),
     }))
     .sort(
       (left, right) =>

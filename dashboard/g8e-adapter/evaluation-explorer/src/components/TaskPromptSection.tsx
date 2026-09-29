@@ -3,6 +3,20 @@
 
 import type { ScenarioTaskDefinition } from '../content/scenario-catalog';
 
+function taskHasToolBoundaries(task: ScenarioTaskDefinition): boolean {
+  return Boolean(task.allowedTools?.length || task.expectedTools?.length || task.forbiddenTools?.length);
+}
+
+function gradingMethodNote(task: ScenarioTaskDefinition): string {
+  const base =
+    task.gradingMethod === 'semantic_judge'
+      ? 'An LLM judge scores the interaction against this rubric.'
+      : 'Fixed rules over trace evidence decide pass or fail.';
+  return taskHasToolBoundaries(task)
+    ? `${base} Tool boundaries below refine what counts as a correct tool choice.`
+    : base;
+}
+
 export function TaskPromptSection({
   task,
   className,
@@ -78,5 +92,72 @@ export function TaskProvidedSection({
         </div>
       ) : null}
     </section>
+  );
+}
+
+export function TaskExpectationSection({
+  task,
+  className,
+}: {
+  task: ScenarioTaskDefinition;
+  className?: string;
+}) {
+  return (
+    <>
+      <section
+        className={`task-detail-section assignment-section-expected${className ? ` ${className}` : ''}`}
+        aria-label="What the model is expected to do"
+      >
+        <h2>Pass criteria</h2>
+        <p className="task-section-note">{gradingMethodNote(task)}</p>
+        <p>{task.expectedBehavior}</p>
+      </section>
+
+      {taskHasToolBoundaries(task) ? (
+        <section className="task-detail-section" aria-label="Tool boundaries">
+          <h2>Tool boundaries</h2>
+          <p className="task-section-note">
+            Three separate policy dimensions, not one whitelist. A tool may appear in both{' '}
+            <strong>Allowed</strong> and <strong>Forbidden</strong>: available as a choice, but
+            calling it fails the scenario. Common in tool-selection and security-policy tasks.
+          </p>
+          <div className="task-tool-grid">
+            {task.allowedTools?.length ? (
+              <div>
+                <h3>Allowed tools</h3>
+                <p className="task-tool-column-note">Exposed to the model during the scenario.</p>
+                <ul>
+                  {task.allowedTools.map((tool) => (
+                    <li key={tool}><code>{tool}</code></li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {task.expectedTools?.length ? (
+              <div>
+                <h3>Expected tools</h3>
+                <p className="task-tool-column-note">Tools the grader expects the model to call.</p>
+                <ul>
+                  {task.expectedTools.map((tool) => (
+                    <li key={tool}><code>{tool}</code></li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {task.forbiddenTools?.length ? (
+              <div>
+                <h3>Forbidden tools</h3>
+                <p className="task-tool-column-note">Tools that fail the scenario if the model calls them.</p>
+                <ul>
+                  {task.forbiddenTools.map((tool) => (
+                    <li key={tool}><code>{tool}</code></li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+    </>
   );
 }

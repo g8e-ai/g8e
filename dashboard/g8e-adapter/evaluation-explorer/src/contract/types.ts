@@ -325,6 +325,7 @@ export interface CorrelatedFailureObservation {
 export interface GradeSummary {
   criterion_id: string;
   status: string;
+  explanation_code: PublicGradeExplanationCode;
   detail?: string;
 }
 

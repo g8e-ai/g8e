@@ -574,9 +574,10 @@ function assertBenchmarkObservations(value: unknown, path: string): void {
       const gradePath = `${path}.grade_summaries[${index}]`;
       const grade: unknown = value.grade_summaries[index];
       assertObject(grade, gradePath);
-      rejectUnknown(grade, ['criterion_id', 'status'], gradePath);
+      rejectUnknown(grade, ['criterion_id', 'status', 'explanation_code'], gradePath);
       assertString(grade.criterion_id, `${gradePath}.criterion_id`);
       assertString(grade.status, `${gradePath}.status`);
+      assertEnum(grade.explanation_code, EXPLANATION_CODES, `${gradePath}.explanation_code`);
     }
   }
   if (value.tool_scorecard !== undefined) {

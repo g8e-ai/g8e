@@ -659,6 +659,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
               {
                 criterion_id: 'tool-selection',
                 status: 'fail',
+                explanation_code: 'PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_FAILED',
               },
             ],
             tool_scorecard: {
@@ -677,6 +678,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
         {
           criterion_id: 'tool-selection',
           status: 'fail',
+          explanation_code: 'criterion_failed',
         },
       ],
       tool_scorecard: {

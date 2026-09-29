@@ -55,9 +55,10 @@ type PublicMetricValue struct {
 
 // PublicGradeSummary is one disclosure-safe deterministic grade for explorer views.
 type PublicGradeSummary struct {
-	CriterionID string `json:"criterion_id"`
-	Status      string `json:"status"`
-	Detail      string `json:"detail,omitempty"`
+	CriterionID     string `json:"criterion_id"`
+	Status          string `json:"status"`
+	ExplanationCode string `json:"explanation_code"`
+	Detail          string `json:"detail,omitempty"`
 }
 
 // PublicBenchmarkTiming carries assignment-level timing observations.

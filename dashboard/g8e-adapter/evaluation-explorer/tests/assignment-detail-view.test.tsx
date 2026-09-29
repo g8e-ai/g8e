@@ -74,8 +74,8 @@ describe('AssignmentDetailView', () => {
         verification_disposition: 'not_run',
         benchmark_observations: {
           grade_summaries: [
-            { criterion_id: 'role-invoked', status: 'pass' },
-            { criterion_id: 'scenario-content', status: 'fail' },
+            { criterion_id: 'role-invoked', status: 'pass', explanation_code: 'criterion_passed' },
+            { criterion_id: 'scenario-content', status: 'fail', explanation_code: 'criterion_failed' },
           ],
           unavailable_reasons: [],
         },
@@ -539,11 +539,11 @@ describe('AssignmentDetailView', () => {
         },
         benchmark_observations: {
           grade_summaries: [
-            { criterion_id: 'pass-test', status: 'pass' },
-            { criterion_id: 'fail-test', status: 'fail' },
-            { criterion_id: 'unavailable-test', status: 'unavailable' },
-            { criterion_id: 'unsupported-test', status: 'unsupported' },
-            { criterion_id: 'invalid-test', status: 'invalid_evidence' },
+            { criterion_id: 'pass-test', status: 'pass', explanation_code: 'criterion_passed' },
+            { criterion_id: 'fail-test', status: 'fail', explanation_code: 'criterion_failed' },
+            { criterion_id: 'unavailable-test', status: 'unavailable', explanation_code: 'evidence_unavailable' },
+            { criterion_id: 'unsupported-test', status: 'unsupported', explanation_code: 'unsupported' },
+            { criterion_id: 'invalid-test', status: 'invalid_evidence', explanation_code: 'invalid_evidence' },
           ],
           unavailable_reasons: [],
         },
