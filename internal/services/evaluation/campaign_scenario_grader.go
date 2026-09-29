@@ -703,12 +703,17 @@ func gradesEquivalent(left, right []*evalv1.DeterministicGrade) bool {
 	if len(leftNorm) != len(rightNorm) {
 		return false
 	}
+	// Keyed by grade ID as well as criterion: heterogeneous grading repeats each
+	// criterion once per formation role, disambiguated only by the grade ID.
+	gradeKey := func(grade *evalv1.DeterministicGrade) string {
+		return grade.GetGradeId() + "\x00" + grade.GetCriterionId()
+	}
 	leftByID := make(map[string]*evalv1.DeterministicGrade, len(leftNorm))
 	for _, grade := range leftNorm {
-		leftByID[grade.GetCriterionId()] = grade
+		leftByID[gradeKey(grade)] = grade
 	}
 	for _, grade := range rightNorm {
-		other := leftByID[grade.GetCriterionId()]
+		other := leftByID[gradeKey(grade)]
 		if other == nil || other.GetStatus() != grade.GetStatus() || other.GetScore() != grade.GetScore() || other.GetDetail() != grade.GetDetail() {
 			return false
 		}

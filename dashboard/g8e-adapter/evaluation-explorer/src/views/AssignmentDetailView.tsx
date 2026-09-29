@@ -6,7 +6,6 @@
 // names and durations, resource observations, verification disposition,
 // task prompt from scenario catalog, and captured model response.
 
-import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { activityFamilyHasObservedRecords } from '../contract/activity-family';
 import type { AssignmentResult } from '../contract/types';
@@ -14,6 +13,7 @@ import { TOOL_SCORE_DIMENSIONS } from '../contract/types';
 import { AssignmentActivitySummary } from '../components/AssignmentActivitySummary';
 import { AssignmentAuditProofRow, filterNonAuditEvidenceBindings } from '../components/AssignmentAuditProofRow';
 import { EvidenceBindingsPanel } from '../components/EvidenceBindingsPanel';
+import { RoleTranscripts } from '../components/RoleTranscripts';
 import { ScenarioContextCard } from '../components/ScenarioContextCard';
 import { TaskExpectationSection, TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
 import { UnifiedGradeBadges } from '../components/UnifiedGradeBadges';
@@ -21,6 +21,7 @@ import { SCENARIO_TASK_BY_ID } from '../content/scenario-catalog';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import {
+  CopyButton,
   EmptyState,
   ErrorState,
   SectionHeading,
@@ -89,31 +90,6 @@ function hasObservedActivity(activity: AssignmentResult['activity_summary']): bo
   return Boolean(activity && Object.values(activity).some((family) => activityFamilyHasObservedRecords(family)));
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-
-  return (
-    <button
-      onClick={handleCopy}
-      className="copy-button"
-      title={`Copy ${label}`}
-      aria-label={`Copy ${label}`}
-    >
-      {copied ? 'Copied' : 'Copy'}
-    </button>
-  );
-}
-
 function toolActionSummaries(activity: AssignmentResult['activity_summary']): string[] {
   if (!activity) return [];
   const lines: string[] = [];
@@ -140,6 +116,7 @@ function toolActionSummaries(activity: AssignmentResult['activity_summary']): st
 
 function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) {
   const isFailure = assignment.terminal_status !== 'completed';
+  const transcripts = assignment.role_transcripts ?? [];
   const hasResponse = Boolean(assignment.model_response);
   const hasFailureOutput = Boolean(assignment.failure_output);
   const toolActions = hasResponse ? [] : toolActionSummaries(assignment.activity_summary);
@@ -174,7 +151,9 @@ function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) 
         </div>
       ) : null}
 
-      {hasResponse ? (
+      {transcripts.length > 0 ? (
+        <RoleTranscripts transcripts={transcripts} variantId={assignment.variant_id} />
+      ) : hasResponse ? (
         <div className="model-response-block">
           <div className="model-response-header">
             <span className="model-response-label">

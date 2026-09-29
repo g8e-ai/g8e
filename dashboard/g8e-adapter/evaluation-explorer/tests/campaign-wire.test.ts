@@ -201,5 +201,47 @@ describe('campaign projection wire contract', () => {
       }),
     ).not.toThrow();
   });
+
+  describe('role_transcripts', () => {
+    const record = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
+    const toolCall = {
+      tool_name: 'read_file',
+      arguments_json: '{"path":"/tmp/retry.conf"}',
+      arguments_hash: 'b'.repeat(64),
+      command: 'cat /tmp/retry.conf',
+      success: true,
+      result_json: '{"content":"retries=3"}',
+      result_redaction: 'truncated',
+    };
+    const transcript = { role: 'lite', response: 'retries=3', finish_reason: 'stop', trace_digest: 'c'.repeat(64), tool_calls: [toolCall] };
+    const withTranscripts = (roleTranscripts: unknown, envelope = fixtureCampaignResultEnvelope) => ({
+      ...envelope,
+      record: { ...record, role_transcripts: roleTranscripts },
+    });
+
+    it('accepts a valid formation transcript list', () => {
+      const decoded = decodeCampaignProjectionEnvelope(withTranscripts([transcript, { ...transcript, role: 'assistant' }, { role: 'primary' }]));
+      expect((decoded.record as CampaignResultRecord).role_transcripts).toHaveLength(3);
+    });
+
+    it.each([
+      ['an unknown transcript field', [{ ...transcript, prompt: 'secret' }]],
+      ['an unknown tool call field', [{ ...transcript, tool_calls: [{ ...toolCall, operator_id: 'op-1' }] }]],
+      ['an unknown role', [{ ...transcript, role: 'judge' }]],
+      ['a non-hex arguments_hash', [{ ...transcript, tool_calls: [{ ...toolCall, arguments_hash: 'Z'.repeat(64) }] }]],
+      ['a short trace_digest', [{ ...transcript, trace_digest: 'c'.repeat(63) }]],
+      ['an unknown result_redaction', [{ ...transcript, tool_calls: [{ ...toolCall, result_redaction: 'hidden' }] }]],
+      ['a missing tool success flag', [{ ...transcript, tool_calls: [{ tool_name: 'read_file' }] }]],
+      ['a non-array value', { role: 'lite' }],
+    ])('rejects %s', (_label, roleTranscripts) => {
+      expect(() => decodeCampaignProjectionEnvelope(withTranscripts(roleTranscripts))).toThrow();
+    });
+
+    it('rejects role_transcripts in a 1.0.0 envelope', () => {
+      expect(() =>
+        decodeCampaignProjectionEnvelope({ ...historicalResultEnvelope, record: { ...historicalResultEnvelope.record, role_transcripts: [transcript] } }),
+      ).toThrow(/requires campaign envelope 1.1.0/);
+    });
+  });
 });
 

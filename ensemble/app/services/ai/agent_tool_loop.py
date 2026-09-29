@@ -294,6 +294,7 @@ def merge_grounding(
 
 def _tribunal_error_result(
     tool_name: str,
+    arguments: dict[str, object],
     request: str,
     error_msg: str,
 ) -> ToolCallResult:
@@ -315,10 +316,15 @@ def _tribunal_error_result(
             tool_name=tool_name,
             execution_id=None,
             command=display_detail,
+            arguments=arguments,
             is_operator_tool=True,
         ),
         result_info=StreamChunkData(
+            tool_name=tool_name,
             execution_id=None,
+            command=display_detail,
+            arguments=arguments,
+            is_operator_tool=True,
             success=False,
             result=error_result,
             error_type=CommandErrorType.EXECUTION_ERROR,
@@ -344,6 +350,7 @@ async def orchestrate_tool_execution(
     """
     tool_name = tool_call.name or ""
     raw_args: dict[str, object] = dict(tool_call.args) if tool_call.args else {}
+    model_args = dict(raw_args)
 
     logger.info(
         "[AGENT] Dispatching function: name=%s args_keys=%s",
@@ -395,6 +402,7 @@ async def orchestrate_tool_execution(
                     )
                     return _tribunal_error_result(
                         tool_name=tool_name,
+                        arguments=model_args,
                         request=request,
                         error_msg=error_msg,
                     )
@@ -484,6 +492,7 @@ async def orchestrate_tool_execution(
             tool_name=tool_name,
             execution_id=execution_id,
             command=command_display,
+            arguments=model_args,
             is_operator_tool=is_operator_tool,
             display_label=display_label,
             display_icon=display_icon,
@@ -491,7 +500,11 @@ async def orchestrate_tool_execution(
             category=category,
         ),
         result_info=StreamChunkData(
+            tool_name=tool_name,
             execution_id=execution_id,
+            command=command_display,
+            arguments=model_args,
+            is_operator_tool=is_operator_tool,
             success=result.success,
             result=result,
             error_type=result.error_type
@@ -585,10 +598,15 @@ async def _process_single_tool_call(
                 tool_name=fc.name,
                 execution_id=execution_id,
                 command="",
+                arguments=dict(fc.args) if fc.args else {},
                 is_operator_tool=False,
             ),
             result_info=StreamChunkData(
+                tool_name=fc.name,
                 execution_id=execution_id,
+                command="",
+                arguments=dict(fc.args) if fc.args else {},
+                is_operator_tool=False,
                 success=False,
                 result=_exc_result,
                 error_type=CommandErrorType.EXECUTION_ERROR,

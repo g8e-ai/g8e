@@ -1660,3 +1660,55 @@ class TestTargetOperatorResolution:
         assert op_ctx is not None
         assert op_ctx.operator_id == "op-linux"
         assert op_ctx.os == "linux"
+
+
+# =============================================================================
+# PRODUCER → SSE CONTRACT
+# =============================================================================
+
+
+async def test_producer_result_chunk_drives_universal_tool_completed_event(
+    mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service
+):
+    """The TOOL_RESULT chunk orchestrate_tool_execution builds must identify its
+    tool. deliver_via_sse keys universal-tool *_COMPLETED events (and trace
+    evidence) on chunk.data.tool_name; before the producer set it, those events
+    never fired. Tests that hand-build result chunks cannot catch that."""
+    from app.constants import EventType, ReasoningAgent, StreamChunkFromModelType
+    from app.models.agent import StreamChunkFromModel
+    from app.services.ai.agent_sse import deliver_via_sse
+    from tests.fakes.agent_helpers import make_agent_run_args
+    from tests.fakes.fake_event_service import FakeEventService
+
+    _mock_executor_success(mock_tool_executor, output="allowed: ls, cat")
+    args = {"reason": "check what I may run"}
+    produced = await orchestrate_tool_execution(
+        ToolCall(name=OperatorToolName.GET_COMMAND_CONSTRAINTS, args=args),
+        tool_executor=mock_tool_executor,
+        investigation=sample_investigation,
+        g8e_context=sample_g8e_context,
+        event_service=mock_event_service,
+        request_settings=request_settings,
+    )
+
+    assert produced.result_info.tool_name == OperatorToolName.GET_COMMAND_CONSTRAINTS
+    assert produced.result_info.arguments == args
+    assert produced.result_info.is_operator_tool == produced.call_info.is_operator_tool
+
+    async def _stream():
+        yield StreamChunkFromModel(type=StreamChunkFromModelType.TOOL_CALL, data=produced.call_info)
+        yield StreamChunkFromModel(type=StreamChunkFromModelType.TOOL_RESULT, data=produced.result_info)
+        yield StreamChunkFromModel(type=StreamChunkFromModelType.COMPLETE, data=StreamChunkData(finish_reason="STOP"))
+
+    inputs, state = make_agent_run_args(
+        case_id="case-producer-sse",
+        investigation_id="inv-producer-sse",
+        web_session_id="web-producer-sse",
+        user_id="user-producer-sse",
+        active_agent=ReasoningAgent.SAGE,
+    )
+    event_svc = FakeEventService()
+    await deliver_via_sse(stream=_stream(), inputs=inputs, state=state, event_service=event_svc)
+
+    published_types = [event.event_type for event in event_svc.published]
+    assert EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED in published_types

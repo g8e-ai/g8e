@@ -323,7 +323,7 @@ describe('AssignmentDetailView', () => {
 
     expect(askedHeading).toBeInTheDocument();
     expect(screen.getByText('User prompt sent to the agent.')).toBeInTheDocument();
-    expect(screen.getByText('Report the HTTP status code from the attached synthetic curl summary.')).toBeInTheDocument();
+    expect(screen.getByText('Report the HTTP status code from the synthetic curl summary below.')).toBeInTheDocument();
 
     expect(providedHeading).toBeInTheDocument();
     expect(screen.getByText('synthetic-curl-summary')).toBeInTheDocument();
@@ -350,7 +350,7 @@ describe('AssignmentDetailView', () => {
     expect(screen.getByRole('heading', { name: 'What the model was provided' })).toBeInTheDocument();
     expect(screen.getByText('synthetic-app-log')).toBeInTheDocument();
     expect(screen.getByText(/checkout payment gateway timeout after 30s/)).toBeInTheDocument();
-    expect(screen.getByText(/Use only the synthetic attachment\. Do not invent external context\./)).toBeInTheDocument();
+    expect(screen.getByText(/Use only the synthetic content below\. Do not invent external context\./)).toBeInTheDocument();
   });
 
   it('does not render task prompt or provided sections when task is unrecognized', () => {
@@ -590,6 +590,80 @@ describe('AssignmentDetailView', () => {
     expect(screen.getByText('Unavailable Test')).toBeInTheDocument();
     expect(screen.getByText('Unsupported Test')).toBeInTheDocument();
     expect(screen.getByText('Invalid Test')).toBeInTheDocument();
+  });
+
+  describe('role transcripts', () => {
+    const readFile = {
+      tool_name: 'read_file',
+      arguments_json: '{"path":"/tmp/retry.conf"}',
+      arguments_hash: 'b'.repeat(64),
+      command: 'cat /tmp/retry.conf',
+      success: true,
+      result_json: '{"content":"retries=3"}',
+    };
+
+    it('renders tool name, pretty arguments, command, outcome, result, and response for a single role', () => {
+      renderAssignment([
+        assignmentResult({
+          model_response: 'legacy response',
+          role_transcripts: [{ role: 'primary', response: 'retries=3', finish_reason: 'stop', trace_digest: 'c'.repeat(64), tool_calls: [readFile] }],
+        }),
+      ]);
+
+      expect(screen.getByText('Tool calls (1)')).toBeInTheDocument();
+      expect(screen.getByText('read_file')).toBeInTheDocument();
+      expect(screen.getByText(/"path": "\/tmp\/retry.conf"/)).toBeInTheDocument();
+      expect(screen.getByText(`sha256 ${'b'.repeat(12)}…`)).toBeInTheDocument();
+      expect(screen.getByText('cat /tmp/retry.conf')).toBeInTheDocument();
+      expect(screen.getByText(/Succeeded/)).toBeInTheDocument();
+      expect(screen.getByText(/"content": "retries=3"/)).toBeInTheDocument();
+      expect(screen.getByText('retries=3')).toBeInTheDocument();
+      expect(screen.getByText('c'.repeat(64))).toBeInTheDocument();
+      // Transcript supersedes the legacy single-response block; single role gets no role heading.
+      expect(screen.queryByText('legacy response')).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Primary' })).not.toBeInTheDocument();
+    });
+
+    it('renders formation roles in execution order with headings', () => {
+      renderAssignment([
+        assignmentResult({
+          role_transcripts: [
+            { role: 'lite', response: 'lite says' },
+            { role: 'assistant', response: 'assistant says' },
+            { role: 'primary', response: 'primary says' },
+          ],
+        }),
+      ]);
+
+      const [lite, assistant, primary] = ['Lite', 'Assistant', 'Primary'].map((name) => screen.getByRole('heading', { name })) as [HTMLElement, HTMLElement, HTMLElement];
+      expect(lite.compareDocumentPosition(assistant)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(assistant.compareDocumentPosition(primary)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(screen.getByText('assistant says')).toBeInTheDocument();
+    });
+
+    it('explains truncated and withheld results and failed calls', () => {
+      renderAssignment([
+        assignmentResult({
+          role_transcripts: [{
+            role: 'primary',
+            tool_calls: [
+              { ...readFile, result_redaction: 'truncated' },
+              { tool_name: 'run_commands', success: false, error_type: 'POLICY_DENIED', result_redaction: 'restricted' },
+            ],
+          }],
+        }),
+      ]);
+
+      expect(screen.getByText(/truncated for publication/)).toBeInTheDocument();
+      expect(screen.getByText(/withheld: restricted content/)).toBeInTheDocument();
+      expect(screen.getByText(/Failed · Policy denied/)).toBeInTheDocument();
+    });
+
+    it('keeps the historical model_response rendering when no transcripts were published', () => {
+      renderAssignment([assignmentResult({ model_response: 'legacy response' })]);
+      expect(screen.getByText('legacy response')).toBeInTheDocument();
+      expect(screen.queryByText(/Tool calls \(/)).not.toBeInTheDocument();
+    });
   });
 });
 

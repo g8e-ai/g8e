@@ -37,11 +37,21 @@ class EvaluationToolDecisionRecord(G8eBaseModel):
 
 
 class EvaluationToolCallRecord(G8eBaseModel):
-    """One executed tool call with hashed arguments and governed binding metadata."""
+    """One executed tool call: the model's exact arguments, the resolved command,
+    and the tool's returned result.
+
+    arguments_json and result_json are canonical JSON text (not nested objects)
+    so the cross-language trace digest never depends on float formatting, and
+    arguments_hash is sha256(arguments_json) so any reader can verify the
+    arguments shown against the hash bound into the trace.
+    """
 
     call_id: str = Field(..., min_length=1)
     tool_name: str = Field(..., min_length=1)
+    arguments_json: str = Field(default="")
     arguments_hash: str = Field(default="", pattern=r"^[0-9a-f]{64}$|^$")
+    command: str = Field(default="")
+    result_json: str = Field(default="")
     success: bool = False
     is_operator_tool: bool = False
     execution_id: str | None = None

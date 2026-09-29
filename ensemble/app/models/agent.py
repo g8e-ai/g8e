@@ -263,6 +263,7 @@ class StreamChunkData(G8eBaseModel):
     tool_name: str | None = None
     execution_id: str | None = None
     command: str | None = None
+    arguments: dict[str, Any] | None = None
     is_operator_tool: bool | None = None
     display_label: str | None = None
     display_icon: str | None = None

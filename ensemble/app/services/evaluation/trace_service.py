@@ -35,7 +35,9 @@ from app.utils.time_ids.timestamp import now
 
 logger = logging.getLogger(__name__)
 
-_TRACE_SCHEMA_VERSION = "2"
+# 3: tool_calls carry arguments_json/command/result_json, and arguments_hash
+# is now sha256(arguments_json) rather than a hash of the command or result.
+_TRACE_SCHEMA_VERSION = "3"
 
 
 def _trace_root() -> Path:

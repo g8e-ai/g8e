@@ -30,6 +30,7 @@ import {
 } from '../contract/types';
 import { normalizeActivityFamily, parseWireActivityFamily } from '../contract/activity-family';
 import { decodeCampaignProjectionEnvelope } from '../contract/campaign-wire';
+import { assertRoleTranscripts } from '../contract/validators';
 
 export const CAMPAIGN_SOURCE_REVISION = 'g8e-eval-campaign';
 
@@ -319,6 +320,7 @@ function adaptResultProjection(
     verification_metadata: mapVerificationMetadata(record.verification_metadata),
     model_response: optionalString(record.model_response),
     failure_output: optionalString(record.failure_output),
+    role_transcripts: mapRoleTranscripts(record.role_transcripts),
   };
 
   const records: Array<SnapshotRecord | LiveEvent> = [assignment];
@@ -485,6 +487,12 @@ function mapPolicyDecisionRecord(value: unknown, _path: string): PublicPolicyDec
 function mapGovernedActionRecord(value: unknown, _path: string): PublicGovernedActionActivityRecord {
   const record = asRecord(value);
   return { action_label: 'governed action', reported_policy_outcome: mapReportedPolicyOutcome(requiredString(record, 'reported_policy_outcome')), receipt_status: mapReceiptStatus(requiredString(record, 'receipt_status')), evidence_source: mapEvidenceSource(requiredString(record, 'evidence_source')) };
+}
+
+function mapRoleTranscripts(value: unknown): AssignmentResult['role_transcripts'] {
+  if (value === undefined) return undefined;
+  assertRoleTranscripts(value, 'role_transcripts');
+  return value;
 }
 
 function mapEvidenceBindings(value: unknown): AssignmentResult['evidence_bindings'] {

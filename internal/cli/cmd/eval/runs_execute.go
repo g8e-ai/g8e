@@ -34,8 +34,28 @@ type runExecuteOptions struct {
 	EnsembleURL              string
 	EnforceProviderResidency bool
 	NoAutoRefresh            bool
+	FormationRunner          string
 	JSONOutput               bool
 	ResultOutput             func(*evalv1.EvaluationAssignmentResult)
+}
+
+// Formation runner choices. g8ee routes every formation role through the
+// production chat/trace pipeline, so role transcripts, tool calls, and
+// scenario grades come from digest-bound g8ee traces. direct dispatches roles
+// straight to the Inference Operator for storage attestation and VRAM
+// telemetry, without scenario grading.
+const (
+	formationRunnerG8ee   = "g8ee"
+	formationRunnerDirect = "direct"
+)
+
+func validateFormationRunner(runner string) error {
+	switch runner {
+	case formationRunnerG8ee, formationRunnerDirect:
+		return nil
+	default:
+		return fmt.Errorf("evaluation: --formation-runner must be %q or %q, got %q", formationRunnerG8ee, formationRunnerDirect, runner)
+	}
 }
 
 // executeRun executes queued assignments of one run while holding the run's
@@ -43,6 +63,12 @@ type runExecuteOptions struct {
 // archive tell a live run from an interrupted one. Output is teed into the
 // run's execution log.
 func executeRun(cmd *cobra.Command, deps nativeEvalDeps, opts runExecuteOptions) (executed int, runErr error) {
+	if opts.FormationRunner == "" {
+		opts.FormationRunner = formationRunnerG8ee
+	}
+	if err := validateFormationRunner(opts.FormationRunner); err != nil {
+		return 0, err
+	}
 	_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 	if err != nil {
 		return 0, err
@@ -198,20 +224,27 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		return 0, fmt.Errorf("evaluation: run execute: %w", err)
 	}
 	fileWriter := evaluation.NewCommandLane(gatewayClient, store, persona, 0, 0)
+	chatClient := &campaignChatHarnessClient{client: ensembleClient}
+	waitForTrace := func(ctx context.Context, fetch func(context.Context) (evaluation.EvaluationTrace, error)) (evaluation.EvaluationTrace, error) {
+		return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), opts.JSONOutput))
+	}
+	newID := func(prefix string) string { return prefix + "-" + deps.newID() }
 	chatExecutor := evaluation.NewCampaignChatExecutor(
-		&campaignChatHarnessClient{client: ensembleClient},
+		chatClient,
 		persona,
 		dataOperator.OperatorID,
 		dataOperator.OperatorSessionID,
 		store,
-		func(ctx context.Context, fetch func(context.Context) (evaluation.EvaluationTrace, error)) (evaluation.EvaluationTrace, error) {
-			return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), opts.JSONOutput))
-		},
+		waitForTrace,
 		fileWriter,
 		deps.now,
-		func(prefix string) string { return prefix + "-" + deps.newID() },
+		newID,
 	)
 	formationExecutor := evaluation.NewLazyCampaignFormationExecutor(func() (evaluation.CampaignAssignmentExecutor, error) {
+		if opts.FormationRunner != formationRunnerDirect {
+			runner := evaluation.NewCampaignFormationChatRunner(chatClient, persona, dataOperator.OperatorID, waitForTrace, fileWriter)
+			return evaluation.NewCampaignFormationExecutor(spec.GetModelRegistry(), runner, store, deps.now, newID), nil
+		}
 		formationRunner, err := buildCampaignFormationProductionRunner(
 			cmd,
 			deps,
@@ -244,7 +277,7 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 			store,
 			evaluation.NewCampaignFormationWitnessReader(observationReader, provenanceReader),
 			deps.now,
-			func(prefix string) string { return prefix + "-" + deps.newID() },
+			newID,
 		), nil
 	})
 	executor := evaluation.NewCampaignAssignmentRouter(chatExecutor, formationExecutor)

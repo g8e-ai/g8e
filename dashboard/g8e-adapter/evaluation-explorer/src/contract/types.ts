@@ -646,6 +646,31 @@ export interface AssignmentResult extends ViewRecordEnvelope {
   verification_metadata?: PublicVerificationMetadata;
   model_response?: string;
   failure_output?: string;
+  role_transcripts?: RoleTranscript[];
+}
+
+export const TOOL_RESULT_REDACTIONS = ['truncated', 'restricted'] as const;
+
+/** One executed tool call, lifted verbatim from a digest-bound g8ee trace.
+ *  arguments_hash is sha256(arguments_json) as recorded by g8ee. */
+export interface RoleTranscriptToolCall {
+  tool_name: string;
+  arguments_json?: string;
+  arguments_hash?: string;
+  command?: string;
+  success: boolean;
+  error_type?: string;
+  result_json?: string;
+  result_redaction?: (typeof TOOL_RESULT_REDACTIONS)[number];
+}
+
+/** What one model role actually did: its output and every tool call. */
+export interface RoleTranscript {
+  role: ModelRole;
+  response?: string;
+  finish_reason?: string;
+  trace_digest?: string;
+  tool_calls?: RoleTranscriptToolCall[];
 }
 
 /** 6. methodology_snapshot: metric definitions and user-facing explanation. */

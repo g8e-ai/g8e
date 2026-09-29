@@ -2351,3 +2351,119 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 }
 /* ===== end Worker 1A ===== */
 
+
+/* ===== Assignment Detail: role transcripts — what the model actually did (2026-09-29) ===== */
+.copy-button {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-elev2);
+  color: var(--fg-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.copy-button:hover,
+.copy-button:focus-visible {
+  color: var(--fg);
+  border-color: var(--fg-dim);
+}
+.role-transcripts {
+  display: grid;
+  gap: 16px;
+}
+.role-transcript + .role-transcript {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.role-transcript-heading {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.model-response-header {
+  gap: 8px;
+}
+.transcript-tool-calls {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.transcript-tool-call {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elev);
+}
+.transcript-tool-call-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.transcript-step {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--bg-elev2);
+  color: var(--fg-dim);
+  font-size: 11px;
+  line-height: 20px;
+  text-align: center;
+}
+.transcript-tool-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.transcript-outcome {
+  margin-left: auto;
+  font-size: 12px;
+}
+.transcript-outcome.tone-ok { color: var(--tone-ok); }
+.transcript-outcome.tone-critical { color: var(--tone-critical); }
+.transcript-field {
+  margin-top: 8px;
+}
+.transcript-field-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.transcript-field-label code,
+.transcript-field-label small {
+  font-family: var(--mono);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.transcript-result summary {
+  cursor: pointer;
+}
+.transcript-result .model-response-text {
+  max-height: 320px;
+}
+.transcript-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+.transcript-provenance code {
+  font-family: var(--mono);
+  word-break: break-all;
+}
+/* ===== end role transcripts ===== */

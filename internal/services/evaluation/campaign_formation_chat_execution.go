@@ -251,6 +251,11 @@ func formationRoleTelemetryFromTrace(role FormationRole, model FormationModel, a
 				telemetry.GenerationDurationNanos = converted
 			}
 		}
+		if raw, present := call["time_to_first_token_seconds"]; present && raw != nil {
+			if converted, err := durationSecondsToNanosChecked(raw); err == nil {
+				telemetry.TTFTNanos = converted
+			}
+		}
 		if raw, present := call["load_duration_seconds"]; present && raw != nil {
 			if converted, err := durationSecondsToNanosChecked(raw); err == nil {
 				nanos := int64(converted)

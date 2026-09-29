@@ -65,6 +65,7 @@ type PublicAssignmentRecordExtensions struct {
 	ResourceSummary       *PublicResourceSummary       `json:"resource_summary,omitempty"`
 	ModelResponse         string                       `json:"model_response,omitempty"`
 	FailureOutput         string                       `json:"failure_output,omitempty"`
+	RoleTranscripts       []PublicRoleTranscript       `json:"role_transcripts,omitempty"`
 }
 
 type PublicAssignmentBuildInput struct {

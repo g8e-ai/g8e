@@ -201,3 +201,31 @@ func TestCampaignFormationChatRunner_StopsOnFailedRoleTrace(t *testing.T) {
 	require.Len(t, result.Roles, 1, "only Lite should be recorded; Assistant's failed trace stops the pipeline before being appended")
 	assert.True(t, strings.Contains(err.Error(), "assistant"))
 }
+
+func TestFormationRoleTelemetryFromTrace_MapsProviderCallTelemetry(t *testing.T) {
+	trace := EvaluationTrace{
+		"model_calls": []any{
+			map[string]any{"provider": "OpenAIProvider", "provider_attempt_id": "ignored", "time_to_first_token_seconds": 9.0},
+			map[string]any{
+				"provider":                    "G8EProvider",
+				"provider_attempt_id":         "attempt-lite",
+				"succeeded":                   true,
+				"finish_reason":               "stop",
+				"usage_reported":              true,
+				"input_tokens":                float64(120),
+				"output_tokens":               float64(40),
+				"generation_duration_seconds": 2.0,
+				"time_to_first_token_seconds": 0.25,
+			},
+		},
+	}
+
+	telemetry := formationRoleTelemetryFromTrace(FormationRoleLite, FormationModel{}, "run-1:lite", trace)
+
+	assert.Equal(t, "attempt-lite", telemetry.ProviderAttemptID)
+	assert.Equal(t, uint32(120), telemetry.PromptTokens)
+	assert.Equal(t, uint32(40), telemetry.GenerationTokens)
+	assert.Equal(t, uint64(2_000_000_000), telemetry.GenerationDurationNanos)
+	assert.Equal(t, uint64(250_000_000), telemetry.TTFTNanos)
+	assert.InDelta(t, 20.0, telemetry.GenerationTokensPerSec, 1e-9)
+}

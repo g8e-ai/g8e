@@ -237,12 +237,13 @@ func (c *CampaignPublicationCoordinator) buildAssignmentResultPublishRequest(
 		return campaignFeedPublishRequest{}, err
 	}
 	isCompleted := result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
-	modelResp, failureOut := c.extractAssignmentModelOutputs(ctx, result.GetRunId(), result.GetAssignmentId(), isCompleted)
+	modelResp, failureOut, transcripts := c.extractAssignmentModelOutputs(ctx, assignment, isCompleted)
 	extensions := PublicAssignmentRecordExtensions{
 		BenchmarkObservations: benchmark,
 		ResourceSummary:       resources,
 		ModelResponse:         modelResp,
 		FailureOutput:         failureOut,
+		RoleTranscripts:       transcripts,
 	}
 	var record *PublicAssignmentRecord
 	if scenarioErr == nil {
@@ -308,17 +309,33 @@ func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ct
 	return reader.BuildPublicBenchmarkObservations(ctx, result)
 }
 
-func (c *CampaignPublicationCoordinator) extractAssignmentModelOutputs(ctx context.Context, runID, assignmentID string, isCompleted bool) (string, string) {
+// extractAssignmentModelOutputs reads what the model(s) actually did from the
+// persisted g8ee traces: the homogeneous assignment trace, or each formation
+// role's trace carried in its formation run evidence. model_response is the
+// final designated output (Primary's, for a formation).
+func (c *CampaignPublicationCoordinator) extractAssignmentModelOutputs(ctx context.Context, assignment *evalv1.EvaluationAssignment, isCompleted bool) (string, string, []PublicRoleTranscript) {
+	runID, assignmentID := assignment.GetRunId(), assignment.GetAssignmentId()
 	if c == nil || c.store == nil || runID == "" || assignmentID == "" {
-		return "", ""
+		return "", "", nil
+	}
+	if IsHeterogeneousAssignment(assignment) {
+		evidence, err := c.store.LoadAssignmentFormationRun(ctx, runID, assignmentID)
+		if err != nil {
+			return "", "", nil
+		}
+		transcripts := buildFormationRoleTranscripts(evidence)
+		if len(transcripts) == 0 {
+			return "", "", nil
+		}
+		return transcripts[len(transcripts)-1].Response, "", transcripts
 	}
 	trace, err := c.store.LoadAssignmentTrace(ctx, runID, assignmentID)
 	if err != nil || trace == nil {
-		return "", ""
+		return "", "", nil
 	}
 	var modelResponse, failureOutput string
 	if resp, ok := trace["designated_role_output"].(string); ok {
-		modelResponse = resp
+		modelResponse = publicTranscriptText(resp)
 	}
 	if !isCompleted {
 		if errMsg, ok := trace["error"].(string); ok && errMsg != "" {
@@ -329,7 +346,7 @@ func (c *CampaignPublicationCoordinator) extractAssignmentModelOutputs(ctx conte
 			failureOutput = fmt.Sprintf("finish_reason: %s", finishReason)
 		}
 	}
-	return modelResponse, failureOutput
+	return modelResponse, failureOutput, buildHomogeneousRoleTranscripts(trace)
 }
 
 // PublishRunAggregates emits explorer evaluation_summary, catalog, model, and
@@ -432,12 +449,13 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 			}
 			key := AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId())
 			isCompleted := result.GetLifecycleStatus() == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
-			modelResp, failureOut := c.extractAssignmentModelOutputs(ctx, runID, assignment.GetAssignmentId(), isCompleted)
+			modelResp, failureOut, transcripts := c.extractAssignmentModelOutputs(ctx, assignment, isCompleted)
 			extensions := PublicAssignmentRecordExtensions{
 				BenchmarkObservations: benchmark,
 				ResourceSummary:       resources,
 				ModelResponse:         modelResp,
 				FailureOutput:         failureOut,
+				RoleTranscripts:       transcripts,
 			}
 			var record *PublicAssignmentRecord
 			if scenarioErr == nil {
