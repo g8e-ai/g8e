@@ -262,6 +262,64 @@ func (t *ExecutionTopologies) Formation(id string) (Formation, error) {
 	return Formation{}, fmt.Errorf("formation %q was not found: %w", id, constants.ErrFormationInvalid)
 }
 
+// AddOrUpdateFormation adds a new catalog formation or replaces the existing
+// entry with the same ID, validating the formation before it is admitted.
+func AddOrUpdateFormation(topologies *ExecutionTopologies, formation Formation) (*ExecutionTopologies, error) {
+	if topologies == nil {
+		return nil, fmt.Errorf("evaluation: add formation: %w", constants.ErrMissingRequiredField)
+	}
+	if err := formation.Validate(); err != nil {
+		return nil, err
+	}
+
+	formations := make([]Formation, 0, len(topologies.formations)+1)
+	replaced := false
+	for _, existing := range topologies.formations {
+		if existing.ID == formation.ID {
+			formations = append(formations, formation)
+			replaced = true
+			continue
+		}
+		formations = append(formations, existing)
+	}
+	if !replaced {
+		formations = append(formations, formation)
+	}
+
+	return &ExecutionTopologies{formations: formations}, nil
+}
+
+// RemoveFormation removes the catalog formation matching id and returns the
+// updated catalog along with the removed entry.
+func RemoveFormation(topologies *ExecutionTopologies, id string) (*ExecutionTopologies, *Formation, error) {
+	if topologies == nil {
+		return nil, nil, fmt.Errorf("evaluation: remove formation: %w", constants.ErrMissingRequiredField)
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, nil, fmt.Errorf("evaluation: remove formation: id is required: %w", constants.ErrMissingRequiredField)
+	}
+
+	var removed *Formation
+	remaining := make([]Formation, 0, len(topologies.formations))
+	for _, existing := range topologies.formations {
+		if removed == nil && existing.ID == id {
+			found := existing
+			removed = &found
+			continue
+		}
+		remaining = append(remaining, existing)
+	}
+	if removed == nil {
+		return nil, nil, fmt.Errorf("formation %q was not found: %w", id, constants.ErrFormationInvalid)
+	}
+	if len(remaining) == 0 {
+		return nil, nil, fmt.Errorf("evaluation: remove formation: cannot remove the last catalog formation")
+	}
+
+	return &ExecutionTopologies{formations: remaining}, removed, nil
+}
+
 func defaultExecutionTopologies() []Formation {
 	return []Formation{
 		{

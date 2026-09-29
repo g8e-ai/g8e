@@ -119,7 +119,7 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
   campaigns   Frozen evaluation definitions
   runs        Executions of a campaign
   rollout     Per-model init qualification queue
-  formations  Heterogeneous model sets (read-only in v2.2.3)
+  formations  Heterogeneous model sets
   gates       Pre-campaign acceptance gates
   boundary    Native execution-boundary suite (no models)
   observer    Provider-boundary hardware observer`,
@@ -156,11 +156,13 @@ func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "formations",
-		Short: "Heterogeneous model sets (read-only in v2.2.3)",
+		Short: "Heterogeneous model sets",
 	}
 	cmd.AddCommand(
 		formationsListEvalCmd(deps),
 		formationsShowEvalCmd(deps),
+		formationsAddEvalCmd(deps),
+		formationsRemoveEvalCmd(deps),
 		formationsSmokeEvalCmd(deps),
 	)
 	return cmd

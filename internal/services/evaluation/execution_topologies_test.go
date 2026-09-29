@@ -64,6 +64,91 @@ func TestFormationToStackDefinitionUsesCanonicalRoleBindings(t *testing.T) {
 	require.NoError(t, ValidateHeterogeneousStackDigest(stack))
 }
 
+func newTestFormation(id string) Formation {
+	return Formation{
+		ID: id, DisplayName: "Test Formation", Description: "A formation used for CRUD tests.", MaxVRAMMiB: FormationMaxVRAMMiB,
+		Primary:   formationModel("test-primary-9b", "Test Primary 9B", "TestProvider", "Test Family Primary", "test-primary:9b", 9_000_000_000, "Q4_K_M", 5632, 512),
+		Assistant: formationModel("test-assistant-3b", "Test Assistant 3B", "OtherProvider", "Test Family Assistant", "test-assistant:3b", 3_800_000_000, "Q4_K_M", 2560, 512),
+		Lite:      formationModel("test-lite-1b", "Test Lite 1B", "ThirdProvider", "Test Family Lite", "test-lite:1b", 999_890_000, "Q4_K_M", 768, 256),
+	}
+}
+
+func TestAddOrUpdateFormationAddsNewEntry(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+
+	updated, err := AddOrUpdateFormation(topologies, newTestFormation("test-new-formation"))
+	require.NoError(t, err)
+	require.Len(t, updated.Formations(), 6)
+
+	formation, err := updated.Formation("test-new-formation")
+	require.NoError(t, err)
+	assert.Equal(t, "Test Formation", formation.DisplayName)
+
+	require.Len(t, topologies.Formations(), 5, "original catalog must be unmodified")
+}
+
+func TestAddOrUpdateFormationReplacesExistingEntry(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+
+	replacement := newTestFormation("qwen-powerhouse")
+	updated, err := AddOrUpdateFormation(topologies, replacement)
+	require.NoError(t, err)
+	require.Len(t, updated.Formations(), 5)
+
+	formation, err := updated.Formation("qwen-powerhouse")
+	require.NoError(t, err)
+	assert.Equal(t, "Test Formation", formation.DisplayName)
+}
+
+func TestAddOrUpdateFormationRejectsInvalidFormation(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+
+	invalid := newTestFormation("test-invalid-formation")
+	invalid.Assistant.Provider = invalid.Primary.Provider
+
+	_, err = AddOrUpdateFormation(topologies, invalid)
+	assert.ErrorIs(t, err, constants.ErrFormationProviderOverlap)
+}
+
+func TestAddOrUpdateFormationRejectsNilTopologies(t *testing.T) {
+	_, err := AddOrUpdateFormation(nil, newTestFormation("test-new-formation"))
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestRemoveFormationRemovesEntry(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+
+	updated, removed, err := RemoveFormation(topologies, "gemma-cascade")
+	require.NoError(t, err)
+	require.NotNil(t, removed)
+	assert.Equal(t, "gemma-cascade", removed.ID)
+	require.Len(t, updated.Formations(), 4)
+
+	_, err = updated.Formation("gemma-cascade")
+	assert.ErrorIs(t, err, constants.ErrFormationInvalid)
+
+	require.Len(t, topologies.Formations(), 5, "original catalog must be unmodified")
+}
+
+func TestRemoveFormationRejectsUnknownID(t *testing.T) {
+	topologies, err := NewExecutionTopologies()
+	require.NoError(t, err)
+
+	_, _, err = RemoveFormation(topologies, "does-not-exist")
+	assert.ErrorIs(t, err, constants.ErrFormationInvalid)
+}
+
+func TestRemoveFormationRejectsRemovingLastEntry(t *testing.T) {
+	topologies := &ExecutionTopologies{formations: []Formation{newTestFormation("only-formation")}}
+
+	_, _, err := RemoveFormation(topologies, "only-formation")
+	assert.Error(t, err)
+}
+
 type formationTestProvenance struct {
 	events []string
 }

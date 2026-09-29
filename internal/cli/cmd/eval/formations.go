@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -92,7 +93,11 @@ func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "list",
 		Short: "List the checked-in execution-topology formation catalog",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			topologies, err := evaluation.NewExecutionTopologies()
+			projectRoot, err := resolveProjectRoot(cmd)
+			if err != nil {
+				return err
+			}
+			topologies, err := newFormationCatalog(projectRoot).topologies()
 			if err != nil {
 				return fmt.Errorf("evaluation: formations list: %w", err)
 			}
@@ -145,7 +150,11 @@ func formationsShowEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Show one catalog formation and its role bindings",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			topologies, err := evaluation.NewExecutionTopologies()
+			projectRoot, err := resolveProjectRoot(cmd)
+			if err != nil {
+				return err
+			}
+			topologies, err := newFormationCatalog(projectRoot).topologies()
 			if err != nil {
 				return fmt.Errorf("evaluation: formations show: %w", err)
 			}
@@ -208,6 +217,268 @@ func formationsShowEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	return jsonLeaf(cmd)
 }
 
+// formationRoleFlagSet binds the CLI flags for one formation role (primary,
+// assistant, or lite) to an evaluation.FormationModel.
+type formationRoleFlagSet struct {
+	displayName   string
+	provider      string
+	family        string
+	providerClass string
+	servedTag     string
+	trust         string
+	quant         string
+	parameters    string
+	modelVRAM     uint64
+	kvCacheVRAM   uint64
+	modelDigest   string
+}
+
+func bindFormationRoleFlags(cmd *cobra.Command, prefix, label string) *formationRoleFlagSet {
+	f := &formationRoleFlagSet{}
+	cmd.Flags().StringVar(&f.displayName, prefix+"-display-name", "", label+" display name")
+	cmd.Flags().StringVar(&f.provider, prefix+"-provider", "", label+" provider, for example Alibaba")
+	cmd.Flags().StringVar(&f.family, prefix+"-family", "", label+" model family, for example \"Qwen 3.5\"")
+	cmd.Flags().StringVar(&f.providerClass, prefix+"-provider-class", "ollama", label+" inference provider class")
+	cmd.Flags().StringVar(&f.servedTag, prefix+"-tag", "", label+" served model tag, for example qwen3.5:9b (required)")
+	cmd.Flags().StringVar(&f.trust, prefix+"-trust", "sovereign", label+" trust class: sovereign or delegated")
+	cmd.Flags().StringVar(&f.quant, prefix+"-quant", "", label+" quantization format, required for sovereign roles (e.g. Q4_K_M)")
+	cmd.Flags().StringVar(&f.parameters, prefix+"-parameters", "", label+" parameter count, for example 9b")
+	cmd.Flags().Uint64Var(&f.modelVRAM, prefix+"-model-vram", 0, label+" estimated model VRAM MiB (sovereign only)")
+	cmd.Flags().Uint64Var(&f.kvCacheVRAM, prefix+"-kv-cache-vram", 0, label+" estimated KV-cache VRAM MiB (sovereign only)")
+	cmd.Flags().StringVar(&f.modelDigest, prefix+"-digest", "", label+" model digest (resolved against the frozen registry at run time when omitted)")
+	return f
+}
+
+func (f *formationRoleFlagSet) toFormationModel() (evaluation.FormationModel, error) {
+	tag := strings.TrimSpace(f.servedTag)
+	if tag == "" {
+		return evaluation.FormationModel{}, fmt.Errorf("served model tag is required: %w", constants.ErrMissingRequiredField)
+	}
+	variantID := inference.NormalizeProviderModelVariantID(tag)
+	var parameterCount uint64
+	if strings.TrimSpace(f.parameters) != "" {
+		count, err := evaluation.ParseParameterCount(f.parameters)
+		if err != nil {
+			return evaluation.FormationModel{}, err
+		}
+		parameterCount = count
+	}
+	return evaluation.FormationModel{
+		VariantID:             variantID,
+		DisplayName:           f.displayName,
+		Provider:              f.provider,
+		Family:                f.family,
+		ProviderClass:         f.providerClass,
+		ServedModelTag:        tag,
+		Trust:                 evaluation.FormationTrust(strings.ToLower(strings.TrimSpace(f.trust))),
+		Quantization:          f.quant,
+		ParameterCount:        parameterCount,
+		EstimatedModelVRAMMiB: f.modelVRAM,
+		EstimatedKVCacheMiB:   f.kvCacheVRAM,
+		ModelDigest:           f.modelDigest,
+	}, nil
+}
+
+func formationsAddEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	var displayName, description string
+	var maxVRAM uint64
+	var relaxedValidation bool
+	var primaryFlags, assistantFlags, liteFlags *formationRoleFlagSet
+	cmd := &cobra.Command{
+		Use:   "add <formation-id>",
+		Short: "Add or update one formation in the checked-in catalog overlay",
+		Long: `Add a new formation to the catalog, or replace an existing entry with the same
+ID, writing the change to the project's eval/formation-catalog-overlay.json.
+The formation must define all three roles.
+
+Example:
+  g8e eval formations add my-formation \
+    --display-name "My Formation" --description "Qwen primary with light triage." \
+    --primary-tag qwen3.5:9b --primary-provider Alibaba --primary-family "Qwen 3.5" \
+    --primary-quant Q4_K_M --primary-parameters 9b --primary-model-vram 5632 --primary-kv-cache-vram 512 \
+    --assistant-tag ministral-3:3b --assistant-provider Mistral --assistant-family "Mistral 3" \
+    --assistant-quant Q4_K_M --assistant-parameters 3.8b --assistant-model-vram 2560 --assistant-kv-cache-vram 512 \
+    --lite-tag gemma3:1b --lite-provider Google --lite-family "Gemma 3" \
+    --lite-quant Q4_K_M --lite-parameters 1b --lite-model-vram 768 --lite-kv-cache-vram 256`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id := strings.TrimSpace(args[0])
+			if id == "" {
+				return fmt.Errorf("evaluation: formations add: %w", constants.ErrMissingRequiredField)
+			}
+			primary, err := primaryFlags.toFormationModel()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations add: primary role: %w", err)
+			}
+			assistant, err := assistantFlags.toFormationModel()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations add: assistant role: %w", err)
+			}
+			lite, err := liteFlags.toFormationModel()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations add: lite role: %w", err)
+			}
+			if maxVRAM == 0 {
+				maxVRAM = evaluation.FormationMaxVRAMMiB
+			}
+			formation := evaluation.Formation{
+				ID:                id,
+				DisplayName:       displayName,
+				Description:       description,
+				MaxVRAMMiB:        maxVRAM,
+				RelaxedValidation: relaxedValidation,
+				Primary:           primary,
+				Assistant:         assistant,
+				Lite:              lite,
+			}
+
+			projectRoot, err := resolveProjectRoot(cmd)
+			if err != nil {
+				return err
+			}
+			catalog := newFormationCatalog(projectRoot)
+			topologies, err := catalog.topologies()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations add: %w", err)
+			}
+			_, existErr := topologies.Formation(id)
+			existed := existErr == nil
+
+			updated, err := evaluation.AddOrUpdateFormation(topologies, formation)
+			if err != nil {
+				return fmt.Errorf("evaluation: formations add: %w", err)
+			}
+			overlay, err := catalog.overlay()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations add: %w", err)
+			}
+			upsertOverlayFormation(overlay, formation)
+			if err := catalog.save(overlay); err != nil {
+				return fmt.Errorf("evaluation: formations add: %w", err)
+			}
+
+			verb := "Added"
+			if existed {
+				verb = "Updated"
+			}
+			if output.JSONEnabled(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), struct {
+					ID             string `json:"id"`
+					Action         string `json:"action"`
+					FormationCount int    `json:"formation_count"`
+				}{id, strings.ToLower(verb), len(updated.Formations())})
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s formation %s (catalog now has %d formations)\n", verb, id, len(updated.Formations()))
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&displayName, "display-name", "", "Formation display name")
+	cmd.Flags().StringVar(&description, "description", "", "Formation description")
+	cmd.Flags().Uint64Var(&maxVRAM, "max-vram", 0, "Maximum estimated VRAM budget in MiB (defaults to the catalog budget)")
+	cmd.Flags().BoolVar(&relaxedValidation, "relaxed-validation", false, "Skip the provider/family overlap and VRAM budget gates")
+	primaryFlags = bindFormationRoleFlags(cmd, "primary", "Primary")
+	assistantFlags = bindFormationRoleFlags(cmd, "assistant", "Assistant")
+	liteFlags = bindFormationRoleFlags(cmd, "lite", "Lite")
+	return jsonLeaf(cmd)
+}
+
+func formationsRemoveEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "remove <formation-id>",
+		Aliases: []string{"rm"},
+		Short:   "Remove one formation from the catalog",
+		Long: `Remove a formation the project overlay added, or record a checked-in default
+formation ID as removed. The catalog can never be left empty.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id := strings.TrimSpace(args[0])
+			if id == "" {
+				return fmt.Errorf("evaluation: formations remove: %w", constants.ErrMissingRequiredField)
+			}
+			defaults, err := evaluation.NewExecutionTopologies()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations remove: %w", err)
+			}
+
+			projectRoot, err := resolveProjectRoot(cmd)
+			if err != nil {
+				return err
+			}
+			catalog := newFormationCatalog(projectRoot)
+			topologies, err := catalog.topologies()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations remove: %w", err)
+			}
+			updated, _, err := evaluation.RemoveFormation(topologies, id)
+			if err != nil {
+				return fmt.Errorf("evaluation: formations remove: %w", err)
+			}
+			overlay, err := catalog.overlay()
+			if err != nil {
+				return fmt.Errorf("evaluation: formations remove: %w", err)
+			}
+			removeOverlayFormation(defaults, overlay, id)
+			if err := catalog.save(overlay); err != nil {
+				return fmt.Errorf("evaluation: formations remove: %w", err)
+			}
+
+			if output.JSONEnabled(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), struct {
+					ID             string `json:"id"`
+					FormationCount int    `json:"formation_count"`
+				}{id, len(updated.Formations())})
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Removed formation %s (catalog now has %d formations)\n", id, len(updated.Formations()))
+			return err
+		},
+	}
+	return jsonLeaf(cmd)
+}
+
+// upsertOverlayFormation replaces the overlay entry matching formation.ID, or
+// appends one, and un-removes that ID if a prior removal recorded it.
+func upsertOverlayFormation(overlay *evaluation.FormationCatalogOverlay, formation evaluation.Formation) {
+	replaced := false
+	for i, existing := range overlay.Formations {
+		if existing.ID == formation.ID {
+			overlay.Formations[i] = formation
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		overlay.Formations = append(overlay.Formations, formation)
+	}
+	remaining := make([]string, 0, len(overlay.RemovedFormationIDs))
+	for _, removedID := range overlay.RemovedFormationIDs {
+		if removedID != formation.ID {
+			remaining = append(remaining, removedID)
+		}
+	}
+	overlay.RemovedFormationIDs = remaining
+}
+
+// removeOverlayFormation drops id from the overlay's own formations and, when
+// id also names a checked-in default, records it as removed so the default
+// does not resurface once the overlay entry is gone.
+func removeOverlayFormation(defaults *evaluation.ExecutionTopologies, overlay *evaluation.FormationCatalogOverlay, id string) {
+	formations := make([]evaluation.Formation, 0, len(overlay.Formations))
+	for _, existing := range overlay.Formations {
+		if existing.ID != id {
+			formations = append(formations, existing)
+		}
+	}
+	overlay.Formations = formations
+	if _, err := defaults.Formation(id); err == nil {
+		for _, removedID := range overlay.RemovedFormationIDs {
+			if removedID == id {
+				return
+			}
+		}
+		overlay.RemovedFormationIDs = append(overlay.RemovedFormationIDs, id)
+	}
+}
+
 func formationsSmokeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var runAll bool
 	var initialState string
@@ -222,6 +493,9 @@ execution topology in sequence. This is a governed smoke path, not a scored camp
 			if err != nil {
 				return fmt.Errorf("evaluation: formations smoke: %w", err)
 			}
+			// Smoke runs bind against the checked-in catalog only (see
+			// FormationBindingFromCatalog); overlay-added or -updated
+			// formations are not yet runnable through the governed path.
 			topologies, err := evaluation.NewExecutionTopologies()
 			if err != nil {
 				return fmt.Errorf("evaluation: formations smoke: %w", err)
