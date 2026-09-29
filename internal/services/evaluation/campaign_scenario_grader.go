@@ -279,6 +279,8 @@ func requiredEvidenceGrade(req ScenarioGradingRequest, evidenceType string) (eva
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "policy decision evidence is missing", 0
 	case "semantic_grade":
 		return requiredSemanticGradeEvidence(req)
+	case "escalation", "handoff":
+		return requiredEscalationEvidence(req)
 	case "final_response":
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, evidenceType + " evidence is not yet bound in campaign traces", 0
 	default:
@@ -472,6 +474,36 @@ func requiredSemanticGradeEvidence(req ScenarioGradingRequest) (evalv1.Evaluatio
 		}
 	}
 	return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "semantic judge grading is unavailable", 0
+}
+
+// requiredEscalationEvidence grades the "escalation" and "handoff" required
+// evidence types (different catalog authors named the same concept
+// differently per scenario) for the homogeneous lane. The homogeneous
+// evaluation lane pins the
+// designated role's model tier before the call runs (see
+// apply_homogeneous_role_control in ensemble), so no real cross-role handoff
+// is ever observable there: whether the designated role over- or
+// under-escalated can only be read from what it actually produced. That is
+// exactly what gradeScenarioContent already checks against the scenario's
+// gold expected behavior, so escalation evidence reuses that verdict instead
+// of tracking a second, redundant signal. Scenarios without a
+// gradeScenarioContent case (route-primary-ownership,
+// route-handoff-assistant) and the heterogeneous lane (whose per-role grading
+// pass has no visibility into sibling roles' traces to detect an actual
+// handoff) remain UNAVAILABLE until those are implemented.
+func requiredEscalationEvidence(req ScenarioGradingRequest) (evalv1.EvaluationVerdictStatus, string, float64) {
+	contentGrade := gradeScenarioContent(req)
+	if contentGrade == nil {
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "escalation evidence has no scenario-content check implemented for " + req.ScenarioID, 0
+	}
+	switch contentGrade.GetStatus() {
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS:
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "designated role output matches the expected escalation posture", 1
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL:
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "designated role output does not match the expected escalation posture: " + contentGrade.GetDetail(), 0
+	default:
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "scenario content grading did not produce a pass/fail verdict", 0
+	}
 }
 
 func semanticGradesFromTrace(assignmentID string, trace EvaluationTrace) []*evalv1.SemanticGrade {

@@ -194,3 +194,37 @@ def resolve_model(
             or settings_primary_model
         )
     raise ValueError(f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'.")
+
+
+def resolve_model_for_designated_role(
+    tier: str,
+    overrides: ModelOverrideResolver,
+    settings_primary_model: str | None,
+    settings_assistant_model: str | None,
+    settings_lite_model: str | None,
+) -> str | None:
+    """Resolve a model for a designated tier with no cross-tier fallback.
+
+    Controlled homogeneous role evaluations pin a specific tier deliberately, to
+    measure how that tier alone handles a task. resolve_model()'s cross-tier fallback
+    chain (e.g. lite -> assistant -> primary) would let a candidate silently spill
+    into another tier's model, which defeats the point of a controlled run. This
+    resolver only ever reads the designated tier's own override and settings value.
+
+    Args:
+        tier: One of "primary", "assistant", or "lite"
+        overrides: The tier-scoped override bundle for this request
+        settings_primary_model: Resolved primary model from settings
+        settings_assistant_model: Resolved assistant model from settings
+        settings_lite_model: Resolved lite model from settings
+
+    Returns:
+        The resolved model name, or None if no model is configured for the tier
+    """
+    if tier == "primary":
+        return overrides.primary_model or settings_primary_model
+    if tier == "assistant":
+        return overrides.assistant_model or settings_assistant_model
+    if tier == "lite":
+        return overrides.lite_model or settings_lite_model
+    raise ValueError(f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'.")

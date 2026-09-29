@@ -94,7 +94,11 @@ class EvaluationTraceService:
     ) -> EvaluationAssignmentTrace:
         evaluation = g8e_context.evaluation_context
         if evaluation is None:
-            raise ValueError("evaluation_context is required to begin a trace")
+            raise ValidationError(
+                "evaluation_context is required to begin a trace",
+                field="evaluation_context",
+                component="g8ee",
+            )
 
         trace = EvaluationAssignmentTrace(
             schema_version=_TRACE_SCHEMA_VERSION,
@@ -129,7 +133,11 @@ class EvaluationTraceService:
     ) -> EvaluationAssignmentTrace:
         evaluation = g8e_context.evaluation_context
         if evaluation is None:
-            raise ValueError("evaluation_context is required to finalize a trace")
+            raise ValidationError(
+                "evaluation_context is required to finalize a trace",
+                field="evaluation_context",
+                component="g8ee",
+            )
 
         trace = EvaluationAssignmentTrace(
             schema_version=_TRACE_SCHEMA_VERSION,
@@ -165,7 +173,12 @@ class EvaluationTraceService:
         trace = EvaluationAssignmentTrace.model_validate_json(raw)
         expected = compute_trace_digest(trace.model_copy(update={"trace_digest": ""}))
         if trace.trace_digest and trace.trace_digest != expected:
-            raise ValueError("evaluation trace digest mismatch")
+            raise ValidationError(
+                "evaluation trace digest mismatch",
+                field="trace_digest",
+                details={"expected": expected, "actual": trace.trace_digest},
+                component="g8ee",
+            )
         return trace
 
     def _write(self, trace: EvaluationAssignmentTrace) -> None:
