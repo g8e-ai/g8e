@@ -31,15 +31,20 @@ func newHarnessOllamaModelCommandDispatcher(cfg *config.Config, authContext *aut
 	if err != nil {
 		return nil, err
 	}
+	// Deliberately no OperatorID/OperatorSessionID here: those headers only
+	// assert a persisted CLI-operator bind (established out of band via CLI
+	// bind, not part of this flow) and the Gateway's CLI auth middleware
+	// fails closed with 403 when a session with no such bind sends them. The
+	// actual dispatch target travels in the request body's
+	// target_operator_session_id, which DispatchService validates on its
+	// own regardless of these headers.
 	return &harnessOllamaModelCommandDispatcher{
 		client: client,
 		persona: harnessclient.Persona{
-			ID:                "g8e-campaign-model-maintenance",
-			UserAgent:         "g8e-eval-campaign",
-			UserID:            authContext.UserID,
-			CLISessionID:      authContext.CLISessionID,
-			OperatorID:        dataOperator.OperatorID,
-			OperatorSessionID: dataOperator.OperatorSessionID,
+			ID:           "g8e-campaign-model-maintenance",
+			UserAgent:    "g8e-eval-campaign",
+			UserID:       authContext.UserID,
+			CLISessionID: authContext.CLISessionID,
 		},
 	}, nil
 }

@@ -572,15 +572,7 @@ Use this after the evaluation stack, Inference Operator, and **both** witness Op
    - `llama3.2:1b` (Lite role)
    - `gemma4:e2b` (Assistant role)
    - `qwen3.5:4b` (Primary role)
-3. Valid delegated **g8ee** app credentials on the campaign host. Copy from the ensemble volume after enrollment (not the image-baked `/app/.g8e` tree):
-
-```bash
-mkdir -p .g8e/pki/issued/apps
-docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.crt .g8e/pki/issued/apps/g8ee.crt
-docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.key .g8e/pki/issued/apps/g8ee.key
-```
-
-If ensemble was re-enrolled, repeat the copy so the host CLI uses the current app cert. `./g8e eval` formation commands verify this cert against the gateway's current trust bundle before dispatching and fail closed with the exact `docker cp` remedy when it is stale, instead of letting every assignment in the run come back `PROVIDER_FAILED`.
+3. An authenticated CLI session on the campaign host (`./g8e auth enroll user`, if not already enrolled). `./g8e eval` formation commands self-enroll a delegated **g8ee** app credential on demand using that session — the same call `mcp agent run` uses to enroll an agent — so there is nothing to copy out of the ensemble container. They verify any existing `g8ee` app cert against the gateway's current trust bundle before dispatching, and transparently re-enroll a fresh one whenever it is missing or was issued by a prior gateway PKI generation, instead of letting every assignment in the run come back `PROVIDER_FAILED`. Enrollment still fails closed with an actionable error (and falls back to `G8E_APP_CERT`/`G8E_APP_KEY` if set) when the CLI has no authenticated session to enroll with.
 
 ### Build formation inventory
 

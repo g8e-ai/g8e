@@ -101,7 +101,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
-			appClient, err := inferenceEvalAppClientFrom(cfg, authContext, deps.clientFactory)
+			appClient, err := inferenceEvalAppClientFrom(fileSvc, cfg, authContext, deps.clientFactory)
 			if err != nil {
 				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
@@ -218,7 +218,7 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates probe: %w", err)
 			}
-			appClient, err := inferenceEvalAppClientFrom(cfg, authContext, deps.clientFactory)
+			appClient, err := inferenceEvalAppClientFrom(fileSvc, cfg, authContext, deps.clientFactory)
 			if err != nil {
 				return fmt.Errorf("evaluation: gates probe: %w", err)
 			}
@@ -267,8 +267,8 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func inferenceEvalAppClientFrom(cfg *config.Config, authContext *auth.ClientAuthContext, clientFactory func(harnessconfig.Config) (*harnessclient.Client, error)) (*harnessclient.Client, error) {
-	certFile, keyFile, err := resolveInferenceProbeAppCredentials(nil, cfg)
+func inferenceEvalAppClientFrom(fileSvc fs.RuntimeFileService, cfg *config.Config, authContext *auth.ClientAuthContext, clientFactory func(harnessconfig.Config) (*harnessclient.Client, error)) (*harnessclient.Client, error) {
+	certFile, keyFile, err := resolveInferenceProbeAppCredentials(fileSvc, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -354,13 +354,22 @@ func inferenceEvalAppClient(cfg *config.Config, fileSvc fs.RuntimeFileService, a
 // evaluation ever reaches the ensemble, and every assignment in the run
 // comes back as an opaque PROVIDER_FAILED. Checking trust here turns that
 // into one actionable error instead.
+//
+// When no candidate is usable, this self-enrolls "g8ee" as a delegated app
+// through auth.EnrollAgentApp — the same call `mcp agent run` uses — instead
+// of asking the operator to hand-copy a cert out of the ensemble container.
+// It reuses the CLI's already-authenticated session (this command cannot
+// reach this point without one), so the minted cert is trusted by the
+// gateway's current PKI by construction.
 func resolveInferenceProbeAppCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) (string, string, error) {
 	issuedAppCert := filepath.Join(cfg.Paths.Infra.AppCertDir, "g8ee"+constants.FileExtCert)
 	issuedAppKey := filepath.Join(cfg.Paths.Infra.AppCertDir, "g8ee"+constants.FileExtKey)
+	managedAppCert := cfg.AppCertFile("g8ee")
+	managedAppKey := cfg.AppKeyFile("g8ee")
 	pairs := []struct{ cert, key string }{
 		{os.Getenv(string(constants.EnvVar.AppCert)), os.Getenv(string(constants.EnvVar.AppKey))},
 		{issuedAppCert, issuedAppKey},
-		{cfg.AppCertFile("g8ee"), cfg.AppKeyFile("g8ee")},
+		{managedAppCert, managedAppKey},
 	}
 	trustBundlePath := cfg.ResolvedTrustBundlePath()
 	trustBundle, err := os.ReadFile(trustBundlePath)
@@ -400,10 +409,33 @@ func resolveInferenceProbeAppCredentials(fileSvc fs.RuntimeFileService, cfg *con
 		}
 		return pair.cert, pair.key, nil
 	}
-	if staleCandidate != "" {
-		return "", "", fmt.Errorf("%w: %s was not issued by the gateway's current trust bundle (%s); the gateway's PKI was regenerated since this app cert was copied out of the ensemble container. Re-run: docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.crt %s && docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.key %s", constants.ErrEvaluationAppCredentialStale, staleCandidate, trustBundlePath, issuedAppCert, issuedAppKey)
+	var enrollErr error
+	if fileSvc != nil {
+		// EnrollAgentApp skips re-issuing when a cert already sits at
+		// managedAppCert (checkExistingAppCert only checks expiry and SPIFFE
+		// SAN, not trust-chain freshness). If that's the candidate we just
+		// found stale, clear it first so self-enrollment actually mints a
+		// fresh one instead of handing back the same untrusted cert.
+		if staleCandidate == managedAppCert {
+			if certRel, relErr := fileSvc.RelFromAbs(managedAppCert); relErr == nil {
+				_ = fileSvc.Remove(context.Background(), certRel)
+			}
+		}
+		var certFile, keyFile string
+		if _, certFile, keyFile, enrollErr = auth.EnrollAgentApp(fileSvc, cfg, "g8ee"); enrollErr == nil {
+			return certFile, keyFile, nil
+		}
 	}
-	return "", "", fmt.Errorf("%w: set G8E_APP_CERT/G8E_APP_KEY or copy the enrolled apps/g8ee cert out of the ensemble container (see docs/guides/unified_stack.md)", constants.ErrEvaluationAppCredentialMissing)
+	switch {
+	case staleCandidate != "" && enrollErr != nil:
+		return "", "", fmt.Errorf("%w: %s was not issued by the gateway's current trust bundle (%s), and self-enrolling a replacement failed: %w", constants.ErrEvaluationAppCredentialStale, staleCandidate, trustBundlePath, enrollErr)
+	case staleCandidate != "":
+		return "", "", fmt.Errorf("%w: %s was not issued by the gateway's current trust bundle (%s); the gateway's PKI was regenerated since this app cert was copied out of the ensemble container. Re-run: docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.crt %s && docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.key %s", constants.ErrEvaluationAppCredentialStale, staleCandidate, trustBundlePath, issuedAppCert, issuedAppKey)
+	case enrollErr != nil:
+		return "", "", fmt.Errorf("%w: self-enrolling the delegated g8ee app credential failed (%w); run './g8e auth enroll user' to establish a CLI session, or set G8E_APP_CERT/G8E_APP_KEY", constants.ErrEvaluationAppCredentialMissing, enrollErr)
+	default:
+		return "", "", fmt.Errorf("%w: set G8E_APP_CERT/G8E_APP_KEY, or run './g8e auth enroll user' so this command can self-enroll the delegated g8ee app credential", constants.ErrEvaluationAppCredentialMissing)
+	}
 }
 
 func parseInferenceProbeRole(role string) (models.InferenceModelRole, error) {

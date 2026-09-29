@@ -541,7 +541,11 @@ The registry then binds to the provider's exact model digests.`,
 			}
 			opts := evaluation.ModelInventoryOptions{RunCapabilityProbes: probeCapabilities}
 			if probeCapabilities {
-				opts.CapabilityProbeRunner = env.ProbeRunner
+				probeRunner, err := env.ResolveProbeRunner()
+				if err != nil {
+					return fmt.Errorf("evaluation: models freeze: %w", err)
+				}
+				opts.CapabilityProbeRunner = probeRunner
 			}
 			freeze, err := evaluation.FreezeModelInventoryFromProvider(cmd.Context(), env.ModelDispatcher, env.Maintenance, evaluation.DefaultGenesisHomogeneousCampaignID, opts)
 			if err != nil {
