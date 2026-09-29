@@ -539,6 +539,12 @@ type FormationRoleResult struct {
 	FinishReason            string
 	LoadState               evalv1.EvaluationLoadState
 	RetryCount              uint32
+	// AdditionalProviderAttemptIDs lists every further provider attempt the role
+	// made after ProviderAttemptID (a g8ee tool loop makes one per model turn).
+	// Each one must carry its own observer window; role peak VRAM spans them all.
+	AdditionalProviderAttemptIDs []string
+	// Trace is the role's g8ee trace when the role executed through g8ee.
+	Trace EvaluationTrace
 }
 
 // FormationRoleExecutor invokes the role through the governed model path.
@@ -732,7 +738,13 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 			FormationID: formation.ID, AttemptID: attemptID, Role: role, Model: model, InputState: append([]byte(nil), state...), MutationCandidate: append([]byte(nil), state...),
 		})
 		failed := executeErr != nil
-		observation, observeErr := r.observer.Finalize(ctx, attemptID, model, failed)
+		// The observer window is keyed by the provider attempt that actually ran.
+		// Direct dispatch echoes attemptID back; g8ee mints its own.
+		observationID := attemptID
+		if !failed && roleResult.ProviderAttemptID != "" {
+			observationID = roleResult.ProviderAttemptID
+		}
+		observation, observeErr := r.observer.Finalize(ctx, observationID, model, failed)
 		if observeErr != nil {
 			if executeErr != nil {
 				return result, fmt.Errorf("formation: role %s: %w", role, errors.Join(executeErr, observeErr))
@@ -747,6 +759,17 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 		}
 		if observation == nil || observation.Window == nil {
 			return result, fmt.Errorf("formation: observer evidence %s: %w", role, constants.ErrFormationWitnessUnavailable)
+		}
+		observedPeak := observedPeakVRAMMiB(observation.Window)
+		for _, extraID := range roleResult.AdditionalProviderAttemptIDs {
+			extra, extraErr := r.observer.Finalize(ctx, extraID, model, false)
+			if extraErr != nil {
+				return result, fmt.Errorf("formation: observer finalize %s attempt %s: %w", role, extraID, extraErr)
+			}
+			if extra == nil || extra.Window == nil {
+				return result, fmt.Errorf("formation: observer evidence %s attempt %s: %w", role, extraID, constants.ErrFormationWitnessUnavailable)
+			}
+			observedPeak = max(observedPeak, observedPeakVRAMMiB(extra.Window))
 		}
 		telemetry := FormationRoleTelemetry{
 			Role: role, Model: model, AttemptID: attemptID,
@@ -765,12 +788,13 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 			RetryCount:         roleResult.RetryCount,
 			ObserverEvidence:   observation,
 			ProvenanceEvidence: bindFormationProvenanceEvidence(attestationForRole(attestations, role), roleResult.ProviderAttemptID),
+			Trace:              roleResult.Trace,
 		}
 		if telemetry.GenerationDurationNanos > 0 {
 			telemetry.GenerationTokensPerSec = float64(telemetry.GenerationTokens) / (float64(telemetry.GenerationDurationNanos) / float64(time.Second))
 		}
 		if telemetry.PeakVRAMMiB == 0 {
-			telemetry.PeakVRAMMiB = observedPeakVRAMMiB(observation.Window)
+			telemetry.PeakVRAMMiB = observedPeak
 		}
 		if telemetry.PeakVRAMMiB > result.PeakVRAMMiB {
 			result.PeakVRAMMiB = telemetry.PeakVRAMMiB

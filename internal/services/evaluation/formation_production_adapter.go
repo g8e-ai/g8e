@@ -52,8 +52,12 @@ type FormationProductionDependencies struct {
 	InferenceDispatcher    FormationInferenceDispatcher
 	ModelCommandDispatcher OllamaModelCommandDispatcher
 	OllamaEnvironment      map[string]string
-	NewID                  func(string) string
-	Now                    func() time.Time
+	// RoleExecutor replaces direct Inference Operator dispatch for role
+	// execution (the g8ee chat runner). Attestation, allocation, observation,
+	// release, and the policy gate are unchanged either way.
+	RoleExecutor FormationRoleExecutor
+	NewID        func(string) string
+	Now          func() time.Time
 }
 
 // NewFormationProductionRunner constructs a FormationRunner backed by governed
@@ -77,6 +81,15 @@ func NewFormationProductionRunner(deps FormationProductionDependencies) (*Format
 		newID = func(prefix string) string { return fmt.Sprintf("%s-%d", prefix, now().UTC().UnixNano()) }
 	}
 	registry := InferenceVariantsFromEvalRegistry(deps.Variants)
+	var roleExecutor FormationRoleExecutor = &formationProductionExecutor{
+		runContext:     deps.RunContext,
+		registryDigest: deps.RunContext.ModelRegistryDigest,
+		registry:       registry,
+		dispatcher:     deps.InferenceDispatcher,
+	}
+	if deps.RoleExecutor != nil {
+		roleExecutor = deps.RoleExecutor
+	}
 	runner, err := NewFormationRunner(
 		&formationProductionProvenance{preflight: deps.ProvenancePreflight},
 		&formationProductionObserver{loader: deps.ObservationLoader},
@@ -89,12 +102,7 @@ func NewFormationProductionRunner(deps FormationProductionDependencies) (*Format
 			environment:     deps.OllamaEnvironment,
 			newID:           newID,
 		},
-		&formationProductionExecutor{
-			runContext:     deps.RunContext,
-			registryDigest: deps.RunContext.ModelRegistryDigest,
-			registry:       registry,
-			dispatcher:     deps.InferenceDispatcher,
-		},
+		roleExecutor,
 		formationProductionPolicyGate{},
 		now,
 		newID,
