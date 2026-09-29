@@ -9,8 +9,10 @@ package evaluation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -231,8 +233,127 @@ type ExecutionTopologies struct {
 }
 
 // NewExecutionTopologies returns the preregistered sovereign benchmark formations.
+// It loads from eval/formation-catalog.json if available, otherwise uses hardcoded defaults.
 func NewExecutionTopologies() (*ExecutionTopologies, error) {
-	formations := defaultExecutionTopologies()
+	var formations []Formation
+
+	// Try to load from checked-in catalog file first
+	catalogPath := "eval/formation-catalog.json"
+	if data, err := os.ReadFile(catalogPath); err == nil {
+		var catalogData struct {
+			SchemaVersion string `json:"schema_version"`
+			Formations    []struct {
+				ID                string `json:"id"`
+				DisplayName       string `json:"display_name"`
+				Description       string `json:"description"`
+				MaxVRAMMiB        uint64 `json:"max_vram_mib"`
+				RelaxedValidation bool   `json:"relaxed_validation,omitempty"`
+				Primary           struct {
+					VariantID             string `json:"variant_id"`
+					DisplayName           string `json:"display_name"`
+					Provider              string `json:"provider"`
+					Family                string `json:"family"`
+					ProviderClass         string `json:"provider_class"`
+					ServedModelTag        string `json:"served_model_tag"`
+					Trust                 string `json:"trust"`
+					Quantization          string `json:"quantization,omitempty"`
+					ParameterCount        uint64 `json:"parameter_count,omitempty"`
+					EstimatedModelVRAMMiB uint64 `json:"estimated_model_vram_mib,omitempty"`
+					EstimatedKVCacheMiB   uint64 `json:"estimated_kv_cache_mib,omitempty"`
+					ModelDigest           string `json:"model_digest,omitempty"`
+				} `json:"primary"`
+				Assistant struct {
+					VariantID             string `json:"variant_id"`
+					DisplayName           string `json:"display_name"`
+					Provider              string `json:"provider"`
+					Family                string `json:"family"`
+					ProviderClass         string `json:"provider_class"`
+					ServedModelTag        string `json:"served_model_tag"`
+					Trust                 string `json:"trust"`
+					Quantization          string `json:"quantization,omitempty"`
+					ParameterCount        uint64 `json:"parameter_count,omitempty"`
+					EstimatedModelVRAMMiB uint64 `json:"estimated_model_vram_mib,omitempty"`
+					EstimatedKVCacheMiB   uint64 `json:"estimated_kv_cache_mib,omitempty"`
+					ModelDigest           string `json:"model_digest,omitempty"`
+				} `json:"assistant"`
+				Lite struct {
+					VariantID             string `json:"variant_id"`
+					DisplayName           string `json:"display_name"`
+					Provider              string `json:"provider"`
+					Family                string `json:"family"`
+					ProviderClass         string `json:"provider_class"`
+					ServedModelTag        string `json:"served_model_tag"`
+					Trust                 string `json:"trust"`
+					Quantization          string `json:"quantization,omitempty"`
+					ParameterCount        uint64 `json:"parameter_count,omitempty"`
+					EstimatedModelVRAMMiB uint64 `json:"estimated_model_vram_mib,omitempty"`
+					EstimatedKVCacheMiB   uint64 `json:"estimated_kv_cache_mib,omitempty"`
+					ModelDigest           string `json:"model_digest,omitempty"`
+				} `json:"lite"`
+			} `json:"formations"`
+		}
+
+		if err := json.Unmarshal(data, &catalogData); err == nil {
+			formations = make([]Formation, 0, len(catalogData.Formations))
+			for _, f := range catalogData.Formations {
+				formations = append(formations, Formation{
+					ID:                f.ID,
+					DisplayName:       f.DisplayName,
+					Description:       f.Description,
+					MaxVRAMMiB:        f.MaxVRAMMiB,
+					RelaxedValidation: f.RelaxedValidation,
+					Primary: FormationModel{
+						VariantID:             f.Primary.VariantID,
+						DisplayName:           f.Primary.DisplayName,
+						Provider:              f.Primary.Provider,
+						Family:                f.Primary.Family,
+						ProviderClass:         f.Primary.ProviderClass,
+						ServedModelTag:        f.Primary.ServedModelTag,
+						Trust:                 FormationTrust(f.Primary.Trust),
+						Quantization:          f.Primary.Quantization,
+						ParameterCount:        f.Primary.ParameterCount,
+						EstimatedModelVRAMMiB: f.Primary.EstimatedModelVRAMMiB,
+						EstimatedKVCacheMiB:   f.Primary.EstimatedKVCacheMiB,
+						ModelDigest:           f.Primary.ModelDigest,
+					},
+					Assistant: FormationModel{
+						VariantID:             f.Assistant.VariantID,
+						DisplayName:           f.Assistant.DisplayName,
+						Provider:              f.Assistant.Provider,
+						Family:                f.Assistant.Family,
+						ProviderClass:         f.Assistant.ProviderClass,
+						ServedModelTag:        f.Assistant.ServedModelTag,
+						Trust:                 FormationTrust(f.Assistant.Trust),
+						Quantization:          f.Assistant.Quantization,
+						ParameterCount:        f.Assistant.ParameterCount,
+						EstimatedModelVRAMMiB: f.Assistant.EstimatedModelVRAMMiB,
+						EstimatedKVCacheMiB:   f.Assistant.EstimatedKVCacheMiB,
+						ModelDigest:           f.Assistant.ModelDigest,
+					},
+					Lite: FormationModel{
+						VariantID:             f.Lite.VariantID,
+						DisplayName:           f.Lite.DisplayName,
+						Provider:              f.Lite.Provider,
+						Family:                f.Lite.Family,
+						ProviderClass:         f.Lite.ProviderClass,
+						ServedModelTag:        f.Lite.ServedModelTag,
+						Trust:                 FormationTrust(f.Lite.Trust),
+						Quantization:          f.Lite.Quantization,
+						ParameterCount:        f.Lite.ParameterCount,
+						EstimatedModelVRAMMiB: f.Lite.EstimatedModelVRAMMiB,
+						EstimatedKVCacheMiB:   f.Lite.EstimatedKVCacheMiB,
+						ModelDigest:           f.Lite.ModelDigest,
+					},
+				})
+			}
+		}
+	}
+
+	// Fall back to defaults if catalog file not loaded
+	if len(formations) == 0 {
+		formations = defaultExecutionTopologies()
+	}
+
 	for _, formation := range formations {
 		if err := formation.Validate(); err != nil {
 			return nil, err
