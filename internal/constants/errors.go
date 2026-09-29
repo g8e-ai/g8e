@@ -1554,4 +1554,6 @@ var (
 	ErrEvaluationRolloutLogDirNotRelative  = errors.New("evaluation: rollout run: log directory must be runtime-relative")
 	ErrOperatorSessionAmbiguous            = errors.New("evaluation: multiple active operator sessions; pin one explicitly")
 	ErrOperatorSessionNotFound             = errors.New("evaluation: no active operator session")
+	ErrEvaluationAppCredentialStale        = errors.New("evaluation: delegated app credential is not trusted by the gateway's current PKI")
+	ErrEvaluationAppCredentialMissing      = errors.New("evaluation: no delegated app credential available")
 )

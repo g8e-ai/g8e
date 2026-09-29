@@ -580,7 +580,7 @@ docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.crt .g8e/pki/issued/apps/
 docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.key .g8e/pki/issued/apps/g8ee.key
 ```
 
-If ensemble was re-enrolled, repeat the copy so the host CLI uses the current app cert.
+If ensemble was re-enrolled, repeat the copy so the host CLI uses the current app cert. `./g8e eval` formation commands verify this cert against the gateway's current trust bundle before dispatching and fail closed with the exact `docker cp` remedy when it is stale, instead of letting every assignment in the run come back `PROVIDER_FAILED`.
 
 ### Build formation inventory
 

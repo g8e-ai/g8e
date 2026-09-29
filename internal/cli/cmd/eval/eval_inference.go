@@ -9,6 +9,7 @@ package eval
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -25,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/pkg/certutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
@@ -341,6 +343,17 @@ func inferenceEvalAppClient(cfg *config.Config, fileSvc fs.RuntimeFileService, a
 	return deps.appClientFactory(appConfig)
 }
 
+// resolveInferenceProbeAppCredentials picks the delegated g8ee app credential
+// the formation runner presents for mTLS inference dispatch. A candidate is
+// only usable when its leaf certificate still chains to the gateway's
+// current trust bundle: the gateway mints a brand-new PKI hierarchy on every
+// fresh boot (see [PKI] Generating root CA in gateway startup logs), so a
+// certificate copied out of a prior ensemble enrollment silently stops being
+// trusted once the gateway restarts. Presenting it anyway does not fail
+// clearly — the gateway's TLS layer rejects the handshake before the
+// evaluation ever reaches the ensemble, and every assignment in the run
+// comes back as an opaque PROVIDER_FAILED. Checking trust here turns that
+// into one actionable error instead.
 func resolveInferenceProbeAppCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) (string, string, error) {
 	issuedAppCert := filepath.Join(cfg.Paths.Infra.AppCertDir, "g8ee"+constants.FileExtCert)
 	issuedAppKey := filepath.Join(cfg.Paths.Infra.AppCertDir, "g8ee"+constants.FileExtKey)
@@ -349,6 +362,16 @@ func resolveInferenceProbeAppCredentials(fileSvc fs.RuntimeFileService, cfg *con
 		{issuedAppCert, issuedAppKey},
 		{cfg.AppCertFile("g8ee"), cfg.AppKeyFile("g8ee")},
 	}
+	trustBundlePath := cfg.ResolvedTrustBundlePath()
+	trustBundle, err := os.ReadFile(trustBundlePath)
+	if err != nil {
+		return "", "", fmt.Errorf("evaluation: inference probe: read trust bundle %s: %w", trustBundlePath, err)
+	}
+	trustPool := x509.NewCertPool()
+	if !trustPool.AppendCertsFromPEM(trustBundle) {
+		return "", "", fmt.Errorf("evaluation: inference probe: trust bundle %s: %w", trustBundlePath, constants.ErrEmptyTrustBundle)
+	}
+	var staleCandidate string
 	for _, pair := range pairs {
 		if pair.cert == "" || pair.key == "" {
 			continue
@@ -359,9 +382,28 @@ func resolveInferenceProbeAppCredentials(fileSvc fs.RuntimeFileService, cfg *con
 		if _, err := os.Stat(pair.key); err != nil {
 			continue
 		}
+		certPEM, err := os.ReadFile(pair.cert)
+		if err != nil {
+			continue
+		}
+		leaf, err := certutil.ParseCertFromPEM(certPEM)
+		if err != nil {
+			continue
+		}
+		if _, err := leaf.Verify(x509.VerifyOptions{
+			Roots:         trustPool,
+			Intermediates: trustPool,
+			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		}); err != nil {
+			staleCandidate = pair.cert
+			continue
+		}
 		return pair.cert, pair.key, nil
 	}
-	return "", "", fmt.Errorf("evaluation: inference probe requires delegated app credentials via G8E_APP_CERT/G8E_APP_KEY or enrolled apps/g8ee cert")
+	if staleCandidate != "" {
+		return "", "", fmt.Errorf("%w: %s was not issued by the gateway's current trust bundle (%s); the gateway's PKI was regenerated since this app cert was copied out of the ensemble container. Re-run: docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.crt %s && docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.key %s", constants.ErrEvaluationAppCredentialStale, staleCandidate, trustBundlePath, issuedAppCert, issuedAppKey)
+	}
+	return "", "", fmt.Errorf("%w: set G8E_APP_CERT/G8E_APP_KEY or copy the enrolled apps/g8ee cert out of the ensemble container (see docs/guides/unified_stack.md)", constants.ErrEvaluationAppCredentialMissing)
 }
 
 func parseInferenceProbeRole(role string) (models.InferenceModelRole, error) {
