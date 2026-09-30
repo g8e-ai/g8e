@@ -269,3 +269,81 @@ func TestEvalBackup_RestoreRejectsManifestPathsOutsideEvidenceTrees(t *testing.T
 		})
 	}
 }
+
+func (f *evalBackupFixture) laterBackup(after time.Duration) *EvalBackup {
+	return NewEvalBackup(f.files, func() time.Time { return evalBackupTestNow.Add(after) })
+}
+
+func TestEvalBackup_CreateIfChangedSkipsIdenticalEvidence(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	first := f.create(t)
+
+	report, err := f.laterBackup(time.Minute).CreateIfChanged(context.Background(), f.outRoot)
+
+	require.NoError(t, err)
+	assert.True(t, report.Unchanged)
+	assert.Equal(t, first.SnapshotDir, report.SnapshotDir)
+	assert.Equal(t, first.Files, report.Files)
+	entries, err := os.ReadDir(f.outRoot)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "an unchanged backup must not leave a second snapshot")
+}
+
+func TestEvalBackup_CreateIfChangedKeepsSnapshotWhenEvidenceChanged(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	first := f.create(t)
+	f.write(t, backupRunReportPath, `{"run":2}`)
+
+	report, err := f.laterBackup(time.Minute).CreateIfChanged(context.Background(), f.outRoot)
+
+	require.NoError(t, err)
+	assert.False(t, report.Unchanged)
+	assert.NotEqual(t, first.SnapshotDir, report.SnapshotDir)
+	assert.FileExists(t, filepath.Join(first.SnapshotDir, constants.EvaluationBackupManifestFilename), "the earlier snapshot must survive")
+	assert.FileExists(t, filepath.Join(report.SnapshotDir, constants.EvaluationBackupManifestFilename))
+}
+
+func TestEvalBackup_CreateIfChangedCreatesFirstSnapshot(t *testing.T) {
+	f := newEvalBackupFixture(t)
+
+	report, err := f.backup.CreateIfChanged(context.Background(), f.outRoot)
+
+	require.NoError(t, err)
+	assert.False(t, report.Unchanged)
+	assert.Equal(t, filepath.Join(f.outRoot, backupSnapshotPrefix), report.SnapshotDir)
+}
+
+func TestEvalBackup_CreateIfChangedRejectsDestinationInsideRuntime(t *testing.T) {
+	f := newEvalBackupFixture(t)
+
+	_, err := f.backup.CreateIfChanged(context.Background(), f.files.Resolve("backups"))
+
+	assert.ErrorIs(t, err, constants.ErrEvaluationBackupDestinationInvalid)
+}
+
+func TestLatestEvalBackupSnapshot_PicksNewestCompleteSnapshot(t *testing.T) {
+	f := newEvalBackupFixture(t)
+	older := f.create(t)
+	newer, err := f.laterBackup(time.Minute).Create(context.Background(), f.outRoot)
+	require.NoError(t, err)
+	incomplete := filepath.Join(f.outRoot, constants.EvaluationBackupDirPrefix+"29990101T000000Z")
+	require.NoError(t, os.Mkdir(incomplete, constants.PermDirPrivate))
+
+	latest, err := LatestEvalBackupSnapshot(f.outRoot)
+
+	require.NoError(t, err)
+	assert.Equal(t, newer.SnapshotDir, latest)
+	assert.NotEqual(t, older.SnapshotDir, latest)
+}
+
+func TestLatestEvalBackupSnapshot_NoneFound(t *testing.T) {
+	for name, dir := range map[string]string{
+		"missing directory": filepath.Join(testutil.TempDir(t), "absent"),
+		"empty directory":   testutil.TempDir(t),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := LatestEvalBackupSnapshot(dir)
+			assert.ErrorIs(t, err, constants.ErrEvaluationBackupNone)
+		})
+	}
+}

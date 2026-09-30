@@ -766,6 +766,7 @@ const (
 	EvaluationBackupManifestFilename              = "eval-backup.json"
 	EvaluationBackupDirPrefix                     = "eval-backup-"
 	EvaluationBackupTimestampLayout               = "20060102T150405Z"
+	EvaluationBackupDefaultDir                    = EvaluationDirname + "/backups"
 	EvaluationModelInventoryPath                  = EvaluationDirname + "/model-inventory.json"
 	EvaluationInitCampaignQueuePath               = EvaluationDirname + "/init-campaign-queue.json"
 	EvaluationQueueLogsDirname                    = EvaluationDirname + "/logs"

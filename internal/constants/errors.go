@@ -1561,6 +1561,7 @@ var (
 	ErrEvaluationBackupIntegrity           = errors.New("evaluation: backup file does not match its manifest digest")
 	ErrEvaluationBackupConflict            = errors.New("evaluation: restore would overwrite different existing evidence")
 	ErrEvaluationBackupUnsupportedEntry    = errors.New("evaluation: backup source contains an unsupported entry type")
+	ErrEvaluationBackupNone                = errors.New("evaluation: no backup snapshot found")
 	ErrEvaluationModelRequired             = errors.New("evaluation: --model is required")
 	ErrEvaluationNoCasesSelected           = errors.New("evaluation: no inference acceptance cases selected")
 	ErrEvaluationInferenceCasesFailed      = errors.New("evaluation: inference acceptance cases failed")

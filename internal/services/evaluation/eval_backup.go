@@ -51,6 +51,10 @@ type EvalBackupReport struct {
 	CreatedAt   time.Time
 	Files       []EvalBackupFile
 	TotalBytes  int64
+	// Unchanged is set by CreateIfChanged when the evidence matched the newest
+	// existing snapshot, in which case SnapshotDir names that snapshot and
+	// nothing new was kept.
+	Unchanged bool
 }
 
 // EvalRestoreReport describes a completed restore.
@@ -118,6 +122,82 @@ func (b *EvalBackup) Create(ctx context.Context, outputDir string) (*EvalBackupR
 		return nil, err
 	}
 	return report, nil
+}
+
+// CreateIfChanged is Create for repeated automatic use: when the evidence is
+// identical to the newest complete snapshot in outputDir, the new snapshot is
+// discarded and the report names the existing one with Unchanged set.
+func (b *EvalBackup) CreateIfChanged(ctx context.Context, outputDir string) (*EvalBackupReport, error) {
+	destRoot, err := b.validateDestination(outputDir)
+	if err != nil {
+		return nil, err
+	}
+	previousDir, err := LatestEvalBackupSnapshot(destRoot)
+	if err != nil && !errors.Is(err, constants.ErrEvaluationBackupNone) {
+		return nil, err
+	}
+	report, err := b.Create(ctx, destRoot)
+	if err != nil || previousDir == "" {
+		return report, err
+	}
+	previous, err := readEvalBackupManifest(previousDir)
+	if err != nil {
+		return nil, err
+	}
+	if !evalBackupSameFiles(previous.Files, report.Files) {
+		return report, nil
+	}
+	// The directory was created by this call, so removing it cannot touch prior backups.
+	if err := os.RemoveAll(report.SnapshotDir); err != nil {
+		return nil, fmt.Errorf("evaluation: backup: discard unchanged snapshot: %w", err)
+	}
+	report.SnapshotDir = previousDir
+	report.Unchanged = true
+	return report, nil
+}
+
+func evalBackupSameFiles(a, b []EvalBackupFile) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// LatestEvalBackupSnapshot returns the newest complete snapshot directory in
+// backupDir. A snapshot without a valid manifest is an interrupted backup and
+// is skipped. It returns ErrEvaluationBackupNone when there is no such snapshot.
+func LatestEvalBackupSnapshot(backupDir string) (string, error) {
+	abs, err := filepath.Abs(backupDir)
+	if err != nil {
+		return "", fmt.Errorf("evaluation: backup: resolve directory: %w", err)
+	}
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
+		}
+		return "", fmt.Errorf("evaluation: backup: list %s: %w", abs, err)
+	}
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), constants.EvaluationBackupDirPrefix) {
+			names = append(names, entry.Name())
+		}
+	}
+	// The timestamp layout is fixed-width UTC, so name order is creation order.
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+	for _, name := range names {
+		dir := filepath.Join(abs, name)
+		if _, err := readEvalBackupManifest(dir); err == nil {
+			return dir, nil
+		}
+	}
+	return "", fmt.Errorf("%w: %s", constants.ErrEvaluationBackupNone, abs)
 }
 
 func (b *EvalBackup) writeSnapshot(ctx context.Context, snapshotDir string, createdAt time.Time, relPaths []string) (*EvalBackupReport, error) {
