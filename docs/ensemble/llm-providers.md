@@ -48,8 +48,8 @@ Invariant groups: [Configuration bootstrap](#bootstrap-configuration-inv-llm-boo
 
 | ID | Rule |
 | --- | --- |
-| INV-LLM-BOOTSTRAP-01 | Environment variables provide the lowest-priority bootstrap values. Platform settings replace them when explicitly set, and request-specific role overrides take precedence over platform settings. |
-| INV-LLM-BOOTSTRAP-02 | Each role (`primary`, `assistant`, `lite`) accepts `PROVIDER`, `MODEL`, `ENDPOINT`, and `API_KEY` environment variables under prefixes `G8E_LLM_PRIMARY_*`, `G8E_LLM_ASSISTANT_*`, `G8E_LLM_LITE_*`. Role-specific credentials and endpoints take precedence over provider-level values. |
+| INV-LLM-BOOTSTRAP-01 | Environment variables provide the lowest-priority bootstrap values for API keys and endpoints only (INV-ENV-04). Platform settings replace them when explicitly set, and request-specific role overrides take precedence over platform settings. |
+| INV-LLM-BOOTSTRAP-02 | Each role (`primary`, `assistant`, `lite`) accepts `ENDPOINT` and `API_KEY` environment variables under prefixes `G8E_LLM_PRIMARY_*`, `G8E_LLM_ASSISTANT_*`, `G8E_LLM_LITE_*`. Provider and model selection come only from Gateway-backed platform settings and request overrides, never from the environment. Role-specific credentials and endpoints take precedence over provider-level values. |
 | INV-LLM-BOOTSTRAP-03 | A model name remains required in settings; the system does not automatically select a provider's default model. |
 
 ### Provider registry (`INV-LLM-PROVIDERS`)

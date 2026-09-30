@@ -59,10 +59,10 @@ Invariant groups: [Coexistence constraints](#coexistence-constraints-inv-dec-coe
 
 ### Verifying Jev provider configuration
 
-1. Confirm `G8E_LLM_LITE_PROVIDER=jev` is set.
+1. Confirm the lite provider is `jev` in the platform LLM settings (Console Settings).
 2. Verify Ollama is running with System One model pulled (e.g., `ollama pull nimble` or `ollama pull tev1`).
 3. Verify `G8E_LLM_OLLAMA_ENDPOINT` is set (default `localhost:11434`). If running Ollama behind a reverse proxy with API key, set `G8E_LLM_OLLAMA_API_KEY`.
-4. Check `G8E_LLM_COMMAND_GEN_ENABLED=false` (Tribunal must be off).
+4. Check that Tribunal command generation is disabled in the platform LLM settings (Tribunal must be off).
 5. Verify primary and assistant roles use generative providers (e.g., `ollama`, `anthropic`, `openai`).
 6. Run a test triage or eval request; logs should show Jev calls, not fallback generative triage.
 
@@ -126,7 +126,7 @@ These call sites detect System One on the lite role and defer to the assistant p
 
 | Constraint | Error | Resolution |
 | --- | --- | --- |
-| Tribunal command generation + Jev lite | Rejected at `validate_llm_config` | Set `G8E_LLM_COMMAND_GEN_ENABLED=false` or use a generative lite provider |
+| Tribunal command generation + Jev lite | Rejected at `validate_llm_config` | Disable command generation in the platform LLM settings or use a generative lite provider |
 | Direct `get_llm_provider(..., is_lite=True)` with Jev | `ConfigurationError` at call time | Use `get_decision_provider()` for System One workloads or `get_generative_lite_provider()` for text generation |
 | Jev on primary or assistant role | Rejected at `validate_llm_config` | Jev is valid only on the lite role |
 
@@ -136,12 +136,15 @@ At startup, when `lite_provider=jev`, ensemble logs a warning stating which gene
 
 Jev is selected through the same lite-role settings as other LLM providers. The constant `LLMProvider.JEV` (`"jev"` string value) is valid **only** for the lite role.
 
-### Environment variables
+### Platform settings and environment variables
 
-| Setting | Env var | Type | Default |
+Provider and model selection, and whether Tribunal command generation is enabled, are Gateway-backed platform settings (set in the Console Settings page). They are not read from the environment (INV-ENV-04). Only endpoints and API keys come from the environment:
+
+| Setting | Source | Type | Default |
 | --- | --- | --- | --- |
-| Lite provider | `G8E_LLM_LITE_PROVIDER` | string | Unset (optional) |
-| Lite model | `G8E_LLM_LITE_MODEL` | string | `nimble` when lite provider is `jev` |
+| Lite provider | Platform settings (`jev`) | string | Unset (optional) |
+| Lite model | Platform settings | string | `nimble` when lite provider is `jev` |
+| Tribunal command generation | Platform settings (must be disabled with Jev lite) | bool | See platform settings |
 | Ollama endpoint | `G8E_LLM_OLLAMA_ENDPOINT` | URL | `localhost:11434` |
 | Ollama API key | `G8E_LLM_OLLAMA_API_KEY` | string | None (optional; for reverse-proxy authentication only) |
 
@@ -152,23 +155,12 @@ Primary and assistant roles must be configured with generative LLM providers; Je
 ### Example configuration
 
 ```bash
-# Enable Jev (System One via Ollama) for lite-role decisions
-G8E_LLM_LITE_PROVIDER=jev
-G8E_LLM_LITE_MODEL=nimble
-
-# Ollama local System One endpoint (ensure nimble is pulled: ollama pull nimble)
+# Ollama System One endpoint (ensure nimble is pulled: ollama pull nimble)
 G8E_LLM_OLLAMA_ENDPOINT=localhost:11434
 # G8E_LLM_OLLAMA_API_KEY=your_key  # Only if Ollama is behind a reverse proxy with auth
-
-# Disable Tribunal (required: incompatible with Jev lite)
-G8E_LLM_COMMAND_GEN_ENABLED=false
-
-# Configure generative providers for primary/assistant roles
-G8E_LLM_PRIMARY_PROVIDER=ollama
-G8E_LLM_PRIMARY_MODEL=qwen3.5:2b
-G8E_LLM_ASSISTANT_PROVIDER=ollama
-G8E_LLM_ASSISTANT_MODEL=llama3.2:3b
 ```
+
+In the Console Settings page, set the lite provider to `jev` with model `nimble`, set the primary and assistant roles to generative providers (for example `ollama` with `qwen3.5:2b` and `llama3.2:3b`), and disable Tribunal command generation.
 
 ## API contract
 

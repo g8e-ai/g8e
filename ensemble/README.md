@@ -48,17 +48,18 @@ make proto
 
 `make setup` installs `../protocol/python` and the ensemble with its development and test dependencies in editable mode. `make proto` verifies that the canonical Python protobuf stubs generated from the protocol definitions are current.
 
-Configure `.env` for the gateway, operator, and selected LLM provider. The ensemble reads `.env` without overriding variables already present in the process environment. See [LLM Providers](../docs/ensemble/llm-providers.md) for provider settings and [PKI and Trust](../docs/ensemble/pki.md) for workload identity and certificate requirements.
+`.env` holds only LLM secrets (API keys) and user-specific endpoints; the ensemble reads it without overriding variables already present in the process environment. Gateway URLs and runtime directories are launch arguments to `python -m app.serve` (see `--help`), and provider and model selection are Gateway-backed platform settings. See [LLM Providers](../docs/ensemble/llm-providers.md) for provider settings and [PKI and Trust](../docs/ensemble/pki.md) for workload identity and certificate requirements.
 
 ## Run locally
 
 From `ensemble/` with the virtual environment active:
 
 ```bash
-python -m app.main
+python -m app.serve   # container entrypoint; accepts the gateway and runtime arguments
+python -m app.main    # reload-enabled developer entry point
 ```
 
-The development entry point listens on HTTP at `0.0.0.0:8443` with reload enabled. Its outbound gateway and operator connections use mTLS. On startup, the ensemble loads or requests its app identity, connects the DB, KV, pub/sub, and blob transports, loads platform settings, and starts its domain services. A new identity remains pending until an enrolled owner approves the ensemble workload request.
+The development entry point listens on HTTP at `0.0.0.0:8443` with reload enabled; `app.serve` listens on `0.0.0.0:8000`. Its outbound gateway and operator connections use mTLS. On startup, the ensemble loads or requests its app identity, connects the DB, KV, pub/sub, and blob transports, loads platform settings, and starts its domain services. A new identity remains pending until an enrolled owner approves the ensemble workload request.
 
 Governed collection mutations use the ensemble's enrolled app certificate for transport and carry the authenticated user's operator identity as delegated authority. The Gateway binds the certificate to `acting_app_id` and validates the delegated operator session separately.
 

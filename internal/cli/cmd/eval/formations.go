@@ -779,7 +779,7 @@ func buildCampaignFormationProductionDeps(
 ) (evaluation.FormationProductionDependencies, error) {
 	appClient, err := inferenceEvalAppClient(fileSvc, cfg, authContext, deps.clientFactory)
 	if err != nil {
-		return evaluation.FormationProductionDependencies{},fmt.Errorf("evaluation: campaign formation dependencies: %w", err)
+		return evaluation.FormationProductionDependencies{}, fmt.Errorf("evaluation: campaign formation dependencies: %w", err)
 	}
 	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
 		configLoader:   deps.configLoader,
