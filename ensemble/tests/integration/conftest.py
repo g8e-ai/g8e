@@ -46,9 +46,15 @@ def _ensure_gateway_url():
     to contact the gateway for enrollment. Set G8E_GATEWAY_HTTP_URL to a sensible
     default (http://localhost:8080) if neither is already configured.
     """
-    if not os.environ.get("G8E_GATEWAY_HTTP_URL") and not os.environ.get("G8E_OPERATOR_URL"):
-        os.environ["G8E_GATEWAY_HTTP_URL"] = "http://localhost:8080"
-        logger.info("Set G8E_GATEWAY_HTTP_URL=http://localhost:8080 for integration test enrollment")
+    from app.constants.env_vars import EnvVar
+    from app.constants.generated_paths import PortConstants
+
+    if not os.environ.get(EnvVar.GATEWAY_HTTP_URL) and not os.environ.get(EnvVar.OPERATOR_URL):
+        http_port = os.environ.get("G8E_HTTP_PORT", PortConstants.PORT_OPERATOR_HTTP)
+        gateway_host = "g8e-gateway" if os.path.exists("/.dockerenv") else "localhost"
+        gateway_url = f"http://{gateway_host}:{http_port}"
+        os.environ[EnvVar.GATEWAY_HTTP_URL] = gateway_url
+        logger.info(f"Set {EnvVar.GATEWAY_HTTP_URL}={gateway_url} for test enrollment")
 
 
 @pytest.fixture(scope="session", autouse=True)
