@@ -38,7 +38,7 @@ The `mcp_server/` directory contains four templates:
 
 The Go types that produce the gateway and stdio configurations are in `internal/services/mcp/config.go`. Agent-specific configuration writers and launch arguments are in `internal/cli/cmd/mcp/`; Goose, Gemini, and Devin use different configuration formats or tool-disabling mechanisms from the agent JSON template.
 
-Use `g8e mcp agent list` to list supported agents. `g8e mcp agent show <agent>` validates a supported agent name and prints the available `g8e.local` mTLS, direct-IP mTLS, and stdio configurations. `g8e mcp agent run <agent>` starts the gateway when necessary, enrolls the CLI and agent identities, configures the agent to use `g8e mcp stdio`, and launches the agent with L1 through L5 governance. By contrast, `g8e mcp agent run -- <command>` and `g8e mcp agent run --url <url>` wrap an external MCP server with L1 doctrine screening only.
+Use `g8e mcp agent list` to list supported agents. `g8e mcp agent show <agent>` validates a supported agent name and prints the available `g8e.local` mTLS, direct-IP mTLS, and stdio configurations. `g8e mcp agent run <agent>` starts the gateway when necessary, enrolls the CLI and agent identities, configures the agent to use `g8e mcp stdio`, and launches the agent with L1 through L5 governance. Third-party MCP servers are governed through Gateway downstream egress.
 
 See the [MCP protocol documentation](../docs/mcp.md) for transport behavior, authentication, and governance details.
 

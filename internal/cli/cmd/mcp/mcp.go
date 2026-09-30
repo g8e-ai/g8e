@@ -901,7 +901,7 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 	cmd.Println()
 
 	cmd.Println("┌─ Stdio Transport ────────────────────────────────────────────────────────────")
-	cmd.Println("│ Use: Direct native tool access without gateway")
+	cmd.Println("│ Use: Stdio bridge to gateway with L1–L5; requires running gateway + enrolled credentials")
 	cmd.Println("│ Apps: Claude Code, Codex, Goose, Gemini CLI")
 	cmd.Println("│ Requires: g8e binary in PATH or full path in config")
 	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")

@@ -275,8 +275,8 @@ Launch supported AI coding assistants with g8e as their governed tool provider:
 # Run an MCP stdio server proxying through the Gateway
 ./g8e mcp stdio
 
-# Govern an external MCP server via reverse proxy
-./g8e mcp agent run --wrap-cmd "npx -y @modelcontextprotocol/server-filesystem /tmp"
+# Govern an external MCP server via Gateway downstream egress
+./g8e serve gateway --mcp-downstream-cmd npx --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/tmp'
 ```
 
 See [AI Agents and the g8e Boundary](docs/architecture/agents.md).
