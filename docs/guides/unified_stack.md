@@ -3,7 +3,7 @@ doc_id: unified_stack
 title: Unified Docker Stack Guide
 audience: platform operators and evaluators
 status: current
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 version: v2.2.4
 owners:
   - docker-compose.yml
@@ -733,6 +733,8 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 | `./g8e docker clean` | `docker compose down -v --remove-orphans` | `make clean-docker` | Destructive wipe of containers, volumes, networks. |
 
 Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean` or `docker compose down -v`, repeat owner enrollment and platform approvals.
+
+Before a destructive wipe, copy evaluation evidence outside `.g8e/` with `./g8e eval backup --output-dir <dir>`, and put it back with `./g8e eval restore <dir>/eval-backup-<timestamp>`. See [Evaluation Programs](../architecture/evals.md#evidence-and-verification). This covers host evidence only, not the Gateway volume.
 
 ## Health checks and resources
 

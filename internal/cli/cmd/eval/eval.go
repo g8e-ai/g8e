@@ -122,7 +122,9 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
   formations  Heterogeneous model sets
   gates       Pre-campaign acceptance gates
   boundary    Native execution-boundary suite (no models)
-  observer    Provider-boundary hardware observer`,
+  observer    Provider-boundary hardware observer
+  backup      Copy evaluation evidence outside .g8e/
+  restore     Restore evaluation evidence from a backup`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
 	bindSessionFlags(cmd)
@@ -135,6 +137,8 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		gatesEvalCmd(deps),
 		boundaryEvalCmd(deps),
 		observerEvalCmd(deps),
+		jsonLeaf(backupEvalCmd(deps)),
+		jsonLeaf(restoreEvalCmd(deps)),
 	)
 	return cmd
 }

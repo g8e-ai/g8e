@@ -3,7 +3,7 @@ doc_id: evals
 title: Evaluation Programs
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 version: v2.2.4
 owners:
   - internal/services/evaluation/
@@ -93,6 +93,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-EVAL-EVID-02 | Provider-boundary observation windows (ingested from Observer Operator results) MUST be stored under the Gateway volume at `data/inference/provider-observer/windows/`. Model provenance attestation windows (ingested from Provenance Operator results) MUST be stored under `data/inference/model-provenance/windows/`. |
 | INV-EVAL-EVID-03 | Campaign run state is run-scoped: definitions, frozen scenario artifacts, lifecycle, assignment, trace, and aggregate records MUST all persist in `.g8e/data/eval/campaigns/<campaign-id>/` and `.g8e/data/eval/runs/<run-id>/`. |
 | INV-EVAL-EVID-04 | Public-safe campaign projections MUST omit principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields. Private prompts, traces other than bounded `model_response`, `failure_output`, and `role_transcripts`, execution identifiers, and artifact locations MUST NOT cross the public boundary. |
+| INV-EVAL-EVID-05 | `g8e eval backup` MUST write only to a destination outside the runtime directory, copy only `.g8e/data/eval/` and `.g8e/eval/` (excluding run `lease.json` and `active-run.json`), and record a SHA-256 manifest. `g8e eval restore` MUST verify every file against that manifest, and confine every write to those two trees, before writing; it MUST NOT overwrite differing evidence without `--overwrite`. |
 
 ### Verification Posture (`INV-EVAL-VERIF`)
 
@@ -150,7 +151,7 @@ Both programs persist canonical, content-addressed run evidence beneath `.g8e/da
 
 ### CLI surface
 
-The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across eight top-level subcommands:
+The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across ten top-level subcommands:
 
 | Subcommand | Purpose |
 | --- | --- |
@@ -162,6 +163,8 @@ The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation comma
 | `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, add, remove, smoke) |
 | `g8e eval gates …` | Pre-campaign acceptance gates (chat, inference, probe) |
 | `g8e eval observer …` | Provider-boundary hardware observer (run, verify) |
+| `g8e eval backup` | Copy evaluation evidence to a directory outside `.g8e/` |
+| `g8e eval restore <snapshot-dir>` | Verify a backup snapshot and restore it into `.g8e/` |
 
 Use `./g8e eval --help` as the command-surface reference. On `g8e eval runs start`, verification and witness flags are optional by default; use `--require-observation`, `--require-provenance`, or the `--require-witness` preset when witness requirements are part of acceptance scope. On `g8e eval rollout run`, strict witness verification defaults true; `--gate-smoke` and `--promote-on-pass` provide fast candidate screening.
 
@@ -277,6 +280,15 @@ The Observer has no Ollama management capability. Consecutive scored assignments
 ### Evidence and verification
 
 **Storage layout:** Native run evidence (`report.json`, `verification.json`, digest-named artifacts) persists under `.g8e/data/eval/runs/<run-id>/` owned by `g8e eval boundary run` and `g8e eval boundary verify`. Campaign definitions and frozen scenario artifacts persist under `.g8e/data/eval/campaigns/<campaign-id>/`. Campaign run state and results persist under `.g8e/data/eval/runs/<run-id>/` (campaign-scoped lifecycle, assignment, trace, and aggregate records). Provider observation windows ingested from Observer Operator persist under the Gateway volume at `data/inference/provider-observer/windows/`. Model provenance attestation windows ingested from Provenance Operator persist under `data/inference/model-provenance/windows/`.
+
+**Backup and restore:** Host evidence survives `docker compose down -v` and `./g8e docker clean`, which destroy only the Docker volumes, but `.g8e/` is still the single copy. `g8e eval backup --output-dir <dir>` writes a new `eval-backup-<UTC timestamp>/` snapshot beneath `<dir>` (any directory outside `.g8e/`; the command rejects destinations inside it, including through symlinks). The snapshot mirrors `data/eval/` and `eval/` and carries an `eval-backup.json` manifest with a SHA-256 per file, written last so an interrupted backup is never restorable. Transient process state (`lease.json`, `active-run.json`) is not copied.
+
+```bash
+./g8e eval backup --output-dir ~/g8e-eval-backups
+./g8e eval restore ~/g8e-eval-backups/eval-backup-<timestamp>
+```
+
+`g8e eval restore` verifies every file against the manifest, rejects manifest paths outside the two evidence trees, and only then writes. Files already identical are skipped; if any existing file differs, nothing is written unless `--overwrite` is passed. Restore repopulates host evidence only. It does not back up or recreate the Gateway volume (PKI, owner and Operator identities, mirror, observation and provenance windows); after enrolling a fresh stack, run `./g8e public restore --queue` to rebuild the Gateway mirror from the restored host evidence.
 
 Native verification is owned by `g8e eval boundary verify`. Campaign verification is owned by `g8e eval runs verify`, with `--require-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing.
 

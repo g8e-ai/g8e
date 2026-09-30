@@ -762,6 +762,10 @@ const (
 	EvaluationAssignmentsDirname                  = "assignments"
 	EvaluationActiveRunFilename                   = "active-run.json"
 	EvaluationActiveRunPath                       = DataDirname + "/" + EvaluationDirname + "/" + EvaluationActiveRunFilename
+	EvaluationDataPath                            = DataDirname + "/" + EvaluationDirname
+	EvaluationBackupManifestFilename              = "eval-backup.json"
+	EvaluationBackupDirPrefix                     = "eval-backup-"
+	EvaluationBackupTimestampLayout               = "20060102T150405Z"
 	EvaluationModelInventoryPath                  = EvaluationDirname + "/model-inventory.json"
 	EvaluationInitCampaignQueuePath               = EvaluationDirname + "/init-campaign-queue.json"
 	EvaluationQueueLogsDirname                    = EvaluationDirname + "/logs"
