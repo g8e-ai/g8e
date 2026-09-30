@@ -131,7 +131,7 @@ func governanceScenarios() []Scenario {
 				r.note("delegator discovered tool %q", tool)
 
 				// Step 2: The delegated agent makes a call with its own persona.
-				// In a real deployment the agent carries a delegated app credential
+				// In a real deployment the agent carries a platform-enrolled application identity
 				// with a distinct SPIFFE ID. Here we verify the agent persona
 				// can independently invoke a tool and receive a result.
 				resp, err := c.MCPToolsCall(ctx, delegateAgent, tool, clientpkg.FSPathArgs{Path: "."})

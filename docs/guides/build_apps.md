@@ -420,7 +420,7 @@ External application repositories use their own test runner against a real Gatew
 - Treat missing or empty state roots as errors. Rebuild a complete envelope after a stale-root rejection; never reuse the old nonce or signatures.
 - Do not weaken or silently rewrite intent after a doctrine, identity, or proof rejection. A retry is valid only when it addresses a transient condition such as a newly fetched state root while preserving the authorized intent.
 - Verify the receipt signature and final persistence attestation against a trusted actuator key before consuming results.
-- Rotate delegated app certificates before their one-hour expiry and revoke compromised identities immediately.
+- Renew application certificates before their expiry and revoke compromised identities immediately.
 
 ---
 

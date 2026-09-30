@@ -425,7 +425,7 @@ The g8ee mechanism that adjusts each agent persona's reputation scalar (ranging 
 
 ## Requestor User ID
 
-The `requestor_user_id` field in a **Governance Envelope**. It identifies the human delegator who authorized the action and pairs with `acting_app_id`, which identifies the delegated application, tool, or agent persona.
+The `requestor_user_id` field in a **Governance Envelope**. It identifies the human delegator who authorized the action and pairs with `acting_app_id`, which identifies the application, tool, or agent persona.
 
 ---
 

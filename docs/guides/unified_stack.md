@@ -564,7 +564,7 @@ Use this after the evaluation stack, Inference Operator, and **both** witness Op
    - `llama3.2:1b` (Lite role)
    - `gemma4:e2b` (Assistant role)
    - `qwen3.5:4b` (Primary role)
-3. An authenticated CLI session on the campaign host (`./g8e auth enroll user`, if not already enrolled). `./g8e eval` formation commands self-enroll a delegated **g8ee** app credential on demand using that session — the same call `mcp agent run` uses to enroll an agent — so there is nothing to copy out of the ensemble container. They verify any existing `g8ee` app cert against the gateway's current trust bundle before dispatching, and transparently re-enroll a fresh one whenever it is missing or was issued by a prior gateway PKI generation, instead of letting every assignment in the run come back `PROVIDER_FAILED`. Enrollment still fails closed with an actionable error (and falls back to `G8E_APP_CERT`/`G8E_APP_KEY` if set) when the CLI has no authenticated session to enroll with.
+3. An enrolled `g8e-eval` application identity (`./g8e auth enroll app g8e-eval`, approved once by the platform owner). `./g8e eval` formation commands present this managed application credential for inference dispatch. They verify the `g8e-eval` app cert against the gateway's current trust bundle before dispatching, failing closed with an actionable error if the credential is missing, expired, or untrusted.
 
 ### Build formation inventory
 

@@ -54,6 +54,7 @@ Describes three distinct meanings of "agent" in g8e: external coding agents (Cla
 | INV-AGT-05 | Agents retain native tools (shell, file, network access) outside their configured MCP server unless the agent's launcher or configuration options actively disable them. Governance covers only MCP-routed operations; side channels remain agent-native. |
 | INV-AGT-06 | Governed HTTP dispatch (`POST /api/v1/operators/commands`) cannot mint human L3 proofs and fails closed under `ratify` or `notary` postures when L3 proof is required. Direct envelopes and MCP/A2A submission paths support L3 suspension; HTTP dispatch does not. |
 | INV-AGT-07 | Third-party MCP servers (subprocess or HTTP) are governed exclusively through Gateway downstream egress with full L1–L5 governance, envelope construction, and signed receipts. `g8e mcp agent run` is launcher-only and does not provide an external MCP wrapper or CLI reverse proxy. |
+| INV-AGT-08 | The Go agent harness (`internal/tools/agent_harness/`) is a scripted governed-client used by `g8e demos` and `g8e eval`. It contains no model, Tribunal, or ReAct loop and is not g8ee. It reaches g8ee only over HTTP (`POST /api/v1/chat` and evaluation trace reads) using the typed contract from `protocol/`, and g8ee (`ensemble/`) MUST NOT import, invoke, or name the harness. Tribunal roles, including the Auditor (`protocol/models/agents/auditor.json`), belong to g8ee and MUST NOT use harness naming. |
 
 ## Owned surfaces
 
@@ -64,6 +65,7 @@ Describes three distinct meanings of "agent" in g8e: external coding agents (Cla
 | MCP native tools | [internal/services/mcp/native_tool_registry.go](internal/services/mcp/native_tool_registry.go) | 31+ tools across database, filesystem, system, cloud categories |
 | Tool interception config | [internal/services/mcp/config.go](internal/services/mcp/config.go), [`WriteAgentConfig`](internal/cli/cmd/mcp/mcp.go) | Per-agent disabling: Claude/Codex (flags), Goose (extensions), Gemini (settings), Devin (MCP server list) |
 | g8ee ensemble | [ensemble/](ensemble/) (Python), [ensemble/app/main.py](ensemble/app/main.py) | Triage, Tribunal, ReAct tool loops, outbound dispatch, SSE events |
+| Go agent harness (not an agent, not g8ee) | [internal/tools/agent_harness/](internal/tools/agent_harness/) | Typed Gateway client, persona impersonation, and scenario registry. Consumers: `internal/cli/cmd/demos/` and `internal/cli/cmd/eval/`. `grep -ri agent_harness ensemble/` returns nothing |
 
 ## Procedures
 
@@ -162,15 +164,14 @@ The launcher supports five external coding agents, each with agent-specific tool
 
 Credentials resolve in this order (first complete pair wins):
 
-1. Delegated app certificate and key flags (`--app-cert`, `--app-key`)
-2. Delegated app certificate and key environment variables (`G8E_APP_CERT`, `G8E_APP_KEY`)
-3. CLI client certificate and key flags (`--client-cert`, `--client-key`)
-4. CLI client certificate and key environment variables (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`)
-5. Enrolled CLI credentials on disk (`.g8e/auth/client.crt`, `.g8e/auth/client.key`)
+1. Application identity flag (`--app <name>`) or environment variable (`G8E_APP`), resolving managed certificates on disk (`.g8e/pki/issued/apps/<name>.crt`, `.g8e/pki/issued/apps/<name>.key`)
+2. CLI client certificate and key flags (`--client-cert`, `--client-key`)
+3. CLI client certificate and key environment variables (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`)
+4. Enrolled CLI credentials on disk (`.g8e/auth/client.crt`, `.g8e/auth/client.key`)
 
-Each tier must provide a complete certificate and key pair. An incomplete pair fails closed immediately with `ErrIncompleteCredentialPair` rather than attempting to degrade. The CA bundle resolves from its flag, then environment variable, then the enrolled trust bundle. The Gateway URL resolves from its flag, then environment variable, then the default HTTPS MCP URL (`https://g8e.local:8443/mcp`).
+Each tier must provide a complete certificate and key pair. An incomplete pair fails closed immediately with `ErrIncompleteCredentialPair` rather than attempting to degrade. Application credentials are owner-approved platform application enrollments (`g8e auth enroll app <name>`). The CA bundle resolves from its flag, then environment variable, then the enrolled trust bundle. The Gateway URL resolves from its flag, then environment variable, then the default HTTPS MCP URL (`https://g8e.local:8443/mcp`).
 
-When L3 approval is required, the stdio bridge opens the approval page in the browser, waits for the matching `approval.completed` event over the authenticated SSE stream, and retries the original request. This automatic flow requires enrolled CLI credentials and a CLI session even when the MCP request itself uses delegated app credentials.
+When L3 approval is required, the stdio bridge opens the approval page in the browser, waits for the matching `approval.completed` event over the authenticated SSE stream, and retries the original request. This automatic flow requires enrolled CLI credentials and a CLI session even when the MCP request itself uses an enrolled application identity.
 
 ## Five-Layer Governance Enforcement
 

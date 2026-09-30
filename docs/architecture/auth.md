@@ -182,7 +182,7 @@ Re-binding to the identical ordered list of operator sessions is idempotent and 
 
 ### Platform workload enrollment
 
-Operators, the dashboard, and the ensemble use owner-approved platform enrollment. Starting a gateway with no users issues no platform workload certificate. The first owner must exist before a workload can submit an enrollment request.
+Operators, the dashboard, the ensemble, and applications use owner-approved platform enrollment. Starting a gateway with no users issues no platform workload certificate. The first owner must exist before a workload can submit an enrollment request.
 
 The workload enrollment flow is:
 
@@ -194,13 +194,13 @@ The workload enrollment flow is:
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
 7. The active first owner can revoke the completed request by its request ID. Revocation records the actor, reason, timestamp, governance envelope, and receipt identifiers on the enrollment record.
 
-For dashboard and ensemble identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active WebSockets authenticated as either identity.
+For dashboard, ensemble, and application identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active WebSockets authenticated as either identity.
 
 ### Identity binding and isolation
 
 mTLS certificates carry SPIFFE identities in URI SANs. The gateway validates certificate revocation, extracts the principal type, and matches the certificate identity to the referenced CLI, operator, or application session before accepting a request. Disabled users, terminated operators, expired sessions, revoked certificates, duplicate bindings, and identity mismatches fail closed.
 
-A CLI command carries a chain from CLI certificate to CLI session to user to operator session to operator. Browser events bind to the user and browser session. Delegated application certificates bind an application identity to the human user who requested the credential. These bindings prevent caller-supplied identifiers from overriding the authenticated transport identity.
+A CLI command carries a chain from CLI certificate to CLI session to user to operator session to operator. Browser events bind to the user and browser session. Application certificates bind an application identity to the approving user via platform enrollment. These bindings prevent caller-supplied identifiers from overriding the authenticated transport identity.
 
 ### Authorization and governance integration
 

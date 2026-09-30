@@ -302,7 +302,7 @@ Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `
 - `PublicBaseURL` (`G8E_PUBLIC_BASE_URL`), `AllowedOrigins` (`G8E_ALLOWED_ORIGINS`)
 - Lattice: `LatticeEndpoint` (`LATTICE_ENDPOINT`), `LatticeClientID` (`LATTICE_CLIENT_ID`), `LatticeClientSecret` (`LATTICE_CLIENT_SECRET`), `LatticeSandboxesToken` (`SANDBOXES_TOKEN`), `LatticeEntityName` (`LATTICE_ENTITY_NAME`), `LatticePostureFloor` (`LATTICE_POSTURE_FLOOR`)
 - Client/operator: `ClientCert` (`G8E_CLIENT_CERT`), `ClientKey` (`G8E_CLIENT_KEY`), `CABundle` (`G8E_CA_BUNDLE`), `GatewayURL` (`G8E_GATEWAY_URL`)
-- App: `AppID` (`G8E_APP_ID`), `AppCert` (`G8E_APP_CERT`), `AppKey` (`G8E_APP_KEY`)
+- App: `App` (`G8E_APP`)
 - `Shell` (`SHELL`), `Lang` (`LANG`), `Term` (`TERM`), `TZ` (`TZ`)
 
 ### Field Paths (`field_paths.go`)

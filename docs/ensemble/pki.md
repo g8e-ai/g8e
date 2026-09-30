@@ -28,7 +28,7 @@ do_not_use_for:
 
 ## Purpose
 
-Documents how g8e applications (dashboard, ensemble, remote Operator, delegated agents) enroll with the Gateway, manage certificates, discover trust anchors, and maintain identity credentials. This guide complements the canonical [Network Architecture](../architecture/network.md) reference by covering the client-side lifecycle: enrollment state management, renewal, revocation, and runtime storage.
+Documents how g8e applications (dashboard, ensemble, remote Operator, applications) enroll with the Gateway, manage certificates, discover trust anchors, and maintain identity credentials. This guide complements the canonical [Network Architecture](../architecture/network.md) reference by covering the client-side lifecycle: enrollment state management, renewal, revocation, and runtime storage.
 
 The Gateway owns the deployment PKI, enrollment records, and revocation state. Applications own their enrolled certificates, private keys, trust bundles, and resumable enrollment state in their own runtime volumes. The Operator owns execution evidence. In unified Compose deployments, the read-only `/operator-state` mount supplies selected bootstrap material for initialization; it is not a general-purpose host filesystem or execution channel.
 
@@ -41,7 +41,7 @@ The Gateway owns the deployment PKI, enrollment records, and revocation state. A
 - [Anti-patterns](#anti-patterns)
 - [Links out](#links-out)
 
-Key concepts: [Trust discovery](#trust-discovery-and-certificate-bootstrap), [Platform enrollment](#platform-application-enrollment), [CLI lifecycle](#cli-identity-lifecycle), [Renewal](#renewal-and-revocation), [Delegated applications](#delegated-application-credentials).
+Key concepts: [Trust discovery](#trust-discovery-and-certificate-bootstrap), [Platform enrollment](#platform-application-enrollment), [CLI lifecycle](#cli-identity-lifecycle), [Renewal](#renewal-and-revocation).
 
 ## Invariants
 
@@ -53,7 +53,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-ENROLL-APP-01 | Applications MUST generate their private key locally and never transmit it to the Gateway. CSRs and public-key fingerprints are submitted over the discovery surface; private keys remain under application control. |
 | INV-ENROLL-APP-02 | Platform enrollment requests MUST be token-scoped and MUST expire after 30 minutes. Requests MUST be persisted in resumable state until completion or explicit denial. |
-| INV-ENROLL-APP-03 | Issued certificates MUST contain the application identity and approving-user SPIFFE SANs. Platform application certificates MUST have 7-day validity; delegated applications MUST have 1-hour validity. |
+| INV-ENROLL-APP-03 | Issued certificates MUST contain the application identity and approving-user SPIFFE SANs. Platform application certificates MUST have 7-day validity. |
 | INV-ENROLL-APP-04 | g8ee MUST load an existing certificate or enroll during FastAPI startup. It MUST NOT proceed to ready state while enrollment is pending. Certificate renewal MUST occur at the 1-day threshold during startup and through lifecycle service checks. |
 
 ### Trust and discovery (`INV-ENROLL-TRUST`)
@@ -69,7 +69,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-ENROLL-RENEW-01 | Operator certificates MUST check validity at startup and every 24 hours, and MUST re-enroll over mTLS when less than 24 hours remain. Renewal generates a new ECDSA P-256 key. |
-| INV-ENROLL-RENEW-02 | g8ee application certificates MUST be renewed at the 1-day threshold during startup and through lifecycle checks. One-hour delegated credentials MUST never be reused merely because they remain technically unexpired. |
+| INV-ENROLL-RENEW-02 | g8ee and application certificates MUST be renewed at the 1-day threshold during startup and through lifecycle checks. |
 | INV-ENROLL-RENEW-03 | Renewal logic MUST distinguish between authenticated rotation (valid certificate, < 24 hours remaining, mTLS refresh) and recovery (expired, missing, or stale certificate requiring fresh enrollment). |
 
 ### Revocation (`INV-ENROLL-REVOKE`)
@@ -104,7 +104,7 @@ Applications initiate enrollment by discovering the Gateway's root CA and verify
 
 ### Platform application enrollment
 
-The dashboard, ensemble, and remote Operator use owner-approved enrollment after the Gateway has an owner:
+The dashboard, ensemble, applications, and remote Operator use owner-approved enrollment after the Gateway has an owner:
 
 1. **CSR Generation**: The application generates an ECDSA P-256 private key locally and creates a certificate signing request (CSR) containing the public key.
 2. **Request Submission**: The application submits the CSR and public-key fingerprint to `POST /api/v1/auth/platform-enrollments/request` over the plain HTTP discovery surface (no client certificate required). The Gateway returns an opaque token-scoped requester token that expires after 30 minutes.
@@ -134,22 +134,10 @@ The coordinator validates the certificate, key, session metadata, and trust bund
 
 CLI certificates and sessions have 7-day validity. Refresh (`g8e auth refresh`) renews server-side session when the certificate is still valid. Logout removes local credentials but does not revoke the Gateway-side certificate or session.
 
-### Delegated application credentials
-
-A locally launched agent can request a delegated certificate through an enrolled CLI at `POST /api/v1/pki/apps/delegated`:
-
-1. **CSR Submission**: The agent generates a P-256 private key and submits a CSR over mTLS using the CLI's authenticated connection.
-2. **Certificate Issuance**: The Gateway validates the CSR, creates an application policy, and returns a one-hour certificate containing both the application and requesting-user SPIFFE SANs.
-3. **Credential Storage**: The agent stores the credential under its application runtime area.
-4. **Renewal Threshold**: The agent re-enrolls when the certificate has 7 days or less remaining; a one-hour credential is therefore never reused merely because it remains technically unexpired at the next enrollment check.
-
-Delegated credentials provide identity and policy admission but do not grant privileged CLI or Operator routes, nor do they grant L2 consensus signing authority.
-
 ## Anti-patterns
 
 - **Transmitting private keys to the Gateway**: Applications MUST generate and retain private keys locally; CSRs and public-key fingerprints are the only material submitted to enrollment endpoints.
 - **Skipping trust verification on first contact**: Fetching and installing the CA bundle without fingerprint validation allows MITM substitution; always verify out-of-band on untrusted networks.
-- **Reusing expired delegated credentials**: One-hour delegated credentials MUST trigger re-enrollment at the 7-day threshold, never merely because unexpired time remains.
 - **Enrolling without resumable state**: Applications MUST persist enrollment requests to disk; in-memory-only state cannot survive restart and causes re-submission attempts.
 - **Trusting caller-supplied identity in enrollment reviews**: Gateway ownership and policy decisions MUST derive from persistent enrollment records, not from request headers or caller identity fields.
 - **Treating enrollment tokens as persistent**: Enrollment tokens expire after 30 minutes and MUST NOT be cached across sessions or assumed to survive request retries without re-fetching.

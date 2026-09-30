@@ -235,7 +235,7 @@ The directory `protocol/constants/` maintains 26 top-level JSON registries along
 
 #### JSON model schemas
 
-`protocol/models/` contains 56 platform JSON Schema definitions for core structures including envelopes, approvals, cases, chat messages, CLI sessions, consensus configurations, operator documents, observe API read models, passkey credentials, and tool results. Per-agent role schemas are maintained in `protocol/models/agents/` (`agent_harness.json`, `assistant.json`, `lite.json`, `primary.json`, `title_generator.json`, `triage.json`). Third-party validated schemas reside under `protocol/schemas/`, including NIST OSCAL 1.1.2.
+`protocol/models/` contains 56 platform JSON Schema definitions for core structures including envelopes, approvals, cases, chat messages, CLI sessions, consensus configurations, operator documents, observe API read models, passkey credentials, and tool results. Per-agent role schemas are maintained in `protocol/models/agents/` (`assistant.json`, `auditor.json`, `lite.json`, `primary.json`, `title_generator.json`, `triage.json`). Third-party validated schemas reside under `protocol/schemas/`, including NIST OSCAL 1.1.2.
 
 #### MCP server deployment configurations
 

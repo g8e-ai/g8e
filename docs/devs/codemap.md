@@ -418,7 +418,7 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 | `make validate-cosais` | `go run ./internal/tools/cosais_validator`. |
 | `make swagger-generate` | Gateway OpenAPI from Swagger annotations. |
 
-Other tools under `internal/tools/`: `agent_harness` (typed governance client and demo scenarios), `chaos`, `doctrine_validator`, `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
+Other tools under `internal/tools/`: `agent_harness` (scripted Go governance client and demo scenarios, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `doctrine_validator`, `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
 
 ## Procedures
 
