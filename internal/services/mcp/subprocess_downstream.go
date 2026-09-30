@@ -140,17 +140,20 @@ func (s *SubprocessDownstream) Call(ctx context.Context, method string, params a
 		err  error
 	}
 
+	// Capture the scanner under the lock: the goroutine can outlive Call
+	// (context cancel) while Close/cleanup nils the field.
+	scanner := s.scanner
 	resultChan := make(chan scanResult, 1)
 	go func() {
-		if s.scanner != nil && s.scanner.Scan() {
-			b := s.scanner.Bytes()
+		if scanner != nil && scanner.Scan() {
+			b := scanner.Bytes()
 			line := make([]byte, len(b))
 			copy(line, b)
 			resultChan <- scanResult{line: line}
 		} else {
 			var scanErr error
-			if s.scanner != nil {
-				scanErr = s.scanner.Err()
+			if scanner != nil {
+				scanErr = scanner.Err()
 			}
 			if scanErr == nil {
 				scanErr = io.EOF
