@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -38,6 +39,10 @@ type ProviderModelInventoryEntry struct {
 	Format                 string
 	ContextLimit           uint32
 	AdvertisedCapabilities []string
+}
+
+type ollamaShowRequest struct {
+	Name string `json:"name"`
 }
 
 type ollamaShowResponse struct {
@@ -112,7 +117,7 @@ func (b *OllamaBackend) describeProviderModel(ctx context.Context, servedTag, di
 }
 
 func (b *OllamaBackend) showModel(ctx context.Context, model string) (*ollamaShowResponse, error) {
-	body, err := json.Marshal(map[string]string{"name": model})
+	body, err := json.Marshal(ollamaShowRequest{Name: model})
 	if err != nil {
 		return nil, fmt.Errorf("ollama_backend: show model: marshal request: %w", err)
 	}
@@ -123,7 +128,7 @@ func (b *OllamaBackend) showModel(ctx context.Context, model string) (*ollamaSho
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return nil, transportError("show model", ctx, err)
+		return nil, transportError(ctx, "show model", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -154,14 +159,14 @@ func parseProviderParameterCount(raw string) (uint64, error) {
 		multiplier = 1_000
 		value = strings.TrimSuffix(value, "k")
 	default:
-		return 0, fmt.Errorf("unsupported parameter size suffix")
+		return 0, fmt.Errorf("%w: unsupported parameter size suffix", constants.ErrInferenceProviderResponseInvalid)
 	}
 	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 	if err != nil {
 		return 0, err
 	}
 	if parsed < 0 {
-		return 0, fmt.Errorf("parameter size must be non-negative")
+		return 0, fmt.Errorf("%w: parameter size must be non-negative", constants.ErrInferenceProviderResponseInvalid)
 	}
 	return uint64(parsed * float64(multiplier)), nil
 }
@@ -172,13 +177,19 @@ func parseProviderContextLimit(parameters string, modelInfo map[string]json.RawM
 			return uint32(parsed)
 		}
 	}
-	for _, key := range []string{".context_length", ".block_count"} {
-		raw, ok := modelInfo[key]
-		if !ok {
-			continue
+	// Ollama prefixes model_info keys with the model architecture, for example
+	// "gemma3.context_length". Keys are visited in sorted order so the result
+	// is deterministic.
+	keys := make([]string, 0, len(modelInfo))
+	for key := range modelInfo {
+		if strings.HasSuffix(key, ".context_length") {
+			keys = append(keys, key)
 		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
 		var parsed uint64
-		if err := json.Unmarshal(raw, &parsed); err == nil && parsed > 0 && parsed <= uint64(^uint32(0)) {
+		if err := json.Unmarshal(modelInfo[key], &parsed); err == nil && parsed > 0 && parsed <= uint64(^uint32(0)) {
 			return uint32(parsed)
 		}
 	}

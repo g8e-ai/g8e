@@ -35,15 +35,20 @@ type InferenceExecutionHandler struct {
 	logger    *slog.Logger
 }
 
-// NewInferenceExecutionHandler constructs an InferenceExecutionHandler with
-// the given backend, config, scrubbing service, and logger.
-func NewInferenceExecutionHandler(backend Backend, cfg *config.Config, scrubbingSvc *scrubbing.ScrubbingService, logger *slog.Logger) *InferenceExecutionHandler {
+// NewInferenceExecutionHandler constructs an InferenceExecutionHandler. Every
+// dependency is required: a handler without a scrubbing service would send
+// unscrubbed data across the provider boundary, so construction fails closed
+// with constants.ErrMissingRequiredField instead.
+func NewInferenceExecutionHandler(backend Backend, cfg *config.Config, scrubbingSvc *scrubbing.ScrubbingService, logger *slog.Logger) (*InferenceExecutionHandler, error) {
+	if backend == nil || cfg == nil || scrubbingSvc == nil || logger == nil {
+		return nil, fmt.Errorf("inference handler: %w", constants.ErrMissingRequiredField)
+	}
 	return &InferenceExecutionHandler{
 		backend:   backend,
 		cfg:       cfg,
 		scrubbing: scrubbingSvc,
 		logger:    logger,
-	}
+	}, nil
 }
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler. It is
@@ -65,10 +70,6 @@ func (h *InferenceExecutionHandler) ExecuteVerifiedTransaction(ctx context.Conte
 
 // ExecuteInference decodes the protobuf InferenceRequested payload, validates and scrubs its typed conversation, authorizes its model against the active standard or campaign authority, and calls Backend.Generate.
 func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg governance.CommandMessage) (*models.GenerateResponse, error) {
-	if h.backend == nil {
-		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceBackendNotRegistered)
-	}
-
 	payloadBytes := cmdMsg.GetPayload()
 	if len(payloadBytes) == 0 {
 		return nil, fmt.Errorf("inference handler: empty payload: %w", constants.ErrPubSubEmptyPayload)
@@ -139,9 +140,8 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 }
 
 func (h *InferenceExecutionHandler) authorizeInferenceModel(req models.InferenceRequestPayload) (string, error) {
-	requestHasCampaignAuthority := req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0
-	if requestHasCampaignAuthority {
-		return h.authorizeGovernedCampaignModel(req)
+	if HasCampaignAuthority(req.CampaignID, req.ModelRegistryDigest, req.ModelRegistry) {
+		return authorizeGovernedCampaignModel(req)
 	}
 	startupCampaignMode := h.cfg.Inference.CampaignID != "" || h.cfg.Inference.ModelRegistryDigest != ""
 	if startupCampaignMode {
@@ -157,7 +157,7 @@ func (h *InferenceExecutionHandler) authorizeInferenceModel(req models.Inference
 	return approved, nil
 }
 
-func (h *InferenceExecutionHandler) authorizeGovernedCampaignModel(req models.InferenceRequestPayload) (string, error) {
+func authorizeGovernedCampaignModel(req models.InferenceRequestPayload) (string, error) {
 	if req.CampaignID == "" || !models.IsSHA256Hex(req.ModelRegistryDigest) ||
 		req.RunID == "" || req.AssignmentID == "" || req.EvaluationAttemptID == "" || req.ScenarioID == "" {
 		return "", constants.ErrInferenceCampaignBindingInvalid
@@ -165,26 +165,8 @@ func (h *InferenceExecutionHandler) authorizeGovernedCampaignModel(req models.In
 	if req.Model == "" || !models.IsSHA256Hex(req.ModelDigest) || len(req.ModelRegistry) == 0 {
 		return "", constants.ErrInferenceModelRegistryInvalid
 	}
-	seen := make(map[string]struct{}, len(req.ModelRegistry))
-	matched := false
-	for _, variant := range req.ModelRegistry {
-		if variant == nil || variant.GetModel() == "" || !models.IsSHA256Hex(variant.GetDigest()) {
-			return "", constants.ErrInferenceModelRegistryInvalid
-		}
-		if _, exists := seen[variant.GetModel()]; exists {
-			return "", constants.ErrInferenceModelRegistryInvalid
-		}
-		seen[variant.GetModel()] = struct{}{}
-		if variant.GetModel() == req.Model && variant.GetDigest() == req.ModelDigest {
-			matched = true
-		}
-	}
-	digest, err := models.ComputeInferenceModelRegistryDigest(req.CampaignID, req.ModelRegistry)
-	if err != nil || digest != req.ModelRegistryDigest {
-		return "", constants.ErrInferenceModelRegistryInvalid
-	}
-	if !matched {
-		return "", constants.ErrInferenceModelOverrideDenied
+	if err := VerifyModelRegistryBinding(req.CampaignID, req.ModelRegistryDigest, req.Model, req.ModelDigest, req.ModelRegistry); err != nil {
+		return "", err
 	}
 	return req.Model, nil
 }
@@ -203,7 +185,7 @@ func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.Inferenc
 		return constants.ErrInferenceMessagesRequired
 	}
 	scrubText := func(value string) string { return value }
-	if h.scrubbing != nil && h.scrubbing.IsEnabled() {
+	if h.scrubbing.IsEnabled() {
 		scrubText = h.scrubbing.ScrubText
 	}
 	if err := normalizeInferenceMessages(req.Messages, scrubText); err != nil {
@@ -428,7 +410,7 @@ func normalizeJSONValue(raw json.RawMessage, scrubText func(string) string) (jso
 	case '{':
 		values := map[string]json.RawMessage{}
 		if err := json.Unmarshal(trimmed, &values); err != nil {
-			return nil, fmt.Errorf("%w: %v", constants.ErrInferenceJSONInvalid, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrInferenceJSONInvalid, err)
 		}
 		for key, value := range values {
 			normalized, err := normalizeJSONValue(value, scrubText)
@@ -445,7 +427,7 @@ func normalizeJSONValue(raw json.RawMessage, scrubText func(string) string) (jso
 	case '[':
 		var values []json.RawMessage
 		if err := json.Unmarshal(trimmed, &values); err != nil {
-			return nil, fmt.Errorf("%w: %v", constants.ErrInferenceJSONInvalid, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrInferenceJSONInvalid, err)
 		}
 		for i, value := range values {
 			normalized, err := normalizeJSONValue(value, scrubText)
@@ -462,7 +444,7 @@ func normalizeJSONValue(raw json.RawMessage, scrubText func(string) string) (jso
 	case '"':
 		var value string
 		if err := json.Unmarshal(trimmed, &value); err != nil {
-			return nil, fmt.Errorf("%w: %v", constants.ErrInferenceJSONInvalid, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrInferenceJSONInvalid, err)
 		}
 		if scrubText != nil {
 			value = scrubText(value)

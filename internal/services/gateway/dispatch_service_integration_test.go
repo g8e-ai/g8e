@@ -484,7 +484,6 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 	remoteCfg.OperatorSessionId = sessionID
 	remoteCfg.HeartbeatInterval = 0
 	remoteCfg.Inference.Enabled = true
-	remoteCfg.Inference.Backend = "ollama"
 	remoteCfg.Inference.PrimaryModel = "primary-boundary"
 	remoteCfg.Inference.AssistantModel = "assistant-boundary"
 	remoteCfg.Inference.LiteModel = "lite-boundary"
@@ -493,7 +492,8 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 	backend := &boundaryInferenceBackend{}
 	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), infra.Logger, nil)
 	require.NoError(t, err)
-	inferenceHandler := inference.NewInferenceExecutionHandler(backend, &remoteCfg, scrubbingSvc, infra.Logger)
+	inferenceHandler, err := inference.NewInferenceExecutionHandler(backend, &remoteCfg, scrubbingSvc, infra.Logger)
+	require.NoError(t, err)
 
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)

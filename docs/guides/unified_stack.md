@@ -3,8 +3,8 @@ doc_id: unified_stack
 title: Unified Docker Stack Guide
 audience: platform operators and evaluators
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - docker-compose.yml
   - docs/guides/
@@ -174,10 +174,10 @@ Provider host (Windows + Ollama example)
 
 Keep internal plan vocabulary separate from public campaign branding.
 
-| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (3 roles × 25 scenarios) |
+| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (25 scenarios × eligible roles) |
 | --- | --- | --- | --- | --- |
-| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **75** |
-| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **225** |
+| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **37** |
+| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **111** |
 | **Full homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-<seq>` | `.g8e/eval/model-inventory.json` (from `inventory freeze`) | all discovered models |
 
 Rules:
@@ -189,7 +189,7 @@ Rules:
 
 ### Init campaign inventory (one model per campaign)
 
-Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 75 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
+Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 37 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
 
 Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/examples/README.md) for the public/private boundary.
 
@@ -262,7 +262,7 @@ DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operat
 ./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
-Matrix size for three models: **225** assignments (3 × 3 roles × 25 scenarios).
+Matrix size for three models: **111** assignments (3 × 37 role-eligible scenario cells).
 
 ## Environment configuration
 
@@ -286,7 +286,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 | `G8E_PUBLIC_MIRROR_PUBLIC_PORT` | `8082` | Loopback-only anonymous public-mirror read/SSE listener |
 | `G8E_EVAL_EXPLORER_PORT` | `5173` | Loopback-only evaluation explorer listener |
 | `G8E_OLLAMA_ENDPOINT` | `http://127.0.0.1:11434` | Remote Ollama URL for Inference Operator (required for live inference campaigns and `docker init`) |
-| `G8E_INFERENCE_PRIMARY_MODEL` | `gemm4:e4b` | Primary model tag passed to the Inference Operator |
+| `G8E_INFERENCE_PRIMARY_MODEL` | `gemma4:e4b` | Primary model tag passed to the Inference Operator |
 | `G8E_INFERENCE_ASSISTANT_MODEL` | `qwen3:1.7b` | Assistant model tag passed to the Inference Operator |
 | `G8E_INFERENCE_LITE_MODEL` | `smol-7b:latest` | Lite model tag passed to the Inference Operator |
 | `G8E_INFERENCE_KEEP_ALIVE` | `-1` | Ollama keep-alive passed to the Inference Operator |
@@ -572,15 +572,7 @@ Use this after the evaluation stack, Inference Operator, and **both** witness Op
    - `llama3.2:1b` (Lite role)
    - `gemma4:e2b` (Assistant role)
    - `qwen3.5:4b` (Primary role)
-3. Valid delegated **g8ee** app credentials on the campaign host. Copy from the ensemble volume after enrollment (not the image-baked `/app/.g8e` tree):
-
-```bash
-mkdir -p .g8e/pki/issued/apps
-docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.crt .g8e/pki/issued/apps/g8ee.crt
-docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.key .g8e/pki/issued/apps/g8ee.key
-```
-
-If ensemble was re-enrolled, repeat the copy so the host CLI uses the current app cert.
+3. An authenticated CLI session on the campaign host (`./g8e auth enroll user`, if not already enrolled). `./g8e eval` formation commands self-enroll a delegated **g8ee** app credential on demand using that session — the same call `mcp agent run` uses to enroll an agent — so there is nothing to copy out of the ensemble container. They verify any existing `g8ee` app cert against the gateway's current trust bundle before dispatching, and transparently re-enroll a fresh one whenever it is missing or was issued by a prior gateway PKI generation, instead of letting every assignment in the run come back `PROVIDER_FAILED`. Enrollment still fails closed with an actionable error (and falls back to `G8E_APP_CERT`/`G8E_APP_KEY` if set) when the CLI has no authenticated session to enroll with.
 
 ### Build formation inventory
 
@@ -614,6 +606,14 @@ Inspect the catalog without running:
 ```bash
 ./g8e eval formations list
 ./g8e eval formations show ultra-efficient-speedster
+```
+
+Add or replace a formation in the checked-in overlay (`eval/formation-catalog-overlay.json`), or remove one. Every role needs its model tag, provider, family, quantization, parameters, and VRAM estimates; see `./g8e eval formations add --help` for the full flag set.
+
+```bash
+./g8e eval formations add my-formation --display-name "My Formation" --description "..." \
+  --primary-tag <tag> ... --assistant-tag <tag> ... --lite-tag <tag> ...
+./g8e eval formations remove my-formation
 ```
 
 ### Heterogeneous campaign assignment (Phase 2)

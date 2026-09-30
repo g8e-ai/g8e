@@ -261,3 +261,41 @@ func TestCollectRunAggregateState_AcceptsHeterogeneousAssignments(t *testing.T) 
 	require.NotNil(t, state)
 	assert.Equal(t, uint32(1), state.Scheduled)
 }
+
+func TestVerifyFormationWitnessEvidence_G8eeRoutedRolePeakSpansEveryProviderAttempt(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	observationReader, err := NewCampaignProviderObservationReader(files)
+	require.NoError(t, err)
+	first := testFormationObserverWindow(t, g8eeAttemptID(FormationRolePrimary, 1))
+	second := testFormationObserverWindow(t, g8eeAttemptID(FormationRolePrimary, 2))
+	second.Samples[0].VramUsedBytes = 4096 * 1024 * 1024
+	second.ObservationDigest = ""
+	second.ObservationDigest, err = provider_observer.ComputeObservationDigest(second)
+	require.NoError(t, err)
+	require.NoError(t, observationReader.ImportObservationWindow(context.Background(), first))
+
+	evidence := func(peak uint64) *FormationRunEvidence {
+		return &FormationRunEvidence{Result: persistedFormationRunResult{Roles: []persistedFormationRoleTelemetry{{
+			Role:                      string(FormationRolePrimary),
+			ProviderAttemptID:         first.GetProviderAttemptId(),
+			ObserverObservationDigest: first.GetObservationDigest(),
+			AttestationStatus:         string(FormationAttestationVerified),
+			PeakVRAMMiB:               peak,
+			Trace: EvaluationTrace{"model_calls": []any{
+				g8eeModelCall(FormationRolePrimary, 1, 0.1, 10, 5),
+				g8eeModelCall(FormationRolePrimary, 2, 0.1, 10, 5),
+			}},
+		}}}}
+	}
+	verify := func(peak uint64) []string {
+		return VerifyFormationWitnessEvidence(context.Background(), evidence(peak), observationReader, nil, ProviderObservationPolicyStrict, ModelProvenancePolicyInterim)
+	}
+
+	failures := verify(4096)
+	require.Len(t, failures, 1, "the second turn's window is required")
+	assert.Contains(t, failures[0], "observer window "+g8eeAttemptID(FormationRolePrimary, 2)+" load failed")
+
+	require.NoError(t, observationReader.ImportObservationWindow(context.Background(), second))
+	assert.Empty(t, verify(4096))
+	assert.Contains(t, verify(2048), "formation role primary peak vram mismatch", "peak must span every attempt, not just the first")
+}

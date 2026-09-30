@@ -3,8 +3,8 @@ doc_id: ensemble
 title: Ensemble Architecture (g8ee)
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - ensemble/
   - ensemble/app/main.py
@@ -148,13 +148,13 @@ The FastAPI application registers three router groups across root and internal p
 3. **Internal API Router (`ensemble/app/routers/internal_router.py`)**:
    Mounted under prefix `/api/v1` via `InternalAPIPaths.PREFIX`:
    - **Chat and Triage**: `POST /api/v1/chat`, `POST /api/v1/chat/stop`, `POST /api/v1/chat/triage/answer`, `POST /api/v1/chat/triage/skip`, `POST /api/v1/chat/triage/timeout`.
-   - **Cases**: `POST /api/v1/case`, `POST /api/v1/cases`, `POST /api/v1/case/get`, `PATCH /api/v1/case`, `POST /api/v1/case/delete`.
-   - **Investigations**: `POST /api/v1/investigation`, `POST /api/v1/investigations`, `POST /api/v1/investigation/get`, `POST /api/v1/investigations/query`.
-   - **Approvals**: `POST /api/v1/operator/approval/pending`, `POST /api/v1/operator/approval/respond`.
+   - **Cases**: `POST /api/v1/case/get`, `PATCH /api/v1/case`, `POST /api/v1/case/delete`.
+   - **Investigations**: `POST /api/v1/investigation/get`, `POST /api/v1/investigations/query`.
+   - **Approvals**: `GET /api/v1/operator/approval/pending`, `POST /api/v1/operator/approval/respond`.
    - **Direct Command Relay**: `POST /api/v1/operator/direct-command`.
-   - **Operator Lifecycle Proxying**: `POST /api/v1/operators/bind`, `POST /api/v1/operators/unbind`, `POST /api/v1/operators/stop`, `POST /api/v1/operators/{operator_id}`, `POST /api/v1/operators/claim-slot`, `POST /api/v1/operators/create-slot`, `POST /api/v1/operators/device-link/register`, `POST /api/v1/operators/gateway-session-auth`, `POST /api/v1/operators/session/refresh`, `POST /api/v1/operators/session/validate`, `POST /api/v1/operators/update-api-key`.
+   - **Operator Lifecycle Proxying**: `POST /api/v1/operators/bind`, `POST /api/v1/operators/unbind`, `POST /api/v1/operators/stop`, `POST /api/v1/operators/terminate`, `POST /api/v1/operators/claim-slot`, `POST /api/v1/operators/create-slot`, `POST /api/v1/operators/device-link/register`, `POST /api/v1/operators/gateway-session-auth`, `POST /api/v1/operators/authenticate`, `POST /api/v1/operators/session/refresh`, `POST /api/v1/operators/session/validate`, `POST /api/v1/operators/update-api-key`.
    - **Auth and Credentials**: `POST /api/v1/auth/api-key/generate`, `POST /api/v1/auth/certificate/revoke`.
-   - **Settings**: `POST /api/v1/settings`, `POST /api/v1/settings/sync`, `POST /api/v1/settings/user`, `POST /api/v1/settings/user/get`, `PATCH /api/v1/settings/user`.
+   - **Settings**: `POST /api/v1/settings/sync`, `POST /api/v1/settings/user/get`, `PATCH /api/v1/settings/user`.
    - **Evaluation Traces**: `GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}`.
    - **Health**: `GET /api/v1/health`.
 
@@ -191,11 +191,12 @@ sequenceDiagram
     Main->>Settings: Phase 0: Load local bootstrap settings
     Main->>Enroll: Phase 0.25: load_identity()
     alt Identity missing or near expiry
-        Enroll->>GW: POST /api/v1/platform-enrollment/request (P-256 CSR)
+        Enroll->>GW: POST /api/v1/auth/platform-enrollments/request (P-256 CSR)
         Enroll->>GW: Poll status until approved in Console
-        Enroll->>GW: POST /api/v1/platform-enrollment/complete (signed transcript)
+        Enroll->>GW: POST /api/v1/auth/platform-enrollments/complete (signed transcript)
         Enroll-->>Main: Install cert, key, CA bundle atomically
     end
+    Main->>Main: Phase 0.5: Build TLSConfig from the enrolled identity
     Main->>Clients: Phase 1: Connect DBClient, KVCacheClient, BlobClient (mTLS)
     Main->>Main: Phase 2: Initialize DBService, KVService, BlobService
     Main->>Main: Phase 3: Construct CacheAsideService (KV + DB)
@@ -207,13 +208,15 @@ sequenceDiagram
     Main-->>Main: Yield readiness
 ```
 
+If the certificate and key are present but the CA bundle is missing, startup first fetches the bundle from the Gateway discovery surface and reloads the identity, and falls back to enrollment only when that fails.
+
 Platform enrollment (`AppEnrollmentService`) follows a 9-step resumable sequence:
 1. Inspects existing credentials in `/root/.g8e`. If valid, not expired, and beyond the 1-day renewal threshold (`_RENEWAL_THRESHOLD_DAYS = 1`), loads them immediately.
 2. If an unexpired pending attempt exists on disk, resumes polling.
-3. Otherwise, generates an ECDSA P-256 private key and CSR for component `g8ee` and kind `ensemble`, submits to Gateway discovery endpoint `POST /api/v1/platform-enrollment/request` over plain HTTP, and writes pending state to disk with 0600 permissions.
+3. Otherwise, generates an ECDSA P-256 private key and CSR for component `g8ee` and kind `ensemble`, submits to Gateway discovery endpoint `POST /api/v1/auth/platform-enrollments/request` over plain HTTP, and writes pending state to disk with 0600 permissions.
 4. Logs non-secret approval instructions (request ID, approval URL `/console/`, CSR fingerprint).
 5. Polls enrollment status with bounded exponential backoff (2s to 30s) and jitter.
-6. Upon approval, signs the canonical `PlatformEnrollmentCompletionTranscript` protobuf bytes with the P-256 private key and posts to `/api/v1/platform-enrollment/complete`.
+6. Upon approval, signs the canonical `PlatformEnrollmentCompletionTranscript` protobuf bytes with the P-256 private key and posts to `/api/v1/auth/platform-enrollments/complete`.
 7. Validates the issued certificate against the pinned CA bundle, expected SPIFFE URI SAN `spiffe://g8e.local/app/g8ee`, public key, and component kind.
 8. Writes certificate, key, and CA bundle atomically using temp-file-plus-rename, then removes pending state.
 9. Returns the verified `AppIdentity`. The FastAPI process does not become ready while enrollment is pending.
@@ -244,8 +247,8 @@ flowchart TD
   - `sage` (`primary` tier): Handles complex turns, plans multi-step investigations, interprets tool output, and formats user responses. Emits `SageOperatorRequest` containing natural language intent and constraints without raw shell commands.
   - `dash` (`assistant` tier): Fast path for direct queries; escalates to Sage when deeper analysis is required.
 - **Tool Registry**: Defined declaratively in `ensemble/app/services/ai/tool_registry.py` via `TOOL_SPECS`:
-  - **Universal Scope** (`ToolScope.UNIVERSAL`): Requires no bound operator. Includes `query_investigation_context`, `get_command_constraints`, `ssh_inventory`, `stream_operator_to_ssh_fleet`, and `g8e_web_search`.
-  - **Operator-Gated Scope** (`ToolScope.OPERATOR_GATED`): Requires an authenticated, bound operator. Includes `run_commands_with_operator`, `file_create`, `file_write`, `file_read`, `file_update`, `list_files`, `recursive_grep_search`, `fetch_file_history`, `fetch_file_diff`, `grant_intent`, `revoke_intent`, and `check_port`.
+  - **Universal Scope** (`ToolScope.UNIVERSAL`): Requires no bound operator. Includes `query_investigation_context`, `get_command_constraints`, `list_ssh_inventory`, `stream_operator_to_ssh_fleet`, and `g8e_web_search`.
+  - **Operator-Gated Scope** (`ToolScope.OPERATOR_GATED`): Requires an authenticated, bound operator. Includes `run_commands_with_operator`, `file_create_on_operator`, `file_write_on_operator`, `file_read_on_operator`, `file_update_on_operator`, `list_files_and_directories_with_detailed_metadata`, `recursive_grep_search`, `fetch_file_history`, `fetch_file_diff`, `grant_intent_permission`, `revoke_intent_permission`, and `check_port_status`.
 - **Loop Limits**: The ReAct loop tracks turns against `AGENT_MAX_TOOL_TURNS` (default `25`). Exceeding this limit triggers an `agent.continue` application approval prompt. Approval resets the counter; denial or timeout terminates the turn.
 
 ### Tribunal Command Generation, Validation, and Risk Analysis

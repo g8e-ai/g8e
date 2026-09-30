@@ -20,6 +20,7 @@ import {
 } from '../content/scenario-catalog';
 import { G8E_REPO_URL } from '../content/platform';
 import { SCENARIO_CATEGORIES, type ScenarioCategory } from '../contract/types';
+import { TaskExpectationSection, TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
 
 function categoryAnchor(category: ScenarioCategory): string {
   return `category-${category}`;
@@ -27,10 +28,6 @@ function categoryAnchor(category: ScenarioCategory): string {
 
 function TaskFlag({ children }: { children: ReactNode }) {
   return <span className="task-flag">{children}</span>;
-}
-
-function taskHasToolBoundaries(task: ScenarioTaskDefinition): boolean {
-  return Boolean(task.allowedTools?.length || task.expectedTools?.length || task.forbiddenTools?.length);
 }
 
 function TaskFlagNotes({ task }: { task: ScenarioTaskDefinition }) {
@@ -62,16 +59,6 @@ function TaskFlagNotes({ task }: { task: ScenarioTaskDefinition }) {
   );
 }
 
-function gradingMethodNote(task: ScenarioTaskDefinition): string {
-  const base =
-    task.gradingMethod === 'semantic_judge'
-      ? 'An LLM judge scores the interaction against this rubric.'
-      : 'Fixed rules over trace evidence decide pass or fail.';
-  return taskHasToolBoundaries(task)
-    ? `${base} Tool boundaries below refine what counts as a correct tool choice.`
-    : base;
-}
-
 function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
   const meta = SCENARIO_CATEGORY_META[task.category];
 
@@ -97,73 +84,10 @@ function TaskDetailPanel({ task }: { task: ScenarioTaskDefinition }) {
       </header>
 
       <div className="task-detail-body">
-        <section className="task-detail-section">
-          <h2>What the model is asked</h2>
-          <p className="task-section-note">
-            User prompt sent to the agent.
-            {task.systemContext
-              ? ' System context is additional background supplied outside the user message.'
-              : null}
-          </p>
-          <blockquote className="task-prompt">{task.userPrompt}</blockquote>
-          {task.systemContext ? (
-            <p className="task-system-context">
-              <strong>System context:</strong> {task.systemContext}
-            </p>
-          ) : null}
-        </section>
+        <TaskPromptSection task={task} />
+        <TaskProvidedSection task={task} />
 
-        <section className="task-detail-section">
-          <h2>Pass criteria</h2>
-          <p className="task-section-note">{gradingMethodNote(task)}</p>
-          <p>{task.expectedBehavior}</p>
-        </section>
-
-        {taskHasToolBoundaries(task) ? (
-          <section className="task-detail-section">
-            <h2>Tool boundaries</h2>
-            <p className="task-section-note">
-              Three separate policy dimensions, not one whitelist. A tool may appear in both{' '}
-              <strong>Allowed</strong> and <strong>Forbidden</strong>: available as a choice, but
-              calling it fails the scenario. Common in tool-selection and security-policy tasks.
-            </p>
-            <div className="task-tool-grid">
-              {task.allowedTools?.length ? (
-                <div>
-                  <h3>Allowed tools</h3>
-                  <p className="task-tool-column-note">Exposed to the model during the scenario.</p>
-                  <ul>
-                    {task.allowedTools.map((tool) => (
-                      <li key={tool}><code>{tool}</code></li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {task.expectedTools?.length ? (
-                <div>
-                  <h3>Expected tools</h3>
-                  <p className="task-tool-column-note">Tools the grader expects the model to call.</p>
-                  <ul>
-                    {task.expectedTools.map((tool) => (
-                      <li key={tool}><code>{tool}</code></li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {task.forbiddenTools?.length ? (
-                <div>
-                  <h3>Forbidden tools</h3>
-                  <p className="task-tool-column-note">Tools that fail the scenario if the model calls them.</p>
-                  <ul>
-                    {task.forbiddenTools.map((tool) => (
-                      <li key={tool}><code>{tool}</code></li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
+        <TaskExpectationSection task={task} />
 
         <section className="task-detail-section">
           <h2>Concepts measured</h2>

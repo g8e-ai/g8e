@@ -55,6 +55,7 @@ func testScenarioCatalog() *evalv1.EvaluationScenarioCatalog {
 				Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 				PublicDescription: "Reply exactly",
 				GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+				EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 			},
 			{
 				ScenarioId:        "tool-select-1",
@@ -62,6 +63,7 @@ func testScenarioCatalog() *evalv1.EvaluationScenarioCatalog {
 				Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 				PublicDescription: "Select the probe tool",
 				GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+				EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 			},
 		},
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -31,11 +32,11 @@ func (c *fixedHardwareCollector) Collect(_ context.Context, observedAt time.Time
 	if c.sample == nil {
 		return nil, nil
 	}
-	clone := *c.sample
+	clone := proto.Clone(c.sample).(*evalv1.ProviderBoundaryHardwareSample)
 	if clone.ObservedAtUnixNanos == 0 {
 		clone.ObservedAtUnixNanos = uint64(observedAt.UTC().UnixNano())
 	}
-	return &clone, nil
+	return clone, nil
 }
 
 func reportedGPUSample(device string) *evalv1.ProviderBoundaryHardwareSample {

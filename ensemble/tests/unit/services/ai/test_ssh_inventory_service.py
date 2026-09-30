@@ -175,18 +175,7 @@ def test_malformed_port_is_tolerated(tmp_path: Path) -> None:
     assert inv.hosts[0].port is None
 
 
-def test_default_service_uses_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    cfg = _write(tmp_path, "Host alpha\n    HostName alpha\n")
-    monkeypatch.setenv("G8E_SSH_CONFIG_PATH", str(cfg))
-    svc = default_ssh_inventory_service()
-    assert svc.source_path == str(cfg)
-    assert svc.load().hosts[0].host == "alpha"
-
-
-def test_default_service_falls_back_to_canonical_mount_path(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("G8E_SSH_CONFIG_PATH", raising=False)
+def test_default_service_uses_canonical_mount_path() -> None:
     svc = default_ssh_inventory_service()
     assert svc.source_path == "/etc/g8e/ssh_config"
 

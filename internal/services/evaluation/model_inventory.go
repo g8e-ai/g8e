@@ -26,10 +26,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-const (
-	HomogeneousRoleCount  = 3
-	StandardScenarioCount = 25
-)
+const StandardScenarioCount = 25
 
 // ModelInventoryFreeze is the immutable model registry derived from
 // a complete provider inventory query and optional capability probes.
@@ -203,9 +200,15 @@ func ValidateModelRegistry(freeze *ModelInventoryFreeze) error {
 	return nil
 }
 
-// ComputeHomogeneousMatrixSize returns model variants × roles × scenarios.
+// ComputeHomogeneousMatrixSize returns model variants × the standard catalog's
+// (scenario, role) cells, counting each scenario once per role it declares
+// eligible.
 func ComputeHomogeneousMatrixSize(variantCount uint64) uint64 {
-	return variantCount * HomogeneousRoleCount * StandardScenarioCount
+	var cellsPerVariant uint64
+	for _, blueprint := range scenarioBlueprints() {
+		cellsPerVariant += uint64(len(blueprint.EligibleRoles))
+	}
+	return variantCount * cellsPerVariant
 }
 
 // LookupModelVariant returns the frozen eval variant for a served model tag.

@@ -541,7 +541,11 @@ The registry then binds to the provider's exact model digests.`,
 			}
 			opts := evaluation.ModelInventoryOptions{RunCapabilityProbes: probeCapabilities}
 			if probeCapabilities {
-				opts.CapabilityProbeRunner = env.ProbeRunner
+				probeRunner, err := env.ResolveProbeRunner()
+				if err != nil {
+					return fmt.Errorf("evaluation: models freeze: %w", err)
+				}
+				opts.CapabilityProbeRunner = probeRunner
 			}
 			freeze, err := evaluation.FreezeModelInventoryFromProvider(cmd.Context(), env.ModelDispatcher, env.Maintenance, evaluation.DefaultGenesisHomogeneousCampaignID, opts)
 			if err != nil {
@@ -558,8 +562,8 @@ The registry then binds to the provider's exact model digests.`,
 				return output.WriteRawJSON(cmd.OutOrStdout(), payload)
 			}
 			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(out, "Registry digest: %s\nModels: %d\nHomogeneous matrix: %d cells (%d models x %d roles x %d scenarios)\n",
-				freeze.RegistryDigest, len(freeze.Variants), freeze.HomogeneousCellCount, len(freeze.Variants), evaluation.HomogeneousRoleCount, evaluation.StandardScenarioCount)
+			_, _ = fmt.Fprintf(out, "Registry digest: %s\nModels: %d\nHomogeneous matrix: %d cells (%d models x role-eligible scenario cells)\n",
+				freeze.RegistryDigest, len(freeze.Variants), freeze.HomogeneousCellCount, len(freeze.Variants))
 			for _, variant := range freeze.Variants {
 				_, _ = fmt.Fprintf(out, "- %s (%s) %s\n", variant.GetServedModelTag(), variant.GetVariantId(), variant.GetModelDigest())
 			}

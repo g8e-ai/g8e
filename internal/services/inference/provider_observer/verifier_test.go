@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -87,9 +88,9 @@ func TestVerifyObservationCoverage(t *testing.T) {
 		{
 			name: "digest mismatch",
 			window: func() *evalv1.ProviderBoundaryObservationWindow {
-				clone := *baseWindow
+				clone := proto.Clone(baseWindow).(*evalv1.ProviderBoundaryObservationWindow)
 				clone.ObservationDigest = "bad-digest"
-				return &clone
+				return clone
 			}(),
 			attempt:      baseAttempt,
 			wantComplete: false,
@@ -98,12 +99,12 @@ func TestVerifyObservationCoverage(t *testing.T) {
 		{
 			name: "non-positive duration",
 			window: func() *evalv1.ProviderBoundaryObservationWindow {
-				clone := *baseWindow
+				clone := proto.Clone(baseWindow).(*evalv1.ProviderBoundaryObservationWindow)
 				clone.WindowCompletedAtUnixNanos = clone.GetWindowStartedAtUnixNanos()
-				digest, err := ComputeObservationDigest(&clone)
+				digest, err := ComputeObservationDigest(clone)
 				require.NoError(t, err)
 				clone.ObservationDigest = digest
-				return &clone
+				return clone
 			}(),
 			attempt:      baseAttempt,
 			wantComplete: false,
@@ -123,12 +124,12 @@ func TestVerifyObservationCoverage(t *testing.T) {
 		{
 			name: "clock skew exceeds tolerance",
 			window: func() *evalv1.ProviderBoundaryObservationWindow {
-				clone := *baseWindow
+				clone := proto.Clone(baseWindow).(*evalv1.ProviderBoundaryObservationWindow)
 				clone.ClockSkewNanos = int64(6 * time.Second)
-				digest, err := ComputeObservationDigest(&clone)
+				digest, err := ComputeObservationDigest(clone)
 				require.NoError(t, err)
 				clone.ObservationDigest = digest
-				return &clone
+				return clone
 			}(),
 			attempt:      baseAttempt,
 			wantComplete: false,
@@ -137,12 +138,12 @@ func TestVerifyObservationCoverage(t *testing.T) {
 		{
 			name: "no samples recorded",
 			window: func() *evalv1.ProviderBoundaryObservationWindow {
-				clone := *baseWindow
+				clone := proto.Clone(baseWindow).(*evalv1.ProviderBoundaryObservationWindow)
 				clone.Samples = nil
-				digest, err := ComputeObservationDigest(&clone)
+				digest, err := ComputeObservationDigest(clone)
 				require.NoError(t, err)
 				clone.ObservationDigest = digest
-				return &clone
+				return clone
 			}(),
 			attempt:      baseAttempt,
 			wantComplete: false,

@@ -418,23 +418,13 @@ const (
 	BinDirname               = "bin"
 	LogDirname               = "logs"
 
-	// Inference directory and model store paths. The model files under
-	// DefaultModelsDir are governed data assets (.gguf files that Ollama
-	// reads); the directory is the canonical path for staged models in
-	// air-gapped deployments.
+	// Inference runtime directory names under data/ and the runtime root.
 	InferenceDirname                        = "inference"
 	InferenceAttemptsDirname                = "attempts"
 	InferenceProviderObserverDirname        = "provider-observer"
 	InferenceProviderObserverWindowsDirname = "windows"
 	InferenceModelProvenanceDirname         = "model-provenance"
 	InferenceModelProvenanceWindowsDirname  = "windows"
-	ModelsDirname                           = "models"
-	InferenceStateFilename                  = "inference-state.json"
-	InferenceModelfilesDirname              = "modelfiles"
-	InferenceManifestFilename               = "inference-manifest.json"
-
-	DefaultInferenceDir = RuntimeDirname + "/" + InferenceDirname
-	DefaultModelsDir    = RuntimeDirname + "/" + InferenceDirname + "/" + ModelsDirname
 
 	// Ledger-specific directory and file names
 	FilesDirname      = "files"

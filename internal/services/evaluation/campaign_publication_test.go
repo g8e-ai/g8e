@@ -115,7 +115,7 @@ func TestCampaignPublicationCoordinatorPublishRunCatchUp(t *testing.T) {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestCampaignPublicationCoordinatorPublishRunCompletion(t *testing.T) {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -189,7 +189,7 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -272,7 +272,7 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 			modelSummaries = append(modelSummaries, payload)
 		}
 	}
-	require.Len(t, modelSummaries, 3)
+	require.Len(t, modelSummaries, 2)
 	roles := make(map[string]struct{}, len(modelSummaries))
 	for _, modelSummary := range modelSummaries {
 		assert.Equal(t, "exploratory_verified", modelSummary.QualityState)
@@ -280,7 +280,7 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 		assert.NotEmpty(t, modelSummary.VariantID)
 		roles[modelSummary.Role] = struct{}{}
 	}
-	assert.Equal(t, map[string]struct{}{"assistant": {}, "lite": {}, "primary": {}}, roles)
+	assert.Equal(t, map[string]struct{}{"lite": {}, "primary": {}}, roles)
 
 	state, err := publicationState.Load(context.Background(), run.GetRunId())
 	require.NoError(t, err)
@@ -296,7 +296,7 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 
 	backfillCount, err := coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
 	require.NoError(t, err)
-	assert.Equal(t, 3, backfillCount)
+	assert.Equal(t, 2, backfillCount)
 	retryCount, err := coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
 	require.NoError(t, err)
 	assert.Equal(t, 0, retryCount)
@@ -313,7 +313,7 @@ func TestCampaignPublicationCoordinatorForceRepublish(t *testing.T) {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -355,7 +355,7 @@ func TestCampaignControllerWithPublicationPublishesQueuedAssignments(t *testing.
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -498,7 +498,7 @@ func completedTestCampaign(t *testing.T, store *Store) *evalv1.EvaluationRun {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -794,7 +794,7 @@ func completedHeterogeneousFormationCampaign(t *testing.T, store *Store) *evalv1
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)

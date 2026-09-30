@@ -368,6 +368,9 @@ func modelInferenceMetricDelta(record *evalv1.ModelInferenceRecord) PublicMetric
 			delta["tokens_per_second"] = *publicMetricValue(float64(completionTokens) / (float64(generationNanos) / float64(time.Second)))
 		}
 	}
+	if record.RetryCount != nil {
+		delta["retries"] = *publicMetricValue(float64(record.GetRetryCount()))
+	}
 	return delta
 }
 

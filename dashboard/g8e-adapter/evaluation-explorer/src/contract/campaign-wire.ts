@@ -7,8 +7,8 @@
 // before any adapter conversion is allowed.
 
 import { parseWireActivityFamily, WIRE_UNAVAILABLE_REASONS, type WireActivityFamily } from './activity-family';
-import { PUBLIC_UNAVAILABLE_REASONS } from './types';
-import { ValidationError } from './validators';
+import { PUBLIC_UNAVAILABLE_REASONS, type RoleTranscript } from './types';
+import { assertRoleTranscripts, ValidationError } from './validators';
 
 export const CAMPAIGN_LIFECYCLE_SCHEMA_VERSION = '1.0.0' as const;
 export const CAMPAIGN_RESULT_SCHEMA_VERSIONS = ['1.0.0', '1.1.0'] as const;
@@ -270,6 +270,7 @@ export interface CampaignResultRecord {
   resource_summary?: Record<string, WireMetric>;
   model_response?: string;
   failure_output?: string;
+  role_transcripts?: RoleTranscript[];
 }
 
 export interface CampaignProjectionEnvelope {
@@ -289,7 +290,7 @@ const RESULT_FIELDS = [
   'lifecycle_status', 'summary_status', 'decomposed_scores', 'result_digest', 'verification_status',
   'unavailable_metric_reasons', 'completed_at', 'scenario_summary', 'semantic_grade_summaries',
   'activity_summary', 'evidence_bindings', 'verification_metadata', 'benchmark_observations', 'resource_summary',
-  'model_response', 'failure_output',
+  'model_response', 'failure_output', 'role_transcripts',
 ] as const;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -574,9 +575,10 @@ function assertBenchmarkObservations(value: unknown, path: string): void {
       const gradePath = `${path}.grade_summaries[${index}]`;
       const grade: unknown = value.grade_summaries[index];
       assertObject(grade, gradePath);
-      rejectUnknown(grade, ['criterion_id', 'status'], gradePath);
+      rejectUnknown(grade, ['criterion_id', 'status', 'explanation_code'], gradePath);
       assertString(grade.criterion_id, `${gradePath}.criterion_id`);
       assertString(grade.status, `${gradePath}.status`);
+      assertEnum(grade.explanation_code, EXPLANATION_CODES, `${gradePath}.explanation_code`);
     }
   }
   if (value.tool_scorecard !== undefined) {
@@ -610,6 +612,7 @@ function assertExtensions(value: Record<string, unknown>, path: string): void {
   }
   if (value.model_response !== undefined) assert(typeof value.model_response === 'string', `${path}.model_response`, 'expected string');
   if (value.failure_output !== undefined) assert(typeof value.failure_output === 'string', `${path}.failure_output`, 'expected string');
+  if (value.role_transcripts !== undefined) assertRoleTranscripts(value.role_transcripts, `${path}.role_transcripts`);
 }
 
 function assertResultRecord(value: unknown, path: string, version: CampaignEnvelopeVersion): asserts value is CampaignResultRecord {
@@ -634,7 +637,7 @@ function assertResultRecord(value: unknown, path: string, version: CampaignEnvel
   if (value.unavailable_metric_reasons !== undefined) assertStringArray(value.unavailable_metric_reasons, `${path}.unavailable_metric_reasons`, 16);
   assertTimestamp(value.completed_at, `${path}.completed_at`);
   if (version === '1.0.0') {
-    for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata', 'benchmark_observations', 'resource_summary', 'model_response', 'failure_output'] as const) {
+    for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata', 'benchmark_observations', 'resource_summary', 'model_response', 'failure_output', 'role_transcripts'] as const) {
       assert(value[field] === undefined, `${path}.${field}`, 'field requires campaign envelope 1.1.0');
     }
   } else {

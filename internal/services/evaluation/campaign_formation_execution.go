@@ -285,6 +285,24 @@ func ImportAssignmentResultFromFormationRun(req AssignmentExecutionRequest, form
 		now = time.Now().UTC()
 	}
 	lifecycle, grades := classifyFormationAssignmentOutcome(req, formationResult)
+	var decomposedScores []*evalv1.DecomposedScoreRecord
+	if roleTraces, ok := roleTracesFromFormationResult(formationResult); ok {
+		grading, err := GradeHeterogeneousScenario(HeterogeneousScenarioGradingRequest{
+			AssignmentID:  req.Assignment.GetAssignmentId(),
+			ScenarioID:    req.Assignment.GetScenarioId(),
+			GradingMethod: req.GradingMethod,
+			ScenarioInput: req.ScenarioInput,
+			ScenarioGold:  req.ScenarioGold,
+			ScenarioTools: req.ScenarioTools,
+			RoleTraces:    roleTraces,
+			Lifecycle:     lifecycle,
+		})
+		if err != nil {
+			return nil, err
+		}
+		grades = grading.DeterministicGrades
+		decomposedScores = grading.DecomposedScores
+	}
 	modelInferences, scoredSpan := modelInferenceRecordsFromFormationRun(req.Assignment, req.AttemptID, formationResult, newID)
 	result := &evalv1.EvaluationAssignmentResult{
 		SchemaVersion:            CampaignSchemaVersion,
@@ -295,6 +313,7 @@ func ImportAssignmentResultFromFormationRun(req AssignmentExecutionRequest, form
 		LifecycleStatus:          lifecycle,
 		ModelInferences:          modelInferences,
 		DeterministicGrades:      grades,
+		DecomposedScores:         decomposedScores,
 		ScoredInferenceSpanNanos: scoredSpan,
 		CompletedAt:              timestamppb.New(now),
 	}
@@ -328,6 +347,25 @@ func classifyFormationAssignmentOutcome(req AssignmentExecutionRequest, formatio
 	return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, []*evalv1.DeterministicGrade{grade}
 }
 
+// roleTracesFromFormationResult builds the ordered role-trace list
+// GradeHeterogeneousScenario needs, and reports whether grading from traces
+// is possible at all: only when all three roles completed and every one of
+// them carries a g8ee trace (i.e. the assignment ran through the g8ee-routed
+// runner, not the direct-dispatch runner, which never sets Trace).
+func roleTracesFromFormationResult(formationResult *FormationRunResult) ([]RoleTrace, bool) {
+	if formationResult == nil || len(formationResult.Roles) != 3 {
+		return nil, false
+	}
+	roleTraces := make([]RoleTrace, 0, len(formationResult.Roles))
+	for _, role := range formationResult.Roles {
+		if len(role.Trace) == 0 {
+			return nil, false
+		}
+		roleTraces = append(roleTraces, RoleTrace{Role: role.Role, Trace: role.Trace})
+	}
+	return roleTraces, true
+}
+
 func modelInferenceRecordsFromFormationRun(assignment *evalv1.EvaluationAssignment, attemptID string, formationResult *FormationRunResult, newID func(string) string) ([]*evalv1.ModelInferenceRecord, *uint64) {
 	if formationResult == nil || len(formationResult.Roles) == 0 {
 		return nil, nil
@@ -352,6 +390,9 @@ func modelInferenceRecordsFromFormationRun(assignment *evalv1.EvaluationAssignme
 			PromptTokens:            role.PromptTokens,
 			CompletionTokens:        role.GenerationTokens,
 			GenerationDurationNanos: role.GenerationDurationNanos,
+			FinishReason:            role.FinishReason,
+			LoadState:               role.LoadState,
+			RetryCount:              &role.RetryCount,
 		}
 		if role.ObserverEvidence != nil && role.ObserverEvidence.Window != nil {
 			record.ProviderBoundaryObservationRef = providerBoundaryObservationRef(role.ObserverEvidence.Window)
@@ -487,9 +528,13 @@ func formationRoleToCampaignRoleLabel(role evalv1.ModelCampaignRole) string {
 	}
 }
 
-// RecomputeFormationAssignmentGrades derives the formation-role grade from one
-// persisted heterogeneous assignment result.
-func RecomputeFormationAssignmentGrades(req AssignmentExecutionRequest, result *evalv1.EvaluationAssignmentResult) ([]*evalv1.DeterministicGrade, error) {
+// RecomputeFormationAssignmentGrades derives the deterministic grades for one
+// persisted heterogeneous assignment result. When the formation run evidence
+// carries every role's g8ee trace, each trace's digest is checked and the
+// grades are recomputed from those traces exactly as the write path graded
+// them; otherwise (direct-dispatch runs) the formation-role grade is derived
+// from the stored lifecycle.
+func RecomputeFormationAssignmentGrades(req AssignmentExecutionRequest, result *evalv1.EvaluationAssignmentResult, evidence *FormationRunEvidence) ([]*evalv1.DeterministicGrade, error) {
 	if req.Assignment == nil || result == nil {
 		return nil, fmt.Errorf("evaluation: recompute formation assignment grades: %w", constants.ErrMissingRequiredField)
 	}
@@ -497,5 +542,40 @@ func RecomputeFormationAssignmentGrades(req AssignmentExecutionRequest, result *
 	if lifecycle != result.GetLifecycleStatus() {
 		return nil, fmt.Errorf("stored lifecycle does not match formation outcome")
 	}
-	return grades, nil
+	roleTraces, ok := formationEvidenceRoleTraces(evidence)
+	if !ok {
+		return grades, nil
+	}
+	for _, roleTrace := range roleTraces {
+		if err := validateTraceDigest(roleTrace.Trace); err != nil {
+			return nil, fmt.Errorf("role %s: %w", roleTrace.Role, err)
+		}
+	}
+	grading, err := GradeHeterogeneousScenario(HeterogeneousScenarioGradingRequest{
+		AssignmentID:  req.Assignment.GetAssignmentId(),
+		ScenarioID:    req.Assignment.GetScenarioId(),
+		GradingMethod: req.GradingMethod,
+		ScenarioInput: req.ScenarioInput,
+		ScenarioGold:  req.ScenarioGold,
+		ScenarioTools: req.ScenarioTools,
+		RoleTraces:    roleTraces,
+		Lifecycle:     lifecycle,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return grading.DeterministicGrades, nil
+}
+
+// formationEvidenceRoleTraces returns the ordered role traces persisted in one
+// formation run's evidence, and whether the run was routed through g8ee.
+func formationEvidenceRoleTraces(evidence *FormationRunEvidence) ([]RoleTrace, bool) {
+	if evidence == nil {
+		return nil, false
+	}
+	formationResult, err := FormationRunResultFromEvidence(evidence)
+	if err != nil {
+		return nil, false
+	}
+	return roleTracesFromFormationResult(formationResult)
 }

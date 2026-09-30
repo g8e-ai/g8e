@@ -40,6 +40,7 @@ import pytest
 
 from app.constants import paths as paths_module
 from app.constants.env_vars import EnvVar
+from app.constants.generated_paths import PortConstants
 from app.errors import ConfigurationError
 from app.services.infra.app_enrollment_service import (
     AppEnrollmentService,
@@ -825,7 +826,7 @@ class TestEnrollPlatformEnrollment:
 
 
 class TestResolveGatewayHttpUrl:
-    """G8E_GATEWAY_HTTP_URL is preferred; otherwise derive from G8E_OPERATOR_URL."""
+    """G8E_GATEWAY_HTTP_URL overrides the default local gateway HTTP URL."""
 
     def test_uses_explicit_gateway_http_url(
         self, monkeypatch: pytest.MonkeyPatch
@@ -834,31 +835,12 @@ class TestResolveGatewayHttpUrl:
         service = AppEnrollmentService()
         assert service._resolve_gateway_http_url() == "http://g8e.local:8080"
 
-    def test_derives_from_operator_url_when_unset(
+    def test_defaults_to_local_gateway_http_port_when_unset(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv(EnvVar.GATEWAY_HTTP_URL, raising=False)
-        monkeypatch.setenv(EnvVar.OPERATOR_URL, "https://g8e.local:8443")
         service = AppEnrollmentService()
-        assert service._resolve_gateway_http_url() == "http://g8e.local:8080"
-
-    def test_raises_when_neither_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.delenv(EnvVar.GATEWAY_HTTP_URL, raising=False)
-        monkeypatch.delenv(EnvVar.OPERATOR_URL, raising=False)
-        service = AppEnrollmentService()
-        with pytest.raises(ConfigurationError, match="cannot resolve gateway HTTP URL"):
+        assert (
             service._resolve_gateway_http_url()
-
-    def test_raises_when_operator_url_not_https_8443(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """An operator URL that is not https://...:8443 cannot be derived to a
-        valid HTTP bootstrap URL — the derivation produces a non-http:// result
-        and the service raises."""
-        monkeypatch.delenv(EnvVar.GATEWAY_HTTP_URL, raising=False)
-        monkeypatch.setenv(EnvVar.OPERATOR_URL, "ftp://g8e.local:21")
-        service = AppEnrollmentService()
-        with pytest.raises(ConfigurationError, match="cannot derive gateway HTTP URL"):
-            service._resolve_gateway_http_url()
+            == f"http://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
+        )

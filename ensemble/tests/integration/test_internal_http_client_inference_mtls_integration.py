@@ -42,7 +42,10 @@ async def test_dispatch_inference_reaches_gateway_validation_over_real_mtls():
     finally:
         await client.close()
 
+    # Certificates are present, so the Gateway is a configured service: a
+    # transport-level failure (no HTTP status) is a test failure, not a skip.
     details = exc_info.value.error_detail.details
-    if "status_code" not in details:
-        pytest.skip("Gateway not reachable for live mTLS integration")
+    assert "status_code" in details, (
+        f"Gateway did not answer over mTLS: {exc_info.value}"
+    )
     assert details["status_code"] == 400

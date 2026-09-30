@@ -24,29 +24,51 @@ const (
 	StandardCatalogVersion = "1.0.0"
 	StandardCatalogScopeID = "north-star-25"
 
-	scenarioInputSchemaVersion = "1.0.0"
+	scenarioInputSchemaVersion = "1.1.0"
 	scenarioGoldSchemaVersion  = "1.0.0"
-	scenarioInputSchemaRef     = "evaluation-scenario-input@1.0.0"
+	scenarioInputSchemaRef     = "evaluation-scenario-input@1.1.0"
 	scenarioGoldSchemaRef      = "evaluation-scenario-gold@1.0.0"
 )
 
 var northStarCatalogFreezeTime = time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC)
 
-// ScenarioAttachment is one labeled synthetic fixture attachment.
-type ScenarioAttachment struct {
+// ScenarioInlineContent is synthetic content the scenario expects the model to
+// reason over in the same turn. It is rendered directly beneath the user
+// prompt in the outgoing chat message (see renderScenarioMessage) — there is
+// no separate attachment channel on this path, so the model only ever sees it
+// because it is literal text in the message, not because anything was
+// "attached".
+type ScenarioInlineContent struct {
 	Kind    string `json:"kind"`
 	Label   string `json:"label"`
 	Content string `json:"content"`
 }
 
+// ScenarioSimulatedFile describes the content a synthetic operator file Path
+// (e.g. /synthetic/eval/network-summary.txt) holds. Before a scenario's chat
+// request is sent, CampaignChatExecutor dispatches a governed file write that
+// materializes Content at Path on the bound Data Operator (see
+// SimulatedFileWriter), so a real file_read_on_operator or
+// run_commands_with_operator call the model makes resolves against real
+// content instead of a missing path. It is deliberately never sent to the
+// model directly: the point of these scenarios is that the model must call
+// the read tool rather than be told the content.
+type ScenarioSimulatedFile struct {
+	Kind    string `json:"kind"`
+	Label   string `json:"label"`
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 // ScenarioInputFixture is the typed private prompt/input payload for one scenario.
 type ScenarioInputFixture struct {
-	SchemaVersion  string               `json:"schema_version"`
-	ScenarioID     string               `json:"scenario_id"`
-	SyntheticLabel string               `json:"synthetic_label"`
-	UserPrompt     string               `json:"user_prompt"`
-	SystemContext  string               `json:"system_context,omitempty"`
-	Attachments    []ScenarioAttachment `json:"attachments,omitempty"`
+	SchemaVersion  string                  `json:"schema_version"`
+	ScenarioID     string                  `json:"scenario_id"`
+	SyntheticLabel string                  `json:"synthetic_label"`
+	UserPrompt     string                  `json:"user_prompt"`
+	SystemContext  string                  `json:"system_context,omitempty"`
+	InlineContext  []ScenarioInlineContent `json:"inline_context,omitempty"`
+	SimulatedFiles []ScenarioSimulatedFile `json:"simulated_files,omitempty"`
 }
 
 // ScenarioCriterion describes one responsibility-specific scoring criterion.

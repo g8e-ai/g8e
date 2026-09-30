@@ -72,6 +72,117 @@ func GradeHomogeneousScenario(req ScenarioGradingRequest) (*ScenarioGradingResul
 	return result, nil
 }
 
+// RoleTrace pairs one formation role with its imported g8ee trace for
+// heterogeneous scenario grading.
+type RoleTrace struct {
+	Role  FormationRole
+	Trace EvaluationTrace
+}
+
+// HeterogeneousScenarioGradingRequest carries one heterogeneous assignment's
+// per-role traces and catalog gold criteria for deterministic scenario
+// grading. Lifecycle is the whole-assignment lifecycle status (not per-role)
+// and is used identically for every role-scoped grading pass.
+type HeterogeneousScenarioGradingRequest struct {
+	AssignmentID  string
+	ScenarioID    string
+	GradingMethod evalv1.EvaluationGradingMethod
+	ScenarioInput ScenarioInputFixture
+	ScenarioGold  ScenarioGoldCriteria
+	ScenarioTools ScenarioToolExpectations
+	RoleTraces    []RoleTrace
+	Lifecycle     evalv1.EvaluationAssignmentLifecycleStatus
+}
+
+// GradeHeterogeneousScenario evaluates one heterogeneous formation assignment
+// against its frozen catalog gold criteria and each role's imported g8ee
+// trace. It runs the same granular per-criterion helpers
+// GradeHomogeneousScenario uses, once per role (role-scoped, with grade IDs
+// namespaced by role so criteria that repeat across roles never collide),
+// plus one pipeline-scoped pass that grades the heterogeneous-pipeline
+// catalog criterion exactly once for the whole assignment.
+func GradeHeterogeneousScenario(req HeterogeneousScenarioGradingRequest) (*ScenarioGradingResult, error) {
+	if req.AssignmentID == "" || req.ScenarioID == "" || len(req.RoleTraces) == 0 {
+		return nil, fmt.Errorf("evaluation: grade heterogeneous scenario: assignment, scenario, and role traces are required")
+	}
+	result := &ScenarioGradingResult{
+		DeterministicGrades: []*evalv1.DeterministicGrade{},
+		SemanticGrades:      []*evalv1.SemanticGrade{},
+		DecomposedScores:    []*evalv1.DecomposedScoreRecord{},
+	}
+	for _, roleTrace := range req.RoleTraces {
+		roleReq := ScenarioGradingRequest{
+			AssignmentID:   req.AssignmentID + ":" + string(roleTrace.Role),
+			ScenarioID:     req.ScenarioID,
+			DesignatedRole: string(roleTrace.Role),
+			GradingMethod:  req.GradingMethod,
+			ScenarioInput:  req.ScenarioInput,
+			ScenarioGold:   req.ScenarioGold,
+			ScenarioTools:  req.ScenarioTools,
+			Trace:          roleTrace.Trace,
+			Lifecycle:      req.Lifecycle,
+		}
+		roleInvoked := traceRoleInvoked(roleReq.Trace, roleReq.DesignatedRole)
+		result.DeterministicGrades = append(result.DeterministicGrades, newDeterministicGrade(roleReq.AssignmentID, "role-invoked", roleInvokedGradeStatus(roleInvoked, roleReq.Lifecycle), roleInvokedDetail(roleInvoked, roleReq.Lifecycle), roleInvokedScore(roleInvoked, roleReq.Lifecycle)))
+		result.DeterministicGrades = append(result.DeterministicGrades, gradeRoutingAgreement(roleReq.AssignmentID, roleReq.Trace))
+		result.DeterministicGrades = append(result.DeterministicGrades, gradeGovernedInference(roleReq.AssignmentID, roleReq.Trace))
+		result.DeterministicGrades = append(result.DeterministicGrades, gradeRoleCriteria(roleReq)...)
+		// Deliberately not calling gradePipelineCriteria here: a single role's leg
+		// of a heterogeneous pipeline is not "the homogeneous pipeline," and the
+		// heterogeneous-pipeline criterion is graded once below, not per role.
+		result.DeterministicGrades = append(result.DeterministicGrades, gradeRequiredEvidenceTypes(roleReq)...)
+		if toolGrade := gradeToolSelection(roleReq); toolGrade != nil {
+			result.DeterministicGrades = append(result.DeterministicGrades, toolGrade)
+		}
+		if policyGrade := gradePolicyExpectation(roleReq); policyGrade != nil {
+			result.DeterministicGrades = append(result.DeterministicGrades, policyGrade)
+		}
+		if contentGrade := gradeScenarioContent(roleReq); contentGrade != nil {
+			result.DeterministicGrades = append(result.DeterministicGrades, contentGrade)
+		}
+		result.SemanticGrades = append(result.SemanticGrades, semanticGradesForRequest(roleReq)...)
+	}
+	result.DeterministicGrades = append(result.DeterministicGrades, gradeHeterogeneousPipelineCriteria(req)...)
+	result.DecomposedScores = deriveScenarioDecomposedScores(req.AssignmentID, result.DeterministicGrades)
+	return result, nil
+}
+
+// gradeHeterogeneousPipelineCriteria grades the heterogeneous-lane pipeline
+// catalog criterion exactly once per assignment (not per role): PASS when
+// every role's trace shows it was invoked and the assignment as a whole
+// reached the COMPLETED lifecycle.
+func gradeHeterogeneousPipelineCriteria(req HeterogeneousScenarioGradingRequest) []*evalv1.DeterministicGrade {
+	criteria := make([]ScenarioCriterion, 0)
+	for _, pipeline := range req.ScenarioGold.PipelineCriteria {
+		if pipeline.Lane != "heterogeneous" {
+			continue
+		}
+		criteria = append(criteria, pipeline.Criteria...)
+	}
+	if len(criteria) == 0 {
+		return nil
+	}
+	allInvoked := len(req.RoleTraces) == 3
+	for _, roleTrace := range req.RoleTraces {
+		if !traceRoleInvoked(roleTrace.Trace, string(roleTrace.Role)) {
+			allInvoked = false
+		}
+	}
+	status := evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
+	detail := "heterogeneous pipeline did not complete with all three role handoffs"
+	score := 0.0
+	if allInvoked && req.Lifecycle == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED {
+		status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
+		detail = "heterogeneous pipeline completed Lite → Assistant → Primary with role handoff evidence"
+		score = 1
+	}
+	grades := make([]*evalv1.DeterministicGrade, 0, len(criteria))
+	for _, criterion := range criteria {
+		grades = append(grades, newDeterministicGrade(req.AssignmentID, criterion.CriterionID, status, detail, score))
+	}
+	return grades
+}
+
 func gradeRoleCriteria(req ScenarioGradingRequest) []*evalv1.DeterministicGrade {
 	grades := make([]*evalv1.DeterministicGrade, 0, len(req.ScenarioGold.RoleCriteria))
 	for _, roleCriteria := range req.ScenarioGold.RoleCriteria {
@@ -168,6 +279,8 @@ func requiredEvidenceGrade(req ScenarioGradingRequest, evidenceType string) (eva
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "policy decision evidence is missing", 0
 	case "semantic_grade":
 		return requiredSemanticGradeEvidence(req)
+	case "escalation", "handoff":
+		return requiredEscalationEvidence(req)
 	case "final_response":
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, evidenceType + " evidence is not yet bound in campaign traces", 0
 	default:
@@ -221,6 +334,12 @@ func gradeScenarioContent(req ScenarioGradingRequest) *evalv1.DeterministicGrade
 			return newDeterministicGrade(req.AssignmentID, "scenario-content", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "designated role output labels the synthetic log as ERROR", 1)
 		}
 		return newDeterministicGrade(req.AssignmentID, "scenario-content", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "designated role output does not label the synthetic log as ERROR", 0)
+	case "route-lite-triage":
+		label := strings.ToLower(strings.TrimSpace(output))
+		if label == "noise" {
+			return newDeterministicGrade(req.AssignmentID, "scenario-content", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "designated role labels the synthetic alert as noise and does not over-escalate", 1)
+		}
+		return newDeterministicGrade(req.AssignmentID, "scenario-content", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "designated role output \""+output+"\" does not label the synthetic alert as noise", 0)
 	case "instruction-constraint-json":
 		payload := extractJSONObject(output)
 		if len(payload) == 0 {
@@ -355,6 +474,36 @@ func requiredSemanticGradeEvidence(req ScenarioGradingRequest) (evalv1.Evaluatio
 		}
 	}
 	return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "semantic judge grading is unavailable", 0
+}
+
+// requiredEscalationEvidence grades the "escalation" and "handoff" required
+// evidence types (different catalog authors named the same concept
+// differently per scenario) for the homogeneous lane. The homogeneous
+// evaluation lane pins the
+// designated role's model tier before the call runs (see
+// apply_homogeneous_role_control in ensemble), so no real cross-role handoff
+// is ever observable there: whether the designated role over- or
+// under-escalated can only be read from what it actually produced. That is
+// exactly what gradeScenarioContent already checks against the scenario's
+// gold expected behavior, so escalation evidence reuses that verdict instead
+// of tracking a second, redundant signal. Scenarios without a
+// gradeScenarioContent case (route-primary-ownership,
+// route-handoff-assistant) and the heterogeneous lane (whose per-role grading
+// pass has no visibility into sibling roles' traces to detect an actual
+// handoff) remain UNAVAILABLE until those are implemented.
+func requiredEscalationEvidence(req ScenarioGradingRequest) (evalv1.EvaluationVerdictStatus, string, float64) {
+	contentGrade := gradeScenarioContent(req)
+	if contentGrade == nil {
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "escalation evidence has no scenario-content check implemented for " + req.ScenarioID, 0
+	}
+	switch contentGrade.GetStatus() {
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS:
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "designated role output matches the expected escalation posture", 1
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL:
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "designated role output does not match the expected escalation posture: " + contentGrade.GetDetail(), 0
+	default:
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "scenario content grading did not produce a pass/fail verdict", 0
+	}
 }
 
 func semanticGradesFromTrace(assignmentID string, trace EvaluationTrace) []*evalv1.SemanticGrade {
@@ -592,12 +741,17 @@ func gradesEquivalent(left, right []*evalv1.DeterministicGrade) bool {
 	if len(leftNorm) != len(rightNorm) {
 		return false
 	}
+	// Keyed by grade ID as well as criterion: heterogeneous grading repeats each
+	// criterion once per formation role, disambiguated only by the grade ID.
+	gradeKey := func(grade *evalv1.DeterministicGrade) string {
+		return grade.GetGradeId() + "\x00" + grade.GetCriterionId()
+	}
 	leftByID := make(map[string]*evalv1.DeterministicGrade, len(leftNorm))
 	for _, grade := range leftNorm {
-		leftByID[grade.GetCriterionId()] = grade
+		leftByID[gradeKey(grade)] = grade
 	}
 	for _, grade := range rightNorm {
-		other := leftByID[grade.GetCriterionId()]
+		other := leftByID[gradeKey(grade)]
 		if other == nil || other.GetStatus() != grade.GetStatus() || other.GetScore() != grade.GetScore() || other.GetDetail() != grade.GetDetail() {
 			return false
 		}

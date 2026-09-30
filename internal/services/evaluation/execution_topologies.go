@@ -9,8 +9,10 @@ package evaluation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -231,8 +233,127 @@ type ExecutionTopologies struct {
 }
 
 // NewExecutionTopologies returns the preregistered sovereign benchmark formations.
+// It loads from eval/formation-catalog.json if available, otherwise uses hardcoded defaults.
 func NewExecutionTopologies() (*ExecutionTopologies, error) {
-	formations := defaultExecutionTopologies()
+	var formations []Formation
+
+	// Try to load from checked-in catalog file first
+	catalogPath := "eval/formation-catalog.json"
+	if data, err := os.ReadFile(catalogPath); err == nil {
+		var catalogData struct {
+			SchemaVersion string `json:"schema_version"`
+			Formations    []struct {
+				ID                string `json:"id"`
+				DisplayName       string `json:"display_name"`
+				Description       string `json:"description"`
+				MaxVRAMMiB        uint64 `json:"max_vram_mib"`
+				RelaxedValidation bool   `json:"relaxed_validation,omitempty"`
+				Primary           struct {
+					VariantID             string `json:"variant_id"`
+					DisplayName           string `json:"display_name"`
+					Provider              string `json:"provider"`
+					Family                string `json:"family"`
+					ProviderClass         string `json:"provider_class"`
+					ServedModelTag        string `json:"served_model_tag"`
+					Trust                 string `json:"trust"`
+					Quantization          string `json:"quantization,omitempty"`
+					ParameterCount        uint64 `json:"parameter_count,omitempty"`
+					EstimatedModelVRAMMiB uint64 `json:"estimated_model_vram_mib,omitempty"`
+					EstimatedKVCacheMiB   uint64 `json:"estimated_kv_cache_mib,omitempty"`
+					ModelDigest           string `json:"model_digest,omitempty"`
+				} `json:"primary"`
+				Assistant struct {
+					VariantID             string `json:"variant_id"`
+					DisplayName           string `json:"display_name"`
+					Provider              string `json:"provider"`
+					Family                string `json:"family"`
+					ProviderClass         string `json:"provider_class"`
+					ServedModelTag        string `json:"served_model_tag"`
+					Trust                 string `json:"trust"`
+					Quantization          string `json:"quantization,omitempty"`
+					ParameterCount        uint64 `json:"parameter_count,omitempty"`
+					EstimatedModelVRAMMiB uint64 `json:"estimated_model_vram_mib,omitempty"`
+					EstimatedKVCacheMiB   uint64 `json:"estimated_kv_cache_mib,omitempty"`
+					ModelDigest           string `json:"model_digest,omitempty"`
+				} `json:"assistant"`
+				Lite struct {
+					VariantID             string `json:"variant_id"`
+					DisplayName           string `json:"display_name"`
+					Provider              string `json:"provider"`
+					Family                string `json:"family"`
+					ProviderClass         string `json:"provider_class"`
+					ServedModelTag        string `json:"served_model_tag"`
+					Trust                 string `json:"trust"`
+					Quantization          string `json:"quantization,omitempty"`
+					ParameterCount        uint64 `json:"parameter_count,omitempty"`
+					EstimatedModelVRAMMiB uint64 `json:"estimated_model_vram_mib,omitempty"`
+					EstimatedKVCacheMiB   uint64 `json:"estimated_kv_cache_mib,omitempty"`
+					ModelDigest           string `json:"model_digest,omitempty"`
+				} `json:"lite"`
+			} `json:"formations"`
+		}
+
+		if err := json.Unmarshal(data, &catalogData); err == nil {
+			formations = make([]Formation, 0, len(catalogData.Formations))
+			for _, f := range catalogData.Formations {
+				formations = append(formations, Formation{
+					ID:                f.ID,
+					DisplayName:       f.DisplayName,
+					Description:       f.Description,
+					MaxVRAMMiB:        f.MaxVRAMMiB,
+					RelaxedValidation: f.RelaxedValidation,
+					Primary: FormationModel{
+						VariantID:             f.Primary.VariantID,
+						DisplayName:           f.Primary.DisplayName,
+						Provider:              f.Primary.Provider,
+						Family:                f.Primary.Family,
+						ProviderClass:         f.Primary.ProviderClass,
+						ServedModelTag:        f.Primary.ServedModelTag,
+						Trust:                 FormationTrust(f.Primary.Trust),
+						Quantization:          f.Primary.Quantization,
+						ParameterCount:        f.Primary.ParameterCount,
+						EstimatedModelVRAMMiB: f.Primary.EstimatedModelVRAMMiB,
+						EstimatedKVCacheMiB:   f.Primary.EstimatedKVCacheMiB,
+						ModelDigest:           f.Primary.ModelDigest,
+					},
+					Assistant: FormationModel{
+						VariantID:             f.Assistant.VariantID,
+						DisplayName:           f.Assistant.DisplayName,
+						Provider:              f.Assistant.Provider,
+						Family:                f.Assistant.Family,
+						ProviderClass:         f.Assistant.ProviderClass,
+						ServedModelTag:        f.Assistant.ServedModelTag,
+						Trust:                 FormationTrust(f.Assistant.Trust),
+						Quantization:          f.Assistant.Quantization,
+						ParameterCount:        f.Assistant.ParameterCount,
+						EstimatedModelVRAMMiB: f.Assistant.EstimatedModelVRAMMiB,
+						EstimatedKVCacheMiB:   f.Assistant.EstimatedKVCacheMiB,
+						ModelDigest:           f.Assistant.ModelDigest,
+					},
+					Lite: FormationModel{
+						VariantID:             f.Lite.VariantID,
+						DisplayName:           f.Lite.DisplayName,
+						Provider:              f.Lite.Provider,
+						Family:                f.Lite.Family,
+						ProviderClass:         f.Lite.ProviderClass,
+						ServedModelTag:        f.Lite.ServedModelTag,
+						Trust:                 FormationTrust(f.Lite.Trust),
+						Quantization:          f.Lite.Quantization,
+						ParameterCount:        f.Lite.ParameterCount,
+						EstimatedModelVRAMMiB: f.Lite.EstimatedModelVRAMMiB,
+						EstimatedKVCacheMiB:   f.Lite.EstimatedKVCacheMiB,
+						ModelDigest:           f.Lite.ModelDigest,
+					},
+				})
+			}
+		}
+	}
+
+	// Fall back to defaults if catalog file not loaded
+	if len(formations) == 0 {
+		formations = defaultExecutionTopologies()
+	}
+
 	for _, formation := range formations {
 		if err := formation.Validate(); err != nil {
 			return nil, err
@@ -260,6 +381,64 @@ func (t *ExecutionTopologies) Formation(id string) (Formation, error) {
 		}
 	}
 	return Formation{}, fmt.Errorf("formation %q was not found: %w", id, constants.ErrFormationInvalid)
+}
+
+// AddOrUpdateFormation adds a new catalog formation or replaces the existing
+// entry with the same ID, validating the formation before it is admitted.
+func AddOrUpdateFormation(topologies *ExecutionTopologies, formation Formation) (*ExecutionTopologies, error) {
+	if topologies == nil {
+		return nil, fmt.Errorf("evaluation: add formation: %w", constants.ErrMissingRequiredField)
+	}
+	if err := formation.Validate(); err != nil {
+		return nil, err
+	}
+
+	formations := make([]Formation, 0, len(topologies.formations)+1)
+	replaced := false
+	for _, existing := range topologies.formations {
+		if existing.ID == formation.ID {
+			formations = append(formations, formation)
+			replaced = true
+			continue
+		}
+		formations = append(formations, existing)
+	}
+	if !replaced {
+		formations = append(formations, formation)
+	}
+
+	return &ExecutionTopologies{formations: formations}, nil
+}
+
+// RemoveFormation removes the catalog formation matching id and returns the
+// updated catalog along with the removed entry.
+func RemoveFormation(topologies *ExecutionTopologies, id string) (*ExecutionTopologies, *Formation, error) {
+	if topologies == nil {
+		return nil, nil, fmt.Errorf("evaluation: remove formation: %w", constants.ErrMissingRequiredField)
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, nil, fmt.Errorf("evaluation: remove formation: id is required: %w", constants.ErrMissingRequiredField)
+	}
+
+	var removed *Formation
+	remaining := make([]Formation, 0, len(topologies.formations))
+	for _, existing := range topologies.formations {
+		if removed == nil && existing.ID == id {
+			found := existing
+			removed = &found
+			continue
+		}
+		remaining = append(remaining, existing)
+	}
+	if removed == nil {
+		return nil, nil, fmt.Errorf("formation %q was not found: %w", id, constants.ErrFormationInvalid)
+	}
+	if len(remaining) == 0 {
+		return nil, nil, fmt.Errorf("evaluation: remove formation: cannot remove the last catalog formation")
+	}
+
+	return &ExecutionTopologies{formations: remaining}, removed, nil
 }
 
 func defaultExecutionTopologies() []Formation {
@@ -316,6 +495,9 @@ type FormationAttestation struct {
 // FormationObserverEvidence carries the typed provider-boundary witness.
 type FormationObserverEvidence struct {
 	Window *evalv1.ProviderBoundaryObservationWindow
+	// AdditionalWindows are the windows for a role's further provider attempts
+	// (FormationRoleResult.AdditionalProviderAttemptIDs), in the same order.
+	AdditionalWindows []*evalv1.ProviderBoundaryObservationWindow
 }
 
 // FormationProvenanceOperator attests sovereign model weights at their storage boundary.
@@ -357,6 +539,15 @@ type FormationRoleResult struct {
 	GenerationTokens        uint32
 	GenerationDurationNanos uint64
 	PeakVRAMMiB             uint64
+	FinishReason            string
+	LoadState               evalv1.EvaluationLoadState
+	RetryCount              uint32
+	// AdditionalProviderAttemptIDs lists every further provider attempt the role
+	// made after ProviderAttemptID (a g8ee tool loop makes one per model turn).
+	// Each one must carry its own observer window; role peak VRAM spans them all.
+	AdditionalProviderAttemptIDs []string
+	// Trace is the role's g8ee trace when the role executed through g8ee.
+	Trace EvaluationTrace
 }
 
 // FormationRoleExecutor invokes the role through the governed model path.
@@ -400,10 +591,17 @@ type FormationRoleTelemetry struct {
 	GenerationTokens        uint32
 	GenerationDurationNanos uint64
 	GenerationTokensPerSec  float64
+	FinishReason            string
+	LoadState               evalv1.EvaluationLoadState
+	RetryCount              uint32
 	StateMutation           bool
 	PolicyValidation        FormationPolicyValidation
 	ObserverEvidence        *FormationObserverEvidence
 	ProvenanceEvidence      *FormationAttestation
+	// Trace is the full g8ee trace for this role, present when execution routed
+	// through g8ee's chat/trace pipeline instead of the direct-dispatch runner.
+	// Nil for the direct-dispatch runner.
+	Trace EvaluationTrace
 }
 
 // FormationRunResult is the benchmark output for one formation.
@@ -543,7 +741,13 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 			FormationID: formation.ID, AttemptID: attemptID, Role: role, Model: model, InputState: append([]byte(nil), state...), MutationCandidate: append([]byte(nil), state...),
 		})
 		failed := executeErr != nil
-		observation, observeErr := r.observer.Finalize(ctx, attemptID, model, failed)
+		// The observer window is keyed by the provider attempt that actually ran.
+		// Direct dispatch echoes attemptID back; g8ee mints its own.
+		observationID := attemptID
+		if !failed && roleResult.ProviderAttemptID != "" {
+			observationID = roleResult.ProviderAttemptID
+		}
+		observation, observeErr := r.observer.Finalize(ctx, observationID, model, failed)
 		if observeErr != nil {
 			if executeErr != nil {
 				return result, fmt.Errorf("formation: role %s: %w", role, errors.Join(executeErr, observeErr))
@@ -559,6 +763,18 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 		if observation == nil || observation.Window == nil {
 			return result, fmt.Errorf("formation: observer evidence %s: %w", role, constants.ErrFormationWitnessUnavailable)
 		}
+		observedPeak := observedPeakVRAMMiB(observation.Window)
+		for _, extraID := range roleResult.AdditionalProviderAttemptIDs {
+			extra, extraErr := r.observer.Finalize(ctx, extraID, model, false)
+			if extraErr != nil {
+				return result, fmt.Errorf("formation: observer finalize %s attempt %s: %w", role, extraID, extraErr)
+			}
+			if extra == nil || extra.Window == nil {
+				return result, fmt.Errorf("formation: observer evidence %s attempt %s: %w", role, extraID, constants.ErrFormationWitnessUnavailable)
+			}
+			observedPeak = max(observedPeak, observedPeakVRAMMiB(extra.Window))
+			observation.AdditionalWindows = append(observation.AdditionalWindows, extra.Window)
+		}
 		telemetry := FormationRoleTelemetry{
 			Role: role, Model: model, AttemptID: attemptID,
 			AttestationStatus:       formationAttestationStatus(model.Trust),
@@ -571,14 +787,18 @@ func (r *FormationRunner) Run(ctx context.Context, formation Formation, initialS
 			TTFTNanos:               roleResult.TTFTNanos,
 			GenerationTokens:        roleResult.GenerationTokens,
 			GenerationDurationNanos: roleResult.GenerationDurationNanos, StateMutation: roleResult.StateMutation,
+			FinishReason:       roleResult.FinishReason,
+			LoadState:          roleResult.LoadState,
+			RetryCount:         roleResult.RetryCount,
 			ObserverEvidence:   observation,
 			ProvenanceEvidence: bindFormationProvenanceEvidence(attestationForRole(attestations, role), roleResult.ProviderAttemptID),
+			Trace:              roleResult.Trace,
 		}
 		if telemetry.GenerationDurationNanos > 0 {
 			telemetry.GenerationTokensPerSec = float64(telemetry.GenerationTokens) / (float64(telemetry.GenerationDurationNanos) / float64(time.Second))
 		}
 		if telemetry.PeakVRAMMiB == 0 {
-			telemetry.PeakVRAMMiB = observedPeakVRAMMiB(observation.Window)
+			telemetry.PeakVRAMMiB = observedPeak
 		}
 		if telemetry.PeakVRAMMiB > result.PeakVRAMMiB {
 			result.PeakVRAMMiB = telemetry.PeakVRAMMiB

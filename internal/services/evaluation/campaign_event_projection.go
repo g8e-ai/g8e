@@ -33,7 +33,7 @@ type PublicModelRoleInvocationSignal struct {
 }
 
 // PublicMetricDelta is the explorer live-event metric_delta object.
-// Keys are metric ids (pass_rate, input_tokens, latency_ms, tokens_per_second).
+// Keys are metric ids (pass_rate, input_tokens, latency_ms, tokens_per_second, retries).
 // Values are the disclosure-safe MetricValue shape.
 type PublicMetricDelta map[string]PublicMetricValue
 

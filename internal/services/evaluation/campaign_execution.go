@@ -44,10 +44,10 @@ func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID
 		return ChatProbeRequest{}, err
 	}
 	variant := homogeneous.Homogeneous.GetCandidateVariant()
-	message := input.UserPrompt
-	if message == "" {
+	if input.UserPrompt == "" {
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: scenario %s missing user prompt", assignment.GetScenarioId())
 	}
+	message := renderScenarioMessage(input.UserPrompt, input.InlineContext)
 	return ChatProbeRequest{
 		AssignmentID:            assignment.GetAssignmentId(),
 		EvaluationAttemptID:     attemptID,
@@ -63,16 +63,16 @@ func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID
 		DesignatedModelRole:     role,
 		Message:                 message,
 		GradingMethod:           grading.GradingMethod,
-		GoldSummary:             buildChatProbeGoldSummary(input, grading),
+		GoldSummary:             buildChatProbeGoldSummary(message, grading),
 	}, nil
 }
 
-func buildChatProbeGoldSummary(input ScenarioInputFixture, grading CampaignChatGradingContext) *ChatProbeGoldSummary {
+func buildChatProbeGoldSummary(message string, grading CampaignChatGradingContext) *ChatProbeGoldSummary {
 	if grading.GradingMethod != evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE {
 		return nil
 	}
 	return &ChatProbeGoldSummary{
-		UserPrompt:       input.UserPrompt,
+		UserPrompt:       message,
 		ExpectedBehavior: grading.ScenarioGold.ExpectedBehavior,
 		RequiredConcepts: nonNullStringSlice(grading.RequiredConcepts),
 		ExpectedTools:    nonNullStringSlice(grading.ScenarioTools.ExpectedTools),

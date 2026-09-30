@@ -200,3 +200,12 @@ func TestParseMeminfoKB(t *testing.T) {
 		})
 	}
 }
+
+func TestWindowStore_LoadRejectsPathHostileAttemptID(t *testing.T) {
+	t.Parallel()
+	store, err := NewWindowStore(storagetest.NewTestFileSvc(t, t.TempDir()))
+	require.NoError(t, err)
+
+	_, err = store.Load(context.Background(), "a/b")
+	assert.ErrorIs(t, err, constants.ErrInferenceProviderAttemptIDInvalid)
+}

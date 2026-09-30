@@ -43,10 +43,10 @@ The fixtures currently use `ds-exploratory-baseline-20260914-r2`, `ds-legacy-pub
 
 ## Routes
 
-The application uses a hash router so local static serving and the gateway-owned public origin require no server-side route rewriting.
+The application uses `BrowserRouter` for client-side routing, which relies on server-side route rewriting to serve the SPA for all non-asset paths. The gateway's public read listener is configured to serve the evaluation explorer at its root path with appropriate rewrite rules.
 
-- `#/` overview: feed state, live panel, dataset selector, aggregate counts, role leaders, recent runs.
-- `#/models` models: model catalog with search, filters, sorting, and comparison.
+- `/` overview: feed state, live panel, dataset selector, aggregate counts, role leaders, recent runs.
+- `/models` models: model catalog with search, filters, sorting, and comparison.
 - `#/models/:variantId` model-detail: per-model identity, metrics, suite results, repeatability, performance, tokens, outcomes, source runs.
 - `#/evaluations` evaluations: evaluation list with dataset, suite, status, quality, model, role, and date filters.
 - `#/evaluations/:runId` evaluation-detail: run status, progress, quality, model-role map, metrics, verification, resources, assignment table.
@@ -70,7 +70,7 @@ Verified model quality is a stored publication result, not a browser promotion. 
 
 ### Campaign wire and view boundary
 
-Campaign lifecycle envelopes use `1.0.0`. Enriched terminal assignment-result envelopes use `1.1.0` and carry `PublicAssignmentResultProjection` data plus the named `benchmark_observations` and `resource_summary` extensions. Historical terminal result envelopes use `1.0.0` and must not contain enriched fields. The campaign-wire validator checks the version-specific allowlist, canonical protobuf enum names, decimal uint64 strings, closed activity and unavailable enums, lowercase SHA-256 bindings, and the required value-or-reason metric shape before the adapter runs.
+Campaign lifecycle envelopes use `1.0.0`. Enriched terminal assignment-result envelopes use `1.1.0` and carry `PublicAssignmentResultProjection` data plus the named `benchmark_observations`, `resource_summary`, `model_response`, `failure_output`, and `role_transcripts` extensions. `role_transcripts` is validated against a closed schema (`assertRoleTranscripts` in `validators.ts`) that mirrors the gateway disclosure validator: roles `primary`/`assistant`/`lite`, lowercase SHA-256 `trace_digest`/`arguments_hash`, and `result_redaction` ∈ `truncated`/`restricted`. Historical terminal result envelopes use `1.0.0` and must not contain enriched fields. The campaign-wire validator checks the version-specific allowlist, canonical protobuf enum names, decimal uint64 strings, closed activity and unavailable enums, lowercase SHA-256 bindings, and the required value-or-reason metric shape before the adapter runs.
 
 The closed public unavailable reasons are `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. `observed` activity with zero records is distinct from `unavailable`; `not_applicable` is reserved for a scenario that does not define the activity family. `no_scored_calls` means resource observations are unavailable, not observed zero. The adapter maps the canonical wire spellings to the lowercase view enums without widening the vocabulary or replacing missingness with zero.
 

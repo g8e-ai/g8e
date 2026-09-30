@@ -59,7 +59,6 @@ func (fs *localFS) CreateRuntimeTree(ctx context.Context) error {
 		{filepath.Join(fs.runtimeDir, constants.ProtocolDirname), constants.PermDirStandard},
 		{filepath.Join(fs.runtimeDir, constants.DocsDirname), constants.PermDirStandard},
 		{filepath.Join(fs.runtimeDir, constants.InferenceDirname), constants.PermDirStandard},
-		{filepath.Join(fs.runtimeDir, constants.InferenceDirname, constants.ModelsDirname), constants.PermDirStandard},
 		{filepath.Join(fs.runtimeDir, constants.PublicFeedDirname), constants.PermDirPrivate},
 		{filepath.Join(fs.runtimeDir, constants.PublicMirrorDirname), constants.PermDirPrivate},
 	}

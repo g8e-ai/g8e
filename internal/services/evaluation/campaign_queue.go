@@ -30,10 +30,11 @@ const (
 	DefaultCampaignInventoryRelDirname = constants.EvaluationDirname + "/" + constants.EvaluationInventoriesDirname
 
 	// Checked-in genesis program inventory.
-	DefaultBaseModelInventoryRelPath    = "eval/base-model-inventory.json"
-	DefaultBaseInitCampaignQueueRelPath = "eval/base-init-campaign-queue.json"
-	DefaultRolloutIntakePriorityRelPath = "eval/rollout-intake-priority.json"
-	DefaultGenesisHomogeneousCampaignID = "eval-genesis-homogeneous"
+	DefaultBaseModelInventoryRelPath      = "eval/base-model-inventory.json"
+	DefaultBaseInitCampaignQueueRelPath   = "eval/base-init-campaign-queue.json"
+	DefaultRolloutIntakePriorityRelPath   = "eval/rollout-intake-priority.json"
+	DefaultFormationCatalogOverlayRelPath = "eval/formation-catalog-overlay.json"
+	DefaultGenesisHomogeneousCampaignID   = "eval-genesis-homogeneous"
 )
 
 // QueueLogDir returns the canonical runtime-relative directory for one rollout.

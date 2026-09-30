@@ -443,6 +443,10 @@ message EvaluationScenarioDefinition {
   g8e.compliance.v1.ComplianceEvidenceReference gold_criteria_ref = 11;
   repeated PublicScenarioCriterion public_criteria = 12;
   repeated PublicToolScoreDimensionRequirement public_tool_score_dimensions = 13;
+  // eligible_roles lists the model roles that perform this task in g8ee. The
+  // homogeneous scheduler assigns the scenario only to these roles; the frozen
+  // catalog digest binds the set.
+  repeated ModelCampaignRole eligible_roles = 14;
 }
 
 // ModelVariant is one frozen provider-backed model identity in a campaign.

@@ -10,6 +10,7 @@
 package gwremote
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,6 +57,9 @@ func TestProviderObservationGatewayRead_LiveNotFound(t *testing.T) {
 	require.NoError(t, err)
 
 	remote, err := NewProviderObservationRemote(fileSvc, cfg)
+	if errors.Is(err, constants.ErrNotAuthenticated) {
+		t.Skip("skipping live gateway test: no CLI credentials available for the running gateway")
+	}
 	require.NoError(t, err)
 	require.NotNil(t, remote)
 

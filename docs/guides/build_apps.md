@@ -44,8 +44,8 @@ Use MCP for standard tool discovery and invocation. The unified `/mcp` endpoint 
 
 ```bash
 curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
 ```
@@ -58,8 +58,8 @@ Use A2A for a configured downstream skill. The Gateway accepts the `a2a/call` JS
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/a2a/call \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"file.read","payload":{"path":"/etc/hosts"},"execution_id":"task-1"}}'
 ```
@@ -105,7 +105,7 @@ Run the CLI enrollment coordinator for local testing and human-authorized integr
 ./g8e auth enroll user
 ```
 
-The coordinator creates or recovers the user and CLI session, generates a file-backed ECDSA P-256 key, and writes `.g8e/pki/cli.crt` and `.g8e/pki/cli.key`. It installs the Gateway Root CA in the OS trust store unless `--no-system-trust` is set. Passkey enrollment is required by notary posture and optional in postures that do not enforce L3.
+The coordinator creates or recovers the user and CLI session, generates a file-backed ECDSA P-256 key, and writes `.g8e/cli.crt` and `.g8e/cli.key`. It installs the Gateway Root CA in the OS trust store unless `--no-system-trust` is set. Passkey enrollment is required by notary posture and optional in postures that do not enforce L3.
 
 The CLI certificate carries a SPIFFE identity of the form `spiffe://g8e.local/cli/<user_id>/<session_id>`. Direct mutation envelopes submitted with this certificate still bind a target `operator_id` or `operator_session_id`, and their `cli_session_id` must match the certificate identity.
 
@@ -133,8 +133,8 @@ Submit the CSR with the enrolled CLI credentials:
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/pki/apps/delegated \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d @app-enrollment.json
 ```
@@ -304,8 +304,8 @@ Identity mismatch returns HTTP 403 without execution.
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```

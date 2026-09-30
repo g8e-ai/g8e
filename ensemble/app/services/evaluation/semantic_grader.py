@@ -43,7 +43,7 @@ def _build_interaction_trace(
         sections.append(f"Designated role output:\n{designated_role_output}")
     if tool_calls:
         tool_lines = [
-            f"- {call.tool_name} success={call.success} execution_id={call.execution_id or ''}"
+            f"- {call.tool_name} success={call.success} arguments={call.arguments_json or '{}'}"
             for call in tool_calls
         ]
         sections.append("Tool calls:\n" + "\n".join(tool_lines))

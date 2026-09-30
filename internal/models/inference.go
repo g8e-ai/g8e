@@ -452,6 +452,31 @@ func ClassifyLoadState(loadDurationNS *int64) operatorv1.InferenceLoadState {
 	return operatorv1.InferenceLoadState_INFERENCE_LOAD_STATE_COLD
 }
 
+// maxProviderAttemptIDBytes bounds a provider attempt ID that is used as a
+// runtime file name.
+const maxProviderAttemptIDBytes = 128
+
+// ValidateProviderAttemptID reports whether id is safe to use as the file name
+// of a durable per-attempt record. Provider attempt IDs arrive in governed
+// request payloads and name files under .g8e/, so only ASCII letters, digits,
+// '-', '_' and '.' are accepted, and "." and ".." are rejected.
+func ValidateProviderAttemptID(id string) error {
+	if id == "" {
+		return fmt.Errorf("models: provider attempt ID: %w", constants.ErrInferenceProviderAttemptRequired)
+	}
+	if len(id) > maxProviderAttemptIDBytes || id == "." || id == ".." {
+		return fmt.Errorf("models: provider attempt ID: %w", constants.ErrInferenceProviderAttemptIDInvalid)
+	}
+	for _, char := range id {
+		switch {
+		case char >= 'a' && char <= 'z', char >= 'A' && char <= 'Z', char >= '0' && char <= '9', char == '-', char == '_', char == '.':
+		default:
+			return fmt.Errorf("models: provider attempt ID: %w", constants.ErrInferenceProviderAttemptIDInvalid)
+		}
+	}
+	return nil
+}
+
 func IsSHA256Hex(value string) bool {
 	if len(value) != sha256.Size*2 || value != strings.ToLower(value) {
 		return false

@@ -14,10 +14,10 @@ const scenario = {
 };
 
 describe('ScenarioContextCard', () => {
-  it('renders scenario prose and criterion chips without a section heading', () => {
+  it('renders scenario prose and tool notes without criterion chips', () => {
     render(<ScenarioContextCard scenario={scenario} />);
     expect(screen.getByText('Select an approved tool.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Public criteria')).toHaveTextContent('Tool choice · required');
+    expect(screen.queryByLabelText('Public criteria')).not.toBeInTheDocument();
     expect(screen.getByText('Allowed: search')).toBeInTheDocument();
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });

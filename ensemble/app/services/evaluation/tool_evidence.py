@@ -8,8 +8,9 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import TYPE_CHECKING
+
+from g8e.eval.v1.trace_digest import marshal_canonical_json
 
 from app.constants import CommandErrorType
 from app.models.agent import StreamChunkData
@@ -26,17 +27,8 @@ if TYPE_CHECKING:
     from app.models.agent import AgentStreamState
 
 
-def _hash_payload(value: object) -> str:
-    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    return hashlib.sha256(encoded.encode()).hexdigest()
-
-
-def _arguments_hash(chunk: StreamChunkData) -> str:
-    if chunk.command:
-        return _hash_payload({"command": chunk.command})
-    if chunk.result is not None:
-        return _hash_payload(chunk.result.model_dump(mode="json"))
-    return ""
+def _canonical_json(value: object) -> str:
+    return marshal_canonical_json(value).decode()
 
 
 def _policy_outcome_from_result(result: CommandExecutionResult) -> str:
@@ -91,11 +83,15 @@ def record_tool_call_completed(
         return
     execution_id = chunk.execution_id or f"{tool_name}:{len(state.tool_calls) + 1}"
     success = bool(chunk.success)
+    arguments_json = _canonical_json(chunk.arguments or {})
     state.tool_calls.append(
         EvaluationToolCallRecord(
             call_id=execution_id,
             tool_name=tool_name,
-            arguments_hash=_arguments_hash(chunk),
+            arguments_json=arguments_json,
+            arguments_hash=hashlib.sha256(arguments_json.encode()).hexdigest(),
+            command=chunk.command or "",
+            result_json=_canonical_json(chunk.result.model_dump(mode="json")) if chunk.result is not None else "",
             success=success,
             is_operator_tool=bool(chunk.is_operator_tool),
             execution_id=execution_id,
