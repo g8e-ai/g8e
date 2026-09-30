@@ -74,6 +74,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-EVAL-CAMP-02 | The default campaign lane is `model_role`, which schedules each frozen model variant against catalog scenarios and records role-specific results. The `system` lane supports heterogeneous multi-model formations with deterministic per-formation binding. |
 | INV-EVAL-CAMP-03 | On `g8e eval rollout run`, strict witness verification MUST default true and MUST fail closed when coverage is missing and `--require-witness` is active. On `g8e eval runs start`, witness requirements remain opt-in via `--require-observation`, `--require-provenance`, or `--require-witness`. |
 | INV-EVAL-CAMP-04 | Homogeneous campaigns MUST apply authentic production agent personas (Sage, Dash) bound to real ReAct agentic loops in the Data Operator, not synthetic harnesses or mock loops. |
+| INV-EVAL-CAMP-05 | Each catalog scenario MUST declare `eligible_roles`: the model roles that perform that task in g8ee (`ensemble/app/constants/chat_model_call_sites.py`). The homogeneous scheduler MUST assign a scenario only to its eligible roles and MUST fail closed (`ErrEvaluationScenarioRolesUnassigned`) on a scenario with none. `ValidateHomogeneousAssignmentMatrix` MUST reject an assignment for a role the scenario does not declare (`ErrEvaluationRoleNotEligible`). The frozen catalog digest binds the eligible-role sets. |
 
 ### Witness Separation (`INV-EVAL-WIT`)
 
@@ -216,13 +217,13 @@ After pulling, `g8e eval models freeze` discovers live provider inventory throug
 
 `g8e eval models add` inserts or replaces one variant and recomputes the registry digest. When `--digest` is omitted, `add` derives a placeholder digest that lacks attestation authority; re-freeze from the provider before scored runs. `g8e eval models remove` deletes one variant and recomputes the same values. `g8e eval models import` copies selected variants from the catalog into the runtime registry.
 
-**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model across all 25 catalog scenarios in all 3 roles (primary, assistant, lite), resulting in 75 scored assignments taking ~45–60 minutes per model.
+**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model on all 25 catalog scenarios, each under only the roles that perform that task in g8ee: 10 bounded classification, verification, and output-analysis scenarios run under `lite`; 12 tool-loop, policy, and recovery scenarios run under `primary` and `assistant`; `route-primary-ownership` and `final-response-diagnosis` run under `primary`; and `route-handoff-assistant` runs under `assistant`. This yields 37 scored assignments per model.
 
 To accelerate high-throughput qualification, `g8e eval rollout run` supports a two-tier screening pipeline:
 
-1. **Tier 1 — Fast Smoke Gate** (`--gate-smoke`): Executes 5 high-discriminative scenarios across 3 roles (15 assignments, ~8 minutes per model). Scenarios exercise syntax and tool execution, investigation and diagnostic reasoning, dissent and safety compliance, multi-step remediation, and fast-path direct instruction response. Requires 100% pass status on witness and verification gates.
+1. **Tier 1 — Fast Smoke Gate** (`--gate-smoke`): Executes 5 high-discriminative scenarios under their eligible roles (8 assignments per model). Scenarios exercise syntax and tool execution, investigation and diagnostic reasoning, dissent and safety compliance, multi-step remediation, and fast-path direct instruction response. Requires 100% pass status on witness and verification gates.
 
-2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 75-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
+2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 37-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
 
 ```bash
 ./g8e eval rollout run --gate-smoke --promote-on-pass

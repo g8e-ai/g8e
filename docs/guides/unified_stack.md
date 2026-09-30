@@ -174,10 +174,10 @@ Provider host (Windows + Ollama example)
 
 Keep internal plan vocabulary separate from public campaign branding.
 
-| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (3 roles × 25 scenarios) |
+| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (25 scenarios × eligible roles) |
 | --- | --- | --- | --- | --- |
-| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **75** |
-| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **225** |
+| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **37** |
+| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **111** |
 | **Full homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-<seq>` | `.g8e/eval/model-inventory.json` (from `inventory freeze`) | all discovered models |
 
 Rules:
@@ -189,7 +189,7 @@ Rules:
 
 ### Init campaign inventory (one model per campaign)
 
-Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 75 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
+Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 37 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
 
 Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/examples/README.md) for the public/private boundary.
 
@@ -262,7 +262,7 @@ DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operat
 ./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
-Matrix size for three models: **225** assignments (3 × 3 roles × 25 scenarios).
+Matrix size for three models: **111** assignments (3 × 37 role-eligible scenario cells).
 
 ## Environment configuration
 

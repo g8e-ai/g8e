@@ -280,7 +280,7 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 		assert.NotEmpty(t, modelSummary.VariantID)
 		roles[modelSummary.Role] = struct{}{}
 	}
-	assert.Equal(t, map[string]struct{}{"assistant": {}, "lite": {}, "primary": {}}, roles)
+	assert.Equal(t, map[string]struct{}{"lite": {}, "primary": {}}, roles)
 
 	state, err := publicationState.Load(context.Background(), run.GetRunId())
 	require.NoError(t, err)
@@ -296,7 +296,7 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 
 	backfillCount, err := coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
 	require.NoError(t, err)
-	assert.Equal(t, 3, backfillCount)
+	assert.Equal(t, 2, backfillCount)
 	retryCount, err := coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
 	require.NoError(t, err)
 	assert.Equal(t, 0, retryCount)
