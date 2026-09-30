@@ -3,8 +3,8 @@ doc_id: evals
 title: Evaluation Programs
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - internal/services/evaluation/
   - internal/cli/cmd/eval/
@@ -74,6 +74,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-EVAL-CAMP-02 | The default campaign lane is `model_role`, which schedules each frozen model variant against catalog scenarios and records role-specific results. The `system` lane supports heterogeneous multi-model formations with deterministic per-formation binding. |
 | INV-EVAL-CAMP-03 | On `g8e eval rollout run`, strict witness verification MUST default true and MUST fail closed when coverage is missing and `--require-witness` is active. On `g8e eval runs start`, witness requirements remain opt-in via `--require-observation`, `--require-provenance`, or `--require-witness`. |
 | INV-EVAL-CAMP-04 | Homogeneous campaigns MUST apply authentic production agent personas (Sage, Dash) bound to real ReAct agentic loops in the Data Operator, not synthetic harnesses or mock loops. |
+| INV-EVAL-CAMP-05 | Each catalog scenario MUST declare `eligible_roles`: the model roles that perform that task in g8ee (`ensemble/app/constants/chat_model_call_sites.py`). The homogeneous scheduler MUST assign a scenario only to its eligible roles and MUST fail closed (`ErrEvaluationScenarioRolesUnassigned`) on a scenario with none. `ValidateHomogeneousAssignmentMatrix` MUST reject an assignment for a role the scenario does not declare (`ErrEvaluationRoleNotEligible`). The frozen catalog digest binds the eligible-role sets. |
 
 ### Witness Separation (`INV-EVAL-WIT`)
 
@@ -91,7 +92,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-EVAL-EVID-01 | Native run evidence (`report.json`, `verification.json`, digest-named artifacts) MUST be persisted under `.g8e/data/eval/runs/<run-id>/` and owned by `g8e eval boundary run` and `g8e eval boundary verify`. Campaign evidence MUST be persisted under the same `.g8e/data/eval/runs/<run-id>/` path and owned by `g8e eval runs …`. |
 | INV-EVAL-EVID-02 | Provider-boundary observation windows (ingested from Observer Operator results) MUST be stored under the Gateway volume at `data/inference/provider-observer/windows/`. Model provenance attestation windows (ingested from Provenance Operator results) MUST be stored under `data/inference/model-provenance/windows/`. |
 | INV-EVAL-EVID-03 | Campaign run state is run-scoped: definitions, frozen scenario artifacts, lifecycle, assignment, trace, and aggregate records MUST all persist in `.g8e/data/eval/campaigns/<campaign-id>/` and `.g8e/data/eval/runs/<run-id>/`. |
-| INV-EVAL-EVID-04 | Public-safe campaign projections MUST omit principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields. Private prompts, traces other than bounded `model_response` and `failure_output`, execution identifiers, and artifact locations MUST NOT cross the public boundary. |
+| INV-EVAL-EVID-04 | Public-safe campaign projections MUST omit principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields. Private prompts, traces other than bounded `model_response`, `failure_output`, and `role_transcripts`, execution identifiers, and artifact locations MUST NOT cross the public boundary. |
 
 ### Verification Posture (`INV-EVAL-VERIF`)
 
@@ -158,7 +159,7 @@ The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation comma
 | `g8e eval campaigns …` | Campaign definitions (list, show, create, archive, unarchive) |
 | `g8e eval runs …` | Campaign execution and lifecycle (list, show, start, resume, cancel, logs, verify, publish, export, repair, compare, archive, unarchive) |
 | `g8e eval rollout …` | Rollout qualification queue (list, add, remove, next, retry, skip, run) |
-| `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, smoke) |
+| `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, add, remove, smoke) |
 | `g8e eval gates …` | Pre-campaign acceptance gates (chat, inference, probe) |
 | `g8e eval observer …` | Provider-boundary hardware observer (run, verify) |
 
@@ -216,13 +217,13 @@ After pulling, `g8e eval models freeze` discovers live provider inventory throug
 
 `g8e eval models add` inserts or replaces one variant and recomputes the registry digest. When `--digest` is omitted, `add` derives a placeholder digest that lacks attestation authority; re-freeze from the provider before scored runs. `g8e eval models remove` deletes one variant and recomputes the same values. `g8e eval models import` copies selected variants from the catalog into the runtime registry.
 
-**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model across all 25 catalog scenarios in all 3 roles (primary, assistant, lite), resulting in 75 scored assignments taking ~45–60 minutes per model.
+**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model on all 25 catalog scenarios, each under only the roles that perform that task in g8ee: 10 bounded classification, verification, and output-analysis scenarios run under `lite`; 12 tool-loop, policy, and recovery scenarios run under `primary` and `assistant`; `route-primary-ownership` and `final-response-diagnosis` run under `primary`; and `route-handoff-assistant` runs under `assistant`. This yields 37 scored assignments per model.
 
 To accelerate high-throughput qualification, `g8e eval rollout run` supports a two-tier screening pipeline:
 
-1. **Tier 1 — Fast Smoke Gate** (`--gate-smoke`): Executes 5 high-discriminative scenarios across 3 roles (15 assignments, ~8 minutes per model). Scenarios exercise syntax and tool execution, investigation and diagnostic reasoning, dissent and safety compliance, multi-step remediation, and fast-path direct instruction response. Requires 100% pass status on witness and verification gates.
+1. **Tier 1 — Fast Smoke Gate** (`--gate-smoke`): Executes 5 high-discriminative scenarios under their eligible roles (8 assignments per model). Scenarios exercise syntax and tool execution, investigation and diagnostic reasoning, dissent and safety compliance, multi-step remediation, and fast-path direct instruction response. Requires 100% pass status on witness and verification gates.
 
-2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 75-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
+2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 37-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
 
 ```bash
 ./g8e eval rollout run --gate-smoke --promote-on-pass
@@ -236,9 +237,18 @@ To accelerate high-throughput qualification, `g8e eval rollout run` supports a t
 
 Each persona wraps in the production modular system prompt stack: Core Safety, Core Loyalty, Core Dissent, Mode Execution/Capabilities, Tool Schemas, Response Constraints, System Context, and Sentinel Mode.
 
+**Simulated operator files:** A tool-selection or tool-argument scenario can pin a `ScenarioInputFixture.SimulatedFiles` entry to a synthetic operator path (e.g. `/synthetic/eval/network-summary.txt`) that the model is expected to reach with `file_read_on_operator` or `run_commands_with_operator`. Before the scenario's chat request is sent, `CampaignChatExecutor` dispatches a governed file write through the same bound Data Operator session, so the tool call resolves against real content rather than a missing path. This content is never sent to the model directly; only a real tool call can surface it.
+
 **Campaign lanes and formations:** The default campaign lane is `model_role`, which schedules each frozen model variant against catalog scenarios and records role-specific results. Campaigns can also use the `system` lane. The CLI creates deterministic, persisted heterogeneous stacks with `g8e eval campaigns create <id> --formations <id>... --seed <seed>` and starts execution with `g8e eval runs start <id>`.
 
-A formation contains primary, assistant, and lite model bindings. The runner allocates all sovereign local models only after storage-side provenance attestation, brackets each role with provider-boundary observation, executes roles in `lite → assistant → primary` order while passing state forward, and routes a role's mutation candidate through the governed policy gate.
+A formation contains primary, assistant, and lite model bindings, executed in `lite → assistant → primary` order. `g8e eval formations add` writes a formation (all three roles required) to the checked-in overlay `eval/formation-catalog-overlay.json`, replacing any entry with the same ID; `formations remove` deletes an overlay entry or records a checked-in default as removed, and the catalog can never be left empty. The effective catalog is the built-in execution topologies merged with that overlay. `runs start` and `runs resume` select the formation runner with `--formation-runner`:
+
+| Runner | Execution | Grading | Telemetry |
+| --- | --- | --- | --- |
+| `g8ee` (default) | Each role is one g8ee `POST /api/v1/chat` call, the same pipeline homogeneous assignments use, with real tool calls against the bound Data Operator and simulated files materialized first. The assignment ID is constant; each role's evaluation attempt ID is role-qualified (`<attempt>:lite`, `:assistant`, `:primary`). Each role's message carries every prior role's output. | `GradeHeterogeneousScenario`: every catalog criterion per role (grade IDs role-qualified), plus one pipeline-scoped `heterogeneous-pipeline` grade; `decomposed_scores` populated. | Tokens, generation duration, TTFT, and provider attempt IDs from each role's trace. Per-attempt witness windows apply exactly as for homogeneous assignments. No formation-level `PeakVRAMMiB` or storage attestation digest. |
+| `direct` | Roles dispatch straight to the Inference Operator after storage-side provenance attestation, each bracketed by provider-boundary observation, with mutation candidates routed through the governed policy gate. | Single completion grade; no `decomposed_scores`. | Full formation witness evidence: peak VRAM, observer and provenance digests. |
+
+Each g8ee-routed role trace is persisted inside the assignment's formation run evidence (`FormationRunEvidence.Result.Roles[].Trace`), not the per-assignment trace store.
 
 ### Witness operator roles
 
@@ -270,9 +280,11 @@ The Observer has no Ollama management capability. Consecutive scored assignments
 
 Native verification is owned by `g8e eval boundary verify`. Campaign verification is owned by `g8e eval runs verify`, with `--require-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing.
 
+Formation verification branches on the persisted evidence, not on a flag. When every role in the formation run evidence carries a trace, the verifier checks each role trace's digest and regrades from those traces with `GradeHeterogeneousScenario`; stored grades must match by grade ID and criterion ID, so a tampered grade for one role cannot hide behind another role's identical criterion. Direct-dispatch evidence keeps the completion-grade recompute and formation witness checks (`VerifyFormationWitnessEvidence`). Both paths run the per-attempt observation and provenance checks over the result's model inference records.
+
 **Public spectator projection:** The checked-in evaluation explorer reads canonical native and campaign projections from persisted runs. A public-safe projector omits principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields before records enter the signed public feed. Native verification remains on the owner path; mirror availability is not verification evidence. See [Public Spectator Architecture](./public_spectator.md).
 
-Campaign assignment results use the enriched campaign projection envelope (`1.1.0`) for new records with named public extensions: scenario context, deterministic and semantic grade summaries, typed activity families, bounded resource metrics, verification metadata, and lowercase SHA-256 evidence bindings. Scenario descriptions and criterion labels come from the exact persisted campaign/catalog bindings; private prompts, gold answers, trace text other than the bounded `model_response` and `failure_output` extensions, execution identifiers, receipt bodies, and artifact locations do not cross the boundary.
+Campaign assignment results use the enriched campaign projection envelope (`1.1.0`) for new records with named public extensions: scenario context, deterministic and semantic grade summaries, typed activity families, bounded resource metrics, verification metadata, and lowercase SHA-256 evidence bindings. Scenario descriptions and criterion labels come from the exact persisted campaign/catalog bindings; private prompts, gold answers, trace text other than the bounded `model_response`, `failure_output`, and `role_transcripts` extensions, execution identifiers, receipt bodies, and artifact locations do not cross the boundary. See [Public Spectator Architecture](./public_spectator.md) for exactly what `role_transcripts` carries.
 
 Assignment activity preserves the distinction between an observed empty list, unavailable source capture, and scenario-not-applicable. Resource metrics preserve an observed zero and identify unavailable token, retry, or latency values explicitly. The closed public unavailable-reason vocabulary is `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`.
 

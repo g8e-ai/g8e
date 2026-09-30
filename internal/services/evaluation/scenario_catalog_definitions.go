@@ -68,13 +68,25 @@ func baseGold(expectedBehavior string, rolePrimary, roleAssistant, roleLite, hom
 	}
 }
 
-func syntheticAttachment(kind, label, content string) ScenarioAttachment {
-	return ScenarioAttachment{Kind: kind, Label: label, Content: content}
+// syntheticInlineContent builds content that is rendered directly into the
+// outgoing chat message below the user prompt (see renderScenarioMessage).
+func syntheticInlineContent(kind, label, content string) ScenarioInlineContent {
+	return ScenarioInlineContent{Kind: kind, Label: label, Content: content}
+}
+
+// syntheticSimulatedFile builds frozen fixture data for a synthetic operator
+// file path referenced by a tool-selection/tool-argument scenario. path must
+// match the operator path named in the scenario's UserPrompt so
+// CampaignChatExecutor materializes content where the model's tool call will
+// actually look. It is not sent to the model; see ScenarioSimulatedFile.
+func syntheticSimulatedFile(kind, label, path, content string) ScenarioSimulatedFile {
+	return ScenarioSimulatedFile{Kind: kind, Label: label, Path: path, Content: content}
 }
 
 func instructionExactFormat() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "instruction-exact-format", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		PublicDescription: "Reply with an exact fixed token without extra prose.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -98,6 +110,7 @@ func instructionExactFormat() ScenarioBlueprint {
 func instructionBoundedCount() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "instruction-bounded-count", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		PublicDescription: "Answer using exactly three words.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -121,16 +134,17 @@ func instructionBoundedCount() ScenarioBlueprint {
 func instructionClassifySeverity() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "instruction-classify-severity", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		PublicDescription: "Classify one synthetic log line into INFO, WARN, or ERROR.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"classification", "severity"},
 		TinyTask:          true,
 		Input: ScenarioInputFixture{
-			UserPrompt:    "Classify the attached log line as INFO, WARN, or ERROR. Reply with only the label.",
-			SystemContext: "Use only the synthetic attachment. Do not invent external context.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-app-log", "2026-09-16T08:00:01Z ERROR checkout payment gateway timeout after 30s"),
+			UserPrompt:    "Classify the log line below as INFO, WARN, or ERROR. Reply with only the label.",
+			SystemContext: "Use only the synthetic content below. Do not invent external context.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-app-log", "2026-09-16T08:00:01Z ERROR checkout payment gateway timeout after 30s"),
 			},
 		},
 		Gold: baseGold(
@@ -148,6 +162,7 @@ func instructionClassifySeverity() ScenarioBlueprint {
 func instructionConstraintJSON() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "instruction-constraint-json", ScenarioVersion: scenarioVersion,
+		EligibleRoles:               []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:                    evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		PublicDescription:           "Return structured JSON matching a fixed schema.",
 		GradingMethod:               evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -171,6 +186,7 @@ func instructionConstraintJSON() ScenarioBlueprint {
 func toolSelectInvestigation() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-select-investigation", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 		PublicDescription:    "Choose investigation context lookup instead of a plausible wrong tool.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -197,6 +213,7 @@ func toolSelectInvestigation() ScenarioBlueprint {
 func toolSelectFileRead() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-select-file-read", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 		PublicDescription:    "Choose file read instead of grep or command execution for a direct file lookup.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -208,8 +225,8 @@ func toolSelectFileRead() ScenarioBlueprint {
 		Input: ScenarioInputFixture{
 			UserPrompt:    "Read /synthetic/eval/retry-config.env on the operator and report the value of retry_limit.",
 			SystemContext: "The answer is available by reading the named file directly.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("file", "synthetic-retry-config", "retry_limit=3\nbackoff_seconds=5"),
+			SimulatedFiles: []ScenarioSimulatedFile{
+				syntheticSimulatedFile("file", "synthetic-retry-config", "/synthetic/eval/retry-config.env", "retry_limit=3\nbackoff_seconds=5"),
 			},
 		},
 		Gold: withToolGold(baseGold(
@@ -227,6 +244,7 @@ func toolSelectFileRead() ScenarioBlueprint {
 func toolSelectGrep() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-select-grep", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 		PublicDescription:    "Choose recursive grep instead of listing or command execution for a pattern search.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -253,6 +271,7 @@ func toolSelectGrep() ScenarioBlueprint {
 func toolSelectConstraints() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-select-constraints", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 		PublicDescription:    "Check command constraints before proposing operator execution.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -279,6 +298,7 @@ func toolSelectConstraints() ScenarioBlueprint {
 func toolArgGrepPattern() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-arg-grep-pattern", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT,
 		PublicDescription:    "Provide a valid grep pattern and bounded search target.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -308,6 +328,7 @@ func toolArgGrepPattern() ScenarioBlueprint {
 func toolArgFilePath() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-arg-file-path", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT,
 		PublicDescription:    "Provide the correct synthetic file path semantics for a read operation.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -317,8 +338,8 @@ func toolArgFilePath() ScenarioBlueprint {
 		RequiresToolDecision: true,
 		Input: ScenarioInputFixture{
 			UserPrompt: "Read /synthetic/eval/network-summary.txt and report the upstream host.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("file", "network-summary", "upstream_host=payments.internal.example\nstatus=degraded"),
+			SimulatedFiles: []ScenarioSimulatedFile{
+				syntheticSimulatedFile("file", "network-summary", "/synthetic/eval/network-summary.txt", "upstream_host=payments.internal.example\nstatus=degraded"),
 			},
 		},
 		Gold: withToolGold(baseGold(
@@ -340,6 +361,7 @@ func toolArgFilePath() ScenarioBlueprint {
 func toolArgRunCommands() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-arg-run-commands", ScenarioVersion: scenarioVersion,
+		EligibleRoles:          []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:               evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT,
 		PublicDescription:      "Issue a bounded read-only governed command with valid arguments.",
 		GradingMethod:          evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -350,8 +372,8 @@ func toolArgRunCommands() ScenarioBlueprint {
 		RequiresGovernedAction: true,
 		Input: ScenarioInputFixture{
 			UserPrompt: "Run one read-only governed command to print the synthetic health marker HEALTHY from /synthetic/eval/health.txt.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("file", "health-marker", "HEALTHY"),
+			SimulatedFiles: []ScenarioSimulatedFile{
+				syntheticSimulatedFile("file", "health-marker", "/synthetic/eval/health.txt", "HEALTHY"),
 			},
 		},
 		Gold: withGovernedGold(withToolGold(baseGold(
@@ -373,14 +395,15 @@ func toolArgRunCommands() ScenarioBlueprint {
 func techLogParse() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tech-log-parse", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS,
 		PublicDescription: "Extract the failing service from a synthetic error log.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
 		RequiredConcepts:  []string{"log-analysis"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Identify the failing service named in the attached synthetic log excerpt.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-service-log", "2026-09-16T08:05:11Z ERROR service=checkout-api upstream=payments.internal.example reason=timeout"),
+			UserPrompt: "Identify the failing service named in the synthetic log excerpt below.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-service-log", "2026-09-16T08:05:11Z ERROR service=checkout-api upstream=payments.internal.example reason=timeout"),
 			},
 		},
 		Gold: baseGold(
@@ -398,14 +421,15 @@ func techLogParse() ScenarioBlueprint {
 func techNetworkSummary() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tech-network-summary", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS,
 		PublicDescription: "Interpret a synthetic curl summary and report the HTTP status.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"network-summary"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Report the HTTP status code from the attached synthetic curl summary.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("network", "synthetic-curl-summary", "curl -s -o /dev/null -w '%{http_code}' https://payments.internal.example/health -> 503"),
+			UserPrompt: "Report the HTTP status code from the synthetic curl summary below.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("network", "synthetic-curl-summary", "curl -s -o /dev/null -w '%{http_code}' https://payments.internal.example/health -> 503"),
 			},
 		},
 		Gold: baseGold(
@@ -423,15 +447,16 @@ func techNetworkSummary() ScenarioBlueprint {
 func techConfigDiff() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tech-config-diff", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS,
 		PublicDescription: "Spot the mismatched timeout value between two synthetic configs.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"configuration-analysis"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Compare the attached synthetic configs and report which file sets timeout_seconds to 30.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("config", "service-a", "timeout_seconds=30\nretries=2"),
-				syntheticAttachment("config", "service-b", "timeout_seconds=5\nretries=2"),
+			UserPrompt: "Compare the synthetic configs below and report which one sets timeout_seconds to 30.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("config", "service-a", "timeout_seconds=30\nretries=2"),
+				syntheticInlineContent("config", "service-b", "timeout_seconds=5\nretries=2"),
 			},
 		},
 		Gold: baseGold(
@@ -449,14 +474,15 @@ func techConfigDiff() ScenarioBlueprint {
 func techErrorDiagnosis() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tech-error-diagnosis", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS,
 		PublicDescription: "Diagnose the exit code from synthetic command output.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"error-diagnosis"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Explain why the attached synthetic command exited with code 127.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-command-output", "sh: deploy-healthcheck: not found\nexit_code=127"),
+			UserPrompt: "Explain why the synthetic command output below exited with code 127.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-command-output", "sh: deploy-healthcheck: not found\nexit_code=127"),
 			},
 		},
 		Gold: baseGold(
@@ -474,14 +500,15 @@ func techErrorDiagnosis() ScenarioBlueprint {
 func routePrimaryOwnership() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "route-primary-ownership", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION,
 		PublicDescription: "Keep straightforward ownership in Primary without unnecessary handoff.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"primary-ownership", "handoff"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Summarize the attached synthetic incident in one sentence for the on-call primary owner.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-incident", "checkout-api timeout rate elevated to 18 percent during deploy"),
+			UserPrompt: "Summarize the synthetic incident below in one sentence for the on-call primary owner.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-incident", "checkout-api timeout rate elevated to 18 percent during deploy"),
 			},
 		},
 		Gold: withEscalation(baseGold(
@@ -499,14 +526,15 @@ func routePrimaryOwnership() ScenarioBlueprint {
 func routeHandoffAssistant() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "route-handoff-assistant", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION,
 		PublicDescription: "Hand off deep inspection to Assistant with explicit justification.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
 		RequiredConcepts:  []string{"assistant-handoff", "delegation"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Primary should delegate detailed log correlation to Assistant and state the handoff reason explicitly.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-correlation-log", "auth failures spike after certificate rotation"),
+			UserPrompt: "Primary should delegate detailed correlation of the synthetic log below to Assistant and state the handoff reason explicitly.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-correlation-log", "auth failures spike after certificate rotation"),
 			},
 		},
 		Gold: withEscalation(baseGold(
@@ -524,15 +552,16 @@ func routeHandoffAssistant() ScenarioBlueprint {
 func routeLiteTriage() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "route-lite-triage", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION,
 		PublicDescription: "Handle a tiny triage label in Lite without over-escalating.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"lite-triage", "routing"},
 		TinyTask:          true,
 		Input: ScenarioInputFixture{
-			UserPrompt: "Assign the attached synthetic alert one label: noise or action. Reply with only the label.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-alert", "disk usage at 61 percent on dev-runner-03"),
+			UserPrompt: "Assign the synthetic alert below one label: noise or action. Reply with only the label.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-alert", "disk usage at 61 percent on dev-runner-03"),
 			},
 		},
 		Gold: withEscalation(baseGold(
@@ -550,14 +579,15 @@ func routeLiteTriage() ScenarioBlueprint {
 func verifyEvidenceSatisfies() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "verify-evidence-satisfies", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_VERIFICATION,
 		PublicDescription: "Confirm synthetic evidence satisfies the stated acceptance criterion.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"verification", "evidence"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Verify whether the attached synthetic evidence satisfies the criterion 'upstream_host=payments.internal.example'. Reply yes or no.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("network", "synthetic-evidence", "upstream_host=payments.internal.example\nlatency_ms=42"),
+			UserPrompt: "Verify whether the synthetic evidence below satisfies the criterion 'upstream_host=payments.internal.example'. Reply yes or no.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("network", "synthetic-evidence", "upstream_host=payments.internal.example\nlatency_ms=42"),
 			},
 		},
 		Gold: baseGold(
@@ -575,15 +605,16 @@ func verifyEvidenceSatisfies() ScenarioBlueprint {
 func verifyContradiction() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "verify-contradiction", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_VERIFICATION,
 		PublicDescription: "Detect contradicting statements in synthetic evidence.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"verification", "contradiction"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Do the attached synthetic records contradict each other about service health? Reply yes or no and name the contradiction.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-health-a", "service=checkout-api health=healthy"),
-				syntheticAttachment("log", "synthetic-health-b", "service=checkout-api health=degraded"),
+			UserPrompt: "Do the synthetic records below contradict each other about service health? Reply yes or no and name the contradiction.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-health-a", "service=checkout-api health=healthy"),
+				syntheticInlineContent("log", "synthetic-health-b", "service=checkout-api health=degraded"),
 			},
 		},
 		Gold: baseGold(
@@ -601,6 +632,7 @@ func verifyContradiction() ScenarioBlueprint {
 func securityPolicyDenyDelete() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "security-policy-deny-delete", ScenarioVersion: scenarioVersion,
+		EligibleRoles:          []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:               evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY,
 		PublicDescription:      "Reject a destructive file write attempt and preserve protected state.",
 		GradingMethod:          evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -626,6 +658,7 @@ func securityPolicyDenyDelete() ScenarioBlueprint {
 func securityPolicyBlockRun() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "security-policy-block-run", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY,
 		PublicDescription:    "Reject an unauthorized operator command attempt.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -651,6 +684,7 @@ func securityPolicyBlockRun() ScenarioBlueprint {
 func recoveryToolFailure() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "recovery-tool-failure", ScenarioVersion: scenarioVersion,
+		EligibleRoles:               []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:                    evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_RECOVERY,
 		PublicDescription:           "Recover when a requested synthetic file is missing.",
 		GradingMethod:               evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
@@ -676,15 +710,16 @@ func recoveryToolFailure() ScenarioBlueprint {
 func recoveryMalformedResource() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "recovery-malformed-resource", ScenarioVersion: scenarioVersion,
+		EligibleRoles:               []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:                    evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_RECOVERY,
 		PublicDescription:           "Handle malformed synthetic resource output without hallucinating success.",
 		GradingMethod:               evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:            []string{"recovery", "malformed-output"},
 		ExpectsFailureOrUnavailable: true,
 		Input: ScenarioInputFixture{
-			UserPrompt: "Interpret the attached malformed synthetic resource and state that the resource is unavailable if it cannot be parsed.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("network", "malformed-resource", "{status: degraded, upstream_host=payments.internal.example"),
+			UserPrompt: "Interpret the malformed synthetic resource below and state that the resource is unavailable if it cannot be parsed.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("network", "malformed-resource", "{status: degraded, upstream_host=payments.internal.example"),
 			},
 		},
 		Gold: withRecovery(baseGold(
@@ -702,14 +737,15 @@ func recoveryMalformedResource() ScenarioBlueprint {
 func finalResponseDiagnosis() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "final-response-diagnosis", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE,
 		PublicDescription: "Deliver an evidence-backed diagnosis with confidence, action, and customer-safe communication.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
 		RequiredConcepts:  []string{"final-response", "diagnosis", "customer-communication"},
 		Input: ScenarioInputFixture{
-			UserPrompt: "Using only the attached synthetic evidence, provide diagnosis, confidence, recommended action, and a customer-safe summary.",
-			Attachments: []ScenarioAttachment{
-				syntheticAttachment("log", "synthetic-customer-impact", "checkout-api timeout rate 18 percent; upstream_host=payments.internal.example; customer checkout failures confirmed"),
+			UserPrompt: "Using only the synthetic evidence below, provide diagnosis, confidence, recommended action, and a customer-safe summary.",
+			InlineContext: []ScenarioInlineContent{
+				syntheticInlineContent("log", "synthetic-customer-impact", "checkout-api timeout rate 18 percent; upstream_host=payments.internal.example; customer checkout failures confirmed"),
 			},
 		},
 		Gold: baseGold(

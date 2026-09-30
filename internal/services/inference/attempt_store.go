@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -48,8 +49,11 @@ func (s *fileAttemptStore) attemptsDir() string {
 	return filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname)
 }
 
-func (s *fileAttemptStore) recordPath(providerAttemptID string) string {
-	return filepath.Join(s.attemptsDir(), providerAttemptID+constants.FileExtJSON)
+func (s *fileAttemptStore) recordPath(providerAttemptID string) (string, error) {
+	if err := models.ValidateProviderAttemptID(providerAttemptID); err != nil {
+		return "", fmt.Errorf("inference attempt store: %w", err)
+	}
+	return filepath.Join(s.attemptsDir(), providerAttemptID+constants.FileExtJSON), nil
 }
 
 func (s *fileAttemptStore) Begin(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error {
@@ -66,7 +70,7 @@ func (s *fileAttemptStore) Begin(ctx context.Context, record *operatorv1.Inferen
 		case operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS,
 			operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
 			operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED:
-			return constants.ErrInferenceProviderAttemptConflict
+			return fmt.Errorf("inference attempt store: begin: %w", constants.ErrInferenceProviderAttemptConflict)
 		}
 	}
 	if err := s.fileSvc.MkdirAll(ctx, s.attemptsDir(), constants.PermDirStandard); err != nil {
@@ -93,7 +97,7 @@ func (s *fileAttemptStore) Import(ctx context.Context, record *operatorv1.Infere
 		if proto.Equal(existing, record) {
 			return nil
 		}
-		return constants.ErrInferenceProviderAttemptConflict
+		return fmt.Errorf("inference attempt store: import: %w", constants.ErrInferenceProviderAttemptConflict)
 	}
 	if !errors.Is(err, constants.ErrNotFound) {
 		return fmt.Errorf("inference attempt store: import: %w", err)
@@ -110,7 +114,7 @@ func (s *fileAttemptStore) Complete(ctx context.Context, providerAttemptID, resu
 		return err
 	}
 	if record.GetStatus() != operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS {
-		return constants.ErrInferenceProviderAttemptConflict
+		return fmt.Errorf("inference attempt store: complete: %w", constants.ErrInferenceProviderAttemptConflict)
 	}
 	record.Status = operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED
 	record.ResultDigest = resultDigest
@@ -124,7 +128,7 @@ func (s *fileAttemptStore) Fail(ctx context.Context, providerAttemptID, failureS
 		return err
 	}
 	if record.GetStatus() != operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS {
-		return constants.ErrInferenceProviderAttemptConflict
+		return fmt.Errorf("inference attempt store: fail: %w", constants.ErrInferenceProviderAttemptConflict)
 	}
 	record.Status = operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED
 	record.FailureSummary = failureSummary
@@ -133,12 +137,13 @@ func (s *fileAttemptStore) Fail(ctx context.Context, providerAttemptID, failureS
 }
 
 func (s *fileAttemptStore) Get(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceProviderAttemptRecord, error) {
-	if providerAttemptID == "" {
-		return nil, fmt.Errorf("inference attempt store: %w", constants.ErrMissingRequiredField)
-	}
-	data, err := s.fileSvc.ReadFile(ctx, s.recordPath(providerAttemptID))
+	path, err := s.recordPath(providerAttemptID)
 	if err != nil {
 		return nil, err
+	}
+	data, err := s.fileSvc.ReadFile(ctx, path)
+	if err != nil {
+		return nil, fmt.Errorf("inference attempt store: read: %w", err)
 	}
 	record := &operatorv1.InferenceProviderAttemptRecord{}
 	if err := protojson.Unmarshal(data, record); err != nil {
@@ -156,9 +161,13 @@ func (s *fileAttemptStore) loadRequired(ctx context.Context, providerAttemptID s
 }
 
 func (s *fileAttemptStore) write(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error {
+	path, err := s.recordPath(record.GetProviderAttemptId())
+	if err != nil {
+		return err
+	}
 	data, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("inference attempt store: marshal: %w", err)
 	}
-	return s.fileSvc.WriteFile(ctx, s.recordPath(record.GetProviderAttemptId()), data, constants.PermFilePrivate)
+	return s.fileSvc.WriteFile(ctx, path, data, constants.PermFilePrivate)
 }

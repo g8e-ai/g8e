@@ -151,8 +151,12 @@ func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(ctx context.C
 		)...)
 	}
 	recomputedGrades, err := RecomputeFormationAssignmentGrades(AssignmentExecutionRequest{
-		Assignment: req.Assignment,
-	}, req.Result)
+		Assignment:    req.Assignment,
+		GradingMethod: req.GradingMethod,
+		ScenarioInput: req.ScenarioInput,
+		ScenarioGold:  req.ScenarioGold,
+		ScenarioTools: req.ScenarioTools,
+	}, req.Result, req.FormationRunEvidence)
 	if err != nil {
 		failures = append(failures, "formation grade recomputation failed: "+err.Error())
 	} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputedGrades) {

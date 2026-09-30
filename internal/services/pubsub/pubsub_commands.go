@@ -1313,14 +1313,6 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 	return summary, nil
 }
 
-// handleInferenceRequestSync is the Actuator egress for INFERENCE
-// transactions: it dispatches the governed inference request to the
-// configured inference execution handler (which calls the Ollama backend),
-// stamps the canonical result digest onto the InferenceResult, stores the
-// result on the command message for the post-actuation completion
-// publication, and returns the digest as the receipt summary so the signed
-// ActionReceipt binds the complete result (see operator.proto
-// InferenceResult.result_digest).
 func (rs *OperatorPubSubService) handleProviderBoundaryObservationSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.providerBoundaryObserver == nil {
 		return "", fmt.Errorf("provider boundary observer handler not configured: %w", constants.ErrMissingRequiredField)
@@ -1335,6 +1327,14 @@ func (rs *OperatorPubSubService) handleModelProvenanceObservationSync(ctx contex
 	return rs.modelProvenanceOperator.HandleCommand(ctx, msg.ID, msg.Payload)
 }
 
+// handleInferenceRequestSync is the Actuator egress for INFERENCE
+// transactions: it dispatches the governed inference request to the
+// configured inference execution handler (which calls the Ollama backend),
+// stamps the canonical result digest onto the InferenceResult, stores the
+// result on the command message for the post-actuation completion
+// publication, and returns the digest as the receipt summary so the signed
+// ActionReceipt binds the complete result (see operator.proto
+// InferenceResult.result_digest).
 func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.inference == nil {
 		return "", fmt.Errorf("inference handler not configured: %w", constants.ErrInferenceBackendNotRegistered)
@@ -1351,9 +1351,20 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 			})
 		}
 	}
-	if rs.inferenceAttemptStore != nil && governedReq != nil && governedReq.GetProviderAttemptId() != "" {
+
+	attemptID := governedReq.GetProviderAttemptId()
+	recordAttempt := rs.inferenceAttemptStore != nil && attemptID != ""
+	failAttempt := func(cause error) {
+		if !recordAttempt {
+			return
+		}
+		if failErr := rs.inferenceAttemptStore.Fail(ctx, attemptID, cause.Error()); failErr != nil {
+			rs.logger.Error("inference handler: record failed attempt", "error", failErr)
+		}
+	}
+	if recordAttempt {
 		if err := rs.inferenceAttemptStore.Begin(ctx, &operatorv1.InferenceProviderAttemptRecord{
-			ProviderAttemptId:   governedReq.GetProviderAttemptId(),
+			ProviderAttemptId:   attemptID,
 			TransactionId:       msg.ID,
 			RetryCount:          governedReq.GetRetryCount(),
 			RetryClassification: models.ClassifyRetry(governedReq.GetRetryCount()),
@@ -1361,29 +1372,21 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 			return "", fmt.Errorf("inference handler: begin attempt: %w", err)
 		}
 	}
+
 	resp, err := rs.inference.ExecuteInference(ctx, msg)
 	if err != nil {
-		if rs.inferenceAttemptStore != nil && governedReq != nil {
-			if failErr := rs.inferenceAttemptStore.Fail(ctx, governedReq.GetProviderAttemptId(), err.Error()); failErr != nil {
-				rs.logger.Error("inference handler: record failed attempt", "error", failErr)
-			}
-		}
+		failAttempt(err)
 		return "", err
 	}
-
 	result := resp.ToProtoInferenceResult()
 	digest, err := models.ComputeInferenceResultDigest(result)
 	if err != nil {
-		if rs.inferenceAttemptStore != nil && governedReq != nil {
-			if failErr := rs.inferenceAttemptStore.Fail(ctx, governedReq.GetProviderAttemptId(), err.Error()); failErr != nil {
-				rs.logger.Error("inference handler: record failed attempt", "error", failErr)
-			}
-		}
+		failAttempt(err)
 		return "", err
 	}
 	result.ResultDigest = digest
-	if rs.inferenceAttemptStore != nil && governedReq != nil {
-		if err := rs.inferenceAttemptStore.Complete(ctx, governedReq.GetProviderAttemptId(), digest); err != nil {
+	if recordAttempt {
+		if err := rs.inferenceAttemptStore.Complete(ctx, attemptID, digest); err != nil {
 			return "", fmt.Errorf("inference handler: complete attempt: %w", err)
 		}
 	}

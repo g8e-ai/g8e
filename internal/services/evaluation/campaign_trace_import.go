@@ -16,6 +16,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -495,10 +496,19 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			}
 			record.RetryCount = &converted
 		}
+		if raw, present := call["load_duration_seconds"]; present && raw != nil {
+			converted, err := durationSecondsToNanosChecked(raw)
+			if err != nil {
+				return nil, nil, fmt.Errorf("load_duration_seconds: %w", err)
+			}
+			record.LoadDurationNanos = converted
+			nanos := int64(converted)
+			record.LoadState = operatorLoadStateToEvaluation(models.ClassifyLoadState(&nanos))
+		}
 		for _, duration := range []struct {
 			name string
 			dest *uint64
-		}{{"load_duration_seconds", &record.LoadDurationNanos}, {"generation_duration_seconds", &record.GenerationDurationNanos}, {"total_duration_seconds", &record.TotalDurationNanos}} {
+		}{{"generation_duration_seconds", &record.GenerationDurationNanos}, {"total_duration_seconds", &record.TotalDurationNanos}} {
 			if raw, present := call[duration.name]; present && raw != nil {
 				converted, err := durationSecondsToNanosChecked(raw)
 				if err != nil {

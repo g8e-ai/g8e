@@ -209,6 +209,52 @@ func TestImportAssignmentResultFromFormationRun_MaterializesRoleTelemetry(t *tes
 	assert.Equal(t, float64(33), *summary.InputTokens.Value)
 }
 
+func TestImportAssignmentResultFromFormationRun_GradesFromRoleTraces(t *testing.T) {
+	variants := testHeterogeneousVariants()
+	stack := mustHeterogeneousStack(t)
+	formation, err := BindHeterogeneousStack(FormationBindingRequest{Stack: stack, Variants: variants})
+	require.NoError(t, err)
+
+	_, artifacts, err := BuildScenarioCatalog()
+	require.NoError(t, err)
+	var gold ScenarioGoldCriteria
+	require.NoError(t, json.Unmarshal(artifacts["instruction-exact-format"].Gold.Body, &gold))
+
+	formationResult := &FormationRunResult{
+		FormationID: formation.ID,
+		Passed:      true,
+		Roles: []FormationRoleTelemetry{
+			{Role: FormationRoleLite, Model: formation.Lite, ProviderAttemptID: "lite-attempt", Trace: completedHomogeneousTrace(t, "lite")},
+			{Role: FormationRoleAssistant, Model: formation.Assistant, ProviderAttemptID: "assistant-attempt", Trace: completedHomogeneousTrace(t, "assistant")},
+			{Role: FormationRolePrimary, Model: formation.Primary, ProviderAttemptID: "primary-attempt", Trace: completedHomogeneousTrace(t, "primary")},
+		},
+	}
+
+	req := heterogeneousAssignmentExecutionRequest(t, stack, variants)
+	req.ScenarioGold = gold
+	result, err := ImportAssignmentResultFromFormationRun(req, formationResult, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, result.GetLifecycleStatus())
+	require.NotEmpty(t, result.GetDeterministicGrades())
+	require.NotEmpty(t, result.GetDecomposedScores())
+
+	seenIDs := make(map[string]bool, len(result.GetDeterministicGrades()))
+	pipelineGrades := 0
+	for _, grade := range result.GetDeterministicGrades() {
+		assert.False(t, seenIDs[grade.GetGradeId()], "duplicate grade id %s", grade.GetGradeId())
+		seenIDs[grade.GetGradeId()] = true
+		if grade.GetCriterionId() == "heterogeneous-pipeline" {
+			pipelineGrades++
+		}
+	}
+	assert.Equal(t, 1, pipelineGrades)
+	for _, role := range []string{"lite", "assistant", "primary"} {
+		invoked := findDeterministicGradeByID(result.GetDeterministicGrades(), req.Assignment.GetAssignmentId()+":"+role+":role-invoked")
+		require.NotNil(t, invoked, "missing role-invoked grade for %s", role)
+		assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, invoked.GetStatus())
+	}
+}
+
 func TestImportAssignmentResultFromFormationRun_DoesNotPublishUnavailablePromptUsageAsZero(t *testing.T) {
 	variants := testHeterogeneousVariants()
 	stack := mustHeterogeneousStack(t)

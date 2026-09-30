@@ -332,6 +332,7 @@ func (e *runEnv) enableWitnessGateway(t *testing.T) {
 	t.Helper()
 	gwremote.WithGatewayHealthCheck(t, true)
 	writeGatewayCredentials(t, e)
+	e.startGatewayFake(t, true)
 }
 
 // withPublishGateway fakes the Gateway public feed and the public mirror.
@@ -371,6 +372,12 @@ func (e *runEnv) startGatewayFake(t *testing.T, executing bool) {
 		case r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.Operators:
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(operators)
+		case executing && r.Method == http.MethodPost && r.URL.Path == constants.APIPaths.OperatorsCommands:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"transaction_id":"tx-simulated-file"}`))
+		case executing && r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.AuditReceipts:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"transactionId":"tx-simulated-file","finalPersistenceAttestation":{"transactionId":"tx-simulated-file"}}`))
 		case r.URL.Path == constants.APIPaths.PublicFeedSnapshot:
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"high_water_sequence":0}`))

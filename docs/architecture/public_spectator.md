@@ -3,8 +3,8 @@ doc_id: public_spectator
 title: Public Spectator Architecture and Threat Model
 audience: architects and security reviewers
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - internal/services/gateway/public_mirror.go
   - internal/services/publicdisclosure/
@@ -135,9 +135,11 @@ Public live projections carry only the following field families:
 - Environment class: hardware class label, backend label, quantization policy label. These are categorical labels, not machine-specific identifiers.
 - Publication status: cycle status, publication status, source freshness label.
 - Evidence link: relative path to a public proof artifact. The link is a content-addressed relative path, never an absolute URL, machine path, or private download location.
-- Assignment detail: approved scenario context, typed grade summaries, grouped model/tool/policy/governed-action activity, bounded resource metrics, verification metadata, lowercase SHA-256 content bindings, and the optional model-text extensions `model_response` and `failure_output`. Activity and resource families retain explicit missingness semantics rather than treating unavailable values as zero.
+- Assignment detail: approved scenario context, typed grade summaries, grouped model/tool/policy/governed-action activity, bounded resource metrics, verification metadata, lowercase SHA-256 content bindings, and the optional model-text extensions `model_response`, `failure_output`, and `role_transcripts`. Activity and resource families retain explicit missingness semantics rather than treating unavailable values as zero.
 
-Assignment detail records are public-safe projections, not traces. They may identify approved model variants, roles, tool labels, closed explanation codes, reported outcomes, and content-addressed bindings. They never contain prompts, reasoning, call or transaction identifiers, receipt bodies, filesystem paths, provider identities, private artifact locations, or unrestricted free text, with one bounded exception: the optional `model_response` extension carries the designated-role output the evaluated model produced for that assignment, and `failure_output` carries the recorded error, failure output, or non-`stop` finish reason for an assignment that did not complete. Both come from the run's assignment trace, are published as recorded rather than rewritten, and are not evidence-bound. The public validator rejects a record whose text exceeds 256 KiB or contains `BEGIN PRIVATE KEY` or `spiffe://`; it does not otherwise classify or redact model text, so operators must treat evaluation scenario inputs and provider outputs as public before publication. A reported tool or policy outcome is not a protocol authorization decision, and an evidence binding is not proof that a public visitor can retrieve or independently verify the referenced artifact.
+Assignment detail records are public-safe projections, not traces. They may identify approved model variants, roles, tool labels, closed explanation codes, reported outcomes, and content-addressed bindings. They never contain prompts, reasoning, call or transaction identifiers, receipt bodies, filesystem paths, provider identities, private artifact locations, or unrestricted free text, with one bounded exception: the optional `model_response` extension carries the designated-role output the evaluated model produced for that assignment, and `failure_output` carries the recorded error, failure output, or non-`stop` finish reason for an assignment that did not complete. Both come from the run's assignment trace, are published as recorded rather than rewritten, and are not evidence-bound. The public validator rejects a record whose text exceeds 256 KiB or contains `BEGIN PRIVATE KEY` or `spiffe://`; it does not otherwise classify or redact model text, so operators must treat evaluation scenario inputs and provider outputs as public before publication.
+
+The optional `role_transcripts` extension shows what each model role did, lifted from its digest-bound g8ee trace. It is one entry per role (one for homogeneous assignments, three in `lite → assistant → primary` order for g8ee-routed formations). Each entry has `role`, `response`, `finish_reason`, `trace_digest`, and `tool_calls`. Each tool call has `tool_name`, `arguments_json`, `arguments_hash`, `command`, `success`, `error_type`, `result_json`, and `result_redaction`. `arguments_json` is the model's exact arguments as canonical JSON, and `arguments_hash` is `sha256(arguments_json)` as bound into the trace, so a reader can check the arguments shown against the trace. Tool results are capped at 16 KiB (`result_redaction: truncated`). Any response or result that matches the restricted-text rule is withheld (`result_redaction: restricted`, or an empty response) rather than failing the whole publish batch. The gateway validator enforces a closed field set, a closed role and redaction vocabulary, and lowercase SHA-256 digests. Operator, session, transaction and receipt identifiers, provider endpoints, and timestamps are never included. Tool results can contain synthetic scenario fixture content and command output from the evaluation Data Operator, so that Operator must hold only public-safe content. A reported tool or policy outcome is not a protocol authorization decision, and an evidence binding is not proof that a public visitor can retrieve or independently verify the referenced artifact.
 
 ### Explorer view schema
 
@@ -359,7 +361,7 @@ The public spectator architecture extends the existing observe and SSE infrastru
 - The owner-local observe API (`GET /api/v1/observe/*`) remains credentialed and user-scoped. The public spectator surface does not add anonymous routes to the Gateway.
 - The SSE event bridge (`GET /api/v1/sse/stream`, `GET /api/v1/sse/events`) remains session-scoped. The public SSE stream is served by the mirror, not by the Gateway.
 - The remaining observe producer endpoints (`POST /api/v1/observe/producer/*`) remain mTLS-authenticated and ensemble-only. The CLI-local public publisher consumes only reviewed public-safe records, signs durable batches, and exports them through the private mirror listener; it does not expose a producer route to browsers.
-- The checked-in evaluation explorer in [dashboard/g8e-adapter/evaluation-explorer/](../../dashboard/g8e-adapter/evaluation-explorer/) connects to Go-native evaluation output. A minimal public-safe projector reads canonical native and campaign records from persisted runs under `.g8e/data/eval/runs/<run-id>/` and emits only the public-safe typed records required by the explorer contract. Enriched campaign assignment records use the `1.1.0` campaign result envelope and combine canonical protobuf JSON with named extensions for scenario context, grades, activity, resources, verification metadata, evidence bindings, and the optional bounded `model_response` and `failure_output` text extensions. Historical `1.0.0` assignment result envelopes remain readable.
+- The checked-in evaluation explorer in [dashboard/g8e-adapter/evaluation-explorer/](../../dashboard/g8e-adapter/evaluation-explorer/) connects to Go-native evaluation output. A minimal public-safe projector reads canonical native and campaign records from persisted runs under `.g8e/data/eval/runs/<run-id>/` and emits only the public-safe typed records required by the explorer contract. Enriched campaign assignment records use the `1.1.0` campaign result envelope and combine canonical protobuf JSON with named extensions for scenario context, grades, activity, resources, verification metadata, evidence bindings, and the optional bounded `model_response`, `failure_output`, and `role_transcripts` extensions. Historical `1.0.0` assignment result envelopes remain readable.
 - Public assignment activity groups by model, tool decision, tool call, policy decision, and governed action families. Each family carries availability semantics so observed empty, unavailable capture, and scenario-not-applicable remain distinguishable. Resource summaries preserve explicit zero and expose bounded latency, token, cache, and retry observations only when their source capture supports them.
 - A passing, run-applicable campaign verification publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates and can backfill existing runs through verified catch-up. Catch-up probes the gateway-owned dataset and clears stale host publication idempotency only when the canonical dataset is missing, allowing mirror-volume recovery without manual state edits. The browser displays the stored quality state; it does not infer verification from assignment records or promote a partial model row itself.
 - The projected records pass disclosure and contract validation, enter the real `g8e public publish` flow, advance its durable high-water sequence, reach the local mirror, appear under the exact run ID in anonymous mirror history, and are delivered over the real SSE stream. Native evaluation verification is owned by `g8e eval boundary verify`, and campaign verification is owned by `g8e eval runs verify`; mirror availability is not verification evidence.
@@ -382,7 +384,7 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 | --- | --- | --- |
 | Public mirror state storage | public-mirror/state.json | Runtime file exists and validates against PublicMirrorStoreState |
 | Public feed configuration | public-feed/ directory | Export config, signing key, ingest token, snapshot persist with correct permissions |
-| Public publisher commands | `g8e public init`, `g8e public config set`, `g8e public source transition`, `g8e public publish`, `g8e public push`, `g8e public rotate-key`, `g8e public restore`, `g8e public status`, `g8e public verify-assignment` | Each command implements its documented operation without fallback paths |
+| Public publisher commands | `g8e public init`, `g8e public config set`, `g8e public source transition`, `g8e public publish`, `g8e public push`, `g8e public repair-outbox`, `g8e public rotate-key`, `g8e public restore`, `g8e public status`, `g8e public verify-assignment` | Each command implements its documented operation without fallback paths |
 | Verification commands | `g8e eval boundary verify`, `g8e eval runs verify` | Verification output reports quality state without mirror involvement |
 | Disclosure validation | [internal/services/publicdisclosure/validator.go](../../internal/services/publicdisclosure/validator.go) | Validator rejects prohibited fields and validates against closed allowlist |
 | Mirror listener separation | [internal/services/gateway/public_spectator_runtime.go](../../internal/services/gateway/public_spectator_runtime.go) | Private and public listeners are separate; private routes never exposed on public listener |
@@ -392,13 +394,13 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 ### Publishing campaign records
 
 1. Run `g8e public init --source-id=<source-id> --mirror-origin=<mirror-url>` on the host to initialize the publisher.
-2. The publisher consumes canonical campaign records from the local evaluation dataset.
+2. The publisher consumes public-safe campaign records supplied to `g8e public publish <records.jsonl>`.
 3. The publisher validates each record against the closed allowlist using [internal/services/publicdisclosure/validator.go](../../internal/services/publicdisclosure/validator.go).
 4. Valid records are signed, batched, and persisted in the publisher's durable outbox.
-5. `g8e public publish` sends the batch to the private mirror listener on the authenticated `/api/v1/public-feed/batches` route.
+5. `g8e public publish <records.jsonl>` sends the batch to the private mirror listener on the authenticated `/api/v1/public-feed/batches` route.
 6. The mirror validates the batch signature and compliance, then stores it in public-mirror/state.json.
 7. The mirror acknowledges the batch back to the publisher.
-8. `g8e public push` confirms the remote mirror has accepted the batch and clears the outbox.
+8. `g8e public push` retries the durable outbox against the mirror; acknowledged entries are pruned and failed entries remain retryable.
 
 ### Key rotation
 
@@ -411,7 +413,7 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 
 ### Source transitions
 
-1. Run `g8e public source transition --new-source-id=<new-id>` to archive the current source and create a new one.
+1. Run `g8e public source transition --source-id=<new-id> --yes` to archive the current source and create a new one. Without `--yes` the command does not archive the current publisher state.
 2. The current publisher configuration, signing key, and outbox are archived.
 3. A new source is created with a fresh key, token, empty outbox, zero-hash predecessor, and sequence beginning at one.
 4. The mirror retains the old source's full history under its original identity.

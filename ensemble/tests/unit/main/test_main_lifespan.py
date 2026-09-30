@@ -246,6 +246,58 @@ class TestLifespanStartup:
                 p.stop()
 
 
+class TestLifespanEnrollmentFailsClosed:
+    """Startup never continues without an enrolled identity issued by the gateway."""
+
+    def test_no_self_issued_identity_path_exists(self):
+        from app.services.infra import app_enrollment_service
+
+        assert not hasattr(app_enrollment_service.AppEnrollmentService, "enroll_test_identity")
+
+    async def test_enrollment_failure_aborts_startup(self, mock_app):
+        from app.errors import ConfigurationError
+
+        mocks, patches = _build_mocks()
+        _configure_settings(mocks)
+        _configure_factory(mocks)
+        mocks["AppEnrollmentService"].return_value.enroll = AsyncMock(
+            side_effect=ConfigurationError("gateway unreachable")
+        )
+        try:
+            with pytest.raises(ConfigurationError, match="gateway unreachable"):
+                async with lifespan(mock_app):
+                    pass
+
+            mocks["DBClient"].return_value.connect.assert_not_called()
+            mocks["KVCacheClient"].return_value.connect.assert_not_called()
+            mocks["BlobClient"].return_value.connect.assert_not_called()
+        finally:
+            for p in patches:
+                p.stop()
+
+    async def test_enrollment_failure_after_ca_bundle_fetch_failure_aborts_startup(
+        self, mock_app
+    ):
+        from app.errors import ConfigurationError
+
+        mocks, patches = _build_mocks()
+        _configure_settings(mocks)
+        _configure_factory(mocks)
+        svc = mocks["AppEnrollmentService"].return_value
+        svc.load_identity.side_effect = ConfigurationError("gateway CA bundle not found")
+        svc.fetch_ca_bundle = AsyncMock(side_effect=RuntimeError("no gateway"))
+        svc.enroll = AsyncMock(side_effect=ConfigurationError("not approved"))
+        try:
+            with pytest.raises(ConfigurationError, match="not approved"):
+                async with lifespan(mock_app):
+                    pass
+
+            mocks["DBClient"].return_value.connect.assert_not_called()
+        finally:
+            for p in patches:
+                p.stop()
+
+
 class TestLifespanShutdown:
     async def test_stop_services_and_close_clients(self, mock_app):
         mocks, patches = _build_mocks()

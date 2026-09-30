@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -33,12 +34,12 @@ func TestBuildHomogeneousAssignmentMatrix_MaterializesFullCrossProduct(t *testin
 		QueuedAt:        time.Unix(1_700_000_000, 0).UTC(),
 	})
 	require.NoError(t, err)
-	assert.Len(t, assignments, 150)
+	assert.Len(t, assignments, 74)
 	inventory := &ModelInventoryFreeze{
 		CampaignID:           "north-star-smoke",
 		RegistryDigest:       repeatHex('c', 64),
 		Variants:             variants,
-		HomogeneousCellCount: 150,
+		HomogeneousCellCount: 74,
 	}
 	require.NoError(t, ValidateHomogeneousAssignmentMatrix(catalog, inventory, 1, assignments))
 }
@@ -49,6 +50,64 @@ func TestBuildHomogeneousAssignmentMatrix_RejectsDuplicateIdentity(t *testing.T)
 	first, err := buildHomogeneousAssignment("campaign", "run", catalog.Scenarios[0], variant, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, 1, time.Unix(0, 0).UTC())
 	require.NoError(t, err)
 	duplicate := first
-	inventory := &ModelInventoryFreeze{Variants: []*evalv1.ModelVariant{variant}, HomogeneousCellCount: 6}
+	inventory := &ModelInventoryFreeze{Variants: []*evalv1.ModelVariant{variant}, HomogeneousCellCount: 3}
 	assert.Error(t, ValidateHomogeneousAssignmentMatrix(catalog, inventory, 1, []*evalv1.EvaluationAssignment{first, duplicate}))
+}
+
+func TestBuildHomogeneousAssignmentMatrix_SchedulesEachScenarioOnlyForItsEligibleRoles(t *testing.T) {
+	catalog, _, err := BuildScenarioCatalog()
+	require.NoError(t, err)
+	variant := &evalv1.ModelVariant{VariantId: "qwen3-4b", ProviderClass: "ollama", ServedModelTag: "qwen3:4b", ModelDigest: repeatHex('a', 64)}
+	assignments, err := BuildHomogeneousAssignmentMatrix(HomogeneousScheduleRequest{
+		CampaignID:      "role-eligibility",
+		RunID:           "run-1",
+		Catalog:         catalog,
+		Variants:        []*evalv1.ModelVariant{variant},
+		RepetitionCount: 1,
+		QueuedAt:        time.Unix(1_700_000_000, 0).UTC(),
+	})
+	require.NoError(t, err)
+
+	rolesByScenario := make(map[string][]evalv1.ModelCampaignRole)
+	for _, assignment := range assignments {
+		rolesByScenario[assignment.GetScenarioId()] = append(rolesByScenario[assignment.GetScenarioId()], assignment.GetHomogeneous().GetDesignatedRole())
+	}
+	const (
+		primary   = evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY
+		assistant = evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT
+		lite      = evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE
+	)
+	assert.ElementsMatch(t, []evalv1.ModelCampaignRole{primary, assistant}, rolesByScenario["tool-arg-file-path"])
+	assert.ElementsMatch(t, []evalv1.ModelCampaignRole{lite}, rolesByScenario["instruction-classify-severity"])
+	assert.ElementsMatch(t, []evalv1.ModelCampaignRole{lite}, rolesByScenario["route-lite-triage"])
+	assert.ElementsMatch(t, []evalv1.ModelCampaignRole{primary}, rolesByScenario["final-response-diagnosis"])
+	assert.ElementsMatch(t, []evalv1.ModelCampaignRole{assistant}, rolesByScenario["route-handoff-assistant"])
+	assert.Len(t, rolesByScenario, len(catalog.GetScenarios()))
+}
+
+func TestBuildHomogeneousAssignmentMatrix_RejectsScenarioWithoutEligibleRoles(t *testing.T) {
+	catalog := testScenarioCatalog()
+	catalog.Scenarios[0].EligibleRoles = nil
+
+	_, err := BuildHomogeneousAssignmentMatrix(HomogeneousScheduleRequest{
+		CampaignID: "campaign",
+		RunID:      "run",
+		Catalog:    catalog,
+		Variants:   []*evalv1.ModelVariant{testModelVariant()},
+	})
+
+	require.ErrorIs(t, err, constants.ErrEvaluationScenarioRolesUnassigned)
+}
+
+func TestValidateHomogeneousAssignmentMatrix_RejectsAssignmentForIneligibleRole(t *testing.T) {
+	catalog := testScenarioCatalog()
+	catalog.Scenarios = catalog.Scenarios[:1]
+	variant := testModelVariant()
+	liteOnly, err := buildHomogeneousAssignment("campaign", "run", catalog.Scenarios[0], variant, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, 1, time.Unix(0, 0).UTC())
+	require.NoError(t, err)
+	inventory := &ModelInventoryFreeze{Variants: []*evalv1.ModelVariant{variant}}
+
+	err = ValidateHomogeneousAssignmentMatrix(catalog, inventory, 1, []*evalv1.EvaluationAssignment{liteOnly})
+
+	require.ErrorIs(t, err, constants.ErrEvaluationRoleNotEligible)
 }

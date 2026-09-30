@@ -17,6 +17,7 @@ import { decodeViewRecord } from '../src/contract/validators';
 import { decodeCampaignProjectionEnvelope } from '../src/contract/campaign-wire';
 import type { LiveEvent } from '../src/contract/types';
 import { EvalStore } from '../src/state/store';
+import { fixtureCampaignResultEnvelope } from '../src/fixtures/fixtures';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const publicResultVector = JSON.parse(
@@ -446,6 +447,21 @@ describe('adaptCampaignProjectionEnvelope', () => {
     });
   });
 
+  it('carries role_transcripts through adaptation and view validation unchanged', () => {
+    const roleTranscripts = [
+      { role: 'lite', response: 'lite says', tool_calls: [{ tool_name: 'read_file', arguments_json: '{"path":"/tmp/a"}', arguments_hash: 'b'.repeat(64), success: true }] },
+      { role: 'assistant', response: 'assistant says' },
+      { role: 'primary', response: 'primary says', finish_reason: 'stop', trace_digest: 'c'.repeat(64) },
+    ];
+    const records = adaptCampaignProjectionEnvelope(
+      { ...fixtureCampaignResultEnvelope, record: { ...fixtureCampaignResultEnvelope.record, role_transcripts: roleTranscripts } },
+      createCampaignAdaptContext(),
+    );
+    const assignment = records.find((record) => record.kind === 'assignment_result');
+    expect(() => decodeViewRecord('assignment_result', assignment)).not.toThrow();
+    expect(assignment).toMatchObject({ role_transcripts: roleTranscripts });
+  });
+
   it('maps deterministic_pass_rate decomposed scores onto pass and dimension keys', () => {
     const context = createCampaignAdaptContext();
     adaptCampaignProjectionEnvelope(
@@ -659,6 +675,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
               {
                 criterion_id: 'tool-selection',
                 status: 'fail',
+                explanation_code: 'PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_FAILED',
               },
             ],
             tool_scorecard: {
@@ -677,6 +694,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
         {
           criterion_id: 'tool-selection',
           status: 'fail',
+          explanation_code: 'criterion_failed',
         },
       ],
       tool_scorecard: {

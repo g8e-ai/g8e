@@ -21,7 +21,7 @@ import {
   type StreamConnectionState,
 } from '../utils/feed-state';
 import { metricDisplay, formatPercent, formatNumber, formatLatency, formatThroughput, formatTokens, formatDuration, formatTimestamp, formatRelativeTime } from '../utils/format';
-const toneClass: Record<string, string> = {
+export const toneClass: Record<string, string> = {
   ok: 'tone-ok',
   info: 'tone-info',
   warn: 'tone-warn',
@@ -368,6 +368,26 @@ export function DetailRow({ label, children }: { label: string; children: ReactN
       <dt>{label}</dt>
       <dd>{children}</dd>
     </div>
+  );
+}
+
+export function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <button type="button" onClick={handleCopy} className="copy-button" title={`Copy ${label}`} aria-label={`Copy ${label}`}>
+      {copied ? 'Copied' : 'Copy'}
+    </button>
   );
 }
 

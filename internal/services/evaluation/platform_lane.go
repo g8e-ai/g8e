@@ -134,6 +134,36 @@ func (l *CommandLane) Execute(ctx context.Context, request ExecutionRequest) (*L
 	return outcome, nil
 }
 
+// WriteSimulatedFile dispatches a governed file write that materializes one
+// frozen scenario fixture file at its Path on the bound Data Operator, and
+// waits for a completed receipt. It shares the dispatch and receipt-polling
+// mechanism used to score file-edit probes (dispatch, pollReceipt) so a
+// tool-selection or tool-argument scenario's expected read target actually
+// exists before the scenario's chat request is sent.
+func (l *CommandLane) WriteSimulatedFile(ctx context.Context, target Target, runID, scenarioID, attemptID string, file ScenarioSimulatedFile) error {
+	if l == nil || l.client == nil {
+		return fmt.Errorf("%w: evaluation lane client is required", constants.ErrMissingRequiredField)
+	}
+	if target.OperatorID == "" || target.SessionID == "" || runID == "" || scenarioID == "" || attemptID == "" || file.Path == "" {
+		return fmt.Errorf("%w: simulated file write requires operator target, scenario identity, and path", constants.ErrMissingRequiredField)
+	}
+	request := ExecutionRequest{RunID: runID, ScenarioID: scenarioID, AttemptID: attemptID, Target: target, TargetResource: file.Path, Marker: file.Content}
+	status, response, _, err := l.dispatch(ctx, request, file.Content)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK || response == nil || !response.Success {
+		return fmt.Errorf("%w: simulated file write rejected for %s", constants.ErrEvaluationDispatchFailed, file.Path)
+	}
+	if response.TransactionID == "" {
+		return fmt.Errorf("%w: governed dispatch response is incomplete", constants.ErrEvaluationDispatchFailed)
+	}
+	if _, err := l.pollReceipt(ctx, response.TransactionID); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (l *CommandLane) executeAllowed(ctx context.Context, request ExecutionRequest) (*LaneOutcome, error) {
 	status, response, _, err := l.dispatch(ctx, request, request.Marker)
 	if err != nil {

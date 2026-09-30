@@ -1707,6 +1707,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   color: var(--fg);
   font-size: 15px;
   line-height: 1.65;
+  border-radius: 0 var(--radius) var(--radius) 0;
 }
 .task-system-context { margin: 12px 0 0; color: var(--fg-muted); font-size: 14px; }
 .task-section-note { margin: 0 0 12px; max-width: 82ch; color: var(--fg-dim); font-size: 13px; line-height: 1.55; }
@@ -1981,6 +1982,87 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .evidence-binding-list li { display: grid; gap: 3px; }
 .evidence-binding-list code, .assignment-evidence code { font-family: var(--mono); font-size: var(--text-md); overflow-wrap: anywhere; }
 
+.assignment-task-prompt,
+.assignment-task-provided,
+.assignment-task-expected {
+  margin: 16px 0;
+}
+
+.task-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.task-attachment-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev2);
+  overflow: hidden;
+}
+.task-attachment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+.task-attachment-label {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--fg);
+}
+.task-attachment-kind {
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-elev2);
+  color: var(--fg-dim);
+}
+.task-attachment-content {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg);
+  background: transparent;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.task-provided-none {
+  margin: 8px 0 0;
+  color: var(--fg-dim);
+  font-size: 13px;
+  font-style: italic;
+}
+.task-provided-tools {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.task-tool-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.task-tool-chip {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-elev2);
+  font-size: 12px;
+  color: var(--fg);
+}
+
 .assignment-model-response {
   margin: 16px 0;
   padding: 16px;
@@ -2076,3 +2158,312 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   color: var(--fg-muted);
 }
 
+/* ===== Assignment Detail: Worker 1B — StatTile resource/scores grid (2026-09-28) ===== */
+.assignment-resources {
+  margin-bottom: 16px;
+}
+.assignment-resources h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  color: var(--fg);
+}
+.assignment-resources h3:first-child {
+  margin-top: 0;
+}
+.stat-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--bg-elev2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.stat-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  font-family: var(--mono);
+}
+.stat-hint {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+.score-not-applicable {
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-weight: 400;
+  font-family: inherit;
+}
+.assignment-scores {
+  margin-bottom: 16px;
+}
+.assignment-scores h2 {
+  margin-bottom: 12px;
+}
+@media (max-width: 640px) {
+  .stat-tile-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}
+
+/* ===== Assignment Detail: Worker 1C — expandable activity records (2026-09-28) ===== */
+.activity-record-details {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+.activity-record-summary {
+  display: block;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+.activity-record-summary:hover {
+  color: var(--accent, #6ea8fe);
+}
+.activity-record-expanded {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 0 0 8px;
+  border-left: 2px solid var(--border);
+}
+.activity-record-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  font-style: italic;
+}
+/* ===== end Worker 1C ===== */
+
+/* ===== Assignment Detail: Worker 1A — unified criteria/verdict badges (2026-09-28) ===== */
+.unified-grade-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-start;
+}
+.grade-badge-details {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+.grade-badge-summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  gap: 4px;
+}
+.grade-badge-summary:hover {
+  border-color: var(--fg-muted);
+}
+.grade-badge-summary::marker {
+  display: none;
+}
+.grade-badge-summary::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.grade-badge-details.grade-pass .grade-badge-summary {
+  color: var(--tone-ok);
+  border-color: var(--tone-ok);
+}
+.grade-badge-details.grade-pass .grade-badge-summary::before {
+  background-color: var(--tone-ok);
+}
+.grade-badge-details.grade-fail .grade-badge-summary {
+  color: var(--tone-critical);
+  border-color: var(--tone-critical);
+}
+.grade-badge-details.grade-fail .grade-badge-summary::before {
+  background-color: var(--tone-critical);
+}
+.grade-badge-details.grade-unavailable .grade-badge-summary {
+  color: var(--tone-info);
+  border-color: var(--tone-info);
+}
+.grade-badge-details.grade-unavailable .grade-badge-summary::before {
+  background-color: var(--tone-info);
+}
+.grade-badge-details.grade-unsupported .grade-badge-summary,
+.grade-badge-details.grade-invalid_evidence .grade-badge-summary {
+  color: var(--tone-warn);
+  border-color: var(--tone-warn);
+}
+.grade-badge-details.grade-unsupported .grade-badge-summary::before,
+.grade-badge-details.grade-invalid_evidence .grade-badge-summary::before {
+  background-color: var(--tone-warn);
+}
+.badge-label {
+  flex: 1;
+  min-width: 0;
+}
+.badge-status {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.grade-badge-details-panel {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 8px 12px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--border);
+  border-radius: 0 6px 6px 0;
+  background: var(--bg-elev2);
+  font-size: 13px;
+}
+.grade-badge-details-panel .detail-row {
+  font-size: 13px;
+}
+/* ===== end Worker 1A ===== */
+
+
+/* ===== Assignment Detail: role transcripts — what the model actually did (2026-09-29) ===== */
+.copy-button {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-elev2);
+  color: var(--fg-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.copy-button:hover,
+.copy-button:focus-visible {
+  color: var(--fg);
+  border-color: var(--fg-dim);
+}
+.role-transcripts {
+  display: grid;
+  gap: 16px;
+}
+.role-transcript + .role-transcript {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.role-transcript-heading {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.model-response-header {
+  gap: 8px;
+}
+.transcript-tool-calls {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.transcript-tool-call {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elev);
+}
+.transcript-tool-call-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.transcript-step {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--bg-elev2);
+  color: var(--fg-dim);
+  font-size: 11px;
+  line-height: 20px;
+  text-align: center;
+}
+.transcript-tool-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.transcript-outcome {
+  margin-left: auto;
+  font-size: 12px;
+}
+.transcript-outcome.tone-ok { color: var(--tone-ok); }
+.transcript-outcome.tone-critical { color: var(--tone-critical); }
+.transcript-field {
+  margin-top: 8px;
+}
+.transcript-field-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.transcript-field-label code,
+.transcript-field-label small {
+  font-family: var(--mono);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.transcript-result summary {
+  cursor: pointer;
+}
+.transcript-result .model-response-text {
+  max-height: 320px;
+}
+.transcript-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+.transcript-provenance code {
+  font-family: var(--mono);
+  word-break: break-all;
+}
+/* ===== end role transcripts ===== */

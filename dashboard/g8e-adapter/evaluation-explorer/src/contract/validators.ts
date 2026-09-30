@@ -41,6 +41,7 @@ import {
   type MethodologySnapshot,
   type ProofCatalog,
   type ProofCatalogEntry,
+  type RoleTranscript,
   ACTIVITY_AVAILABILITIES,
   PUBLIC_ACTIVITY_EVIDENCE_SOURCES,
   PUBLIC_EVIDENCE_KINDS,
@@ -56,6 +57,7 @@ import {
   RUN_METRIC_UNITS,
   SUPPORTED_VIEW_SCHEMA_VERSIONS,
   TERMINAL_STATUSES,
+  TOOL_RESULT_REDACTIONS,
   TOOL_SCORE_DIMENSIONS,
   VERIFIER_STATES,
 } from './types';
@@ -251,9 +253,10 @@ function assertGradeSummaries(value: unknown, path: string): void {
   for (let i = 0; i < value.length; i++) {
     const summary: unknown = value[i];
     assertObject(summary, `${path}[${i}]`);
-    rejectUnknown(summary, ['criterion_id', 'status', 'detail'], `${path}[${i}]`);
+    rejectUnknown(summary, ['criterion_id', 'status', 'explanation_code', 'detail'], `${path}[${i}]`);
     assertString(summary.criterion_id, `${path}[${i}].criterion_id`);
     assertString(summary.status, `${path}[${i}].status`);
+    assertString(summary.explanation_code, `${path}[${i}].explanation_code`);
     assertOptional(summary.detail, `${path}[${i}].detail`, assertString);
   }
 }
@@ -733,6 +736,45 @@ function assertPublicEvidenceBindings(value: unknown, path: string): void {
   }
 }
 
+function assertOptionalHash(value: unknown, path: string): void {
+  if (value === undefined) return;
+  assertString(value, path);
+  assert(/^[0-9a-f]{64}$/u.test(value), path, 'expected lowercase SHA-256');
+}
+
+/** Closed role_transcripts schema, mirroring the gateway disclosure validator. */
+export function assertRoleTranscripts(value: unknown, path: string): asserts value is RoleTranscript[] {
+  assert(Array.isArray(value), path, 'expected array');
+  assert(value.length <= 8, path, 'expected at most 8 entries');
+  for (let index = 0; index < value.length; index++) {
+    const transcriptPath = `${path}[${index}]`;
+    const transcript: unknown = value[index];
+    assertObject(transcript, transcriptPath);
+    rejectUnknown(transcript, ['role', 'response', 'finish_reason', 'trace_digest', 'tool_calls'], transcriptPath);
+    assertEnum(transcript.role, MODEL_ROLES, `${transcriptPath}.role`);
+    assertOptional(transcript.response, `${transcriptPath}.response`, assertString);
+    assertOptional(transcript.finish_reason, `${transcriptPath}.finish_reason`, assertString);
+    assertOptionalHash(transcript.trace_digest, `${transcriptPath}.trace_digest`);
+    if (transcript.tool_calls === undefined) continue;
+    assert(Array.isArray(transcript.tool_calls), `${transcriptPath}.tool_calls`, 'expected array');
+    assert(transcript.tool_calls.length <= 128, `${transcriptPath}.tool_calls`, 'expected at most 128 entries');
+    for (let callIndex = 0; callIndex < transcript.tool_calls.length; callIndex++) {
+      const callPath = `${transcriptPath}.tool_calls[${callIndex}]`;
+      const call: unknown = transcript.tool_calls[callIndex];
+      assertObject(call, callPath);
+      rejectUnknown(call, ['tool_name', 'arguments_json', 'arguments_hash', 'command', 'success', 'error_type', 'result_json', 'result_redaction'], callPath);
+      assertString(call.tool_name, `${callPath}.tool_name`);
+      assertOptional(call.arguments_json, `${callPath}.arguments_json`, assertString);
+      assertOptionalHash(call.arguments_hash, `${callPath}.arguments_hash`);
+      assertOptional(call.command, `${callPath}.command`, assertString);
+      assertBoolean(call.success, `${callPath}.success`);
+      assertOptional(call.error_type, `${callPath}.error_type`, assertString);
+      assertOptional(call.result_json, `${callPath}.result_json`, assertString);
+      assertOptional(call.result_redaction, `${callPath}.result_redaction`, (v, p) => assertEnum(v, TOOL_RESULT_REDACTIONS, p));
+    }
+  }
+}
+
 function assertPublicVerificationMetadata(value: unknown, path: string): void {
   assertObject(value, path);
   rejectUnknown(value, ['provenance', 'verifier_state', 'verifier_release_version', 'verifier_contract_version', 'report_digest', 'population_digest', 'verified_at'], path);
@@ -790,7 +832,7 @@ function assertPublicResourceSummary(value: unknown, path: string): void {
 
 export function isAssignmentResult(value: unknown): asserts value is AssignmentResult {
   assertObject(value, 'assignment_result');
-  rejectUnknown(value, [...ENVELOPE_FIELDS, 'assignment_id', 'run_id', 'task_id', 'scenario_id', 'variant_id', 'role', 'repetition', 'scenario_category', 'evaluation_unit', 'stack_id', 'scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'benchmark_observations', 'terminal_status', 'metric_values', 'missingness_reason', 'stage_summary', 'resource_summary', 'verification_disposition', 'verification_metadata', 'model_response', 'failure_output'], 'assignment_result');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'assignment_id', 'run_id', 'task_id', 'scenario_id', 'variant_id', 'role', 'repetition', 'scenario_category', 'evaluation_unit', 'stack_id', 'scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'benchmark_observations', 'terminal_status', 'metric_values', 'missingness_reason', 'stage_summary', 'resource_summary', 'verification_disposition', 'verification_metadata', 'model_response', 'failure_output', 'role_transcripts'], 'assignment_result');
   assertEnvelope(value, 'assignment_result', ['assignment_result']);
   assertString(value.assignment_id, 'assignment_result.assignment_id');
   assertString(value.run_id, 'assignment_result.run_id');
@@ -823,6 +865,7 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
   assertOptional(value.missingness_reason, 'assignment_result.missingness_reason', assertString);
   assertOptional(value.model_response, 'assignment_result.model_response', assertString);
   assertOptional(value.failure_output, 'assignment_result.failure_output', assertString);
+  if (value.role_transcripts !== undefined) assertRoleTranscripts(value.role_transcripts, 'assignment_result.role_transcripts');
   assert(Array.isArray(value.stage_summary), 'assignment_result.stage_summary', 'expected array');
   assert(value.stage_summary.length <= 128, 'assignment_result.stage_summary', 'expected at most 128 entries');
   for (let index = 0; index < value.stage_summary.length; index++) {

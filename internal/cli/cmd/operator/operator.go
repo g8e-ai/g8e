@@ -187,7 +187,11 @@ func operatorModelResidencyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			residency, err := inference.ReadProviderResidency(cmd.Context(), inference.ProviderResidencyOptions{Endpoint: endpoint})
+			backend, err := inference.NewOllamaBackend(endpoint, slog.Default())
+			if err != nil {
+				return fmt.Errorf("operator: model residency: %w", err)
+			}
+			residency, err := backend.ReadResidency(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("operator: model residency: %w", err)
 			}

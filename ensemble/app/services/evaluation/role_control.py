@@ -9,19 +9,21 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from app.constants import ReasoningAgent, TriageComplexityClassification
-from app.llm.utils import ModelOverrideResolver, resolve_model
+from app.constants.evaluation import DesignatedRoleToAgent
+from app.errors import ValidationError
+from app.llm.utils import ModelOverrideResolver, resolve_model_for_designated_role
 from app.models.base import G8eBaseModel
-from app.models.evaluation_trace import EvaluationControlledRoleAssignment
+from app.models.evaluation_trace import (
+    DesignatedModelRole,
+    EvaluationControlledRoleAssignment,
+    EvaluationRoleOutcome,
+    NaturalModelRole,
+)
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from g8e.models.internal_api import EvaluationInferenceContext
 
-DesignatedModelRole = Literal["primary", "assistant", "lite"]
-NaturalModelRole = Literal["primary", "assistant"]
-EvaluationRoleOutcome = Literal["invoked", "role_not_invoked"]
 _SCORED_AGENT_ROLES = frozenset({"sage", "dash"})
 
 
@@ -52,11 +54,7 @@ class ControlledRoleRouting(G8eBaseModel):
 def natural_model_role_from_triage(
     complexity: TriageComplexityClassification,
 ) -> NaturalModelRole:
-    return (
-        "primary"
-        if complexity == TriageComplexityClassification.COMPLEX
-        else "assistant"
-    )
+    return "primary" if complexity == TriageComplexityClassification.COMPLEX else "assistant"
 
 
 def apply_homogeneous_role_control(
@@ -72,7 +70,11 @@ def apply_homogeneous_role_control(
 
     designated = evaluation_context.designated_model_role
     if designated is None:
-        raise ValueError("designated_model_role is required for model_role evaluation lane")
+        raise ValidationError(
+            "designated_model_role is required for model_role evaluation lane",
+            field="designated_model_role",
+            component="g8ee",
+        )
 
     natural_model_role = natural_model_role_from_triage(triage_complexity)
     controlled_role_assignment = EvaluationControlledRoleAssignment(
@@ -82,43 +84,20 @@ def apply_homogeneous_role_control(
         triage_complexity=triage_complexity,
     )
 
-    if designated == "primary":
-        active_agent = ReasoningAgent.SAGE
-        model_to_use = resolve_model(
-            tier="primary",
-            primary_override=model_overrides.primary_model,
-            assistant_override=None,
-            lite_override=None,
-            settings_primary_model=request_settings.llm.resolved_primary_model,
-            settings_assistant_model=request_settings.llm.resolved_assistant_model,
-            settings_lite_model=request_settings.llm.resolved_lite_model,
-        )
-    elif designated == "assistant":
-        active_agent = ReasoningAgent.DASH
-        model_to_use = resolve_model(
-            tier="assistant",
-            primary_override=None,
-            assistant_override=model_overrides.assistant_model,
-            lite_override=None,
-            settings_primary_model=request_settings.llm.resolved_primary_model,
-            settings_assistant_model=request_settings.llm.resolved_assistant_model,
-            settings_lite_model=request_settings.llm.resolved_lite_model,
-        )
-    else:
-        active_agent = ReasoningAgent.DASH
-        model_to_use = resolve_model(
-            tier="lite",
-            primary_override=None,
-            assistant_override=None,
-            lite_override=model_overrides.lite_model,
-            settings_primary_model=request_settings.llm.resolved_primary_model,
-            settings_assistant_model=request_settings.llm.resolved_assistant_model,
-            settings_lite_model=request_settings.llm.resolved_lite_model,
-        )
+    active_agent = DesignatedRoleToAgent[designated]
+    model_to_use = resolve_model_for_designated_role(
+        tier=designated,
+        overrides=model_overrides,
+        settings_primary_model=request_settings.llm.resolved_primary_model,
+        settings_assistant_model=request_settings.llm.resolved_assistant_model,
+        settings_lite_model=request_settings.llm.resolved_lite_model,
+    )
 
     if not model_to_use:
-        raise ValueError(
-            f"No model configured for designated homogeneous role {designated}"
+        raise ValidationError(
+            f"No model configured for designated homogeneous role {designated}",
+            field="model_config",
+            component="g8ee",
         )
 
     return ControlledRoleRouting(

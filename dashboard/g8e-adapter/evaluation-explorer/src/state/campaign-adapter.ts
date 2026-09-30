@@ -30,6 +30,7 @@ import {
 } from '../contract/types';
 import { normalizeActivityFamily, parseWireActivityFamily } from '../contract/activity-family';
 import { decodeCampaignProjectionEnvelope } from '../contract/campaign-wire';
+import { assertRoleTranscripts } from '../contract/validators';
 
 export const CAMPAIGN_SOURCE_REVISION = 'g8e-eval-campaign';
 
@@ -319,6 +320,7 @@ function adaptResultProjection(
     verification_metadata: mapVerificationMetadata(record.verification_metadata),
     model_response: optionalString(record.model_response),
     failure_output: optionalString(record.failure_output),
+    role_transcripts: mapRoleTranscripts(record.role_transcripts),
   };
 
   const records: Array<SnapshotRecord | LiveEvent> = [assignment];
@@ -487,6 +489,12 @@ function mapGovernedActionRecord(value: unknown, _path: string): PublicGovernedA
   return { action_label: 'governed action', reported_policy_outcome: mapReportedPolicyOutcome(requiredString(record, 'reported_policy_outcome')), receipt_status: mapReceiptStatus(requiredString(record, 'receipt_status')), evidence_source: mapEvidenceSource(requiredString(record, 'evidence_source')) };
 }
 
+function mapRoleTranscripts(value: unknown): AssignmentResult['role_transcripts'] {
+  if (value === undefined) return undefined;
+  assertRoleTranscripts(value, 'role_transcripts');
+  return value;
+}
+
 function mapEvidenceBindings(value: unknown): AssignmentResult['evidence_bindings'] {
   if (!Array.isArray(value)) return undefined;
   return value.map((entry) => {
@@ -603,6 +611,7 @@ function mapGradeSummaries(value: unknown): BenchmarkObservations['grade_summari
       return {
         criterion_id: criterionId,
         status,
+        explanation_code: mapExplanationCode(optionalString(summary.explanation_code) ?? 'evidence_unavailable'),
         detail: optionalString(summary.detail),
       };
     })

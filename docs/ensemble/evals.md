@@ -3,8 +3,8 @@ doc_id: ensemble-evals
 title: Ensemble Evaluations
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.0
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - ensemble/app/services/evaluation/
   - protocol/python/g8e/models/internal_api.py
@@ -63,7 +63,7 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | --- | --- |
 | INV-EVAL-TRACE-01 | `EvaluationTraceService` persists one immutable JSON trace per assignment and evaluation attempt at `$G8E_RUNTIME_DIR/data/evaluation/traces/<assignment-id>/<evaluation-attempt-id>.json`. When `G8E_RUNTIME_DIR` is unset, g8ee uses `.g8e` in the project root. |
 | INV-EVAL-TRACE-02 | Assignment and attempt IDs are validated as safe filenames before filesystem access. Trace writes use canonical JSON and atomic temporary-file replacement (write to `.json.tmp`, then replace). |
-| INV-EVAL-TRACE-03 | Trace schema version is `2`. Digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch. |
+| INV-EVAL-TRACE-03 | Trace schema version is `4` (`3` added `arguments_json`, `command`, and `result_json` to tool calls; `4` added the terminal `error` field).  Digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch. |
 | INV-EVAL-TRACE-04 | The authenticated, read-only lookup is `GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}`. The response is `{ "trace": <typed trace> }`. Missing traces return not-found. Unsafe path parameters are rejected. |
 
 ### Role control and model selection (`INV-EVAL-ROLE`)
@@ -71,7 +71,7 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | ID | Rule |
 | --- | --- |
 | INV-EVAL-ROLE-01 | For the `model_role` lane, `apply_homogeneous_role_control` runs after triage and records the designated role, the natural role from triage, whether they agree, and the triage complexity. The designated role overrides normal triage routing. |
-| INV-EVAL-ROLE-02 | The `primary` role activates `ReasoningAgent.SAGE` with `SagePersona`. The `assistant` and `lite` roles activate `ReasoningAgent.DASH` with `DashPersona`, with model resolution taken from the designated tier and request overrides. |
+| INV-EVAL-ROLE-02 | The `primary` role activates `ReasoningAgent.SAGE` with `SagePersona`. The `assistant` and `lite` roles activate `ReasoningAgent.DASH` with `DashPersona`, with model resolution taken from the designated tier and request overrides. Resolution uses `resolve_model_for_designated_role`, which reads only that tier's own override and settings value and never falls back to another tier; a missing model raises a `ValidationError`. |
 | INV-EVAL-ROLE-03 | A `lite` assignment always resolves the lite tier; the normal simple/complex routing rule does not override that assignment. The `system` lane does not apply homogeneous role control and follows normal triage routing. |
 
 ### Semantic grading (`INV-EVAL-GRADE`)
@@ -118,7 +118,7 @@ The chat endpoint returns after starting the background chat task. The campaign 
 A scored request uses the normal `ChatPipelineService` rather than an evaluation-only inference shortcut:
 
 1. g8ee performs triage and records the triage model telemetry in the assignment trace.
-2. For the `model_role` lane, `apply_homogeneous_role_control` runs after triage. It records the designated role, the natural role implied by triage, whether they agree, and the triage complexity. `primary` dynamically activates `ReasoningAgent.SAGE` with `SagePersona`; `assistant` and `lite` activate `ReasoningAgent.DASH` with `DashPersona`, with model resolution taken from the designated tier and its request overrides.
+2. For the `model_role` lane, `apply_homogeneous_role_control` runs after triage. It records the designated role, the natural role implied by triage, whether they agree, and the triage complexity. `primary` dynamically activates `ReasoningAgent.SAGE` with `SagePersona`; `assistant` and `lite` activate `ReasoningAgent.DASH` with `DashPersona`, with model resolution taken from the designated tier and its request overrides, with no cross-tier fallback.
 3. The designated role controls the scored model selection even when triage would normally select another tier. A `lite` assignment always resolves the lite tier; the normal simple/complex routing rule does not override that assignment.
 4. The system lane does not apply homogeneous role control and follows normal triage routing: complex turns use the primary Sage path, and other turns use the assistant Dash path.
 5. The sequential ReAct loop (`G8eAgent._stream_with_tool_loop`) records model calls and tool activity against the bound remote Data Operator without synthetic mocks. Both Tier 1 fast smoke gate assignments (`--gate-smoke`) and full qualification assignments drive this identical production ReAct loop. Governed operator tool calls retain the bound Operator ID and session ID, execution binding, and receipt status in the trace. Failed tool results are classified as policy `deny` for known policy or validation blocks, or `refused` for other failures.
@@ -151,16 +151,16 @@ A trace has schema version `2` and can contain:
 - triage and model-call telemetry;
 - controlled-role assignment and `invoked` or `role_not_invoked` outcome;
 - the designated-role output;
-- model tool decisions and executed tool calls, including hashed arguments;
+- model tool decisions and executed tool calls, each with the model's exact canonical-JSON `arguments_json`, `arguments_hash` (`sha256(arguments_json)`), the resolved `command`, and the canonical-JSON `result_json`;
 - governed-action bindings and policy decisions;
 - semantic grades and judge-call telemetry;
-- finish reason, terminal status, completion timestamp, and trace digest.
+- finish reason, terminal status, the terminal stream `error` message for a failed assignment, completion timestamp, and trace digest.
 
 The trace is campaign evidence, not an independent authorization record. It does not replace the Operator's local audit evidence, signed receipt, Gateway verification, or campaign verifier.
 
 ## Tool and governed-action evidence
 
-Evaluation tool evidence is collected only when `g8e_context.evaluation_context` is present. A started tool call records its name and decision ID. A completed call records a deterministic SHA-256 hash of the command payload or typed result, success, execution ID, operator-tool status, and error type.
+Evaluation tool evidence is collected only when `g8e_context.evaluation_context` is present. A started tool call records its name and decision ID. A completed call records the model's arguments as canonical JSON with their SHA-256 hash, the resolved command, the canonical-JSON typed result, success, execution ID, operator-tool status, and error type. These values are the source of the public `role_transcripts` extension described in [Public Spectator Architecture](../architecture/public_spectator.md).
 
 For a failed `CommandExecutionResult`, g8ee records a typed policy decision with the outcome `deny` or `refused` and the available error or denial detail. For a successful operator tool, it records the first bound Operator's ID and session ID, the execution binding, a completed receipt status, and policy outcome `allow`. These records describe what g8ee observed; they do not independently prove protocol authorization or receipt validity.
 

@@ -3,8 +3,8 @@ doc_id: getting_started_ensemble
 title: Getting Started with g8ee
 audience: developers implementing or deploying the ensemble
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - docs/ensemble/
   - ensemble/
@@ -162,16 +162,14 @@ make proto
 Configure `.env` with the endpoints visible from the local process:
 
 ```dotenv
-G8E_GATEWAY_HTTP_URL=http://localhost:8080
 G8E_GATEWAY_URL=https://localhost:8443
-G8E_OPERATOR_URL=https://localhost:8443
-G8E_OPERATOR_PUBSUB_URL=wss://localhost:8443
-G8E_G8EE_URL=https://localhost:8443
+G8E_GATEWAY_HTTPS_URL=https://localhost:8443
+G8E_GATEWAY_PUBSUB_URL=wss://localhost:8443
 ```
 
 Variable semantics:
-- `G8E_GATEWAY_HTTP_URL`: Plain-HTTP enrollment and discovery surface. If unset, enrollment derives it from `G8E_OPERATOR_URL` by changing `https` to `http` and port `8443` to `8080`. Startup fails closed when neither is available.
-- `G8E_OPERATOR_URL` and `G8E_OPERATOR_PUBSUB_URL`: Gateway-hosted HTTPS and WebSocket services used by ensemble transport clients.
+- `G8E_GATEWAY_HTTP_URL`: Optional override for the plain-HTTP enrollment and discovery surface. Defaults to `http://localhost:8080`.
+- `G8E_GATEWAY_HTTPS_URL` and `G8E_GATEWAY_PUBSUB_URL`: Gateway-hosted HTTPS and WebSocket services used by ensemble transport clients.
 - `G8E_GATEWAY_URL`: HTTPS base URL used by the internal HTTP client for Gateway event and operator-link operations.
 
 The process loads `.env` without replacing variables already present in the environment. The enrollment service obtains the Gateway CA bundle during enrollment and stores the app identity in the configured runtime tree. Do not put private keys, API keys, or copied operator credentials in documentation or source control. Governed application-record writes use the enrolled app certificate for transport and the configured Operator session binding as delegated authority; the Gateway validates both identities and applies the active posture. An application approval or mTLS fingerprint is not a substitute for required protocol L2 or L3 evidence.

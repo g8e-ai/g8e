@@ -44,11 +44,16 @@ def _resolve_host_path(raw_path: str | None, default: Path) -> Path:
     return path.expanduser().resolve()
 
 
-def _host_runtime_paths() -> tuple[Path, Path]:
-    runtime_dir = _resolve_host_path(
+def resolve_runtime_dir() -> Path:
+    """Resolve the ``.g8e`` runtime directory (``G8E_RUNTIME_DIR`` or ``<project>/.g8e``)."""
+    return _resolve_host_path(
         os.environ.get(EnvVar.RUNTIME_DIR),
         resolve_project_root() / ".g8e",
     )
+
+
+def _host_runtime_paths() -> tuple[Path, Path]:
+    runtime_dir = resolve_runtime_dir()
     pki_dir = _resolve_host_path(
         os.environ.get(EnvVar.PKI_DIR),
         runtime_dir / "pki",

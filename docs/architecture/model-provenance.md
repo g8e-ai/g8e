@@ -64,7 +64,7 @@ Invariant groups: [Operator topology](#operator-topology-inv-prov-topo), [Attest
 
 | ID | Rule |
 | --- | --- |
-| INV-PROV-PERSIST-01 | Gateway-local windows are canonical protojson files owned by the Gateway's runtime file service under `.g8e/data/inference/model-provenance/windows/`, keyed by `provider_attempt_id`. They are private runtime evidence, not public spectator data. |
+| INV-PROV-PERSIST-01 | Gateway-local windows are canonical protojson files owned by the Gateway's runtime file service under `.g8e/data/inference/model-provenance/windows/`, keyed by `provider_attempt_id`, which MUST be 1 to 128 ASCII letters, digits, `-`, `_`, or `.` (`models.ValidateProviderAttemptID`) because it names the file. They are private runtime evidence, not public spectator data. |
 | INV-PROV-PERSIST-02 | Authenticated owner mTLS clients read windows via GET `/api/v1/inference/model-provenance/attestations/{provider_attempt_id}`, which returns the window wrapped in a `window` field. |
 | INV-PROV-PERSIST-03 | Campaign verification validates the window's `attestation_digest` and checks the expected campaign digest binding. `g8e eval runs verify --require-provenance` enforces strict policy, requiring a valid window and `digest_match=true` for every scored inference. |
 | INV-PROV-PERSIST-04 | Missing windows are recorded as unavailable telemetry under interim policy. Strict policy requires a valid window for every scored inference. |

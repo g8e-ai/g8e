@@ -860,8 +860,9 @@ class ChatPipelineService:
             policy_decisions=state.policy_decisions,
             semantic_grades=semantic_grades,
             grader_calls=grader_calls,
-            finish_reason=state.finish_reason or "stop",
+            finish_reason=state.finish_reason or ("error" if state.stream_failed else "stop"),
             status="failed" if state.stream_failed else "completed",
+            error=state.error,
         )
 
     async def run_chat(

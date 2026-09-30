@@ -9,6 +9,7 @@ package inference
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -37,6 +38,13 @@ func mustNewScrubbingSvc(t *testing.T) *scrubbing.ScrubbingService {
 	svc, err := scrubbing.NewScrubbingService(context.Background(), &scrubbing.Config{Enabled: true, StrictMode: false}, testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 	return svc
+}
+
+func mustNewHandler(t *testing.T, backend Backend, cfg *config.Config, scrubbingSvc *scrubbing.ScrubbingService, logger *slog.Logger) *InferenceExecutionHandler {
+	t.Helper()
+	handler, err := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	require.NoError(t, err)
+	return handler
 }
 
 func mustMarshalInferenceRequested(t *testing.T, req *operatorv1.InferenceRequested) []byte {
@@ -87,7 +95,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PrimaryRole(t *testing.T) {
 		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -120,7 +128,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AssistantRole(t *testing.T)
 		KeepAlive:      "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -150,7 +158,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LiteRole(t *testing.T) {
 		KeepAlive: "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -180,7 +188,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_MatchingModelOverrideAccept
 		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -207,7 +215,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_UnauthorizedModelOverrideDe
 		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -235,7 +243,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CrossRoleModelDenied(t *tes
 		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -257,7 +265,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_MissingProviderAttemptIDRej
 	t.Parallel()
 	backend := &stubBackend{}
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "gemma3:4b"}}
-	handler := NewInferenceExecutionHandler(backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
+	handler := mustNewHandler(t, backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 	payload, err := proto.Marshal(&operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
 		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
@@ -317,11 +325,11 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CampaignRegistryAuthorizesE
 				Model:             model,
 				ServedModelDigest: modelDigest,
 			}}
-			handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{
+			handler := mustNewHandler(t, backend, &config.Config{Inference: config.InferenceConfig{
 				Enabled:             true,
 				CampaignID:          campaignID,
 				ModelRegistryDigest: registryDigest,
-			}}, nil, testutil.NewTestLogger())
+			}}, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 			payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
 				Role:                 role,
@@ -371,11 +379,11 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CampaignRegistryRejectsInva
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			backend := &stubBackend{}
-			handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{
+			handler := mustNewHandler(t, backend, &config.Config{Inference: config.InferenceConfig{
 				Enabled:             true,
 				CampaignID:          campaignID,
 				ModelRegistryDigest: registryDigest,
-			}}, nil, testutil.NewTestLogger())
+			}}, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 			req := &operatorv1.InferenceRequested{
 				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
 				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
@@ -416,12 +424,12 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AcceptsGovernedCampaignWith
 				Model:             model,
 				ServedModelDigest: modelDigest,
 			}}
-			handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{
+			handler := mustNewHandler(t, backend, &config.Config{Inference: config.InferenceConfig{
 				Enabled:        true,
 				PrimaryModel:   model,
 				AssistantModel: model,
 				LiteModel:      model,
-			}}, nil, testutil.NewTestLogger())
+			}}, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 			payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
 				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
@@ -459,7 +467,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_UnspecifiedRoleRejected(t *
 	backend := &stubBackend{}
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "gemma3:4b"}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -481,7 +489,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_EmptyPayloadReturnsErrPubSu
 	backend := &stubBackend{}
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "gemma3:4b"}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	cmdMsg := &testCommandMessage{payload: nil}
 
@@ -497,7 +505,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidPayloadReturnsError(
 	backend := &stubBackend{}
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "gemma3:4b"}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	cmdMsg := &testCommandMessage{payload: []byte("not a protobuf message")}
 
@@ -506,24 +514,31 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidPayloadReturnsError(
 	require.Error(t, err)
 }
 
-func TestInferenceHandler_ExecuteVerifiedTransaction_NilBackendReturnsErrInferenceBackendNotRegistered(t *testing.T) {
+func TestNewInferenceExecutionHandler_RejectsMissingDependencies(t *testing.T) {
 	t.Parallel()
-	logger := testutil.NewTestLogger()
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "gemma3:4b"}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(nil, cfg, scrubbingSvc, logger)
-
-	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
-		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages:             textInferenceMessages("test"),
-	})
-	cmdMsg := &testCommandMessage{payload: payload}
-
-	_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
-
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInferenceBackendNotRegistered)
+	logger := testutil.NewTestLogger()
+	tests := []struct {
+		name         string
+		backend      Backend
+		cfg          *config.Config
+		scrubbingSvc *scrubbing.ScrubbingService
+		logger       *slog.Logger
+	}{
+		{name: "nil backend", cfg: cfg, scrubbingSvc: scrubbingSvc, logger: logger},
+		{name: "nil config", backend: &stubBackend{}, scrubbingSvc: scrubbingSvc, logger: logger},
+		{name: "nil scrubbing service", backend: &stubBackend{}, cfg: cfg, logger: logger},
+		{name: "nil logger", backend: &stubBackend{}, cfg: cfg, scrubbingSvc: scrubbingSvc},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			handler, err := NewInferenceExecutionHandler(test.backend, test.cfg, test.scrubbingSvc, test.logger)
+			assert.Nil(t, handler)
+			assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+		})
+	}
 }
 
 func TestInferenceHandler_ExecuteVerifiedTransaction_BackendErrorReturnsErrInferenceGenerateFailed(t *testing.T) {
@@ -532,7 +547,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_BackendErrorReturnsErrInfer
 	backend := &stubBackend{generateErr: constants.ErrInferenceGenerateFailed}
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "gemma3:4b"}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -553,7 +568,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_NoDefaultModelReturnsErrInf
 	backend := &stubBackend{}
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -582,7 +597,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsPromptBeforeBackend(t
 		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	// Include an email-like pattern that scrubbing should redact
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
@@ -610,7 +625,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsTypedMessagesAndCanon
 		Model:        "test-model",
 	}}
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}
-	handler := NewInferenceExecutionHandler(backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
+	handler := mustNewHandler(t, backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 	schema := `{"properties":{"email":{"type":"string"}},"type":"object"}`
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -657,7 +672,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PreservesValidatedGeneratio
 	t.Parallel()
 	backend := &stubBackend{}
 	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}
-	handler := NewInferenceExecutionHandler(backend, cfg, nil, testutil.NewTestLogger())
+	handler := mustNewHandler(t, backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 	topP := float32(0.75)
 	topK := int32(42)
 	seed := int32(424242)
@@ -753,7 +768,7 @@ func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
 func TestInferenceHandler_ExecuteVerifiedTransaction_AcceptsDisabledThinkingAndParallelTools(t *testing.T) {
 	t.Parallel()
 	backend := &stubBackend{}
-	handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}, nil, testutil.NewTestLogger())
+	handler := mustNewHandler(t, backend, &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 	parallelToolCalls := true
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -1024,7 +1039,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 		t.Run(tt.name, func(t *testing.T) {
 			backend := &stubBackend{}
 			cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}
-			handler := NewInferenceExecutionHandler(backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
+			handler := mustNewHandler(t, backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 			payload := mustMarshalInferenceRequested(t, tt.req)
 
 			_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, &testCommandMessage{payload: payload})
@@ -1075,7 +1090,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest(
 		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -1105,7 +1120,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AppliesConfigKeepAliveDefau
 		KeepAlive:    "30m",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	// Request does not set keep_alive, so config default should be used
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
@@ -1135,7 +1150,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_RequestKeepAliveOverridesCo
 		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
-	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	handler := mustNewHandler(t, backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -1160,7 +1175,7 @@ func TestInferenceHandler_DefaultModelForRole_UnspecifiedReturnsEmpty(t *testing
 		AssistantModel: "assistant",
 		LiteModel:      "lite",
 	}}
-	handler := NewInferenceExecutionHandler(&stubBackend{}, cfg, mustNewScrubbingSvc(t), logger)
+	handler := mustNewHandler(t, &stubBackend{}, cfg, mustNewScrubbingSvc(t), logger)
 
 	assert.Equal(t, "primary", handler.defaultModelForRole(models.InferenceModelRolePrimary))
 	assert.Equal(t, "assistant", handler.defaultModelForRole(models.InferenceModelRoleAssistant))

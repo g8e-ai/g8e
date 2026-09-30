@@ -331,13 +331,15 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		if err := inference.VerifyProviderReady(ctx, ollamaBackend, vs.config.Inference); err != nil {
 			return fmt.Errorf("g8eo: %w", err)
 		}
-		inferenceHandler = inference.NewInferenceExecutionHandler(ollamaBackend, vs.config, scrubbingService, vs.logger)
+		inferenceHandler, err = inference.NewInferenceExecutionHandler(ollamaBackend, vs.config, scrubbingService, vs.logger)
+		if err != nil {
+			return fmt.Errorf("g8eo: inference handler: %w", err)
+		}
 		inferenceAttemptStore, err = inference.NewAttemptStore(vs.fileSvc)
 		if err != nil {
 			return fmt.Errorf("g8eo: inference attempt store: %w", err)
 		}
 		vs.logger.Info("Inference backend initialized",
-			"backend", vs.config.Inference.Backend,
 			"endpoint", vs.config.Inference.OllamaEndpoint,
 			"primary_model", vs.config.Inference.PrimaryModel,
 			"assistant_model", vs.config.Inference.AssistantModel,

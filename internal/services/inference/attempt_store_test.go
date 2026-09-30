@@ -80,3 +80,23 @@ func TestAttemptStore_FailMarksTerminalState(t *testing.T) {
 	assert.Equal(t, operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED, stored.GetStatus())
 	assert.Equal(t, "provider unavailable", stored.GetFailureSummary())
 }
+
+func TestAttemptStore_RejectsPathHostileAttemptID(t *testing.T) {
+	t.Parallel()
+	for _, attemptID := range []string{"../escape", "a/b", `a\b`, "..", "a\x00b"} {
+		t.Run(attemptID, func(t *testing.T) {
+			t.Parallel()
+			store, err := NewAttemptStore(storagetest.NewTestFileSvc(t, t.TempDir()))
+			require.NoError(t, err)
+			ctx := context.Background()
+
+			err = store.Begin(ctx, &operatorv1.InferenceProviderAttemptRecord{
+				ProviderAttemptId: attemptID,
+				TransactionId:     "tx-hostile",
+			})
+			assert.ErrorIs(t, err, constants.ErrInferenceProviderAttemptIDInvalid)
+			_, err = store.Get(ctx, attemptID)
+			assert.ErrorIs(t, err, constants.ErrInferenceProviderAttemptIDInvalid)
+		})
+	}
+}

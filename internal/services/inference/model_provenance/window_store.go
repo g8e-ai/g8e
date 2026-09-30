@@ -42,8 +42,11 @@ func (s *fileWindowStore) windowsDir() string {
 	return filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceModelProvenanceDirname, constants.InferenceModelProvenanceWindowsDirname)
 }
 
-func (s *fileWindowStore) windowPath(providerAttemptID string) string {
-	return filepath.Join(s.windowsDir(), providerAttemptID+constants.FileExtJSON)
+func (s *fileWindowStore) windowPath(providerAttemptID string) (string, error) {
+	if err := models.ValidateProviderAttemptID(providerAttemptID); err != nil {
+		return "", fmt.Errorf("model provenance window store: %w", err)
+	}
+	return filepath.Join(s.windowsDir(), providerAttemptID+constants.FileExtJSON), nil
 }
 
 func (s *fileWindowStore) Save(ctx context.Context, window *evalv1.ModelProvenanceAttestationWindow) error {
@@ -57,17 +60,25 @@ func (s *fileWindowStore) Save(ctx context.Context, window *evalv1.ModelProvenan
 	if err != nil {
 		return fmt.Errorf("model provenance window store: marshal: %w", err)
 	}
+	path, err := s.windowPath(window.GetProviderAttemptId())
+	if err != nil {
+		return err
+	}
 	if err := s.fileSvc.MkdirAll(ctx, s.windowsDir(), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("model provenance window store: mkdir: %w", err)
 	}
-	return s.fileSvc.WriteFile(ctx, s.windowPath(window.GetProviderAttemptId()), body, constants.PermFilePrivate)
+	return s.fileSvc.WriteFile(ctx, path, body, constants.PermFilePrivate)
 }
 
 func (s *fileWindowStore) Load(ctx context.Context, providerAttemptID string) (*evalv1.ModelProvenanceAttestationWindow, error) {
 	if providerAttemptID == "" {
 		return nil, fmt.Errorf("model provenance window store: %w", constants.ErrMissingRequiredField)
 	}
-	body, err := s.fileSvc.ReadFile(ctx, s.windowPath(providerAttemptID))
+	path, err := s.windowPath(providerAttemptID)
+	if err != nil {
+		return nil, err
+	}
+	body, err := s.fileSvc.ReadFile(ctx, path)
 	if err != nil {
 		return nil, err
 	}

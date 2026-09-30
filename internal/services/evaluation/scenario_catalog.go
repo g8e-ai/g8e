@@ -28,6 +28,7 @@ type ScenarioBlueprint struct {
 	ExpectedTools               []string
 	ForbiddenTools              []string
 	RequiredConcepts            []string
+	EligibleRoles               []evalv1.ModelCampaignRole
 	TinyTask                    bool
 	RequiresToolDecision        bool
 	RequiresGovernedAction      bool
@@ -172,6 +173,9 @@ func ValidateSmokeGateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog,
 		if scenario == nil || scenario.GetScenarioId() == "" || scenario.GetScenarioVersion() == "" {
 			return fmt.Errorf("evaluation: validate smoke scenario catalog: %w", constants.ErrMissingRequiredField)
 		}
+		if _, err := scenarioEligibleRoles(scenario); err != nil {
+			return fmt.Errorf("evaluation: validate smoke scenario catalog: %w", err)
+		}
 		pair, ok := artifacts[scenario.GetScenarioId()]
 		if !ok {
 			return fmt.Errorf("evaluation: validate smoke scenario catalog: missing artifacts for scenario %s", scenario.GetScenarioId())
@@ -225,6 +229,9 @@ func ValidateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog, artifact
 		if scenario.GetInputFixtureRef() == nil || scenario.GetGoldCriteriaRef() == nil {
 			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s missing fixture references", scenario.GetScenarioId())
 		}
+		if _, err := scenarioEligibleRoles(scenario); err != nil {
+			return fmt.Errorf("evaluation: validate scenario catalog: %w", err)
+		}
 		pair, ok := artifacts[scenario.GetScenarioId()]
 		if !ok {
 			return fmt.Errorf("evaluation: validate scenario catalog: missing artifacts for scenario %s", scenario.GetScenarioId())
@@ -263,6 +270,7 @@ func materializeScenarioBlueprint(blueprint ScenarioBlueprint) (*evalv1.Evaluati
 		ExpectedTools:     append([]string(nil), blueprint.ExpectedTools...),
 		ForbiddenTools:    append([]string(nil), blueprint.ForbiddenTools...),
 		RequiredConcepts:  append([]string(nil), blueprint.RequiredConcepts...),
+		EligibleRoles:     append([]evalv1.ModelCampaignRole(nil), blueprint.EligibleRoles...),
 		InputFixtureRef:   inputArtifact.Reference,
 		GoldCriteriaRef:   goldArtifact.Reference,
 	}, ScenarioArtifacts{Input: inputArtifact, Gold: goldArtifact}, nil

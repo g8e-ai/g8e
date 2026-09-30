@@ -143,7 +143,6 @@ test('renders rich assignment evidence from mirror history and follows sibling r
 
   await page.goto(`/evaluations/${datasetId}/${runId}/assignments/assignment-1`);
   await expect(page.getByText('Follows a bounded response-format instruction.')).toBeVisible();
-  await expect(page.getByLabel('Public criteria')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'What happened' })).toBeVisible();
   await expect(page.getByText('1 observed')).toBeVisible();
   await expect(page.getByText('Criterion passed')).toBeVisible();

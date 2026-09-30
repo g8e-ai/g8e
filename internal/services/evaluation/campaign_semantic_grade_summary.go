@@ -24,7 +24,11 @@ func BuildPublicGradeSummarySet(result *evalv1.EvaluationAssignmentResult, scena
 		if grade == nil || grade.GetCriterionId() == "" {
 			return nil, fmt.Errorf("evaluation: build public grade summaries: %w", constants.ErrEvidenceArtifactMalformed)
 		}
-		deterministic = append(deterministic, PublicGradeSummary{CriterionID: grade.GetCriterionId(), Status: publicVerdictStatus(grade.GetStatus())})
+		deterministic = append(deterministic, PublicGradeSummary{
+			CriterionID:     grade.GetCriterionId(),
+			Status:          publicVerdictStatus(grade.GetStatus()),
+			ExplanationCode: PublicGradeExplanation(grade.GetStatus()).String(),
+		})
 	}
 	semantic := make([]*evalv1.PublicSemanticGradeSummary, 0, len(result.GetSemanticGrades()))
 	for _, grade := range result.GetSemanticGrades() {
@@ -82,7 +86,11 @@ func buildPublicGradeSummaries(result *evalv1.EvaluationAssignmentResult) []Publ
 	out := make([]PublicGradeSummary, 0, len(result.GetDeterministicGrades()))
 	for _, grade := range result.GetDeterministicGrades() {
 		if grade != nil && grade.GetCriterionId() != "" {
-			out = append(out, PublicGradeSummary{CriterionID: grade.GetCriterionId(), Status: publicVerdictStatus(grade.GetStatus())})
+			out = append(out, PublicGradeSummary{
+				CriterionID:     grade.GetCriterionId(),
+				Status:          publicVerdictStatus(grade.GetStatus()),
+				ExplanationCode: PublicGradeExplanation(grade.GetStatus()).String(),
+			})
 		}
 	}
 	return out

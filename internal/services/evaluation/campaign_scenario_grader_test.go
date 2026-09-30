@@ -85,6 +85,105 @@ func TestGradeHomogeneousScenario_InstructionBoundedCountFailsWithWrongWordCount
 	assert.Less(t, result.DecomposedScores[1].GetValue(), 1.0)
 }
 
+func TestGradeHomogeneousScenario_RouteLiteTriageFailsWhenOutputOverEscalates(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace(t, "lite")
+	trace["designated_role_output"] = "action"
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+	_, artifacts, err := BuildScenarioCatalog()
+	require.NoError(t, err)
+	var gold ScenarioGoldCriteria
+	require.NoError(t, json.Unmarshal(artifacts["route-lite-triage"].Gold.Body, &gold))
+	result, err := GradeHomogeneousScenario(ScenarioGradingRequest{
+		AssignmentID:   "assignment-lite-triage",
+		ScenarioID:     "route-lite-triage",
+		DesignatedRole: "lite",
+		GradingMethod:  evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+		ScenarioInput: ScenarioInputFixture{
+			UserPrompt: "Assign the synthetic alert below one label: noise or action. Reply with only the label.",
+		},
+		ScenarioGold: gold,
+		Trace:        trace,
+		Lifecycle:    evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	})
+	require.NoError(t, err)
+	content := findDeterministicGrade(result.DeterministicGrades, "scenario-content")
+	require.NotNil(t, content)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, content.GetStatus())
+	liteResponsibility := findDeterministicGrade(result.DeterministicGrades, "lite-responsibility")
+	require.NotNil(t, liteResponsibility)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, liteResponsibility.GetStatus())
+	escalation := findDeterministicGrade(result.DeterministicGrades, "required-evidence:escalation")
+	require.NotNil(t, escalation)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, escalation.GetStatus())
+}
+
+func TestGradeHomogeneousScenario_RouteLiteTriagePassesWithNoiseLabel(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace(t, "lite")
+	trace["designated_role_output"] = "noise"
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+	_, artifacts, err := BuildScenarioCatalog()
+	require.NoError(t, err)
+	var gold ScenarioGoldCriteria
+	require.NoError(t, json.Unmarshal(artifacts["route-lite-triage"].Gold.Body, &gold))
+	result, err := GradeHomogeneousScenario(ScenarioGradingRequest{
+		AssignmentID:   "assignment-lite-triage-pass",
+		ScenarioID:     "route-lite-triage",
+		DesignatedRole: "lite",
+		GradingMethod:  evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+		ScenarioInput: ScenarioInputFixture{
+			UserPrompt: "Assign the synthetic alert below one label: noise or action. Reply with only the label.",
+		},
+		ScenarioGold: gold,
+		Trace:        trace,
+		Lifecycle:    evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	})
+	require.NoError(t, err)
+	content := findDeterministicGrade(result.DeterministicGrades, "scenario-content")
+	require.NotNil(t, content)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, content.GetStatus())
+	liteResponsibility := findDeterministicGrade(result.DeterministicGrades, "lite-responsibility")
+	require.NotNil(t, liteResponsibility)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, liteResponsibility.GetStatus())
+	escalation := findDeterministicGrade(result.DeterministicGrades, "required-evidence:escalation")
+	require.NotNil(t, escalation)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, escalation.GetStatus())
+}
+
+func TestGradeHomogeneousScenario_RoutePrimaryOwnershipEscalationEvidenceUnavailableWithoutContentCheck(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace(t, "primary")
+	trace["designated_role_output"] = "Checkout API timeout rate rose to 18 percent during the deploy."
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+	_, artifacts, err := BuildScenarioCatalog()
+	require.NoError(t, err)
+	var gold ScenarioGoldCriteria
+	require.NoError(t, json.Unmarshal(artifacts["route-primary-ownership"].Gold.Body, &gold))
+	result, err := GradeHomogeneousScenario(ScenarioGradingRequest{
+		AssignmentID:   "assignment-primary-ownership",
+		ScenarioID:     "route-primary-ownership",
+		DesignatedRole: "primary",
+		GradingMethod:  evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+		ScenarioInput: ScenarioInputFixture{
+			UserPrompt: "Summarize the synthetic incident below in one sentence for the on-call primary owner.",
+		},
+		ScenarioGold: gold,
+		Trace:        trace,
+		Lifecycle:    evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	})
+	require.NoError(t, err)
+	handoff := findDeterministicGrade(result.DeterministicGrades, "required-evidence:handoff")
+	require.NotNil(t, handoff)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, handoff.GetStatus())
+}
+
 func TestGradeHomogeneousScenario_SemanticScenarioUsesImportedTraceGrades(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace(t, "primary")

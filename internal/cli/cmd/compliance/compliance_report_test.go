@@ -776,7 +776,7 @@ func generateCampaignComplianceBundleFixture(t *testing.T, includeWitnesses bool
 	controller := evaluation.NewCampaignController(store, executor, func() time.Time { return executedAt }, func(prefix string) string { return prefix + "-1" })
 	req := cmdtest.EvaluationTestCampaignInitRequest(t)
 	catalog := req.Catalog
-	truncated := &evalv1.EvaluationScenarioCatalog{SchemaVersion: catalog.GetSchemaVersion(), CatalogRef: catalog.GetCatalogRef(), Scenarios: catalog.GetScenarios()[:1]}
+	truncated := &evalv1.EvaluationScenarioCatalog{SchemaVersion: catalog.GetSchemaVersion(), CatalogRef: catalog.GetCatalogRef(), Scenarios: catalog.GetScenarios()[:3]}
 	catalogDigest, err := evaluation.ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
 	truncated.CatalogDigest = catalogDigest
