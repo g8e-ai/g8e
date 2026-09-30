@@ -1187,7 +1187,7 @@ func TestInferenceHandler_DefaultModelForRole_UnspecifiedReturnsEmpty(t *testing
 // this escaped form; a raw '<', '>' or '&' round-trips to a different string
 // and is rejected as non-canonical.
 func TestNormalizeCanonicalJSON_EscapesHTMLCharacters(t *testing.T) {
-	escaped := `{"pattern":":(){ :|:& };:","substring":"> /dev/sd"}`
+	escaped := `{"pattern":":(){ :|:\u0026 };:","substring":"\u003e /dev/sd","tag":"\u003cb\u003e\u2028\u2029\u003c/b\u003e"}`
 	got, err := normalizeCanonicalJSON(escaped, true, nil)
 	require.NoError(t, err)
 	assert.Equal(t, escaped, got)
