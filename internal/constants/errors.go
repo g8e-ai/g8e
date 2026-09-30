@@ -1556,4 +1556,6 @@ var (
 	ErrOperatorSessionNotFound             = errors.New("evaluation: no active operator session")
 	ErrEvaluationAppCredentialStale        = errors.New("evaluation: delegated app credential is not trusted by the gateway's current PKI")
 	ErrEvaluationAppCredentialMissing      = errors.New("evaluation: no delegated app credential available")
+	ErrEvaluationScenarioRolesUnassigned   = errors.New("evaluation: scenario has no valid eligible roles")
+	ErrEvaluationRoleNotEligible           = errors.New("evaluation: role is not eligible for scenario")
 )

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest, marshal_canonical_json
 
-from app.constants.env_vars import EnvVar
+from app.constants.paths import resolve_runtime_dir
 from app.errors import ValidationError
 from app.models.evaluation_trace import (
     EvaluationAssignmentTrace,
@@ -29,7 +29,6 @@ from app.models.evaluation_trace import (
 )
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
-from app.utils.path import resolve_project_root
 from app.utils.security import resolve_safe_path_segments, validate_safe_filename
 from app.utils.time_ids.timestamp import now
 
@@ -44,11 +43,7 @@ _TRACE_SCHEMA_VERSION = "4"
 
 
 def _trace_root() -> Path:
-    runtime_dir = os.environ.get(EnvVar.RUNTIME_DIR)
-    base = Path(runtime_dir) if runtime_dir else resolve_project_root() / ".g8e"
-    if not base.is_absolute():
-        base = resolve_project_root() / base
-    return (base / "data" / "evaluation" / "traces").resolve()
+    return (resolve_runtime_dir() / "data" / "evaluation" / "traces").resolve()
 
 
 def validated_trace_ids(assignment_id: str, evaluation_attempt_id: str) -> tuple[str, str]:

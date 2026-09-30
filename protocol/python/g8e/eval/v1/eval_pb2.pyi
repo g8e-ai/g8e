@@ -772,7 +772,7 @@ class PublicToolScoreDimensionRequirement(_message.Message):
     def __init__(self, dimension: _Optional[_Union[PublicToolScoreDimension, str]] = ..., required: _Optional[bool] = ...) -> None: ...
 
 class EvaluationScenarioDefinition(_message.Message):
-    __slots__ = ("scenario_id", "scenario_version", "category", "public_description", "grading_method", "allowed_tools", "expected_tools", "forbidden_tools", "input_fixture_ref", "required_concepts", "gold_criteria_ref", "public_criteria", "public_tool_score_dimensions")
+    __slots__ = ("scenario_id", "scenario_version", "category", "public_description", "grading_method", "allowed_tools", "expected_tools", "forbidden_tools", "input_fixture_ref", "required_concepts", "gold_criteria_ref", "public_criteria", "public_tool_score_dimensions", "eligible_roles")
     SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
     SCENARIO_VERSION_FIELD_NUMBER: _ClassVar[int]
     CATEGORY_FIELD_NUMBER: _ClassVar[int]
@@ -786,6 +786,7 @@ class EvaluationScenarioDefinition(_message.Message):
     GOLD_CRITERIA_REF_FIELD_NUMBER: _ClassVar[int]
     PUBLIC_CRITERIA_FIELD_NUMBER: _ClassVar[int]
     PUBLIC_TOOL_SCORE_DIMENSIONS_FIELD_NUMBER: _ClassVar[int]
+    ELIGIBLE_ROLES_FIELD_NUMBER: _ClassVar[int]
     scenario_id: str
     scenario_version: str
     category: EvaluationScenarioCategory
@@ -799,7 +800,8 @@ class EvaluationScenarioDefinition(_message.Message):
     gold_criteria_ref: _compliance_pb2.ComplianceEvidenceReference
     public_criteria: _containers.RepeatedCompositeFieldContainer[PublicScenarioCriterion]
     public_tool_score_dimensions: _containers.RepeatedCompositeFieldContainer[PublicToolScoreDimensionRequirement]
-    def __init__(self, scenario_id: _Optional[str] = ..., scenario_version: _Optional[str] = ..., category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., public_description: _Optional[str] = ..., grading_method: _Optional[_Union[EvaluationGradingMethod, str]] = ..., allowed_tools: _Optional[_Iterable[str]] = ..., expected_tools: _Optional[_Iterable[str]] = ..., forbidden_tools: _Optional[_Iterable[str]] = ..., input_fixture_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., required_concepts: _Optional[_Iterable[str]] = ..., gold_criteria_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., public_criteria: _Optional[_Iterable[_Union[PublicScenarioCriterion, _Mapping]]] = ..., public_tool_score_dimensions: _Optional[_Iterable[_Union[PublicToolScoreDimensionRequirement, _Mapping]]] = ...) -> None: ...
+    eligible_roles: _containers.RepeatedScalarFieldContainer[ModelCampaignRole]
+    def __init__(self, scenario_id: _Optional[str] = ..., scenario_version: _Optional[str] = ..., category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., public_description: _Optional[str] = ..., grading_method: _Optional[_Union[EvaluationGradingMethod, str]] = ..., allowed_tools: _Optional[_Iterable[str]] = ..., expected_tools: _Optional[_Iterable[str]] = ..., forbidden_tools: _Optional[_Iterable[str]] = ..., input_fixture_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., required_concepts: _Optional[_Iterable[str]] = ..., gold_criteria_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., public_criteria: _Optional[_Iterable[_Union[PublicScenarioCriterion, _Mapping]]] = ..., public_tool_score_dimensions: _Optional[_Iterable[_Union[PublicToolScoreDimensionRequirement, _Mapping]]] = ..., eligible_roles: _Optional[_Iterable[_Union[ModelCampaignRole, str]]] = ...) -> None: ...
 
 class ModelVariant(_message.Message):
     __slots__ = ("variant_id", "provider_class", "served_model_tag", "model_digest", "model_family", "parameter_count", "quantization", "context_limit", "capability_observations")

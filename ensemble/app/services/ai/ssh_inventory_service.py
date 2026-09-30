@@ -24,7 +24,6 @@ import logging
 import os
 from pathlib import Path
 
-from app.constants.env_vars import EnvVar
 from app.errors import ConfigurationError
 from app.utils.security import validate_safe_path
 from app.models.ssh_inventory import SshHost, SshInventory
@@ -33,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 _WILDCARD_CHARS = frozenset("*?!")
+_DEFAULT_SSH_CONFIG_PATH = "/etc/g8e/ssh_config"
 
 
 class SshInventoryService:
@@ -301,10 +301,5 @@ def _parse_ssh_config(
 
 
 def default_ssh_inventory_service() -> SshInventoryService:
-    """Construct an :class:`SshInventoryService` using the canonical mount path.
-
-    The path is overridable via the ``G8E_SSH_CONFIG_PATH`` env var so tests
-    can point the service at a fixture without mocking.
-    """
-    path = os.environ.get(EnvVar.SSH_CONFIG_PATH, "/etc/g8e/ssh_config")
-    return SshInventoryService(ssh_config_path=path)
+    """Construct an :class:`SshInventoryService` using the canonical mount path."""
+    return SshInventoryService(ssh_config_path=_DEFAULT_SSH_CONFIG_PATH)

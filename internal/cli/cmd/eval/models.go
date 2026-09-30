@@ -562,8 +562,8 @@ The registry then binds to the provider's exact model digests.`,
 				return output.WriteRawJSON(cmd.OutOrStdout(), payload)
 			}
 			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(out, "Registry digest: %s\nModels: %d\nHomogeneous matrix: %d cells (%d models x %d roles x %d scenarios)\n",
-				freeze.RegistryDigest, len(freeze.Variants), freeze.HomogeneousCellCount, len(freeze.Variants), evaluation.HomogeneousRoleCount, evaluation.StandardScenarioCount)
+			_, _ = fmt.Fprintf(out, "Registry digest: %s\nModels: %d\nHomogeneous matrix: %d cells (%d models x role-eligible scenario cells)\n",
+				freeze.RegistryDigest, len(freeze.Variants), freeze.HomogeneousCellCount, len(freeze.Variants))
 			for _, variant := range freeze.Variants {
 				_, _ = fmt.Fprintf(out, "- %s (%s) %s\n", variant.GetServedModelTag(), variant.GetVariantId(), variant.GetModelDigest())
 			}

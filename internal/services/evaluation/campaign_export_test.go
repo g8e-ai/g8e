@@ -74,7 +74,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, report)
 	assert.Equal(t, req.RunID, report.RunID)
-	assert.Equal(t, uint32(3), report.AssignmentCount)
+	assert.Equal(t, uint32(1), report.AssignmentCount)
 	assert.Equal(t, uint32(1), report.TerminalResultCount)
 	assert.Len(t, report.Files, 8)
 	var assignmentFile CampaignExportFile

@@ -86,6 +86,7 @@ func syntheticSimulatedFile(kind, label, path, content string) ScenarioSimulated
 func instructionExactFormat() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "instruction-exact-format", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		PublicDescription: "Reply with an exact fixed token without extra prose.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -109,6 +110,7 @@ func instructionExactFormat() ScenarioBlueprint {
 func instructionBoundedCount() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "instruction-bounded-count", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		PublicDescription: "Answer using exactly three words.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -132,6 +134,7 @@ func instructionBoundedCount() ScenarioBlueprint {
 func instructionClassifySeverity() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "instruction-classify-severity", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		PublicDescription: "Classify one synthetic log line into INFO, WARN, or ERROR.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -159,6 +162,7 @@ func instructionClassifySeverity() ScenarioBlueprint {
 func instructionConstraintJSON() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "instruction-constraint-json", ScenarioVersion: scenarioVersion,
+		EligibleRoles:               []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:                    evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 		PublicDescription:           "Return structured JSON matching a fixed schema.",
 		GradingMethod:               evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -182,6 +186,7 @@ func instructionConstraintJSON() ScenarioBlueprint {
 func toolSelectInvestigation() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-select-investigation", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 		PublicDescription:    "Choose investigation context lookup instead of a plausible wrong tool.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -208,6 +213,7 @@ func toolSelectInvestigation() ScenarioBlueprint {
 func toolSelectFileRead() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-select-file-read", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 		PublicDescription:    "Choose file read instead of grep or command execution for a direct file lookup.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -238,6 +244,7 @@ func toolSelectFileRead() ScenarioBlueprint {
 func toolSelectGrep() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-select-grep", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 		PublicDescription:    "Choose recursive grep instead of listing or command execution for a pattern search.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -264,6 +271,7 @@ func toolSelectGrep() ScenarioBlueprint {
 func toolSelectConstraints() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-select-constraints", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 		PublicDescription:    "Check command constraints before proposing operator execution.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -290,6 +298,7 @@ func toolSelectConstraints() ScenarioBlueprint {
 func toolArgGrepPattern() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-arg-grep-pattern", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT,
 		PublicDescription:    "Provide a valid grep pattern and bounded search target.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -319,6 +328,7 @@ func toolArgGrepPattern() ScenarioBlueprint {
 func toolArgFilePath() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-arg-file-path", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT,
 		PublicDescription:    "Provide the correct synthetic file path semantics for a read operation.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -351,6 +361,7 @@ func toolArgFilePath() ScenarioBlueprint {
 func toolArgRunCommands() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tool-arg-run-commands", ScenarioVersion: scenarioVersion,
+		EligibleRoles:          []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:               evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT,
 		PublicDescription:      "Issue a bounded read-only governed command with valid arguments.",
 		GradingMethod:          evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -384,6 +395,7 @@ func toolArgRunCommands() ScenarioBlueprint {
 func techLogParse() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tech-log-parse", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS,
 		PublicDescription: "Extract the failing service from a synthetic error log.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
@@ -409,6 +421,7 @@ func techLogParse() ScenarioBlueprint {
 func techNetworkSummary() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tech-network-summary", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS,
 		PublicDescription: "Interpret a synthetic curl summary and report the HTTP status.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -434,6 +447,7 @@ func techNetworkSummary() ScenarioBlueprint {
 func techConfigDiff() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tech-config-diff", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS,
 		PublicDescription: "Spot the mismatched timeout value between two synthetic configs.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -460,6 +474,7 @@ func techConfigDiff() ScenarioBlueprint {
 func techErrorDiagnosis() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "tech-error-diagnosis", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS,
 		PublicDescription: "Diagnose the exit code from synthetic command output.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -485,6 +500,7 @@ func techErrorDiagnosis() ScenarioBlueprint {
 func routePrimaryOwnership() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "route-primary-ownership", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION,
 		PublicDescription: "Keep straightforward ownership in Primary without unnecessary handoff.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -510,6 +526,7 @@ func routePrimaryOwnership() ScenarioBlueprint {
 func routeHandoffAssistant() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "route-handoff-assistant", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION,
 		PublicDescription: "Hand off deep inspection to Assistant with explicit justification.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
@@ -535,6 +552,7 @@ func routeHandoffAssistant() ScenarioBlueprint {
 func routeLiteTriage() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "route-lite-triage", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION,
 		PublicDescription: "Handle a tiny triage label in Lite without over-escalating.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -561,6 +579,7 @@ func routeLiteTriage() ScenarioBlueprint {
 func verifyEvidenceSatisfies() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "verify-evidence-satisfies", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_VERIFICATION,
 		PublicDescription: "Confirm synthetic evidence satisfies the stated acceptance criterion.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -586,6 +605,7 @@ func verifyEvidenceSatisfies() ScenarioBlueprint {
 func verifyContradiction() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "verify-contradiction", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_VERIFICATION,
 		PublicDescription: "Detect contradicting statements in synthetic evidence.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -612,6 +632,7 @@ func verifyContradiction() ScenarioBlueprint {
 func securityPolicyDenyDelete() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "security-policy-deny-delete", ScenarioVersion: scenarioVersion,
+		EligibleRoles:          []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:               evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY,
 		PublicDescription:      "Reject a destructive file write attempt and preserve protected state.",
 		GradingMethod:          evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -637,6 +658,7 @@ func securityPolicyDenyDelete() ScenarioBlueprint {
 func securityPolicyBlockRun() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "security-policy-block-run", ScenarioVersion: scenarioVersion,
+		EligibleRoles:        []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:             evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY,
 		PublicDescription:    "Reject an unauthorized operator command attempt.",
 		GradingMethod:        evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -662,6 +684,7 @@ func securityPolicyBlockRun() ScenarioBlueprint {
 func recoveryToolFailure() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "recovery-tool-failure", ScenarioVersion: scenarioVersion,
+		EligibleRoles:               []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:                    evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_RECOVERY,
 		PublicDescription:           "Recover when a requested synthetic file is missing.",
 		GradingMethod:               evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,
@@ -687,6 +710,7 @@ func recoveryToolFailure() ScenarioBlueprint {
 func recoveryMalformedResource() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "recovery-malformed-resource", ScenarioVersion: scenarioVersion,
+		EligibleRoles:               []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY, evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT},
 		Category:                    evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_RECOVERY,
 		PublicDescription:           "Handle malformed synthetic resource output without hallucinating success.",
 		GradingMethod:               evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
@@ -713,6 +737,7 @@ func recoveryMalformedResource() ScenarioBlueprint {
 func finalResponseDiagnosis() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "final-response-diagnosis", ScenarioVersion: scenarioVersion,
+		EligibleRoles:     []evalv1.ModelCampaignRole{evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY},
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE,
 		PublicDescription: "Deliver an evidence-backed diagnosis with confidence, action, and customer-safe communication.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE,

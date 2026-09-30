@@ -12,9 +12,6 @@ This test exercises real construction to catch production startup bugs that
 would be hidden by mocking create_all_services in test_main_lifespan.py.
 """
 
-import os
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -55,59 +52,35 @@ class TestServiceFactorySmoke:
         what production code expects, catching bugs like missing parameters or
         incorrect field access that would be hidden by mocking.
         """
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("")
-            ssh_config_path = f.name
+        services = ServiceFactory.create_all_services(
+            settings=mock_settings,
+            cache_aside_service=mock_cache_aside,
+            db_service=MagicMock(),
+            kv_service=MagicMock(),
+            blob_service=None,
+            web_search_provider=None,
+            governance_client=MagicMock(),
+        )
 
-        try:
-            os.environ["G8E_SSH_CONFIG_PATH"] = ssh_config_path
-
-            services = ServiceFactory.create_all_services(
-                settings=mock_settings,
-                cache_aside_service=mock_cache_aside,
-                db_service=MagicMock(),
-                kv_service=MagicMock(),
-                blob_service=None,
-                web_search_provider=None,
-                governance_client=MagicMock(),
-            )
-
-            assert services is not None
-            assert hasattr(services, "tool_service")
-            assert hasattr(services, "investigation_service")
-            assert hasattr(services, "ssh_inventory_service")
-            assert isinstance(services.certificate_service.data_service, CertificateDataService)
-
-        finally:
-            Path(ssh_config_path).unlink()
-            if "G8E_SSH_CONFIG_PATH" in os.environ:
-                del os.environ["G8E_SSH_CONFIG_PATH"]
+        assert services is not None
+        assert hasattr(services, "tool_service")
+        assert hasattr(services, "investigation_service")
+        assert hasattr(services, "ssh_inventory_service")
+        assert isinstance(services.certificate_service.data_service, CertificateDataService)
 
     def test_create_all_services_with_web_search_provider(self, mock_settings, mock_cache_aside):
         """Test create_all_services with web search provider injected."""
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write("")
-            ssh_config_path = f.name
+        web_search_provider = MagicMock()
 
-        try:
-            os.environ["G8E_SSH_CONFIG_PATH"] = ssh_config_path
+        services = ServiceFactory.create_all_services(
+            settings=mock_settings,
+            cache_aside_service=mock_cache_aside,
+            db_service=MagicMock(),
+            kv_service=MagicMock(),
+            blob_service=None,
+            web_search_provider=web_search_provider,
+            governance_client=MagicMock(),
+        )
 
-            web_search_provider = MagicMock()
-
-            services = ServiceFactory.create_all_services(
-                settings=mock_settings,
-                cache_aside_service=mock_cache_aside,
-                db_service=MagicMock(),
-                kv_service=MagicMock(),
-                blob_service=None,
-                web_search_provider=web_search_provider,
-                governance_client=MagicMock(),
-            )
-
-            assert services is not None
-            assert services.web_search_provider is web_search_provider
-
-        finally:
-            Path(ssh_config_path).unlink()
-            if "G8E_SSH_CONFIG_PATH" in os.environ:
-                del os.environ["G8E_SSH_CONFIG_PATH"]
+        assert services is not None
+        assert services.web_search_provider is web_search_provider

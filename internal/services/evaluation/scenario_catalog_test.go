@@ -137,6 +137,7 @@ func TestHomogeneousAssignmentMatrix_FiltersBySmokeGateScenarioIDs(t *testing.T)
 		ScenarioIDs: SmokeGateScenarioIDs,
 	})
 	require.NoError(t, err)
-	// 5 scenarios × 1 variant × 3 roles = 15 assignments
-	assert.Len(t, assignments, 15)
+	// instruction-exact-format and tech-error-diagnosis are Lite-only; the
+	// three tool/policy/recovery scenarios are Primary and Assistant.
+	assert.Len(t, assignments, 8)
 }

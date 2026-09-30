@@ -85,7 +85,7 @@ func TestCampaignControllerInitializeScheduleAndResume(t *testing.T) {
 
 	count, err := controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
 	require.NoError(t, err)
-	assert.Equal(t, 3, count)
+	assert.Equal(t, 1, count)
 
 	first, ok, err := controller.ResumeNextAssignment(context.Background(), req.RunID)
 	require.NoError(t, err)

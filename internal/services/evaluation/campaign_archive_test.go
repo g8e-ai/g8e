@@ -59,7 +59,7 @@ func newArchiveFixture(t *testing.T) *archiveFixture {
 		require.NoError(t, err)
 		count, err := controller.ScheduleHomogeneousRun(context.Background(), runID)
 		require.NoError(t, err)
-		require.Equal(t, 3, count)
+		require.Equal(t, 1, count)
 		fixture.runIDs = append(fixture.runIDs, runID)
 	}
 	return fixture

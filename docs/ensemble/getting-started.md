@@ -162,7 +162,6 @@ make proto
 Configure `.env` with the endpoints visible from the local process:
 
 ```dotenv
-G8E_GATEWAY_HTTP_URL=http://localhost:8080
 G8E_GATEWAY_URL=https://localhost:8443
 G8E_OPERATOR_URL=https://localhost:8443
 G8E_OPERATOR_PUBSUB_URL=wss://localhost:8443
@@ -170,7 +169,7 @@ G8E_G8EE_URL=https://localhost:8443
 ```
 
 Variable semantics:
-- `G8E_GATEWAY_HTTP_URL`: Plain-HTTP enrollment and discovery surface. If unset, enrollment derives it from `G8E_OPERATOR_URL` by changing `https` to `http` and port `8443` to `8080`. Startup fails closed when neither is available.
+- `G8E_GATEWAY_HTTP_URL`: Optional override for the plain-HTTP enrollment and discovery surface. Defaults to `http://localhost:8080`.
 - `G8E_OPERATOR_URL` and `G8E_OPERATOR_PUBSUB_URL`: Gateway-hosted HTTPS and WebSocket services used by ensemble transport clients.
 - `G8E_GATEWAY_URL`: HTTPS base URL used by the internal HTTP client for Gateway event and operator-link operations.
 

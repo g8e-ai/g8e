@@ -95,6 +95,11 @@ class AuthSettings(G8eBaseModel):
     )
 
 
+def _env_or(name: str, default: str) -> str:
+    """Return the env var when set and non-empty, otherwise the default."""
+    return os.environ.get(name) or default
+
+
 class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration.
 
@@ -108,22 +113,10 @@ class ComponentURLsSettings(G8eBaseModel):
     """
 
     g8ee_url: str = Field(
-        default_factory=lambda: (
-            os.environ.get(
-                EnvVar.G8EE_URL,
-                f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}",
-            )
-            or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
-        )
+        default_factory=lambda: _env_or(EnvVar.G8EE_URL, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}")
     )
     client_url: str = Field(
-        default_factory=lambda: (
-            os.environ.get(
-                EnvVar.GATEWAY_URL,
-                f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
-            )
-            or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
-        )
+        default_factory=lambda: _env_or(EnvVar.GATEWAY_URL, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}")
     )
 
 
@@ -251,31 +244,13 @@ class GatewaySettings(G8eBaseModel):
     """operator (Operator Gateway mode) configuration."""
 
     http_url: str = Field(
-        default_factory=lambda: (
-            os.environ.get(
-                EnvVar.OPERATOR_URL,
-                f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}",
-            )
-            or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
-        )
+        default_factory=lambda: _env_or(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
     )
     pubsub_url: str = Field(
-        default_factory=lambda: (
-            os.environ.get(
-                EnvVar.OPERATOR_PUBSUB_URL,
-                f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}",
-            )
-            or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
-        )
+        default_factory=lambda: _env_or(EnvVar.OPERATOR_PUBSUB_URL, f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
     )
     blob_url: str = Field(
-        default_factory=lambda: (
-            os.environ.get(
-                EnvVar.OPERATOR_URL,
-                f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}",
-            )
-            or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
-        )
+        default_factory=lambda: _env_or(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
     )
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
     enable_cache_read: bool = Field(False)
@@ -609,37 +584,19 @@ class G8eeAppSettings(G8eBaseModel):
     docs_dir: str = Field(PATHS["infra"]["docs_dir"])
 
     app_url: str = Field(
-        default_factory=lambda: (
-            os.environ.get(
-                EnvVar.OPERATOR_URL,
-                f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
-            )
-            or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
-        )
+        default_factory=lambda: _env_or(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}")
     )
     allowed_origins: str = Field(
-        default_factory=lambda: os.environ.get(EnvVar.ALLOWED_ORIGINS, "") or ""
+        default_factory=lambda: _env_or(EnvVar.ALLOWED_ORIGINS, "")
     )
     passkey_rp_name: str = Field(
-        default_factory=lambda: (
-            os.environ.get(EnvVar.PASSKEY_RP_NAME, PATHS.get("host", "localhost"))
-            or PATHS.get("host", "localhost")
-        )
+        default_factory=lambda: _env_or(EnvVar.PASSKEY_RP_NAME, PATHS.get("host", "localhost"))
     )
     passkey_rp_id: str = Field(
-        default_factory=lambda: (
-            os.environ.get(EnvVar.PASSKEY_RP_ID, PATHS.get("host", "localhost"))
-            or PATHS.get("host", "localhost")
-        )
+        default_factory=lambda: _env_or(EnvVar.PASSKEY_RP_ID, PATHS.get("host", "localhost"))
     )
     passkey_origin: str = Field(
-        default_factory=lambda: (
-            os.environ.get(
-                EnvVar.PASSKEY_ORIGIN,
-                f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
-            )
-            or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
-        )
+        default_factory=lambda: _env_or(EnvVar.PASSKEY_ORIGIN, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}")
     )
 
     llm: LLMSettings = Field(default_factory=LLMSettings)

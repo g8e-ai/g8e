@@ -541,6 +541,7 @@ EvaluationScenarioDefinition describes one frozen typed scenario.
 | gold_criteria_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
 | public_criteria | [PublicScenarioCriterion](#g8e-eval-v1-PublicScenarioCriterion) | repeated |  |
 | public_tool_score_dimensions | [PublicToolScoreDimensionRequirement](#g8e-eval-v1-PublicToolScoreDimensionRequirement) | repeated |  |
+| eligible_roles | [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole) | repeated | eligible_roles lists the model roles that perform this task in g8ee. The homogeneous scheduler assigns the scenario only to these roles; the frozen catalog digest binds the set. |
 
 
 

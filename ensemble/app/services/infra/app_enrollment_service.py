@@ -72,6 +72,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
 from app.constants.env_vars import EnvVar
+from app.constants.generated_paths import PortConstants
 from app.constants.paths import PATHS, get_app_cert_paths
 from app.errors import ConfigurationError
 
@@ -125,11 +126,10 @@ class AppIdentity:
 class AppEnrollmentService:
     """Owner-approved platform enrollment for the g8ee app identity.
 
-    The service reads ``G8E_GATEWAY_HTTP_URL`` to find the gateway's plain-HTTP
-    bootstrap surface. When unset, it derives from ``G8E_OPERATOR_URL`` (the
-    HTTPS surface the operator clients use) by replacing ``https`` with
-    ``http`` and ``8443`` with ``8080``. It does not read ``G8E_GATEWAY_URL``
-    — that env var is set in the compose but unused by any ensemble code.
+    The gateway's plain-HTTP bootstrap surface defaults to
+    ``http://localhost:<PORT_OPERATOR_HTTP>``; ``G8E_GATEWAY_HTTP_URL``
+    overrides it when the gateway is on a different host (e.g. the Docker
+    stack). It does not read ``G8E_GATEWAY_URL``.
     """
 
     def __init__(
@@ -139,34 +139,19 @@ class AppEnrollmentService:
         hostname: str | None = None,
     ) -> None:
         self._app_name = app_name
-        self._instance_id = instance_id or f"ensemble-{os.environ.get('HOSTNAME', 'local')}"
         self._hostname = hostname or socket.gethostname()
+        self._instance_id = instance_id or f"ensemble-{self._hostname}"
 
     def _resolve_gateway_http_url(self) -> str:
         """Resolve the gateway's plain-HTTP bootstrap surface URL.
 
-        Reads ``G8E_GATEWAY_HTTP_URL``. When unset, derives from
-        ``G8E_OPERATOR_URL`` by replacing ``https`` with ``http`` and ``8443``
-        with ``8080``. Fail-closed: raises ``ConfigurationError`` if neither
-        is set.
+        ``G8E_GATEWAY_HTTP_URL`` when set, otherwise the default local
+        gateway HTTP port.
         """
-        explicit = os.environ.get(EnvVar.GATEWAY_HTTP_URL)
-        if explicit:
-            return explicit.rstrip("/")
-
-        operator_url = os.environ.get(EnvVar.OPERATOR_URL)
-        if not operator_url:
-            raise ConfigurationError(
-                "AppEnrollmentService cannot resolve gateway HTTP URL: "
-                f"neither {EnvVar.GATEWAY_HTTP_URL} nor {EnvVar.OPERATOR_URL} is set"
-            )
-        derived = operator_url.replace("https://", "http://", 1).replace(":8443", ":8080", 1)
-        if not derived.startswith("http://"):
-            raise ConfigurationError(
-                f"AppEnrollmentService cannot derive gateway HTTP URL from "
-                f"{EnvVar.OPERATOR_URL}={operator_url!r}: expected an https://...:8443 URL"
-            )
-        return derived.rstrip("/")
+        url = os.environ.get(EnvVar.GATEWAY_HTTP_URL) or (
+            f"http://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
+        )
+        return url.rstrip("/")
 
     def _resolve_pending_path(self) -> str:
         """Resolve the pending enrollment state file path from PATHS."""
