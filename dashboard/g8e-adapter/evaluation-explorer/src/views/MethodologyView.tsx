@@ -63,7 +63,7 @@ const SCENARIO_COUNTS: Record<(typeof SCENARIO_CATEGORIES)[number], number> = {
   technical_analysis: 4,
   routing_delegation: 3,
   verification: 2,
-  security_policy: 2,
+  security_policy: 3,
   recovery: 2,
   final_response: 1,
 };

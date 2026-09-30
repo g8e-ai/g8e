@@ -219,13 +219,13 @@ After pulling, `g8e eval models freeze` discovers live provider inventory throug
 
 `g8e eval models add` inserts or replaces one variant and recomputes the registry digest. When `--digest` is omitted, `add` derives a placeholder digest that lacks attestation authority; re-freeze from the provider before scored runs. `g8e eval models remove` deletes one variant and recomputes the same values. `g8e eval models import` copies selected variants from the catalog into the runtime registry.
 
-**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model on all 25 catalog scenarios, each under only the roles that perform that task in g8ee: 10 bounded classification, verification, and output-analysis scenarios run under `lite`; 12 tool-loop, policy, and recovery scenarios run under `primary` and `assistant`; `route-primary-ownership` and `final-response-diagnosis` run under `primary`; and `route-handoff-assistant` runs under `assistant`. This yields 37 scored assignments per model.
+**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model on all 26 catalog scenarios, each under only the roles that perform that task in g8ee: 10 bounded classification, verification, and output-analysis scenarios run under `lite`; 13 tool-loop, policy, and recovery scenarios run under `primary` and `assistant`; `route-primary-ownership` and `final-response-diagnosis` run under `primary`; and `route-handoff-assistant` runs under `assistant`. This yields 39 scored assignments per model.
 
 To accelerate high-throughput qualification, `g8e eval rollout run` supports a two-tier screening pipeline:
 
 1. **Tier 1 — Fast Smoke Gate** (`--gate-smoke`): Executes 5 high-discriminative scenarios under their eligible roles (8 assignments per model). Scenarios exercise syntax and tool execution, investigation and diagnostic reasoning, dissent and safety compliance, multi-step remediation, and fast-path direct instruction response. Requires 100% pass status on witness and verification gates.
 
-2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 37-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
+2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 39-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
 
 ```bash
 ./g8e eval rollout run --gate-smoke --promote-on-pass

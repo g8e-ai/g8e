@@ -21,7 +21,7 @@ Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-
 
 Campaign publication emits public-safe assignment records with the enriched `1.1.0` result envelope and Evaluation Explorer summaries with view schema `1.5.0`.
 Assignment Details use a compact layout with approved scenario context, typed grades, and a Model Response section (the model's recorded output and, for assignments that did not complete, a failure diagnosis with failing criteria) when the public record carries `model_response` or `failure_output`. When the record carries `role_transcripts`, the section shows each role's tool calls in order, with the tool, pretty-printed arguments and their SHA-256, the resolved command, the outcome, and a collapsible result. It then shows the role's response and trace digest. Formations list Lite, Assistant, and Primary under their own headings.
-The Tasks view lists the frozen north-star-25 scenario catalog with disclosure-safe prompts, pass criteria, and source links.
+The Tasks view lists the frozen 26-scenario catalog with disclosure-safe prompts, pass criteria, and source links.
 Empty sections and values absent from the public record are omitted.
 
 Evaluation summaries carry typed pass-rate, latency-p50, and output-throughput-p50 metrics with observed, eligible, and unavailable contributor counts; model evaluations omit system-only routing and correlation metrics.

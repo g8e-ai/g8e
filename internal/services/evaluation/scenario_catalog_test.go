@@ -16,12 +16,12 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func TestBuildScenarioCatalog_HasTwentyFiveScenariosWithExpectedCategoryCounts(t *testing.T) {
+func TestBuildScenarioCatalog_HasTwentySixScenariosWithExpectedCategoryCounts(t *testing.T) {
 	catalog, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	require.NotNil(t, catalog)
-	require.Len(t, catalog.Scenarios, 25)
-	require.Len(t, artifacts, 25)
+	require.Len(t, catalog.Scenarios, 26)
+	require.Len(t, artifacts, 26)
 
 	counts := map[evalv1.EvaluationScenarioCategory]int{}
 	for _, scenario := range catalog.Scenarios {
@@ -33,7 +33,7 @@ func TestBuildScenarioCatalog_HasTwentyFiveScenariosWithExpectedCategoryCounts(t
 	assert.Equal(t, 4, counts[evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS])
 	assert.Equal(t, 3, counts[evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION])
 	assert.Equal(t, 2, counts[evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_VERIFICATION])
-	assert.Equal(t, 2, counts[evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY])
+	assert.Equal(t, 3, counts[evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY])
 	assert.Equal(t, 2, counts[evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_RECOVERY])
 	assert.Equal(t, 1, counts[evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE])
 }
