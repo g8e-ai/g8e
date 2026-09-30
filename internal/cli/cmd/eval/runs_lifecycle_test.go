@@ -62,12 +62,12 @@ func TestRunsCancel_StopsEveryAssignmentOfAnIdleRun(t *testing.T) {
 	env.prepareRun(t, "eval-a", "run-a-1")
 
 	out := env.mustRun(t, "runs", "cancel", "run-a-1")
-	assert.Contains(t, out, "Cancelled run run-a-1: stopped 37 assignment(s)")
+	assert.Contains(t, out, "Cancelled run run-a-1: stopped 39 assignment(s)")
 
 	var show runShowJSON
 	require.NoError(t, env.runJSON(t, &show, "runs", "show", "run-a-1"))
 	assert.Equal(t, "cancelled", show.Status)
-	assert.Equal(t, uint32(37), show.Stopped)
+	assert.Equal(t, uint32(39), show.Stopped)
 	assert.Zero(t, show.Queued)
 }
 
@@ -78,7 +78,7 @@ func TestRunsCancel_JSONReportsWhatItStopped(t *testing.T) {
 	var payload runCancelJSON
 	require.NoError(t, env.runJSON(t, &payload, "runs", "cancel", "run-a-1"))
 	assert.Equal(t, "run-a-1", payload.RunID)
-	assert.Equal(t, 37, payload.Stopped)
+	assert.Equal(t, 39, payload.Stopped)
 	assert.False(t, payload.WasRunning)
 	assert.False(t, payload.ClearedStale)
 }
@@ -123,7 +123,7 @@ func TestRunsCancel_AsksALiveProcessToStopAndWaitsForItToRelease(t *testing.T) {
 	case result := <-done:
 		require.NoError(t, result.err, result.out)
 		assert.Contains(t, result.out, "Waiting for process 9999")
-		assert.Contains(t, result.out, "stopped 37 assignment(s)")
+		assert.Contains(t, result.out, "stopped 39 assignment(s)")
 	case <-time.After(5 * time.Second):
 		t.Fatal("cancel did not finish after the process exited")
 	}
@@ -319,8 +319,8 @@ func TestRunsArchive_ArchivedRunsStayReadable(t *testing.T) {
 
 	var compared runCompareJSON
 	require.NoError(t, env.runJSON(t, &compared, "runs", "compare", "run-a-1", "run-a-2"))
-	assert.Equal(t, 37, compared.Left.Cells)
-	assert.Equal(t, 37, compared.Right.Cells)
+	assert.Equal(t, 39, compared.Left.Cells)
+	assert.Equal(t, 39, compared.Right.Cells)
 }
 
 func TestRunsArchive_ArchivedRunsAreRejectedByMutatingCommands(t *testing.T) {

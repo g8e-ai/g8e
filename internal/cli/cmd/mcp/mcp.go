@@ -600,7 +600,6 @@ func extractTxHashFromApprovalURL(approvalURL string) string {
 	return path
 }
 
-
 func isL3ApprovalResponse(resp JSONRPCResponse) bool {
 	if resp.Result == nil {
 		return false
@@ -1578,7 +1577,6 @@ func runMCPAgentRun(args []string, verify bool, fileSvcFactory func(string, *slo
 
 	return fmt.Errorf("%w: %q (supported agents: claude, codex, devin, gemini, goose)", constants.ErrAgentNotFound, args[0])
 }
-
 
 func extractURLFromText(text string) string {
 	urlPattern := regexp.MustCompile(`https://[^\s"']+` + regexp.QuoteMeta(constants.APIPaths.ApprovePagePrefix) + `[^\s"']*`)

@@ -13,10 +13,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -190,4 +188,3 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 	})
 }
-

@@ -148,7 +148,6 @@ func TestL2Consensus_MalformedCSR(t *testing.T) {
 	require.NotEqual(t, http.StatusCreated, resp.StatusCode, "malformed CSR should not succeed")
 }
 
-
 // TestL2Consensus_QuorumReached verifies that when a consensus has
 // sufficient voting members (2-of-3), an MCP tools/call succeeds with
 // L2 consensus votes present.

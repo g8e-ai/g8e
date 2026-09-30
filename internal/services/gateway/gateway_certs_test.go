@@ -511,7 +511,6 @@ func TestPKIAuthority_SignCSR_Unit(t *testing.T) {
 	})
 }
 
-
 func TestPKIAuthority_CertsUseECDSASignatures_NotEd25519(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)

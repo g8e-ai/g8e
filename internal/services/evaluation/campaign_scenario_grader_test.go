@@ -497,4 +497,3 @@ func findDeterministicGrade(grades []*evalv1.DeterministicGrade, criterionID str
 	}
 	return nil
 }
-

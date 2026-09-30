@@ -267,12 +267,8 @@ func TestGradeHeterogeneousScenario_HandoffFailsWhenDownstreamRoleMissesPriorOut
 	for _, role := range []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary} {
 		trace := completedHomogeneousTrace(t, string(role))
 		trace["designated_role_output"] = outputs[role]
-		// Only add handoff evidence for Lite (no prior outputs needed).
-		// Intentionally omit prior_role_outputs for Assistant and Primary.
-		if role == FormationRoleLite {
-			// Lite has no prior outputs, which is correct.
-			// Don't add prior_role_outputs field.
-		}
+		// Only add handoff evidence for Lite (no prior outputs needed, which is correct).
+		// Intentionally omit prior_role_outputs for Assistant and Primary (broken handoff).
 		// Assistant and Primary missing prior_role_outputs = broken handoff.
 		digest, err := ComputeChatProbeTraceDigest(trace)
 		require.NoError(t, err)

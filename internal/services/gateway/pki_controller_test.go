@@ -719,8 +719,6 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 	})
 }
 
-
-
 func mustMarshalJSON(t *testing.T, v interface{}) []byte {
 	t.Helper()
 	b, err := json.Marshal(v)

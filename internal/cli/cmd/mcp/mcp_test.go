@@ -437,7 +437,6 @@ func TestExtractApprovalURL(t *testing.T) {
 	})
 }
 
-
 func TestProxyToGatewayWithRetry(t *testing.T) {
 	t.Run("SSE credentials missing returns ErrNotAuthenticated", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -960,7 +959,6 @@ func TestProxySessionToGateway(t *testing.T) {
 		require.Error(t, err)
 	})
 }
-
 
 func TestMcpStdioCmd(t *testing.T) {
 	t.Run("mcp stdio command has correct structure", func(t *testing.T) {

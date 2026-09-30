@@ -673,7 +673,6 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		envProc = ls.cmdSvc
 	}
 
-
 	providerObservationDeps := providerObservationControllerDeps(logger, ls.responder, ls.fileSvc)
 	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)

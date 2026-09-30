@@ -756,7 +756,6 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	return certPEM, chainPEM, nil
 }
 
-
 func (pki *PKIAuthority) SignPlatformAppCSR(csrPEM, appName, userID string) (certPEM, chainPEM string, err error) {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()

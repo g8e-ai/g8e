@@ -170,7 +170,6 @@ func TestPlatformEnrollmentBypassClosed_DelegatedAppEnrollRouteRemoved(t *testin
 		"no certificate must be issued from the removed route")
 }
 
-
 // TestPlatformEnrollmentBypassClosed_PrivilegedGenericCSRSignRequiresMTLS
 // proves that the generic CSR signing endpoint rejects callers with no
 // client certificate. The handler enforces mTLS directly (defense-in-depth)
@@ -198,7 +197,6 @@ func TestPlatformEnrollmentBypassClosed_PrivilegedGenericCSRSignRequiresMTLS(t *
 	assert.Contains(t, rr.Body.String(), constants.ErrMissingCertificate.Error(),
 		"the 401 must carry the typed ErrMissingCertificate error")
 }
-
 
 // TestPlatformEnrollmentBypassClosed_PlainHTTPRouterDoesNotRegisterBypassRoutes
 // proves that the plain HTTP discovery router no longer registers the CSR

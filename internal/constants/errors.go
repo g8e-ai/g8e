@@ -747,11 +747,11 @@ var (
 	ErrSystemFingerprintRequired   = errors.New("system_fingerprint is required")
 	ErrHostnameRequired            = errors.New("hostname is required")
 
-	ErrBootstrapNoConfig          = errors.New("bootstrap: no configuration returned from Auth Services")
-	ErrBootstrapNoSessionID       = errors.New("bootstrap: no operator_session_id returned from Auth Services")
-	ErrBootstrapCertParse         = errors.New("bootstrap: failed to parse per-operator cert+key")
-	ErrBootstrapTLSConfigDI       = errors.New("bootstrap: failed to get base TLS config from DI")
-	ErrBootstrapCertTrust         = errors.New("bootstrap: cert trust failure: per-operator mTLS cert invalid")
+	ErrBootstrapNoConfig    = errors.New("bootstrap: no configuration returned from Auth Services")
+	ErrBootstrapNoSessionID = errors.New("bootstrap: no operator_session_id returned from Auth Services")
+	ErrBootstrapCertParse   = errors.New("bootstrap: failed to parse per-operator cert+key")
+	ErrBootstrapTLSConfigDI = errors.New("bootstrap: failed to get base TLS config from DI")
+	ErrBootstrapCertTrust   = errors.New("bootstrap: cert trust failure: per-operator mTLS cert invalid")
 
 	// CLI L3 notary errors
 	ErrCLIL3TransactionHashRequired       = errors.New("transaction_hash required for CLI L3 verification")

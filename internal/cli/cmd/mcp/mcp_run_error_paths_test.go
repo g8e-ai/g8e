@@ -171,7 +171,6 @@ func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 	})
 }
 
-
 // ─── agent_harness.go error paths ────────────────────────────────────────────
 
 func TestRunAgentHarness_ConfigLoadError(t *testing.T) {

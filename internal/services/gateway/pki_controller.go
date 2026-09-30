@@ -323,7 +323,6 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
-
 // @Summary		Download g8e binary
 // @Description	Downloads the g8e binary file binary for the current platform (internal endpoint)
 // @Tags			bootstrap

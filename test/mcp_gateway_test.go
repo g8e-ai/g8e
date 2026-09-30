@@ -343,4 +343,3 @@ done
 		require.Contains(t, mcpRes.Result.Content[0].Text, constants.MCPApprovalPausedPrefix)
 	})
 }
-

@@ -48,7 +48,6 @@ type CLIEnrollRequest struct {
 	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
 }
 
-
 // PasskeyChallengeRequest is the inbound body for passkey authentication challenge endpoints.
 type PasskeyChallengeRequest struct {
 	UserID string `json:"user_id"`
