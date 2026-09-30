@@ -784,30 +784,13 @@ func promptApproveComponent(cmd *cobra.Command, ctx context.Context, client auth
 		RequestID: req.RequestID,
 		Decision:  models.PlatformEnrollmentDecisionApprove,
 	}
-	resp, err := approvePlatformEnrollmentDecision(client, decisionReq)
+	resp, err := authcmd.PostPlatformEnrollmentDecision(client, decisionReq)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDockerStartApprovalFailed, err)
 	}
 
 	cmd.Printf("  %s enrollment request %s.\n", component, string(resp.State))
 	return nil
-}
-
-// approvePlatformEnrollmentDecision posts an owner decision for a pending platform
-// enrollment request and returns the gateway response.
-func approvePlatformEnrollmentDecision(client authcmd.APIClient, decisionReq models.PlatformEnrollmentDecisionRequest) (*models.PlatformEnrollmentDecisionResponse, error) {
-	if err := decisionReq.Validate(); err != nil {
-		return nil, fmt.Errorf("validate decision: %w", err)
-	}
-	respBody, err := client.Post(constants.APIPaths.AuthPlatformEnrollmentDecision, decisionReq)
-	if err != nil {
-		return nil, fmt.Errorf("post decision: %w", err)
-	}
-	var resp models.PlatformEnrollmentDecisionResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return nil, fmt.Errorf("parse decision response: %w", err)
-	}
-	return &resp, nil
 }
 
 // fetchPendingPlatformEnrollments returns the current pending platform enrollment
@@ -900,7 +883,7 @@ func runDockerInitApprovals(cmd *cobra.Command, client authcmd.APIClient) error 
 			RequestID: next.RequestID,
 			Decision:  models.PlatformEnrollmentDecisionApprove,
 		}
-		resp, err := approvePlatformEnrollmentDecision(client, decisionReq)
+		resp, err := authcmd.PostPlatformEnrollmentDecision(client, decisionReq)
 		if err != nil {
 			return fmt.Errorf("%w: approve %s (%s): %w", constants.ErrDockerInitApprovalFailed, next.ComponentKind, next.RequestID, err)
 		}

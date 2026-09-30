@@ -272,6 +272,23 @@ func platformEnrollmentDecisionCmdWithConfig(
 	return cmd
 }
 
+// PostPlatformEnrollmentDecision posts an owner decision for a pending platform
+// enrollment request and returns the gateway response.
+func PostPlatformEnrollmentDecision(client APIClient, decisionReq models.PlatformEnrollmentDecisionRequest) (*models.PlatformEnrollmentDecisionResponse, error) {
+	if err := decisionReq.Validate(); err != nil {
+		return nil, fmt.Errorf("validate decision: %w", err)
+	}
+	respBody, err := client.Post(constants.APIPaths.AuthPlatformEnrollmentDecision, decisionReq)
+	if err != nil {
+		return nil, fmt.Errorf("post decision: %w", err)
+	}
+	var resp models.PlatformEnrollmentDecisionResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("parse decision response: %w", err)
+	}
+	return &resp, nil
+}
+
 // findPendingRequest looks up a request ID in the pending list. Returns nil if
 // the request is not found (it may have been decided, expired, or completed
 // since the pending list was last fetched).
