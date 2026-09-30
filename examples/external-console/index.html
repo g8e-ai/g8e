@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>g8e Console (external)</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand">g8e Console</div>
+      <div class="user-chip" id="header-user">not signed in</div>
+    </header>
+
+    <div id="webauthn-warn" class="alert warn hidden">
+      WebAuthn is not available in this browser/context. Use a modern browser on HTTPS or localhost (secure context).
+    </div>
+
+    <section class="config-bar" aria-label="Gateway configuration">
+      <label class="field">
+        Gateway HTTPS origin
+        <input id="gateway-url" type="url" spellcheck="false" placeholder="https://localhost:8443" />
+      </label>
+      <button type="button" class="btn" id="btn-save-gateway">Save</button>
+      <button type="button" class="btn btn-ghost" id="btn-health">Health</button>
+      <span class="badge" id="health-badge"><span class="dot"></span><span class="lbl">unknown</span></span>
+    </section>
+
+    <div id="view-loading" class="card"><p class="muted">Checking session…</p></div>
+
+    <div id="view-login" class="hidden">
+      <div class="card stack" id="login-bootstrap">
+        <h2>First-time owner setup</h2>
+        <p class="muted">Gateway has no owner yet. Register a passkey to bootstrap the console (first credential only).</p>
+        <label class="field">Display name
+          <input id="reg-name" type="text" placeholder="Owner" autocomplete="username" />
+        </label>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="btn-register">Enroll Passkey</button>
+        </div>
+      </div>
+
+      <div class="card stack hidden" id="login-sign-in">
+        <h2>Sign in with passkey</h2>
+        <p class="muted">Enter your g8e user ID. To add a passkey for an existing user, run <span class="mono">g8e auth enroll user</span> and open the enrollment link.</p>
+        <label class="field">User ID
+          <input id="user-id" type="text" spellcheck="false" placeholder="user id from prior registration" autocomplete="username" />
+        </label>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="btn-login">Sign In with Passkey</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-dashboard" class="hidden">
+      <div class="stats" id="stats-row">
+        <div class="stat"><div class="label">Passkeys</div><div class="value" id="stat-passkeys">—</div></div>
+        <div class="stat"><div class="label">Pending approvals</div><div class="value" id="stat-approvals">—</div></div>
+        <div class="stat"><div class="label">Workload enrollments</div><div class="value" id="stat-enrollments">—</div></div>
+        <div class="stat"><div class="label">Gateway</div><div class="value" id="stat-version" style="font-size:1rem">—</div></div>
+      </div>
+
+      <section class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:.5rem">
+          <h2 style="margin:0">Account</h2>
+          <button type="button" class="btn btn-sm" id="btn-refresh">Refresh</button>
+        </div>
+        <p class="mono" id="account-user">—</p>
+        <p class="muted" id="account-session">session: —</p>
+        <div class="row" style="margin-top:.75rem">
+          <button type="button" class="btn btn-danger" id="btn-logout">Sign Out</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Passkeys</h2>
+        <p class="muted">Add more passkeys via CLI token enrollment (<span class="mono">g8e auth enroll user</span>).</p>
+        <ul class="list" id="passkey-list"></ul>
+        <p class="empty hidden" id="passkey-empty">No passkeys returned.</p>
+      </section>
+
+      <section class="card">
+        <h2>Pending approvals</h2>
+        <ul class="list" id="approval-list"></ul>
+        <p class="empty" id="approval-empty">No pending approvals</p>
+      </section>
+
+      <section class="card">
+        <h2>Platform workload enrollments</h2>
+        <ul class="list" id="enrollment-list"></ul>
+        <p class="empty" id="enrollment-empty">No pending workload enrollments</p>
+      </section>
+
+      <section class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:.5rem">
+          <h2 style="margin:0">Live audit stream</h2>
+          <span class="badge disconnected" id="sse-badge"><span class="dot"></span><span class="lbl">disconnected</span></span>
+        </div>
+        <div class="row" style="margin-bottom:.5rem">
+          <button type="button" class="btn btn-sm btn-primary" id="btn-sse-connect">Connect</button>
+          <button type="button" class="btn btn-sm" id="btn-sse-disconnect" disabled>Disconnect</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="btn-sse-clear">Clear</button>
+          <label class="muted" style="display:flex;align-items:center;gap:.35rem;font-size:.8rem">
+            <input type="checkbox" id="sse-autoscroll" checked /> Auto-scroll
+          </label>
+          <span class="muted" id="sse-count" style="font-size:.8rem">0 events</span>
+        </div>
+        <label class="field" style="margin-bottom:.5rem">
+          Filter by event type
+          <input id="sse-filter" type="text" placeholder="e.g. audit, approval" />
+        </label>
+        <div class="stream" id="sse-log" role="log" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <footer class="footer">g8e Gateway · external browser frontend · Lateralus Labs, LLC</footer>
+  </div>
+
+  <div class="toast-host" id="toasts" aria-live="polite"></div>
+  <script src="./app.js" type="module"></script>
+</body>
+</html>
