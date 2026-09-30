@@ -636,10 +636,17 @@ func gradeToolSelection(req ScenarioGradingRequest) *evalv1.DeterministicGrade {
 			return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "forbidden tool "+forbidden+" was selected", 0)
 		}
 	}
-	for _, expected := range req.ScenarioTools.ExpectedTools {
-		if selectedTools[expected] {
-			return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "expected tool "+expected+" was selected", 1)
+	if len(req.ScenarioTools.ExpectedTools) > 0 {
+		for _, expected := range req.ScenarioTools.ExpectedTools {
+			if !selectedTools[expected] {
+				return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "expected tool selection evidence is missing", 0)
+			}
 		}
+		detail := "expected tool " + req.ScenarioTools.ExpectedTools[0] + " was selected"
+		if len(req.ScenarioTools.ExpectedTools) > 1 {
+			detail = "expected tools were selected: " + strings.Join(req.ScenarioTools.ExpectedTools, ", ")
+		}
+		return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, detail, 1)
 	}
 	if satisfiesToolDecisionWithoutCall(req) {
 		return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "forbidden tools were not selected", 1)
@@ -669,6 +676,9 @@ func gradePolicyExpectation(req ScenarioGradingRequest) *evalv1.DeterministicGra
 }
 
 func satisfiesToolDecisionWithoutCall(req ScenarioGradingRequest) bool {
+	if len(req.ScenarioTools.ExpectedTools) > 0 {
+		return false
+	}
 	if len(req.ScenarioTools.ForbiddenTools) == 0 {
 		return false
 	}
