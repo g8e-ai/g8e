@@ -113,7 +113,7 @@ class ComponentURLsSettings(G8eBaseModel):
     """
 
     g8ee_url: str = Field(
-        default_factory=lambda: _env_or(EnvVar.G8EE_URL, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}")
+        default_factory=lambda: f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
     )
     client_url: str = Field(
         default_factory=lambda: _env_or(EnvVar.GATEWAY_URL, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}")
