@@ -74,7 +74,7 @@ The verification helpers establish signature validity against the public key sup
 
 ### Examples
 
-Working examples are in `protocol/python/examples/`. Run `constants_example.py` for constants and headers usage, or `models_example.py` for model instantiation, serialization, validation, and observe producer request construction.
+Working examples are in `examples/python/` at the repository root. Run `constants_example.py` for constants and headers usage, or `models_example.py` for model instantiation, serialization, validation, and observe producer request construction.
 
 ## Components
 

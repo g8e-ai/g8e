@@ -191,7 +191,7 @@ Rules:
 
 Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 37 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
 
-Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/examples/README.md) for the public/private boundary.
+Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/README.md) for the public/private boundary.
 
 ```bash
 # Freeze your provider's model registry (once per provider snapshot)
@@ -704,7 +704,7 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 
 Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean` or `docker compose down -v`, repeat owner enrollment and platform approvals.
 
-Before a destructive wipe, copy evaluation evidence outside `.g8e/` with `./g8e eval backup --output-dir <dir>`, and put it back with `./g8e eval restore <dir>/eval-backup-<timestamp>`. See [Evaluation Programs](../architecture/evals.md#evidence-and-verification). This covers host evidence only, not the Gateway volume.
+Eval runs back up their evidence to `eval/backups/` automatically when they finish. Before a destructive wipe, take a fresh copy outside `.g8e/` with `./g8e eval backup` (or `--output-dir <dir>`), and put it back with `./g8e eval restore` (newest snapshot in `eval/backups/`, or pass `<dir>/eval-backup-<timestamp>`). See [Evaluation Programs](../architecture/evals.md#evidence-and-verification). This covers host evidence only, not the Gateway volume.
 
 ## Health checks and resources
 
@@ -851,4 +851,4 @@ Restarting the gateway with `docker compose up -d g8e-gateway` preserves the tru
 - [g8ee Documentation](../ensemble/index.md) — ensemble configuration and providers.
 - [g8ed Documentation](../dashboard/index.md) — dashboard development.
 - [Authentication and Identity](../architecture/auth.md) — mTLS, WebAuthn, PKI.
-- [Evaluation data layout](../../eval/examples/README.md) — public vs runtime vs private operator data.
+- [Evaluation data layout](../../eval/README.md) — public vs runtime vs private operator data.

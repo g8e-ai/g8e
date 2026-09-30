@@ -239,7 +239,7 @@ The directory `protocol/constants/` maintains 26 top-level JSON registries along
 
 #### MCP server deployment configurations
 
-Example deployment configurations in `protocol/examples/mcp_server/` illustrate governed MCP topologies:
+Example deployment configurations in `examples/mcp-client-configs/` illustrate governed MCP topologies:
 
 - `g8e_gateway_mcp_config.json`: Production HTTP with mTLS using client certificate paths.
 - `g8e_stdio_mcp_config.json`: Local development stdio mode executing `g8e mcp stdio`.

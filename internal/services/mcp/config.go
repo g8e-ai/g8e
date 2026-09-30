@@ -19,7 +19,7 @@ import (
 // This is the single source of truth for the MCP config schema used by:
 // - CLI commands (mcp agent show)
 // - Tests (test/mcp_stdio_test.go)
-// - Example templates (protocol/examples/mcp_server/g8e_gateway_mcp_config.json)
+// - Example templates (examples/mcp-client-configs/g8e_gateway_mcp_config.json)
 type Config struct {
 	MCPServers map[string]ServerConfig `json:"mcpServers"`
 }

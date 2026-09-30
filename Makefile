@@ -111,7 +111,7 @@ TEST_EXCLUDE_PKGS := \
 # the coverage threshold (e.g. generated protobuf code, example programs).
 COVERAGE_ONLY_EXCLUDE_PKGS := \
 	g8e/v2/protocol/proto \
-	g8e/v2/protocol/examples \
+	g8e/v2/examples \
 	adapters/lattice/gen \
 	node_modules
 

@@ -25,7 +25,7 @@ exists and contains the expected HTTP transport structure.
 func TestMCPGateway_ConfigTemplate(t *testing.T) {
 	t.Run("http template exists", func(t *testing.T) {
 		repoRoot := ResolveRepoRootFromTestDir(t)
-		fullPath := filepath.Join(repoRoot, "protocol/examples/mcp_server/g8e_gateway_mcp_config.json")
+		fullPath := filepath.Join(repoRoot, "examples/mcp-client-configs/g8e_gateway_mcp_config.json")
 		content, err := os.ReadFile(fullPath)
 		require.NoError(t, err, "http template should exist at %s", fullPath)
 		assert.Contains(t, string(content), `"type": "http"`)
