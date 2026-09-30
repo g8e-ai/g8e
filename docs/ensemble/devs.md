@@ -103,12 +103,12 @@ Use the repository-root targets when you need the supported split between local 
 
 ```bash
 make ensemble-test    # tests/unit and tests/integration, excluding external-service markers
-make test-external    # integration tests marked ai_integration, requires_web_search, requires_api, or requires_typesafe
+make test-external    # integration tests marked ai_integration, requires_web_search, requires_api, or requires_system_one
 make ensemble-lint    # Ruff and Pyright for ensemble/app
 make build-ensemble   # Build g8e-ensemble:<VERSION> from ensemble/Dockerfile
 ```
 
-The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe"`. The `make test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_typesafe"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_typesafe`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
+The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one"`. The `make test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_system_one"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_system_one`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
 
 For a focused test, use the environment selected by the target or invoke the ensemble interpreter explicitly:
 

@@ -3,8 +3,8 @@ doc_id: decision-providers
 title: Decision Providers
 audience: developers integrating structured reasoning into agent workloads
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-30
+version: v2.2.5
 owners:
   - ensemble/app/decision/
   - ensemble/app/services/ai/triage.py
@@ -28,7 +28,7 @@ do_not_use_for:
 
 g8ee separates **text generation** (generative LLM providers) from **structured decision** workloads (decision providers). Decision providers evaluate a `state` plus typed `questions` and return structured answers with probabilities. They do not emit chat prose.
 
-The first decision provider is **Jev** from TypeSafe AI, a System One model that performs native classification and scoring. Jev powers lite-role decision workloads when explicitly configured; other roles require generative LLM providers.
+The first decision provider is **System One** via Ollama, a local model service for native classification and scoring. Jev (available via Ollama 0.35+) powers lite-role decision workloads when explicitly configured; other roles require generative LLM providers.
 
 ## Quick index
 
@@ -53,17 +53,18 @@ Invariant groups: [Coexistence constraints](#coexistence-constraints-inv-dec-coe
 | Triage question mapping | [ensemble/app/services/ai/triage.py:_build_jev_questions()](ensemble/app/services/ai/triage.py) | Choice question names and criteria; confidence threshold constant |
 | Eval judge question mapping | [ensemble/app/services/ai/eval_judge.py:_build_jev_questions()](ensemble/app/services/ai/eval_judge.py) | Score and noul question names; passing threshold constant |
 | Coexistence validation | [ensemble/app/decision/validation.py](ensemble/app/decision/validation.py) | `validate_jev_lite_coexistence()` rejects Tribunal + Jev lite |
-| Configuration defaults | [ensemble/app/constants/config.py](ensemble/app/constants/config.py) | `JEV_DEFAULT_ENDPOINT`, `JEV_DEFAULT_MODEL` constants |
+| Configuration defaults | [ensemble/app/constants/config.py](ensemble/app/constants/config.py) | `JEV_DEFAULT_MODEL`, Ollama settings (`G8E_LLM_OLLAMA_ENDPOINT`) |
 
 ## Procedures
 
 ### Verifying Jev provider configuration
 
 1. Confirm `G8E_LLM_LITE_PROVIDER=jev` is set.
-2. Verify `G8E_LLM_JEV_API_KEY` or `TYPESAFE_API_KEY` is set (required).
-3. Check `G8E_LLM_COMMAND_GEN_ENABLED=false` (Tribunal must be off).
-4. Verify primary and assistant roles use generative providers (e.g., `ollama`, `anthropic`, `openai`).
-5. Run a test triage or eval request; logs should show Jev calls, not fallback generative triage.
+2. Verify Ollama is running with System One model pulled (e.g., `ollama pull nimble` or `ollama pull tev1`).
+3. Verify `G8E_LLM_OLLAMA_ENDPOINT` is set (default `localhost:11434`). If running Ollama behind a reverse proxy with API key, set `G8E_LLM_OLLAMA_API_KEY`.
+4. Check `G8E_LLM_COMMAND_GEN_ENABLED=false` (Tribunal must be off).
+5. Verify primary and assistant roles use generative providers (e.g., `ollama`, `anthropic`, `openai`).
+6. Run a test triage or eval request; logs should show Jev calls, not fallback generative triage.
 
 ### Adding a new decision workload
 
@@ -72,13 +73,14 @@ Invariant groups: [Coexistence constraints](#coexistence-constraints-inv-dec-coe
 3. Call `get_decision_provider(settings.llm)` and invoke `await provider.evaluate(model=…, state=…, questions=…)`.
 4. Parse the `EvaluateResponse` into a domain-specific result struct.
 5. Add unit tests mocking the HTTP response in `ensemble/tests/unit/decision/`.
-6. Add integration tests in `ensemble/tests/integration/` with the `requires_typesafe` marker.
+6. Add integration tests in `ensemble/tests/integration/` with the `requires_system_one` marker.
 
 ### Updating Jev endpoint or model defaults
 
-1. Edit [ensemble/app/constants/config.py](ensemble/app/constants/config.py): update `JEV_DEFAULT_ENDPOINT` or `JEV_DEFAULT_MODEL`.
-2. Run unit tests to verify factory cache key generation and provider instantiation still work.
-3. Run integration tests against the new endpoint to confirm reachability and response format.
+1. For model changes: edit [ensemble/app/constants/config.py](ensemble/app/constants/config.py), update `JEV_DEFAULT_MODEL`.
+2. For Ollama endpoint changes: set `G8E_LLM_OLLAMA_ENDPOINT` environment variable (default `localhost:11434`).
+3. Run unit tests to verify factory cache key generation and provider instantiation still work.
+4. Run integration tests against the running Ollama instance to confirm reachability and response format.
 
 ## Overview
 
@@ -99,26 +101,26 @@ Call sites:
 | Triage (complexity, intent, posture) | [ensemble/app/services/ai/triage.py](ensemble/app/services/ai/triage.py) | `get_decision_provider()` + batched `choice` questions | `_classify_generative()` when lite provider is not `jev` |
 | Semantic eval judge | [ensemble/app/services/ai/eval_judge.py](ensemble/app/services/ai/eval_judge.py) | `EvalJudge(decision_provider=…)` + `score` / `noul` questions | Generative LLM JSON judge when lite provider is not `jev` |
 
-## When to use Jev
+## When to use System One (Ollama)
 
-Select Jev for the **lite role** to enable native System One classification and scoring without prompt-and-JSON simulation. Jev excels at structured decision tasks but does not support text generation.
+Select System One models via Ollama for the **lite role** to enable native classification and scoring without prompt-and-JSON simulation. System One models (e.g., Nimble 9B or Tev1 4B/0.8B) excel at structured decision tasks but do not support text generation.
 
-Jev supports only **decision** and **triage** workloads via `get_decision_provider()`. Generative lite features automatically fall back to the assistant provider when lite is Jev.
+System One supports only **decision** and **triage** workloads via `get_decision_provider()`. Generative lite features automatically fall back to the assistant provider when lite is System One.
 
 ### Supported paths
 
-- **Triage** (complexity, intent, posture classification): `get_decision_provider()` returns a cached Jev instance; call `provider.evaluate()` with `choice` questions.
+- **Triage** (complexity, intent, posture classification): `get_decision_provider()` returns a cached System One provider instance; call `provider.evaluate()` with `choice` questions.
 - **Semantic eval judge** (rubric scoring): Pass `decision_provider=get_decision_provider()` to `EvalJudge`; judge uses `score` and `noul` questions for grading.
 
 ### Unsupported paths and fallbacks
 
-Generative lite features use `get_generative_lite_provider()`, which automatically selects the **assistant provider** when `lite_provider=jev`:
+Generative lite features use `get_generative_lite_provider()`, which automatically selects the **assistant provider** when `lite_provider=jev` (System One):
 
 - Case title generation
 - Memory extraction
 - Marshal response analysis
 
-These call sites detect Jev on the lite role and defer to the assistant provider without additional configuration.
+These call sites detect System One on the lite role and defer to the assistant provider without additional configuration.
 
 ### Coexistence constraints (`INV-DEC-COEX`)
 
@@ -139,21 +141,24 @@ Jev is selected through the same lite-role settings as other LLM providers. The 
 | Setting | Env var | Type | Default |
 | --- | --- | --- | --- |
 | Lite provider | `G8E_LLM_LITE_PROVIDER` | string | Unset (optional) |
-| Lite model | `G8E_LLM_LITE_MODEL` | string | `jev-latest` when lite provider is `jev` |
-| Jev API key | `G8E_LLM_JEV_API_KEY` | string | None (required when lite provider is `jev`) |
-| Jev endpoint | `G8E_LLM_JEV_ENDPOINT` | URL | `https://api.typesafe.ai/v1/systemone` (from `JEV_DEFAULT_ENDPOINT` constant) |
+| Lite model | `G8E_LLM_LITE_MODEL` | string | `nimble` when lite provider is `jev` |
+| Ollama endpoint | `G8E_LLM_OLLAMA_ENDPOINT` | URL | `localhost:11434` |
+| Ollama API key | `G8E_LLM_OLLAMA_API_KEY` | string | None (optional; for reverse-proxy authentication only) |
 
-The fallback `TYPESAFE_API_KEY` environment variable is read if `G8E_LLM_JEV_API_KEY` is not set.
+Jev resolves to the Ollama System One endpoint (`<G8E_LLM_OLLAMA_ENDPOINT>/v1/systemone`) using the existing Ollama settings path. No separate Jev endpoint or API key is required.
 
 Primary and assistant roles must be configured with generative LLM providers; Jev is rejected on those roles during validation.
 
 ### Example configuration
 
 ```bash
-# Enable Jev for lite-role decisions
+# Enable Jev (System One via Ollama) for lite-role decisions
 G8E_LLM_LITE_PROVIDER=jev
-G8E_LLM_LITE_MODEL=jev-latest
-G8E_LLM_JEV_API_KEY=ts_your_api_key
+G8E_LLM_LITE_MODEL=nimble
+
+# Ollama local System One endpoint (ensure nimble is pulled: ollama pull nimble)
+G8E_LLM_OLLAMA_ENDPOINT=localhost:11434
+# G8E_LLM_OLLAMA_API_KEY=your_key  # Only if Ollama is behind a reverse proxy with auth
 
 # Disable Tribunal (required: incompatible with Jev lite)
 G8E_LLM_COMMAND_GEN_ENABLED=false
@@ -167,23 +172,26 @@ G8E_LLM_ASSISTANT_MODEL=llama3.2:3b
 
 ## API contract
 
-The `JevProvider` class in [ensemble/app/decision/providers/jev.py](ensemble/app/decision/providers/jev.py) implements a thin HTTP adapter over the TypeSafe System One API.
+The `JevProvider` class in [ensemble/app/decision/providers/jev.py](ensemble/app/decision/providers/jev.py) implements a thin HTTP adapter over the Ollama System One API (available in Ollama 0.35+).
 
 | Field | Value |
 | --- | --- |
-| Endpoint | `POST https://api.typesafe.ai/v1/systemone` (or `JEV_DEFAULT_ENDPOINT` if overridden) |
-| Authentication | `Authorization: Bearer <api_key>` header |
+| Endpoint | `POST <G8E_LLM_OLLAMA_ENDPOINT>/v1/systemone` (default `localhost:11434/v1/systemone`) |
+| Authentication | Optional `Authorization: Bearer <api_key>` header (only if `G8E_LLM_OLLAMA_API_KEY` is set, for reverse-proxy scenarios) |
 | Request body | JSON object with `model` (string), `state` (string, dict, or list), `questions` (object mapping names to question objects) |
 | Question types | `choice` (enum classification), `score` (numeric scale 1–5), `noul` (yes/no/unknown) |
 | Response | JSON object with `model` (string), `answers` (object mapping question names to answer objects), `usage` (token counts) |
+| Limits | Request body ≤ 64 KiB (HTTP 413 if exceeded); 404 when model not pulled; 400 for prompt exceeding context |
 
 Each question object includes `type`, `instructions` (string), and type-specific fields (`criteria` for `choice` and `score`). Each answer includes `type`, the resolved value (e.g., `choice` or `score`), `confidence` (0–1), and `probabilities` (per-choice or per-score-level breakdown).
 
 **Implementation notes:**
-- `JevProvider` uses `httpx.AsyncClient` with a default timeout; no `typesafe-sdk` dependency.
+- `JevProvider` uses `httpx.AsyncClient` with a default timeout.
 - HTTP errors map to `ExternalServiceError` or `RateLimitError` for distinction.
+- Requests exceeding 64 KiB raise `ExternalServiceError` (413 payload too large).
 - Callers own retry logic; for example, `EvalJudge` applies exponential backoff on rate limits.
 - Model boundary attestation records input artifact hashes for privacy audit trails.
+- Reference: [Ollama System One API docs](https://docs.ollama.com/api/systemone)
 
 ## Question mappings (as implemented)
 
@@ -201,14 +209,14 @@ Confidence mapping uses the constant `JEV_TRIAGE_HIGH_CONFIDENCE_THRESHOLD = 0.8
 
 ### Eval judge questions
 
-Eval judge sends one `ScoreQuestion` and one `NoulQuestion` to Jev; see [ensemble/app/services/ai/eval_judge.py:_build_jev_questions()](ensemble/app/services/ai/eval_judge.py) for full instructions.
+Eval judge sends one `ScoreQuestion` and one `NoulQuestion` to the System One model via Ollama; see [ensemble/app/services/ai/eval_judge.py:_build_jev_questions()](ensemble/app/services/ai/eval_judge.py) for full instructions.
 
 | Question key | Type | Criteria | Maps to result field |
 | --- | --- | --- | --- |
 | `rubric_score` | `score` | `["1", "2", "3", "4", "5"]` | `EvalGrade.score` (1–5 integer) |
 | `meets_passing_threshold` | `noul` | N/A (yes/no/unknown) | Included in `EvalGrade.reasoning` as probability summary |
 
-Pass/fail is deterministic: `score >= 3` passes. Jev does not emit prose reasoning; the grade stores a formatted probability summary instead of natural-language justification.
+Pass/fail is deterministic: `score >= 3` passes. System One models do not emit prose reasoning; the grade stores a formatted probability summary instead of natural-language justification.
 
 ## Invariants
 
@@ -220,7 +228,7 @@ Pass/fail is deterministic: `score >= 3` passes. Jev does not emit prose reasoni
 | `get_generative_lite_provider()` with Jev lite | [ensemble/app/llm/factory.py:get_generative_lite_provider()](ensemble/app/llm/factory.py) | Transparently falls back to assistant provider; no error |
 | Jev on primary or assistant role | [ensemble/app/services/ai/chat_pipeline.py:validate_llm_config()](ensemble/app/services/ai/chat_pipeline.py) | Rejected during config validation in routers before request handling |
 | Tribunal command generation + Jev lite | [ensemble/app/decision/validation.py:validate_jev_lite_coexistence()](ensemble/app/decision/validation.py) | Rejected during config validation; call `validate_jev_lite_coexistence()` after `resolve()` |
-| Missing Jev API key | [ensemble/app/decision/providers/jev.py:JevProvider.validate_config()](ensemble/app/decision/providers/jev.py) | Raises `ConfigurationError` when `JevProvider` is instantiated or when chat validation calls `provider_classes[LLMProvider.JEV.value].validate_config()` |
+| Missing Ollama endpoint | [ensemble/app/decision/providers/jev.py:JevProvider.validate_config()](ensemble/app/decision/providers/jev.py) | Raises `ConfigurationError` when `JevProvider` is instantiated or when chat validation calls `provider_classes[LLMProvider.JEV.value].validate_config()` |
 
 All guardrails trigger at startup or request time, never at runtime during classification or grading. Configuration errors are fatal; invalid Jev state is never silently degraded to a fallback.
 
@@ -242,24 +250,24 @@ make test-unit
 
 ### Integration tests
 
-Tier 4 live tests call the actual Jev API and require `G8E_LLM_JEV_API_KEY` or `TYPESAFE_API_KEY` environment variable to be set. These tests use the `requires_typesafe` pytest marker:
+Tier 4 live tests call the actual Ollama System One API and require Ollama 0.35+ running with a System One model pulled (e.g., `nimble`). These tests use the `requires_system_one` pytest marker:
 
-- [ensemble/tests/integration/test_jev_triage_integration.py](ensemble/tests/integration/test_jev_triage_integration.py) — End-to-end triage classification via Jev
-- [ensemble/tests/integration/test_jev_eval_judge_integration.py](ensemble/tests/integration/test_jev_eval_judge_integration.py) — End-to-end eval judge grading via Jev
+- [ensemble/tests/integration/test_jev_triage_integration.py](ensemble/tests/integration/test_jev_triage_integration.py) — End-to-end triage classification via System One
+- [ensemble/tests/integration/test_jev_eval_judge_integration.py](ensemble/tests/integration/test_jev_eval_judge_integration.py) — End-to-end eval judge grading via System One
 
 Run external tests from repository root:
 ```bash
-make test-external   # Runs all tests marked requires_typesafe
+make test-external   # Runs all tests marked requires_system_one
 ```
 
 For details on test markers and CI scope, see [Testing Guide](docs/devs/tests.md).
 
 ## Anti-patterns
 
-- Attempting to use Jev for text generation (e.g., calling `get_llm_provider(..., is_lite=True)` with Jev). Decision providers are not LLM providers; use `get_decision_provider()` for System One classification only.
-- Enabling Tribunal command generation alongside Jev lite. This configuration is rejected at validation; disable command generation or choose a generative lite provider.
-- Configuring Jev on primary or assistant roles. Jev is valid **only** on the lite role for decisions; primary and assistant must use generative providers.
-- Relying on fallback text generation when a generative lite call site runs against Jev. Callers of `get_generative_lite_provider()` automatically fall back to the assistant provider; this is correct behavior, not a degradation.
+- Attempting to use System One for text generation (e.g., calling `get_llm_provider(..., is_lite=True)` with System One). Decision providers are not LLM providers; use `get_decision_provider()` for System One classification only.
+- Enabling Tribunal command generation alongside System One lite. This configuration is rejected at validation; disable command generation or choose a generative lite provider.
+- Configuring System One on primary or assistant roles. System One is valid **only** on the lite role for decisions; primary and assistant must use generative providers.
+- Relying on fallback text generation when a generative lite call site runs against System One. Callers of `get_generative_lite_provider()` automatically fall back to the assistant provider; this is correct behavior, not a degradation.
 
 ## Links out
 

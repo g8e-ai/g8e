@@ -123,7 +123,7 @@ Provider-level credentials and endpoints are also available through:
 - Gemini: `G8E_LLM_GEMINI_API_KEY`
 - Ollama: `G8E_LLM_OLLAMA_API_KEY`, `G8E_LLM_OLLAMA_ENDPOINT`
 - llama.cpp: `G8E_LLM_LLAMACPP_API_KEY`, `G8E_LLM_LLAMACPP_ENDPOINT`
-- Jev: `G8E_LLM_JEV_API_KEY`, `G8E_LLM_JEV_ENDPOINT`, `G8E_LLM_JEV_MODEL`
+- System One (via Ollama): `G8E_LLM_JEV_MODEL` (uses existing Ollama endpoint settings)
 
 Role-specific credentials and endpoints take precedence over provider-level values. A model name remains required; the settings layer does not automatically select a provider's default model.
 
@@ -150,7 +150,7 @@ The LLM settings model carries these cross-provider controls:
 | llama.cpp (`llamacpp`) | Endpoint; API key is optional; default endpoint is `http://localhost:11444` | Uses the OpenAI-compatible adapter; inherits OpenAI behavior and appends `/v1` when absent. Actual tool, schema, and streaming support depend on the server and loaded model. |
 | g8e (`g8e`) | No provider endpoint or API key; requires the startup-injected `InternalHttpClient` | Routes inference through the Gateway's `/api/v1/inference/dispatch` endpoint over mTLS. The Gateway and Inference Operator apply the governed L1-L5 path and return a signed receipt with the typed result. Ordered messages, tools, structured output, thinking controls, usage, and evaluation bindings cross the governed request; inline-data parts fail closed with a `ModelCapabilityError`. |
 | Fake (`fake`) | No credentials or endpoint | Runs in process without network access; emits deterministic text, structured lite responses, and selected tool calls for CI, air-gapped tests, and scenarios. |
-| Jev (`jev`) | API key; default endpoint is `https://api.typesafe.ai/v1/systemone` | **Lite role only.** System One decision API for triage and semantic eval judge — not a generative LLM. See [Decision Providers](decision-providers.md). |
+| System One (`jev`) | Uses existing Ollama endpoint settings; no separate API key (optional reverse-proxy auth via `G8E_LLM_OLLAMA_API_KEY`) | **Lite role only.** Ollama System One API for triage and semantic eval judge — not a generative LLM. Models: `nimble` (9B), `tev1` (4B/0.8B). See [Decision Providers](decision-providers.md). |
 
 Provider validation runs for every configured role before chat starts. A configured model without a provider fails validation. OpenAI and Anthropic require both credentials and endpoints, Gemini requires credentials, Ollama and llama.cpp require endpoints, and the fake and g8e providers have no provider-level credential or endpoint requirements. The g8e provider still fails if the startup-injected `InternalHttpClient` is unavailable.
 

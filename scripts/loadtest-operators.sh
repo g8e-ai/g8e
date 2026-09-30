@@ -40,7 +40,7 @@
 #   RUN_TIMEOUT             Per-operator dispatch timeout in seconds, max 300 (default 60)
 #   PER_OP_RAM_MB           RAM budget per live operator process, MB (default 55; measured RSS ~40MB, padded)
 #   RAM_RESERVE_MB          RAM left untouched for the Gateway/OS/other work (default 4096)
-#   PER_OP_DISK_MB          Disk budget per operator beyond the binary copy, MB (default 10)
+#   PER_OP_DISK_MB          Disk budget per operator beyond the binary copy, MB (default 32; measured ~31MB of .g8e state)
 #   DISK_RESERVE_MB         Free disk left untouched on the sandbox filesystem (default 2048)
 #   FORCE=1                 Skip the RAM safety cap and launch exactly COUNT regardless of risk
 #   ENROLL_POLL_TIMEOUT_S   Max seconds to wait for one operator's CSR to show up as pending (default 15)
@@ -72,7 +72,7 @@ RUN_CMD="${RUN_CMD:-hostname && date && echo LOADTEST_OK}"
 RUN_TIMEOUT="${RUN_TIMEOUT:-60}"
 PER_OP_RAM_MB="${PER_OP_RAM_MB:-55}"
 RAM_RESERVE_MB="${RAM_RESERVE_MB:-4096}"
-PER_OP_DISK_MB="${PER_OP_DISK_MB:-10}"
+PER_OP_DISK_MB="${PER_OP_DISK_MB:-32}"
 DISK_RESERVE_MB="${DISK_RESERVE_MB:-2048}"
 FORCE="${FORCE:-0}"
 ENROLL_POLL_TIMEOUT_S="${ENROLL_POLL_TIMEOUT_S:-15}"
@@ -273,7 +273,7 @@ for i in $(seq 1 "$ACTUAL_COUNT"); do
     # up as pending within our poll window yet). Stop it before redeploying
     # on top of the same directory -- two processes racing over one .g8e/
     # dir is a correctness hazard, and scp cannot overwrite a running binary.
-    if [ "$attempt" -gt 1 ]; then
+    if pgrep -f -- "--working-dir $d( |\$)" >/dev/null 2>&1; then
       stop_operator_at "$d"
       sleep 0.3
     fi
