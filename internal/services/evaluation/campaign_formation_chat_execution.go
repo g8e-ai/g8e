@@ -193,7 +193,7 @@ func formationRoleChatMessage(input ScenarioInputFixture, priorOutputs []formati
 	b.WriteString(base)
 	b.WriteString("\n\nPrior formation role output:")
 	for _, prior := range priorOutputs {
-		b.WriteString(fmt.Sprintf("\n\n[%s]:\n%s", prior.Role, prior.Output))
+		fmt.Fprintf(&b, "\n\n[%s]:\n%s", prior.Role, prior.Output)
 	}
 	return b.String()
 }
