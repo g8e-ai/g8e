@@ -263,6 +263,28 @@ The Gateway provides a special `read_field` tool for governed field access with 
 }
 ```
 
+#### MCP Downstream Egress (Subprocess and HTTP)
+
+The Gateway can forward tool discovery (`tools/list`), resources (`resources/*`), prompts (`prompts/*`), and governed tool calls (`tools/call`) to a downstream third-party MCP server. All mutations and tool executions pass through the complete L1–L5 governance pipeline (doctrine screening, consensus, human approval, warden pre-dispatch verification, and actuator isolation with cryptographic ActionReceipts) before reaching the downstream server.
+
+Configure downstream egress when starting the Gateway:
+
+**Subprocess Downstream (stdio):**
+```bash
+./g8e serve gateway \
+  --mcp-downstream-cmd npx \
+  --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/var/data'
+```
+
+**HTTP Downstream:**
+```bash
+./g8e serve gateway \
+  --mcp-downstream-url http://localhost:3000
+```
+
+> [!NOTE]
+> `--mcp-downstream-cmd` and `--mcp-downstream-url` are mutually exclusive. All downstream tool executions are governed by the Gateway; downstream outputs are scrubbed for sensitive data and receipts are recorded in the audit vault.
+
 ---
 
 ### 2. A2A (Agent-to-Agent)

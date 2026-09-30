@@ -91,6 +91,7 @@ const (
 	PlatformComponentKind_PLATFORM_COMPONENT_KIND_DASHBOARD   PlatformComponentKind = 1
 	PlatformComponentKind_PLATFORM_COMPONENT_KIND_ENSEMBLE    PlatformComponentKind = 2
 	PlatformComponentKind_PLATFORM_COMPONENT_KIND_OPERATOR    PlatformComponentKind = 3
+	PlatformComponentKind_PLATFORM_COMPONENT_KIND_APPLICATION PlatformComponentKind = 4
 )
 
 // Enum value maps for PlatformComponentKind.
@@ -100,12 +101,14 @@ var (
 		1: "PLATFORM_COMPONENT_KIND_DASHBOARD",
 		2: "PLATFORM_COMPONENT_KIND_ENSEMBLE",
 		3: "PLATFORM_COMPONENT_KIND_OPERATOR",
+		4: "PLATFORM_COMPONENT_KIND_APPLICATION",
 	}
 	PlatformComponentKind_value = map[string]int32{
 		"PLATFORM_COMPONENT_KIND_UNSPECIFIED": 0,
 		"PLATFORM_COMPONENT_KIND_DASHBOARD":   1,
 		"PLATFORM_COMPONENT_KIND_ENSEMBLE":    2,
 		"PLATFORM_COMPONENT_KIND_OPERATOR":    3,
+		"PLATFORM_COMPONENT_KIND_APPLICATION": 4,
 	}
 )
 

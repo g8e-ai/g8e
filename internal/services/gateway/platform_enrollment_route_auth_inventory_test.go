@@ -66,12 +66,6 @@ func TestPlatformEnrollmentBypassRouteAuth_CurrentClassifications(t *testing.T) 
 	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.PKIDevicesEnroll),
 		"device enrollment is RouteAuthNone (handler enforces mTLS internally; bootstrap path creates identities)")
 
-	// /api/v1/pki/apps/delegated is NOT explicitly classified — it
-	// falls through to the fail-closed RouteAuthMTLS default. This is
-	// the retained authenticated short-lived path.
-	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.PKIAppsDelegated),
-		"delegated app enrollment is RouteAuthMTLS (fail-closed default); retained as the authenticated short-lived path")
-
 	// /api/v1/auth/bootstrap IS explicitly classified as RouteAuthNone.
 	// It creates the first user and does not issue a platform workload
 	// certificate.

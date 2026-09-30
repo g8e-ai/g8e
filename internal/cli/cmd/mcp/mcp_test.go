@@ -789,15 +789,17 @@ func TestAgentRunCmd(t *testing.T) {
 	t.Run("agent run command has correct structure", func(t *testing.T) {
 		cmd := agentRunCmd()
 		assert.Contains(t, cmd.Use, "run")
-		assert.Contains(t, cmd.Short, "Govern any MCP server")
+		assert.Contains(t, cmd.Short, "Launch an AI agent")
 		assert.Contains(t, cmd.Long, "Launch an AI agent")
 	})
 
-	t.Run("agent run has url flag", func(t *testing.T) {
+	t.Run("agent run does not have url flag and has verify flag", func(t *testing.T) {
 		cmd := agentRunCmd()
 		urlFlag := cmd.Flags().Lookup("url")
-		require.NotNil(t, urlFlag, "agent run should have --url flag")
-		assert.Equal(t, "string", urlFlag.Value.Type())
+		assert.Nil(t, urlFlag, "agent run should not have --url flag")
+		verifyFlag := cmd.Flags().Lookup("verify")
+		require.NotNil(t, verifyFlag, "agent run should have --verify flag")
+		assert.Equal(t, "bool", verifyFlag.Value.Type())
 	})
 
 	t.Run("agent run has silence flags set", func(t *testing.T) {
@@ -1113,85 +1115,25 @@ func TestAgentLaunchArgs(t *testing.T) {
 }
 
 func TestRunMCPAgentRun_NoArgs(t *testing.T) {
-	t.Run("returns error when no args and no url", func(t *testing.T) {
-		err := runMCPAgentRun(nil, "", false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+	t.Run("returns error when no args", func(t *testing.T) {
+		err := runMCPAgentRun(nil, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "specify an agent name")
 	})
 
-	t.Run("returns error for unknown agent", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "", false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+	t.Run("returns ErrAgentNotFound for unknown agent", func(t *testing.T) {
+		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrAgentNotFound)
 	})
 
-	t.Run("devin returns error for unknown agent (not cloud-based)", func(t *testing.T) {
-		// Devin is now a local CLI agent and goes through launchAgentWithGovernance.
+	t.Run("devin returns error for missing gateway or binary", func(t *testing.T) {
+		// Devin is a local CLI agent and goes through launchAgentWithGovernance.
 		// We can't test the full launch path here (requires gateway), but we verify
 		// it does NOT return the old cloud-based error.
-		err := runMCPAgentRun([]string{"devin"}, "", false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+		err := runMCPAgentRun([]string{"devin"}, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.NotContains(t, err.Error(), "cloud-based agent")
-	})
-}
-
-func TestSubprocessMCPProxy_ForwardError(t *testing.T) {
-	t.Run("forward returns error when stdin write fails", func(t *testing.T) {
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		require.NoError(t, w.Close()) // close write end so writes fail
-		defer r.Close()
-
-		proxy := &subprocessMCPProxy{
-			command: "echo",
-			args:    []string{"test"},
-			stdin:   w,
-			logger:  slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		}
-
-		_, err = proxy.forward(JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		})
-		require.Error(t, err)
-	})
-}
-
-func TestHttpMCPProxy(t *testing.T) {
-	t.Run("forward proxies to server", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			resp := JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      float64(1),
-				Result:  map[string]interface{}{"status": "ok"},
-			}
-			_ = json.NewEncoder(w).Encode(resp)
-		}))
-		defer server.Close()
-
-		proxy := &httpMCPProxy{
-			url:    server.URL,
-			client: &http.Client{Timeout: 5 * time.Second},
-		}
-
-		resp, err := proxy.forward(JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		})
-		require.NoError(t, err)
-		assert.Equal(t, "2.0", resp.JSONRPC)
-	})
-
-	t.Run("stop is safe to call", func(t *testing.T) {
-		proxy := &httpMCPProxy{
-			url:    "http://localhost:1",
-			client: &http.Client{},
-		}
-		assert.NotPanics(t, func() {
-			proxy.stop()
-		})
 	})
 }
 

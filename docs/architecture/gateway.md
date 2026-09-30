@@ -179,7 +179,7 @@ Commands:
 
 - `g8e mcp agent list` — Lists supported agent binaries: Claude Code, OpenAI Codex, Devin CLI, Goose, Gemini CLI.
 - `g8e mcp agent show <agent>` — Prints MCP client configuration (g8e.local mTLS, IP address mTLS, stdio transport).
-- `g8e mcp agent run [--url <url>] [--verify] [-- <command> [args...]]` — Launches an agent with automatic MCP configuration and native tool disabling. The stdio proxy bridges stdio MCP transport to gateway mTLS HTTPS endpoint. Runtime verification (`--verify`, enabled by default) checks that tool-disabling configuration was written correctly; use `--verify=false` to skip for pre-validated configs.
+- `g8e mcp agent run <agent> [--verify] [-- <args...>]` — Launches an agent with automatic MCP configuration and native tool disabling. The stdio proxy bridges stdio MCP transport to gateway mTLS HTTPS endpoint. Runtime verification (`--verify`, enabled by default) checks that tool-disabling configuration was written correctly; use `--verify=false` to skip for pre-validated configs. External MCP servers connect via gateway downstream egress flags (`--mcp-downstream-cmd`, `--mcp-downstream-url`).
 
 When the Gateway returns an L3 approval response, the stdio proxy auto-opens a browser, subscribes to SSE stream (`GET /api/v1/sse/stream`), waits for the `approval.completed` event (3-minute timeout; Gateway approval request TTL is 2 minutes), and re-sends the original request.
 

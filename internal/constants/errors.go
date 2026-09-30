@@ -538,6 +538,8 @@ var (
 
 	ErrPlatformEnrollmentRequiresBootstrap    = errors.New("platform enrollment requires a bootstrapped gateway")
 	ErrPlatformEnrollmentInvalidComponent     = errors.New("invalid platform component kind")
+	ErrPlatformEnrollmentAppNameRequired      = errors.New("platform enrollment app_name is required")
+	ErrPlatformEnrollmentInvalidAppName       = errors.New("invalid platform enrollment app_name")
 	ErrPlatformEnrollmentInstanceIDRequired   = errors.New("platform enrollment instance_id is required")
 	ErrPlatformEnrollmentInvalidInstanceID    = errors.New("invalid platform enrollment instance_id")
 	ErrPlatformEnrollmentHostnameRequired     = errors.New("platform enrollment hostname is required")
@@ -745,18 +747,6 @@ var (
 	ErrSystemFingerprintRequired   = errors.New("system_fingerprint is required")
 	ErrHostnameRequired            = errors.New("hostname is required")
 
-	// App enrollment service errors
-	ErrAppEnrollCSRRequired       = errors.New("csr_pem is required")
-	ErrAppEnrollAppNameRequired   = errors.New("app_name is required")
-	ErrAppEnrollInvalidAppName    = errors.New("app_name must contain only alphanumeric characters")
-	ErrAppEnrollInvalidCSRPEM     = errors.New("invalid CSR PEM format")
-	ErrAppEnrollParseCSR          = errors.New("failed to parse CSR")
-	ErrAppEnrollCSRSignatureCheck = errors.New("CSR signature check failed")
-	ErrAppEnrollSignCertificate   = errors.New("failed to sign certificate")
-	ErrAppEnrollParseIssuedCert   = errors.New("failed to parse issued certificate")
-	ErrAppEnrollNoURISAN          = errors.New("issued certificate has no URI SAN")
-	ErrAppEnrollMarshalAppPolicy  = errors.New("failed to marshal app policy")
-	ErrAppEnrollPersistAppPolicy  = errors.New("failed to persist app policy")
 	ErrBootstrapNoConfig          = errors.New("bootstrap: no configuration returned from Auth Services")
 	ErrBootstrapNoSessionID       = errors.New("bootstrap: no operator_session_id returned from Auth Services")
 	ErrBootstrapCertParse         = errors.New("bootstrap: failed to parse per-operator cert+key")

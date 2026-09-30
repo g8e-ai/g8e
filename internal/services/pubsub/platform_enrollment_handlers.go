@@ -120,6 +120,8 @@ func protoComponentKind(k commonv1.PlatformComponentKind) (models.PlatformCompon
 		return models.PlatformComponentEnsemble, nil
 	case commonv1.PlatformComponentKind_PLATFORM_COMPONENT_KIND_OPERATOR:
 		return models.PlatformComponentOperator, nil
+	case commonv1.PlatformComponentKind_PLATFORM_COMPONENT_KIND_APPLICATION:
+		return models.PlatformComponentApplication, nil
 	default:
 		return "", constants.ErrPlatformEnrollmentInvalidComponent
 	}
@@ -361,7 +363,7 @@ func (h *PlatformEnrollmentHandler) signComponent(req *models.PlatformEnrollment
 	}
 
 	switch req.ComponentKind {
-	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble:
+	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble, models.PlatformComponentApplication:
 		return h.signAppComponent(req, actorUserID, trustBundle)
 	case models.PlatformComponentOperator:
 		return h.signOperatorComponent(req, actorUserID, trustBundle)
@@ -510,6 +512,20 @@ func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg
 		return "", constants.ErrPlatformEnrollmentInvalidPayload
 	}
 
+	existingDoc, err := h.deps.DocStore.DocGet(targetCollection, targetDocumentID)
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: check existing policy: %w", err)
+	}
+	if existingDoc != nil {
+		policyID := payload.GetPolicyId()
+		h.logger.Info("platform enrollment policy already exists, retaining",
+			"request_id", requestID,
+			"policy_id", policyID,
+			"target_document_id", targetDocumentID)
+		return fmt.Sprintf("platform enrollment persist_policy retained request_id=%s policy_id=%s document=%s",
+			requestID, policyID, targetDocumentID), nil
+	}
+
 	now := time.Now().UTC()
 	policy := models.AppPolicy{
 		AppID:                  targetDocumentID,
@@ -577,7 +593,7 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		}
 	}
 	switch req.ComponentKind {
-	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble:
+	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble, models.PlatformComponentApplication:
 		if payload.GetTargetDocumentId() == "" {
 			return "", constants.ErrPlatformEnrollmentInvalidPayload
 		}

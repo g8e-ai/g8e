@@ -673,8 +673,6 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		envProc = ls.cmdSvc
 	}
 
-	// Initialize AppEnrollmentService for external app enrollment
-	appEnrollment := NewAppEnrollmentService(ls.docStore, pki, logger)
 
 	providerObservationDeps := providerObservationControllerDeps(logger, ls.responder, ls.fileSvc)
 	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
@@ -699,13 +697,12 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		Logger: logger,
 		Auth:   auth,
 		PKIControllerDeps: PKIControllerDeps{
-			Cfg:           cfg,
-			Logger:        logger,
-			PKI:           pki,
-			AppEnrollment: appEnrollment,
-			Registration:  reg,
-			Responder:     ls.responder,
-			G8eReader:     g8eReader,
+			Cfg:          cfg,
+			Logger:       logger,
+			PKI:          pki,
+			Registration: reg,
+			Responder:    ls.responder,
+			G8eReader:    g8eReader,
 		},
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:            cfg,

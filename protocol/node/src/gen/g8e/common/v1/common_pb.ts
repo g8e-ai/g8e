@@ -717,6 +717,11 @@ export enum PlatformComponentKind {
    * @generated from enum value: PLATFORM_COMPONENT_KIND_OPERATOR = 3;
    */
   OPERATOR = 3,
+
+  /**
+   * @generated from enum value: PLATFORM_COMPONENT_KIND_APPLICATION = 4;
+   */
+  APPLICATION = 4,
 }
 
 /**

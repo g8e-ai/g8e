@@ -412,7 +412,6 @@ func TestRouteAuthRegistry_GenericRoutesRemainMTLS(t *testing.T) {
 		constants.APIPaths.GovernanceSignersByID + "some-signer",
 		// PKI management routes
 		constants.APIPaths.PKICSRSign,
-		constants.APIPaths.PKIAppsDelegated,
 		constants.APIPaths.PKICertificatesRevoke,
 		constants.APIPaths.PKIRevocationBundle,
 		// Operator mTLS-only sub-paths

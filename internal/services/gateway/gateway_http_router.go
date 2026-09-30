@@ -214,7 +214,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// PKI management routes (require mTLS)
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
-	mux.HandleFunc(constants.APIPaths.PKIAppsDelegated, h.pkiController.handlePKIAppsDelegated)
 	mux.HandleFunc(constants.APIPaths.PKICertificatesRevoke, h.pkiController.handlePKICertificatesRevoke)
 	mux.HandleFunc(constants.APIPaths.PKIRevocationBundle, h.pkiController.handlePKIRevocationBundle)
 

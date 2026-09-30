@@ -30,6 +30,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -184,3 +186,161 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		require.Contains(t, mcpRes.Result.Content[0].Text, constants.MCPApprovalPausedPrefix)
 	})
 }
+
+func TestMCPGateway_SubprocessDownstream_EndToEnd(t *testing.T) {
+	// Create mock downstream stdio script
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "mock_mcp_downstream.sh")
+	scriptContent := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *"tools/list"*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"subprocess_echo","description":"Subprocess downstream echo tool"}]}}'
+      ;;
+    *"resources/list"*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"resources":[{"uri":"file:///sub.txt","name":"sub.txt"}]}}'
+      ;;
+    *"prompts/list"*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"prompts":[{"name":"sub-prompt","description":"Subprocess prompt"}]}}'
+      ;;
+    *"tools/call"*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"subprocess tool output"}]}}'
+      ;;
+    *)
+      echo '{"jsonrpc":"2.0","id":1,"result":{}}'
+      ;;
+  esac
+done
+`
+	require.NoError(t, os.WriteFile(scriptPath, []byte(scriptContent), 0o755))
+
+	// Create gateway fixture with subprocess downstream configuration
+	fixture := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
+		TestName:          t.Name(),
+		AllowTestPortZero: true,
+		DownstreamCmd:     "/bin/sh",
+		DownstreamArgs:    []string{scriptPath},
+	})
+
+	fixture.WaitForReady(t)
+
+	identity := fixtures.EnrollClientIdentity(t, fixture, "sub-user", "sub-org", "sub-fingerprint", "sub-host")
+	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
+	mcpURL := network.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
+
+	// Test tools/list proxied to subprocess downstream
+	t.Run("subprocess tools/list", func(t *testing.T) {
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := mtlsClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpResp struct {
+			Result mcp.ToolsListResult `json:"result"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(mcpResp.Result.Tools), 1)
+
+		hasSubprocessTool := false
+		for _, tool := range mcpResp.Result.Tools {
+			if tool.Name == "subprocess_echo" {
+				hasSubprocessTool = true
+				break
+			}
+		}
+		require.True(t, hasSubprocessTool, "Subprocess downstream 'subprocess_echo' tool should be present")
+	})
+
+	// Test resources/list proxied to subprocess downstream
+	t.Run("subprocess resources/list", func(t *testing.T) {
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "resources/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := mtlsClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpResp struct {
+			Result mcp.ResourcesListResult `json:"result"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
+		require.NoError(t, err)
+		require.Len(t, mcpResp.Result.Resources, 1)
+		require.Equal(t, "file:///sub.txt", mcpResp.Result.Resources[0].URI)
+	})
+
+	// Test prompts/list proxied to subprocess downstream
+	t.Run("subprocess prompts/list", func(t *testing.T) {
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "prompts/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := mtlsClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpResp struct {
+			Result mcp.PromptsListResult `json:"result"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
+		require.NoError(t, err)
+		require.Len(t, mcpResp.Result.Prompts, 1)
+		require.Equal(t, "subprocess-prompt", mcpResp.Result.Prompts[0].Name)
+	})
+
+	// Test tools/call through governance pipeline
+	t.Run("subprocess tools/call governance", func(t *testing.T) {
+		callReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/call",
+			ID:      1,
+		}
+		params := mcp.CallToolRequest{
+			Name:      "subprocess_echo",
+			Arguments: mustMarshal(map[string]interface{}{"msg": "governed call"}),
+		}
+		callReq.Params = mustMarshal(params)
+
+		reqBody, _ := json.Marshal(callReq)
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := mtlsClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpRes struct {
+			Result struct {
+				Content []mcp.TextContent `json:"content"`
+			} `json:"result"`
+		}
+		body, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(body, &mcpRes)
+		require.NoError(t, err)
+
+		// Mutation requires L3 approval and returns approval paused prefix in Notary posture
+		require.NotEmpty(t, mcpRes.Result.Content)
+		require.Contains(t, mcpRes.Result.Content[0].Text, constants.MCPApprovalPausedPrefix)
+	})
+}
+

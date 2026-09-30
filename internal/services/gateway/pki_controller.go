@@ -36,35 +36,32 @@ type g8eBinaryReader interface {
 }
 
 type PKIController struct {
-	cfg           *config.Config
-	logger        *slog.Logger
-	pki           *PKIAuthority
-	appEnrollment *AppEnrollmentService
-	registration  *RegistrationService
-	responder     *response.Writer
-	g8eReader     g8eBinaryReader
+	cfg          *config.Config
+	logger       *slog.Logger
+	pki          *PKIAuthority
+	registration *RegistrationService
+	responder    *response.Writer
+	g8eReader    g8eBinaryReader
 }
 
 // PKIControllerDeps groups all dependencies for PKIController.
 type PKIControllerDeps struct {
-	Cfg           *config.Config
-	Logger        *slog.Logger
-	PKI           *PKIAuthority
-	AppEnrollment *AppEnrollmentService
-	Registration  *RegistrationService
-	Responder     *response.Writer
-	G8eReader     g8eBinaryReader
+	Cfg          *config.Config
+	Logger       *slog.Logger
+	PKI          *PKIAuthority
+	Registration *RegistrationService
+	Responder    *response.Writer
+	G8eReader    g8eBinaryReader
 }
 
 func newPKIController(d PKIControllerDeps) *PKIController {
 	return &PKIController{
-		cfg:           d.Cfg,
-		logger:        d.Logger,
-		pki:           d.PKI,
-		appEnrollment: d.AppEnrollment,
-		registration:  d.Registration,
-		responder:     d.Responder,
-		g8eReader:     d.G8eReader,
+		cfg:          d.Cfg,
+		logger:       d.Logger,
+		pki:          d.PKI,
+		registration: d.Registration,
+		responder:    d.Responder,
+		g8eReader:    d.G8eReader,
 	}
 }
 
@@ -326,62 +323,6 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
-// @Summary		Mint delegated app credential
-// @Description	Mints a short-lived delegated credential for an app, binding both app and requestor identities (mTLS-authenticated)
-// @Tags			pki
-// @Accept			json
-// @Produce		json
-// @Success		200	{object}	AppEnrollResponse
-// @Router			/api/v1/pki/apps/delegated [post]
-func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-		return
-	}
-
-	if c.appEnrollment == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
-		return
-	}
-
-	// Require mTLS authentication from a human CLI session
-	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		c.responder.Error(w, http.StatusUnauthorized, constants.ErrMissingCertificate.Error())
-		return
-	}
-
-	// Extract user ID from the CLI certificate
-	userID, err := ExtractUserIDFromCert(r.TLS.PeerCertificates[0])
-	if err != nil {
-		c.responder.Error(w, http.StatusUnauthorized, fmt.Errorf("%w: %v", constants.ErrCertParseFailed, err).Error())
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
-		return
-	}
-
-	var req AppEnrollRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
-		return
-	}
-
-	resp, err := c.appEnrollment.EnrollDelegatedApp(req, userID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrEnrollmentFailed, err).Error())
-		return
-	}
-
-	if !resp.Success {
-		c.responder.Error(w, http.StatusBadRequest, resp.Error)
-		return
-	}
-
-	c.responder.JSON(w, http.StatusCreated, resp)
-}
 
 // @Summary		Download g8e binary
 // @Description	Downloads the g8e binary file binary for the current platform (internal endpoint)

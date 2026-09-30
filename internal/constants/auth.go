@@ -243,25 +243,10 @@ const (
 	CLIBindMaxOperators = 5000
 )
 
-// App enrollment type constants define the valid app_type values for external app enrollment.
-const (
-	AppTypeMCPClient       = "mcp-client"
-	AppTypeA2AGateway      = "a2a-gateway"
-	AppTypeCustom          = "custom"
-	AppTypeConsensusMember = "consensus-member"
-)
-
 // L3 notary constants
 const (
 	// L3ApprovalWindow is the maximum time between approval and L3 verification.
 	L3ApprovalWindow = 30 * time.Minute
-)
-
-// Certificate renewal constants
-const (
-	// AppCertMinValidity is the minimum remaining validity an app certificate must
-	// have to be considered valid for reuse without re-enrollment.
-	AppCertMinValidity = 7 * 24 * time.Hour
 )
 
 // Auth scheme and default identity constants.
