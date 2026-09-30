@@ -38,7 +38,7 @@ dependencies = [
     # Documentation
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.5.0",
-    "python-dotenv==1.1.1",
+    "python-dotenv==1.2.3",
 ]
 
 [project.optional-dependencies]
