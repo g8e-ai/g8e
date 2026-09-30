@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -329,9 +328,6 @@ func formatChatAcceptElapsed(d time.Duration) string {
 func resolveChatEvalEnsembleURL(ensembleURL string) string {
 	if strings.TrimSpace(ensembleURL) != "" {
 		return strings.TrimSpace(ensembleURL)
-	}
-	if envURL := strings.TrimSpace(os.Getenv("G8E_ENSEMBLE_URL")); envURL != "" {
-		return envURL
 	}
 	return network.LocalhostHTTPURL(constants.EnsembleDefaultPort)
 }

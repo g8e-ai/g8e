@@ -66,15 +66,7 @@ func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (g
 		},
 		ModelDispatcher: modelDispatcher,
 		ResolveProbeRunner: func() (evaluation.GovernedCapabilityProbeRunner, error) {
-			appClient, err := inferenceEvalAppClient(cfg, fileSvc, authContext, inferenceEvalDeps{
-				configLoader:     deps.configLoader,
-				fileSvcFactory:   deps.fileSvcFactory,
-				authLoader:       deps.authLoader,
-				clientFactory:    deps.clientFactory,
-				appClientFactory: deps.clientFactory,
-				now:              deps.now,
-				newID:            deps.newID,
-			})
+			appClient, err := inferenceEvalAppClient(fileSvc, cfg, authContext, deps.clientFactory)
 			if err != nil {
 				return nil, err
 			}

@@ -170,7 +170,7 @@ func RunStream(args []string) {
 
 	// Run concurrent streaming
 	wallStart := time.Now()
-	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, sshKnownHosts, concurrency, dialTimeout, os.Getenv("SSH_AUTH_SOCK"), os.Getenv("USER"), sshIdentityFile, sshUser, sshPassphrase, preFlightCheck)
+	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, sshKnownHosts, concurrency, dialTimeout, os.Getenv(string(constants.EnvVar.SSHAuthSock)), os.Getenv(string(constants.EnvVar.User)), sshIdentityFile, sshUser, sshPassphrase, preFlightCheck)
 
 	// Tally results
 	var succeeded, failed int

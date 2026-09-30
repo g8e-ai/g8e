@@ -77,12 +77,13 @@ type GatewayFlags struct {
 	AllowedOrigins      []string
 	DoctrineDir         string
 
-	PublicSpectatorEnabled           bool
-	PublicSpectatorPrivateAddr       string
-	PublicSpectatorPublicAddr        string
-	EvalExplorerAddr                 string
-	EvalExplorerRoot                 string
-	PublicSpectatorTrustedProxyCIDRs []string
+	PublicSpectatorEnabled            bool
+	PublicSpectatorPrivateAddr        string
+	PublicSpectatorPublicAddr         string
+	PublicSpectatorAllowContainerBind bool
+	EvalExplorerAddr                  string
+	EvalExplorerRoot                  string
+	PublicSpectatorTrustedProxyCIDRs  []string
 }
 
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
@@ -110,13 +111,14 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.MCPDownstreamCmd, "mcp-downstream-cmd", "", "Command of a downstream MCP subprocess to proxy discovery and execution to (default: none)")
 	cmd.Flags().StringVar(&f.MCPDownstreamArgs, "mcp-downstream-args", "", "Comma-separated arguments for the downstream MCP subprocess (default: none)")
 	cmd.Flags().StringVar(&f.A2ADownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
-	cmd.Flags().StringVar(&f.EnsembleUpstreamURL, "ensemble-upstream-url", "", "HTTP URL of the g8ee ensemble for browser proxy forwarding (default: G8E_ENSEMBLE_URL or http://127.0.0.1:8000)")
+	cmd.Flags().StringVar(&f.EnsembleUpstreamURL, "ensemble-upstream-url", "", "HTTP URL of the g8ee ensemble for browser proxy forwarding (default: http://127.0.0.1:8000)")
 	cmd.Flags().StringVar(&f.PublicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
 	cmd.Flags().StringArrayVar(&f.AllowedOrigins, "cors-origin", nil, "Allowed CORS origin for cross-origin browser access (repeatable, e.g. https://lovable.dev)")
 	cmd.Flags().StringVar(&f.DoctrineDir, "doctrine-dir", "", "Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)")
 	cmd.Flags().BoolVar(&f.PublicSpectatorEnabled, "public-spectator", true, "Start the in-process public mirror and evaluation explorer listeners")
 	cmd.Flags().StringVar(&f.PublicSpectatorPrivateAddr, "public-spectator-private-listen", "", fmt.Sprintf("Loopback address for authenticated public mirror ingest (default: 127.0.0.1:%d)", constants.PublicSpectatorPrivatePort))
 	cmd.Flags().StringVar(&f.PublicSpectatorPublicAddr, "public-spectator-public-listen", "", fmt.Sprintf("Loopback address for anonymous public mirror reads (default: 127.0.0.1:%d)", constants.PublicSpectatorPublicPort))
+	cmd.Flags().BoolVar(&f.PublicSpectatorAllowContainerBind, "public-spectator-allow-container-bind", false, "Allow the public mirror and explorer listeners to bind 0.0.0.0 so a container network can reach them (set only inside a container deployment)")
 	cmd.Flags().StringVar(&f.EvalExplorerAddr, "eval-explorer-listen", "", fmt.Sprintf("Loopback address for the evaluation explorer SPA (default: 127.0.0.1:%d)", constants.EvalExplorerDefaultPort))
 	cmd.Flags().StringVar(&f.EvalExplorerRoot, "eval-explorer-root", "", "Directory containing the built evaluation explorer dist assets")
 	cmd.Flags().StringArrayVar(&f.PublicSpectatorTrustedProxyCIDRs, "public-spectator-trusted-proxy-cidr", nil, "Trusted proxy CIDR allowed to provide exactly one CF-Connecting-IP address (repeatable)")
@@ -162,9 +164,6 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	if f.DoctrineDir == "" {
 		f.DoctrineDir = os.Getenv(string(constants.EnvVar.DoctrineDir))
 	}
-	if f.EnsembleUpstreamURL == "" {
-		f.EnsembleUpstreamURL = os.Getenv("G8E_ENSEMBLE_URL")
-	}
 	return f
 }
 
@@ -173,38 +172,39 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 // gateway config struct.
 func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	return serve.GatewayConfig{
-		Posture:                          g8econfig.GatewayPosture(f.Posture),
-		HTTPPort:                         f.HTTPPort,
-		HTTPSPort:                        f.HTTPSPort,
-		DataDir:                          f.DataDir,
-		PKIDir:                           f.PKIDir,
-		SecretsDir:                       f.SecretsDir,
-		VaultDir:                         f.VaultDir,
-		VaultKeyPath:                     f.VaultKeyPath,
-		PasskeyRpID:                      f.PasskeyRpID,
-		PasskeyRpName:                    f.PasskeyRpName,
-		PasskeyRpOrigins:                 f.PasskeyRpOrigins,
-		RateLimitRPS:                     f.RateLimitRPS,
-		RateLimitBurst:                   f.RateLimitBurst,
-		LogLevel:                         f.LogLevel,
-		CertIdentityMode:                 f.CertIdentityMode,
-		ConsensusID:                      f.ConsensusID,
-		ConsensusURL:                     f.ConsensusURL,
-		ConsensusBootstrap:               f.ConsensusBootstrap,
-		MCPDownstreamURL:                 f.MCPDownstreamURL,
-		MCPDownstreamCmd:                 f.MCPDownstreamCmd,
-		MCPDownstreamArgs:                parseDownstreamArgs(f.MCPDownstreamArgs),
-		A2ADownstreamURL:                 f.A2ADownstreamURL,
-		EnsembleUpstreamURL:              f.EnsembleUpstreamURL,
-		PublicBaseURL:                    f.PublicBaseURL,
-		AllowedOrigins:                   f.AllowedOrigins,
-		DoctrineDir:                      f.DoctrineDir,
-		PublicSpectatorEnabled:           f.PublicSpectatorEnabled,
-		PublicSpectatorPrivateAddr:       f.PublicSpectatorPrivateAddr,
-		PublicSpectatorPublicAddr:        f.PublicSpectatorPublicAddr,
-		EvalExplorerAddr:                 f.EvalExplorerAddr,
-		EvalExplorerRoot:                 f.EvalExplorerRoot,
-		PublicSpectatorTrustedProxyCIDRs: f.PublicSpectatorTrustedProxyCIDRs,
+		Posture:                           g8econfig.GatewayPosture(f.Posture),
+		HTTPPort:                          f.HTTPPort,
+		HTTPSPort:                         f.HTTPSPort,
+		DataDir:                           f.DataDir,
+		PKIDir:                            f.PKIDir,
+		SecretsDir:                        f.SecretsDir,
+		VaultDir:                          f.VaultDir,
+		VaultKeyPath:                      f.VaultKeyPath,
+		PasskeyRpID:                       f.PasskeyRpID,
+		PasskeyRpName:                     f.PasskeyRpName,
+		PasskeyRpOrigins:                  f.PasskeyRpOrigins,
+		RateLimitRPS:                      f.RateLimitRPS,
+		RateLimitBurst:                    f.RateLimitBurst,
+		LogLevel:                          f.LogLevel,
+		CertIdentityMode:                  f.CertIdentityMode,
+		ConsensusID:                       f.ConsensusID,
+		ConsensusURL:                      f.ConsensusURL,
+		ConsensusBootstrap:                f.ConsensusBootstrap,
+		MCPDownstreamURL:                  f.MCPDownstreamURL,
+		MCPDownstreamCmd:                  f.MCPDownstreamCmd,
+		MCPDownstreamArgs:                 parseDownstreamArgs(f.MCPDownstreamArgs),
+		A2ADownstreamURL:                  f.A2ADownstreamURL,
+		EnsembleUpstreamURL:               f.EnsembleUpstreamURL,
+		PublicBaseURL:                     f.PublicBaseURL,
+		AllowedOrigins:                    f.AllowedOrigins,
+		DoctrineDir:                       f.DoctrineDir,
+		PublicSpectatorEnabled:            f.PublicSpectatorEnabled,
+		PublicSpectatorPrivateAddr:        f.PublicSpectatorPrivateAddr,
+		PublicSpectatorPublicAddr:         f.PublicSpectatorPublicAddr,
+		PublicSpectatorAllowContainerBind: f.PublicSpectatorAllowContainerBind,
+		EvalExplorerAddr:                  f.EvalExplorerAddr,
+		EvalExplorerRoot:                  f.EvalExplorerRoot,
+		PublicSpectatorTrustedProxyCIDRs:  f.PublicSpectatorTrustedProxyCIDRs,
 	}
 }
 

@@ -330,6 +330,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.PublicSpectatorPublicAddr != "" {
 		args = append(args, "--public-spectator-public-listen", opts.PublicSpectatorPublicAddr)
 	}
+	if opts.PublicSpectatorAllowContainerBind {
+		args = append(args, "--public-spectator-allow-container-bind")
+	}
 	if opts.EvalExplorerAddr != "" {
 		args = append(args, "--eval-explorer-listen", opts.EvalExplorerAddr)
 	}

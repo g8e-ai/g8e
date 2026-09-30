@@ -26,7 +26,7 @@ docker compose up -d
 
 The unified stack starts all 5 core services (gateway, data operator, inference operator, ensemble, and dashboard) together in the default Compose profile. Workloads remain pending until an enrolled owner approves them. The helper above manages that flow; see the [Unified Docker Stack guide](../docs/guides/unified_stack.md) for the manual commands and troubleshooting steps.
 
-After enrollment completes, the ensemble health endpoint is available at `http://localhost:8000/health`. Set `G8E_ENSEMBLE_PORT` before starting Compose to publish a different host port.
+After enrollment completes, the ensemble health endpoint is available at `http://localhost:8000/health`. The published host port is fixed in `docker-compose.yml`; use a checked-in `docker-compose.override.yml` to change it.
 
 ## Development setup
 

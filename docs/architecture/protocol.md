@@ -242,9 +242,8 @@ The directory `protocol/constants/` maintains 26 top-level JSON registries along
 Example deployment configurations in `protocol/examples/mcp_server/` illustrate governed MCP topologies:
 
 - `g8e_gateway_mcp_config.json`: Production HTTP with mTLS using client certificate paths.
-- `g8e_gateway_mcp_config_env.json`: Containerized HTTP with mTLS using environment variables (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`, `G8E_CA_BUNDLE`).
 - `g8e_stdio_mcp_config.json`: Local development stdio mode executing `g8e mcp stdio`.
-- `g8e_agent_mcp_config.json`: Agent governance configuration routing tool executions through governed gateway endpoints while excluding raw execution primitives (`Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `WebSearch`, `WebFetch`).
+- `g8e_agent_mcp_config.json`: Agent governance configuration routing tool executions through governed gateway endpoints under the agent's application identity (`--app <agent>`) while excluding raw execution primitives (`Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `WebSearch`, `WebFetch`).
 
 ### Protobuf compilation and code generation workflow
 
@@ -352,7 +351,7 @@ The target executes the following steps:
 - [Gateway Architecture](gateway.md): Gateway ingress routing, policy decision points, and dispatch mechanics.
 - [Operator Architecture](operator.md): Operator runtime daemon, local execution, and L4/L5 verification.
 - [Event and Action Protocol](events.md): Event catalog taxonomy, SSE streaming, and payload structures.
-- [AI Agents and Boundary](agents.md): Agent roles, MCP wrappers, and tool boundaries.
+- [AI Agents and Boundary](agents.md): Agent roles, downstream MCP egress, and tool boundaries.
 - [Release Process](../devs/release_process.md): Detailed release workflows, compliance bundles, and native eval acceptance.
 - [Documentation Guide](../devs/docs.md): Standards, invariants, and procedures for g8e documentation.
 - [Protocol Specification](../../protocol/docs/spec.md): Canonical envelope structure and 5-layer interlock sequence details.

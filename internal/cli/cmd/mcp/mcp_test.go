@@ -600,25 +600,6 @@ func generateTestCerts(t *testing.T) (certPath, keyPath, caPath string) {
 	return certPath, keyPath, certPath
 }
 
-func TestEnvOr(t *testing.T) {
-	t.Run("returns environment variable when set", func(t *testing.T) {
-		t.Setenv("TEST_VAR", "test_value")
-		result := envOr("TEST_VAR", "fallback")
-		assert.Equal(t, "test_value", result)
-	})
-
-	t.Run("returns fallback when environment variable not set", func(t *testing.T) {
-		result := envOr("NONEXISTENT_VAR", "fallback")
-		assert.Equal(t, "fallback", result)
-	})
-
-	t.Run("returns fallback when environment variable is empty string", func(t *testing.T) {
-		t.Setenv("EMPTY_VAR", "")
-		result := envOr("EMPTY_VAR", "fallback")
-		assert.Equal(t, "fallback", result)
-	})
-}
-
 func TestSendSuccess(t *testing.T) {
 	t.Run("success response has correct structure", func(t *testing.T) {
 		var buf bytes.Buffer
@@ -980,7 +961,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
-		configPath, cleanup, err := WriteAgentConfig("goose", binaryPath)
+		configPath, cleanup, err := WriteAgentConfig("goose", binaryPath, "goose")
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 		if cleanup != nil {
@@ -994,7 +975,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
-		configPath, cleanup, err := WriteAgentConfig("gemini", binaryPath)
+		configPath, cleanup, err := WriteAgentConfig("gemini", binaryPath, "gemini")
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 		if cleanup != nil {
@@ -1013,7 +994,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
-		configPath, cleanup, err := WriteAgentConfig("devin", binaryPath)
+		configPath, cleanup, err := WriteAgentConfig("devin", binaryPath, "devin")
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 		if cleanup != nil {
@@ -1022,7 +1003,11 @@ func TestWriteAgentConfig(t *testing.T) {
 
 		data, err := os.ReadFile(configPath)
 		require.NoError(t, err)
-		assert.Contains(t, string(data), "g8e")
+		var cfg agentMCPConfig
+		require.NoError(t, json.Unmarshal(data, &cfg))
+		require.Contains(t, cfg.MCPServers, "g8e")
+		assert.Equal(t, []string{"mcp", "stdio", "--app", "devin"}, cfg.MCPServers["g8e"].Args,
+			"the agent's stdio bridge must select its credentials by app name, not env or paths")
 	})
 
 	t.Run("unknown agent writes temp file with cleanup", func(t *testing.T) {
@@ -1030,7 +1015,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
-		configPath, cleanup, err := WriteAgentConfig("unknown-agent", binaryPath)
+		configPath, cleanup, err := WriteAgentConfig("unknown-agent", binaryPath, "unknown-agent")
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 
@@ -1041,74 +1026,6 @@ func TestWriteAgentConfig(t *testing.T) {
 
 		_, err = os.Stat(configPath)
 		assert.True(t, errors.Is(err, os.ErrNotExist))
-	})
-}
-
-func TestAgentLaunchArgs(t *testing.T) {
-	t.Run("claude returns governance flags", func(t *testing.T) {
-		args, err := agentLaunchArgs("claude", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Contains(t, args, "--mcp-config")
-		assert.Contains(t, args, "/path/to/config.json")
-		assert.Contains(t, args, "--strict-mcp-config")
-		assert.Contains(t, args, "--disallowed-tools")
-	})
-
-	t.Run("codex returns governance flags", func(t *testing.T) {
-		args, err := agentLaunchArgs("codex", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Contains(t, args, "--mcp-config")
-		assert.Contains(t, args, "--strict-mcp-config")
-	})
-
-	t.Run("goose returns no-profile args", func(t *testing.T) {
-		args, err := agentLaunchArgs("goose", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Contains(t, args, "session")
-		assert.Contains(t, args, "--no-profile")
-		assert.Contains(t, args, "--with-extension")
-	})
-
-	t.Run("gemini returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("gemini", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("cursor returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("cursor", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
-	})
-
-	t.Run("devin returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("devin", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("aider returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("aider", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
-	})
-
-	t.Run("ollama returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("ollama", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
-	})
-
-	t.Run("unknown agent returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("unknown-agent", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
-	})
-
-	t.Run("case-insensitive", func(t *testing.T) {
-		args, err := agentLaunchArgs("CLAUDE", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Contains(t, args, "--mcp-config")
 	})
 }
 

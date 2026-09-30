@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.services.evaluation.trace_service import EvaluationTraceService, compute_trace_digest
@@ -28,8 +29,8 @@ def test_chat_probe_trace_digest_matches_protocol_vector():
 
 
 @pytest.fixture
-def trace_service(tmp_path, monkeypatch):
-    monkeypatch.setenv("G8E_RUNTIME_DIR", str(tmp_path))
+def trace_service(tmp_path):
+    configure_bootstrap(BootstrapSettings(runtime_dir=str(tmp_path)))
     return EvaluationTraceService()
 
 

@@ -71,7 +71,7 @@ This guide covers the unified evaluation stack — how to bootstrap it, enroll o
 - Docker Engine with the Docker Compose v2 plugin. **Note: Local Go or `make` are NOT required on the host** — all builds can run inside Docker.
 - Optional: Host Go toolchain and `make` (when developing locally and using `make build`).
 - Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **3000**, **8081**, **8082**, **5173**. The mirror and explorer ports are loopback-only in the root Compose file.
-- Repository-root `.env` (copy from `.env.example`). Remove or comment out the sample `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` values when using dispatch-carried campaign authority.
+- Repository-root `.env` (copy from `.env.example`) with `G8E_OLLAMA_ENDPOINT` set. Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` unset when using dispatch-carried campaign authority.
 - `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider** (defaults to `http://127.0.0.1:11434` if unset).
 - Remote Ollama reachable from the Docker network, for example: `curl -fsS http://192.168.1.2:11434/api/version`.
 
@@ -258,7 +258,7 @@ Matrix size for three models: **111** assignments (3 × 37 role-eligible scenari
 
 ## Environment configuration
 
-Copy `.env.example` to `.env`, remove or comment out its sample campaign binding values, and set at minimum:
+Copy `.env.example` to `.env` and set the one required value:
 
 ```bash
 G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
@@ -266,24 +266,17 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 
 `g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are **not** startup `.env` bindings for the campaign workflow — `g8e eval runs start` resolves them from the campaign definition and the campaign controller attaches them to each governed dispatch. Setting either startup binding causes the Inference Operator to reject governed campaign requests that do not match that static binding; leave both unset for per-dispatch campaign authority.
 
+`.env` holds only secrets and user-specific endpoints or identities (INV-ENV-04 in [Developer Guidelines](../devs/devs.md)). Everything else is fixed in `docker-compose.yml` or in the `g8e` binary defaults:
+
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `G8E_PREFIX` | `g8e` | Container name prefix |
-| `G8E_HTTP_PORT` | `8080` | Gateway discovery / enrollment HTTP |
-| `G8E_HTTPS_PORT` | `8443` | Gateway mTLS API and pub/sub |
-| `G8E_ENSEMBLE_PORT` | `8000` | Ensemble API |
-| `G8E_DASHBOARD_PORT` | `3000` | Dashboard |
-| `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (CORS, WebAuthn) |
-| `G8E_PUBLIC_MIRROR_PRIVATE_PORT` | `8081` | Loopback-only authenticated public-mirror ingest listener |
-| `G8E_PUBLIC_MIRROR_PUBLIC_PORT` | `8082` | Loopback-only anonymous public-mirror read/SSE listener |
-| `G8E_EVAL_EXPLORER_PORT` | `5173` | Loopback-only evaluation explorer listener |
-| `G8E_OLLAMA_ENDPOINT` | `http://127.0.0.1:11434` | Remote Ollama URL for Inference Operator (required for live inference campaigns and `docker init`) |
-| `G8E_INFERENCE_PRIMARY_MODEL` | `gemma4:e4b` | Primary model tag passed to the Inference Operator |
-| `G8E_INFERENCE_ASSISTANT_MODEL` | `qwen3:1.7b` | Assistant model tag passed to the Inference Operator |
-| `G8E_INFERENCE_LITE_MODEL` | `smol-7b:latest` | Lite model tag passed to the Inference Operator |
-| `G8E_INFERENCE_KEEP_ALIVE` | `-1` | Ollama keep-alive passed to the Inference Operator |
+| `G8E_OLLAMA_ENDPOINT` | *(required)* | Approved Ollama URL for the Inference Operator; Compose fails fast when unset (required for live inference campaigns and `docker init`). `localhost` is the container itself, so use an address the container can reach. |
+| `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (approval links, CORS, WebAuthn); set only when you reach the stack by another name |
+| `G8E_USER_HOSTNAME` | `localhost` | Same role for the User Gateway (g8ellama profile) |
 | `G8E_INFERENCE_CAMPAIGN_ID` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
 | `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
+
+Container names (`g8e-<service>`), host ports (8080, 8443, 8000, 3000, and loopback 8081, 8082, 5173), and heartbeat interval are literals in `docker-compose.yml`. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
 
 ## Standard bootstrap workflow
 

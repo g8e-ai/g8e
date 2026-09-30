@@ -15,7 +15,6 @@ import os
 from app.constants import (
     ErrorCode,
     LogLevel,
-    LLMProvider,
 )
 from app.constants.collections import (
     DB_COLLECTION_SETTINGS,
@@ -116,51 +115,38 @@ class SettingsService:
         # the container boundary (per docs/g8e/guides/build_apps.md § Identity
         # and Authentication).
 
-        # Apply LLM env-var bootstrap defaults (lowest priority). A fresh
-        # deployment can serve chat via env vars alone, without platform DB
-        # configuration or per-request overrides. Priority order:
+        # Apply LLM credential and endpoint bootstrap defaults (lowest
+        # priority). Only secrets (API keys) and user-specific endpoints come
+        # from the environment (INV-ENV-04); provider and model selection are
+        # Gateway-backed platform settings only. Priority order:
         # platform DB settings > per-request overrides > env-var defaults.
         self._apply_llm_env_defaults(settings.llm)
 
         return settings
 
     def _apply_llm_env_defaults(self, llm: LLMSettings) -> None:
-        """Populate LLMSettings fields from environment variables.
+        """Populate LLMSettings API keys and endpoints from environment variables.
 
         This is the lowest-priority bootstrap source. Each field is set only
         when the env var is present and non-empty; unset env vars leave the
         field at its model default (None). The platform DB overlay
         (overlay_platform_data) and per-request overrides both take
-        precedence over these values.
+        precedence over these values. Provider and model names are never read
+        from the environment.
         """
         env = os.environ.get
 
-        # Role-specific provider/model/endpoint/api-key
-        provider_str = env(EnvVar.LLM_PRIMARY_PROVIDER)
-        if provider_str:
-            llm.primary_provider = LLMProvider(provider_str)
-        if env(EnvVar.LLM_PRIMARY_MODEL):
-            llm.primary_model = env(EnvVar.LLM_PRIMARY_MODEL)
+        # Role-specific endpoint/api-key
         if env(EnvVar.LLM_PRIMARY_ENDPOINT):
             llm.primary_endpoint = env(EnvVar.LLM_PRIMARY_ENDPOINT)
         if env(EnvVar.LLM_PRIMARY_API_KEY):
             llm.primary_api_key = env(EnvVar.LLM_PRIMARY_API_KEY)
 
-        assistant_str = env(EnvVar.LLM_ASSISTANT_PROVIDER)
-        if assistant_str:
-            llm.assistant_provider = LLMProvider(assistant_str)
-        if env(EnvVar.LLM_ASSISTANT_MODEL):
-            llm.assistant_model = env(EnvVar.LLM_ASSISTANT_MODEL)
         if env(EnvVar.LLM_ASSISTANT_ENDPOINT):
             llm.assistant_endpoint = env(EnvVar.LLM_ASSISTANT_ENDPOINT)
         if env(EnvVar.LLM_ASSISTANT_API_KEY):
             llm.assistant_api_key = env(EnvVar.LLM_ASSISTANT_API_KEY)
 
-        lite_str = env(EnvVar.LLM_LITE_PROVIDER)
-        if lite_str:
-            llm.lite_provider = LLMProvider(lite_str)
-        if env(EnvVar.LLM_LITE_MODEL):
-            llm.lite_model = env(EnvVar.LLM_LITE_MODEL)
         if env(EnvVar.LLM_LITE_ENDPOINT):
             llm.lite_endpoint = env(EnvVar.LLM_LITE_ENDPOINT)
         if env(EnvVar.LLM_LITE_API_KEY):

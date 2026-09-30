@@ -98,7 +98,7 @@ func operatorModelCmd() *cobra.Command {
 }
 
 func operatorOllamaEndpoint() (string, error) {
-	endpoint := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+	endpoint := strings.TrimSpace(os.Getenv(string(constants.EnvVar.OllamaHost)))
 	if endpoint == "" {
 		return "", fmt.Errorf("operator: model maintenance: %w", constants.ErrInferenceEndpointInvalid)
 	}
@@ -407,10 +407,10 @@ func operatorStartCmd() *cobra.Command {
 	// Inference Node calling the configured remote Ollama provider.
 	cmd.Flags().BoolVar(&inferenceEnabled, "inference-enabled", false, "Enable governed LLM inference backend (g8ellama)")
 	cmd.Flags().StringVar(&inferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Remote Ollama provider endpoint (default: http://127.0.0.1:11434)")
-	cmd.Flags().StringVar(&inferencePrimaryModel, "inference-primary-model", "", "Ollama model name for the Primary chat tier")
-	cmd.Flags().StringVar(&inferenceAssistantModel, "inference-assistant-model", "", "Ollama model name for the Assistant chat tier")
-	cmd.Flags().StringVar(&inferenceLiteModel, "inference-lite-model", "", "Ollama model name for the Lite chat tier")
-	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration (default: -1 for infinite)")
+	cmd.Flags().StringVar(&inferencePrimaryModel, "inference-primary-model", "", fmt.Sprintf("Ollama model name for the Primary chat tier (default: %s)", constants.InferenceDefaultPrimaryModel))
+	cmd.Flags().StringVar(&inferenceAssistantModel, "inference-assistant-model", "", fmt.Sprintf("Ollama model name for the Assistant chat tier (default: %s)", constants.InferenceDefaultAssistantModel))
+	cmd.Flags().StringVar(&inferenceLiteModel, "inference-lite-model", "", fmt.Sprintf("Ollama model name for the Lite chat tier (default: %s)", constants.InferenceDefaultLiteModel))
+	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", fmt.Sprintf("Ollama keep-alive duration (default: %s for infinite)", constants.InferenceDefaultKeepAlive))
 	cmd.Flags().StringVar(&inferenceCampaignID, "inference-campaign-id", "", "Frozen evaluation campaign authorized by this inference operator")
 	cmd.Flags().StringVar(&inferenceModelRegistryDigest, "inference-model-registry-digest", "", "SHA-256 digest of the frozen campaign model registry")
 	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")

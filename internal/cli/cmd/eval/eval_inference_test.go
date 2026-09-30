@@ -193,6 +193,31 @@ func TestResolveInferenceProbeAppCredentials_ExpiredAppCertRejected(t *testing.T
 	assert.Contains(t, err.Error(), "g8e auth enroll app g8e-eval")
 }
 
+func TestGatesInference_RequiresModel(t *testing.T) {
+	cmd := gatesInferenceEvalCmd(nativeEvalDeps{})
+	cmd.SetArgs(nil)
+
+	err := cmd.ExecuteContext(context.Background())
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvaluationModelRequired)
+}
+
+func TestGatesProbe_TakesModelOnlyAsPositionalArgument(t *testing.T) {
+	cmd := gatesProbeEvalCmd(nativeEvalDeps{})
+
+	assert.Nil(t, cmd.Flags().Lookup("model"), "the deprecated --model flag must not exist")
+	assert.Error(t, cmd.Args(cmd, nil), "probe requires the positional <model>")
+	assert.NoError(t, cmd.Args(cmd, []string{"qwen3:4b"}))
+}
+
+func TestParseInferenceAcceptanceCases_RejectsAllBlankSelection(t *testing.T) {
+	_, err := parseInferenceAcceptanceCases(" , ,")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvaluationNoCasesSelected)
+}
+
 func TestResolveInferenceProbeAppCredentials_NilParameters(t *testing.T) {
 	_, _, err := resolveInferenceProbeAppCredentials(nil, nil)
 	require.Error(t, err)

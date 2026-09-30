@@ -32,7 +32,7 @@ A browser deployment uses different network addresses for browser traffic and co
 3. Add the dashboard origin with `--passkey-rp-origin`, and set `--passkey-rp-id` to the dashboard hostname or a valid registrable parent-domain suffix (no scheme or port).
 4. Use a Gateway certificate trusted by the user's browser. The dashboard must run in a WebAuthn secure context (HTTPS or the browser's localhost development exception).
 5. Keep the Gateway plain-HTTP health surface (`/api/v1/health` by default) reachable from the dashboard container.
-6. Point the Gateway ensemble proxy at the running g8ee service via `--ensemble-upstream-url` or `G8E_ENSEMBLE_URL` (for example `http://ensemble:8000` in Docker Compose). Gateway default is `http://127.0.0.1:8000`.
+6. Point the Gateway ensemble proxy at the running g8ee service via `--ensemble-upstream-url` (for example `http://ensemble:8000` in Docker Compose). Gateway default is `http://127.0.0.1:8000`.
 
 When configured with cross-origin origins, the Gateway issues its Secure, HttpOnly web-session cookie with `SameSite=None`; without configured origins it uses `SameSite=Lax`. The dashboard host allows browser connections only to itself and `G8E_GATEWAY_URL`; it does not allow WebSocket connections. Browser events use Server-Sent Events (SSE) because the Gateway WebSocket endpoint requires mTLS.
 
@@ -67,7 +67,7 @@ A missing `G8E_GATEWAY_URL`, an unreachable health endpoint, or incorrect health
 | `GATEWAY_HEALTH_PATH` | No | `/api/v1/health` | Health check path polled on startup |
 | `PORT` | No | `3000` | Dashboard static host port |
 
-The unified Docker deployment publishes the dashboard on host port `G8E_DASHBOARD_PORT` (default `3000`) and constructs `G8E_GATEWAY_URL` from `G8E_HOSTNAME` and `G8E_HTTPS_PORT` (defaults `localhost` and `8443`). It uses the internal Docker `g8eg` network alias for `GATEWAY_HEALTH_URL` and `GATEWAY_HEALTH_PATH`. Configure the dashboard origin on the Gateway with `--cors-origin` and `--passkey-rp-origin`.
+The unified Docker deployment publishes the dashboard on host port `3000` and constructs `G8E_GATEWAY_URL` from `G8E_HOSTNAME` (default `localhost`) and the gateway HTTPS port `8443`. It uses the internal Docker `g8eg` network alias for `GATEWAY_HEALTH_URL` and `GATEWAY_HEALTH_PATH`. Configure the dashboard origin on the Gateway with `--cors-origin` and `--passkey-rp-origin`.
 
 ## Troubleshooting
 
@@ -75,7 +75,7 @@ The unified Docker deployment publishes the dashboard on host port `G8E_DASHBOAR
 - **CORS errors in browser**: Confirm `--cors-origin` matches the dashboard origin exactly (scheme and port). Run `./g8e gw connect <origin>` to validate CORS.
 - **Passkey operations rejected**: Verify Gateway certificate trust, secure-context status (HTTPS or localhost), RP ID, RP origin, and that authentication includes an explicit `user_id`.
 - **Events not arriving after successful login**: Confirm `G8E_GATEWAY_URL` in `/g8e-config.js` is correct and trusted by the browser. Verify browser connects to `/api/v1/sse/stream` (not the dashboard port). See [Server-Sent Events](sse.md).
-- **Chat or settings fail with upstream errors in Docker**: Verify the Gateway has `G8E_ENSEMBLE_URL` or `--ensemble-upstream-url` pointing at the ensemble service (for example `http://ensemble:8000`).
+- **Chat or settings fail with upstream errors in Docker**: Verify the Gateway has `--ensemble-upstream-url` pointing at the ensemble service (for example `http://ensemble:8000`).
 - **Operator or approval requests return HTML or 404 from port 3000**: The request hit the static dashboard host instead of the Gateway. Verify [dashboard/public/js/utils/service-client.js](../../dashboard/public/js/utils/service-client.js) routing and `window.G8E_GATEWAY_URL`.
 
 ## Related

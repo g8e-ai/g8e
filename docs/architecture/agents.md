@@ -164,12 +164,11 @@ The launcher supports five external coding agents, each with agent-specific tool
 
 Credentials resolve in this order (first complete pair wins):
 
-1. Application identity flag (`--app <name>`) or environment variable (`G8E_APP`), resolving managed certificates on disk (`.g8e/pki/issued/apps/<name>.crt`, `.g8e/pki/issued/apps/<name>.key`)
+1. Application identity flag (`--app <name>`), resolving the managed certificates on disk (`.g8e/pki/issued/apps/<name>.crt`, `.g8e/pki/issued/apps/<name>.key`)
 2. CLI client certificate and key flags (`--client-cert`, `--client-key`)
-3. CLI client certificate and key environment variables (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`)
-4. Enrolled CLI credentials on disk (`.g8e/auth/client.crt`, `.g8e/auth/client.key`)
+3. Enrolled CLI credentials on disk (`.g8e/auth/client.crt`, `.g8e/auth/client.key`)
 
-Each tier must provide a complete certificate and key pair. An incomplete pair fails closed immediately with `ErrIncompleteCredentialPair` rather than attempting to degrade. Application credentials are owner-approved platform application enrollments (`g8e auth enroll app <name>`). The CA bundle resolves from its flag, then environment variable, then the enrolled trust bundle. The Gateway URL resolves from its flag, then environment variable, then the default HTTPS MCP URL (`https://g8e.local:8443/mcp`).
+Each tier must provide a complete certificate and key pair. An incomplete pair fails closed immediately with `ErrIncompleteCredentialPair` rather than attempting to degrade. Application credentials are owner-approved platform application enrollments (`g8e auth enroll app <name>`). The CA bundle resolves from its flag, then the enrolled trust bundle. The Gateway URL resolves from its flag, then the default HTTPS MCP URL (`https://g8e.local:8443/mcp`). No credential, path, or endpoint is read from the environment (INV-ENV-04): `g8e mcp agent run` writes `--app <agent>` into the agent's generated MCP configuration and passes nothing else to the agent process.
 
 When L3 approval is required, the stdio bridge opens the approval page in the browser, waits for the matching `approval.completed` event over the authenticated SSE stream, and retries the original request. This automatic flow requires enrolled CLI credentials and a CLI session even when the MCP request itself uses an enrolled application identity.
 

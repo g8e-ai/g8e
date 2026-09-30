@@ -53,7 +53,7 @@ func ResolveCurrentAccount() string {
 			return u.Uid
 		}
 	}
-	return os.Getenv("USER")
+	return os.Getenv(string(constants.EnvVar.User))
 }
 
 // GenerateSystemFingerprint creates a unique fingerprint based on immutable system properties.

@@ -60,13 +60,11 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 			ProjectRoot: tempDir,
 			RuntimeDir:  filepath.Dir(certPath),
 		}
-		// Set env to point to non-existent CA bundle
-		t.Setenv(string(constants.EnvVar.CABundle), filepath.Join(tempDir, "nonexistent-ca.pem"))
-		// Also set cert/key env to the generated test certs
-		t.Setenv(string(constants.EnvVar.ClientCert), certPath)
-		t.Setenv(string(constants.EnvVar.ClientKey), keyPath)
-
-		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
+		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   filepath.Join(tempDir, "nonexistent-ca.pem"),
+		})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
@@ -77,17 +75,17 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 		require.NoError(t, err)
 
-		t.Setenv(string(constants.EnvVar.ClientCert), certPath)
-		t.Setenv(string(constants.EnvVar.ClientKey), keyPath)
-		t.Setenv(string(constants.EnvVar.CABundle), caPath)
-		t.Setenv(string(constants.EnvVar.GatewayURL), "https://127.0.0.1:9999/mcp")
-
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 			RuntimeDir:  filepath.Dir(certPath),
 		}
 
-		conn, err := buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
+		conn, err := buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   caPath,
+			GatewayURL: "https://127.0.0.1:9999/mcp",
+		})
 		require.NoError(t, err)
 		assert.NotNil(t, conn)
 		assert.Equal(t, "https://127.0.0.1:9999/mcp", conn.gatewayURL)
@@ -307,30 +305,28 @@ func TestBuildGatewayConn_FlagResolution(t *testing.T) {
 		assert.NotNil(t, conn)
 	})
 
-	t.Run("flag beats env for cert/key", func(t *testing.T) {
+	t.Run("ambient G8E_* env credentials are ignored", func(t *testing.T) {
 		certPath, keyPath, caPath := generateTestCerts(t)
 		tempDir := testutil.TempDir(t)
 		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 		require.NoError(t, err)
 
-		// Set env to wrong values, flags to correct values
-		t.Setenv(string(constants.EnvVar.ClientCert), "/nonexistent/env-cert.crt")
-		t.Setenv(string(constants.EnvVar.ClientKey), "/nonexistent/env-key.key")
-		t.Setenv(string(constants.EnvVar.CABundle), caPath)
+		// Valid credentials supplied only through the retired env channel must not
+		// be consulted: with no flags and no managed trust bundle the bridge fails
+		// closed rather than silently adopting them.
+		t.Setenv("G8E_CLIENT_CERT", certPath)
+		t.Setenv("G8E_CLIENT_KEY", keyPath)
+		t.Setenv("G8E_CA_BUNDLE", caPath)
+		t.Setenv("G8E_GATEWAY_URL", "https://127.0.0.1:9999/mcp")
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 			RuntimeDir:  tempDir,
 		}
 
-		flags := stdioCredentialFlags{
-			ClientCert: certPath,
-			ClientKey:  keyPath,
-		}
-
-		conn, err := buildGatewayConn(fileSvc, cfg, flags)
-		require.NoError(t, err)
-		assert.NotNil(t, conn)
+		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
 
 	t.Run("gateway-url flag honored verbatim", func(t *testing.T) {

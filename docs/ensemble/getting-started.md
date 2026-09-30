@@ -113,7 +113,7 @@ Responses:
 - `/health/live` returns `{"status":"alive","service":"g8ee"}`. No authentication required.
 - `/health/details` returns `{"status":"ok","service":"g8ee","timestamp":"<iso-datetime>","clients":{...}}`. No authentication required. The `clients` object reports `cache_aside_service`, `operator_kv`, `internal_http_client`, `operator_command_service`, and `chat_pipeline` status.
 
-The ensemble API listens on port 8000 inside the container. Override the published host port by setting `G8E_ENSEMBLE_PORT` before starting Compose (default: `8000`). The variable changes only the host-side port binding; the container always listens on `8000`. For manual profile commands, non-default ports, logs, workload revocation, and recovery, see [Unified Docker Stack](../guides/unified_stack.md).
+The ensemble API listens on port 8000 inside the container. The published host port is the literal `8000:8000` in `docker-compose.yml`; change it with a checked-in `docker-compose.override.yml`. The override changes only the host-side port binding; the container always listens on `8000`. For manual profile commands, non-default ports, logs, workload revocation, and recovery, see [Unified Docker Stack](../guides/unified_stack.md).
 
 #### Recovery
 

@@ -60,7 +60,7 @@ docker compose up -d --build
 The CLI binary must run on the same workstation where you complete the browser-based WebAuthn passkey ceremony in Step 3, because `auth enroll user` opens a browser on the local machine. If your workstation with a browser is the same host where the gateway is running, copy the binary out of the gateway container:
 
 ```bash
-docker cp "${G8E_PREFIX:-g8e}-gateway:/g8e" ./g8e
+docker cp g8e-gateway:/g8e ./g8e
 ```
 
 If your workstation is on a different host than the gateway, download the binary over HTTP from the gateway's bootstrap endpoint instead. The gateway serves all platform binaries built by the Dockerfile at `/.well-known/g8e/bin/{filename}` on the HTTP discovery port (8080 by default), with no authentication required so that the g8e binary can be placed on remote hosts as soon as the Gateway is started:
@@ -292,7 +292,7 @@ This runs `docker compose up -d --build`, which starts all platform services. Se
 To obtain a host-side CLI binary without a local Go toolchain, copy it out of the running gateway container:
 
 ```bash
-docker cp "${G8E_PREFIX:-g8e}-gateway:/g8e" ./g8e
+docker cp g8e-gateway:/g8e ./g8e
 ```
 
 The Dockerfile builder stage produces only the image target platform binary. Run `make build-all` on the host when you need the full deployment matrix for `/.well-known/g8e/bin/{filename}` downloads. Linux builds link the pinned Go Cryptographic Module; run `g8e version --fips` to inspect module status. The project's FIPS 140-3 compliance claim applies only to linux/amd64.
@@ -470,7 +470,7 @@ Launch a supported agent with g8e as its MCP server. Claude, Codex, Goose, and G
 ./g8e mcp agent run goose
 ```
 
-The launcher cannot disable Devin's native tools, and clients can still use side channels such as direct filesystem, shell, network, or other MCP access when those capabilities remain enabled. Only requests sent through g8e cross the governance boundary. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the launcher matrix and external MCP wrapper limitations.
+The launcher cannot disable Devin's native tools, and clients can still use side channels such as direct filesystem, shell, network, or other MCP access when those capabilities remain enabled. Only requests sent through g8e cross the governance boundary. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the launcher matrix and its limitations.
 
 ### List supported agents
 

@@ -156,7 +156,7 @@ The Operator's `.g8e/` runtime tree contains local PKI material and enrollment s
 
 The reference binary registers 32 native tools in the MCP service. The catalog includes database triage, log digestion, process and resource inspection, network and TLS checks, system introspection, file operations, cloud and Kubernetes inspection, Git operations, shell execution, Operator deployment, and governed audit-receipt queries. The native catalog is compiled into the binary and is not evidence that an arbitrary external MCP server is governed.
 
-Native tools are dispatched only after the request has crossed a governed Gateway ingress or arrived as a complete envelope and passed the applicable verification path. An external MCP wrapper that forwards requests directly to another MCP server is a separate integration path and does not gain L2-L5 governance or signed Operator receipts merely by running alongside g8e. Client-native tools, direct filesystem access, unrestricted network access, and other side channels remain outside this boundary. See [AI Agents and the g8e Governance Boundary](./agents.md).
+Native tools are dispatched only after the request has crossed a governed Gateway ingress or arrived as a complete envelope and passed the applicable verification path. A third-party MCP server is governed only when it is configured as Gateway downstream egress, so its tool calls traverse the full pipeline and produce signed receipts; a server that a client talks to directly gains none of that merely by running alongside g8e. Client-native tools, direct filesystem access, unrestricted network access, and other side channels remain outside this boundary. See [AI Agents and the g8e Governance Boundary](./agents.md).
 
 ## Evidence and limitations
 

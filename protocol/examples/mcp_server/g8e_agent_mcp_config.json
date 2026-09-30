@@ -2,7 +2,7 @@
   "mcpServers": {
     "g8e": {
       "command": "/path/to/g8e",
-      "args": ["mcp", "stdio"]
+      "args": ["mcp", "stdio", "--app", "claude"]
     }
   },
   "excludeTools": [

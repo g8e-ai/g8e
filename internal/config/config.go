@@ -8,6 +8,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"net"
 	"os"
@@ -177,6 +178,9 @@ type GatewayConfig struct {
 	PublicSpectatorPrivateAddr string
 	// PublicSpectatorPublicAddr is the anonymous mirror read/SSE listener.
 	PublicSpectatorPublicAddr string
+	// PublicSpectatorAllowContainerBind permits the mirror and explorer listeners
+	// to bind 0.0.0.0 inside a container network.
+	PublicSpectatorAllowContainerBind bool
 	// EvalExplorerAddr is the loopback listener for the evaluation explorer SPA.
 	EvalExplorerAddr string
 	// EvalExplorerRoot overrides the built explorer dist directory.
@@ -477,9 +481,6 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	mcpDownstreamArgs := opts.MCPDownstreamArgs
 	a2aDownstreamURL := opts.A2ADownstreamURL
 	ensembleUpstreamURL := opts.EnsembleUpstreamURL
-	if ensembleUpstreamURL == "" {
-		ensembleUpstreamURL = os.Getenv("G8E_ENSEMBLE_URL")
-	}
 	secretsDir := opts.SecretsDir
 	if secretsDir == "" {
 		secretsDir = paths.Infra.SecretsDir
@@ -721,17 +722,13 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 	if endpoint == "" {
 		endpoint = fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
 	}
-	keepAlive := opts.InferenceKeepAlive
-	if keepAlive == "" {
-		keepAlive = "-1"
-	}
 	return InferenceConfig{
 		Enabled:             opts.InferenceEnabled,
 		OllamaEndpoint:      endpoint,
-		PrimaryModel:        opts.InferencePrimaryModel,
-		AssistantModel:      opts.InferenceAssistantModel,
-		LiteModel:           opts.InferenceLiteModel,
-		KeepAlive:           keepAlive,
+		PrimaryModel:        cmp.Or(opts.InferencePrimaryModel, constants.InferenceDefaultPrimaryModel),
+		AssistantModel:      cmp.Or(opts.InferenceAssistantModel, constants.InferenceDefaultAssistantModel),
+		LiteModel:           cmp.Or(opts.InferenceLiteModel, constants.InferenceDefaultLiteModel),
+		KeepAlive:           cmp.Or(opts.InferenceKeepAlive, constants.InferenceDefaultKeepAlive),
 		CampaignID:          opts.InferenceCampaignID,
 		ModelRegistryDigest: opts.InferenceModelRegistryDigest,
 	}

@@ -27,14 +27,13 @@ Run `go run ./protocol/examples/governance_envelope/` from the repository root. 
 
 ## MCP Server Configurations
 
-The `mcp_server/` directory contains four templates:
+The `mcp_server/` directory contains three templates:
 
 | File | Transport | Use case |
 | --- | --- | --- |
 | `g8e_gateway_mcp_config.json` | Streamable HTTP with mTLS certificate paths | Connect to `https://g8e.local:8443/mcp` after configuring DNS or `/etc/hosts` and replacing the placeholder certificate paths |
-| `g8e_gateway_mcp_config_env.json` | Streamable HTTP with mTLS certificate-path environment variables | Supply `G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`, and `G8E_CA_BUNDLE` in environments that inject certificate paths at runtime |
 | `g8e_stdio_mcp_config.json` | Stdio subprocess | Start `g8e mcp stdio`, which proxies requests to a running gateway over mTLS and applies L1 through L5 governance |
-| `g8e_agent_mcp_config.json` | Stdio subprocess plus native-tool exclusions | Show the temporary JSON shape used when `g8e mcp agent run` launches Claude or Codex; the command also applies strict MCP and native-tool-disabling launch flags |
+| `g8e_agent_mcp_config.json` | Stdio subprocess plus native-tool exclusions | Show the temporary JSON shape used when `g8e mcp agent run` launches Claude or Codex, where `--app claude` selects the agent's owner-approved application identity; the command also applies strict MCP and native-tool-disabling launch flags |
 
 The Go types that produce the gateway and stdio configurations are in `internal/services/mcp/config.go`. Agent-specific configuration writers and launch arguments are in `internal/cli/cmd/mcp/`; Goose, Gemini, and Devin use different configuration formats or tool-disabling mechanisms from the agent JSON template.
 

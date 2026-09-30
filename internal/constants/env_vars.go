@@ -34,13 +34,19 @@ var EnvVar = struct {
 	LatticeSandboxesToken EnvVarKey
 	LatticeEntityName     EnvVarKey
 	LatticePostureFloor   EnvVarKey
-	ClientCert            EnvVarKey
-	ClientKey             EnvVarKey
-	CABundle              EnvVarKey
-	GatewayURL            EnvVarKey
-	App                   EnvVarKey
 	DemoRunID             EnvVarKey
 	DemoScenarioID        EnvVarKey
+	Home                  EnvVarKey
+	User                  EnvVarKey
+	SSHAuthSock           EnvVarKey
+	CloudflareAPIToken    EnvVarKey
+	CFAPIToken            EnvVarKey
+	OllamaHost            EnvVarKey
+	HarnessPollTimeout    EnvVarKey
+	HarnessLLMProvider    EnvVarKey
+	HarnessLLMModel       EnvVarKey
+	HarnessLLMEndpoint    EnvVarKey
+	TestReexec            EnvVarKey
 }{
 	ConsensusID:           EnvVarKey("G8E_CONSENSUS_ID"),
 	ConsensusURL:          EnvVarKey("G8E_CONSENSUS_URL"),
@@ -64,11 +70,17 @@ var EnvVar = struct {
 	LatticeSandboxesToken: EnvVarKey("SANDBOXES_TOKEN"),
 	LatticeEntityName:     EnvVarKey("LATTICE_ENTITY_NAME"),
 	LatticePostureFloor:   EnvVarKey("LATTICE_POSTURE_FLOOR"),
-	ClientCert:            EnvVarKey("G8E_CLIENT_CERT"),
-	ClientKey:             EnvVarKey("G8E_CLIENT_KEY"),
-	CABundle:              EnvVarKey("G8E_CA_BUNDLE"),
-	GatewayURL:            EnvVarKey("G8E_GATEWAY_URL"),
-	App:                   EnvVarKey("G8E_APP"),
 	DemoRunID:             EnvVarKey("G8E_DEMO_RUN_ID"),
 	DemoScenarioID:        EnvVarKey("G8E_DEMO_SCENARIO_ID"),
+	Home:                  EnvVarKey("HOME"),
+	User:                  EnvVarKey("USER"),
+	SSHAuthSock:           EnvVarKey("SSH_AUTH_SOCK"),
+	CloudflareAPIToken:    EnvVarKey("CLOUDFLARE_API_TOKEN"),
+	CFAPIToken:            EnvVarKey("CF_API_TOKEN"),
+	OllamaHost:            EnvVarKey("OLLAMA_HOST"),
+	HarnessPollTimeout:    EnvVarKey("G8E_HARNESS_POLL_TIMEOUT"),
+	HarnessLLMProvider:    EnvVarKey("G8E_HARNESS_LLM_PROVIDER"),
+	HarnessLLMModel:       EnvVarKey("G8E_HARNESS_LLM_MODEL"),
+	HarnessLLMEndpoint:    EnvVarKey("G8E_HARNESS_LLM_ENDPOINT"),
+	TestReexec:            EnvVarKey("G8E_TEST_REEXEC"),
 }

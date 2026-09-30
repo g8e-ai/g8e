@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -48,16 +47,6 @@ type inferenceAcceptanceOutputJSON struct {
 	Cases             []inferenceAcceptanceResultJSON `json:"cases"`
 }
 
-type inferenceEvalDeps struct {
-	configLoader     func(string) (*config.Config, error)
-	fileSvcFactory   func(string, *slog.Logger) (fs.RuntimeFileService, error)
-	authLoader       func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
-	clientFactory    func(harnessconfig.Config) (*harnessclient.Client, error)
-	appClientFactory func(harnessconfig.Config) (*harnessclient.Client, error)
-	now              func() time.Time
-	newID            func() string
-}
-
 func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var model string
 	var role string
@@ -67,7 +56,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Inference-only vertical acceptance matrix",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
-				return fmt.Errorf("evaluation: gates inference: --model is required")
+				return fmt.Errorf("evaluation: gates inference: %w", constants.ErrEvaluationModelRequired)
 			}
 			caseIDs, err := parseInferenceAcceptanceCases(casesCSV)
 			if err != nil {
@@ -97,7 +86,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
-			appClient, err := inferenceEvalAppClientFrom(fileSvc, cfg, authContext, deps.clientFactory)
+			appClient, err := inferenceEvalAppClient(fileSvc, cfg, authContext, deps.clientFactory)
 			if err != nil {
 				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
@@ -171,7 +160,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nPhase 1A inference acceptance: %d passed, %d failed\n", len(cases)-failures, failures)
 			}
 			if failures > 0 {
-				return fmt.Errorf("evaluation: gates inference: %d case(s) failed", failures)
+				return fmt.Errorf("evaluation: gates inference: %w: %d", constants.ErrEvaluationInferenceCasesFailed, failures)
 			}
 			return nil
 		},
@@ -183,7 +172,6 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 }
 
 func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
-	var model string
 	var role string
 	var prompt string
 	var seed int32 = -1
@@ -193,7 +181,7 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Single non-scored governed inference probe",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			model = args[0]
+			model := args[0]
 			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
@@ -214,7 +202,7 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates probe: %w", err)
 			}
-			appClient, err := inferenceEvalAppClientFrom(fileSvc, cfg, authContext, deps.clientFactory)
+			appClient, err := inferenceEvalAppClient(fileSvc, cfg, authContext, deps.clientFactory)
 			if err != nil {
 				return fmt.Errorf("evaluation: gates probe: %w", err)
 			}
@@ -255,7 +243,6 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&model, "model", "", "[DEPRECATED] use positional argument instead")
 	cmd.Flags().StringVar(&role, "role", "primary", "Governed model role: primary, assistant, or lite")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Probe prompt (default: Reply with exactly: probe-ok)")
 	cmd.Flags().Int32Var(&seed, "seed", -1, "Optional deterministic generation seed (omit for provider default)")
@@ -263,7 +250,9 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func inferenceEvalAppClientFrom(fileSvc fs.RuntimeFileService, cfg *config.Config, authContext *auth.ClientAuthContext, clientFactory func(harnessconfig.Config) (*harnessclient.Client, error)) (*harnessclient.Client, error) {
+// inferenceEvalAppClient builds the governed-dispatch client that presents the
+// eval runner's own g8e-eval application identity.
+func inferenceEvalAppClient(fileSvc fs.RuntimeFileService, cfg *config.Config, authContext *auth.ClientAuthContext, clientFactory func(harnessconfig.Config) (*harnessclient.Client, error)) (*harnessclient.Client, error) {
 	certFile, keyFile, err := resolveInferenceProbeAppCredentials(fileSvc, cfg)
 	if err != nil {
 		return nil, err
@@ -316,13 +305,9 @@ func parseInferenceAcceptanceCases(raw string) ([]evaluation.InferenceAcceptance
 		caseIDs = append(caseIDs, evaluation.InferenceAcceptanceCaseID(part))
 	}
 	if len(caseIDs) == 0 {
-		return nil, fmt.Errorf("evaluation: inference accept: no cases selected")
+		return nil, fmt.Errorf("evaluation: inference accept: %w", constants.ErrEvaluationNoCasesSelected)
 	}
 	return caseIDs, nil
-}
-
-func inferenceEvalAppClient(cfg *config.Config, fileSvc fs.RuntimeFileService, authContext *auth.ClientAuthContext, deps inferenceEvalDeps) (*harnessclient.Client, error) {
-	return inferenceEvalAppClientFrom(fileSvc, cfg, authContext, deps.appClientFactory)
 }
 
 // resolveInferenceProbeAppCredentials loads the managed g8e-eval application identity.
@@ -330,16 +315,15 @@ func inferenceEvalAppClient(cfg *config.Config, fileSvc fs.RuntimeFileService, a
 // it fails closed with an actionable error directing the operator to run
 // './g8e auth enroll app g8e-eval'.
 func resolveInferenceProbeAppCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) (string, string, error) {
-	const evalAppName = "g8e-eval"
 	if fileSvc == nil || cfg == nil {
 		return "", "", constants.ErrInternal
 	}
 
-	if _, err := auth.LoadAppIdentity(fileSvc, cfg, evalAppName); err != nil {
-		return "", "", fmt.Errorf("evaluation: app credential %q not found or invalid; run './g8e auth enroll app %s' to enroll: %w", evalAppName, evalAppName, err)
+	if _, err := auth.LoadAppIdentity(fileSvc, cfg, constants.EvaluationAppName); err != nil {
+		return "", "", fmt.Errorf("evaluation: app credential %q not found or invalid; run './g8e auth enroll app %s' to enroll: %w", constants.EvaluationAppName, constants.EvaluationAppName, err)
 	}
 
-	return cfg.AppCertFile(evalAppName), cfg.AppKeyFile(evalAppName), nil
+	return cfg.AppCertFile(constants.EvaluationAppName), cfg.AppKeyFile(constants.EvaluationAppName), nil
 }
 
 func parseInferenceProbeRole(role string) (models.InferenceModelRole, error) {

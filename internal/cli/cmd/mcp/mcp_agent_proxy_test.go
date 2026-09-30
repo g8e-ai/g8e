@@ -24,7 +24,7 @@ import (
 )
 
 func TestAgentLaunchArgs_ClaudeIncludesMcpConfigAndDisallowedTools(t *testing.T) {
-	args, err := agentLaunchArgs("claude", "/tmp/mcp-config.json", "/fake/g8e")
+	args, err := agentLaunchArgs("claude", "/tmp/mcp-config.json", "/fake/g8e", "claude")
 	require.NoError(t, err)
 	assert.Contains(t, args, "--mcp-config")
 	assert.Contains(t, args, "/tmp/mcp-config.json")
@@ -33,7 +33,7 @@ func TestAgentLaunchArgs_ClaudeIncludesMcpConfigAndDisallowedTools(t *testing.T)
 }
 
 func TestAgentLaunchArgs_CodexIncludesMcpConfigAndDisallowedTools(t *testing.T) {
-	args, err := agentLaunchArgs("codex", "/tmp/mcp-config.json", "/fake/g8e")
+	args, err := agentLaunchArgs("codex", "/tmp/mcp-config.json", "/fake/g8e", "codex")
 	require.NoError(t, err)
 	assert.Contains(t, args, "--mcp-config")
 	assert.Contains(t, args, "--strict-mcp-config")
@@ -41,52 +41,52 @@ func TestAgentLaunchArgs_CodexIncludesMcpConfigAndDisallowedTools(t *testing.T) 
 }
 
 func TestAgentLaunchArgs_GooseReturnsNoProfileArgs(t *testing.T) {
-	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json", "/fake/g8e")
+	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json", "/fake/g8e", "goose")
 	require.NoError(t, err)
 	assert.Contains(t, args, "session")
 	assert.Contains(t, args, "--no-profile")
 	assert.Contains(t, args, "--with-extension")
-	assert.Contains(t, args, "/fake/g8e mcp stdio")
+	assert.Contains(t, args, "/fake/g8e mcp stdio --app goose")
 }
 
 func TestAgentLaunchArgs_GeminiReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("gemini", "/tmp/mcp-config.json", "/fake/g8e")
+	args, err := agentLaunchArgs("gemini", "/tmp/mcp-config.json", "/fake/g8e", "gemini")
 	require.NoError(t, err)
 	assert.Empty(t, args)
 }
 
 func TestAgentLaunchArgs_CursorReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("cursor", "/tmp/mcp-config.json", "/fake/g8e")
+	_, err := agentLaunchArgs("cursor", "/tmp/mcp-config.json", "/fake/g8e", "cursor")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_DevinReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("devin", "/tmp/mcp-config.json", "/fake/g8e")
+	args, err := agentLaunchArgs("devin", "/tmp/mcp-config.json", "/fake/g8e", "devin")
 	require.NoError(t, err)
 	assert.Empty(t, args)
 }
 
 func TestAgentLaunchArgs_AiderReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("aider", "/tmp/mcp-config.json", "/fake/g8e")
+	_, err := agentLaunchArgs("aider", "/tmp/mcp-config.json", "/fake/g8e", "aider")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_OllamaReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("ollama", "/tmp/mcp-config.json", "/fake/g8e")
+	_, err := agentLaunchArgs("ollama", "/tmp/mcp-config.json", "/fake/g8e", "ollama")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_UnknownAgentReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("unknown-agent", "/tmp/mcp-config.json", "/fake/g8e")
+	_, err := agentLaunchArgs("unknown-agent", "/tmp/mcp-config.json", "/fake/g8e", "unknown-agent")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_IsCaseInsensitive(t *testing.T) {
-	args, err := agentLaunchArgs("CLAUDE", "/tmp/mcp-config.json", "/fake/g8e")
+	args, err := agentLaunchArgs("CLAUDE", "/tmp/mcp-config.json", "/fake/g8e", "claude")
 	require.NoError(t, err)
 	assert.Contains(t, args, "--mcp-config")
 }
@@ -122,7 +122,7 @@ func TestGetSupportedAgents_ReturnsAllExpectedAgents(t *testing.T) {
 func TestWriteAgentConfig_GooseWritesConfigFile(t *testing.T) {
 	t.Setenv("HOME", testutil.TempDir(t))
 
-	configPath, cleanup, err := WriteAgentConfig("goose", "/fake/g8e")
+	configPath, cleanup, err := WriteAgentConfig("goose", "/fake/g8e", "goose")
 	require.NoError(t, err)
 	if cleanup != nil {
 		t.Cleanup(cleanup)
@@ -133,7 +133,7 @@ func TestWriteAgentConfig_GooseWritesConfigFile(t *testing.T) {
 func TestWriteAgentConfig_GeminiWritesSettingsFile(t *testing.T) {
 	t.Setenv("HOME", testutil.TempDir(t))
 
-	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e")
+	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e", "gemini")
 	require.NoError(t, err)
 	if cleanup != nil {
 		t.Cleanup(cleanup)
@@ -157,7 +157,7 @@ func TestWriteAgentConfig_GeminiMergesExistingSettings(t *testing.T) {
 	existingSettings := `{"mcpServers":{"other":{"command":"other-cmd","args":[]}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(geminiDir, "settings.json"), []byte(existingSettings), 0o644))
 
-	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e")
+	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e", "gemini")
 	require.NoError(t, err)
 	if cleanup != nil {
 		t.Cleanup(cleanup)

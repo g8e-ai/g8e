@@ -35,12 +35,12 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
 def _reset_paths_cache():
-    """Reset the global PATHS cache before and after every test to prevent test isolation leaks."""
-    from app.constants.paths import reload_paths
+    """Reset bootstrap settings (and the PATHS cache they feed) before and after every test."""
+    from app.constants.bootstrap import reset_bootstrap
 
-    reload_paths()
+    reset_bootstrap()
     yield
-    reload_paths()
+    reset_bootstrap()
 
 
 @pytest.fixture

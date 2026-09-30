@@ -13,6 +13,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // ReexecGatewayIfRequested exits when the test binary is re-executed by
@@ -21,7 +23,7 @@ func ReexecGatewayIfRequested() {
 	if len(os.Args) <= 1 || os.Args[1] != "gw" {
 		return
 	}
-	if os.Getenv("G8E_TEST_REEXEC") == "serve" {
+	if os.Getenv(string(constants.EnvVar.TestReexec)) == "serve" {
 		serveHealth()
 	}
 	os.Exit(0)

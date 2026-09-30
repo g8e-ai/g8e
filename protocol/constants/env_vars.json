@@ -1,70 +1,221 @@
 {
-  "description": "Environment variable names consumed by the g8e Operator and CLI.",
+  "description": "Environment variable names read by the Go binary. Every key has a category (INV-ENV-04): secret, user_endpoint, host, or violation. A violation is platform configuration that still arrives through the environment; that set may only shrink (see internal/constants/env_vars_registry_test.go).",
+  "categories": {
+    "secret": "API keys, tokens, client secrets, encryption keys",
+    "user_endpoint": "User-specific endpoint or identity with no correct universal default",
+    "host": "Host fact provided by the OS, read as a fact rather than as g8e configuration",
+    "violation": "Platform configuration or test switch read from the environment; scheduled for removal in the env-config-purge follow-on"
+  },
   "env_vars": {
     "ConsensusID": {
       "_go_const": "EnvVar.ConsensusID",
       "value": "G8E_CONSENSUS_ID",
-      "description": "Consensus ID for L2-enforcing governance postures (consensus and notary)"
+      "category": "violation",
+      "description": "Consensus ID for L2-enforcing governance postures (flag fallback)"
     },
     "ConsensusURL": {
       "_go_const": "EnvVar.ConsensusURL",
       "value": "G8E_CONSENSUS_URL",
-      "description": "Consensus URL for L2-enforcing governance postures (consensus and notary)"
+      "category": "violation",
+      "description": "Consensus URL for L2-enforcing governance postures (flag fallback)"
+    },
+    "ConsensusBootstrap": {
+      "_go_const": "EnvVar.ConsensusBootstrap",
+      "value": "G8E_CONSENSUS_BOOTSTRAP",
+      "category": "violation",
+      "description": "Consensus bootstrap file path (flag fallback)"
     },
     "VaultDir": {
-      "_go_const": "",
+      "_go_const": "EnvVar.VaultDir",
       "value": "G8E_VAULT_DIR",
-      "description": "Override for the vault directory path"
+      "category": "violation",
+      "description": "Vault directory path (flag fallback)"
     },
     "VaultKey": {
-      "_go_const": "",
+      "_go_const": "EnvVar.VaultKey",
       "value": "G8E_VAULT_KEY",
-      "description": "Override for the vault key file path"
-    },
-    "VaultRequireUnlock": {
-      "_go_const": "",
-      "value": "G8E_VAULT_REQUIRE_UNLOCK",
-      "description": "When set to 'true', requires vault unlock before gateway start"
+      "category": "violation",
+      "description": "Vault key file path (flag fallback)"
     },
     "OperatorSessionID": {
       "_go_const": "EnvVar.OperatorSessionID",
       "value": "G8E_OPERATOR_SESSION_ID",
-      "description": "In-memory operator session ID set by deploy script after enrollment; never persisted to config"
+      "category": "violation",
+      "description": "In-memory operator session ID set by the deploy script after enrollment; never persisted to config"
     },
-    "ClientCert": {
-      "_go_const": "EnvVar.ClientCert",
-      "value": "G8E_CLIENT_CERT",
-      "description": "Path to the operator client certificate for MCP stdio connections"
+    "PasskeyRpID": {
+      "_go_const": "EnvVar.PasskeyRpID",
+      "value": "G8E_PASSKEY_RP_ID",
+      "category": "violation",
+      "description": "Passkey relying-party ID (flag fallback)"
     },
-    "ClientKey": {
-      "_go_const": "EnvVar.ClientKey",
-      "value": "G8E_CLIENT_KEY",
-      "description": "Path to the operator client key for MCP stdio connections"
+    "PasskeyRpName": {
+      "_go_const": "EnvVar.PasskeyRpName",
+      "value": "G8E_PASSKEY_RP_NAME",
+      "category": "violation",
+      "description": "Passkey relying-party name (flag fallback)"
     },
-    "CABundle": {
-      "_go_const": "EnvVar.CABundle",
-      "value": "G8E_CA_BUNDLE",
-      "description": "Path to the CA trust bundle for MCP stdio connections"
+    "PasskeyRpOrigins": {
+      "_go_const": "EnvVar.PasskeyRpOrigins",
+      "value": "G8E_PASSKEY_RP_ORIGINS",
+      "category": "violation",
+      "description": "Comma-separated passkey relying-party origins (flag fallback)"
     },
-    "GatewayURL": {
-      "_go_const": "EnvVar.GatewayURL",
-      "value": "G8E_GATEWAY_URL",
-      "description": "Override for the gateway URL used by MCP stdio; defaults to https://g8e.local:8443/mcp"
+    "PublicBaseURL": {
+      "_go_const": "EnvVar.PublicBaseURL",
+      "value": "G8E_PUBLIC_BASE_URL",
+      "category": "violation",
+      "description": "Public base URL for approval links (flag fallback)"
     },
-    "App": {
-      "_go_const": "EnvVar.App",
-      "value": "G8E_APP",
-      "description": "Name of enrolled platform application to authenticate MCP stdio session"
+    "AllowedOrigins": {
+      "_go_const": "EnvVar.AllowedOrigins",
+      "value": "G8E_ALLOWED_ORIGINS",
+      "category": "violation",
+      "description": "Comma-separated allowed CORS origins (flag fallback)"
     },
-    "DataDir": {
-      "_go_const": "",
-      "value": "G8E_DATA_DIR",
-      "description": "Override for the data directory; used in test configurations"
+    "DoctrineDir": {
+      "_go_const": "EnvVar.DoctrineDir",
+      "value": "G8E_DOCTRINE_DIR",
+      "category": "violation",
+      "description": "Doctrine JSON directory (flag fallback)"
     },
-    "ProjectRoot": {
-      "_go_const": "",
-      "value": "G8E_PROJECT_ROOT",
-      "description": "Override for project root directory; deprecated, paths now resolved by walking up from CWD"
+    "Shell": {
+      "_go_const": "EnvVar.Shell",
+      "value": "SHELL",
+      "category": "host",
+      "description": "Login shell reported by the host"
+    },
+    "Lang": {
+      "_go_const": "EnvVar.Lang",
+      "value": "LANG",
+      "category": "host",
+      "description": "Locale reported by the host"
+    },
+    "Term": {
+      "_go_const": "EnvVar.Term",
+      "value": "TERM",
+      "category": "host",
+      "description": "Terminal type reported by the host"
+    },
+    "TZ": {
+      "_go_const": "EnvVar.TZ",
+      "value": "TZ",
+      "category": "host",
+      "description": "Time zone reported by the host"
+    },
+    "Home": {
+      "_go_const": "EnvVar.Home",
+      "value": "HOME",
+      "category": "host",
+      "description": "Home directory reported by the host"
+    },
+    "User": {
+      "_go_const": "EnvVar.User",
+      "value": "USER",
+      "category": "host",
+      "description": "Login user name reported by the host"
+    },
+    "SSHAuthSock": {
+      "_go_const": "EnvVar.SSHAuthSock",
+      "value": "SSH_AUTH_SOCK",
+      "category": "host",
+      "description": "SSH agent socket provided by the host session"
+    },
+    "LatticeEndpoint": {
+      "_go_const": "EnvVar.LatticeEndpoint",
+      "value": "LATTICE_ENDPOINT",
+      "category": "user_endpoint",
+      "description": "Lattice adapter endpoint"
+    },
+    "LatticeClientID": {
+      "_go_const": "EnvVar.LatticeClientID",
+      "value": "LATTICE_CLIENT_ID",
+      "category": "user_endpoint",
+      "description": "Lattice adapter client identity"
+    },
+    "LatticeClientSecret": {
+      "_go_const": "EnvVar.LatticeClientSecret",
+      "value": "LATTICE_CLIENT_SECRET",
+      "category": "secret",
+      "description": "Lattice adapter client secret"
+    },
+    "LatticeSandboxesToken": {
+      "_go_const": "EnvVar.LatticeSandboxesToken",
+      "value": "SANDBOXES_TOKEN",
+      "category": "secret",
+      "description": "Lattice sandboxes API token"
+    },
+    "LatticeEntityName": {
+      "_go_const": "EnvVar.LatticeEntityName",
+      "value": "LATTICE_ENTITY_NAME",
+      "category": "user_endpoint",
+      "description": "Lattice entity name this deployment reports as"
+    },
+    "LatticePostureFloor": {
+      "_go_const": "EnvVar.LatticePostureFloor",
+      "value": "LATTICE_POSTURE_FLOOR",
+      "category": "violation",
+      "description": "Lattice minimum governance posture"
+    },
+    "CloudflareAPIToken": {
+      "_go_const": "EnvVar.CloudflareAPIToken",
+      "value": "CLOUDFLARE_API_TOKEN",
+      "category": "secret",
+      "description": "Cloudflare API token for tunnel DNS routing"
+    },
+    "CFAPIToken": {
+      "_go_const": "EnvVar.CFAPIToken",
+      "value": "CF_API_TOKEN",
+      "category": "secret",
+      "description": "Cloudflare API token (short form) for tunnel DNS routing"
+    },
+    "OllamaHost": {
+      "_go_const": "EnvVar.OllamaHost",
+      "value": "OLLAMA_HOST",
+      "category": "violation",
+      "description": "Ollama endpoint for hidden model-maintenance commands; duplicates --inference-ollama-endpoint"
+    },
+    "DemoRunID": {
+      "_go_const": "EnvVar.DemoRunID",
+      "value": "G8E_DEMO_RUN_ID",
+      "category": "violation",
+      "description": "Demo run identifier injected by the demo runner"
+    },
+    "DemoScenarioID": {
+      "_go_const": "EnvVar.DemoScenarioID",
+      "value": "G8E_DEMO_SCENARIO_ID",
+      "category": "violation",
+      "description": "Demo scenario identifier injected by the demo runner"
+    },
+    "HarnessPollTimeout": {
+      "_go_const": "EnvVar.HarnessPollTimeout",
+      "value": "G8E_HARNESS_POLL_TIMEOUT",
+      "category": "violation",
+      "description": "Agent harness ensemble poll timeout"
+    },
+    "HarnessLLMProvider": {
+      "_go_const": "EnvVar.HarnessLLMProvider",
+      "value": "G8E_HARNESS_LLM_PROVIDER",
+      "category": "violation",
+      "description": "Agent harness ensemble LLM provider"
+    },
+    "HarnessLLMModel": {
+      "_go_const": "EnvVar.HarnessLLMModel",
+      "value": "G8E_HARNESS_LLM_MODEL",
+      "category": "violation",
+      "description": "Agent harness ensemble LLM model"
+    },
+    "HarnessLLMEndpoint": {
+      "_go_const": "EnvVar.HarnessLLMEndpoint",
+      "value": "G8E_HARNESS_LLM_ENDPOINT",
+      "category": "violation",
+      "description": "Agent harness ensemble LLM endpoint"
+    },
+    "TestReexec": {
+      "_go_const": "EnvVar.TestReexec",
+      "value": "G8E_TEST_REEXEC",
+      "category": "violation",
+      "description": "Test-binary switch that makes a re-executed test process serve a health endpoint"
     }
   }
 }
