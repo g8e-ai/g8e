@@ -7,8 +7,11 @@
 # released under the Apache License, Version 2.0.
 #
 # Stand up N data Operators on this host, enroll + approve them, confirm
-# they're online, bind the CLI to each one, fire one shell command at all of
-# them through `g8e operator run`, and print a copy/paste-able summary.
+# they're online, bind the CLI to ALL of them in a single `g8e operator bind`
+# call, fire one shell command at all of them through `g8e operator run`, and
+# print a copy/paste-able summary. This follows
+# docs/guides/connect_operator_to_gateway.md: start, approve, verify with
+# `operator list`, then bind and run.
 #
 # Everything goes through the real CLI: `g8e operator deploy --background`
 # installs the binary into each Operator's own directory over SSH and starts
@@ -366,28 +369,28 @@ PHASE3_S=$(elapsed "$T3")
 echo "      $active_new/$target_active newly-enrolled operators confirmed active in ${PHASE3_S}s"
 
 # ---------------------------------------------------------------------------
-# Phase 4 -- bind the CLI session to each online operator via
-# `g8e operator bind`, then clear the binding so the owner CLI identity is
-# left as we found it. Binding reissues the CLI session server-side each time.
+# Phase 4 -- bind every online operator to the CLI session in ONE
+# `g8e operator bind` call (one gateway request, every target validated
+# before anything changes, one replacement CLI session). The binding is
+# cleared after the command fan-out in phase 5 so the owner CLI identity is
+# left as we found it.
 # ---------------------------------------------------------------------------
 bind_ok=0
 bind_failed=0
 PHASE4B_S=0
+mapfile -t session_ids < "$SESSION_FILE"
 if [ "$active_new" -gt 0 ]; then
-  echo "[4/6] Binding the CLI session to each of $active_new online operators ..."
+  echo "[4/6] Binding the CLI session to all $active_new online operators in one call ..."
   T4B=$(now)
-  while IFS= read -r sid; do
-    [ -z "$sid" ] && continue
-    if bind_out=$(OWNER_G8E operator bind "$sid" --yes 2>&1); then
-      bind_ok=$((bind_ok + 1))
-    else
-      bind_failed=$((bind_failed + 1))
-      echo "bind $sid: $(tr '\n' ' ' <<< "$bind_out" | cut -c1-300)" >> "$FAIL_LOG"
-    fi
-  done < "$SESSION_FILE"
-  OWNER_G8E operator bind unbind --yes >/dev/null 2>&1 || echo "WARNING: could not clear the CLI operator binding; run '$G8E_BIN operator bind unbind --yes' in $OWNER_DIR" >&2
+  if bind_out=$(OWNER_G8E operator bind "${session_ids[@]}" --yes --json 2>&1); then
+    bind_ok=$(jq -r '.bound_count // 0' <<< "$bind_out")
+    bind_failed=$((active_new - bind_ok))
+  else
+    bind_failed="$active_new"
+    echo "bind (${#session_ids[@]} operators, one call): $(tr '\n' ' ' <<< "$bind_out" | cut -c1-300)" >> "$FAIL_LOG"
+  fi
   PHASE4B_S=$(elapsed "$T4B")
-  echo "      bind done in ${PHASE4B_S}s -- success=$bind_ok failed=$bind_failed"
+  echo "      bind done in ${PHASE4B_S}s -- bound=$bind_ok failed=$bind_failed"
 else
   echo "[4/6] Skipped: no operators came online."
 fi
@@ -403,10 +406,12 @@ cmd_failed=0
 PHASE4_S=0
 if [ "$active_new" -gt 0 ]; then
   echo "[5/6] Dispatching one-shot command to $active_new operators: $RUN_CMD"
-  mapfile -t session_ids < "$SESSION_FILE"
   T4=$(now)
   OWNER_G8E operator run "${session_ids[@]}" --cmd "$RUN_CMD" --timeout "$RUN_TIMEOUT" --json > "$RUN_RESULT_JSON" 2>"$RUN_DIR/run_stderr.log"
   PHASE4_S=$(elapsed "$T4")
+  if [ "$bind_ok" -gt 0 ]; then
+    OWNER_G8E operator bind unbind --yes >/dev/null 2>&1 || echo "WARNING: could not clear the CLI operator binding; run '$G8E_BIN operator bind unbind --yes' in $OWNER_DIR" >&2
+  fi
   cmd_success=$(jq '[.results[] | select(.success==true)] | length' "$RUN_RESULT_JSON" 2>/dev/null || echo 0)
   cmd_failed=$(jq '[.results[] | select(.success==false)] | length' "$RUN_RESULT_JSON" 2>/dev/null || echo 0)
   echo "      dispatch done in ${PHASE4_S}s -- success=$cmd_success failed=$cmd_failed"
@@ -442,7 +447,7 @@ TOTAL_S=$(elapsed "$T_START")
   echo "  Enrolled (approved):     $enrolled / $ACTUAL_COUNT"
   echo "  Failed after retries:    $enroll_failed"
   echo "  Confirmed online:        $active_new / $enrolled"
-  echo "  Bound via operator bind: $bind_ok / $active_new"
+  echo "  Bound (one bind call):   $bind_ok / $active_new"
   echo
   echo "-- One-shot command dispatch --"
   echo "  Command:  $RUN_CMD"
@@ -469,7 +474,7 @@ TOTAL_S=$(elapsed "$T_START")
   if [ "$enroll_failed" -gt 0 ] || [ "$cmd_failed" -gt 0 ] || [ "$bind_failed" -gt 0 ]; then
     echo "-- Failures (see $FAIL_LOG and $RUN_RESULT_JSON for detail) --"
     [ "$enroll_failed" -gt 0 ] && echo "  $enroll_failed operator(s) never enrolled."
-    [ "$bind_failed" -gt 0 ] && echo "  $bind_failed operator(s) failed to bind."
+    [ "$bind_failed" -gt 0 ] && echo "  $bind_failed operator(s) not bound (the single bind call failed; see $FAIL_LOG)."
     [ "$cmd_failed" -gt 0 ] && jq -r '.results[] | select(.success==false) | "  \(.operator_session_id): \(.error)"' "$RUN_RESULT_JSON" 2>/dev/null | head -20
     echo
   fi

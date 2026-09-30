@@ -660,7 +660,7 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 		Short: "Deploy the operator binary to remote hosts and start it",
 		Long: `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll user' first.
 
-The binary is installed at <remote-dir>/g8e. With --background the worker is started as
+The binary is installed at <remote-dir>/g8e (uploaded as g8e.new, then renamed into place, so redeploying over a running Operator is safe). With --background the worker is started as
 'g8e operator start --endpoint <endpoint> --working-dir <remote-dir>' from inside <remote-dir>
 (the .g8e/ runtime tree is rooted at the process's current directory), so its runtime state
 lives under --remote-dir. Distinct --remote-dir values give distinct Operator identities
@@ -713,6 +713,7 @@ on the same host. --endpoint is required with --background.`,
 			cmd.Printf("Deploying operator to %d hosts: %s\n", len(hostList), strings.Join(hostList, ", "))
 
 			remoteBinary := strings.TrimSuffix(remoteDir, "/") + "/g8e"
+			remoteBinaryStaging := remoteBinary + ".new"
 			sshArgsFor := func(remoteCommand string, host string) []string {
 				args := []string{}
 				if port != 0 {
@@ -745,7 +746,10 @@ on the same host. --endpoint is required with --background.`,
 				if identityFile != "" {
 					scpArgs = append(scpArgs, "-i", identityFile)
 				}
-				scpArgs = append(scpArgs, sourceBinary, fmt.Sprintf("%s:%s", host, remoteBinary))
+				// Upload beside the target and rename into place: scp cannot open a
+				// running (or hard-linked, shared) g8e for writing (ETXTBSY), but a
+				// rename replaces the directory entry and leaves the old inode alone.
+				scpArgs = append(scpArgs, sourceBinary, fmt.Sprintf("%s:%s", host, remoteBinaryStaging))
 
 				scpCmd := exec.Command("scp", scpArgs...)
 				scpCmd.Stdout = cmd.OutOrStdout()
@@ -759,7 +763,7 @@ on the same host. --endpoint is required with --background.`,
 
 				cmd.Printf("Copied binary to %s:%s\n", host, remoteBinary)
 
-				postCopy := "chmod +x " + remoteBinary
+				postCopy := "chmod +x " + remoteBinaryStaging + " && mv -f " + remoteBinaryStaging + " " + remoteBinary
 				if background {
 					postCopy += fmt.Sprintf(" && cd %s && { nohup ./g8e operator start --endpoint %s --working-dir %s > start.log 2>&1 < /dev/null & }",
 						remoteDir, endpoint, remoteDir)

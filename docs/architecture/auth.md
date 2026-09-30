@@ -169,15 +169,15 @@ The `g8e operator bind` command manages the authenticated CLI session's persiste
 
 | Subcommand | Purpose |
 | --- | --- |
-| `bind <operator-session-id>` | Pin the CLI session to one active operator session owned by the same user |
-| `bind list` | Show the operator currently bound to the CLI session |
+| `bind <operator-session-id>...` | Pin the CLI session to one or more active operator sessions owned by the same user, in a single call |
+| `bind list` | Show the operators currently bound to the CLI session |
 | `bind unbind` | Clear the operator binding from the CLI session |
 
-Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The gateway validates that the target operator session is active and belongs to the authenticated user, then issues a replacement CLI session server-side and returns the new `cli_session_id`.
+Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The bind request carries `operator_session_ids` (or the single `operator_session_id`); the gateway validates that every target operator session is active and belongs to the authenticated user before changing anything, so one rejected target binds none. It then issues one replacement CLI session server-side and returns the new `cli_session_id` with the `bound` list. The first target is the primary binding (`operator_session_id` on the CLI session, the identity the auth middleware stamps); the full list is persisted as `bound_operator_session_ids`, carried through rotation, and kept on refresh only while the primary binding survives. One call accepts at most `CLIBindMaxOperators` (5000) targets. `GET /api/v1/auth/cli/session` reports the list.
 
 Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details before binding.
 
-Re-binding to the same operator session is idempotent and does not rotate the CLI session.
+Re-binding to the identical ordered list of operator sessions is idempotent and does not rotate the CLI session.
 
 ### Platform workload enrollment
 

@@ -219,17 +219,24 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Multi-bind survives a refresh only while the primary binding does.
+	var boundOperatorSessionIDs []string
+	if oldSession != nil && oldSession.OperatorSessionID == operatorSessionID {
+		boundOperatorSessionIDs = oldSession.BoundOperatorSessionIDs
+	}
+
 	newCLISessionID := uuid.NewString()
 	_, err = c.cliSessionSvc.RefreshCLISession(
 		oldCLISessionID,
 		newCLISessionID,
 		CLISessionFields{
-			OperatorSessionID: operatorSessionID,
-			UserID:            userID,
-			SystemFingerprint: systemFingerprint,
-			CertFingerprint:   certFingerprint,
-			CertSerial:        certSerial,
-			LoginMethod:       loginMethod,
+			OperatorSessionID:       operatorSessionID,
+			BoundOperatorSessionIDs: boundOperatorSessionIDs,
+			UserID:                  userID,
+			SystemFingerprint:       systemFingerprint,
+			CertFingerprint:         certFingerprint,
+			CertSerial:              certSerial,
+			LoginMethod:             loginMethod,
 		},
 	)
 	if err != nil {

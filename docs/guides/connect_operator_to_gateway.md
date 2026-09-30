@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-09-28
-Version: v2.2.0
+Last Updated: 2026-09-30
+Version: v2.2.5
 
 ---
 
@@ -60,13 +60,13 @@ Replace `192.0.2.10` with the Gateway IP address. Do not use `--cert-mode localh
 
 ### 1. Start the Gateway
 
-On the Gateway host, start the service in the foreground:
+On the Gateway host, start the service:
 
 ```bash
 ./g8e gw start
 ```
 
-The Gateway runs in the background by default. Use `--follow` to run it in the foreground, or use `./g8e gw logs -f` to follow a background process. The default posture is `doctrine`. Use `--posture consensus`, `--posture ratify`, or `--posture notary` to select a different governance layer configuration.
+The Gateway runs as a background process in its own session by default. Use `--follow` (`-f`) to run it in the foreground, or use `./g8e gw logs -f` to follow a background process. The default posture is `doctrine`. Use `--posture consensus`, `--posture ratify`, or `--posture notary` to select a different governance layer configuration.
 
 To preview settings with the interactive wizard before starting, run:
 
@@ -145,8 +145,8 @@ After approval, the Operator signs the completion transcript with both private k
 
 - `.g8e/pki/operator.crt` - Operator certificate
 - `.g8e/pki/operator.key` - Operator private key
-- `.g8e/cli.crt` - CLI certificate (for local enrollment operations)
-- `.g8e/cli.key` - CLI private key
+- `.g8e/pki/cli.crt` - CLI certificate (for local enrollment operations)
+- `.g8e/pki/cli.key` - CLI private key
 - `.g8e/pki/trust/g8eg-ca-bundle.pem` - Gateway trust bundle
 
 Once these writes succeed, the process removes the pending state and then authenticates to the Gateway over mTLS, receives its Operator ID, Operator session ID, runtime limits, governance posture, and heartbeat interval configuration. It initializes encrypted local storage, execution vaults, and replay protection, then subscribes to its command channel:
@@ -163,12 +163,11 @@ A successful connection prints `Channel established - Ready to receive` in the l
 
 The root `docker-compose.yml` runs the Gateway and Operator as separate containers with separate process and network namespaces and named volumes. The Gateway publishes host ports 8080 and 8443 by default. The Operator container reaches the Gateway as `g8e.local:8080` and `g8e.local:8443` and exposes no host port. Each container has its own volume for credentials, vault keys, and local state; the Operator volume does not mount the Docker host filesystem.
 
-Start only the Gateway first, enroll the owner from the repository host, then start the bootstrapped operators:
+All core services (Gateway, Data Operator, Inference Operator, ensemble, and dashboard) start together in the default Compose profile; there is no bootstrap profile. Workloads submit their platform enrollment requests and poll for owner approval, so enroll the owner from the repository host once the Gateway is healthy:
 
 ```bash
 docker compose up -d
 ./g8e auth enroll user -e localhost
-docker compose --profile bootstrapped up -d
 ```
 
 List pending enrollment requests:
@@ -184,7 +183,7 @@ Approve the request for the Data Operator, then verify the remote session:
 ./g8e operator list
 ```
 
-The container runs `operator start -e g8e.local`. The same owner-approval workflow applies to the dashboard and ensemble operators started by the `bootstrapped` profile. For profile details, volume ownership, and cleanup procedures, see [Unified Docker Stack](unified_stack.md).
+The container runs `operator start -e g8e.local`. The same owner-approval workflow applies to the Inference Operator, dashboard, and ensemble. For profile details, volume ownership, and cleanup procedures, see [Unified Docker Stack](unified_stack.md).
 
 ---
 
@@ -229,6 +228,12 @@ ssh user@192.0.2.10 /opt/g8e operator start --endpoint <gateway-host>
 
 `g8e operator deploy --hosts user@192.0.2.10 --remote-dir /opt/g8e-operator --background --endpoint <gateway-host>` performs the same copy and start in one step (see [Build Operator](build_operator.md#deployment-commands)). Approve the resulting enrollment request as described above.
 
+`operator deploy` uploads the binary as `<remote-dir>/g8e.new` and renames it over `<remote-dir>/g8e`, so redeploying into a directory whose Operator is still running does not fail with "text file busy". Each distinct `--remote-dir` is a distinct Operator identity.
+
+### Connect Many Operators
+
+The Gateway allows at most three live (non-terminal) Operator enrollment requests at once, platform-wide; further `operator start` processes are rejected with HTTP 429. To enroll a fleet, deploy and approve one Operator at a time: deploy, wait for its request to appear in `auth enroll pending`, approve it, then deploy the next. Once the Operators are online, bind and drive them together as described in [Bind the CLI to Operators and Run Commands](#bind-the-cli-to-operators-and-run-commands). `scripts/loadtest-operators.sh` automates this whole sequence.
+
 ---
 
 ## Verify and Operate the Connection
@@ -251,14 +256,17 @@ From an enrolled CLI identity, list Operators associated with your user:
 
 This displays each Operator's ID, type (e.g., data, dashboard, ensemble), hostname, session ID, and heartbeat status. Use `g8e operator show <operator-id-or-session-id>` to display the latest heartbeat snapshot and performance metrics. Check the Operator process log for the `Channel established - Ready to receive` message as confirmation that it established its pub/sub channel subscription.
 
-### Bind CLI to an Operator and Run Commands
+### Bind the CLI to Operators and Run Commands
 
-Pin the enrolled CLI session to a specific Operator when automation or eval scripts need a stable default target:
+Pin the enrolled CLI session to one or more Operators when automation or eval scripts need a stable default target. Pass every Operator session ID to a single `bind` call; do not loop over Operators, because each call issues a replacement CLI session:
 
 ```bash
-./g8e operator bind <operator-session-id>
+./g8e operator bind <operator-session-id> [<operator-session-id>...]
 ./g8e operator bind list
+./g8e operator bind unbind
 ```
+
+The Gateway validates every target (active and owned by the authenticated user) before changing anything; if any target is rejected, none is bound and the existing binding is kept. The first ID is the primary binding that the auth middleware stamps on the CLI session; the rest are recorded alongside it and reported by `bind list`. One call accepts up to 5000 sessions, and rebinding the identical list is idempotent and does not rotate the CLI session. Use `--yes` to skip the confirmation prompt.
 
 Execute a governed shell command on active Operators in parallel:
 
@@ -291,7 +299,7 @@ Gateway restart restores the complete validated launch profile from the last suc
 
 ### Stop the Operator
 
-Send `SIGINT` or `SIGTERM` to the foreground Operator process. It cancels the service context, stops the heartbeat scheduler and pub/sub service, closes local services, and exits after graceful shutdown.
+From an enrolled CLI, `g8e operator stop <operator-session-id> [--reason <text>]` stops a remote Operator through its governed shutdown channel. On the Operator host, send `SIGINT` or `SIGTERM` to the foreground Operator process. It cancels the service context, stops the heartbeat scheduler and pub/sub service, closes local services, and exits after graceful shutdown.
 
 ---
 

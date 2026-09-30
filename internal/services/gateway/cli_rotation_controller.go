@@ -203,12 +203,13 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 		newCertFingerprint,
 		newCertSerial,
 		CLISessionFields{
-			OperatorSessionID: oldSession.OperatorSessionID,
-			UserID:            oldSession.UserID,
-			SystemFingerprint: oldSession.SystemFingerprint,
-			CertFingerprint:   newCertFingerprint,
-			CertSerial:        newCertSerial,
-			LoginMethod:       oldSession.LoginMethod,
+			OperatorSessionID:       oldSession.OperatorSessionID,
+			BoundOperatorSessionIDs: oldSession.BoundOperatorSessionIDs,
+			UserID:                  oldSession.UserID,
+			SystemFingerprint:       oldSession.SystemFingerprint,
+			CertFingerprint:         newCertFingerprint,
+			CertSerial:              newCertSerial,
+			LoginMethod:             oldSession.LoginMethod,
 		},
 	)
 	if err != nil {

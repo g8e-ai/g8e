@@ -87,7 +87,7 @@ A just-in-time, single-action, self-dissolving permission minted by the L5 Actua
 
 ## CLI Operator Session Binding
 
-The persisted pair of `operator_session_id` and `operator_id` stamped on an authenticated CLI session. Running `g8e operator bind <operator-session-id>` pins the CLI session to an active operator session owned by the same user via `POST /api/v1/auth/cli/bind`; `g8e operator bind list` inspects bindings; `g8e operator bind unbind` clears the binding via `POST /api/v1/auth/cli/unbind`. Binding changes issue a replacement CLI session server-side and update local credentials. Session refresh, rotation, and recovery inherit the prior binding when present. The unified auth middleware derives operator identity from the session record and rejects contradictory request headers.
+The persisted pair of `operator_session_id` and `operator_id` stamped on an authenticated CLI session. Running `g8e operator bind <operator-session-id>...` pins the CLI session to one or more active operator sessions owned by the same user in a single `POST /api/v1/auth/cli/bind` call (all targets are validated first; the first is the primary binding); `g8e operator bind list` inspects bindings; `g8e operator bind unbind` clears the binding via `POST /api/v1/auth/cli/unbind`. Binding changes issue a replacement CLI session server-side and update local credentials. Session refresh, rotation, and recovery inherit the prior binding when present. The unified auth middleware derives operator identity from the session record and rejects contradictory request headers.
 
 ---
 

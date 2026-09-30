@@ -400,19 +400,24 @@ type OperatorSession struct {
 // CLISession represents an authenticated CLI/BYO session.
 // Strictly disjoint from operator_session_id.
 type CLISession struct {
-	ID                string    `json:"id"`
-	UserID            string    `json:"user_id"`
-	OperatorSessionID string    `json:"operator_session_id"` // Bind to the specific Operator session that created it
-	SystemFingerprint string    `json:"system_fingerprint,omitempty"`
-	CertFingerprint   string    `json:"cert_fingerprint,omitempty"` // SHA-256 fingerprint of the mTLS certificate
-	CertSerial        string    `json:"cert_serial,omitempty"`      // Serial number for revocation checking
-	CreatedAt         time.Time `json:"created_at"`
-	ExpiresAt         time.Time `json:"expires_at"`
-	AbsoluteExpiresAt time.Time `json:"absolute_expires_at"`
-	IdleExpiresAt     time.Time `json:"idle_expires_at"`
-	SessionType       string    `json:"session_type"`
-	IsActive          bool      `json:"is_active"`
-	LoginMethod       string    `json:"login_method"`
+	ID                string `json:"id"`
+	UserID            string `json:"user_id"`
+	OperatorSessionID string `json:"operator_session_id"` // Bind to the specific Operator session that created it
+	// BoundOperatorSessionIDs lists every operator session bound by a single
+	// `operator bind` call. OperatorSessionID is always its first element when
+	// the list is non-empty; it stays the primary identity the auth middleware
+	// stamps on requests.
+	BoundOperatorSessionIDs []string  `json:"bound_operator_session_ids,omitempty"`
+	SystemFingerprint       string    `json:"system_fingerprint,omitempty"`
+	CertFingerprint         string    `json:"cert_fingerprint,omitempty"` // SHA-256 fingerprint of the mTLS certificate
+	CertSerial              string    `json:"cert_serial,omitempty"`      // Serial number for revocation checking
+	CreatedAt               time.Time `json:"created_at"`
+	ExpiresAt               time.Time `json:"expires_at"`
+	AbsoluteExpiresAt       time.Time `json:"absolute_expires_at"`
+	IdleExpiresAt           time.Time `json:"idle_expires_at"`
+	SessionType             string    `json:"session_type"`
+	IsActive                bool      `json:"is_active"`
+	LoginMethod             string    `json:"login_method"`
 }
 
 // LocalOSUser represents local OS user account information.
@@ -688,8 +693,13 @@ type CLIRefreshResponse struct {
 // derived from the authenticated certificate context. The caller pins the
 // CLI session to the specified operator session, issuing a replacement CLI
 // session when the binding changes.
+//
+// OperatorSessionIDs binds several operator sessions in one call; the first
+// becomes the primary binding. OperatorSessionID remains accepted for a
+// single target. Every target is validated before any binding changes.
 type CLIBindRequest struct {
-	OperatorSessionID string `json:"operator_session_id"`
+	OperatorSessionID  string   `json:"operator_session_id,omitempty"`
+	OperatorSessionIDs []string `json:"operator_session_ids,omitempty"`
 }
 
 // CLIBindResponse is the wire response for POST /api/v1/auth/cli/bind.
@@ -700,6 +710,14 @@ type CLIBindResponse struct {
 	OperatorSessionID string `json:"operator_session_id,omitempty"`
 	OperatorID        string `json:"operator_id,omitempty"`
 	AlreadyBound      bool   `json:"already_bound,omitempty"`
+	// Bound lists every operator the session is now bound to, primary first.
+	Bound []CLIBoundOperator `json:"bound,omitempty"`
+}
+
+// CLIBoundOperator identifies one operator bound to a CLI session.
+type CLIBoundOperator struct {
+	OperatorSessionID string `json:"operator_session_id"`
+	OperatorID        string `json:"operator_id"`
 }
 
 // CLIUnbindRequest is the wire request for POST /api/v1/auth/cli/unbind.
@@ -730,4 +748,6 @@ type CLISessionInfoResponse struct {
 	UserID            string `json:"user_id"`
 	OperatorSessionID string `json:"operator_session_id,omitempty"`
 	OperatorID        string `json:"operator_id,omitempty"`
+	// BoundOperatorSessionIDs lists every operator session bound by `operator bind`, primary first.
+	BoundOperatorSessionIDs []string `json:"bound_operator_session_ids,omitempty"`
 }

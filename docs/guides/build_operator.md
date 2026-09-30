@@ -261,15 +261,15 @@ After enrolling the host CLI with `g8e auth enroll user` and starting one or mor
 
 `operator list` prints operator ID, type, hostname (decoded from the Gateway-persisted latest heartbeat), session ID, and status. This hostname is live operator telemetry; it is distinct from the enrollment-time `name` metadata shown by `auth enroll list`. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata plus the same canonical latest heartbeat snapshot.
 
-#### Bind the CLI session to an operator
+#### Bind the CLI session to operators
 
 ```bash
-./g8e operator bind <operator-session-id>
+./g8e operator bind <operator-session-id> [<operator-session-id>...]
 ./g8e operator bind list
 ./g8e operator bind unbind
 ```
 
-Binding pins the authenticated CLI session to one active operator session owned by the same user. A successful bind issues a replacement CLI session server-side and updates local credentials. Use `bind list` to confirm the current binding and `bind unbind` to clear it. `g8e auth context` and `GET /api/v1/auth/cli/session` report the persisted binding for automation.
+Binding pins the authenticated CLI session to one or more active operator sessions owned by the same user, in one call. Every target is validated before any binding changes; the first is the primary binding. A successful bind issues one replacement CLI session server-side and updates local credentials. Use `bind list` to confirm the current bindings and `bind unbind` to clear them. `g8e auth context` and `GET /api/v1/auth/cli/session` report the persisted binding for automation.
 
 #### Run a governed shell command on one or more operators
 
@@ -375,7 +375,7 @@ The matching root targets are `make test-unit`, `make test-integration`, `make t
 
 `g8e operator cp <target>` copies the currently running binary to a local file or directory. `g8e operator scp <user@host:path>` invokes the system `scp` command and supports the flags shown by `g8e operator scp --help`.
 
-`g8e operator deploy --hosts <host[,host...]> [--remote-dir <dir>] [--background] --endpoint <gateway-host>` copies the running binary to `<remote-dir>/g8e` over SSH (`--remote-dir` defaults to `~`). With `--background` it starts `g8e operator start --endpoint <gateway-host> --working-dir <remote-dir>` there and writes `start.log` in that directory; `--endpoint` is required with `--background`. Each distinct `--remote-dir` on a host is a separate Operator working directory with its own `.g8e/` state and enrollment request, so `scripts/loadtest-operators.sh` uses it to run many Operators on one host. The command exits non-zero if any host fails. The started worker still needs its enrollment request approved (`g8e auth enroll approve`).
+`g8e operator deploy --hosts <host[,host...]> [--remote-dir <dir>] [--background] --endpoint <gateway-host>` copies the running binary to `<remote-dir>/g8e` over SSH (`--remote-dir` defaults to `~`), uploading it as `g8e.new` and renaming it into place so an already-running or hard-linked `g8e` does not block the copy. With `--background` it starts `g8e operator start --endpoint <gateway-host> --working-dir <remote-dir>` there and writes `start.log` in that directory; `--endpoint` is required with `--background`. Each distinct `--remote-dir` on a host is a separate Operator working directory with its own `.g8e/` state and enrollment request, so `scripts/loadtest-operators.sh` uses it to run many Operators on one host. The command exits non-zero if any host fails. The started worker still needs its enrollment request approved (`g8e auth enroll approve`).
 
 The current Cobra wrapper for `operator stream` parses its public flags before calling the native stream parser, so options such as `--endpoint`, `--hosts`, and `--binary-dir` are not forwarded to the implementation. Do not use `operator stream` as an automated Operator rollout path in this version.
 

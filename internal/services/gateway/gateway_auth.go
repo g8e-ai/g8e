@@ -870,6 +870,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			}
 			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
 			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, cliSession.OperatorSessionID)
+			ctx = context.WithValue(ctx, constants.ContextKeyBoundOperatorSessionIDs, cliSession.BoundOperatorSessionIDs)
 		} else if headerOpID != "" || headerOpSessionID != "" {
 			// No persisted binding: the caller must not assert an operator
 			// identity the session does not carry.
