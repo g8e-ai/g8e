@@ -183,13 +183,28 @@ func TestAppPlatformEnrollmentClient_FullFlow(t *testing.T) {
 	fileSvc, cfg := newAuthTestEnv(t)
 	appName := "test-app"
 
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	caTemplate := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, &caKey.PublicKey, caKey)
+	require.NoError(t, err)
+	caCert, err := x509.ParseCertificate(caDER)
+	require.NoError(t, err)
+
 	var (
 		requestReceived  int32
 		statusCount      int32
 		completeReceived int32
+		issuedCertPEM    string
 	)
-
-	issuedCertPEM, _ := generateTestCertificateWithSPIFFE(t, appName, time.Now().Add(24*time.Hour))
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -201,6 +216,26 @@ func TestAppPlatformEnrollmentClient_FullFlow(t *testing.T) {
 			assert.Equal(t, models.PlatformComponentApplication, createReq.ComponentKind)
 			assert.Equal(t, appName, createReq.AppName)
 			assert.NotEmpty(t, createReq.App.CSRPEM)
+
+			block, _ := pem.Decode([]byte(createReq.App.CSRPEM))
+			require.NotNil(t, block)
+			csr, err := x509.ParseCertificateRequest(block.Bytes)
+			require.NoError(t, err)
+
+			uri, err := url.Parse("spiffe://g8e.local/app/" + appName)
+			require.NoError(t, err)
+			leafTemplate := x509.Certificate{
+				SerialNumber: big.NewInt(2),
+				Subject:      pkix.Name{CommonName: "g8e-app-" + appName},
+				NotBefore:    time.Now().Add(-time.Hour),
+				NotAfter:     time.Now().Add(24 * time.Hour),
+				KeyUsage:     x509.KeyUsageDigitalSignature,
+				ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+				URIs:         []*url.URL{uri},
+			}
+			leafDER, err := x509.CreateCertificate(rand.Reader, &leafTemplate, caCert, csr.PublicKey, caKey)
+			require.NoError(t, err)
+			issuedCertPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}))
 
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(models.PlatformEnrollmentCreateResponse{

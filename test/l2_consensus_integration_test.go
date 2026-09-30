@@ -15,11 +15,10 @@ pipeline through the in-process GatewayFixture. These integration tests prove:
 
 1. Idempotent client enrollment (re-enroll same identity succeeds)
 2. Malformed CSR rejection at the enrollment endpoint
-3. Delegated app enrollment via CLI mTLS credentials
-4. Consensus quorum reached (2-of-3 members vote affirmatively)
-5. Consensus quorum not reached (fewer votes than quorum threshold)
-6. MITRE veto (L1 doctrine detects malicious command, member votes false)
-7. Full L1–L5 walkthrough with receipt verification
+3. Consensus quorum reached (2-of-3 members vote affirmatively)
+4. Consensus quorum not reached (fewer votes than quorum threshold)
+5. MITRE veto (L1 doctrine detects malicious command, member votes false)
+6. Full L1–L5 walkthrough with receipt verification
 
 All tests use real GatewayFixture infrastructure — no mocks for PKI, consensus,
 or database. The only fiction is the client identity (generated test CSRs).
@@ -149,52 +148,6 @@ func TestL2Consensus_MalformedCSR(t *testing.T) {
 	require.NotEqual(t, http.StatusCreated, resp.StatusCode, "malformed CSR should not succeed")
 }
 
-// TestL2Consensus_DelegatedAppEnrollment verifies that a CLI mTLS client
-// can mint a delegated app credential via /api/v1/pki/apps/delegated.
-func TestL2Consensus_DelegatedAppEnrollment(t *testing.T) {
-	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "consensus-delegated",
-		Posture:           config.PostureConsensus,
-		AllowTestPortZero: true,
-	})
-
-	// Enroll a client identity to get CLI credentials
-	identity := fixtures.EnrollClientIdentity(t, f, "delegated-user", "test-org", "fp-delegated", "test-host")
-
-	// Create a CLI mTLS client (presents CLI cert + session header)
-	cliClient := fixtures.CreateCLIMTLSClient(t, f, identity)
-
-	// Generate a CSR for the delegated app
-	appCSRPEM, _ := generateTestCSR(t, "delegated-app")
-
-	mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-
-	// Request a delegated credential
-	delegatedReq := map[string]string{
-		"csr_pem":  appCSRPEM,
-		"app_name": "delegated-test-app",
-	}
-	reqBody, _ := json.Marshal(delegatedReq)
-	req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIAppsDelegated, bytes.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := cliClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "delegated enrollment should succeed")
-
-	var result map[string]interface{}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-
-	require.Equal(t, true, result["success"], "response should indicate success")
-	require.NotEmpty(t, result["app_cert"], "should receive a delegated certificate")
-	require.NotEmpty(t, result["app_id"], "should receive an app ID")
-
-	appID, ok := result["app_id"].(string)
-	require.True(t, ok, "app_id should be a string")
-	require.Contains(t, appID, "spiffe://", "app_id should be a SPIFFE URI")
-}
 
 // TestL2Consensus_QuorumReached verifies that when a consensus has
 // sufficient voting members (2-of-3), an MCP tools/call succeeds with

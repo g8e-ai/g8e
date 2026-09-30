@@ -60,6 +60,11 @@ const removedAppEnrollPath = "/api/v1/pki/apps/enroll"
 // regression test can prove the route is gone.
 const removedOperatorEnrollPath = "/api/v1/auth/operator/enroll"
 
+// removedDelegatedAppEnrollPath is the path of the removed delegated app
+// enrollment route. The constant was deleted when delegated credentials
+// were consolidated into owner-approved platform application enrollment.
+const removedDelegatedAppEnrollPath = "/api/v1/pki/apps/delegated"
+
 // extractURISANs returns the URI SAN strings from a PEM-encoded certificate.
 func extractURISANs(t *testing.T, certPEM string) []string {
 	t.Helper()
@@ -135,6 +140,34 @@ func TestPlatformEnrollmentBypassClosed_OperatorEnrollRouteRemoved(t *testing.T)
 		"the removed operator enrollment route must fail-closed to 401 (RouteAuthMTLS default) without a client certificate")
 	assert.NotContains(t, rr.Body.String(), "operator_cert",
 		"no operator certificate must be issued from the removed route")
+}
+
+// TestPlatformEnrollmentBypassClosed_DelegatedAppEnrollRouteRemoved proves
+// that the delegated app enrollment route is gone. The route is removed from
+// both routers and no longer classified, so the auth middleware fail-closes
+// it to RouteAuthMTLS. A POST with no client certificate returns 401 — no
+// certificate is issued. This closes the delegated app issuance bypass.
+func TestPlatformEnrollmentBypassClosed_DelegatedAppEnrollRouteRemoved(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	router := h.buildPublicRouter()
+
+	body := map[string]string{
+		"csr_pem":  testutil.GenerateTestCSRP256(t, "my-app"),
+		"app_name": "my-app",
+	}
+	b, err := json.Marshal(body)
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, removedDelegatedAppEnrollPath, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.TLS = nil
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code,
+		"the removed delegated app enrollment route must fail-closed to 401 (RouteAuthMTLS default) without a client certificate")
+	assert.NotContains(t, rr.Body.String(), "app_cert",
+		"no certificate must be issued from the removed route")
 }
 
 

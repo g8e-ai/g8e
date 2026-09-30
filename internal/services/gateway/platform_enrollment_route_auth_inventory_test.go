@@ -18,7 +18,7 @@
 //   /api/v1/auth/bootstrap                RouteAuthNone  Creates first user; no platform cert
 //   /api/v1/auth/operator/enroll          REMOVED        Route gone; fail-closed to RouteAuthMTLS default
 //   /api/v1/pki/apps/enroll               REMOVED        Route gone; fail-closed to RouteAuthMTLS default
-//   /api/v1/pki/apps/delegated            RouteAuthMTLS  Retained; short-lived, authenticated (fail-closed default)
+//   /api/v1/pki/apps/delegated            REMOVED        Route gone; fail-closed to RouteAuthMTLS default
 //   /api/v1/pki/csr/sign                  RouteAuthMTLS  Privileged leaf-type signing; requires validated mTLS identity
 //   /api/v1/pki/devices/enroll            RouteAuthNone  Handler enforces mTLS internally; bootstrap path creates identities
 //
