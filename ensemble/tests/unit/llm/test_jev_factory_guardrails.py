@@ -24,8 +24,7 @@ class TestLlmFactoryJevGuardrails:
     def test_get_llm_provider_rejects_jev_for_lite_text_generation(self):
         settings = LLMSettings(
             lite_provider=LLMProvider.JEV,
-            lite_model="jev-latest",
-            jev_api_key="ts_test_key",
+            lite_model="nimble",
         )
 
         with pytest.raises(ConfigurationError, match="does not support lite text generation"):
@@ -34,8 +33,7 @@ class TestLlmFactoryJevGuardrails:
     def test_get_generative_lite_provider_falls_back_to_assistant_when_lite_is_jev(self):
         settings = LLMSettings(
             lite_provider=LLMProvider.JEV,
-            lite_model="jev-latest",
-            jev_api_key="ts_test_key",
+            lite_model="nimble",
             assistant_provider=LLMProvider.FAKE,
             assistant_model="fake-assistant",
         )

@@ -39,14 +39,7 @@ through Cloudflare's edge to the gateway's HTTPS listener on localhost:8443.
 
 Prerequisites:
   - cloudflared installed (https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
-  - A Cloudflare account with a registered domain
-
-Subcommands:
-  create    Create a named tunnel, route DNS, and generate config.yml
-  route-dns Route a hostname to a tunnel in the correct Cloudflare DNS zone
-  run       Start the tunnel (foreground, blocks until interrupted)
-  status    Check tunnel connectivity and gateway health through the tunnel
-`,
+  - A Cloudflare account with a registered domain`,
 	}
 
 	cmd.AddCommand(

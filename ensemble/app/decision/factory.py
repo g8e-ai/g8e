@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import logging
 
-from app.constants import JEV_DEFAULT_ENDPOINT, JEV_DEFAULT_MODEL, LLMProvider
+from app.constants import JEV_DEFAULT_MODEL, LLMProvider
 from app.decision.provider import DecisionProvider
 from app.decision.providers.jev import JevProvider
 from app.errors import ConfigurationError
@@ -31,7 +31,6 @@ def _api_key_fingerprint(api_key: str | None) -> str:
 
 def _get_provider_cache_key(settings: LLMSettings) -> str:
     _, api_key, endpoint, _ = settings.resolve("lite")
-    endpoint = endpoint or JEV_DEFAULT_ENDPOINT
     return f"jev|{endpoint}|{_api_key_fingerprint(api_key)}"
 
 
@@ -52,7 +51,7 @@ def get_decision_provider(settings: LLMSettings) -> DecisionProvider:
 
     provider = JevProvider(
         api_key=api_key,
-        endpoint=endpoint or JEV_DEFAULT_ENDPOINT,
+        endpoint=endpoint,
         default_model=model,
     )
     provider._is_cached_singleton = True

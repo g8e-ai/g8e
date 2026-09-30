@@ -227,7 +227,7 @@ ssh user@192.0.2.10 chmod +x /opt/g8e
 ssh user@192.0.2.10 /opt/g8e operator start --endpoint <gateway-host>
 ```
 
-Do not use `operator deploy --background` for Operator rollout in this version. Its current implementation starts `gw start` on each target instead of `operator start`, and flag handling is unreliable for automation. Use `cp`, `scp`, or an external deployment system and start the worker explicitly on each target.
+`g8e operator deploy --hosts user@192.0.2.10 --remote-dir /opt/g8e-operator --background --endpoint <gateway-host>` performs the same copy and start in one step (see [Build Operator](build_operator.md#deployment-commands)). Approve the resulting enrollment request as described above.
 
 ---
 

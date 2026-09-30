@@ -375,14 +375,16 @@ The matching root targets are `make test-unit`, `make test-integration`, `make t
 
 `g8e operator cp <target>` copies the currently running binary to a local file or directory. `g8e operator scp <user@host:path>` invokes the system `scp` command and supports the flags shown by `g8e operator scp --help`.
 
-The current `operator deploy --background` implementation copies the binary and starts `gw start` on each remote host; it does not start `operator start`. The current Cobra wrapper for `operator stream` parses its public flags before calling the native stream parser, so options such as `--endpoint`, `--hosts`, and `--binary-dir` are not forwarded to the implementation. Do not use either command as an automated Operator rollout path in this version. Copy the binary with `cp`, `scp`, or an external deployment system, then run `g8e operator start --endpoint <gateway-host>` on the target.
+`g8e operator deploy --hosts <host[,host...]> [--remote-dir <dir>] [--background] --endpoint <gateway-host>` copies the running binary to `<remote-dir>/g8e` over SSH (`--remote-dir` defaults to `~`). With `--background` it starts `g8e operator start --endpoint <gateway-host> --working-dir <remote-dir>` there and writes `start.log` in that directory; `--endpoint` is required with `--background`. Each distinct `--remote-dir` on a host is a separate Operator working directory with its own `.g8e/` state and enrollment request, so `scripts/loadtest-operators.sh` uses it to run many Operators on one host. The command exits non-zero if any host fails. The started worker still needs its enrollment request approved (`g8e auth enroll approve`).
+
+The current Cobra wrapper for `operator stream` parses its public flags before calling the native stream parser, so options such as `--endpoint`, `--hosts`, and `--binary-dir` are not forwarded to the implementation. Do not use `operator stream` as an automated Operator rollout path in this version.
 
 ## Anti-patterns
 
 - Treating the Lattice adapter path as implemented (INV-BUILD-OP-02: flags parse but do not affect runtime).
 - Using `make clean` on a host with operational state (INV-BUILD-OP-04: removes `.g8e/` runtime state).
 - Assuming protocol package re-exports guarantee behavioral compatibility (INV-BUILD-OP-05: independent implementations require full L1-L5 stack).
-- Relying on `operator deploy --background` or `operator stream` for production rollout (use external deployment systems).
+- Relying on `operator stream` for production rollout (its flags are not forwarded; use `operator deploy` or an external deployment system).
 
 ## Links out
 

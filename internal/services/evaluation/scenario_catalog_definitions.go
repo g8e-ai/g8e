@@ -101,7 +101,7 @@ func instructionExactFormat() ScenarioBlueprint {
 			"Assistant produces the exact token when designated without unnecessary delegation.",
 			"Lite produces the exact token when designated on this tiny instruction task.",
 			"Homogeneous lane scores the designated role response against the exact token.",
-			"Heterogeneous lane preserves the same exact-token requirement through the system pipeline.",
+			heterogeneousPipelineDescription,
 			[]string{"model_inference", "deterministic_grade"},
 		),
 	}

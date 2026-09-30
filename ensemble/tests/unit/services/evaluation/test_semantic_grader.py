@@ -139,7 +139,6 @@ async def test_grade_campaign_assignment_semantically_uses_jev_decision_provider
         llm=LLMSettings(
             lite_provider=LLMProvider.JEV,
             lite_model=JEV_DEFAULT_MODEL,
-            jev_api_key="ts_test_key",
         ),
         eval_judge=EvalJudgeSettings(eval_judge_model=JEV_DEFAULT_MODEL),
     )

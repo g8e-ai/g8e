@@ -695,6 +695,7 @@ var (
 	ErrReadClientCert         = errors.New("failed to read client certificate")
 	ErrReadPrivateKey         = errors.New("failed to read private key")
 	ErrLoadCertKeyPair        = errors.New("failed to load client certificate/key pair")
+	ErrOperatorDeployFailed   = errors.New("operator deploy failed")
 
 	// JWKS errors
 	ErrJWKSRequestCreate    = errors.New("jwks: failed to create request")

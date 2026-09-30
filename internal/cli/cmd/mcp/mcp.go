@@ -816,11 +816,6 @@ func agentCmd() *cobra.Command {
 		Long: `Configure and integrate g8e with popular AI agent binaries (Claude, Codex,
 Cursor, Devin, etc.) for seamless MCP tool access.
 
-Subcommands:
-  list    List all supported agent binaries
-  show    Print MCP client configuration for a specific agent
-  run     Launch an agent or wrap an external MCP server with g8e governance
-
 For tools that don't support the agent wrapper, use 'g8e mcp agent show <agent>'
 to display MCP client configurations (g8e.local mTLS, IP Address mTLS, Stdio
 Transport), then copy the generated JSON to your agent's MCP settings file.`,

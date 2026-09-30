@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -635,6 +636,14 @@ func CopyFile(src, dst string) error {
 	return os.Chmod(dst, sourceInfo.Mode())
 }
 
+// operatorDeployRemoteDirPattern and operatorDeployEndpointPattern restrict the values
+// interpolated into the remote shell command; a leading ~ must stay unquoted so the
+// remote shell expands it.
+var (
+	operatorDeployRemoteDirPattern = regexp.MustCompile(`^(~|~?/?[A-Za-z0-9_.-]+)(/[A-Za-z0-9_.-]+)*/?$`)
+	operatorDeployEndpointPattern  = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
+)
+
 func operatorDeployCmd() *cobra.Command {
 	return operatorDeployCmdWithConfig(shared.LoadConfig, shared.NewFileSvc)
 }
@@ -644,11 +653,18 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 	var port int
 	var identityFile string
 	var background bool
+	var remoteDir string
 
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploy the operator binary to remote hosts and start it",
-		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll user' first.`,
+		Long: `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll user' first.
+
+The binary is installed at <remote-dir>/g8e. With --background the worker is started as
+'g8e operator start --endpoint <endpoint> --working-dir <remote-dir>' from inside <remote-dir>
+(the .g8e/ runtime tree is rooted at the process's current directory), so its runtime state
+lives under --remote-dir. Distinct --remote-dir values give distinct Operator identities
+on the same host. --endpoint is required with --background.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -668,6 +684,17 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 			if hosts == "" {
 				return fmt.Errorf("%w: --hosts flag is required (comma-separated list of hosts)", constants.ErrMissingRequiredField)
 			}
+			if !operatorDeployRemoteDirPattern.MatchString(remoteDir) {
+				return fmt.Errorf("%w: --remote-dir %q must match %s", constants.ErrPathValidation, remoteDir, operatorDeployRemoteDirPattern)
+			}
+			endpoint, _ := cmd.Flags().GetString("endpoint")
+			endpoint = strings.TrimSpace(endpoint)
+			if background && endpoint == "" {
+				return fmt.Errorf("%w: --endpoint is required with --background", constants.ErrMissingRequiredField)
+			}
+			if background && !operatorDeployEndpointPattern.MatchString(endpoint) {
+				return fmt.Errorf("%w: --endpoint %q must match %s", constants.ErrPathValidation, endpoint, operatorDeployEndpointPattern)
+			}
 
 			hostList := strings.Split(hosts, ",")
 			for i := range hostList {
@@ -685,14 +712,31 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 
 			cmd.Printf("Deploying operator to %d hosts: %s\n", len(hostList), strings.Join(hostList, ", "))
 
-			httpPort := constants.Ports.OperatorHttp
-			httpsPort := constants.Ports.OperatorHttps
+			remoteBinary := strings.TrimSuffix(remoteDir, "/") + "/g8e"
+			sshArgsFor := func(remoteCommand string, host string) []string {
+				args := []string{}
+				if port != 0 {
+					args = append(args, "-p", fmt.Sprintf("%d", port))
+				}
+				if identityFile != "" {
+					args = append(args, "-i", identityFile)
+				}
+				return append(args, host, remoteCommand)
+			}
 
+			var failedHosts []string
 			for _, host := range hostList {
 				cmd.Printf("\nDeploying to %s...\n", host)
 
-				remotePath := "~/g8e"
-				scpTarget := fmt.Sprintf("%s:%s", host, remotePath)
+				// The directory must exist before scp can place the binary in it.
+				mkdirCmd := exec.Command("ssh", sshArgsFor("mkdir -p "+remoteDir, host)...)
+				mkdirCmd.Stdout = cmd.OutOrStdout()
+				mkdirCmd.Stderr = cmd.ErrOrStderr()
+				if err := mkdirCmd.Run(); err != nil {
+					cmd.Printf("Failed to create %s on %s: %v\n", remoteDir, host, err)
+					failedHosts = append(failedHosts, host)
+					continue
+				}
 
 				scpArgs := []string{}
 				if port != 0 {
@@ -701,7 +745,7 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 				if identityFile != "" {
 					scpArgs = append(scpArgs, "-i", identityFile)
 				}
-				scpArgs = append(scpArgs, sourceBinary, scpTarget)
+				scpArgs = append(scpArgs, sourceBinary, fmt.Sprintf("%s:%s", host, remoteBinary))
 
 				scpCmd := exec.Command("scp", scpArgs...)
 				scpCmd.Stdout = cmd.OutOrStdout()
@@ -709,55 +753,37 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 
 				if err := scpCmd.Run(); err != nil {
 					cmd.Printf("Failed to copy to %s: %v\n", host, err)
+					failedHosts = append(failedHosts, host)
 					continue
 				}
 
-				cmd.Printf("Copied binary to %s\n", host)
+				cmd.Printf("Copied binary to %s:%s\n", host, remoteBinary)
 
-				sshArgs := []string{}
-				if port != 0 {
-					sshArgs = append(sshArgs, "-p", fmt.Sprintf("%d", port))
+				postCopy := "chmod +x " + remoteBinary
+				if background {
+					postCopy += fmt.Sprintf(" && cd %s && { nohup ./g8e operator start --endpoint %s --working-dir %s > start.log 2>&1 < /dev/null & }",
+						remoteDir, endpoint, remoteDir)
 				}
-				if identityFile != "" {
-					sshArgs = append(sshArgs, "-i", identityFile)
-				}
-				sshArgs = append(sshArgs, host, "chmod +x ~/g8e")
+				postCmd := exec.Command("ssh", sshArgsFor(postCopy, host)...)
+				postCmd.Stdout = cmd.OutOrStdout()
+				postCmd.Stderr = cmd.ErrOrStderr()
 
-				chmodCmd := exec.Command("ssh", sshArgs...)
-				chmodCmd.Stdout = cmd.OutOrStdout()
-				chmodCmd.Stderr = cmd.ErrOrStderr()
-
-				if err := chmodCmd.Run(); err != nil {
-					cmd.Printf("Failed to chmod on %s: %v\n", host, err)
+				if err := postCmd.Run(); err != nil {
+					cmd.Printf("Failed to finalize deployment on %s: %v\n", host, err)
+					failedHosts = append(failedHosts, host)
 					continue
 				}
 
 				if background {
-					sshArgs = []string{}
-					if port != 0 {
-						sshArgs = append(sshArgs, "-p", fmt.Sprintf("%d", port))
-					}
-					if identityFile != "" {
-						sshArgs = append(sshArgs, "-i", identityFile)
-					}
-					startCommand := fmt.Sprintf("nohup ~/g8e gw start --http-port %d --https-port %d > /dev/null 2>&1 &", httpPort, httpsPort)
-					sshArgs = append(sshArgs, host, startCommand)
-
-					startCmd := exec.Command("ssh", sshArgs...)
-					startCmd.Stdout = cmd.OutOrStdout()
-					startCmd.Stderr = cmd.ErrOrStderr()
-
-					if err := startCmd.Run(); err != nil {
-						cmd.Printf("Failed to start operator on %s: %v\n", host, err)
-						continue
-					}
-
-					cmd.Printf("Started operator in background on %s\n", host)
+					cmd.Printf("Started operator in background on %s (working dir %s)\n", host, remoteDir)
 				} else {
 					cmd.Printf("Operator deployed to %s (use --background to auto-start)\n", host)
 				}
 			}
 
+			if len(failedHosts) > 0 {
+				return fmt.Errorf("%w: %d of %d hosts failed: %s", constants.ErrOperatorDeployFailed, len(failedHosts), len(hostList), strings.Join(failedHosts, ", "))
+			}
 			cmd.Println("\nDeployment complete")
 			return nil
 		},
@@ -766,7 +792,8 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 	cmd.Flags().StringVar(&hosts, "hosts", "", "Comma-separated list of hosts to deploy to (required)")
 	cmd.Flags().IntVarP(&port, "port", "P", 0, "SSH port to connect to on remote hosts")
 	cmd.Flags().StringVarP(&identityFile, "identity", "i", "", "SSH identity file (private key)")
-	cmd.Flags().BoolVar(&background, "background", false, "Start operator in background after deployment")
+	cmd.Flags().BoolVar(&background, "background", false, "Start operator in background after deployment (requires --endpoint)")
+	cmd.Flags().StringVar(&remoteDir, "remote-dir", "~", "Remote directory for the binary and the Operator working directory")
 
 	return cmd
 }

@@ -20,8 +20,8 @@ from app.errors import ExternalServiceError, RateLimitError
 
 pytestmark = pytest.mark.unit
 
-_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
-_API_KEY = "ts_test_key"
+_ENDPOINT = "http://localhost:11434"
+_API_KEY = "proxy_token"
 
 
 def _mock_transport(handler) -> httpx.AsyncClient:
@@ -30,7 +30,7 @@ def _mock_transport(handler) -> httpx.AsyncClient:
 
 def _success_payload() -> dict:
     return {
-        "model": "jev-1.13.0",
+        "model": "nimble",
         "answers": {
             "topic": {
                 "type": "choice",
@@ -51,13 +51,13 @@ def _success_payload() -> dict:
 
 
 class TestJevProviderValidateConfig:
-    def test_validate_config_requires_api_key(self):
-        assert JevProvider.validate_config(api_key=None, endpoint=_ENDPOINT) == [
-            "Provider 'jev' requires an API key."
-        ]
+    def test_validate_config_does_not_require_api_key(self):
+        assert JevProvider.validate_config(api_key=None, endpoint=_ENDPOINT) == []
 
-    def test_validate_config_accepts_api_key(self):
-        assert JevProvider.validate_config(api_key=_API_KEY, endpoint=None) == []
+    def test_validate_config_requires_endpoint(self):
+        assert JevProvider.validate_config(api_key=None, endpoint=None) == [
+            "Provider 'jev' requires an Ollama endpoint URL."
+        ]
 
 
 class TestJevProviderEvaluate:
@@ -67,17 +67,18 @@ class TestJevProviderEvaluate:
 
         def handler(request: httpx.Request) -> httpx.Response:
             captured["authorization"] = request.headers.get("Authorization")
+            captured["url"] = str(request.url)
             captured["body"] = json.loads(request.content.decode())
             return httpx.Response(200, json=_success_payload())
 
         provider = JevProvider(
-            api_key=_API_KEY,
+            api_key=None,
             endpoint=_ENDPOINT,
             client=_mock_transport(handler),
         )
 
         response = await provider.evaluate(
-            model="jev-latest",
+            model="nimble",
             state="Customer: I was charged twice.",
             questions={
                 "topic": ChoiceQuestion(
@@ -92,14 +93,73 @@ class TestJevProviderEvaluate:
             },
         )
 
-        assert response.model == "jev-1.13.0"
+        assert response.model == "nimble"
         assert response.answers["topic"].choice == "billing"
         assert response.answers["severity"].score == 3.0
         assert response.answers["escalate"].noul == 0.8
         assert response.usage.input_tokens == 434
-        assert captured["authorization"] == f"Bearer {_API_KEY}"
-        assert captured["body"]["model"] == "jev-latest"
+        assert captured["authorization"] is None
+        assert captured["url"] == "http://localhost:11434/v1/systemone"
+        assert captured["body"]["model"] == "nimble"
         assert provider.input_artifact_hash
+
+    @pytest.mark.asyncio
+    async def test_evaluate_sends_bearer_token_when_proxy_key_configured(self):
+        captured: dict[str, object] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["authorization"] = request.headers.get("Authorization")
+            return httpx.Response(200, json=_success_payload())
+
+        provider = JevProvider(
+            api_key=_API_KEY,
+            endpoint=_ENDPOINT,
+            client=_mock_transport(handler),
+        )
+
+        await provider.evaluate(
+            model="nimble",
+            state="hello",
+            questions={"topic": NoulQuestion(instructions="Escalate?")},
+        )
+
+        assert captured["authorization"] == f"Bearer {_API_KEY}"
+
+    @pytest.mark.asyncio
+    async def test_evaluate_rejects_oversized_request_before_sending(self):
+        def handler(_request: httpx.Request) -> httpx.Response:
+            raise AssertionError("oversized request must not reach the network")
+
+        provider = JevProvider(
+            api_key=None,
+            endpoint=_ENDPOINT,
+            client=_mock_transport(handler),
+        )
+
+        with pytest.raises(ExternalServiceError, match="limit is 65536"):
+            await provider.evaluate(
+                model="nimble",
+                state="x" * 70_000,
+                questions={"topic": NoulQuestion(instructions="Escalate?")},
+            )
+
+    @pytest.mark.asyncio
+    async def test_evaluate_raises_on_404_when_model_not_pulled(self):
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(404, text="model not found")
+
+        provider = JevProvider(
+            api_key=None,
+            endpoint=_ENDPOINT,
+            client=_mock_transport(handler),
+        )
+
+        with pytest.raises(ExternalServiceError, match="HTTP 404"):
+            await provider.evaluate(
+                model="nimble",
+                state="hello",
+                questions={"topic": NoulQuestion(instructions="Escalate?")},
+            )
 
     @pytest.mark.asyncio
     async def test_evaluate_raises_on_401(self):
@@ -114,7 +174,7 @@ class TestJevProviderEvaluate:
 
         with pytest.raises(ExternalServiceError, match="HTTP 401"):
             await provider.evaluate(
-                model="jev-latest",
+                model="nimble",
                 state="hello",
                 questions={"topic": NoulQuestion(instructions="Escalate?")},
             )
@@ -132,7 +192,7 @@ class TestJevProviderEvaluate:
 
         with pytest.raises(RateLimitError, match="rate limit"):
             await provider.evaluate(
-                model="jev-latest",
+                model="nimble",
                 state="hello",
                 questions={"topic": NoulQuestion(instructions="Escalate?")},
             )
@@ -150,7 +210,7 @@ class TestJevProviderEvaluate:
 
         with pytest.raises(ExternalServiceError, match="not valid JSON"):
             await provider.evaluate(
-                model="jev-latest",
+                model="nimble",
                 state="hello",
                 questions={"topic": NoulQuestion(instructions="Escalate?")},
             )
@@ -161,7 +221,7 @@ class TestJevProviderEvaluate:
             return httpx.Response(
                 200,
                 json={
-                    "model": "jev-latest",
+                    "model": "nimble",
                     "answers": {},
                     "usage": {"input_tokens": 1, "output_tokens": 1},
                 },
@@ -175,7 +235,7 @@ class TestJevProviderEvaluate:
 
         with pytest.raises(ExternalServiceError, match="missing answers"):
             await provider.evaluate(
-                model="jev-latest",
+                model="nimble",
                 state="hello",
                 questions={"topic": NoulQuestion(instructions="Escalate?")},
             )
@@ -186,7 +246,7 @@ class TestJevProviderEvaluate:
             return httpx.Response(
                 200,
                 json={
-                    "model": "jev-latest",
+                    "model": "nimble",
                     "answers": {"topic": {"type": "choice", "choice": "billing"}},
                     "usage": {"input_tokens": 1, "output_tokens": 1},
                 },
@@ -200,7 +260,7 @@ class TestJevProviderEvaluate:
 
         with pytest.raises(ExternalServiceError, match="malformed answer"):
             await provider.evaluate(
-                model="jev-latest",
+                model="nimble",
                 state="hello",
                 questions={"topic": NoulQuestion(instructions="Escalate?")},
             )

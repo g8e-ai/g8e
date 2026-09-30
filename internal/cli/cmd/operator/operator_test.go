@@ -247,6 +247,7 @@ func TestOperatorDeployCmd(t *testing.T) {
 			{"port", "P"},
 			{"identity", "i"},
 			{"background", ""},
+			{"remote-dir", ""},
 		}
 
 		for _, ef := range expectedFlags {
@@ -255,6 +256,15 @@ func TestOperatorDeployCmd(t *testing.T) {
 			assert.Equal(t, ef.shorthand, flag.Shorthand, "flag %s shorthand should match", ef.name)
 		}
 	})
+}
+
+func TestOperatorDeployRemoteDirPattern(t *testing.T) {
+	for _, valid := range []string{"~", "~/g8e", "/home/bob/sandbox/op-00001", "/opt/g8e/", "rel/dir"} {
+		assert.True(t, operatorDeployRemoteDirPattern.MatchString(valid), valid)
+	}
+	for _, invalid := range []string{"", "/tmp/a b", "/tmp/a;rm -rf /", "$(id)", "/tmp/`id`", "~user/x y", "a&b"} {
+		assert.False(t, operatorDeployRemoteDirPattern.MatchString(invalid), invalid)
+	}
 }
 
 func TestOperatorStreamCmd(t *testing.T) {

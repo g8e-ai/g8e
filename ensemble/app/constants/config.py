@@ -375,8 +375,12 @@ ANTHROPIC_DEFAULT_MODEL = ANTHROPIC_CLAUDE_OPUS_4_6
 GEMINI_DEFAULT_MODEL = GEMINI_3_FLASH
 LLAMACPP_DEFAULT_MODEL = LLAMACPP_GEMMA4_E2B
 
-JEV_LATEST = "jev-latest"
-JEV_DEFAULT_MODEL = JEV_LATEST
+# Ollama System One decision model (ollama pull nimble); served at OLLAMA_SYSTEM_ONE_PATH.
+OLLAMA_SYSTEM_ONE_NIMBLE = "nimble"
+JEV_DEFAULT_MODEL = OLLAMA_SYSTEM_ONE_NIMBLE
+OLLAMA_SYSTEM_ONE_PATH = "/v1/systemone"
+# Ollama rejects System One request bodies above 64 KiB with HTTP 413.
+SYSTEM_ONE_MAX_REQUEST_BYTES = 64 * 1024
 
 
 # Provider default endpoints
@@ -385,7 +389,6 @@ OLLAMA_DEFAULT_ENDPOINT = "http://localhost:11434"
 ANTHROPIC_DEFAULT_ENDPOINT = "https://api.anthropic.com"
 GEMINI_DEFAULT_ENDPOINT = ""  # Gemini uses different discovery mechanism
 LLAMACPP_DEFAULT_ENDPOINT = "http://localhost:11444"
-JEV_DEFAULT_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 
 
 # Ollama host normalization defaults

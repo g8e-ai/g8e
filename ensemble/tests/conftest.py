@@ -19,11 +19,12 @@ E2E fixtures are in tests/e2e/conftest.py.
 import logging
 import os
 
+import httpx
 import pytest
 import pytest_asyncio
 
 import contextlib
-from app.constants import G8EE_COMPONENT
+from app.constants import G8EE_COMPONENT, OLLAMA_DEFAULT_ENDPOINT
 
 # Lazy imports for protocol-dependent modules to prevent pytest collection crashes
 # when protocol JSON files are missing or malformed.
@@ -374,6 +375,17 @@ def pytest_configure(config):
         set_search_settings(env_search)
 
 
+def _ollama_has_model(endpoint: str, model: str) -> bool:
+    """True when the Ollama daemon at endpoint is reachable and has model pulled."""
+    try:
+        response = httpx.get(f"{endpoint.rstrip('/')}/api/tags", timeout=2.0)
+        response.raise_for_status()
+        names = [m.get("name", "") for m in response.json().get("models", [])]
+    except (httpx.HTTPError, ValueError):
+        return False
+    return any(name == model or name.startswith(f"{model}:") for name in names)
+
+
 def pytest_collection_modifyitems(config, items):
     from app.constants.env_vars import EnvVar
     from app.llm.factory import get_llm_settings, get_search_settings, get_settings
@@ -413,8 +425,8 @@ def pytest_collection_modifyitems(config, items):
         if search_settings
         else False
     )
-    has_typesafe_key = bool(
-        os.environ.get(EnvVar.LLM_JEV_API_KEY) or os.environ.get(EnvVar.TYPESAFE_API_KEY)
+    has_system_one = any(item.get_closest_marker("requires_system_one") for item in items) and (
+        _ollama_has_model(os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT, "nimble")
     )
 
     for item in items:
@@ -424,8 +436,8 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.skip(reason="no vertex search"))
         elif item.get_closest_marker("requires_web_search") and not has_web_search:
             item.add_marker(pytest.mark.skip(reason="no web search"))
-        elif item.get_closest_marker("requires_typesafe") and not has_typesafe_key:
-            item.add_marker(pytest.mark.skip(reason="no typesafe api key"))
+        elif item.get_closest_marker("requires_system_one") and not has_system_one:
+            item.add_marker(pytest.mark.skip(reason="no Ollama System One model (nimble)"))
 
         # Dynamically add markers based on scenario data for accuracy tests
         if "test_agent_accuracy" in item.name or "test_gemini_accuracy" in item.name:
