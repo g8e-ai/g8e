@@ -71,7 +71,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
-from app.constants.env_vars import EnvVar
+from app.constants.bootstrap import get_bootstrap
 from app.constants.generated_paths import PortConstants
 from app.constants.paths import PATHS, get_app_cert_paths
 from app.errors import ConfigurationError
@@ -127,9 +127,9 @@ class AppEnrollmentService:
     """Owner-approved platform enrollment for the g8ee app identity.
 
     The gateway's plain-HTTP bootstrap surface defaults to
-    ``http://localhost:<PORT_OPERATOR_HTTP>``; ``G8E_GATEWAY_HTTP_URL``
-    overrides it when the gateway is on a different host (e.g. the Docker
-    stack). It does not read ``G8E_GATEWAY_URL``.
+    ``http://localhost:<PORT_OPERATOR_HTTP>``; the ``--gateway-http-url`` launch
+    argument (typed bootstrap settings) overrides it when the gateway is on a
+    different host (e.g. the Docker stack).
     """
 
     def __init__(
@@ -145,10 +145,10 @@ class AppEnrollmentService:
     def _resolve_gateway_http_url(self) -> str:
         """Resolve the gateway's plain-HTTP bootstrap surface URL.
 
-        ``G8E_GATEWAY_HTTP_URL`` when set, otherwise the default local
-        gateway HTTP port.
+        The bootstrap ``gateway_http_url`` when set, otherwise the default
+        local gateway HTTP port.
         """
-        url = os.environ.get(EnvVar.GATEWAY_HTTP_URL) or (
+        url = get_bootstrap().gateway_http_url or (
             f"http://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
         )
         return url.rstrip("/")

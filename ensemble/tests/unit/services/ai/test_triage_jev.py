@@ -43,7 +43,6 @@ def jev_settings() -> G8eeUserSettings:
             primary_model="main-model",
             lite_provider=LLMProvider.JEV,
             lite_model=JEV_DEFAULT_MODEL,
-            jev_api_key="ts_test_key",
         )
     )
 
@@ -68,7 +67,7 @@ def _jev_response(**overrides) -> EvaluateResponse:
     }
     answers.update(overrides.get("answers", {}))
     return EvaluateResponse(
-        model=overrides.get("model", "jev-latest"),
+        model=overrides.get("model", "nimble"),
         answers=answers,
         usage=EvaluateUsage(input_tokens=120, output_tokens=30),
     )

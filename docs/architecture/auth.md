@@ -80,8 +80,9 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-AUTH-OP-BIND-01 | The embedded operator is a binding record (not an enrollment lease) anchoring the first user's sessions. It holds no certificate and persists under the deterministic ID `embedded-operator`. |
 | INV-AUTH-OP-BIND-02 | First-user bootstrap claims the embedded-operator document, recording the user and operator session ID. The claim is the explicit human enrollment act. A same-user reclaim is idempotent; a different user's claim is rejected. |
-| INV-AUTH-OP-BIND-03 | Unified auth middleware stamps operator identity from the persisted session record, not from request headers. Headers that contradict the persisted binding are rejected. |
+| INV-AUTH-OP-BIND-03 | Unified auth middleware stamps operator identity from the persisted session record, not from request headers. Headers that name an operator session outside the persisted binding are rejected. |
 | INV-AUTH-OP-BIND-04 | CLI session refresh and rotation preserve the prior session's operator binding. Recovery prefers the embedded operator's active session. |
+| INV-AUTH-OP-BIND-05 | A CLI session bound to many operators admits every bound operator session as a request's operator identity, not only the primary. The operator ID header, when sent, MUST match the named bound session, and the bound operator MUST belong to the session's user. A session outside the persisted bound list is rejected. |
 
 ### External identity providers (`INV-AUTH-JWT`)
 
@@ -169,37 +170,37 @@ The `g8e operator bind` command manages the authenticated CLI session's persiste
 
 | Subcommand | Purpose |
 | --- | --- |
-| `bind <operator-session-id>` | Pin the CLI session to one active operator session owned by the same user |
-| `bind list` | Show the operator currently bound to the CLI session |
+| `bind <operator-session-id>...` | Bind the CLI session to one or more active operator sessions owned by the same user, in a single call |
+| `bind list` | Show the operators currently bound to the CLI session |
 | `bind unbind` | Clear the operator binding from the CLI session |
 
-Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The gateway validates that the target operator session is active and belongs to the authenticated user, then issues a replacement CLI session server-side and returns the new `cli_session_id`.
+Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The bind request carries `operator_session_ids` (or the single `operator_session_id`); the gateway validates that every target operator session is active and belongs to the authenticated user before changing anything, so one rejected target binds none. It then issues one replacement CLI session server-side and returns the new `cli_session_id` with the `bound` list. The first target is the primary binding (`operator_session_id` on the CLI session, the identity the auth middleware stamps when a request names no operator); a request whose operator headers name another bound session is stamped as that session (INV-AUTH-OP-BIND-05). The full list is persisted as `bound_operator_session_ids`, carried through rotation, and kept on refresh only while the primary binding survives. One call accepts at most `CLIBindMaxOperators` (5000) targets. `GET /api/v1/auth/cli/session` reports the list.
 
 Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details before binding.
 
-Re-binding to the same operator session is idempotent and does not rotate the CLI session.
+Re-binding to the identical ordered list of operator sessions is idempotent and does not rotate the CLI session.
 
 ### Platform workload enrollment
 
-Operators, the dashboard, and the ensemble use owner-approved platform enrollment. Starting a gateway with no users issues no platform workload certificate. The first owner must exist before a workload can submit an enrollment request.
+Operators, the dashboard, the ensemble, and applications use owner-approved platform enrollment. Starting a gateway with no users issues no platform workload certificate. The first owner must exist before a workload can submit an enrollment request.
 
 The workload enrollment flow is:
 
 1. The workload generates its private keys locally and submits its certificate requests with a system fingerprint.
 2. The gateway creates a token-scoped request that expires after 30 minutes.
 3. The active first user reviews the request in the Console or with `g8e auth enroll pending`.
-4. The owner approves or denies the request. CLI approval uses `g8e auth enroll approve <request-id> --yes`; denial uses `g8e auth enroll deny <request-id> --yes`.
+4. The owner approves or denies the request. CLI approval uses `g8e auth enroll approve <selector>... --yes`; denial uses `g8e auth enroll deny <selector>... --yes`. Each space-separated selector matches a pending request by request ID, instance ID, or hostname, and `--all` decides every pending request. Every selector must match or nothing is decided; matched requests are shown and confirmed once, then decided independently.
 5. After approval, the workload proves possession of every requested private key and receives its certificate, trust bundle, and session or application policy.
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
 7. The active first owner can revoke the completed request by its request ID. Revocation records the actor, reason, timestamp, governance envelope, and receipt identifiers on the enrollment record.
 
-For dashboard and ensemble identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active WebSockets authenticated as either identity.
+For dashboard, ensemble, and application identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active WebSockets authenticated as either identity.
 
 ### Identity binding and isolation
 
 mTLS certificates carry SPIFFE identities in URI SANs. The gateway validates certificate revocation, extracts the principal type, and matches the certificate identity to the referenced CLI, operator, or application session before accepting a request. Disabled users, terminated operators, expired sessions, revoked certificates, duplicate bindings, and identity mismatches fail closed.
 
-A CLI command carries a chain from CLI certificate to CLI session to user to operator session to operator. Browser events bind to the user and browser session. Delegated application certificates bind an application identity to the human user who requested the credential. These bindings prevent caller-supplied identifiers from overriding the authenticated transport identity.
+A CLI command carries a chain from CLI certificate to CLI session to user to operator session to operator. Browser events bind to the user and browser session. Application certificates bind an application identity to the approving user via platform enrollment. These bindings prevent caller-supplied identifiers from overriding the authenticated transport identity.
 
 ### Authorization and governance integration
 

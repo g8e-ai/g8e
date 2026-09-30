@@ -147,3 +147,15 @@ func TestEnrollUserCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
 }
+
+func TestEnrollAppCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := cmdtest.NewCmdTestEnv(t)
+	cmd := enrollAppCmdWithConfig(cmdtest.ConfigLoaderFor(cfg), cmdtest.FailingFileSvcFactory(errFactory), DefaultAppEnrollerFactory)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, []string{"my-app"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}

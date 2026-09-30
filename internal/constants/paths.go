@@ -251,7 +251,7 @@ const (
 	DockerEvaluationProfile          = "evaluation"
 	DockerG8ellamaProfile            = "g8ellama"
 	DockerGatewayContainer           = "g8e-gateway"
-	DockerOperatorContainer          = "g8e-operator"
+	DockerDataOperatorContainer      = "g8e-data-operator"
 	DockerEnsembleContainer          = "ensemble"
 	DockerDashboardContainer         = "dashboard"
 	DockerNativeTargetReaderService  = "g8e-native-target-reader"
@@ -399,6 +399,11 @@ const (
 	// persisted. Stored under .g8e/pids/ alongside the PID file.
 	OperatorLaunchProfileFilename = "operator-launch-profile.json"
 )
+
+// RuntimeArchiveTimestampLayout is the MMDDHHMM suffix appended to
+// RuntimeDirname when a destructive clean renames the runtime tree aside
+// (.g8e-09301401) instead of deleting it.
+const RuntimeArchiveTimestampLayout = "01021504"
 
 // Runtime directory constants for the .g8e/ state tree.
 const (
@@ -762,6 +767,11 @@ const (
 	EvaluationAssignmentsDirname                  = "assignments"
 	EvaluationActiveRunFilename                   = "active-run.json"
 	EvaluationActiveRunPath                       = DataDirname + "/" + EvaluationDirname + "/" + EvaluationActiveRunFilename
+	EvaluationDataPath                            = DataDirname + "/" + EvaluationDirname
+	EvaluationBackupManifestFilename              = "eval-backup.json"
+	EvaluationBackupDirPrefix                     = "eval-backup-"
+	EvaluationBackupTimestampLayout               = "20060102T150405Z"
+	EvaluationBackupDefaultDir                    = EvaluationDirname + "/backups"
 	EvaluationModelInventoryPath                  = EvaluationDirname + "/model-inventory.json"
 	EvaluationInitCampaignQueuePath               = EvaluationDirname + "/init-campaign-queue.json"
 	EvaluationQueueLogsDirname                    = EvaluationDirname + "/logs"

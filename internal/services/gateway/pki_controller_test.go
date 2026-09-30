@@ -27,7 +27,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -80,7 +79,6 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 	require.NoError(t, pki.InitializePKI(nil), "failed to ensure PKI")
 
-	appEnrollment := NewAppEnrollmentService(db.GetDocStore(), pki, logger)
 	resp := response.NewWriter(logger)
 
 	// Initialize script templates
@@ -94,7 +92,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
-	controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, AppEnrollment: appEnrollment, Registration: reg, Responder: resp})
+	controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, Registration: reg, Responder: resp})
 	return controller, cfg, db
 }
 
@@ -490,17 +488,15 @@ func TestNewPKIController(t *testing.T) {
 	}
 
 	pki := &PKIAuthority{}
-	appEnrollment := &AppEnrollmentService{}
 	registration := &RegistrationService{}
 	responder := &response.Writer{}
 
-	controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, AppEnrollment: appEnrollment, Registration: registration, Responder: responder})
+	controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, Registration: registration, Responder: responder})
 
 	assert.NotNil(t, controller)
 	assert.Equal(t, cfg, controller.cfg)
 	assert.Equal(t, logger, controller.logger)
 	assert.Equal(t, pki, controller.pki)
-	assert.Equal(t, appEnrollment, controller.appEnrollment)
 	assert.Equal(t, registration, controller.registration)
 	assert.Equal(t, responder, controller.responder)
 }
@@ -720,103 +716,6 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIDevicesEnroll(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-}
-
-func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
-
-	t.Run("Failure - GET method not allowed", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/pki/apps/delegated", nil)
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsDelegated(rr, req)
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - no TLS connection", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", nil)
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsDelegated(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"missing certificate"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - empty peer certificates", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", nil)
-		req.TLS = &tls.ConnectionState{}
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsDelegated(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"missing certificate"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - invalid JSON body", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", strings.NewReader("{invalid}"))
-		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsDelegated(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-
-	t.Run("Failure - missing CSR", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		body := map[string]string{"app_name": "test-app"}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", bytes.NewReader(b))
-		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsDelegated(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"csr_pem is required"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - missing app_name", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		body := map[string]string{"csr_pem": testutil.GenerateTestCSRP256(t, "test-app")}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", bytes.NewReader(b))
-		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsDelegated(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"app_name is required"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - invalid app name (special characters)", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		body := map[string]string{
-			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),
-			"app_name": "invalid@name",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", bytes.NewReader(b))
-		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsDelegated(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-
-	t.Run("Failure - invalid CSR PEM format", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		body := map[string]string{
-			"csr_pem":  "not-a-valid-csr",
-			"app_name": "test-app",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", bytes.NewReader(b))
-		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsDelegated(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"invalid CSR PEM format"}`, rr.Body.String())
 	})
 }
 

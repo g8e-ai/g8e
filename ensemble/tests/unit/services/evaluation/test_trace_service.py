@@ -7,6 +7,7 @@
 
 import pytest
 
+from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
 from app.errors import ValidationError
 from app.models.evaluation_trace import EvaluationAssignmentTrace
 from app.models.http_context import G8eHttpContext
@@ -20,8 +21,8 @@ from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVa
 
 
 @pytest.fixture
-def trace_service(tmp_path, monkeypatch):
-    monkeypatch.setenv("G8E_RUNTIME_DIR", str(tmp_path))
+def trace_service(tmp_path):
+    configure_bootstrap(BootstrapSettings(runtime_dir=str(tmp_path)))
     return EvaluationTraceService()
 
 

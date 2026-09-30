@@ -437,134 +437,6 @@ func TestExtractApprovalURL(t *testing.T) {
 	})
 }
 
-func TestProxyToGateway(t *testing.T) {
-	t.Run("proxyToGateway marshals request correctly", func(t *testing.T) {
-		req := JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		}
-
-		reqBody, err := json.Marshal(req)
-		require.NoError(t, err)
-		assert.Contains(t, string(reqBody), "tools/list")
-		assert.Contains(t, string(reqBody), "2.0")
-	})
-
-	t.Run("proxyToGateway forwards request to server and returns response", func(t *testing.T) {
-		expectedResp := JSONRPCResponse{
-			JSONRPC: "2.0",
-			ID:      float64(1),
-			Result: map[string]interface{}{
-				"tools": []interface{}{
-					map[string]interface{}{
-						"name":        "test_tool",
-						"description": "A test tool",
-					},
-				},
-			},
-		}
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method)
-			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-			var req JSONRPCRequest
-			err := json.NewDecoder(r.Body).Decode(&req)
-			assert.NoError(t, err)
-			assert.Equal(t, "tools/list", req.Method)
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			err = json.NewEncoder(w).Encode(expectedResp)
-			assert.NoError(t, err)
-		}))
-		defer server.Close()
-
-		req := JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		}
-
-		client := &http.Client{Timeout: 5 * time.Second}
-		resp, err := proxyToGateway(client, server.URL, req)
-		require.NoError(t, err)
-		assert.Equal(t, "2.0", resp.JSONRPC)
-		assert.NotNil(t, resp.Result)
-	})
-
-	t.Run("proxyToGateway returns error on server error with invalid JSON", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`internal server error`))
-		}))
-		defer server.Close()
-
-		req := JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		}
-
-		client := &http.Client{Timeout: 5 * time.Second}
-		_, err := proxyToGateway(client, server.URL, req)
-		require.Error(t, err)
-	})
-
-	t.Run("proxyToGateway returns error on invalid JSON response", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{invalid json`))
-		}))
-		defer server.Close()
-
-		req := JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		}
-
-		client := &http.Client{Timeout: 5 * time.Second}
-		_, err := proxyToGateway(client, server.URL, req)
-		require.Error(t, err)
-	})
-
-	t.Run("proxyToGateway forwards L3 approval response", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			resp := JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      float64(1),
-				Result: map[string]interface{}{
-					"approval_url": "https://example.com/approve/abc123",
-					"content": []interface{}{
-						map[string]interface{}{
-							"type": "text",
-							"text": "Execution paused. Please visit https://example.com/approve/abc123 to authorize",
-						},
-					},
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(resp)
-		}))
-		defer server.Close()
-
-		req := JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/call",
-		}
-
-		client := &http.Client{Timeout: 5 * time.Second}
-		resp, err := proxyToGateway(client, server.URL, req)
-		require.NoError(t, err)
-		assert.True(t, isL3ApprovalResponse(resp))
-	})
-}
-
 func TestProxyToGatewayWithRetry(t *testing.T) {
 	t.Run("SSE credentials missing returns ErrNotAuthenticated", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -726,25 +598,6 @@ func generateTestCerts(t *testing.T) (certPath, keyPath, caPath string) {
 	require.NoError(t, os.WriteFile(keyPath, keyPEM, constants.PermFilePublic))
 
 	return certPath, keyPath, certPath
-}
-
-func TestEnvOr(t *testing.T) {
-	t.Run("returns environment variable when set", func(t *testing.T) {
-		t.Setenv("TEST_VAR", "test_value")
-		result := envOr("TEST_VAR", "fallback")
-		assert.Equal(t, "test_value", result)
-	})
-
-	t.Run("returns fallback when environment variable not set", func(t *testing.T) {
-		result := envOr("NONEXISTENT_VAR", "fallback")
-		assert.Equal(t, "fallback", result)
-	})
-
-	t.Run("returns fallback when environment variable is empty string", func(t *testing.T) {
-		t.Setenv("EMPTY_VAR", "")
-		result := envOr("EMPTY_VAR", "fallback")
-		assert.Equal(t, "fallback", result)
-	})
 }
 
 func TestSendSuccess(t *testing.T) {
@@ -916,15 +769,17 @@ func TestAgentRunCmd(t *testing.T) {
 	t.Run("agent run command has correct structure", func(t *testing.T) {
 		cmd := agentRunCmd()
 		assert.Contains(t, cmd.Use, "run")
-		assert.Contains(t, cmd.Short, "Govern any MCP server")
+		assert.Contains(t, cmd.Short, "Launch an AI agent")
 		assert.Contains(t, cmd.Long, "Launch an AI agent")
 	})
 
-	t.Run("agent run has url flag", func(t *testing.T) {
+	t.Run("agent run does not have url flag and has verify flag", func(t *testing.T) {
 		cmd := agentRunCmd()
 		urlFlag := cmd.Flags().Lookup("url")
-		require.NotNil(t, urlFlag, "agent run should have --url flag")
-		assert.Equal(t, "string", urlFlag.Value.Type())
+		assert.Nil(t, urlFlag, "agent run should not have --url flag")
+		verifyFlag := cmd.Flags().Lookup("verify")
+		require.NotNil(t, verifyFlag, "agent run should have --verify flag")
+		assert.Equal(t, "bool", verifyFlag.Value.Type())
 	})
 
 	t.Run("agent run has silence flags set", func(t *testing.T) {
@@ -1086,22 +941,6 @@ func TestProxySessionToGateway(t *testing.T) {
 	})
 }
 
-func TestSubprocessMCPProxyStop(t *testing.T) {
-	t.Run("subprocessMCPProxy stop is safe on nil fields", func(t *testing.T) {
-		proxy := &subprocessMCPProxy{
-			command: "echo",
-			args:    []string{"test"},
-			logger:  slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		}
-
-		// Should not panic
-		assert.NotPanics(t, func() {
-			proxy.stop()
-		})
-	})
-
-}
-
 func TestMcpStdioCmd(t *testing.T) {
 	t.Run("mcp stdio command has correct structure", func(t *testing.T) {
 		cmd := mcpStdioCmd()
@@ -1122,7 +961,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
-		configPath, cleanup, err := WriteAgentConfig("goose", binaryPath)
+		configPath, cleanup, err := WriteAgentConfig("goose", binaryPath, "goose")
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 		if cleanup != nil {
@@ -1136,7 +975,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
-		configPath, cleanup, err := WriteAgentConfig("gemini", binaryPath)
+		configPath, cleanup, err := WriteAgentConfig("gemini", binaryPath, "gemini")
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 		if cleanup != nil {
@@ -1155,7 +994,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
-		configPath, cleanup, err := WriteAgentConfig("devin", binaryPath)
+		configPath, cleanup, err := WriteAgentConfig("devin", binaryPath, "devin")
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 		if cleanup != nil {
@@ -1164,7 +1003,11 @@ func TestWriteAgentConfig(t *testing.T) {
 
 		data, err := os.ReadFile(configPath)
 		require.NoError(t, err)
-		assert.Contains(t, string(data), "g8e")
+		var cfg agentMCPConfig
+		require.NoError(t, json.Unmarshal(data, &cfg))
+		require.Contains(t, cfg.MCPServers, "g8e")
+		assert.Equal(t, []string{"mcp", "stdio", "--app", "devin"}, cfg.MCPServers["g8e"].Args,
+			"the agent's stdio bridge must select its credentials by app name, not env or paths")
 	})
 
 	t.Run("unknown agent writes temp file with cleanup", func(t *testing.T) {
@@ -1172,7 +1015,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
-		configPath, cleanup, err := WriteAgentConfig("unknown-agent", binaryPath)
+		configPath, cleanup, err := WriteAgentConfig("unknown-agent", binaryPath, "unknown-agent")
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 
@@ -1186,154 +1029,26 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 }
 
-func TestAgentLaunchArgs(t *testing.T) {
-	t.Run("claude returns governance flags", func(t *testing.T) {
-		args, err := agentLaunchArgs("claude", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Contains(t, args, "--mcp-config")
-		assert.Contains(t, args, "/path/to/config.json")
-		assert.Contains(t, args, "--strict-mcp-config")
-		assert.Contains(t, args, "--disallowed-tools")
-	})
-
-	t.Run("codex returns governance flags", func(t *testing.T) {
-		args, err := agentLaunchArgs("codex", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Contains(t, args, "--mcp-config")
-		assert.Contains(t, args, "--strict-mcp-config")
-	})
-
-	t.Run("goose returns no-profile args", func(t *testing.T) {
-		args, err := agentLaunchArgs("goose", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Contains(t, args, "session")
-		assert.Contains(t, args, "--no-profile")
-		assert.Contains(t, args, "--with-extension")
-	})
-
-	t.Run("gemini returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("gemini", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("cursor returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("cursor", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
-	})
-
-	t.Run("devin returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("devin", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("aider returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("aider", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
-	})
-
-	t.Run("ollama returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("ollama", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
-	})
-
-	t.Run("unknown agent returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("unknown-agent", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
-	})
-
-	t.Run("case-insensitive", func(t *testing.T) {
-		args, err := agentLaunchArgs("CLAUDE", "/path/to/config.json", "/fake/g8e")
-		require.NoError(t, err)
-		assert.Contains(t, args, "--mcp-config")
-	})
-}
-
 func TestRunMCPAgentRun_NoArgs(t *testing.T) {
-	t.Run("returns error when no args and no url", func(t *testing.T) {
-		err := runMCPAgentRun(nil, "", false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+	t.Run("returns error when no args", func(t *testing.T) {
+		err := runMCPAgentRun(nil, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "specify an agent name")
 	})
 
-	t.Run("returns error for unknown agent", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "", false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+	t.Run("returns ErrAgentNotFound for unknown agent", func(t *testing.T) {
+		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrAgentNotFound)
 	})
 
-	t.Run("devin returns error for unknown agent (not cloud-based)", func(t *testing.T) {
-		// Devin is now a local CLI agent and goes through launchAgentWithGovernance.
+	t.Run("devin returns error for missing gateway or binary", func(t *testing.T) {
+		// Devin is a local CLI agent and goes through launchAgentWithGovernance.
 		// We can't test the full launch path here (requires gateway), but we verify
 		// it does NOT return the old cloud-based error.
-		err := runMCPAgentRun([]string{"devin"}, "", false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+		err := runMCPAgentRun([]string{"devin"}, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.NotContains(t, err.Error(), "cloud-based agent")
-	})
-}
-
-func TestSubprocessMCPProxy_ForwardError(t *testing.T) {
-	t.Run("forward returns error when stdin write fails", func(t *testing.T) {
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		require.NoError(t, w.Close()) // close write end so writes fail
-		defer r.Close()
-
-		proxy := &subprocessMCPProxy{
-			command: "echo",
-			args:    []string{"test"},
-			stdin:   w,
-			logger:  slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		}
-
-		_, err = proxy.forward(JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		})
-		require.Error(t, err)
-	})
-}
-
-func TestHttpMCPProxy(t *testing.T) {
-	t.Run("forward proxies to server", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			resp := JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      float64(1),
-				Result:  map[string]interface{}{"status": "ok"},
-			}
-			_ = json.NewEncoder(w).Encode(resp)
-		}))
-		defer server.Close()
-
-		proxy := &httpMCPProxy{
-			url:    server.URL,
-			client: &http.Client{Timeout: 5 * time.Second},
-		}
-
-		resp, err := proxy.forward(JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		})
-		require.NoError(t, err)
-		assert.Equal(t, "2.0", resp.JSONRPC)
-	})
-
-	t.Run("stop is safe to call", func(t *testing.T) {
-		proxy := &httpMCPProxy{
-			url:    "http://localhost:1",
-			client: &http.Client{},
-		}
-		assert.NotPanics(t, func() {
-			proxy.stop()
-		})
 	})
 }
 
@@ -1341,7 +1056,7 @@ func TestMcpStdioCmd_FlagsRegistered(t *testing.T) {
 	cmd := mcpStdioCmd()
 	expectedFlags := []string{
 		constants.Flag.ClientCert, constants.Flag.ClientKey, constants.Flag.CABundle,
-		constants.Flag.GatewayURL, constants.Flag.AppCert, constants.Flag.AppKey,
+		constants.Flag.GatewayURL, constants.Flag.App,
 	}
 	for _, name := range expectedFlags {
 		f := cmd.Flags().Lookup(name)

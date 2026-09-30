@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/pathutil"
@@ -69,6 +70,12 @@ type RuntimeFileService interface {
 
 	// RemoveAll deletes a directory tree. No-op if path doesn't exist.
 	RemoveAll(ctx context.Context, relPath string) error
+
+	// ArchiveRuntime renames the whole runtime directory aside to
+	// .g8e-<MMDDHHMM> rather than deleting it and returns the archive path
+	// ("" if there was no runtime directory). Destructive cleans use this so
+	// nothing is unrecoverable; callers must not RemoveAll the runtime root.
+	ArchiveRuntime(ctx context.Context, now time.Time) (string, error)
 
 	// ReadDir lists directory entries.
 	ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, error)

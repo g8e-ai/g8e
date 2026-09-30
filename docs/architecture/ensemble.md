@@ -119,7 +119,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 The root Docker Compose stack runs `g8ee` as the `ensemble` service in the default profile (`docker compose up -d`). The container image is built from `ensemble/Dockerfile` using Python 3.12-slim in a multi-stage build that compiles in-tree protocol constants and Python packages:
 
-- **Ports**: Exposes container port 8000, published to the host as `${G8E_ENSEMBLE_PORT:-8000}`.
+- **Ports**: Exposes container port 8000, published to the host as port 8000 (a literal in `docker-compose.yml`).
 - **Volumes**:
   - `g8e-ensemble-data` mounted at `/root/.g8e`: Stores the ensemble's mTLS certificate, private key, trusted CA bundle, and pending enrollment state.
   - `g8e-operator-data` mounted read-only at `/operator-state`: Provides bootstrap materials including audit HMAC keys and secret paths at `/operator-state/secrets`.

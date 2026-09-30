@@ -25,6 +25,7 @@ class PlatformComponentKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     PLATFORM_COMPONENT_KIND_DASHBOARD: _ClassVar[PlatformComponentKind]
     PLATFORM_COMPONENT_KIND_ENSEMBLE: _ClassVar[PlatformComponentKind]
     PLATFORM_COMPONENT_KIND_OPERATOR: _ClassVar[PlatformComponentKind]
+    PLATFORM_COMPONENT_KIND_APPLICATION: _ClassVar[PlatformComponentKind]
 
 class PlatformEnrollmentDecision(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -39,6 +40,7 @@ PLATFORM_COMPONENT_KIND_UNSPECIFIED: PlatformComponentKind
 PLATFORM_COMPONENT_KIND_DASHBOARD: PlatformComponentKind
 PLATFORM_COMPONENT_KIND_ENSEMBLE: PlatformComponentKind
 PLATFORM_COMPONENT_KIND_OPERATOR: PlatformComponentKind
+PLATFORM_COMPONENT_KIND_APPLICATION: PlatformComponentKind
 PLATFORM_ENROLLMENT_DECISION_UNSPECIFIED: PlatformEnrollmentDecision
 PLATFORM_ENROLLMENT_DECISION_APPROVE: PlatformEnrollmentDecision
 PLATFORM_ENROLLMENT_DECISION_DENY: PlatformEnrollmentDecision

@@ -36,8 +36,7 @@ class TestValidateJevLiteCoexistence:
     def test_returns_no_errors_for_jev_when_tribunal_disabled(self):
         llm = LLMSettings(
             lite_provider=LLMProvider.JEV,
-            lite_model="jev-latest",
-            jev_api_key="ts_test_key",
+            lite_model="nimble",
             llm_command_gen_enabled=False,
         )
         assert validate_jev_lite_coexistence(llm) == []
@@ -45,8 +44,7 @@ class TestValidateJevLiteCoexistence:
     def test_rejects_jev_when_tribunal_enabled(self):
         llm = LLMSettings(
             lite_provider=LLMProvider.JEV,
-            lite_model="jev-latest",
-            jev_api_key="ts_test_key",
+            lite_model="nimble",
             llm_command_gen_enabled=True,
         )
         errors = validate_jev_lite_coexistence(llm)
@@ -73,8 +71,7 @@ class TestJevGenerativeLiteWarning:
             logging.getLogger("test"),
             LLMSettings(
                 lite_provider=LLMProvider.JEV,
-                lite_model="jev-latest",
-                jev_api_key="ts_test_key",
+                lite_model="nimble",
             ),
         )
         assert len(caplog.records) == 1

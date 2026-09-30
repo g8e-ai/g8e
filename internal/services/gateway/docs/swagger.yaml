@@ -781,23 +781,6 @@ definitions:
     x-enum-varnames:
     - UserStatusActive
     - UserStatusDisabled
-  gateway.AppEnrollResponse:
-    properties:
-      app_cert:
-        type: string
-      app_id:
-        type: string
-      cert_chain:
-        type: string
-      error:
-        type: string
-      expires_at:
-        type: string
-      success:
-        type: boolean
-      trust_bundle:
-        type: string
-    type: object
   models.ActionReceiptRecord:
     properties:
       acting_app_id:
@@ -3831,22 +3814,6 @@ paths:
       summary: Validate operator session binding
       tags:
       - operators
-  /api/v1/pki/apps/delegated:
-    post:
-      consumes:
-      - application/json
-      description: Mints a short-lived delegated credential for an app, binding both
-        app and requestor identities (mTLS-authenticated)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/gateway.AppEnrollResponse'
-      summary: Mint delegated app credential
-      tags:
-      - pki
   /api/v1/pki/certificates/revoke:
     post:
       consumes:

@@ -9,12 +9,8 @@ package eval
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -26,7 +22,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/pkg/certutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
@@ -52,16 +47,6 @@ type inferenceAcceptanceOutputJSON struct {
 	Cases             []inferenceAcceptanceResultJSON `json:"cases"`
 }
 
-type inferenceEvalDeps struct {
-	configLoader     func(string) (*config.Config, error)
-	fileSvcFactory   func(string, *slog.Logger) (fs.RuntimeFileService, error)
-	authLoader       func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
-	clientFactory    func(harnessconfig.Config) (*harnessclient.Client, error)
-	appClientFactory func(harnessconfig.Config) (*harnessclient.Client, error)
-	now              func() time.Time
-	newID            func() string
-}
-
 func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var model string
 	var role string
@@ -71,7 +56,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Inference-only vertical acceptance matrix",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
-				return fmt.Errorf("evaluation: gates inference: --model is required")
+				return fmt.Errorf("evaluation: gates inference: %w", constants.ErrEvaluationModelRequired)
 			}
 			caseIDs, err := parseInferenceAcceptanceCases(casesCSV)
 			if err != nil {
@@ -101,7 +86,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
-			appClient, err := inferenceEvalAppClientFrom(fileSvc, cfg, authContext, deps.clientFactory)
+			appClient, err := inferenceEvalAppClient(fileSvc, cfg, authContext, deps.clientFactory)
 			if err != nil {
 				return fmt.Errorf("evaluation: gates inference: %w", err)
 			}
@@ -175,7 +160,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nPhase 1A inference acceptance: %d passed, %d failed\n", len(cases)-failures, failures)
 			}
 			if failures > 0 {
-				return fmt.Errorf("evaluation: gates inference: %d case(s) failed", failures)
+				return fmt.Errorf("evaluation: gates inference: %w: %d", constants.ErrEvaluationInferenceCasesFailed, failures)
 			}
 			return nil
 		},
@@ -187,7 +172,6 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 }
 
 func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
-	var model string
 	var role string
 	var prompt string
 	var seed int32 = -1
@@ -197,7 +181,7 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Single non-scored governed inference probe",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			model = args[0]
+			model := args[0]
 			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
@@ -218,7 +202,7 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates probe: %w", err)
 			}
-			appClient, err := inferenceEvalAppClientFrom(fileSvc, cfg, authContext, deps.clientFactory)
+			appClient, err := inferenceEvalAppClient(fileSvc, cfg, authContext, deps.clientFactory)
 			if err != nil {
 				return fmt.Errorf("evaluation: gates probe: %w", err)
 			}
@@ -259,7 +243,6 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&model, "model", "", "[DEPRECATED] use positional argument instead")
 	cmd.Flags().StringVar(&role, "role", "primary", "Governed model role: primary, assistant, or lite")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Probe prompt (default: Reply with exactly: probe-ok)")
 	cmd.Flags().Int32Var(&seed, "seed", -1, "Optional deterministic generation seed (omit for provider default)")
@@ -267,7 +250,9 @@ func gatesProbeEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func inferenceEvalAppClientFrom(fileSvc fs.RuntimeFileService, cfg *config.Config, authContext *auth.ClientAuthContext, clientFactory func(harnessconfig.Config) (*harnessclient.Client, error)) (*harnessclient.Client, error) {
+// inferenceEvalAppClient builds the governed-dispatch client that presents the
+// eval runner's own g8e-eval application identity.
+func inferenceEvalAppClient(fileSvc fs.RuntimeFileService, cfg *config.Config, authContext *auth.ClientAuthContext, clientFactory func(harnessconfig.Config) (*harnessclient.Client, error)) (*harnessclient.Client, error) {
 	certFile, keyFile, err := resolveInferenceProbeAppCredentials(fileSvc, cfg)
 	if err != nil {
 		return nil, err
@@ -320,122 +305,25 @@ func parseInferenceAcceptanceCases(raw string) ([]evaluation.InferenceAcceptance
 		caseIDs = append(caseIDs, evaluation.InferenceAcceptanceCaseID(part))
 	}
 	if len(caseIDs) == 0 {
-		return nil, fmt.Errorf("evaluation: inference accept: no cases selected")
+		return nil, fmt.Errorf("evaluation: inference accept: %w", constants.ErrEvaluationNoCasesSelected)
 	}
 	return caseIDs, nil
 }
 
-func inferenceEvalAppClient(cfg *config.Config, fileSvc fs.RuntimeFileService, authContext *auth.ClientAuthContext, deps inferenceEvalDeps) (*harnessclient.Client, error) {
-	certFile, keyFile, err := resolveInferenceProbeAppCredentials(fileSvc, cfg)
-	if err != nil {
-		return nil, err
-	}
-	trustBundle := cfg.ResolvedTrustBundlePath()
-	appConfig := harnessconfig.Config{
-		MTLSBaseURL: cfg.OperatorHTTPURL(),
-		Auth: harnessconfig.Auth{
-			ClientCert: certFile,
-			ClientKey:  keyFile,
-			CABundle:   trustBundle,
-		},
-		UserID: authContext.UserID,
-	}
-	return deps.appClientFactory(appConfig)
-}
-
-// resolveInferenceProbeAppCredentials picks the delegated g8ee app credential
-// the formation runner presents for mTLS inference dispatch. A candidate is
-// only usable when its leaf certificate still chains to the gateway's
-// current trust bundle: the gateway mints a brand-new PKI hierarchy on every
-// fresh boot (see [PKI] Generating root CA in gateway startup logs), so a
-// certificate copied out of a prior ensemble enrollment silently stops being
-// trusted once the gateway restarts. Presenting it anyway does not fail
-// clearly — the gateway's TLS layer rejects the handshake before the
-// evaluation ever reaches the ensemble, and every assignment in the run
-// comes back as an opaque PROVIDER_FAILED. Checking trust here turns that
-// into one actionable error instead.
-//
-// When no candidate is usable, this self-enrolls "g8ee" as a delegated app
-// through auth.EnrollAgentApp — the same call `mcp agent run` uses — instead
-// of asking the operator to hand-copy a cert out of the ensemble container.
-// It reuses the CLI's already-authenticated session (this command cannot
-// reach this point without one), so the minted cert is trusted by the
-// gateway's current PKI by construction.
+// resolveInferenceProbeAppCredentials loads the managed g8e-eval application identity.
+// If the identity does not exist, has expired, or is untrusted by the gateway's current PKI,
+// it fails closed with an actionable error directing the operator to run
+// './g8e auth enroll app g8e-eval'.
 func resolveInferenceProbeAppCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) (string, string, error) {
-	issuedAppCert := filepath.Join(cfg.Paths.Infra.AppCertDir, "g8ee"+constants.FileExtCert)
-	issuedAppKey := filepath.Join(cfg.Paths.Infra.AppCertDir, "g8ee"+constants.FileExtKey)
-	managedAppCert := cfg.AppCertFile("g8ee")
-	managedAppKey := cfg.AppKeyFile("g8ee")
-	pairs := []struct{ cert, key string }{
-		{os.Getenv(string(constants.EnvVar.AppCert)), os.Getenv(string(constants.EnvVar.AppKey))},
-		{issuedAppCert, issuedAppKey},
-		{managedAppCert, managedAppKey},
+	if fileSvc == nil || cfg == nil {
+		return "", "", constants.ErrInternal
 	}
-	trustBundlePath := cfg.ResolvedTrustBundlePath()
-	trustBundle, err := os.ReadFile(trustBundlePath)
-	if err != nil {
-		return "", "", fmt.Errorf("evaluation: inference probe: read trust bundle %s: %w", trustBundlePath, err)
+
+	if _, err := auth.LoadAppIdentity(fileSvc, cfg, constants.EvaluationAppName); err != nil {
+		return "", "", fmt.Errorf("evaluation: app credential %q not found or invalid; run './g8e auth enroll app %s' to enroll: %w", constants.EvaluationAppName, constants.EvaluationAppName, err)
 	}
-	trustPool := x509.NewCertPool()
-	if !trustPool.AppendCertsFromPEM(trustBundle) {
-		return "", "", fmt.Errorf("evaluation: inference probe: trust bundle %s: %w", trustBundlePath, constants.ErrEmptyTrustBundle)
-	}
-	var staleCandidate string
-	for _, pair := range pairs {
-		if pair.cert == "" || pair.key == "" {
-			continue
-		}
-		if _, err := os.Stat(pair.cert); err != nil {
-			continue
-		}
-		if _, err := os.Stat(pair.key); err != nil {
-			continue
-		}
-		certPEM, err := os.ReadFile(pair.cert)
-		if err != nil {
-			continue
-		}
-		leaf, err := certutil.ParseCertFromPEM(certPEM)
-		if err != nil {
-			continue
-		}
-		if _, err := leaf.Verify(x509.VerifyOptions{
-			Roots:         trustPool,
-			Intermediates: trustPool,
-			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-		}); err != nil {
-			staleCandidate = pair.cert
-			continue
-		}
-		return pair.cert, pair.key, nil
-	}
-	var enrollErr error
-	if fileSvc != nil {
-		// EnrollAgentApp skips re-issuing when a cert already sits at
-		// managedAppCert (checkExistingAppCert only checks expiry and SPIFFE
-		// SAN, not trust-chain freshness). If that's the candidate we just
-		// found stale, clear it first so self-enrollment actually mints a
-		// fresh one instead of handing back the same untrusted cert.
-		if staleCandidate == managedAppCert {
-			if certRel, relErr := fileSvc.RelFromAbs(managedAppCert); relErr == nil {
-				_ = fileSvc.Remove(context.Background(), certRel)
-			}
-		}
-		var certFile, keyFile string
-		if _, certFile, keyFile, enrollErr = auth.EnrollAgentApp(fileSvc, cfg, "g8ee"); enrollErr == nil {
-			return certFile, keyFile, nil
-		}
-	}
-	switch {
-	case staleCandidate != "" && enrollErr != nil:
-		return "", "", fmt.Errorf("%w: %s was not issued by the gateway's current trust bundle (%s), and self-enrolling a replacement failed: %w", constants.ErrEvaluationAppCredentialStale, staleCandidate, trustBundlePath, enrollErr)
-	case staleCandidate != "":
-		return "", "", fmt.Errorf("%w: %s was not issued by the gateway's current trust bundle (%s); the gateway's PKI was regenerated since this app cert was copied out of the ensemble container. Re-run: docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.crt %s && docker cp g8e-ensemble:/root/.g8e/pki/issued/apps/g8ee.key %s", constants.ErrEvaluationAppCredentialStale, staleCandidate, trustBundlePath, issuedAppCert, issuedAppKey)
-	case enrollErr != nil:
-		return "", "", fmt.Errorf("%w: self-enrolling the delegated g8ee app credential failed (%w); run './g8e auth enroll user' to establish a CLI session, or set G8E_APP_CERT/G8E_APP_KEY", constants.ErrEvaluationAppCredentialMissing, enrollErr)
-	default:
-		return "", "", fmt.Errorf("%w: set G8E_APP_CERT/G8E_APP_KEY, or run './g8e auth enroll user' so this command can self-enroll the delegated g8ee app credential", constants.ErrEvaluationAppCredentialMissing)
-	}
+
+	return cfg.AppCertFile(constants.EvaluationAppName), cfg.AppKeyFile(constants.EvaluationAppName), nil
 }
 
 func parseInferenceProbeRole(role string) (models.InferenceModelRole, error) {

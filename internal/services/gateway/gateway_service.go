@@ -412,6 +412,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		SigningKey:             actuatorPriv,
 		KeyID:                  actuatorKeyID,
 		DownstreamURL:          cfg.Gateway.MCPDownstreamURL,
+		DownstreamCmd:          cfg.Gateway.MCPDownstreamCmd,
+		DownstreamArgs:         cfg.Gateway.MCPDownstreamArgs,
 		DBService:              docStore,
 		SessionValidator:       cmdSvc,
 		AuditLogger:            auditLogger,
@@ -538,6 +540,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 			spectatorCfg.PublicBaseURL = cfg.Gateway.PublicBaseURL
 		}
 		spectatorCfg.TrustedProxyCIDRs = cfg.Gateway.PublicSpectatorTrustedProxyCIDRs
+		spectatorCfg.AllowContainerBind = cfg.Gateway.PublicSpectatorAllowContainerBind
 		spectator, err := NewPublicSpectatorRuntime(spectatorCfg, b.fileSvc, logger)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: initialize public spectator: %w", err)
@@ -671,9 +674,6 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		envProc = ls.cmdSvc
 	}
 
-	// Initialize AppEnrollmentService for external app enrollment
-	appEnrollment := NewAppEnrollmentService(ls.docStore, pki, logger)
-
 	providerObservationDeps := providerObservationControllerDeps(logger, ls.responder, ls.fileSvc)
 	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
@@ -697,13 +697,12 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		Logger: logger,
 		Auth:   auth,
 		PKIControllerDeps: PKIControllerDeps{
-			Cfg:           cfg,
-			Logger:        logger,
-			PKI:           pki,
-			AppEnrollment: appEnrollment,
-			Registration:  reg,
-			Responder:     ls.responder,
-			G8eReader:     g8eReader,
+			Cfg:          cfg,
+			Logger:       logger,
+			PKI:          pki,
+			Registration: reg,
+			Responder:    ls.responder,
+			G8eReader:    g8eReader,
 		},
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:            cfg,
@@ -1365,6 +1364,11 @@ func (ls *GatewayModeService) closeResources() {
 	if ls.db != nil {
 		if err := ls.db.Close(); err != nil {
 			ls.logger.Error("Database close error", "state", string(constants.ConnectionStateError), "error", err)
+		}
+	}
+	if ls.mcpGateway != nil {
+		if err := ls.mcpGateway.Close(); err != nil {
+			ls.logger.Error("MCP gateway close error", "state", string(constants.ConnectionStateError), "error", err)
 		}
 	}
 }

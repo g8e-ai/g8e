@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.constants import JEV_DEFAULT_ENDPOINT, JEV_DEFAULT_MODEL, LLMProvider
+from app.constants import JEV_DEFAULT_MODEL, LLMProvider
 from app.decision.factory import (
     clear_decision_provider_cache,
     get_decision_provider,
@@ -35,8 +35,7 @@ def _jev_settings(**overrides) -> LLMSettings:
     base = {
         "lite_provider": LLMProvider.JEV,
         "lite_model": JEV_DEFAULT_MODEL,
-        "jev_api_key": "ts_test_key",
-        "jev_endpoint": JEV_DEFAULT_ENDPOINT,
+        "ollama_endpoint": "http://localhost:11434",
     }
     base.update(overrides)
     return LLMSettings(**base)
@@ -52,12 +51,12 @@ class TestDecisionProviderFactory:
         with pytest.raises(ConfigurationError, match="lite_provider is not 'jev'"):
             get_decision_provider(settings)
 
-    def test_get_decision_provider_caches_by_endpoint_and_api_key(self):
+    def test_get_decision_provider_caches_by_endpoint(self):
         first = get_decision_provider(_jev_settings())
         second = get_decision_provider(_jev_settings())
         assert first is second
 
-        different_key = get_decision_provider(_jev_settings(jev_api_key="ts_other_key"))
+        different_key = get_decision_provider(_jev_settings(ollama_endpoint="http://other-host:11434"))
         assert different_key is not first
 
     @pytest.mark.asyncio

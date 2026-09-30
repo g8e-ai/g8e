@@ -43,7 +43,7 @@ type ScenarioArtifacts struct {
 	Gold  ScenarioArtifactPair
 }
 
-// BuildScenarioCatalog materializes the frozen 25-scenario catalog and
+// BuildScenarioCatalog materializes the frozen 26-scenario catalog and
 // its content-addressed fixture artifacts.
 func BuildScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
 	blueprints := scenarioBlueprints()
@@ -204,8 +204,8 @@ func ValidateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog, artifact
 	if err := ValidateScenarioCatalogDigest(catalog); err != nil {
 		return err
 	}
-	if len(catalog.GetScenarios()) != 25 {
-		return fmt.Errorf("evaluation: validate scenario catalog: expected 25 scenarios, got %d", len(catalog.GetScenarios()))
+	if len(catalog.GetScenarios()) != 26 {
+		return fmt.Errorf("evaluation: validate scenario catalog: expected 26 scenarios, got %d", len(catalog.GetScenarios()))
 	}
 	seen := make(map[string]struct{}, len(catalog.GetScenarios()))
 	for _, scenario := range catalog.GetScenarios() {
@@ -297,7 +297,7 @@ func validateCategoryCounts(scenarios []*evalv1.EvaluationScenarioDefinition) er
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS:    4,
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION:    3,
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_VERIFICATION:          2,
-		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY:       2,
+		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY:       3,
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_RECOVERY:              2,
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE:        1,
 	}

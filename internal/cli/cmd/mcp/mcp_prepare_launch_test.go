@@ -40,7 +40,7 @@ func TestPrepareAgentLaunch_Claude_VerifyTrue(t *testing.T) {
 	t.Setenv("HOME", tmpHome)
 	createFakeAgentBinary(t, "claude")
 
-	configPath, cleanup, launchArgs, err := prepareAgentLaunch("claude", true)
+	configPath, cleanup, launchArgs, err := prepareAgentLaunch("claude", "claude", true)
 	require.NoError(t, err)
 	defer func() {
 		if cleanup != nil {
@@ -60,7 +60,7 @@ func TestPrepareAgentLaunch_Codex_VerifyTrue(t *testing.T) {
 	t.Setenv("HOME", tmpHome)
 	createFakeAgentBinary(t, "codex")
 
-	configPath, cleanup, launchArgs, err := prepareAgentLaunch("codex", true)
+	configPath, cleanup, launchArgs, err := prepareAgentLaunch("codex", "codex", true)
 	require.NoError(t, err)
 	defer func() {
 		if cleanup != nil {
@@ -79,7 +79,7 @@ func TestPrepareAgentLaunch_Goose_VerifyTrue(t *testing.T) {
 	t.Setenv("HOME", tmpHome)
 	createFakeAgentBinary(t, "goose")
 
-	configPath, cleanup, launchArgs, err := prepareAgentLaunch("goose", true)
+	configPath, cleanup, launchArgs, err := prepareAgentLaunch("goose", "goose", true)
 	require.NoError(t, err)
 	defer func() {
 		if cleanup != nil {
@@ -103,7 +103,7 @@ func TestPrepareAgentLaunch_Gemini_VerifyTrue(t *testing.T) {
 	t.Setenv("HOME", tmpHome)
 	createFakeAgentBinary(t, "gemini")
 
-	configPath, cleanup, launchArgs, err := prepareAgentLaunch("gemini", true)
+	configPath, cleanup, launchArgs, err := prepareAgentLaunch("gemini", "gemini", true)
 	require.NoError(t, err)
 	defer func() {
 		if cleanup != nil {
@@ -132,7 +132,7 @@ func TestPrepareAgentLaunch_Devin_VerifyTrue(t *testing.T) {
 	t.Setenv("HOME", tmpHome)
 	createFakeAgentBinary(t, "devin")
 
-	configPath, cleanup, launchArgs, err := prepareAgentLaunch("devin", true)
+	configPath, cleanup, launchArgs, err := prepareAgentLaunch("devin", "devin", true)
 	require.NoError(t, err)
 	defer func() {
 		if cleanup != nil {
@@ -161,7 +161,7 @@ func TestPrepareAgentLaunch_VerifyFalse_SkipsVerification(t *testing.T) {
 	t.Setenv("HOME", tmpHome)
 	createFakeAgentBinary(t, "claude")
 
-	configPath, cleanup, launchArgs, err := prepareAgentLaunch("claude", false)
+	configPath, cleanup, launchArgs, err := prepareAgentLaunch("claude", "claude", false)
 	require.NoError(t, err)
 	defer func() {
 		if cleanup != nil {
@@ -181,7 +181,7 @@ func TestPrepareAgentLaunch_UnsupportedAgent(t *testing.T) {
 	t.Setenv("HOME", tmpHome)
 	createFakeAgentBinary(t, "cursor")
 
-	_, _, _, err := prepareAgentLaunch("cursor", true)
+	_, _, _, err := prepareAgentLaunch("cursor", "cursor", true)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
@@ -196,7 +196,7 @@ func TestPrepareAgentLaunch_AgentNotInPath(t *testing.T) {
 	originalPath := os.Getenv("PATH")
 	t.Setenv("PATH", "")
 
-	_, _, _, err := prepareAgentLaunch("nonexistent-agent-xyz", true)
+	_, _, _, err := prepareAgentLaunch("nonexistent-agent-xyz", "nonexistent-agent-xyz", true)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotInPath)
 

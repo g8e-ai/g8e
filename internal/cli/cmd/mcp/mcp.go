@@ -8,7 +8,6 @@
 package mcp
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -25,7 +24,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
@@ -36,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/mcptransport"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	g8econfig "github.com/g8e-ai/g8e/v2/internal/config"
@@ -43,7 +42,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 )
@@ -74,27 +72,13 @@ func Cmd() *cobra.Command {
 }
 
 // JSONRPCRequest represents a JSON-RPC 2.0 request.
-type JSONRPCRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      interface{}     `json:"id"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
-}
+type JSONRPCRequest = mcptransport.JSONRPCRequest
 
 // JSONRPCResponse represents a JSON-RPC 2.0 response.
-type JSONRPCResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *RPCError   `json:"error,omitempty"`
-}
+type JSONRPCResponse = mcptransport.JSONRPCResponse
 
 // RPCError represents a JSON-RPC error object.
-type RPCError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
-}
+type RPCError = mcptransport.JSONRPCError
 
 // ToolsListResult is the result payload for tools/list.
 type ToolsListResult struct {
@@ -106,12 +90,6 @@ type Tool struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description"`
 	InputSchema *mcp.InputSchema `json:"inputSchema"`
-}
-
-// CallToolRequest is the params object for tools/call.
-type CallToolRequest struct {
-	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 
 // MCPToolsCapability declares the tools capability for the MCP initialize handshake.
@@ -165,13 +143,17 @@ discovery and health checks only.
 
 This command is launched automatically by 'g8e mcp agent run'. When invoked
 directly (e.g. from an IDE MCP config), credentials resolve in order:
-  1. CLI flags (--client-cert/--client-key, --app-cert/--app-key, --ca-bundle, --gateway-url)
-  2. G8E_* environment variables (injected by 'agent run')
+  1. --app <name>: the owner-approved application identity enrolled under that name
+  2. --client-cert/--client-key flags
   3. Enrolled CLI credentials on disk
+
+The CA bundle defaults to the managed trust bundle (override with --ca-bundle) and
+the gateway URL defaults to the local gateway (override with --gateway-url).
 
 This command is a credential CONSUMER, not an enrollment UI. It does NOT enroll,
 open a browser, install OS trust, or run a passkey ceremony. If credentials are
-absent, run 'g8e auth enroll user' or 'g8e mcp agent run' first to obtain them.
+absent, run 'g8e auth enroll user', 'g8e auth enroll app <name>', or
+'g8e mcp agent run' first to obtain them.
 
 Cert and key must be supplied as a pair per tier; supplying only one half fails closed.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -182,8 +164,7 @@ Cert and key must be supplied as a pair per tier; supplying only one half fails 
 	cmd.Flags().String(constants.Flag.ClientKey, "", "Path to CLI client key (mTLS)")
 	cmd.Flags().String(constants.Flag.CABundle, "", "Path to gateway CA bundle PEM")
 	cmd.Flags().String(constants.Flag.GatewayURL, "", "Gateway MCP endpoint URL (https only, e.g. https://g8e.local:8443/mcp)")
-	cmd.Flags().String(constants.Flag.AppCert, "", "Path to delegated app certificate (requires --app-key)")
-	cmd.Flags().String(constants.Flag.AppKey, "", "Path to delegated app key (requires --app-cert)")
+	cmd.Flags().String(constants.Flag.App, "", "Name of enrolled platform application to authenticate session")
 	return cmd
 }
 
@@ -232,8 +213,8 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 // ─── stdio: governed proxy, full mTLS + CLI session to gateway ────────────────
 
 // gatewayConn is the mTLS connection to the gateway established at startup.
-// For delegated app credentials, identity is cryptographically bound in the
-// cert's URI SANs — the cert IS the session. For CLI credentials (the enrolled
+// For platform-enrolled application credentials, identity is cryptographically
+// bound in the cert's URI SANs — the cert IS the session. For CLI credentials (the enrolled
 // CLI cert on disk), the cert's URI SAN is a CLI SPIFFE URI that the gateway
 // validates against the CLI session ID, so cliSessionID must be sent as the
 // X-G8E-CLI-Session-ID header on every proxied request.
@@ -242,7 +223,7 @@ type gatewayConn struct {
 	gatewayURL string
 
 	// cliSessionID is set when the resolved credential tier is a CLI cert (client
-	// flags, client env, or enrolled CLI disk cert). When non-empty, it is attached
+	// flags or enrolled CLI disk cert). When non-empty, it is attached
 	// as X-G8E-CLI-Session-ID on every proxied request so the gateway routes the
 	// request through handleCLIAuth instead of falling through to handleAppAuth
 	// (which would reject a CLI cert SAN) and returning 401.
@@ -257,18 +238,17 @@ type gatewayConn struct {
 }
 
 // stdioCredentialFlags holds the credential overrides parsed from 'mcp stdio' flags.
-// Empty fields mean "not supplied" and fall through to G8E_* env vars, then to the
+// Empty fields mean "not supplied" and fall through to the next tier, ending at the
 // enrolled CLI credentials on disk.
 type stdioCredentialFlags struct {
 	ClientCert string
 	ClientKey  string
 	CABundle   string
 	GatewayURL string
-	AppCert    string
-	AppKey     string
+	App        string
 }
 
-// parseStdioCredentialFlags reads the six credential flags from the cobra command.
+// parseStdioCredentialFlags reads the credential flags from the cobra command.
 // The zero value is valid (all fields empty), so tests that do not exercise flags
 // pass stdioCredentialFlags{}.
 func parseStdioCredentialFlags(cmd *cobra.Command) (stdioCredentialFlags, error) {
@@ -286,19 +266,16 @@ func parseStdioCredentialFlags(cmd *cobra.Command) (stdioCredentialFlags, error)
 	if f.GatewayURL, err = cmd.Flags().GetString(constants.Flag.GatewayURL); err != nil {
 		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.GatewayURL, err)
 	}
-	if f.AppCert, err = cmd.Flags().GetString(constants.Flag.AppCert); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.AppCert, err)
-	}
-	if f.AppKey, err = cmd.Flags().GetString(constants.Flag.AppKey); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.AppKey, err)
+	if f.App, err = cmd.Flags().GetString(constants.Flag.App); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.App, err)
 	}
 	return f, nil
 }
 
 // resolveCredentialPair picks the first complete (cert+key) pair from the ordered
 // tiers. Exactly one half of any tier present returns ErrIncompleteCredentialPair.
-// The name of the winning tier is returned so callers can distinguish delegated
-// app credentials (which carry identity in the cert URI SANs) from CLI credentials
+// The name of the winning tier is returned so callers can distinguish application
+// credentials (which carry identity in the cert URI SANs) from CLI credentials
 // (which require an X-G8E-CLI-Session-ID header for gateway auth).
 func resolveCredentialPair(tiers []struct{ cert, key, name string }) (string, string, string, error) {
 	for _, t := range tiers {
@@ -313,12 +290,12 @@ func resolveCredentialPair(tiers []struct{ cert, key, name string }) (string, st
 }
 
 // isCLICredentialTier reports whether the resolved credential tier carries a CLI
-// SPIFFE URI SAN (validated by the gateway via handleCLIAuth) rather than a
-// delegated app SAN (validated via handleAppAuth). CLI tiers require the
+// SPIFFE URI SAN (validated by the gateway via handleCLIAuth) rather than an
+// application SAN (validated via handleAppAuth). CLI tiers require the
 // X-G8E-CLI-Session-ID header; app tiers do not.
 func isCLICredentialTier(tierName string) bool {
 	switch tierName {
-	case "client flags", "client env", "CLI disk":
+	case "client flags", "CLI disk":
 		return true
 	default:
 		return false
@@ -326,18 +303,22 @@ func isCLICredentialTier(tierName string) bool {
 }
 
 // buildGatewayConn constructs a gatewayConn. Credentials resolve in order:
-// 1. --app-cert/--app-key flags  2. G8E_APP_CERT/G8E_APP_KEY env
-// 3. --client-cert/--client-key flags  4. G8E_CLIENT_CERT/G8E_CLIENT_KEY env
-// 5. enrolled CLI cert/key on disk (cfg.CLICertFile/cfg.CLIKeyFile)
+// 1. --app <name>: the platform-enrolled application's managed cert/key
+// 2. --client-cert/--client-key flags
+// 3. enrolled CLI cert/key on disk (cfg.CLICertFile/cfg.CLIKeyFile)
 // Cert and key are resolved as pairs per tier; supplying only one half fails closed.
-// CA bundle resolves: --ca-bundle flag → G8E_CA_BUNDLE env → auth.ReadTrustBundle.
-// Gateway URL resolves: --gateway-url flag → G8E_GATEWAY_URL env → default https://g8e.local:8443/mcp.
+// CA bundle resolves: --ca-bundle flag → auth.ReadTrustBundle.
+// Gateway URL resolves: --gateway-url flag → default https://g8e.local:8443/mcp.
 func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags stdioCredentialFlags) (*gatewayConn, error) {
+	var appCert, appKey string
+	if flags.App != "" {
+		appCert = cfg.AppCertFile(flags.App)
+		appKey = cfg.AppKeyFile(flags.App)
+	}
+
 	certFile, keyFile, tierName, err := resolveCredentialPair([]struct{ cert, key, name string }{
-		{flags.AppCert, flags.AppKey, "app flags"},
-		{os.Getenv(string(constants.EnvVar.AppCert)), os.Getenv(string(constants.EnvVar.AppKey)), "app env"},
+		{appCert, appKey, "app"},
 		{flags.ClientCert, flags.ClientKey, "client flags"},
-		{os.Getenv(string(constants.EnvVar.ClientCert)), os.Getenv(string(constants.EnvVar.ClientKey)), "client env"},
 		{cfg.CLICertFile(), cfg.CLIKeyFile(), "CLI disk"},
 	})
 	if err != nil {
@@ -345,12 +326,8 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 	}
 
 	var caBundleBytes []byte
-	caPath := flags.CABundle
-	if caPath == "" {
-		caPath = os.Getenv(string(constants.EnvVar.CABundle))
-	}
-	if caPath != "" {
-		caBundleBytes, err = readCABundle(fileSvc, caPath)
+	if flags.CABundle != "" {
+		caBundleBytes, err = readCABundle(fileSvc, flags.CABundle)
 	} else {
 		caBundleBytes, err = auth.ReadTrustBundle(fileSvc, cfg)
 	}
@@ -359,9 +336,6 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 	}
 
 	gatewayURL := flags.GatewayURL
-	if gatewayURL == "" {
-		gatewayURL = os.Getenv(string(constants.EnvVar.GatewayURL))
-	}
 	if gatewayURL == "" {
 		gatewayURL = fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
 	} else {
@@ -396,18 +370,18 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 		gatewayURL: gatewayURL,
 	}
 
-	// CLI-tier certs (client flags, client env, or enrolled CLI disk cert) carry a
+	// CLI-tier certs (client flags or enrolled CLI disk cert) carry a
 	// CLI SPIFFE URI SAN that the gateway validates against the CLI session ID via
 	// handleCLIAuth. The gateway only routes to handleCLIAuth when the X-G8E-CLI-
 	// Session-ID header is present; without it, the request falls through to
-	// handleAppAuth (which rejects a CLI SAN) and returns 401. Delegated app certs
-	// (app flags / app env) carry an app SAN and authenticate via handleAppAuth
+	// handleAppAuth (which rejects a CLI SAN) and returns 401. Platform-enrolled
+	// application certs (--app) carry an app SAN and authenticate via handleAppAuth
 	// without any header, so we only attach the session ID for CLI tiers.
 	//
 	// Best-effort: tests and some edge cases use synthetic certs without enrolled
 	// credentials on disk. If LoadCredentials fails, leave cliSessionID empty and
 	// let the gateway reject the request — this preserves existing behavior for
-	// delegated app certs and fails closed for CLI certs without a session.
+	// application certs and fails closed for CLI certs without a session.
 	if isCLICredentialTier(tierName) {
 		if creds, cerr := auth.LoadCredentials(fileSvc, cfg); cerr == nil && creds != nil && creds.CLISessionID != "" {
 			session.cliSessionID = creds.CLISessionID
@@ -440,13 +414,6 @@ func readCABundle(fileSvc fs.RuntimeFileService, caPath string) ([]byte, error) 
 	return os.ReadFile(caPath)
 }
 
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
 func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) error {
 	cfg, err := shared.LoadConfig("")
 	if err != nil {
@@ -461,13 +428,13 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func(string
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	// Parse credential flags from the stdio subcommand. Empty fields fall through
-	// to G8E_* env vars, then to the enrolled CLI credentials on disk.
+	// to the enrolled CLI credentials on disk.
 	credFlags, err := parseStdioCredentialFlags(cmd)
 	if err != nil {
 		return err
 	}
 
-	// Build the mTLS gateway connection once. Identity is in the delegated cert's
+	// Build the mTLS gateway connection once. Identity is in the application cert's
 	// URI SANs — no session object or headers. All proxy calls reuse this connection.
 	conn, err := buildGatewayConn(fileSvc, cfg, credFlags)
 	if err != nil {
@@ -479,7 +446,7 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func(string
 	)
 
 	// Populate SSE fields for L3 approval notifications. The SSE client uses
-	// the CLI cert (not the delegated/app cert) because the gateway's SSE auth
+	// the CLI cert (not the application cert) because the gateway's SSE auth
 	// middleware validates CLI session ownership. The gateway URL is stripped
 	// of the /mcp suffix to get the base URL for SSE endpoints.
 	if creds, err := auth.LoadCredentials(fileSvc, cfg); err == nil && creds != nil && creds.CLISessionID != "" {
@@ -493,53 +460,17 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func(string
 		}
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
-	encoder := json.NewEncoder(os.Stdout)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		var req JSONRPCRequest
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			logger.Error("Failed to parse JSON-RPC request", "error", err)
-			sendError(encoder, nil, constants.JSONRPCErrorCodeParseError, constants.JSONRPCErrorMessageParseError)
-			continue
-		}
-
-		// MCP notifications are fire-and-forget. They must not receive a
-		// response — drop them silently.
-		if req.ID == nil && req.Method != "" {
-			logger.Debug("Dropping MCP notification", "method", req.Method)
-			continue
-		}
-
-		// The initialize handshake is answered locally so the agent gets an
-		// immediate response without a gateway round-trip.
+	handler := mcptransport.HandlerFunc(func(ctx context.Context, req mcptransport.JSONRPCRequest) (mcptransport.JSONRPCResponse, error) {
 		if req.Method == "initialize" {
-			handleInitialize(encoder, req.ID)
-			continue
+			return mcptransport.NewInitializeResponse(req.ID, "g8e", "dev"), nil
 		}
-
 		logger.Info("Proxying MCP request", "method", req.Method, "id", req.ID)
+		return proxySessionToGatewayWithRetryContext(ctx, conn, req, logger)
+	})
 
-		resp, err := proxySessionToGatewayWithRetryContext(cmd.Context(), conn, req, logger)
-		if err != nil {
-			logger.Error("Failed to proxy to gateway", "error", err)
-			sendError(encoder, req.ID, -32603, fmt.Sprintf("gateway proxy error: %v", err))
-			continue
-		}
-
-		if err := encoder.Encode(resp); err != nil {
-			logger.Error("Failed to encode response", "error", err)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error("Error reading stdin", "error", err)
-		return fmt.Errorf("mcp: read stdin: %w", err)
+	if err := mcptransport.ServeStdio(cmd.Context(), os.Stdin, os.Stdout, logger, handler); err != nil {
+		logger.Error("MCP stdio proxy terminated with error", "error", err)
+		return fmt.Errorf("mcp: serve stdio: %w", err)
 	}
 
 	logger.Info("g8e MCP governance proxy shutting down")
@@ -564,7 +495,7 @@ func proxySessionToGateway(session *gatewayConn, req JSONRPCRequest) (JSONRPCRes
 	// gateway validates against the CLI session ID in handleCLIAuth. That path is
 	// only reached when X-G8E-CLI-Session-ID is present; without it the gateway
 	// falls through to handleAppAuth (which rejects a CLI SAN) and returns 401.
-	// Delegated app certs carry identity in their URI SANs and need no header.
+	// Application certs carry identity in their URI SANs and need no header.
 	if session.cliSessionID != "" {
 		httpReq.Header.Set(constants.HeaderCLISessionID, session.cliSessionID)
 	}
@@ -652,33 +583,6 @@ func extractTxHashFromApprovalURL(approvalURL string) string {
 		path = path[:idx]
 	}
 	return path
-}
-
-// proxyToGateway is a low-level helper used by the L1-only governance proxy
-// and test code. It does not attach CLI session headers; use
-// proxySessionToGateway when a bound session is available.
-func proxyToGateway(client *http.Client, gatewayURL string, req JSONRPCRequest) (JSONRPCResponse, error) {
-	reqBody, err := json.Marshal(req)
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: marshal request: %w", err)
-	}
-
-	httpResp, err := client.Post(gatewayURL, "application/json", strings.NewReader(string(reqBody)))
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: post request: %w", err)
-	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(httpResp.Body)
-		return JSONRPCResponse{}, fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, httpResp.StatusCode, string(body))
-	}
-
-	var resp JSONRPCResponse
-	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: decode response: %w", err)
-	}
-	return resp, nil
 }
 
 func isL3ApprovalResponse(resp JSONRPCResponse) bool {
@@ -816,11 +720,6 @@ func agentCmd() *cobra.Command {
 		Long: `Configure and integrate g8e with popular AI agent binaries (Claude, Codex,
 Cursor, Devin, etc.) for seamless MCP tool access.
 
-Subcommands:
-  list    List all supported agent binaries
-  show    Print MCP client configuration for a specific agent
-  run     Launch an agent or wrap an external MCP server with g8e governance
-
 For tools that don't support the agent wrapper, use 'g8e mcp agent show <agent>'
 to display MCP client configurations (g8e.local mTLS, IP Address mTLS, Stdio
 Transport), then copy the generated JSON to your agent's MCP settings file.`,
@@ -906,7 +805,7 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 	cmd.Println()
 
 	cmd.Println("┌─ Stdio Transport ────────────────────────────────────────────────────────────")
-	cmd.Println("│ Use: Direct native tool access without gateway")
+	cmd.Println("│ Use: Stdio bridge to gateway with L1–L5; requires running gateway + enrolled credentials")
 	cmd.Println("│ Apps: Claude Code, Codex, Goose, Gemini CLI")
 	cmd.Println("│ Requires: g8e binary in PATH or full path in config")
 	cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
@@ -942,13 +841,12 @@ func agentRunCmdWithConfig(
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	enrollerFactory authcmd.EnrollerFactory,
 ) *cobra.Command {
-	var downstreamURL string
 	var verify bool
 
 	cmd := &cobra.Command{
-		Use:   "run [--url <url>] [-- <command> [args...]]",
-		Short: "Govern any MCP server via g8e reverse proxy",
-		Long: `Launch an AI agent or wrap an MCP server with g8e governance.
+		Use:   "run <agent> [-- <args...>]",
+		Short: "Launch an AI agent with g8e governance",
+		Long: `Launch an AI agent configured to use g8e as its governed MCP provider.
 
 LAUNCH AN AGENT (one command does everything):
 
@@ -976,13 +874,11 @@ LAUNCH AN AGENT (one command does everything):
   Extra args are forwarded to the agent:
     g8e mcp agent run claude -- -p "fix the failing tests"
 
-WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
-
-  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
-  g8e mcp agent run --url http://localhost:3000
-
-  Intercepts all tools/call requests, screens them through L1 doctrine
-  (MITRE ATT&CK threat detection), and blocks violations before forwarding.
+EXTERNAL MCP SERVERS:
+  To govern external third-party MCP servers (stdio subprocess or HTTP), attach
+  them directly to the gateway via downstream egress flags:
+    g8e serve gateway --mcp-downstream-cmd npx --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/path'
+    g8e serve gateway --mcp-downstream-url http://localhost:3000
 
 AUDIT TRAIL:
   When launching an agent, the agent is automatically enrolled as an external app
@@ -994,12 +890,15 @@ AUDIT TRAIL:
     g8e gw data audit list --operator-session-id spiffe://g8e.local/app/claude
     g8e gw data audit summary --operator-session-id spiffe://g8e.local/app/claude
 
-DELEGATED CREDENTIAL MODEL:
-  g8e uses a delegated credential model for agent identity. When an agent is
-  launched, it receives a short-lived mTLS certificate that carries both
-  identities:
+APPLICATION ENROLLMENT MODEL:
+  Each agent is an application enrolled through the owner-approved platform
+  enrollment protocol (the same one g8ed and g8ee use). The first launch submits an
+  enrollment request and waits; approve it in the Console or with
+  'g8e auth enroll approve <request-id> --yes'. The launcher never approves its own
+  request. The approved mTLS certificate (7-day validity, revocable by request ID)
+  carries both identities:
   - App SPIFFE ID: spiffe://g8e.local/app/<agent-name> (the agent's policy identity)
-  - Requestor User ID: spiffe://g8e.local/user/<id> (the human who launched the agent)
+  - Approving User ID: spiffe://g8e.local/user/<id> (the human who approved the agent)
 
   Both identities are cryptographically bound in the certificate's URI SANs and
   presented at the TLS handshake. No trusted identity headers are used; the
@@ -1018,103 +917,12 @@ the gateway and use 'g8e mcp stdio'.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPAgentRun(args, downstreamURL, verify, fileSvcFactory, enrollerFactory)
+			return runMCPAgentRun(args, verify, fileSvcFactory, enrollerFactory)
 		},
 	}
 
-	cmd.Flags().StringVar(&downstreamURL, "url", "", "URL of the downstream MCP server")
 	cmd.Flags().BoolVar(&verify, "verify", true, "Verify tool interception config before launching agent (use --verify=false to skip)")
 	return cmd
-}
-
-// mcpDownstreamProxy abstracts the downstream MCP server (HTTP or subprocess).
-type mcpDownstreamProxy interface {
-	forward(req JSONRPCRequest) (JSONRPCResponse, error)
-	stop()
-}
-
-// httpMCPProxy forwards MCP requests to an HTTP downstream server.
-type httpMCPProxy struct {
-	url    string
-	client *http.Client
-}
-
-func (d *httpMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error) {
-	return proxyToGateway(d.client, d.url, req)
-}
-
-func (d *httpMCPProxy) stop() {}
-
-// subprocessMCPProxy manages an MCP subprocess connected via stdio.
-type subprocessMCPProxy struct {
-	command string
-	args    []string
-	logger  *slog.Logger
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	scanner *bufio.Scanner
-	mu      sync.Mutex
-}
-
-func (d *subprocessMCPProxy) start() error {
-	d.cmd = exec.Command(d.command, d.args...) //nolint:gosec
-	setSysProcAttr(d.cmd)
-
-	stdin, err := d.cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-	}
-	d.stdin = stdin
-
-	stdout, err := d.cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-	}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-	d.scanner = scanner
-	d.cmd.Stderr = os.Stderr
-
-	if err := d.cmd.Start(); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-	}
-	d.logger.Info("Downstream MCP subprocess started", "command", d.command, "pid", d.cmd.Process.Pid)
-	return nil
-}
-
-func (d *subprocessMCPProxy) stop() {
-	if d.stdin != nil {
-		_ = d.stdin.Close()
-	}
-	if d.cmd != nil && d.cmd.Process != nil {
-		_ = d.cmd.Process.Kill()
-		_ = d.cmd.Wait()
-	}
-}
-
-func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
-	}
-	if _, err := fmt.Fprintf(d.stdin, "%s\n", reqBytes); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
-	}
-
-	if !d.scanner.Scan() {
-		if err := d.scanner.Err(); err != nil {
-			return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-		}
-		return JSONRPCResponse{}, fmt.Errorf("%w: subprocess closed", constants.ErrProcessInterrupted)
-	}
-	var resp JSONRPCResponse
-	if err := json.Unmarshal(d.scanner.Bytes(), &resp); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-	return resp, nil
 }
 
 // startGatewayIfNeeded starts the gateway if it is not already running and
@@ -1263,14 +1071,23 @@ func writeConfigWithBackup(configDir, configPath string, configJSON []byte) (str
 	return configPath, nil, nil
 }
 
+// stdioServerArgs returns the argv that makes an agent launch the stdio bridge
+// under the enrolled application identity appName. The app name is the only
+// credential selector passed to the agent child; the bridge loads the managed
+// cert/key for that name itself.
+func stdioServerArgs(appName string) []string {
+	return []string{"mcp", "stdio", "--" + constants.Flag.App, appName}
+}
+
 // WriteAgentConfig writes the appropriate MCP config file for the agent.
+// The g8e MCP server entry launches the stdio bridge as application appName.
 // Returns the path to the config file and a cleanup function (if any).
-func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
+func WriteAgentConfig(agentID, binaryPath, appName string) (string, func(), error) {
 	config := agentMCPConfig{
 		MCPServers: map[string]agentMCPServer{
 			"g8e": {
 				Command: binaryPath,
-				Args:    []string{"mcp", "stdio"},
+				Args:    stdioServerArgs(appName),
 			},
 		},
 	}
@@ -1278,7 +1095,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 	// Get home directory: prefer os.UserHomeDir() (cross-platform), fall back to HOME env
 	homeDir, err := os.UserHomeDir()
 	if err != nil || homeDir == "" {
-		homeDir = os.Getenv("HOME")
+		homeDir = os.Getenv(string(constants.EnvVar.Home))
 		if homeDir == "" {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrMCPGetHomeDirectory, err)
 		}
@@ -1322,7 +1139,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		}
 		settings.MCPServers["g8e"] = agentMCPServer{
 			Command: binaryPath,
-			Args:    []string{"mcp", "stdio"},
+			Args:    stdioServerArgs(appName),
 		}
 
 		// Disable ALL built-in tools by setting tools.core to an empty array.
@@ -1357,7 +1174,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 				Type:        constants.MCPTransportStdio,
 				Name:        constants.MCPServerNameG8E,
 				Cmd:         binaryPath,
-				Args:        []string{"mcp", "stdio"},
+				Args:        stdioServerArgs(appName),
 				Description: constants.MCPG8EDescription,
 				Timeout:     constants.GooseExtTimeout,
 			},
@@ -1422,9 +1239,9 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 }
 
 // launchAgentWithGovernance starts the gateway if needed, performs CLI auth,
-// then launches the requested agent with 'g8e mcp stdio' as its sole MCP server.
-// The authenticated CLI session is propagated to the stdio subprocess via G8E_*
-// environment variables so it never needs to re-read credentials from disk.
+// then launches the requested agent with 'g8e mcp stdio --app <agent>' as its sole
+// MCP server. The stdio bridge loads the agent's managed application credentials by
+// name; no credential material or paths are passed through the environment.
 func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
 	if err := startGatewayIfNeeded(fileSvcFactory); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
@@ -1459,13 +1276,21 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		return fmt.Errorf("%w: enrollment returned empty identity", constants.ErrEnrollmentFailed)
 	}
 
-	// Enroll the agent as an external app for audit trail attribution
-	appID, appCert, appKey, err := auth.EnrollAgentApp(fileSvc, cfg, strings.ToLower(agentID))
+	// Ensure the agent application is enrolled with the gateway
+	agentAppName := strings.ToLower(agentID)
+	appClient, err := auth.NewAppPlatformEnrollmentClient(agentAppName, fileSvc, cfg, slog.Default())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 
-	_, cleanup, launchArgs, err := prepareAgentLaunch(agentID, verify)
+	if !appClient.HasValidIdentity() {
+		fmt.Fprintf(os.Stderr, "[g8e] Enrolling application %q...\n", agentAppName)
+		if _, err := appClient.Enroll(context.Background(), os.Stderr); err != nil {
+			return fmt.Errorf("%w: failed to enroll agent app %q: %w", constants.ErrEnrollmentFailed, agentAppName, err)
+		}
+	}
+
+	_, cleanup, launchArgs, err := prepareAgentLaunch(agentID, agentAppName, verify)
 	if err != nil {
 		return err
 	}
@@ -1473,12 +1298,13 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		defer cleanup()
 	}
 
-	return launchAgentProcess(agentID, extraArgs, launchArgs, cfg, appID, appCert, appKey)
+	return launchAgentProcess(agentID, extraArgs, launchArgs)
 }
 
 // prepareAgentLaunch validates the agent binary, writes the agent config, computes launch
-// args, and optionally verifies tool interception. Returns configPath, cleanup func, launchArgs.
-func prepareAgentLaunch(agentID string, verify bool) (string, func(), []string, error) {
+// args, and optionally verifies tool interception. The stdio bridge the agent spawns runs
+// as application appName. Returns configPath, cleanup func, launchArgs.
+func prepareAgentLaunch(agentID, appName string, verify bool) (string, func(), []string, error) {
 	agentBin, err := exec.LookPath(agentID)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("%w: %q not found in PATH — is it installed?", constants.ErrAgentNotInPath, agentID)
@@ -1490,12 +1316,12 @@ func prepareAgentLaunch(agentID string, verify bool) (string, func(), []string, 
 		return "", nil, nil, fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
-	configPath, cleanup, err := WriteAgentConfig(agentID, binaryPath)
+	configPath, cleanup, err := WriteAgentConfig(agentID, binaryPath, appName)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("mcp: write agent config: %w", err)
 	}
 
-	launchArgs, err := agentLaunchArgs(agentID, configPath, binaryPath)
+	launchArgs, err := agentLaunchArgs(agentID, configPath, binaryPath, appName)
 	if err != nil {
 		if cleanup != nil {
 			cleanup()
@@ -1516,8 +1342,9 @@ func prepareAgentLaunch(agentID string, verify bool) (string, func(), []string, 
 	return configPath, cleanup, launchArgs, nil
 }
 
-// launchAgentProcess spawns the agent binary with governance environment variables.
-func launchAgentProcess(agentID string, extraArgs, launchArgs []string, cfg *config.Config, appID, appCert, appKey string) error {
+// launchAgentProcess spawns the agent binary. The agent inherits the caller's
+// environment unchanged; governance identity is carried by the generated MCP config.
+func launchAgentProcess(agentID string, extraArgs, launchArgs []string) error {
 	agentBin, err := exec.LookPath(agentID)
 	if err != nil {
 		return fmt.Errorf("%w: %q not found in PATH — is it installed?", constants.ErrAgentNotInPath, agentID)
@@ -1531,28 +1358,13 @@ func launchAgentProcess(agentID string, extraArgs, launchArgs []string, cfg *con
 	agentCmd.Stderr = os.Stderr
 	// Don't set process group for interactive agents - it breaks terminal handling
 
-	// Propagate the delegated credential to the 'g8e mcp stdio' subprocess that
-	// the agent will spawn. Identity (both app and human) is cryptographically bound
-	// in the delegated cert's URI SANs — no session headers needed.
-	// The stdio proxy will automatically fall back to IP if g8e.local DNS fails.
-	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
-	agentCmd.Env = append(os.Environ(),
-		string(constants.EnvVar.ClientCert)+"="+cfg.CLICertFile(),
-		string(constants.EnvVar.ClientKey)+"="+cfg.CLIKeyFile(),
-		string(constants.EnvVar.CABundle)+"="+cfg.ResolvedTrustBundlePath(),
-		string(constants.EnvVar.GatewayURL)+"="+gatewayURL,
-		string(constants.EnvVar.AppID)+"="+appID,
-		string(constants.EnvVar.AppCert)+"="+appCert,
-		string(constants.EnvVar.AppKey)+"="+appKey,
-	)
-
 	return agentCmd.Run()
 }
 
 // agentLaunchArgs returns the argv to pass to the agent binary for a governed session.
 // Governance is enforced by making g8e the only MCP server in the agent's config.
 // For agents that support native tool disabling via CLI flags, those are added here.
-func agentLaunchArgs(agentID, mcpConfigPath, binaryPath string) ([]string, error) {
+func agentLaunchArgs(agentID, mcpConfigPath, binaryPath, appName string) ([]string, error) {
 	switch strings.ToLower(agentID) {
 	case "claude", "codex":
 		// --mcp-config          load g8e as the only MCP server
@@ -1569,10 +1381,10 @@ func agentLaunchArgs(agentID, mcpConfigPath, binaryPath string) ([]string, error
 		// extension, which provides shell/file tools). --with-extension loads
 		// g8e as the sole MCP server for the session, since --no-profile also
 		// skips extensions defined in config.yaml.
-		return []string{"session", "--no-profile", "--with-extension", binaryPath + " mcp stdio"}, nil
+		return []string{"session", "--no-profile", "--with-extension", binaryPath + " " + strings.Join(stdioServerArgs(appName), " ")}, nil
 	case "gemini":
-		// Gemini uses `gemini mcp add` to register servers, no config file needed
-		// Governance enforced by g8e being the only MCP server
+		// Gemini reads the g8e MCP server and the empty tools.core list from the
+		// settings.json written by WriteAgentConfig, so no launch flags are needed.
 		return []string{}, nil
 	case "devin":
 		// Devin CLI reads from ~/.config/devin/config.json written by WriteAgentConfig
@@ -1741,131 +1553,19 @@ func verifyGeminiInterception(configPath string) error {
 	return nil
 }
 
-func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
-	if downstreamURL == "" && len(args) == 0 {
-		return fmt.Errorf("specify an agent name or MCP server\n\nLaunch an agent with governance:\n  g8e mcp agent run claude\n\nWrap an MCP server subprocess:\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /\n\nWrap an HTTP MCP server:\n  g8e mcp agent run --url http://localhost:3000")
+func runMCPAgentRun(args []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
+	if len(args) == 0 {
+		return fmt.Errorf("specify an agent name to launch with g8e governance\n\nUsage:\n  g8e mcp agent run <agent> [-- <args...>]\n\nSupported agents:\n  claude, codex, devin, gemini, goose")
 	}
 
-	// Named agent → launch it with g8e as its governed MCP provider.
-	if downstreamURL == "" && len(args) > 0 {
-		firstArg := strings.ToLower(args[0])
-		for _, a := range getSupportedAgents() {
-			if strings.ToLower(a.ID) == firstArg {
-				return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory, enrollerFactory)
-			}
+	firstArg := strings.ToLower(args[0])
+	for _, a := range getSupportedAgents() {
+		if strings.ToLower(a.ID) == firstArg {
+			return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory, enrollerFactory)
 		}
 	}
 
-	// MCP server (--url or -- command) → run as L1 governance reverse proxy.
-	return runMCPProxy(args, downstreamURL)
-}
-
-// runMCPProxy runs an L1 governance reverse proxy in front of a downstream MCP
-// server (HTTP via --url, or subprocess via -- command).
-func runMCPProxy(args []string, downstreamURL string) error {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
-	var ds mcpDownstreamProxy
-	if downstreamURL != "" {
-		ds = &httpMCPProxy{
-			url:    downstreamURL,
-			client: &http.Client{Timeout: 30 * time.Second},
-		}
-	} else {
-		proc := &subprocessMCPProxy{
-			command: args[0],
-			args:    args[1:],
-			logger:  logger,
-		}
-		if err := proc.start(); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-		}
-		ds = proc
-	}
-	defer ds.stop()
-
-	l1 := governance.NewL1Doctrine()
-	logger.Info("g8e MCP governance proxy started")
-
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-	encoder := json.NewEncoder(os.Stdout)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		var req JSONRPCRequest
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			sendError(encoder, nil, constants.JSONRPCErrorCodeParseError, constants.JSONRPCErrorMessageParseError)
-			continue
-		}
-
-		// Drop notifications.
-		if req.ID == nil && req.Method != "" {
-			continue
-		}
-
-		logger.Info("g8e intercepted", "method", req.Method, "id", req.ID)
-
-		if req.Method == "tools/call" {
-			var callParams CallToolRequest
-			if err := json.Unmarshal(req.Params, &callParams); err != nil {
-				sendError(encoder, req.ID, -32600, "invalid tools/call params")
-				continue
-			}
-
-			argsJSON := "{}"
-			if len(callParams.Arguments) > 0 {
-				argsJSON = string(callParams.Arguments)
-			}
-
-			signals, err := l1.AnalyzeMCPArguments(argsJSON)
-			if err != nil {
-				logger.Warn("L1 analysis error", "tool", callParams.Name, "error", err)
-			}
-
-			var violations []string
-			for _, sig := range signals {
-				if sig.BlockRecommended {
-					violations = append(violations, fmt.Sprintf("%s [%s, MITRE: %s]",
-						sig.Indicator, sig.Category, sig.MitreAttack))
-				}
-			}
-
-			if len(violations) > 0 {
-				logger.Warn("g8e L1 BLOCKED", "tool", callParams.Name, "violations", violations)
-				sendSuccess(encoder, req.ID, mcp.CallToolResult{
-					IsError: true,
-					Content: []mcp.TextContent{{
-						Type: "text",
-						Text: fmt.Sprintf("g8e governance blocked tool call %q:\n- %s",
-							callParams.Name, strings.Join(violations, "\n- ")),
-					}},
-				})
-				continue
-			}
-
-			logger.Info("g8e L1 approved", "tool", callParams.Name)
-		}
-
-		resp, err := ds.forward(req)
-		if err != nil {
-			if req.Method == "initialize" {
-				handleInitialize(encoder, req.ID)
-				continue
-			}
-			sendError(encoder, req.ID, -32603, fmt.Sprintf("downstream error: %v", err))
-			continue
-		}
-		if err := encoder.Encode(resp); err != nil {
-			logger.Error("Failed to encode response", "error", err)
-		}
-	}
-
-	return scanner.Err()
+	return fmt.Errorf("%w: %q (supported agents: claude, codex, devin, gemini, goose)", constants.ErrAgentNotFound, args[0])
 }
 
 func extractURLFromText(text string) string {

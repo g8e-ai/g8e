@@ -99,6 +99,10 @@ func TestEvalCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 		{name: "gates inference", args: []string{"gates", "inference", "--model", "qwen3:4b"}},
 		{name: "gates probe", args: []string{"gates", "probe", "qwen3:4b", "--prompt", "hi"}},
 
+		// backup
+		{name: "backup", args: []string{"backup", "--output-dir", "out"}},
+		{name: "restore", args: []string{"restore", "snapshot-dir"}},
+
 		// observer
 		{name: "observer run", args: []string{"observer", "run"}},
 		{name: "observer verify", args: []string{"observer", "verify", "attempt-1"}},

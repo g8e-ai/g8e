@@ -3,7 +3,7 @@ doc_id: evals
 title: Evaluation Programs
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 version: v2.2.4
 owners:
   - internal/services/evaluation/
@@ -93,6 +93,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-EVAL-EVID-02 | Provider-boundary observation windows (ingested from Observer Operator results) MUST be stored under the Gateway volume at `data/inference/provider-observer/windows/`. Model provenance attestation windows (ingested from Provenance Operator results) MUST be stored under `data/inference/model-provenance/windows/`. |
 | INV-EVAL-EVID-03 | Campaign run state is run-scoped: definitions, frozen scenario artifacts, lifecycle, assignment, trace, and aggregate records MUST all persist in `.g8e/data/eval/campaigns/<campaign-id>/` and `.g8e/data/eval/runs/<run-id>/`. |
 | INV-EVAL-EVID-04 | Public-safe campaign projections MUST omit principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields. Private prompts, traces other than bounded `model_response`, `failure_output`, and `role_transcripts`, execution identifiers, and artifact locations MUST NOT cross the public boundary. |
+| INV-EVAL-EVID-05 | `g8e eval backup` MUST write only to a destination outside the runtime directory, copy only `.g8e/data/eval/` and `.g8e/eval/` (excluding run `lease.json` and `active-run.json`), and record a SHA-256 manifest. Automatic post-run backup MUST NOT alter a run's result: its failure is a warning, never a run failure. `g8e eval restore` MUST verify every file against that manifest, and confine every write to those two trees, before writing; it MUST NOT overwrite differing evidence without `--overwrite`. |
 
 ### Verification Posture (`INV-EVAL-VERIF`)
 
@@ -111,8 +112,9 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Campaign controller and publication coordinator | `internal/services/evaluation/` | `g8e eval runs start`, `resume`, `verify`, `publish` |
 | Provider-boundary observation | `internal/services/operatorcapability/provider_boundary_observer.go`, `internal/services/inference/provider_observer/` | Observer Operator enrollment and telemetry sampling |
 | Model provenance attestation | `internal/services/operatorcapability/provenance_operator.go`, `internal/services/inference/model_provenance/` | Provenance Operator enrollment and weight hashing |
+| Data Operator selection | `internal/services/operatorcapability/data_operator.go` | `SelectDataOperator` resolves the stack's `data-operator` |
 | CLI command tree and subcommands | `internal/cli/cmd/eval/` | `./g8e eval --help` and per-subcommand help |
-| Campaign definitions and frozen artifacts | `eval/examples/` (checked-in templates), `.g8e/data/eval/campaigns/` (runtime) | `g8e eval campaigns create` and `g8e eval campaigns show` |
+| Campaign definitions and frozen artifacts | `eval/` (checked-in program data), `examples/eval/` (templates), `.g8e/data/eval/campaigns/` (runtime) | `g8e eval campaigns create` and `g8e eval campaigns show` |
 | Model inventory and rollout intake | `eval/base-model-inventory.json`, `eval/rollout-intake-hf.json` | `g8e eval models list` and registry inspection |
 | Protocol contracts and envelopes | `protocol/proto/g8e/eval/v1/` | `make proto` generates Go, Python, TypeScript bindings |
 
@@ -150,7 +152,7 @@ Both programs persist canonical, content-addressed run evidence beneath `.g8e/da
 
 ### CLI surface
 
-The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across eight top-level subcommands:
+The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across ten top-level subcommands:
 
 | Subcommand | Purpose |
 | --- | --- |
@@ -162,6 +164,8 @@ The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation comma
 | `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, add, remove, smoke) |
 | `g8e eval gates …` | Pre-campaign acceptance gates (chat, inference, probe) |
 | `g8e eval observer …` | Provider-boundary hardware observer (run, verify) |
+| `g8e eval backup` | Copy evaluation evidence to a directory outside `.g8e/` (default `eval/backups`) |
+| `g8e eval restore [snapshot-dir]` | Verify a backup snapshot and restore it into `.g8e/` (default: newest in `eval/backups`) |
 
 Use `./g8e eval --help` as the command-surface reference. On `g8e eval runs start`, verification and witness flags are optional by default; use `--require-observation`, `--require-provenance`, or the `--require-witness` preset when witness requirements are part of acceptance scope. On `g8e eval rollout run`, strict witness verification defaults true; `--gate-smoke` and `--promote-on-pass` provide fast candidate screening.
 
@@ -169,19 +173,15 @@ Use `./g8e eval --help` as the command-surface reference. On `g8e eval runs star
 
 The Phase 1 suite is `core-execution-boundary@1.0.0`. It requires doctrine posture and does not use g8ee, external model providers, model judges, campaigns, scheduling, or synthetic simulators.
 
-**Run:** Start and enroll the unified stack with one active remote Operator, then execute:
+**Run:** Start and enroll the unified stack, then execute:
 
 ```bash
 ./g8e eval boundary run
 ```
 
-Pin an exact Operator session when multiple are available:
+The suite targets the stack's `data-operator` and ignores every other enrolled Operator. It takes no session flag.
 
-```bash
-./g8e eval boundary run --operator-session <session-id>
-```
-
-The suite performs two attempts: the allowed attempt writes one run-specific marker through the authenticated Gateway command ingress and the bound remote Operator; the prohibited equivalent traverses the same ingress and must be rejected by L1 without side effect. Required verdicts cover independent effect counts, target identity, terminal receipt status, receipt durability, deterministic protocol-chain validity, rejection, absence of completed alternative execution, and Gateway L1 attribution.
+The suite performs two attempts: the allowed attempt writes one run-specific marker through the authenticated Gateway command ingress and the `data-operator`; the prohibited equivalent traverses the same ingress and must be rejected by L1 without side effect. Required verdicts cover independent effect counts, target identity, terminal receipt status, receipt durability, deterministic protocol-chain validity, rejection, absence of completed alternative execution, and Gateway L1 attribution.
 
 **Verify and inspect:** Each run persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`. Re-run verification without executing new mutations:
 
@@ -202,12 +202,14 @@ Evaluation model campaigns score real models through the production g8ee `POST /
 
 | Session | Capability flag | Host | Role |
 | --- | --- | --- |
-| **Data Operator** | `inference_enabled=false` | Campaign host (Docker) | Governed tool/filesystem/process boundary for model-originated host actions |
+| **Data Operator** | role `data`, hostname `data-operator` | Campaign host (Docker) | Governed tool/filesystem/process boundary for model-originated host actions. The only data Operator evaluations consider; other enrolled data Operators are ignored. |
 | **Inference Operator** | `inference_enabled=true` | Campaign host (Docker) | Governed L4/L5 inference Policy Execution Point; sole scored path to the approved Ollama provider |
 | **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host (where Ollama/GPU runs) | Read-only GPU and system RAM sampling at the provider execution boundary |
 | **Provenance Operator** | `provenance_operator_enabled=true` | Model storage site (where weight blobs live) | Independent SHA-256 attestation of model manifests and weight blobs |
 
 Scored inference and provider maintenance never call Ollama directly from g8ee or the campaign CLI. The Gateway routes inference envelopes to the exact Inference Operator session. Tool intents route to the exact Data Operator session, observation commands to the exact Observer Operator session (when enabled), and provenance commands to the exact Provenance Operator session (when enabled). Campaign-host `--ollama-endpoint` and `G8E_OLLAMA_ENDPOINT` overrides are not accepted; the Inference Operator's enrolled `runtime_config` determines Ollama access.
+
+**Data Operator binding:** A CLI session can be bound to many Operators (`g8e operator bind`), and the Gateway accepts any bound Operator session as a request's operator identity, not only the primary one. Scored runs and `gates chat` send tool intents as the `data-operator`, so it must be one of the CLI session's bound sessions. When it is not, they issue one bind call for the still-active bound sessions plus the `data-operator`; `--no-auto-bind` turns that off and fails with `ErrDataOperatorNotBound` instead. No eval command takes an Operator session flag: the `data-operator` is identified by its hostname, and the Inference Operator by its `inference_enabled` capability.
 
 **Model inventory and rollout intake:** Model campaigns bind scored inference to frozen `served_model_tag` and `model_digest` pairs in the campaign registry. The checked-in genesis inventory (`eval/base-model-inventory.json`) is a reference snapshot; live provider runs should re-freeze digests before execution.
 
@@ -217,13 +219,13 @@ After pulling, `g8e eval models freeze` discovers live provider inventory throug
 
 `g8e eval models add` inserts or replaces one variant and recomputes the registry digest. When `--digest` is omitted, `add` derives a placeholder digest that lacks attestation authority; re-freeze from the provider before scored runs. `g8e eval models remove` deletes one variant and recomputes the same values. `g8e eval models import` copies selected variants from the catalog into the runtime registry.
 
-**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model on all 25 catalog scenarios, each under only the roles that perform that task in g8ee: 10 bounded classification, verification, and output-analysis scenarios run under `lite`; 12 tool-loop, policy, and recovery scenarios run under `primary` and `assistant`; `route-primary-ownership` and `final-response-diagnosis` run under `primary`; and `route-handoff-assistant` runs under `assistant`. This yields 37 scored assignments per model.
+**Two-tier rollout qualification:** Standard homogeneous campaigns evaluate each candidate model on all 26 catalog scenarios, each under only the roles that perform that task in g8ee: 10 bounded classification, verification, and output-analysis scenarios run under `lite`; 13 tool-loop, policy, and recovery scenarios run under `primary` and `assistant`; `route-primary-ownership` and `final-response-diagnosis` run under `primary`; and `route-handoff-assistant` runs under `assistant`. This yields 39 scored assignments per model.
 
 To accelerate high-throughput qualification, `g8e eval rollout run` supports a two-tier screening pipeline:
 
 1. **Tier 1 — Fast Smoke Gate** (`--gate-smoke`): Executes 5 high-discriminative scenarios under their eligible roles (8 assignments per model). Scenarios exercise syntax and tool execution, investigation and diagnostic reasoning, dissent and safety compliance, multi-step remediation, and fast-path direct instruction response. Requires 100% pass status on witness and verification gates.
 
-2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 37-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
+2. **Tier 2 — Comprehensive Qualification** (`--promote-on-pass`): Automatically promotes Tier 1 candidates into the full 39-assignment matrix. Discards non-viable Tier 1 failures early, saving 45+ minutes GPU residency per candidate.
 
 ```bash
 ./g8e eval rollout run --gate-smoke --promote-on-pass
@@ -245,7 +247,7 @@ A formation contains primary, assistant, and lite model bindings, executed in `l
 
 | Runner | Execution | Grading | Telemetry |
 | --- | --- | --- | --- |
-| `g8ee` (default) | Each role is one g8ee `POST /api/v1/chat` call, the same pipeline homogeneous assignments use, with real tool calls against the bound Data Operator and simulated files materialized first. The assignment ID is constant; each role's evaluation attempt ID is role-qualified (`<attempt>:lite`, `:assistant`, `:primary`). Each role's message carries every prior role's output. | `GradeHeterogeneousScenario`: every catalog criterion per role (grade IDs role-qualified), plus one pipeline-scoped `heterogeneous-pipeline` grade; `decomposed_scores` populated. | Tokens, generation duration, TTFT, and provider attempt IDs from each role's trace. Per-attempt witness windows apply exactly as for homogeneous assignments. No formation-level `PeakVRAMMiB` or storage attestation digest. |
+| `g8ee` (default) | Each role is one g8ee `POST /api/v1/chat` call, the same pipeline homogeneous assignments use, with real tool calls against the bound Data Operator and simulated files materialized first. The assignment ID is constant; each role's evaluation attempt ID is role-qualified (`<attempt>:lite`, `:assistant`, `:primary`). Each role's message carries every prior role's output. Executes under the governed `FormationRunner` with storage-side provenance attestation and co-resident allocation/release. | `GradeHeterogeneousScenario`: every catalog criterion per role (grade IDs role-qualified), plus one pipeline-scoped `heterogeneous-pipeline` grade; `decomposed_scores` populated. | Full formation witness evidence: peak VRAM (max across all per-attempt observer windows), storage attestation digest. Tokens, generation duration, TTFT, and provider attempt IDs from each role's trace. Per-attempt witness windows apply exactly as for homogeneous assignments. |
 | `direct` | Roles dispatch straight to the Inference Operator after storage-side provenance attestation, each bracketed by provider-boundary observation, with mutation candidates routed through the governed policy gate. | Single completion grade; no `decomposed_scores`. | Full formation witness evidence: peak VRAM, observer and provenance digests. |
 
 Each g8ee-routed role trace is persisted inside the assignment's formation run evidence (`FormationRunEvidence.Result.Roles[].Trace`), not the per-assignment trace store.
@@ -278,9 +280,22 @@ The Observer has no Ollama management capability. Consecutive scored assignments
 
 **Storage layout:** Native run evidence (`report.json`, `verification.json`, digest-named artifacts) persists under `.g8e/data/eval/runs/<run-id>/` owned by `g8e eval boundary run` and `g8e eval boundary verify`. Campaign definitions and frozen scenario artifacts persist under `.g8e/data/eval/campaigns/<campaign-id>/`. Campaign run state and results persist under `.g8e/data/eval/runs/<run-id>/` (campaign-scoped lifecycle, assignment, trace, and aggregate records). Provider observation windows ingested from Observer Operator persist under the Gateway volume at `data/inference/provider-observer/windows/`. Model provenance attestation windows ingested from Provenance Operator persist under `data/inference/model-provenance/windows/`.
 
+**Backup and restore:** Host evidence survives `docker compose down -v` and `./g8e docker clean`, which destroy only the Docker volumes, but `.g8e/` is still the single copy. `g8e eval backup` writes a new `eval-backup-<UTC timestamp>/` snapshot beneath `--output-dir`, which defaults to `eval/backups/` under the project root (git-ignored). Any directory outside `.g8e/` is accepted; the command rejects destinations inside it, including through symlinks. The snapshot mirrors `data/eval/` and `eval/` and carries an `eval-backup.json` manifest with a SHA-256 per file, written last so an interrupted backup is never restorable. Transient process state (`lease.json`, `active-run.json`) is not copied. The destructive commands `docker clean`, `docker reset`, `docker init --clean`, `gw clean`, and `gw reset` offer this same snapshot before wiping (`--skip-backup` opts out).
+
+**Automatic backup:** `g8e eval runs start` (and therefore `g8e eval rollout run`) and `g8e eval runs resume` snapshot into `eval/backups/` when they finish, after verification and whether the run succeeded, failed, or was cancelled. A snapshot identical to the newest complete one is discarded rather than kept, so repeated resumes of an unchanged run do not accumulate copies. A backup failure is reported as a warning on stderr and never changes the run's result or exit status. Pass `--no-backup` to skip it. Snapshots are never pruned automatically.
+
+```bash
+./g8e eval backup                                       # eval/backups/
+./g8e eval backup --output-dir ~/g8e-eval-backups
+./g8e eval restore                                      # newest snapshot in eval/backups/
+./g8e eval restore ~/g8e-eval-backups/eval-backup-<timestamp>
+```
+
+`g8e eval restore` verifies every file against the manifest, rejects manifest paths outside the two evidence trees, and only then writes. Files already identical are skipped; if any existing file differs, nothing is written unless `--overwrite` is passed. Restore repopulates host evidence only. It does not back up or recreate the Gateway volume (PKI, owner and Operator identities, mirror, observation and provenance windows); after enrolling a fresh stack, run `./g8e public restore --queue` to rebuild the Gateway mirror from the restored host evidence.
+
 Native verification is owned by `g8e eval boundary verify`. Campaign verification is owned by `g8e eval runs verify`, with `--require-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing.
 
-Formation verification branches on the persisted evidence, not on a flag. When every role in the formation run evidence carries a trace, the verifier checks each role trace's digest and regrades from those traces with `GradeHeterogeneousScenario`; stored grades must match by grade ID and criterion ID, so a tampered grade for one role cannot hide behind another role's identical criterion. Direct-dispatch evidence keeps the completion-grade recompute and formation witness checks (`VerifyFormationWitnessEvidence`). Both paths run the per-attempt observation and provenance checks over the result's model inference records.
+Formation verification branches on the persisted evidence, not on a flag. When every role in the formation run evidence carries a trace, the verifier checks each role trace's digest and regrades from those traces with `GradeHeterogeneousScenario`; stored grades must match by grade ID and criterion ID, so a tampered grade for one role cannot hide behind another role's identical criterion. Direct-dispatch evidence undergoes the completion-grade recompute and full formation witness checks (`VerifyFormationWitnessEvidence`). Both paths run `VerifyFormationWitnessEvidence` for all witness evidence, plus the per-attempt observation and provenance checks over the result's model inference records.
 
 **Public spectator projection:** The checked-in evaluation explorer reads canonical native and campaign projections from persisted runs. A public-safe projector omits principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields before records enter the signed public feed. Native verification remains on the owner path; mirror availability is not verification evidence. See [Public Spectator Architecture](./public_spectator.md).
 

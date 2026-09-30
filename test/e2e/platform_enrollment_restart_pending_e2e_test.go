@@ -26,7 +26,7 @@ import (
 // than creating a duplicate. The user starts the full stack (docker compose
 // up) with the owner bootstrapped and no approvals, waits for the operator's
 // pending request to appear, restarts the operator container
-// (docker compose restart g8e-operator), then runs:
+// (docker compose restart g8e-data-operator), then runs:
 //
 //	./g8e test e2e --run TestPlatformEnrollment_RestartDuringPending
 //
@@ -64,7 +64,7 @@ func TestPlatformEnrollment_RestartDuringPending(t *testing.T) {
 	if operatorReq == nil {
 		t.Fatalf("TestPlatformEnrollment_RestartDuringPending requires a pending operator enrollment request. " +
 			"Start the full stack without approving enrollments (docker compose down -v && docker compose up -d), " +
-			"restart the operator (docker compose restart g8e-operator), " +
+			"restart the operator (docker compose restart g8e-data-operator), " +
 			"then run: ./g8e test e2e --run TestPlatformEnrollment_RestartDuringPending")
 	}
 	require.NotEmpty(t, operatorReq.RequestID, "resumed operator request must have a non-empty request ID")

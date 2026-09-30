@@ -60,6 +60,11 @@ const removedAppEnrollPath = "/api/v1/pki/apps/enroll"
 // regression test can prove the route is gone.
 const removedOperatorEnrollPath = "/api/v1/auth/operator/enroll"
 
+// removedDelegatedAppEnrollPath is the path of the removed delegated app
+// enrollment route. The constant was deleted when delegated credentials
+// were consolidated into owner-approved platform application enrollment.
+const removedDelegatedAppEnrollPath = "/api/v1/pki/apps/delegated"
+
 // extractURISANs returns the URI SAN strings from a PEM-encoded certificate.
 func extractURISANs(t *testing.T, certPEM string) []string {
 	t.Helper()
@@ -137,30 +142,32 @@ func TestPlatformEnrollmentBypassClosed_OperatorEnrollRouteRemoved(t *testing.T)
 		"no operator certificate must be issued from the removed route")
 }
 
-// TestPlatformEnrollmentBypassClosed_ReservedNameRejectedByDelegatedPath
-// proves that the retained authenticated delegated app enrollment path
-// rejects the reserved platform component names (g8ed, g8ee, g8eo). Those
-// identities are issued only through the owner-approved platform enrollment
-// protocol. This closes the reserved-name issuance bypass (invariant 3) on
-// the one path that remains.
-func TestPlatformEnrollmentBypassClosed_ReservedNameRejectedByDelegatedPath(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
+// TestPlatformEnrollmentBypassClosed_DelegatedAppEnrollRouteRemoved proves
+// that the delegated app enrollment route is gone. The route is removed from
+// both routers and no longer classified, so the auth middleware fail-closes
+// it to RouteAuthMTLS. A POST with no client certificate returns 401 — no
+// certificate is issued. This closes the delegated app issuance bypass.
+func TestPlatformEnrollmentBypassClosed_DelegatedAppEnrollRouteRemoved(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	router := h.buildPublicRouter()
 
-	reservedNames := []string{"g8ed", "g8ee", "g8eo"}
-	for _, name := range reservedNames {
-		t.Run(name, func(t *testing.T) {
-			resp, err := c.appEnrollment.EnrollDelegatedApp(AppEnrollRequest{
-				CSR:     testutil.GenerateTestCSRP256(t, name),
-				AppName: name,
-				AppType: "mcp-client",
-			}, "user-approver-1")
-			require.NoError(t, err)
-			assert.False(t, resp.Success, "reserved name %q must be rejected", name)
-			assert.Contains(t, resp.Error, constants.ErrPlatformEnrollmentReservedIdentity.Error(),
-				"reserved name %q must be rejected with ErrPlatformEnrollmentReservedIdentity", name)
-			assert.Empty(t, resp.AppCert, "no certificate must be issued for reserved name %q", name)
-		})
+	body := map[string]string{
+		"csr_pem":  testutil.GenerateTestCSRP256(t, "my-app"),
+		"app_name": "my-app",
 	}
+	b, err := json.Marshal(body)
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, removedDelegatedAppEnrollPath, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.TLS = nil
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code,
+		"the removed delegated app enrollment route must fail-closed to 401 (RouteAuthMTLS default) without a client certificate")
+	assert.NotContains(t, rr.Body.String(), "app_cert",
+		"no certificate must be issued from the removed route")
 }
 
 // TestPlatformEnrollmentBypassClosed_PrivilegedGenericCSRSignRequiresMTLS
@@ -189,38 +196,6 @@ func TestPlatformEnrollmentBypassClosed_PrivilegedGenericCSRSignRequiresMTLS(t *
 		"generic CSR sign must reject unauthenticated callers with 401 (mTLS required)")
 	assert.Contains(t, rr.Body.String(), constants.ErrMissingCertificate.Error(),
 		"the 401 must carry the typed ErrMissingCertificate error")
-}
-
-// TestPlatformEnrollmentBypass_DelegatedAppIsShortLived documents the
-// current SignDelegatedCSR behavior so the Phase 2 SignPlatformAppCSR
-// implementation can be contrasted against it. Delegated credentials are
-// 1-hour, client-auth-only, dual-SAN. The new platform app signer must use
-// normal platform workload validity and server+client auth, not reuse this
-// 1-hour path. This is a reference characterization, not a bypass.
-func TestPlatformEnrollmentBypass_DelegatedAppIsShortLived(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
-
-	resp, err := c.appEnrollment.EnrollDelegatedApp(AppEnrollRequest{
-		CSR:     testutil.GenerateTestCSRP256(t, "delegated-app"),
-		AppName: "delegated-app",
-		AppType: "mcp-client",
-	}, "user-approver-1")
-	require.NoError(t, err)
-	assert.True(t, resp.Success)
-
-	block, _ := pem.Decode([]byte(resp.AppCert))
-	require.NotNil(t, block)
-	cert, err := x509.ParseCertificate(block.Bytes)
-	require.NoError(t, err)
-
-	assert.Less(t, cert.NotAfter.Sub(cert.NotBefore).Hours(), float64(2),
-		"SignDelegatedCSR is short-lived (~1h); the new SignPlatformAppCSR must NOT reuse this validity")
-	assert.ElementsMatch(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, cert.ExtKeyUsage,
-		"SignDelegatedCSR is client-auth-only; the new SignPlatformAppCSR must add server auth for the dashboard/ensemble")
-	uris := extractURISANs(t, resp.AppCert)
-	require.Len(t, uris, 2)
-	assert.Equal(t, "spiffe://g8e.local/app/delegated-app", uris[0], "app SAN is first; Phase 2 must preserve app-first ordering")
-	assert.Equal(t, "spiffe://g8e.local/user/user-approver-1", uris[1], "user SAN is second; Phase 2 must bind the approving user")
 }
 
 // TestPlatformEnrollmentBypassClosed_PlainHTTPRouterDoesNotRegisterBypassRoutes

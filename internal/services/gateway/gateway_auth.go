@@ -561,7 +561,7 @@ func (s *AuthService) ValidateOperatorCLISessionBinding(operatorSessionID, cliSe
 	if !cliSession.IsActive || (!cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(checkTime)) || (!cliSession.AbsoluteExpiresAt.IsZero() && cliSession.AbsoluteExpiresAt.Before(checkTime)) || (!cliSession.IdleExpiresAt.IsZero() && cliSession.IdleExpiresAt.Before(checkTime)) {
 		return nil, &AuthError{Message: constants.ErrCLISessionExpired.Error(), Status: http.StatusUnauthorized}
 	}
-	if cliSession.UserID != userID || cliSession.OperatorSessionID != operatorSessionID {
+	if cliSession.UserID != userID || !cliSessionBindsOperator(&cliSession, operatorSessionID) {
 		return nil, &AuthError{Message: constants.ErrGatewayCLISessionBindingMismatch.Error(), Status: http.StatusUnauthorized}
 	}
 	return op, nil
@@ -849,7 +849,21 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		headerOpSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
 
 		if cliSession.OperatorSessionID != "" {
-			op, err := s.ValidateOperatorSession(cliSession.OperatorSessionID)
+			// A request targets the primary binding unless its operator
+			// session header names another session bound to this CLI session.
+			targetSessionID := cliSession.OperatorSessionID
+			if headerOpSessionID != "" && headerOpSessionID != targetSessionID {
+				if !cliSessionBindsOperator(&cliSession, headerOpSessionID) {
+					s.logger.Warn("gateway: auth: operator headers mismatch persisted CLI session binding",
+						"path", r.URL.Path,
+						"cli_session_id", cliSessionID,
+						"persisted_operator_session_id", safeTruncateID(cliSession.OperatorSessionID, 8))
+					s.responder.Error(w, http.StatusForbidden, constants.ErrOperatorBindingMismatch.Error())
+					return true
+				}
+				targetSessionID = headerOpSessionID
+			}
+			op, err := s.ValidateOperatorSession(targetSessionID)
 			if err != nil {
 				if ae, ok := err.(*AuthError); ok {
 					s.logger.Warn("gateway: auth: persisted operator binding invalid", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
@@ -860,7 +874,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				}
 				return true
 			}
-			if (headerOpID != "" && headerOpID != op.ID) || (headerOpSessionID != "" && headerOpSessionID != cliSession.OperatorSessionID) {
+			if (headerOpID != "" && headerOpID != op.ID) || (targetSessionID != cliSession.OperatorSessionID && op.UserID != cliSession.UserID) {
 				s.logger.Warn("gateway: auth: operator headers mismatch persisted CLI session binding",
 					"path", r.URL.Path,
 					"cli_session_id", cliSessionID,
@@ -869,7 +883,8 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				return true
 			}
 			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
-			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, cliSession.OperatorSessionID)
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, targetSessionID)
+			ctx = context.WithValue(ctx, constants.ContextKeyBoundOperatorSessionIDs, cliSession.BoundOperatorSessionIDs)
 		} else if headerOpID != "" || headerOpSessionID != "" {
 			// No persisted binding: the caller must not assert an operator
 			// identity the session does not carry.
@@ -1145,7 +1160,7 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 	if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
 		return false, nil
 	}
-	return cliSession.OperatorSessionID == operatorSessionID, nil
+	return cliSessionBindsOperator(&cliSession, operatorSessionID), nil
 }
 
 // ValidateWebSessionCookie extracts and validates the web session cookie from

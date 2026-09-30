@@ -149,8 +149,9 @@ func GradeHeterogeneousScenario(req HeterogeneousScenarioGradingRequest) (*Scena
 
 // gradeHeterogeneousPipelineCriteria grades the heterogeneous-lane pipeline
 // catalog criterion exactly once per assignment (not per role): PASS when
-// every role's trace shows it was invoked and the assignment as a whole
-// reached the COMPLETED lifecycle.
+// every role's trace shows it was invoked, each role received the prior roles'
+// outputs as handoff evidence, and the assignment as a whole reached the
+// COMPLETED lifecycle.
 func gradeHeterogeneousPipelineCriteria(req HeterogeneousScenarioGradingRequest) []*evalv1.DeterministicGrade {
 	criteria := make([]ScenarioCriterion, 0)
 	for _, pipeline := range req.ScenarioGold.PipelineCriteria {
@@ -169,18 +170,99 @@ func gradeHeterogeneousPipelineCriteria(req HeterogeneousScenarioGradingRequest)
 		}
 	}
 	status := evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
-	detail := "heterogeneous pipeline did not complete with all three role handoffs"
+	detail := heterogeneousPipelineNotCompletedDetail
 	score := 0.0
 	if allInvoked && req.Lifecycle == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED {
-		status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
-		detail = "heterogeneous pipeline completed Lite → Assistant → Primary with role handoff evidence"
-		score = 1
+		// Verify handoff chain: each role must have received prior role outputs.
+		handoffValid := verifyHeterogeneousHandoffChain(req.RoleTraces)
+		if handoffValid {
+			status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
+			detail = heterogeneousPipelineHandoffVerifiedDetail
+			score = 1
+		} else {
+			detail = heterogeneousPipelineHandoffIncompleteDetail
+		}
 	}
 	grades := make([]*evalv1.DeterministicGrade, 0, len(criteria))
 	for _, criterion := range criteria {
 		grades = append(grades, newDeterministicGrade(req.AssignmentID, criterion.CriterionID, status, detail, score))
 	}
 	return grades
+}
+
+// verifyHeterogeneousHandoffChain checks that each role in the formation
+// received the prior roles' outputs as evidence of proper handoff.
+// Expected handoff:
+// - Lite: no prior outputs (first in chain)
+// - Assistant: should have Lite's output in its prior_role_outputs
+// - Primary: should have both Lite's and Assistant's outputs in its prior_role_outputs
+func verifyHeterogeneousHandoffChain(roleTraces []RoleTrace) bool {
+	if len(roleTraces) != 3 {
+		return false
+	}
+	// Create a map of role → role output for easy lookup.
+	roleOutputs := make(map[FormationRole]string)
+	for _, rt := range roleTraces {
+		if output, ok := rt.Trace["designated_role_output"].(string); ok {
+			roleOutputs[rt.Role] = output
+		}
+	}
+	// Check each role's prior_role_outputs.
+	for _, rt := range roleTraces {
+		switch rt.Role {
+		case FormationRoleLite:
+			// Lite should have no prior outputs (it's first in chain).
+			if priors, ok := rt.Trace["prior_role_outputs"]; ok && priors != nil {
+				return false
+			}
+		case FormationRoleAssistant:
+			// Assistant should have Lite's output.
+			if !hasPriorOutput(rt.Trace, FormationRoleLite, roleOutputs[FormationRoleLite]) {
+				return false
+			}
+		case FormationRolePrimary:
+			// Primary should have both Lite's and Assistant's outputs.
+			if !hasPriorOutput(rt.Trace, FormationRoleLite, roleOutputs[FormationRoleLite]) {
+				return false
+			}
+			if !hasPriorOutput(rt.Trace, FormationRoleAssistant, roleOutputs[FormationRoleAssistant]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// hasPriorOutput checks if a trace's prior_role_outputs contains the
+// specified role's expected output.
+func hasPriorOutput(trace EvaluationTrace, role FormationRole, expectedOutput string) bool {
+	if expectedOutput == "" {
+		return false
+	}
+	priorOutputs, ok := trace["prior_role_outputs"].([]any)
+	if !ok {
+		return false
+	}
+	for _, prior := range priorOutputs {
+		// Handle both map[string]any and map[string]string
+		var roleVal, outputVal any
+		switch m := prior.(type) {
+		case map[string]any:
+			roleVal = m["role"]
+			outputVal = m["output"]
+		case map[string]string:
+			roleVal = m["role"]
+			outputVal = m["output"]
+		default:
+			continue
+		}
+		roleStr, roleIsStr := roleVal.(string)
+		outputStr, outputIsStr := outputVal.(string)
+		if roleIsStr && outputIsStr && roleStr == string(role) && outputStr == expectedOutput {
+			return true
+		}
+	}
+	return false
 }
 
 func gradeRoleCriteria(req ScenarioGradingRequest) []*evalv1.DeterministicGrade {
@@ -554,10 +636,17 @@ func gradeToolSelection(req ScenarioGradingRequest) *evalv1.DeterministicGrade {
 			return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "forbidden tool "+forbidden+" was selected", 0)
 		}
 	}
-	for _, expected := range req.ScenarioTools.ExpectedTools {
-		if selectedTools[expected] {
-			return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "expected tool "+expected+" was selected", 1)
+	if len(req.ScenarioTools.ExpectedTools) > 0 {
+		for _, expected := range req.ScenarioTools.ExpectedTools {
+			if !selectedTools[expected] {
+				return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "expected tool selection evidence is missing", 0)
+			}
 		}
+		detail := "expected tool " + req.ScenarioTools.ExpectedTools[0] + " was selected"
+		if len(req.ScenarioTools.ExpectedTools) > 1 {
+			detail = "expected tools were selected: " + strings.Join(req.ScenarioTools.ExpectedTools, ", ")
+		}
+		return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, detail, 1)
 	}
 	if satisfiesToolDecisionWithoutCall(req) {
 		return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "forbidden tools were not selected", 1)
@@ -587,6 +676,9 @@ func gradePolicyExpectation(req ScenarioGradingRequest) *evalv1.DeterministicGra
 }
 
 func satisfiesToolDecisionWithoutCall(req ScenarioGradingRequest) bool {
+	if len(req.ScenarioTools.ExpectedTools) > 0 {
+		return false
+	}
 	if len(req.ScenarioTools.ForbiddenTools) == 0 {
 		return false
 	}

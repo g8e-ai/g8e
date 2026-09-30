@@ -26,11 +26,44 @@ func findDeterministicGradeByID(grades []*evalv1.DeterministicGrade, gradeID str
 	return nil
 }
 
+// heterogeneousHandoffEvidence returns the prior_role_outputs for a given role
+// based on cumulative formation execution order (Lite → Assistant → Primary).
+func heterogeneousHandoffEvidence(outputs map[FormationRole]string, currentRole FormationRole) []any {
+	var result []any
+	if currentRole == FormationRoleLite {
+		// Lite gets no prior outputs (first in chain).
+		return result
+	}
+	// Assistant and Primary receive Lite's output.
+	if liteOutput, ok := outputs[FormationRoleLite]; ok && liteOutput != "" {
+		result = append(result, map[string]string{
+			"role":   string(FormationRoleLite),
+			"output": liteOutput,
+		})
+	}
+	if currentRole == FormationRolePrimary {
+		// Primary also receives Assistant's output.
+		if assistantOutput, ok := outputs[FormationRoleAssistant]; ok && assistantOutput != "" {
+			result = append(result, map[string]string{
+				"role":   string(FormationRoleAssistant),
+				"output": assistantOutput,
+			})
+		}
+	}
+	return result
+}
+
 func heterogeneousToolSelectionRoleTraces(t *testing.T) []RoleTrace {
 	t.Helper()
 	roleTraces := make([]RoleTrace, 0, 3)
+	outputs := map[FormationRole]string{
+		FormationRoleLite:      "Lite output",
+		FormationRoleAssistant: "Assistant output",
+		FormationRolePrimary:   "Primary output",
+	}
 	for _, role := range []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary} {
 		trace := completedHomogeneousTrace(t, string(role))
+		trace["designated_role_output"] = outputs[role]
 		trace["tool_decisions"] = []any{
 			EvaluationTrace{
 				"decision_id": "exec-" + string(role),
@@ -47,6 +80,11 @@ func heterogeneousToolSelectionRoleTraces(t *testing.T) []RoleTrace {
 				"success":          true,
 				"is_operator_tool": false,
 			},
+		}
+		// Add handoff evidence: each role has prior outputs from earlier roles.
+		priorOutputs := heterogeneousHandoffEvidence(outputs, role)
+		if len(priorOutputs) > 0 {
+			trace["prior_role_outputs"] = priorOutputs
 		}
 		digest, err := ComputeChatProbeTraceDigest(trace)
 		require.NoError(t, err)
@@ -116,6 +154,11 @@ func TestGradeHeterogeneousScenario_OneRoleFailsScenarioContentIndependently(t *
 	for _, role := range []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary} {
 		trace := completedHomogeneousTrace(t, string(role))
 		trace["designated_role_output"] = outputs[role]
+		// Add handoff evidence: each role has prior outputs from earlier roles.
+		priorOutputs := heterogeneousHandoffEvidence(outputs, role)
+		if len(priorOutputs) > 0 {
+			trace["prior_role_outputs"] = priorOutputs
+		}
 		digest, err := ComputeChatProbeTraceDigest(trace)
 		require.NoError(t, err)
 		trace["trace_digest"] = digest
@@ -146,13 +189,12 @@ func TestGradeHeterogeneousScenario_OneRoleFailsScenarioContentIndependently(t *
 	require.NotNil(t, primary)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, primary.GetStatus())
 
-	// The pipeline-scoped grade is decoupled from any single role's content
-	// grade: it only checks that all three roles handed off and the
-	// assignment reached COMPLETED, so it still passes even though primary's
-	// answer was wrong.
+	// The pipeline-scoped grade now requires verified handoff: all roles
+	// invoked AND each role received the prior role outputs.
 	pipeline := findDeterministicGrade(result.DeterministicGrades, "heterogeneous-pipeline")
 	require.NotNil(t, pipeline)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, pipeline.GetStatus())
+	assert.Contains(t, pipeline.GetDetail(), "verified role handoff evidence")
 }
 
 func TestGradeHeterogeneousScenario_RequiresRoleTraces(t *testing.T) {
@@ -162,4 +204,92 @@ func TestGradeHeterogeneousScenario_RequiresRoleTraces(t *testing.T) {
 		ScenarioID:   "instruction-exact-format",
 	})
 	require.Error(t, err)
+}
+
+func TestGradeHeterogeneousScenario_VerifiesHandoffChain(t *testing.T) {
+	t.Parallel()
+	_, artifacts, err := BuildScenarioCatalog()
+	require.NoError(t, err)
+	var gold ScenarioGoldCriteria
+	require.NoError(t, json.Unmarshal(artifacts["instruction-exact-format"].Gold.Body, &gold))
+
+	outputs := map[FormationRole]string{
+		FormationRoleLite:      "LITE_RESPONSE",
+		FormationRoleAssistant: "ASSISTANT_RESPONSE",
+		FormationRolePrimary:   "PRIMARY_RESPONSE",
+	}
+	roleTraces := make([]RoleTrace, 0, 3)
+	for _, role := range []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary} {
+		trace := completedHomogeneousTrace(t, string(role))
+		trace["designated_role_output"] = outputs[role]
+		// Add handoff evidence: each role has prior outputs from earlier roles.
+		priorOutputs := heterogeneousHandoffEvidence(outputs, role)
+		if len(priorOutputs) > 0 {
+			trace["prior_role_outputs"] = priorOutputs
+		}
+		digest, err := ComputeChatProbeTraceDigest(trace)
+		require.NoError(t, err)
+		trace["trace_digest"] = digest
+		roleTraces = append(roleTraces, RoleTrace{Role: role, Trace: trace})
+	}
+
+	result, err := GradeHeterogeneousScenario(HeterogeneousScenarioGradingRequest{
+		AssignmentID: "assignment-hetero-handoff-pass",
+		ScenarioID:   "instruction-exact-format",
+		ScenarioInput: ScenarioInputFixture{
+			UserPrompt: "Reply with exactly: PRIMARY_RESPONSE",
+		},
+		ScenarioGold: gold,
+		RoleTraces:   roleTraces,
+		Lifecycle:    evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	})
+	require.NoError(t, err)
+
+	pipeline := findDeterministicGrade(result.DeterministicGrades, "heterogeneous-pipeline")
+	require.NotNil(t, pipeline)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, pipeline.GetStatus())
+	assert.Contains(t, pipeline.GetDetail(), "verified role handoff evidence")
+}
+
+func TestGradeHeterogeneousScenario_HandoffFailsWhenDownstreamRoleMissesPriorOutput(t *testing.T) {
+	t.Parallel()
+	_, artifacts, err := BuildScenarioCatalog()
+	require.NoError(t, err)
+	var gold ScenarioGoldCriteria
+	require.NoError(t, json.Unmarshal(artifacts["instruction-exact-format"].Gold.Body, &gold))
+
+	outputs := map[FormationRole]string{
+		FormationRoleLite:      "LITE_RESPONSE",
+		FormationRoleAssistant: "ASSISTANT_RESPONSE",
+		FormationRolePrimary:   "PRIMARY_RESPONSE",
+	}
+	roleTraces := make([]RoleTrace, 0, 3)
+	for _, role := range []FormationRole{FormationRoleLite, FormationRoleAssistant, FormationRolePrimary} {
+		trace := completedHomogeneousTrace(t, string(role))
+		trace["designated_role_output"] = outputs[role]
+		// Only add handoff evidence for Lite (no prior outputs needed, which is correct).
+		// Intentionally omit prior_role_outputs for Assistant and Primary (broken handoff).
+		// Assistant and Primary missing prior_role_outputs = broken handoff.
+		digest, err := ComputeChatProbeTraceDigest(trace)
+		require.NoError(t, err)
+		trace["trace_digest"] = digest
+		roleTraces = append(roleTraces, RoleTrace{Role: role, Trace: trace})
+	}
+
+	result, err := GradeHeterogeneousScenario(HeterogeneousScenarioGradingRequest{
+		AssignmentID: "assignment-hetero-handoff-fail",
+		ScenarioID:   "instruction-exact-format",
+		ScenarioInput: ScenarioInputFixture{
+			UserPrompt: "Reply with exactly: PRIMARY_RESPONSE",
+		},
+		ScenarioGold: gold,
+		RoleTraces:   roleTraces,
+		Lifecycle:    evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	})
+	require.NoError(t, err)
+
+	pipeline := findDeterministicGrade(result.DeterministicGrades, "heterogeneous-pipeline")
+	require.NotNil(t, pipeline)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, pipeline.GetStatus())
+	assert.Contains(t, pipeline.GetDetail(), "handoff chain incomplete")
 }

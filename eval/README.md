@@ -8,7 +8,7 @@ Checked-in evaluation program data and templates live here. **Runtime** campaign
 | --- | --- |
 | `eval/base-model-inventory.json` | **Default genesis program inventory** — 50 init-campaign models (3 roles × 25 scenarios = **3750** cells when run homogeneously) |
 | `eval/base-init-campaign-queue.json` | Template rollout queue (`status: pending`); currently 47 entries and does not yet list `gemma4:12b`, `glm-5.3-air`, or `qwen2.5:1b-rlcd` |
-| `eval/examples/init-campaign-queue.example.json` | Minimal queue shape reference |
+| `examples/eval/init-campaign-queue.example.json` | Minimal queue shape reference |
 
 The base inventory is the canonical 50-model genesis program set. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code. `eval/rollout-intake-priority.json` lists variant IDs that `g8e eval rollout add` orders ahead of the rest of the backlog; it is currently empty, so adding uses the default ordering.
 
@@ -47,23 +47,15 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 ## Typical workflow
 
 ```bash
-# Resolve the exact governed maintenance sessions (optional if single active sessions exist).
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-
 # 0. (Optional) Pull trending Hugging Face GGUF models through governed Operator dispatch.
 #    Catalog: eval/rollout-intake-hf.json. Applies canonical served-model aliases
 #    (for example qwen3.8:27b, glm-5.3-flash) after pull/copy.
-./g8e eval models pull --all \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models pull --all
 # Manual-create entries (sharded GGUF, pending single-file) are skipped until a
 # governed provider-side alias-creation workflow is available.
 
 # 1. Freeze provider inventory into runtime registry
-./g8e eval models freeze \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models freeze
 
 ./g8e eval models list
 
@@ -106,7 +98,7 @@ go run ./.local.dev/tools/gen-base-model-inventory
 | `g8e eval rollout skip` | Skip queue entries |
 | `g8e public restore` | Republish verified runs to the gateway-owned public mirror |
 
-See [Unified Docker Stack Guide](../../docs/guides/unified_stack.md) and [Evaluations architecture](../../docs/architecture/evals.md) for full campaign operations.
+See [Unified Docker Stack Guide](../docs/guides/unified_stack.md) and [Evaluations architecture](../docs/architecture/evals.md) for full campaign operations.
 
 ## Wipe recovery
 
@@ -133,7 +125,7 @@ curl -sf http://127.0.0.1:8082/bootstrap | jq '{freshness: .source_freshness, hi
 ./g8e public restore eval-init-granite3-3-2b-1789754079
 ```
 
-If `runs publish` exports zero records after a mirror wipe (host `public-projection-state.json` still lists old idempotency keys), use `--force` on publish instead — see [Unified Docker Stack Guide](../../docs/guides/unified_stack.md#mirror-empty-after-docker-init---clean-but-host-run-artifacts-remain).
+If `runs publish` exports zero records after a mirror wipe (host `public-projection-state.json` still lists old idempotency keys), use `--force` on publish instead — see [Unified Docker Stack Guide](../docs/guides/unified_stack.md#mirror-empty-after-docker-init---clean-but-host-run-artifacts-remain).
 
 Runs marked `verified` in the queue but missing under `.g8e/data/eval/runs/<verified_run_id>/` cannot be mirror-restored. Mark them pending and re-run:
 
@@ -155,4 +147,4 @@ Back up `.g8e/data/eval/runs/` and `.g8e/eval/` together before a full platform 
 
 ## License
 
-Source in this repository is licensed under the Business Source License 1.1 (BSL 1.1). It converts to Apache 2.0 on 2030-08-18. See the repository [LICENSE](../../LICENSE) for details.
+Source in this repository is licensed under the Business Source License 1.1 (BSL 1.1). It converts to Apache 2.0 on 2030-08-18. See the repository [LICENSE](../LICENSE) for details.

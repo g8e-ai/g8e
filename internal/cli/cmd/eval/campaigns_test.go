@@ -91,7 +91,7 @@ func TestCampaignsShow_ReportsSpecAndRuns(t *testing.T) {
 	assert.Equal(t, []string{"qwen3:4b"}, payload.Models)
 	require.Len(t, payload.Runs, 1)
 	assert.Equal(t, "run-a-1", payload.Runs[0].RunID)
-	assert.Equal(t, uint64(37), payload.CellsPer)
+	assert.Equal(t, uint64(39), payload.CellsPer)
 }
 
 func TestCampaignsShow_RejectsUnknownCampaign(t *testing.T) {
@@ -123,7 +123,7 @@ func TestCampaignsCreate_JSONReportsFrozenSpec(t *testing.T) {
 	assert.Equal(t, "eval-a", payload.CampaignID)
 	assert.Equal(t, campaignLaneModelRole, payload.Lane)
 	assert.Equal(t, 1, payload.ModelCount)
-	assert.Equal(t, uint64(37), payload.CellsPerRun)
+	assert.Equal(t, uint64(39), payload.CellsPerRun)
 	assert.NotEmpty(t, payload.ModelRegistryDigest)
 	assert.NotEmpty(t, payload.CatalogDigest)
 }

@@ -82,7 +82,7 @@ func uniqueDocumentID(kind string) string {
 // take 60-120s with real local LLMs (triage + agent turn + risk analysis); the
 // fake provider is near-instant. Defaults to 3 minutes.
 func getEnsemblePollTimeout() time.Duration {
-	if s := os.Getenv("G8E_HARNESS_POLL_TIMEOUT"); s != "" {
+	if s := os.Getenv(string(constants.EnvVar.HarnessPollTimeout)); s != "" {
 		if d, err := time.ParseDuration(s); err == nil && d > 0 {
 			return d
 		}
@@ -130,12 +130,12 @@ const harnessDocIDPrefix = "harness"
 // request with "No LLM model configured" even though the provider override
 // is present.
 func ensembleLLMOverrides() (provider, model, endpoint string) {
-	provider = os.Getenv("G8E_HARNESS_LLM_PROVIDER")
+	provider = os.Getenv(string(constants.EnvVar.HarnessLLMProvider))
 	if provider == "" {
 		provider = "fake"
 	}
-	model = os.Getenv("G8E_HARNESS_LLM_MODEL")
-	endpoint = os.Getenv("G8E_HARNESS_LLM_ENDPOINT")
+	model = os.Getenv(string(constants.EnvVar.HarnessLLMModel))
+	endpoint = os.Getenv(string(constants.EnvVar.HarnessLLMEndpoint))
 	if model == "" && provider == "fake" {
 		model = "fake"
 	}

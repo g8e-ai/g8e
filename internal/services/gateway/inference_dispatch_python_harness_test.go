@@ -81,7 +81,7 @@ func writeECPrivateKeyPEM(t *testing.T, dir, name string, key *ecdsa.PrivateKey)
 	})))
 }
 
-func generateHarnessDelegatedAppCert(
+func generateHarnessPlatformAppCert(
 	t *testing.T,
 	caCert *x509.Certificate,
 	caKey *ecdsa.PrivateKey,
@@ -145,7 +145,7 @@ func generateInferenceDispatchHarnessTLS(t *testing.T, dir string, userID string
 	caPEM := testutil.EncodePEM("CERTIFICATE", caCert.Raw)
 
 	serverCertPEM, serverKey := generateHarnessServerCert(t, caCert, caKey)
-	clientCertPEM, clientKey := generateHarnessDelegatedAppCert(t, caCert, caKey, userID)
+	clientCertPEM, clientKey := generateHarnessPlatformAppCert(t, caCert, caKey, userID)
 
 	caPath := writePEMFile(t, dir, "ca.pem", caPEM)
 	clientCertPath := writePEMFile(t, dir, "client.pem", clientCertPEM)

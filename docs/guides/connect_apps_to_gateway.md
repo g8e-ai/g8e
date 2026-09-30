@@ -17,7 +17,7 @@ For application integration patterns and state models, see [Build g8e-Compatible
 
 - Run commands from the repository root with a built `./g8e` binary, or use a deployed Gateway endpoint and the matching client credentials.
 - For a local Gateway, use Docker with Compose v2 or start the reference binary with `./g8e gw start`.
-- For CLI or delegated-app mTLS, enroll a human CLI identity first. The CLI must trust the Gateway CA bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`.
+- For CLI or application mTLS, enroll a human CLI identity first. The CLI must trust the Gateway CA bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`.
 - For a browser frontend, use an HTTPS Gateway endpoint, a browser with WebAuthn support, and an exact frontend origin that can be configured as a CORS origin and valid WebAuthn RP origin.
 - Keep private keys and issued certificates in a protected application-owned directory. The Gateway returns certificates and trust material, but never the app private key.
 
@@ -263,6 +263,28 @@ The Gateway provides a special `read_field` tool for governed field access with 
 }
 ```
 
+#### MCP Downstream Egress (Subprocess and HTTP)
+
+The Gateway can forward tool discovery (`tools/list`), resources (`resources/*`), prompts (`prompts/*`), and governed tool calls (`tools/call`) to a downstream third-party MCP server. All mutations and tool executions pass through the complete L1–L5 governance pipeline (doctrine screening, consensus, human approval, warden pre-dispatch verification, and actuator isolation with cryptographic ActionReceipts) before reaching the downstream server.
+
+Configure downstream egress when starting the Gateway:
+
+**Subprocess Downstream (stdio):**
+```bash
+./g8e serve gateway \
+  --mcp-downstream-cmd npx \
+  --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/var/data'
+```
+
+**HTTP Downstream:**
+```bash
+./g8e serve gateway \
+  --mcp-downstream-url http://localhost:3000
+```
+
+> [!NOTE]
+> `--mcp-downstream-cmd` and `--mcp-downstream-url` are mutually exclusive. All downstream tool executions are governed by the Gateway; downstream outputs are scrubbed for sensitive data and receipts are recorded in the audit vault.
+
 ---
 
 ### 2. A2A (Agent-to-Agent)
@@ -479,15 +501,15 @@ Web sessions use WebAuthn signatures as L3 proof.
 
 CSR-based enrollment gives CLI, Operator, and app workloads cryptographic identities without transferring their private keys to the Gateway. The client generates a P-256 key and CSR, the Gateway authorizes the enrollment path, and the issued certificate carries one or more SPIFFE URI SANs. Browser sessions use WebAuthn rather than client certificates, and MCP/A2A clients may use JWT authentication when the Gateway has JWKS configured.
 
-The first successful `./g8e auth enroll user` against an unbootstrapped Gateway creates the first user and CLI session; that user is the platform owner. Later CLI enrollment on an already bootstrapped Gateway uses the one-time human-approved recovery flow. External apps use delegated enrollment backed by an enrolled human CLI. Reserved first-party platform components use the separate owner-approved platform enrollment protocol.
+The first successful `./g8e auth enroll user` against an unbootstrapped Gateway creates the first user and CLI session; that user is the platform owner. Later CLI enrollment on an already bootstrapped Gateway uses the one-time human-approved recovery flow. External applications use owner-approved platform enrollment (`./g8e auth enroll app <name>`). Reserved first-party platform components use the platform component enrollment protocol.
 
 #### mTLS Enrollment Properties
 
 1. **Private key ownership**: The client creates and retains its private key and submits only a signed CSR.
 2. **SPIFFE identity**: The Gateway issues a certificate with an identity appropriate to the enrollment path, such as `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` or `spiffe://g8e.local/app/<app_name>`.
 3. **Trust material**: The enrollment response or runtime tree supplies the certificate chain and Gateway trust bundle needed for server verification.
-4. **Short lifetimes**: Standard leaf certificates and CLI sessions have a seven-day lifetime. Delegated external-app certificates have a one-hour lifetime.
-5. **Renewal**: The CLI enrollment coordinator reuses complete valid credentials and rotates an expiring identity; `--rotate-cli` forces rotation. External apps request another delegated certificate before expiry. Reserved platform components resume their owner-approved enrollment workflow as needed.
+4. **Lifetimes**: Standard leaf certificates, platform workload certificates, and CLI sessions have a seven-day lifetime.
+5. **Renewal**: The CLI enrollment coordinator reuses complete valid credentials and rotates an expiring identity; `--rotate-cli` forces rotation. Applications renew or re-enroll their credentials as needed.
 
 #### Device Enrollment
 
@@ -495,61 +517,41 @@ For device enrollment, use the `/api/v1/pki/devices/enroll` endpoint (see PKI se
 
 #### Application Enrollment
 
-External applications use delegated enrollment. An enrolled human CLI authenticates `POST /api/v1/pki/apps/delegated`, vouches for the application, and submits a P-256 CSR with `app_name`, `app_type`, and optional `organization_id`. The Gateway returns a one-hour certificate containing both the app identity and requesting-user identity, its chain, the trust bundle, the SPIFFE app ID, and the expiry time. It also creates the default `AppPolicy` required by app authentication. The default policy has no per-app rate or payload limit; the middleware enforces those limits only when corresponding policy fields are populated. Delegated enrollment establishes identity only and does not grant L2 consensus signing authority. It also does not make query or other privileged routes available to the app.
-
-The following example creates an app key and CSR, builds the JSON request without flattening PEM newlines, and enrolls the app with the local CLI identity:
+Applications use owner-approved platform enrollment. Any application workload can enroll via the CLI command:
 
 ```bash
-openssl ecparam -name prime256v1 -genkey -noout -out etl-service.key
-openssl req -new -key etl-service.key -subj "/CN=etl-service" -out etl-service.csr
-python3 - <<'PY'
-import json
-from pathlib import Path
-
-request = {
-    "csr_pem": Path("etl-service.csr").read_text(),
-    "app_name": "etl-service",
-    "app_type": "custom",
-}
-Path("etl-service-enrollment.json").write_text(json.dumps(request))
-PY
-curl -X POST https://localhost:8443/api/v1/pki/apps/delegated \
-  --cacert .g8e/pki/trust/g8eg-ca-bundle.pem \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
-  -H "Content-Type: application/json" \
-  -d @etl-service-enrollment.json \
-  -o etl-service-enrollment-response.json
+./g8e auth enroll app etl-service
 ```
 
-The app retains `etl-service.key`; the Gateway never returns the private key. Persist `app_cert`, `cert_chain`, and `trust_bundle` from the response with private-file permissions. Present the leaf certificate followed by its chain when connecting:
+This generates a local ECDSA P-256 private key and CSR, submits an enrollment request to the Gateway, and displays the approval command:
+
+```
+Enrollment request submitted for application "etl-service".
+Approve with: g8e auth enroll approve req-12345
+```
+
+The platform owner approves the request from an authenticated CLI:
 
 ```bash
-python3 - <<'PY'
-import json
-import os
-from pathlib import Path
+./g8e auth enroll approve req-12345
+```
 
-response = json.loads(Path("etl-service-enrollment-response.json").read_text())
-if not response.get("success"):
-    raise RuntimeError(response.get("error", "app enrollment failed"))
-Path("etl-service.crt").write_text(response["app_cert"])
-Path("etl-service-chain.pem").write_text(response["app_cert"] + response["cert_chain"])
-Path("g8eg-ca-bundle.pem").write_text(response["trust_bundle"])
-for path in ("etl-service.key", "etl-service.crt", "etl-service-chain.pem", "g8eg-ca-bundle.pem"):
-    os.chmod(path, 0o600)
-PY
+Upon approval, the enrollment client completes the proof-of-possession ceremony, receives a 7-day certificate carrying `spiffe://g8e.local/app/etl-service` and the approving user's SPIFFE SAN, and writes the certificate and private key to `.g8e/apps/etl-service.crt` and `.g8e/apps/etl-service.key`. It also establishes the default `AppPolicy` required for application authentication.
+
+The application can then connect to MCP using `--app etl-service` or by presenting its client certificate:
+
+```bash
 curl -X POST https://localhost:8443/mcp \
-  --cacert g8eg-ca-bundle.pem \
-  --cert etl-service-chain.pem \
-  --key etl-service.key \
+  --cacert .g8e/pki/trust/g8eg-ca-bundle.pem \
+  --cert .g8e/apps/etl-service.crt \
+  --key .g8e/apps/etl-service.key \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
 #### Reserved First-Party Component Enrollment
 
-The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot use delegated enrollment. Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`. The enrollment flow:
+The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot be registered as custom applications; they are reserved for the dashboard, ensemble, and operator platform components. Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`. The enrollment flow:
 
 1. **Request submission** (`POST /api/v1/auth/platform-enrollments/request`) — token-scoped, plain HTTP or HTTPS, available before owner bootstrap
 2. **Status polling** (`GET /api/v1/auth/platform-enrollments/status?token=<token>`) — token-scoped, plain HTTP or HTTPS; the client polls with bounded backoff
@@ -706,7 +708,7 @@ curl -X POST https://localhost:8443/api/v1/pki/devices/enroll \
 
 ### CSR Signing (Low-level)
 
-`POST /api/v1/pki/csr/sign` is an authenticated low-level platform identity endpoint. Prefer the purpose-built CLI, device, delegated-app, or platform-component enrollment flows because they create the associated session and policy records. Callers of this endpoint must supply every identity component required by the selected leaf type.
+`POST /api/v1/pki/csr/sign` is an authenticated low-level platform identity endpoint. Prefer the purpose-built CLI, device, or platform application enrollment flows because they create the associated session and policy records. Callers of this endpoint must supply every identity component required by the selected leaf type.
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/pki/csr/sign \
@@ -844,7 +846,7 @@ For custom g8e-compatible gateway implementations, connection follows the same o
 2. **Configure Persistence**: Set up document store and persistence backends
 3. **Configure Ports**: Bind the two logical surfaces (HTTP and HTTPS) to appropriate ports with correct TLS settings
 4. **Start Gateway**: Launch in the desired posture (doctrine, consensus, ratify, or notary)
-5. **Enroll Clients**: Use CSR-based enrollment for operators and CLI clients, or delegated app enrollment for external applications
+5. **Enroll Clients**: Use CSR-based enrollment for operators and CLI clients, or platform application enrollment for applications (`./g8e auth enroll app <name>`)
 6. **Monitor Health**: Implement health checks for gateway process and connected operators
 
 ### Configuration Requirements

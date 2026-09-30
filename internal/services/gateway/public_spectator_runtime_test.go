@@ -74,6 +74,25 @@ func TestPublicSpectatorRuntime_StartsDedicatedExplorerListener(t *testing.T) {
 	require.NoError(t, runtime.Stop(stopCtx))
 }
 
+func TestNewPublicSpectatorRuntime_ContainerBindRequiresExplicitConfig(t *testing.T) {
+	// The retired env switch must not relax the network-exposure check.
+	t.Setenv("G8E_DOCKER_COMPOSE", "1")
+
+	cfg := PublicSpectatorConfig{
+		Enabled:               true,
+		PrivateListenAddress:  "0.0.0.0:" + mustFreePort(t),
+		PublicListenAddress:   "0.0.0.0:" + mustFreePort(t),
+		ExplorerListenAddress: "",
+	}
+
+	_, err := NewPublicSpectatorRuntime(cfg, newProducerFileSvc(t), testutil.NewTestLogger())
+	require.ErrorIs(t, err, constants.ErrPublicFeedListenAddress)
+
+	cfg.AllowContainerBind = true
+	_, err = NewPublicSpectatorRuntime(cfg, newProducerFileSvc(t), testutil.NewTestLogger())
+	require.NoError(t, err)
+}
+
 func TestValidatePublicFeedSourceID_RejectsPathComponents(t *testing.T) {
 	for _, sourceID := range []string{"../source", "source/id", ".", "source id"} {
 		t.Run(sourceID, func(t *testing.T) {

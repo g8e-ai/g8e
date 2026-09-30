@@ -235,16 +235,15 @@ The directory `protocol/constants/` maintains 26 top-level JSON registries along
 
 #### JSON model schemas
 
-`protocol/models/` contains 56 platform JSON Schema definitions for core structures including envelopes, approvals, cases, chat messages, CLI sessions, consensus configurations, operator documents, observe API read models, passkey credentials, and tool results. Per-agent role schemas are maintained in `protocol/models/agents/` (`agent_harness.json`, `assistant.json`, `lite.json`, `primary.json`, `title_generator.json`, `triage.json`). Third-party validated schemas reside under `protocol/schemas/`, including NIST OSCAL 1.1.2.
+`protocol/models/` contains 56 platform JSON Schema definitions for core structures including envelopes, approvals, cases, chat messages, CLI sessions, consensus configurations, operator documents, observe API read models, passkey credentials, and tool results. Per-agent role schemas are maintained in `protocol/models/agents/` (`assistant.json`, `auditor.json`, `lite.json`, `primary.json`, `title_generator.json`, `triage.json`). Third-party validated schemas reside under `protocol/schemas/`, including NIST OSCAL 1.1.2.
 
 #### MCP server deployment configurations
 
-Example deployment configurations in `protocol/examples/mcp_server/` illustrate governed MCP topologies:
+Example deployment configurations in `examples/mcp-client-configs/` illustrate governed MCP topologies:
 
 - `g8e_gateway_mcp_config.json`: Production HTTP with mTLS using client certificate paths.
-- `g8e_gateway_mcp_config_env.json`: Containerized HTTP with mTLS using environment variables (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`, `G8E_CA_BUNDLE`).
 - `g8e_stdio_mcp_config.json`: Local development stdio mode executing `g8e mcp stdio`.
-- `g8e_agent_mcp_config.json`: Agent governance configuration routing tool executions through governed gateway endpoints while excluding raw execution primitives (`Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `WebSearch`, `WebFetch`).
+- `g8e_agent_mcp_config.json`: Agent governance configuration routing tool executions through governed gateway endpoints under the agent's application identity (`--app <agent>`) while excluding raw execution primitives (`Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `WebSearch`, `WebFetch`).
 
 ### Protobuf compilation and code generation workflow
 
@@ -303,7 +302,7 @@ uv run --project protocol/python --extra dev pytest protocol/conformance -v
 
 #### Version sync validation
 
-All protocol artifacts adhere to the semantic version in `VERSION` (`v2.2.3`). CI job `Verify Version Sync` in `.github/workflows/build-and-test.yml` strictly validates:
+All protocol artifacts adhere to the semantic version in `VERSION` (`v2.2.5`). CI job `Verify Version Sync` in `.github/workflows/build-and-test.yml` strictly validates:
 
 1. `protocol/python/pyproject.toml` (`version = "X.Y.Z"`)
 2. `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`)
@@ -352,7 +351,7 @@ The target executes the following steps:
 - [Gateway Architecture](gateway.md): Gateway ingress routing, policy decision points, and dispatch mechanics.
 - [Operator Architecture](operator.md): Operator runtime daemon, local execution, and L4/L5 verification.
 - [Event and Action Protocol](events.md): Event catalog taxonomy, SSE streaming, and payload structures.
-- [AI Agents and Boundary](agents.md): Agent roles, MCP wrappers, and tool boundaries.
+- [AI Agents and Boundary](agents.md): Agent roles, downstream MCP egress, and tool boundaries.
 - [Release Process](../devs/release_process.md): Detailed release workflows, compliance bundles, and native eval acceptance.
 - [Documentation Guide](../devs/docs.md): Standards, invariants, and procedures for g8e documentation.
 - [Protocol Specification](../../protocol/docs/spec.md): Canonical envelope structure and 5-layer interlock sequence details.

@@ -80,6 +80,10 @@ func (m *campaignMemoryFileService) Remove(_ context.Context, relPath string) er
 	return nil
 }
 
+func (m *campaignMemoryFileService) ArchiveRuntime(context.Context, time.Time) (string, error) {
+	panic("unexpected ArchiveRuntime")
+}
+
 func (m *campaignMemoryFileService) RemoveAll(_ context.Context, relPath string) error {
 	if relPath == "" {
 		return nil

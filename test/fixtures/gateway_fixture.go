@@ -64,6 +64,8 @@ type GatewayFixture struct {
 	ActuatorPriv     ed25519.PrivateKey
 	ActuatorKeyID    string
 	DownstreamURL    string // URL of the downstream MCP/A2A server
+	DownstreamCmd    string // Command of downstream subprocess MCP server
+	DownstreamArgs   []string
 	A2ADownstreamURL string // URL used for A2A (same as DownstreamURL if not overridden)
 }
 
@@ -71,8 +73,10 @@ type GatewayFixture struct {
 type GatewayFixtureOptions struct {
 	TestName          string
 	Posture           config.GatewayPosture
-	DownstreamURL     string // MCP downstream; creates mock server if empty
-	A2ADownstreamURL  string // A2A downstream; if empty, reuses MCP downstream server
+	DownstreamURL     string   // MCP downstream HTTP URL; creates mock server if empty and DownstreamCmd is empty
+	DownstreamCmd     string   // MCP downstream stdio subprocess command
+	DownstreamArgs    []string // MCP downstream stdio subprocess arguments
+	A2ADownstreamURL  string   // A2A downstream; if empty, reuses MCP downstream server
 	AllowTestPortZero bool
 	PublicBaseURL     string // Public base URL for approval links; defaults to localhost:HTTPS_port
 
@@ -134,60 +138,62 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	var downstreamServer *httptest.Server
 	var downstreamURL string
 
-	if opts.DownstreamURL == "" {
-		// Create default mock downstream MCP server
-		downstreamServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var req struct {
-				Method string `json:"method"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
+	if opts.DownstreamCmd == "" {
+		if opts.DownstreamURL == "" {
+			// Create default mock downstream MCP server
+			downstreamServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var req struct {
+					Method string `json:"method"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
 
-			w.Header().Set("Content-Type", "application/json")
-			switch req.Method {
-			case "tools/list":
-				resp := mcp.JSONRPCResponse{
-					JSONRPC: "2.0",
-					ID:      1,
-					Result:  mustMarshal(mcp.ToolsListResult{Tools: []mcp.Tool{{Name: "echo", Description: "echoes input"}}}),
+				w.Header().Set("Content-Type", "application/json")
+				switch req.Method {
+				case "tools/list":
+					resp := mcp.JSONRPCResponse{
+						JSONRPC: "2.0",
+						ID:      1,
+						Result:  mustMarshal(mcp.ToolsListResult{Tools: []mcp.Tool{{Name: "echo", Description: "echoes input"}}}),
+					}
+					if err := json.NewEncoder(w).Encode(resp); err != nil {
+						t.Logf("Failed to encode response: %v", err)
+					}
+				case "tools/call":
+					resp := mcp.JSONRPCResponse{
+						JSONRPC: "2.0",
+						ID:      1,
+						Result:  mustMarshal(mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
+					}
+					if err := json.NewEncoder(w).Encode(resp); err != nil {
+						t.Logf("Failed to encode response: %v", err)
+					}
+				case "resources/list":
+					resp := mcp.JSONRPCResponse{
+						JSONRPC: "2.0",
+						ID:      1,
+						Result:  mustMarshal(mcp.ResourcesListResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
+					}
+					if err := json.NewEncoder(w).Encode(resp); err != nil {
+						t.Logf("Failed to encode response: %v", err)
+					}
+				case "prompts/list":
+					resp := mcp.JSONRPCResponse{
+						JSONRPC: "2.0",
+						ID:      1,
+						Result:  mustMarshal(mcp.PromptsListResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
+					}
+					if err := json.NewEncoder(w).Encode(resp); err != nil {
+						t.Logf("Failed to encode response: %v", err)
+					}
 				}
-				if err := json.NewEncoder(w).Encode(resp); err != nil {
-					t.Logf("Failed to encode response: %v", err)
-				}
-			case "tools/call":
-				resp := mcp.JSONRPCResponse{
-					JSONRPC: "2.0",
-					ID:      1,
-					Result:  mustMarshal(mcp.CallToolResult{Content: []mcp.TextContent{{Type: "text", Text: "mcp says hello"}}}),
-				}
-				if err := json.NewEncoder(w).Encode(resp); err != nil {
-					t.Logf("Failed to encode response: %v", err)
-				}
-			case "resources/list":
-				resp := mcp.JSONRPCResponse{
-					JSONRPC: "2.0",
-					ID:      1,
-					Result:  mustMarshal(mcp.ResourcesListResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
-				}
-				if err := json.NewEncoder(w).Encode(resp); err != nil {
-					t.Logf("Failed to encode response: %v", err)
-				}
-			case "prompts/list":
-				resp := mcp.JSONRPCResponse{
-					JSONRPC: "2.0",
-					ID:      1,
-					Result:  mustMarshal(mcp.PromptsListResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
-				}
-				if err := json.NewEncoder(w).Encode(resp); err != nil {
-					t.Logf("Failed to encode response: %v", err)
-				}
-			}
-		}))
-		downstreamURL = downstreamServer.URL
-	} else {
-		downstreamURL = opts.DownstreamURL
+			}))
+			downstreamURL = downstreamServer.URL
+		} else {
+			downstreamURL = opts.DownstreamURL
+		}
 	}
 
 	// Setup gateway configuration
@@ -209,6 +215,8 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	})
 	require.NoError(t, err)
 	cfg.Gateway.MCPDownstreamURL = downstreamURL
+	cfg.Gateway.MCPDownstreamCmd = opts.DownstreamCmd
+	cfg.Gateway.MCPDownstreamArgs = opts.DownstreamArgs
 
 	if opts.PublicBaseURL != "" {
 		cfg.Gateway.PublicBaseURL = opts.PublicBaseURL
@@ -326,6 +334,8 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		ActuatorPriv:     ActuatorPriv,
 		ActuatorKeyID:    ActuatorKeyID,
 		DownstreamURL:    downstreamURL,
+		DownstreamCmd:    opts.DownstreamCmd,
+		DownstreamArgs:   opts.DownstreamArgs,
 		A2ADownstreamURL: a2aURL,
 	}
 }

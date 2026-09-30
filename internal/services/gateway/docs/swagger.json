@@ -1355,29 +1355,6 @@
                 }
             }
         },
-        "/api/v1/pki/apps/delegated": {
-            "post": {
-                "description": "Mints a short-lived delegated credential for an app, binding both app and requestor identities (mTLS-authenticated)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "pki"
-                ],
-                "summary": "Mint delegated app credential",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/gateway.AppEnrollResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/pki/certificates/revoke": {
             "post": {
                 "description": "Revokes a certificate by serial number (internal mTLS endpoint)",
@@ -2930,32 +2907,6 @@
                 "UserStatusActive",
                 "UserStatusDisabled"
             ]
-        },
-        "gateway.AppEnrollResponse": {
-            "type": "object",
-            "properties": {
-                "app_cert": {
-                    "type": "string"
-                },
-                "app_id": {
-                    "type": "string"
-                },
-                "cert_chain": {
-                    "type": "string"
-                },
-                "error": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "success": {
-                    "type": "boolean"
-                },
-                "trust_bundle": {
-                    "type": "string"
-                }
-            }
         },
         "models.ActionReceiptRecord": {
             "type": "object",

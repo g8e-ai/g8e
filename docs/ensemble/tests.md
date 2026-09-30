@@ -3,8 +3,8 @@ doc_id: ensemble_tests
 title: Ensemble Testing Guide
 audience: developers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-30
+version: v2.2.5
 owners:
   - ensemble/tests/
   - ensemble/pyproject.toml
@@ -45,8 +45,8 @@ Defines how to set up, run, and audit the g8ee ensemble test suite. The ensemble
 | --- | --- |
 | INV-TEST-ENUM-01 | The ensemble test suite contains unit tests (Tier 1), integration tests (Tier 2), external-provider tests (Tier 4), fake conformance checks, and protocol-constant parity checks. End-to-end tests (Tier 3) are reserved; the `e2e` directory and marker exist but contain no executable test cases. |
 | INV-TEST-ENUM-02 | Unit tests live in `ensemble/tests/unit/` and integration tests in `ensemble/tests/integration/`. The `ensemble-test` and `ci-ensemble` targets collect only `tests/unit/` and `tests/integration/`, excluding external-provider markers. Top-level checks under `tests/test_constants_parity.py` and `tests/fakes/test_fakes_protocol_conformance.py` are collected when running pytest over all of `tests/`. |
-| INV-TEST-ENUM-03 | Markers are registered in [ensemble/pyproject.toml](ensemble/pyproject.toml:99) and enforced via `--strict-markers`. Active markers are `unit`, `integration`, `ai_integration`, `requires_web_search`, `requires_typesafe`, `requires_operator`, `slow`, `thinking`, and `tools`. Reserved markers with no current test population are `e2e`, `smoke`, `ai`, `aws`, `intent_workflow`, `operator_wire`, and others for future use. |
-| INV-TEST-ENUM-04 | External markers (`ai_integration`, `requires_web_search`, `requires_typesafe`, `requires_api`, `requires_operator`) are gated at pytest collection time in [ensemble/tests/conftest.py:377](ensemble/tests/conftest.py#L377). Tests skip when required credentials (LLM keys, web search config, TypeSafe API key) or Operator connectivity are detectably absent. Invalid or unavailable configured services remain test failures. |
+| INV-TEST-ENUM-03 | Markers are registered in [ensemble/pyproject.toml](ensemble/pyproject.toml:99) and enforced via `--strict-markers`. Active markers are `unit`, `integration`, `ai_integration`, `requires_web_search`, `requires_system_one`, `requires_operator`, `slow`, `thinking`, and `tools`. Reserved markers with no current test population are `e2e`, `smoke`, `ai`, `aws`, `intent_workflow`, `operator_wire`, and others for future use. |
+| INV-TEST-ENUM-04 | External markers (`ai_integration`, `requires_web_search`, `requires_system_one`, `requires_api`, `requires_operator`) are gated at pytest collection time in [ensemble/tests/conftest.py:377](ensemble/tests/conftest.py#L377). Tests skip when required services (LLM keys, web search config, Ollama with System One model, Operator connectivity) are detectably absent. Invalid or unavailable configured services remain test failures. |
 | INV-TEST-ENUM-05 | The g8ee platform enrollment client is covered at three layers. Mocked client behavior is in `tests/unit/services/infra/app_enrollment_service_test.py` and startup fail-closed behavior in `tests/unit/main/test_main_lifespan.py`. The completion transcript wire contract is pinned in `tests/unit/services/infra/app_enrollment_transcript_contract_test.py` against the generated protobuf message and a golden vector shared with the Gateway's `TestPlatformEnrollmentCompletionTranscriptGoldenVector`. The live flow (request, owner decision, signed completion, certificate chained to the Gateway trust bundle) runs the real client against a real Gateway in the Go test `test/ensemble_enrollment_integration_test.go`. No test or fixture may substitute self-issued credentials for enrollment, and the live test fails rather than skips when the ensemble virtualenv is missing. |
 
 ### Configuration and startup
@@ -70,7 +70,7 @@ Defines how to set up, run, and audit the g8ee ensemble test suite. The ensemble
 | ID | Rule |
 | --- | --- |
 | INV-TEST-ENV-01 | The suite requires Python 3.12+, the in-tree Python protocol package at [protocol/python/](protocol/python/), and ensemble test dependencies from [ensemble/pyproject.toml](ensemble/pyproject.toml:53). Install via `pip install -e protocol/python` and `pip install -e 'ensemble[dev,test]'` from the repository root, or `make setup` from `ensemble/`. |
-| INV-TEST-ENV-02 | Coverage tracks branch coverage for `app/` and omits tests, `conftest.py`, entry points, empty modules, and site packages (configured in [ensemble/pyproject.toml:146](ensemble/pyproject.toml#L146)). The suite does not enforce a coverage failure threshold. Run `python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe and not e2e" --cov=app --cov-report=term-missing` from `ensemble/` for a terminal report. |
+| INV-TEST-ENV-02 | Coverage tracks branch coverage for `app/` and omits tests, `conftest.py`, entry points, empty modules, and site packages (configured in [ensemble/pyproject.toml:146](ensemble/pyproject.toml#L146)). The suite does not enforce a coverage failure threshold. Run `python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one and not e2e" --cov=app --cov-report=term-missing` from `ensemble/` for a terminal report. |
 
 ## Owned surfaces
 
@@ -109,8 +109,8 @@ Run commands from the repository root unless a command explicitly says otherwise
 
 ### Run test suites from the repository root
 
-- `make ensemble-test` runs `ensemble/tests/unit/` and `ensemble/tests/integration/` with `-m "not ai_integration and not requires_web_search and not requires_api"`. Tests marked `requires_typesafe` are gated at collection time when the TypeSafe API key is absent.
-- `make test-external` runs only tests in `ensemble/tests/integration/` marked with `ai_integration`, `requires_web_search`, `requires_api`, or `requires_typesafe`.
+- `make ensemble-test` runs `ensemble/tests/unit/` and `ensemble/tests/integration/` with `-m "not ai_integration and not requires_web_search and not requires_api"`. Tests marked `requires_system_one` are gated at collection time when Ollama with a System One model is unavailable.
+- `make test-external` runs only tests in `ensemble/tests/integration/` marked with `ai_integration`, `requires_web_search`, `requires_api`, or `requires_system_one`.
 - `make ensemble-lint` runs Ruff and Pyright against [ensemble/app](ensemble/app).
 - `make ci-ensemble` runs `ensemble-lint` followed by `ensemble-test`.
 - `make build-ensemble` builds the `g8e-ensemble:<VERSION>` Docker image without running tests.
@@ -129,10 +129,10 @@ For targeted pytest runs, use the markers and directories:
 
 ```bash
 python -m pytest tests/unit/
-python -m pytest tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe"
-python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe and not e2e"
+python -m pytest tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one"
+python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one and not e2e"
 python -m pytest tests/integration/ -m ai_integration
-python -m pytest tests/integration/ -m "requires_web_search or requires_api or requires_typesafe"
+python -m pytest tests/integration/ -m "requires_web_search or requires_api or requires_system_one"
 ```
 
 The third command includes top-level parity and fake conformance checks while excluding external-provider and E2E-marked tests. The repository `./g8e test` subcommands run the Go platform test suites; they do not run the Python ensemble suite.
@@ -142,7 +142,7 @@ The third command includes top-level parity and fake conformance checks while ex
 Coverage tracks branch coverage for [app/](app/) and omits tests, `conftest.py`, entry points, empty modules, and site packages. From `ensemble/`, generate a terminal report while excluding external-provider and e2e tests:
 
 ```bash
-python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe and not e2e" --cov=app --cov-report=term-missing
+python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one and not e2e" --cov=app --cov-report=term-missing
 ```
 
 Add `--cov-report=html` or `--cov-report=json` to write reports to `coverage-reports/g8ee/`. Ruff and Pyright targets cover only [app/](app/) in the ensemble Makefile and CI job. Go-native evaluation code is covered by `./g8e test unit`, `./g8e test lint`, and the platform coverage workflow.

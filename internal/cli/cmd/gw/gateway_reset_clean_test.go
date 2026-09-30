@@ -10,6 +10,7 @@ package gw
 import (
 	"bytes"
 	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -120,7 +121,7 @@ func TestGatewayCleanCmd_PromptTextContainsWarning(t *testing.T) {
 
 	output := buf.String()
 	assert.Contains(t, output, "WARNING")
-	assert.Contains(t, output, "permanently destroyed")
+	assert.Contains(t, output, "Rename the runtime directory (.g8e) aside to .g8e-<MMDDHHMM>")
 	assert.Contains(t, output, "Remove g8e root CA anchors from the OS trust store")
 	assert.Contains(t, output, "Continue? [y/N]")
 }
@@ -138,10 +139,10 @@ func TestGatewayResetCmd_PromptTextContainsResetSteps(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "This command will:")
+	assert.Contains(t, output, "destructive operation")
 	assert.Contains(t, output, "Stop all running g8e services")
-	assert.Contains(t, output, "Wipe the SQLite databases")
-	assert.Contains(t, output, "Preserve your existing TLS/PKI")
+	assert.Contains(t, output, "Rename the runtime directory (.g8e) aside to .g8e-<MMDDHHMM>")
+	assert.Contains(t, output, "Start a fresh gateway with a new trust domain")
 	assert.Contains(t, output, "Continue? [y/N]")
 }
 
@@ -281,4 +282,74 @@ func TestGatewayCleanCmd_OSTrustListError_ProceedsWithWarning(t *testing.T) {
 	require.NoError(t, err, "list error is best-effort and must not abort the runtime wipe")
 	assert.Contains(t, buf.String(), "could not enumerate OS trust anchors")
 	assert.Contains(t, buf.String(), "Clean complete")
+}
+
+// TestGatewayCleanCmd_ArchivesRuntimeInsteadOfDeleting verifies `gw clean`
+// renames .g8e to .g8e-<MMDDHHMM> so the prior state stays recoverable.
+func TestGatewayCleanCmd_ArchivesRuntimeInsteadOfDeleting(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), "data/marker.txt", []byte("keep me"), constants.PermFilePrivate))
+	runtimeDir := fileSvc.Resolve("")
+	cmd := gatewayCleanCmdWithConfig(
+		cmdtest.ConfigLoaderFor(cfg),
+		cmdtest.FileSvcFactoryFor(fileSvc),
+		func() (systemTrustCleaner, error) { return &mockTrustCleaner{}, nil },
+	)
+	require.NoError(t, cmd.Flags().Set("force", "true"))
+	require.NoError(t, cmd.Flags().Set("skip-backup", "true"))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.NoDirExists(t, runtimeDir)
+	archives, err := filepath.Glob(runtimeDir + "-*")
+	require.NoError(t, err)
+	require.Len(t, archives, 1)
+	assert.FileExists(t, filepath.Join(archives[0], "data", "marker.txt"))
+	assert.Contains(t, buf.String(), archives[0])
+}
+
+// TestGatewayCleanCmd_OffersBackupBeforeArchiving verifies the default flow
+// snapshots evaluation evidence before the runtime is moved aside, and that
+// --skip-backup leaves no snapshot behind.
+func TestGatewayCleanCmd_OffersBackupBeforeArchiving(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		skipBackup bool
+		wantBackup bool
+	}{
+		{name: "backup taken by default", wantBackup: true},
+		{name: "skip-backup opts out", skipBackup: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+			evidence := constants.EvaluationDataPath + "/" + constants.EvaluationRunsDirname + "/run-1/report.json"
+			require.NoError(t, fileSvc.WriteFile(context.Background(), evidence, []byte(`{"ok":true}`), constants.PermFilePrivate))
+			cmd := gatewayCleanCmdWithConfig(
+				cmdtest.ConfigLoaderFor(cfg),
+				cmdtest.FileSvcFactoryFor(fileSvc),
+				func() (systemTrustCleaner, error) { return &mockTrustCleaner{}, nil },
+			)
+			require.NoError(t, cmd.Flags().Set("force", "true"))
+			if tc.skipBackup {
+				require.NoError(t, cmd.Flags().Set("skip-backup", "true"))
+			}
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+
+			require.NoError(t, cmd.RunE(cmd, nil))
+
+			backupDir := filepath.Join(cfg.ProjectRoot, filepath.FromSlash(constants.EvaluationBackupDefaultDir))
+			snapshots, _ := filepath.Glob(filepath.Join(backupDir, constants.EvaluationBackupDirPrefix+"*"))
+			if tc.wantBackup {
+				require.Len(t, snapshots, 1)
+				assert.FileExists(t, filepath.Join(snapshots[0], filepath.FromSlash(evidence)))
+			} else {
+				assert.Empty(t, snapshots)
+			}
+		})
+	}
 }

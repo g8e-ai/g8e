@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -77,6 +78,9 @@ func (s *stubFileSvc) OpenForRead(ctx context.Context, relPath string) (*os.File
 	return s.openReadFile, nil
 }
 
+func (s *stubFileSvc) ArchiveRuntime(ctx context.Context, now time.Time) (string, error) {
+	panic("unexpected")
+}
 func (s *stubFileSvc) Remove(ctx context.Context, relPath string) error    { panic("unexpected") }
 func (s *stubFileSvc) RemoveAll(ctx context.Context, relPath string) error { panic("unexpected") }
 func (s *stubFileSvc) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, error) {

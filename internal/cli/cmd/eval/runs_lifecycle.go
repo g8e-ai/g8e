@@ -33,7 +33,8 @@ type runStartFlowOptions struct {
 	Verify             bool
 	RequireObservation bool
 	RequireProvenance  bool
-	NoAutoRefresh      bool
+	NoAutoBind         bool
+	NoBackup           bool
 	EnsembleURL        string
 	FormationRunner    string
 	JSONOutput         bool
@@ -190,13 +191,18 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 		result.Prepared = true
 		return result, nil
 	}
+	if !opts.NoBackup {
+		// Deferred so the snapshot also captures verification output and the
+		// evidence of a run that failed or was cancelled.
+		defer autoBackupEval(cmd, deps, opts.JSONOutput)
+	}
 	executed, err := executeRun(cmd, deps, runExecuteOptions{
 		RunID:                    runID,
 		Publish:                  opts.Publish,
 		Daemon:                   opts.Daemon,
 		EnsembleURL:              opts.EnsembleURL,
 		EnforceProviderResidency: opts.RequireObservation || opts.RequireProvenance,
-		NoAutoRefresh:            opts.NoAutoRefresh,
+		NoAutoBind:               opts.NoAutoBind,
 		FormationRunner:          opts.FormationRunner,
 		JSONOutput:               opts.JSONOutput,
 	})
@@ -289,10 +295,13 @@ Examples:
 	cmd.Flags().BoolVar(&opts.RequireProvenance, "require-provenance", false, "Fail verification when model provenance attestation windows are missing")
 	cmd.Flags().BoolVar(&opts.RequireObservation, "require-observation", false, "Fail verification when provider-boundary observation windows are missing")
 	cmd.Flags().StringVar(&opts.EnsembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().BoolVar(&opts.NoAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
+	cmd.Flags().BoolVar(&opts.NoAutoBind, "no-auto-bind", false, "Do not bind the data-operator to the CLI session when it is not bound")
+	cmd.Flags().BoolVar(&opts.NoBackup, "no-backup", false, noBackupFlagUsage)
 	cmd.Flags().StringVar(&opts.FormationRunner, "formation-runner", formationRunnerG8ee, formationRunnerFlagUsage)
 	return cmd
 }
+
+const noBackupFlagUsage = "Do not back up evaluation evidence to eval/backups when the run finishes"
 
 const formationRunnerFlagUsage = `Formation role execution: "g8ee" runs each role through the g8ee chat pipeline (graded, full transcripts); "direct" dispatches each role to the Inference Operator (ungraded). Both record storage attestation, observer windows, and peak VRAM`
 
@@ -333,7 +342,7 @@ type runResumeJSON struct {
 func runsResumeCmd(deps nativeEvalDeps) *cobra.Command {
 	var limit uint32
 	var ensembleURL, formationRunner string
-	var noAutoRefresh, publish, daemon bool
+	var noAutoBind, noBackup, publish, daemon bool
 	cmd := &cobra.Command{
 		Use:   "resume <run>",
 		Short: "Execute the remaining queued assignments of a run",
@@ -345,13 +354,16 @@ runs until the matrix is exhausted. An archived run cannot be resumed.`,
 			runID := args[0]
 			jsonOutput := output.JSONEnabled(cmd)
 			results := make([]runResumeResult, 0)
+			if !noBackup {
+				defer autoBackupEval(cmd, deps, jsonOutput)
+			}
 			executed, err := executeRun(cmd, deps, runExecuteOptions{
 				RunID:           runID,
 				Publish:         publish,
 				Daemon:          daemon,
 				Limit:           limit,
 				EnsembleURL:     ensembleURL,
-				NoAutoRefresh:   noAutoRefresh,
+				NoAutoBind:      noAutoBind,
 				FormationRunner: formationRunner,
 				JSONOutput:      jsonOutput,
 				ResultOutput: func(result *evalv1.EvaluationAssignmentResult) {
@@ -390,7 +402,8 @@ runs until the matrix is exhausted. An archived run cannot be resumed.`,
 	cmd.Flags().BoolVar(&daemon, "daemon", false, "Run continuously until the queued matrix is exhausted")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish assignment lifecycle and terminal result projections to the public mirror")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
+	cmd.Flags().BoolVar(&noAutoBind, "no-auto-bind", false, "Do not bind the data-operator to the CLI session when it is not bound")
+	cmd.Flags().BoolVar(&noBackup, "no-backup", false, noBackupFlagUsage)
 	cmd.Flags().StringVar(&formationRunner, "formation-runner", formationRunnerG8ee, formationRunnerFlagUsage)
 	return cmd
 }

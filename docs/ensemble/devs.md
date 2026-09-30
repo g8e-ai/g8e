@@ -82,7 +82,7 @@ pip install -e protocol/python
 pip install -e 'ensemble[dev,test]'
 ```
 
-The service reads `.env` with `python-dotenv` at import time without overriding existing environment variables. Local bootstrap settings are assembled by `SettingsService`; verified bootstrap secrets can come from the configured bootstrap material, LLM provider defaults can come from environment variables, and platform settings are loaded through the Gateway-backed cache-aside service. Platform settings take precedence over environment defaults, and request overrides are applied at the user-settings boundary. Do not treat the `/operator-state` mount in the unified Compose deployment as a general host filesystem or execution channel.
+The service reads `.env` with `python-dotenv` at import time without overriding existing environment variables. Local bootstrap settings are assembled by `SettingsService`; verified bootstrap secrets can come from the configured bootstrap material, and platform settings (LLM provider, models, token limits) are loaded through the Gateway-backed cache-aside service, which is their only source. Request overrides are applied at the user-settings boundary. Environment variables follow INV-ENV-04 in [docs/devs/devs.md](../devs/devs.md): secrets, user-specific endpoints, and host facts only. Do not treat the `/operator-state` mount in the unified Compose deployment as a general host filesystem or execution channel.
 
 ## Development commands
 
@@ -103,12 +103,12 @@ Use the repository-root targets when you need the supported split between local 
 
 ```bash
 make ensemble-test    # tests/unit and tests/integration, excluding external-service markers
-make test-external    # integration tests marked ai_integration, requires_web_search, requires_api, or requires_typesafe
+make test-external    # integration tests marked ai_integration, requires_web_search, requires_api, or requires_system_one
 make ensemble-lint    # Ruff and Pyright for ensemble/app
 make build-ensemble   # Build g8e-ensemble:<VERSION> from ensemble/Dockerfile
 ```
 
-The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_typesafe"`. The `make test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_typesafe"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_typesafe`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
+The root `make ensemble-test` target runs [tests/unit/](../../ensemble/tests/unit/) and [tests/integration/](../../ensemble/tests/integration/) with `-m "not ai_integration and not requires_web_search and not requires_api and not requires_system_one"`. The `make test-external` target runs marked integration tests with `-m "ai_integration or requires_web_search or requires_api or requires_system_one"` and requires relevant credentials or external services. The test suite defines markers for `unit`, `integration`, `ai_integration`, `ai`, `e2e`, `smoke`, `thinking`, `tools`, `operator_wire`, `requires_operator`, `requires_api`, `requires_web_search`, `requires_system_one`, `slow`, `aws`, and `intent_workflow`; inspect the test and fixture before selecting a marker because some require a live Gateway, Operator, or external provider.
 
 For a focused test, use the environment selected by the target or invoke the ensemble interpreter explicitly:
 
@@ -126,6 +126,7 @@ Tests use the pytest configuration in [ensemble/pyproject.toml](../../ensemble/p
 - Import shared constants, API paths, model types, and enums from the in-tree `g8e` package. Keep values in `app/constants/` only when they are ensemble-owned.
 - Keep service construction and dependency wiring in `ServiceFactory` and its typed `CoreServices`, `DataServices`, `DomainServices`, `OperatorServices`, and `AllServices` containers. Do not create a second production wiring path in a router or provider.
 - Preserve the startup dependency order: bootstrap settings and identity, transport clients, DB/KV/blob handlers, cache-aside service, platform settings, governance and domain services, then lifecycle start hooks.
+- Read environment variables only for secrets, user-specific endpoints, and host facts (INV-ENV-04 in [docs/devs/devs.md](../devs/devs.md)). Platform configuration (service URLs, runtime and PKI paths, provider, models, token limits) is a typed default in `app.models.settings` or a Gateway-backed platform setting, varied only by explicit command arguments. Every env key is declared in `app/constants/env_vars.py`; do not use raw-string keys.
 - Return or raise the typed errors defined by `app.errors` and use the centralized error codes in `app.constants.errors` for machine-checked failures.
 - Route business-critical application-record mutations through `GovernanceClient`. Do not bypass the Gateway with direct storage writes or treat application approval as protocol authorization.
 - Preserve exact Operator/session binding when constructing command requests. Do not broadcast commands or trust caller-supplied identity headers without authenticated-context validation.

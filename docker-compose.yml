@@ -13,7 +13,7 @@
 # Binary precedence:
 # Host binaries in ./bin are mounted read-only at /opt/g8e/bin. When present,
 # a local `make build` takes immediate precedence across all internal services.
-# Restarting the operators (`docker compose restart g8e-operator g8e-inference-operator`)
+# Restarting the operators (`docker compose restart g8e-data-operator g8e-inference-operator`)
 # aligns operator versions immediately without rebuilding images. If no host
 # binary is present, the image baked-in binary (/g8e) is used automatically.
 # See docs/guides/unified_stack.md.
@@ -51,7 +51,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${G8E_PREFIX:-g8e}-gateway
+    container_name: g8e-gateway
     working_dir: /root
     networks:
       g8e-net:
@@ -66,28 +66,27 @@ services:
       - /etc/hosts:/etc/hosts.host:ro
       - /etc/hostname:/etc/hostname.host:ro
     ports:
-      - "${G8E_HTTP_PORT:-8080}:8080"
-      - "${G8E_HTTPS_PORT:-8443}:8443"
-      - "127.0.0.1:${G8E_PUBLIC_MIRROR_PRIVATE_PORT:-8081}:8081"
-      - "127.0.0.1:${G8E_PUBLIC_MIRROR_PUBLIC_PORT:-8082}:8082"
-      - "127.0.0.1:${G8E_EVAL_EXPLORER_PORT:-5173}:5173"
+      - "8080:8080"
+      - "8443:8443"
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:5173:5173"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
-    environment:
-      - G8E_PUBLIC_BASE_URL=${G8E_PUBLIC_BASE_URL:-https://${G8E_HOSTNAME:-localhost}:${G8E_HTTPS_PORT:-8443}}
-      - G8E_DOCKER_COMPOSE=1
-      - G8E_EVAL_EXPLORER_ROOT=/eval-explorer
     command:
       - "gw"
       - "start"
       - "-f"
       - "--log"
       - "info"
+      - "--public-base-url"
+      - "https://${G8E_HOSTNAME:-localhost}:8443"
       - "--public-spectator"
+      - "--public-spectator-allow-container-bind"
       - "--public-spectator-private-listen"
       - "0.0.0.0:8081"
       - "--public-spectator-public-listen"
@@ -96,10 +95,12 @@ services:
       - "172.28.0.1/32"
       - "--eval-explorer-listen"
       - "0.0.0.0:5173"
+      - "--eval-explorer-root"
+      - "/eval-explorer"
       - "--cors-origin"
-      - "http://${G8E_HOSTNAME:-localhost}:${G8E_DASHBOARD_PORT:-3000}"
+      - "http://${G8E_HOSTNAME:-localhost}:3000"
       - "--passkey-rp-origin"
-      - "http://${G8E_HOSTNAME:-localhost}:${G8E_DASHBOARD_PORT:-3000}"
+      - "http://${G8E_HOSTNAME:-localhost}:3000"
       - "--passkey-rp-id"
       - "${G8E_HOSTNAME:-localhost}"
       - "--passkey-rp-name"
@@ -118,14 +119,19 @@ services:
           cpus: '1'
           memory: 512M
 
-  g8e-operator:
+  g8e-data-operator:
     # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
-    # Data Operator for governed tool/filesystem/process boundaries.
+    # Data Operator for governed tool/filesystem/process boundaries. The
+    # `data-operator` hostname is how evaluations identify it among enrolled
+    # Operators, so it must stay in step with constants.DataOperatorHostname.
     image: g8e-gateway
-    container_name: ${G8E_PREFIX:-g8e}-operator
+    container_name: g8e-data-operator
+    hostname: data-operator
     working_dir: /root
     networks:
-      - g8e-net
+      g8e-net:
+        aliases:
+          - g8e-data-operator
     volumes:
       - g8e-operator-data:/root/.g8e
       - g8e-shared-tmp:/tmp
@@ -139,7 +145,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "start", "-e", "g8e.local", "--heartbeat-interval", "${G8E_HEARTBEAT_INTERVAL_SECONDS:-30}"]
+    command: ["operator", "start", "-e", "g8e.local"]
     restart: unless-stopped
     deploy:
       resources:
@@ -156,7 +162,7 @@ services:
     # runtime volume and session identity. Satisfies the exact-two-Operator
     # evaluation topology.
     image: g8e-gateway
-    container_name: ${G8E_PREFIX:-g8e}-inference-operator
+    container_name: g8e-inference-operator
     hostname: inference-operator
     working_dir: /root
     networks:
@@ -183,15 +189,7 @@ services:
       - "g8e.local"
       - "--inference-enabled"
       - "--inference-ollama-endpoint"
-      - "${G8E_OLLAMA_ENDPOINT:-http://127.0.0.1:11434}"
-      - "--inference-primary-model"
-      - "${G8E_INFERENCE_PRIMARY_MODEL:-gemma4:e4b}"
-      - "--inference-assistant-model"
-      - "${G8E_INFERENCE_ASSISTANT_MODEL:-qwen3:1.7b}"
-      - "--inference-lite-model"
-      - "${G8E_INFERENCE_LITE_MODEL:-smol-7b:latest}"
-      - "--inference-keep-alive"
-      - "${G8E_INFERENCE_KEEP_ALIVE:--1}"
+      - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
       - "--inference-campaign-id"
       - "${G8E_INFERENCE_CAMPAIGN_ID:-}"
       - "--inference-model-registry-digest"
@@ -212,7 +210,7 @@ services:
     # primary gateway. Activated via the `cross-enrollment` profile.
     profiles: [cross-enrollment]
     image: g8e-gateway
-    container_name: ${G8E_PREFIX:-g8e}-gateway-secondary
+    container_name: g8e-gateway-secondary
     hostname: gateway-secondary
     working_dir: /root
     networks:
@@ -232,7 +230,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "start", "-e", "g8e.local", "--heartbeat-interval", "${G8E_HEARTBEAT_INTERVAL_SECONDS:-30}"]
+    command: ["operator", "start", "-e", "g8e.local"]
     restart: unless-stopped
     deploy:
       resources:
@@ -248,27 +246,33 @@ services:
     build:
       context: .
       dockerfile: ensemble/Dockerfile
-    container_name: ${G8E_PREFIX:-g8e}-ensemble
+    container_name: g8e-ensemble
     networks:
       - g8e-net
     depends_on:
       g8e-gateway:
         condition: service_healthy
-      g8e-operator:
+      g8e-data-operator:
         condition: service_started
     ports:
-      - "${G8E_ENSEMBLE_PORT:-8000}:8000"
+      - "8000:8000"
     volumes:
       - g8e-ensemble-data:/root/.g8e
       - g8e-operator-data:/operator-state:ro
       - g8e-shared-tmp:/tmp
-    environment:
-      - G8E_GATEWAY_HTTP_URL=http://g8e.local:8080
-      - G8E_GATEWAY_URL=https://g8e.local:8443
-      - G8E_GATEWAY_HTTPS_URL=https://g8e.local:8443
-      - G8E_GATEWAY_PUBSUB_URL=wss://g8e.local:8443
-      - G8E_RUNTIME_DIR=/root/.g8e
-      - G8E_SECRETS_DIR=/operator-state/secrets
+    command:
+      - "--gateway-http-url"
+      - "http://g8e.local:8080"
+      - "--gateway-url"
+      - "https://g8e.local:8443"
+      - "--gateway-https-url"
+      - "https://g8e.local:8443"
+      - "--gateway-pubsub-url"
+      - "wss://g8e.local:8443"
+      - "--runtime-dir"
+      - "/root/.g8e"
+      - "--secrets-dir"
+      - "/operator-state/secrets"
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -290,11 +294,11 @@ services:
     build:
       context: .
       dockerfile: dashboard/Dockerfile
-    container_name: ${G8E_PREFIX:-g8e}-dashboard
+    container_name: g8e-dashboard
     networks:
       - g8e-net
     ports:
-      - "${G8E_DASHBOARD_PORT:-3000}:3000"
+      - "3000:3000"
     depends_on:
       g8e-gateway:
         condition: service_healthy
@@ -303,7 +307,7 @@ services:
     environment:
       - GATEWAY_HEALTH_URL=http://g8eg:8080
       - GATEWAY_HEALTH_PATH=/api/v1/health
-      - G8E_GATEWAY_URL=https://${G8E_HOSTNAME:-localhost}:${G8E_HTTPS_PORT:-8443}
+      - G8E_GATEWAY_URL=https://${G8E_HOSTNAME:-localhost}:8443
       - G8E_GATEWAY_HTTP_URL=http://g8eg:8080
       - G8E_RUNTIME_DIR=/data
     healthcheck:
@@ -341,7 +345,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${G8E_PREFIX:-g8e}-gateway-user
+    container_name: g8e-gateway-user
     hostname: gateway-user
     working_dir: /root
     networks:
@@ -353,26 +357,26 @@ services:
       - g8e-shared-tmp:/tmp
       - ./bin:/opt/g8e/bin:ro
     ports:
-      - "${G8E_USER_HTTP_PORT:-8090}:8080"
-      - "${G8E_USER_HTTPS_PORT:-8453}:8443"
+      - "8090:8080"
+      - "8453:8443"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
-    environment:
-      - G8E_PUBLIC_BASE_URL=https://${G8E_USER_HOSTNAME:-localhost}:${G8E_USER_HTTPS_PORT:-8453}
     command:
       - "gw"
       - "start"
       - "-f"
       - "--log"
       - "info"
+      - "--public-base-url"
+      - "https://${G8E_USER_HOSTNAME:-localhost}:8453"
       - "--cors-origin"
-      - "http://${G8E_USER_HOSTNAME:-localhost}:${G8E_USER_DASHBOARD_PORT:-3001}"
+      - "http://${G8E_USER_HOSTNAME:-localhost}:3001"
       - "--passkey-rp-origin"
-      - "http://${G8E_USER_HOSTNAME:-localhost}:${G8E_USER_DASHBOARD_PORT:-3001}"
+      - "http://${G8E_USER_HOSTNAME:-localhost}:3001"
       - "--passkey-rp-id"
       - "${G8E_USER_HOSTNAME:-localhost}"
       - "--passkey-rp-name"
@@ -391,7 +395,7 @@ services:
     # Inference Node: gateway binary in operator mode (`operator start -e g8e-user`).
     profiles: [g8ellama]
     image: g8e-gateway
-    container_name: ${G8E_PREFIX:-g8e}-inference
+    container_name: g8e-inference
     hostname: inference
     working_dir: /root
     networks:
@@ -419,14 +423,6 @@ services:
       - "--inference-enabled"
       - "--inference-ollama-endpoint"
       - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
-      - "--inference-primary-model"
-      - "${G8E_INFERENCE_PRIMARY_MODEL:-gemma4:e4b}"
-      - "--inference-assistant-model"
-      - "${G8E_INFERENCE_ASSISTANT_MODEL:-qwen3:1.7b}"
-      - "--inference-lite-model"
-      - "${G8E_INFERENCE_LITE_MODEL:-smol-7b:latest}"
-      - "--inference-keep-alive"
-      - "${G8E_INFERENCE_KEEP_ALIVE:--1}"
     restart: unless-stopped
     deploy:
       resources:

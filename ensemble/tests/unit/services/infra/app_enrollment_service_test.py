@@ -21,7 +21,7 @@ Covers the two explicit operations:
 
 HTTP traffic is intercepted at the httpx transport layer via
 ``httpx.MockTransport`` and filesystem state is isolated to ``tmp_path`` via
-``G8E_PKI_DIR`` + ``reload_paths()``.
+bootstrap ``pki_dir`` settings (``configure_bootstrap``).
 """
 
 from __future__ import annotations
@@ -33,13 +33,13 @@ import json
 import os
 import stat
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
 import pytest
 
-from app.constants import paths as paths_module
-from app.constants.env_vars import EnvVar
+from app.constants.bootstrap import BootstrapSettings, configure_bootstrap, get_bootstrap
 from app.constants.generated_paths import PortConstants
 from app.errors import ConfigurationError
 from app.services.infra.app_enrollment_service import (
@@ -64,17 +64,19 @@ def _isolate_pki_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 
     Returns the resolved pki_dir. The ensemble's PATHS resolution derives
     pki_dir / app_cert_dir / ca_cert_path / pending_enrollment_dir from
-    G8E_PKI_DIR (or G8E_RUNTIME_DIR when PKI_DIR is unset); setting PKI_DIR
-    directly keeps the test independent of the runtime-dir default and of any
-    host-side .g8e state.
+    the bootstrap ``pki_dir`` (or ``runtime_dir`` when it is unset); setting
+    ``pki_dir`` directly keeps the test independent of the runtime-dir default
+    and of any host-side .g8e state.
     """
     pki_dir = tmp_path / "pki"
     pki_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setenv(EnvVar.PKI_DIR, str(pki_dir))
-    monkeypatch.delenv(EnvVar.RUNTIME_DIR, raising=False)
-    monkeypatch.delenv(EnvVar.CA_CERT_PATH, raising=False)
-    paths_module.reload_paths()
+    configure_bootstrap(BootstrapSettings(pki_dir=str(pki_dir)))
     return pki_dir
+
+
+def _set_gateway_http_url(url: str) -> None:
+    """Set the gateway plain-HTTP URL while keeping the other bootstrap settings."""
+    configure_bootstrap(replace(get_bootstrap(), gateway_http_url=url))
 
 
 def _self_signed_cert(
@@ -416,7 +418,7 @@ class TestEnrollPlatformEnrollment:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         cert_pem, _ = _self_signed_cert(_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365))
         handler, captured = _mock_platform_enrollment_handler(app_cert=cert_pem)
@@ -454,7 +456,7 @@ class TestEnrollPlatformEnrollment:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         handler, captured = _mock_platform_enrollment_handler()
         _patch_httpx_with_mock_transport(monkeypatch, handler)
@@ -473,7 +475,7 @@ class TestEnrollPlatformEnrollment:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         cert_pem, _ = _self_signed_cert(_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365))
         handler, _ = _mock_platform_enrollment_handler(app_cert=cert_pem)
@@ -499,7 +501,7 @@ class TestEnrollPlatformEnrollment:
         poll. This lets us inspect the pending state file on disk.
         """
         pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         cert_pem, _ = _self_signed_cert(_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365))
         pending_path_str = str(pki_dir / "pending-enrollment" / "g8ee.json")
@@ -588,7 +590,7 @@ class TestEnrollPlatformEnrollment:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         cert_pem, _ = _self_signed_cert(_dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365))
         # Generate a real key pair for the pending state.
@@ -668,7 +670,7 @@ class TestEnrollPlatformEnrollment:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         stale_key = ec.generate_private_key(ec.SECP256R1())
         stale_key_pem = stale_key.private_bytes(
@@ -715,7 +717,7 @@ class TestEnrollPlatformEnrollment:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         handler, _ = _mock_platform_enrollment_handler(deny=True)
         _patch_httpx_with_mock_transport(monkeypatch, handler)
@@ -728,7 +730,7 @@ class TestEnrollPlatformEnrollment:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         handler, _ = _mock_platform_enrollment_handler(expire=True)
         _patch_httpx_with_mock_transport(monkeypatch, handler)
@@ -741,7 +743,7 @@ class TestEnrollPlatformEnrollment:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+        _set_gateway_http_url("http://g8e.local:8080")
 
         def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
@@ -826,19 +828,14 @@ class TestEnrollPlatformEnrollment:
 
 
 class TestResolveGatewayHttpUrl:
-    """G8E_GATEWAY_HTTP_URL overrides the default local gateway HTTP URL."""
+    """The bootstrap gateway_http_url overrides the default local gateway HTTP URL."""
 
-    def test_uses_explicit_gateway_http_url(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080/")
+    def test_uses_explicit_gateway_http_url(self) -> None:
+        _set_gateway_http_url("http://g8e.local:8080/")
         service = AppEnrollmentService()
         assert service._resolve_gateway_http_url() == "http://g8e.local:8080"
 
-    def test_defaults_to_local_gateway_http_port_when_unset(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.delenv(EnvVar.GATEWAY_HTTP_URL, raising=False)
+    def test_defaults_to_local_gateway_http_port_when_unset(self) -> None:
         service = AppEnrollmentService()
         assert (
             service._resolve_gateway_http_url()

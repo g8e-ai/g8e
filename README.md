@@ -2,7 +2,7 @@
 
 **Give AI systems a governed path to real infrastructure—without giving them direct authority over it.**
 
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Version](https://img.shields.io/badge/version-v2.2.3-green.svg)](VERSION) [![FIPS 140-3](https://img.shields.io/badge/FIPS%20140--3-Go%20Cryptographic%20Module-006400.svg)](docs/reference/fips140-3.md) [![MCP](https://img.shields.io/badge/MCP-governed-5D3FD3.svg)](protocol/docs/mcp.md)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Version](https://img.shields.io/badge/version-v2.2.5-green.svg)](VERSION) [![FIPS 140-3](https://img.shields.io/badge/FIPS%20140--3-Go%20Cryptographic%20Module-006400.svg)](docs/reference/fips140-3.md) [![MCP](https://img.shields.io/badge/MCP-governed-5D3FD3.svg)](protocol/docs/mcp.md)
 
 g8e is a zero-trust execution and evidence platform for AI agents, human operators, and distributed target runtimes. An AI client or operator proposes typed intent. A central **Gateway** authenticates the ingress, binds identity and state roots, and screens policy. A host-side **Operator** on the target machine independently verifies the exact transaction before executing anything, mints a short-lived capability, and records signed cryptographic receipts and commitment chains at the local execution boundary.
 
@@ -101,8 +101,8 @@ g8e is a polyglot platform combining a single statically linked Go binary with f
 ### 1. Governed AI agent integrations (MCP & A2A)
 Connect autonomous agents and AI coding assistants to real infrastructure through a governed reverse proxy:
 - **Universal MCP Server:** Run g8e as a local stdio MCP server (`g8e mcp stdio`) or stream over HTTP (`POST /mcp`) to expose 32 governed system tools to any MCP-compliant client.
-- **Built-in Agent Launchers:** Configure and run popular coding agents with delegated, short-lived identities using `g8e mcp agent run <claude|codex|devin|gemini|goose>`.
-- **MCP Proxy & Tool Governance:** Wrap and govern third-party MCP servers (`g8e mcp agent run --wrap-cmd "<cmd>"`), subjecting arbitrary tools to L1-L5 verification.
+- **Built-in Agent Launchers:** Configure and run popular coding agents with owner-approved application identities using `g8e mcp agent run <claude|codex|devin|gemini|goose>`.
+- **MCP Proxy & Tool Governance:** Attach third-party MCP servers to the Gateway as downstream egress (`--mcp-downstream-cmd` / `--mcp-downstream-args` for a stdio subprocess, or `--mcp-downstream-url`), subjecting arbitrary tools to L1-L5 verification.
 - **Agent-to-Agent (A2A) Routing:** Expose structured JSON-RPC endpoints (`POST /a2a`) that wrap downstream agent skill invocations inside canonical `GovernanceEnvelope` transactions.
 - See [AI Agents and the g8e Boundary](docs/architecture/agents.md) and [MCP Specification](protocol/docs/mcp.md).
 
@@ -275,8 +275,8 @@ Launch supported AI coding assistants with g8e as their governed tool provider:
 # Run an MCP stdio server proxying through the Gateway
 ./g8e mcp stdio
 
-# Govern an external MCP server via reverse proxy
-./g8e mcp agent run --wrap-cmd "npx -y @modelcontextprotocol/server-filesystem /tmp"
+# Govern an external MCP server via Gateway downstream egress
+./g8e serve gateway --mcp-downstream-cmd npx --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/tmp'
 ```
 
 See [AI Agents and the g8e Boundary](docs/architecture/agents.md).
@@ -355,10 +355,10 @@ Integrate with the g8e protocol in Go or Python:
 
 ```bash
 # Go module (canonical protobuf bindings, models, hashing, and verifiers)
-go get github.com/g8e-ai/g8e/v2@v2.2.3
+go get github.com/g8e-ai/g8e/v2@v2.2.5
 
 # Python package (FastAPI clients, envelope models, and receipt validation)
-pip install g8e==2.2.3
+pip install g8e==2.2.5
 ```
 
 See [Protocol Library](docs/architecture/protocol.md).

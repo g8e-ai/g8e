@@ -82,7 +82,7 @@ Database paths are relative to `.g8e/data/` within the runtime directory. Consta
 
 All databases are local to the runtime that opens them. An outbound Operator's `g8e.db` is not a central platform database; it is authoritative only for evidence produced by that Operator. During L4 verification, the Operator obtains the Gateway's current state root; its local database is not substituted. The Gateway mirrors remote signed receipts on a best-effort basis; mirroring failure does not invalidate the Operator's local evidence.
 
-In the root Compose deployment, `g8e-gateway`, `g8e-operator`, and `g8e-inference-operator` use separate named volumes. The cross-enrollment secondary gateway and `g8ellama` topology also use separate volumes. The shared `/tmp` volume is not a storage boundary. Removing a component volume removes that component's database, PKI, vault, and evidence only.
+In the root Compose deployment, `g8e-gateway`, `g8e-data-operator`, and `g8e-inference-operator` use separate named volumes. The cross-enrollment secondary gateway and `g8ellama` topology also use separate volumes. The shared `/tmp` volume is not a storage boundary. Removing a component volume removes that component's database, PKI, vault, and evidence only.
 
 ## Canonical Database
 

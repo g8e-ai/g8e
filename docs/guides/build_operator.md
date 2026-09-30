@@ -61,7 +61,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Gateway start command and flags | `internal/cli/cmd/gw/gateway.go` (gatewayStartCmd) | `./g8e gw start --help` |
 | Operator list/bind/run/stop commands | `internal/cli/cmd/operator/operator.go` | `./g8e operator --help` |
 | Vault administration | `internal/cli/cmd/vault/` | `./g8e vault --help` |
-| Public protocol Go module | `github.com/g8e-ai/g8e/v2@v2.2.3` | `go get -d github.com/g8e-ai/g8e/v2@v2.2.3` |
+| Public protocol Go module | `github.com/g8e-ai/g8e/v2@v2.2.5` | `go get -d github.com/g8e-ai/g8e/v2@v2.2.5` |
 
 ## Procedures
 
@@ -261,15 +261,15 @@ After enrolling the host CLI with `g8e auth enroll user` and starting one or mor
 
 `operator list` prints operator ID, type, hostname (decoded from the Gateway-persisted latest heartbeat), session ID, and status. This hostname is live operator telemetry; it is distinct from the enrollment-time `name` metadata shown by `auth enroll list`. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata plus the same canonical latest heartbeat snapshot.
 
-#### Bind the CLI session to an operator
+#### Bind the CLI session to operators
 
 ```bash
-./g8e operator bind <operator-session-id>
+./g8e operator bind <operator-session-id> [<operator-session-id>...]
 ./g8e operator bind list
 ./g8e operator bind unbind
 ```
 
-Binding pins the authenticated CLI session to one active operator session owned by the same user. A successful bind issues a replacement CLI session server-side and updates local credentials. Use `bind list` to confirm the current binding and `bind unbind` to clear it. `g8e auth context` and `GET /api/v1/auth/cli/session` report the persisted binding for automation.
+Binding pins the authenticated CLI session to one or more active operator sessions owned by the same user, in one call. Every target is validated before any binding changes; the first is the primary binding. A successful bind issues one replacement CLI session server-side and updates local credentials. Use `bind list` to confirm the current bindings and `bind unbind` to clear them. `g8e auth context` and `GET /api/v1/auth/cli/session` report the persisted binding for automation.
 
 #### Run a governed shell command on one or more operators
 
@@ -332,7 +332,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.3
+go get github.com/g8e-ai/g8e/v2@v2.2.5
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -344,7 +344,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.2.3
+pip install g8e==2.2.5
 ```
 
 See the [Protocol Library architecture document](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.
@@ -375,14 +375,16 @@ The matching root targets are `make test-unit`, `make test-integration`, `make t
 
 `g8e operator cp <target>` copies the currently running binary to a local file or directory. `g8e operator scp <user@host:path>` invokes the system `scp` command and supports the flags shown by `g8e operator scp --help`.
 
-The current `operator deploy --background` implementation copies the binary and starts `gw start` on each remote host; it does not start `operator start`. The current Cobra wrapper for `operator stream` parses its public flags before calling the native stream parser, so options such as `--endpoint`, `--hosts`, and `--binary-dir` are not forwarded to the implementation. Do not use either command as an automated Operator rollout path in this version. Copy the binary with `cp`, `scp`, or an external deployment system, then run `g8e operator start --endpoint <gateway-host>` on the target.
+`g8e operator deploy --hosts <host[,host...]> [--remote-dir <dir>] [--background] --endpoint <gateway-host>` copies the running binary to `<remote-dir>/g8e` over SSH (`--remote-dir` defaults to `~`), uploading it as `g8e.new` and renaming it into place so an already-running or hard-linked `g8e` does not block the copy. With `--background` it stops any Operator previously started from that directory, then starts `g8e operator start --endpoint <gateway-host> --working-dir <remote-dir>` there and writes `start.log` in that directory; `--endpoint` is required with `--background`. Each distinct `--remote-dir` on a host is a separate Operator working directory with its own `.g8e/` state and enrollment request. `--count N` deploys N Operators per host into `<remote-dir>/op-00001` through `op-N`. The command exits non-zero if any Operator fails to deploy. Without `--approve` the started worker still needs its enrollment request approved (`g8e auth enroll approve`); with `--approve` (which requires `--background`) deploy approves each Operator's request itself and waits until it is active, as described in [Connect Many Operators](connect_operator_to_gateway.md#connect-many-operators).
+
+The current Cobra wrapper for `operator stream` parses its public flags before calling the native stream parser, so options such as `--endpoint`, `--hosts`, and `--binary-dir` are not forwarded to the implementation. Do not use `operator stream` as an automated Operator rollout path in this version.
 
 ## Anti-patterns
 
 - Treating the Lattice adapter path as implemented (INV-BUILD-OP-02: flags parse but do not affect runtime).
 - Using `make clean` on a host with operational state (INV-BUILD-OP-04: removes `.g8e/` runtime state).
 - Assuming protocol package re-exports guarantee behavioral compatibility (INV-BUILD-OP-05: independent implementations require full L1-L5 stack).
-- Relying on `operator deploy --background` or `operator stream` for production rollout (use external deployment systems).
+- Relying on `operator stream` for production rollout (its flags are not forwarded; use `operator deploy` or an external deployment system).
 
 ## Links out
 

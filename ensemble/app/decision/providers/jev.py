@@ -5,17 +5,23 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""TypeSafe System One (Jev) decision provider adapter."""
+"""Ollama System One (Jev-style decision model) provider adapter."""
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
-from app.constants import DEFAULT_HTTP_CLIENT_TIMEOUT, JEV_DEFAULT_ENDPOINT
+from app.constants import (
+    DEFAULT_HTTP_CLIENT_TIMEOUT,
+    OLLAMA_DEFAULT_ENDPOINT,
+    OLLAMA_SYSTEM_ONE_PATH,
+    SYSTEM_ONE_MAX_REQUEST_BYTES,
+)
 from app.decision.provider import DecisionProvider
 from app.decision.types import (
     Answer,
@@ -28,8 +34,11 @@ from app.decision.types import (
     ScoreQuestion,
 )
 from app.errors import ExternalServiceError, RateLimitError
+from app.llm.providers.ollama import _normalize_ollama_host
 
 logger = logging.getLogger(__name__)
+
+_SERVICE_NAME = "ollama"
 
 _ANSWER_ADAPTER: TypeAdapter[Answer] = TypeAdapter(Answer)
 _QUESTION_WIRE_TYPES = {
@@ -40,19 +49,19 @@ _QUESTION_WIRE_TYPES = {
 
 
 class JevProvider(DecisionProvider):
-    """HTTP adapter for the TypeSafe System One API."""
+    """HTTP adapter for Ollama's local System One API (POST /v1/systemone)."""
 
     def __init__(
         self,
         *,
         api_key: str | None,
-        endpoint: str = JEV_DEFAULT_ENDPOINT,
+        endpoint: str | None = OLLAMA_DEFAULT_ENDPOINT,
         default_model: str | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         super().__init__()
         self._api_key = api_key
-        self._endpoint = endpoint.rstrip("/")
+        self._endpoint = _normalize_ollama_host(endpoint or OLLAMA_DEFAULT_ENDPOINT) + OLLAMA_SYSTEM_ONE_PATH
         self._default_model = default_model
         self._client = client
         self._owns_client = client is None
@@ -60,8 +69,8 @@ class JevProvider(DecisionProvider):
     @staticmethod
     def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
         errors: list[str] = []
-        if not api_key:
-            errors.append("Provider 'jev' requires an API key.")
+        if not endpoint:
+            errors.append("Provider 'jev' requires an Ollama endpoint URL.")
         return errors
 
     def _build_client(self) -> httpx.AsyncClient:
@@ -98,8 +107,8 @@ class JevProvider(DecisionProvider):
     def _parse_answers(raw_answers: object) -> dict[str, Answer]:
         if not isinstance(raw_answers, dict) or not raw_answers:
             raise ExternalServiceError(
-                "Jev response missing answers.",
-                service_name="typesafe",
+                "System One response missing answers.",
+                service_name=_SERVICE_NAME,
                 details={"operation": "evaluate"},
             )
 
@@ -109,8 +118,8 @@ class JevProvider(DecisionProvider):
                 parsed[name] = _ANSWER_ADAPTER.validate_python(raw_answer)
             except ValidationError as exc:
                 raise ExternalServiceError(
-                    f"Jev returned malformed answer for question '{name}'.",
-                    service_name="typesafe",
+                    f"System One returned malformed answer for question '{name}'.",
+                    service_name=_SERVICE_NAME,
                     cause=exc,
                     details={"operation": "evaluate", "question": name},
                 ) from exc
@@ -120,16 +129,16 @@ class JevProvider(DecisionProvider):
     def _parse_usage(raw_usage: object) -> EvaluateUsage:
         if not isinstance(raw_usage, dict):
             raise ExternalServiceError(
-                "Jev response missing usage.",
-                service_name="typesafe",
+                "System One response missing usage.",
+                service_name=_SERVICE_NAME,
                 details={"operation": "evaluate"},
             )
         try:
             return EvaluateUsage.model_validate(raw_usage)
         except ValidationError as exc:
             raise ExternalServiceError(
-                "Jev response contained malformed usage.",
-                service_name="typesafe",
+                "System One response contained malformed usage.",
+                service_name=_SERVICE_NAME,
                 cause=exc,
                 details={"operation": "evaluate"},
             ) from exc
@@ -138,12 +147,12 @@ class JevProvider(DecisionProvider):
     def _translate_http_error(response: httpx.Response) -> ExternalServiceError | RateLimitError:
         if response.status_code == 429:
             return RateLimitError(
-                "Jev rate limit exceeded.",
-                component="typesafe",
+                "System One rate limit exceeded.",
+                component=_SERVICE_NAME,
             )
         return ExternalServiceError(
-            f"Jev request failed with HTTP {response.status_code}.",
-            service_name="typesafe",
+            f"System One request failed with HTTP {response.status_code}.",
+            service_name=_SERVICE_NAME,
             details={
                 "operation": "evaluate",
                 "status_code": response.status_code,
@@ -158,24 +167,18 @@ class JevProvider(DecisionProvider):
         state: DecisionState,
         questions: dict[str, Question],
     ) -> EvaluateResponse:
-        if not self._api_key:
-            raise ExternalServiceError(
-                "Jev provider is missing an API key.",
-                service_name="typesafe",
-                details={"operation": "evaluate"},
-            )
         if not questions:
             raise ExternalServiceError(
-                "Jev evaluate requires at least one question.",
-                service_name="typesafe",
+                "System One evaluate requires at least one question.",
+                service_name=_SERVICE_NAME,
                 details={"operation": "evaluate"},
             )
 
         resolved_model = model or self._default_model
         if not resolved_model:
             raise ExternalServiceError(
-                "Jev evaluate requires a model name.",
-                service_name="typesafe",
+                "System One evaluate requires a model name.",
+                service_name=_SERVICE_NAME,
                 details={"operation": "evaluate"},
             )
 
@@ -184,22 +187,31 @@ class JevProvider(DecisionProvider):
             state=state,
             questions=questions,
         )
+        encoded_body = json.dumps(request_body).encode()
+        if len(encoded_body) > SYSTEM_ONE_MAX_REQUEST_BYTES:
+            raise ExternalServiceError(
+                f"System One request body is {len(encoded_body)} bytes; "
+                f"limit is {SYSTEM_ONE_MAX_REQUEST_BYTES}.",
+                service_name=_SERVICE_NAME,
+                details={"operation": "evaluate", "request_bytes": len(encoded_body)},
+            )
         self._record_model_boundary(request_body)
+
+        headers = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
 
         client = await self._get_client()
         try:
             response = await client.post(
                 self._endpoint,
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=request_body,
+                headers=headers,
+                content=encoded_body,
             )
         except httpx.HTTPError as exc:
             raise ExternalServiceError(
-                "Jev request failed.",
-                service_name="typesafe",
+                "System One request failed.",
+                service_name=_SERVICE_NAME,
                 cause=exc,
                 details={"operation": "evaluate"},
             ) from exc
@@ -211,24 +223,24 @@ class JevProvider(DecisionProvider):
             payload = response.json()
         except ValueError as exc:
             raise ExternalServiceError(
-                "Jev response was not valid JSON.",
-                service_name="typesafe",
+                "System One response was not valid JSON.",
+                service_name=_SERVICE_NAME,
                 cause=exc,
                 details={"operation": "evaluate"},
             ) from exc
 
         if not isinstance(payload, dict):
             raise ExternalServiceError(
-                "Jev response body was not a JSON object.",
-                service_name="typesafe",
+                "System One response body was not a JSON object.",
+                service_name=_SERVICE_NAME,
                 details={"operation": "evaluate"},
             )
 
         resolved_response_model = payload.get("model")
         if not isinstance(resolved_response_model, str) or not resolved_response_model:
             raise ExternalServiceError(
-                "Jev response missing model.",
-                service_name="typesafe",
+                "System One response missing model.",
+                service_name=_SERVICE_NAME,
                 details={"operation": "evaluate"},
             )
 

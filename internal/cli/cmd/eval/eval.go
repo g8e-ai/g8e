@@ -19,7 +19,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
-	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -57,6 +56,7 @@ type nativeEvalDeps struct {
 	createRuntimeTree          func(context.Context, fs.RuntimeFileService) error
 	clientFactory              nativeEvalClientFactory
 	authLoader                 nativeEvalAuthLoader
+	bindClientFactory          func(*config.Config) chatEvalBindClient
 	laneFactory                func(*harnessclient.Client, fs.RuntimeFileService, harnessclient.Persona) evaluation.PlatformLane
 	observerFactory            func(string) evaluation.TargetObserver
 	runnerFactory              func(evaluation.PlatformLane, evaluation.TargetObserver, evaluation.ReportStore, func() time.Time, func(string) string) nativeEvalRunner
@@ -71,13 +71,13 @@ type nativeEvalDeps struct {
 // chatDeps projects the shared dependencies onto the operator-facing helpers.
 func (d nativeEvalDeps) chatDeps() chatEvalDeps {
 	return chatEvalDeps{
-		configLoader:         d.configLoader,
-		fileSvcFactory:       d.fileSvcFactory,
-		authLoader:           d.authLoader,
-		clientFactory:        d.clientFactory,
-		refreshClientFactory: authcmd.DefaultRefreshClientFactory,
-		now:                  d.now,
-		newID:                d.newID,
+		configLoader:      d.configLoader,
+		fileSvcFactory:    d.fileSvcFactory,
+		authLoader:        d.authLoader,
+		clientFactory:     d.clientFactory,
+		bindClientFactory: d.bindClientFactory,
+		now:               d.now,
+		newID:             d.newID,
 	}
 }
 
@@ -88,6 +88,7 @@ func Cmd() *cobra.Command {
 		createRuntimeTree: func(ctx context.Context, fileSvc fs.RuntimeFileService) error { return fileSvc.CreateRuntimeTree(ctx) },
 		clientFactory:     harnessclient.New,
 		authLoader:        auth.LoadClientAuthContext,
+		bindClientFactory: defaultChatEvalBindClient,
 		laneFactory: func(client *harnessclient.Client, fileSvc fs.RuntimeFileService, persona harnessclient.Persona) evaluation.PlatformLane {
 			return evaluation.NewCommandLane(client, evaluation.NewStore(fileSvc), persona, 0, 0)
 		},
@@ -113,19 +114,9 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		Use:     "eval",
 		Aliases: []string{"evals"},
 		Short:   "Run and verify g8e evaluation programs",
-		Long: `Platform evaluation programs and their supporting workflows.
-
-  models      Model catalog and registry
-  campaigns   Frozen evaluation definitions
-  runs        Executions of a campaign
-  rollout     Per-model init qualification queue
-  formations  Heterogeneous model sets
-  gates       Pre-campaign acceptance gates
-  boundary    Native execution-boundary suite (no models)
-  observer    Provider-boundary hardware observer`,
+		Long:    `Platform evaluation programs and their supporting workflows.`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
-	bindSessionFlags(cmd)
 	cmd.AddCommand(
 		modelsEvalCmd(deps),
 		campaignsEvalCmd(deps),
@@ -135,14 +126,17 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		gatesEvalCmd(deps),
 		boundaryEvalCmd(deps),
 		observerEvalCmd(deps),
+		jsonLeaf(backupEvalCmd(deps)),
+		jsonLeaf(restoreEvalCmd(deps)),
 	)
 	return cmd
 }
 
 func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "boundary",
-		Short: "Native execution-boundary suite (no models)",
+		Use:     "boundary",
+		Aliases: []string{"boundaries"},
+		Short:   "Native execution-boundary suite (no models)",
 	}
 	cmd.AddCommand(
 		jsonLeaf(boundaryEvalListCmd(deps)),
@@ -155,8 +149,9 @@ func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "formations",
-		Short: "Heterogeneous model sets",
+		Use:     "formations",
+		Aliases: []string{"formation"},
+		Short:   "Heterogeneous model sets",
 	}
 	cmd.AddCommand(
 		formationsListEvalCmd(deps),
@@ -170,8 +165,9 @@ func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gates",
-		Short: "Pre-campaign acceptance gates",
+		Use:     "gates",
+		Aliases: []string{"gate"},
+		Short:   "Pre-campaign acceptance gates",
 	}
 	cmd.AddCommand(
 		jsonLeaf(gatesChatEvalCmd(deps)),
@@ -256,7 +252,6 @@ func boundaryEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 }
 
 func boundaryEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
-	var operatorSessionID string
 	command := &cobra.Command{
 		Use:   "run",
 		Short: "Run core-execution-boundary@1.0.0",
@@ -280,7 +275,7 @@ func boundaryEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 			store := deps.storeFactory(fileSvc)
 			lane := deps.laneFactory(gatewayClient, fileSvc, harnessclient.Persona{ID: "g8e-native-evaluator", CLISessionID: authContext.CLISessionID, UserID: authContext.UserID})
 			runner := deps.runnerFactory(lane, deps.observerFactory(cfg.ProjectRoot), store, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
-			report, runErr := runner.Run(cmd.Context(), evaluation.RunRequest{RunID: runID, PinnedOperatorSessionID: operatorSessionID, TargetResource: target, Marker: marker, Deployment: nativeEvalDeployment(cfg, authContext, runID, target)})
+			report, runErr := runner.Run(cmd.Context(), evaluation.RunRequest{RunID: runID, TargetResource: target, Marker: marker, Deployment: nativeEvalDeployment(cfg, authContext, runID, target)})
 			if report == nil {
 				return runErr
 			}
@@ -308,7 +303,6 @@ func boundaryEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	command.Flags().StringVar(&operatorSessionID, "operator-session", "", "Pin the evaluation to one exact active remote Operator session")
 	return command
 }
 
@@ -411,7 +405,7 @@ func nativeEvalDeployment(cfg *config.Config, authContext *auth.ClientAuthContex
 		RuntimeBoundaries: []*evalv1.EvaluationRuntimeBoundary{
 			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_EVALUATOR, ProcessIdentity: "host-side g8e eval process", RuntimeNamespace: "Docker host workspace", Endpoint: cfg.OperatorHTTPURL(), AuthenticatedIdentity: authContext.UserID},
 			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_GATEWAY, ProcessIdentity: constants.DockerGatewayContainer, RuntimeNamespace: "Gateway container", PersistentStore: "Gateway runtime volume", Endpoint: cfg.OperatorHTTPURL(), AuthenticatedIdentity: authContext.CLISessionID},
-			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_OPERATOR, ProcessIdentity: constants.DockerOperatorContainer, RuntimeNamespace: "Operator container", MountedFilesystems: []string{"Operator runtime volume", "shared controlled fixture volume"}, PersistentStore: "Operator runtime volume"},
+			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_OPERATOR, ProcessIdentity: constants.DockerDataOperatorContainer, RuntimeNamespace: "Operator container", MountedFilesystems: []string{"Operator runtime volume", "shared controlled fixture volume"}, PersistentStore: "Operator runtime volume"},
 			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_CONTROLLED_TARGET, ProcessIdentity: target, RuntimeNamespace: "shared controlled fixture volume", MountedFilesystems: []string{"shared controlled fixture volume"}},
 		},
 	}

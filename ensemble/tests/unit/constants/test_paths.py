@@ -10,6 +10,7 @@ import json
 import pytest
 
 from app.constants import paths as paths_module
+from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
 
 pytestmark = [pytest.mark.unit]
 
@@ -50,10 +51,7 @@ def _configure_protocol_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
 def test_load_paths_prefers_explicit_host_pki_dir(monkeypatch: pytest.MonkeyPatch, tmp_path):
     _configure_protocol_paths(monkeypatch, tmp_path)
     pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
-    monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
-    monkeypatch.delenv("G8E_RUNTIME_DIR", raising=False)
-    # Clear cache to pick up new PKI_DIR
-    paths_module.reload_paths()
+    configure_bootstrap(BootstrapSettings(pki_dir=str(pki_dir)))
 
     paths = load_paths()
 
@@ -68,10 +66,7 @@ def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(
 ):
     _configure_protocol_paths(monkeypatch, tmp_path)
     runtime_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e"
-    monkeypatch.delenv("G8E_PKI_DIR", raising=False)
-    monkeypatch.setenv("G8E_RUNTIME_DIR", str(runtime_dir))
-    # Clear cache to pick up new RUNTIME_DIR
-    paths_module.reload_paths()
+    configure_bootstrap(BootstrapSettings(runtime_dir=str(runtime_dir)))
 
     paths = load_paths()
 
@@ -81,17 +76,14 @@ def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(
     assert paths["g8ee"]["cert_name"] == "g8ee"
 
 
-def test_load_paths_ca_cert_path_env_var_overrides_default(
+def test_load_paths_ca_cert_path_setting_overrides_default(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ):
-    """G8E_CA_CERT_PATH overrides the default trust bundle path."""
+    """The bootstrap ca_cert_path overrides the default trust bundle path."""
     _configure_protocol_paths(monkeypatch, tmp_path)
     pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
-    monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
-    monkeypatch.delenv("G8E_RUNTIME_DIR", raising=False)
     override = str(pki_dir / "trust" / "custom-bundle.pem")
-    monkeypatch.setenv("G8E_CA_CERT_PATH", override)
-    paths_module.reload_paths()
+    configure_bootstrap(BootstrapSettings(pki_dir=str(pki_dir), ca_cert_path=override))
 
     paths = load_paths()
 
@@ -101,16 +93,13 @@ def test_load_paths_ca_cert_path_env_var_overrides_default(
     assert paths["infra"]["app_cert_dir"] == str(pki_dir / "issued" / "apps")
 
 
-def test_load_paths_ca_cert_path_defaults_to_g8eg_ca_bundle_when_env_unset(
+def test_load_paths_ca_cert_path_defaults_to_g8eg_ca_bundle_when_unset(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ):
-    """When G8E_CA_CERT_PATH is unset, ca_cert_path defaults to g8eg-ca-bundle.pem."""
+    """When no ca_cert_path is configured, it defaults to g8eg-ca-bundle.pem."""
     _configure_protocol_paths(monkeypatch, tmp_path)
     pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
-    monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
-    monkeypatch.delenv("G8E_RUNTIME_DIR", raising=False)
-    monkeypatch.delenv("G8E_CA_CERT_PATH", raising=False)
-    paths_module.reload_paths()
+    configure_bootstrap(BootstrapSettings(pki_dir=str(pki_dir)))
 
     paths = load_paths()
 

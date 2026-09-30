@@ -13,10 +13,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -188,26 +186,5 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		_, err := proxySessionToGatewayWithRetryContext(context.Background(), conn, req, nil)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
-	})
-}
-
-func TestSubprocessMCPProxyIntegration(t *testing.T) {
-	t.Run("subprocessMCPProxy stop closes stdin and kills process", func(t *testing.T) {
-		proxy := &subprocessMCPProxy{
-			command: "sleep",
-			args:    []string{"10"},
-			logger:  slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		}
-
-		// Start the subprocess
-		err := proxy.start()
-		if err != nil {
-			// May fail if sleep is not available, but we test the stop logic
-			return
-		}
-		defer proxy.stop()
-
-		assert.NotNil(t, proxy.cmd)
-		assert.NotNil(t, proxy.stdin)
 	})
 }

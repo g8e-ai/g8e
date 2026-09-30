@@ -67,6 +67,29 @@ func checkDockerComposeFileExists() error {
 	return nil
 }
 
+// confirmDockerVolumeWipe gates every command that runs `compose down -v`.
+// Docker volumes cannot be renamed aside the way the host .g8e directory can,
+// so the wipe is final; the offered backup covers the host-side evaluation
+// evidence, which lives in .g8e/ rather than in a volume.
+func confirmDockerVolumeWipe(
+	cmd *cobra.Command,
+	assumeYes, skipBackup bool,
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+) (bool, error) {
+	return shared.ConfirmDestructive(cmd, shared.DestructiveOptions{
+		Effects: []string{
+			"Remove every container, network, and orphan of the unified stack (all profiles)",
+			"Permanently delete the Docker data volumes (gateway, operator, inference, ensemble, dashboard); volumes cannot be recovered",
+			"Destroy the trust domain (PKI, owner and Operator identities); owner and workload enrollment must be repeated",
+			"The host .g8e directory is not touched",
+		},
+		AssumeYes:  assumeYes,
+		SkipBackup: skipBackup,
+		Backup:     shared.EvalEvidenceBackup(configLoader, fileSvcFactory),
+	})
+}
+
 // prepareDockerHostRuntime ensures the host-side .g8e tree exists and is
 // writable before Docker Compose starts the gateway container.
 func prepareDockerHostRuntime(ctx context.Context, fileSvc fs.RuntimeFileService) error {
@@ -209,7 +232,7 @@ func dockerRestartCmd() *cobra.Command {
 		Short: "Restart services in the Docker Compose unified stack",
 		Long: `Restart services in the Docker Compose unified stack.
 
-If no services are specified, restarts g8e-operator and g8e-inference-operator
+If no services are specified, restarts g8e-data-operator and g8e-inference-operator
 so they align with the current host-mounted binary (from 'make build').`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
@@ -219,7 +242,7 @@ so they align with the current host-mounted binary (from 'make build').`,
 			if len(args) > 0 {
 				restartArgs = append(restartArgs, args...)
 			} else {
-				restartArgs = append(restartArgs, "g8e-operator", "g8e-inference-operator")
+				restartArgs = append(restartArgs, "g8e-data-operator", "g8e-inference-operator")
 			}
 			cmd.Printf("Restarting %s...\n", strings.Join(restartArgs[1:], ", "))
 			if err := RunDockerCompose(restartArgs, profile); err != nil {
@@ -267,6 +290,8 @@ func dockerInitCmdWithConfig(
 		skipApprovals  bool
 		noCache        bool
 		clean          bool
+		assumeYes      bool
+		skipBackup     bool
 		headlessEnroll bool
 	)
 
@@ -291,7 +316,9 @@ docs/guides/unified_stack.md:
   8. Wait for the ensemble health endpoint to respond.
 
 Use --clean to wipe containers, volumes, and networks before init.
-That destroys the trust domain and repeats owner enrollment from scratch.
+That destroys the trust domain and repeats owner enrollment from scratch, so it
+asks for confirmation and offers an evaluation-evidence backup first
+(--yes skips the confirmation, --skip-backup opts out of the backup).
 
 By default, owner enrollment runs the browser passkey ceremony (same as
 'g8e auth enroll user'). Pass --headless to opt into an mTLS-only CLI identity
@@ -312,6 +339,10 @@ already-enrolled CLI.`,
 			}
 
 			if clean {
+				proceed, err := confirmDockerVolumeWipe(cmd, assumeYes, skipBackup, configLoader, fileSvcFactory)
+				if err != nil || !proceed {
+					return err
+				}
 				cmd.Println("Cleaning existing Docker Compose stack before init...")
 				if err := RunDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, dockerTeardownProfiles("")...); err != nil {
 					cmd.Printf("Warning: compose down had issues: %v\n", err)
@@ -431,7 +462,9 @@ already-enrolled CLI.`,
 	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Skip CLI owner enrollment (reuse an existing enrolled CLI identity)")
 	cmd.Flags().BoolVar(&skipApprovals, "skip-approvals", false, "Start workloads without auto-approving platform enrollment requests")
 	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Build Docker images without using the cache")
-	cmd.Flags().BoolVar(&clean, "clean", false, "Remove containers, volumes, and networks before init (destructive)")
+	cmd.Flags().BoolVar(&clean, "clean", false, "Remove containers, volumes, and networks before init (destructive; asks for confirmation and offers a backup first)")
+	cmd.Flags().BoolVar(&assumeYes, shared.FlagYes, false, "With --clean, skip the confirmation prompt (the backup still runs unless --skip-backup)")
+	shared.AddSkipBackupFlag(cmd, &skipBackup)
 	cmd.Flags().BoolVar(&headlessEnroll, "headless", false, "Enroll an mTLS-only CLI owner without the browser passkey ceremony (same as 'g8e auth enroll user --headless')")
 	return cmd
 }
@@ -784,30 +817,13 @@ func promptApproveComponent(cmd *cobra.Command, ctx context.Context, client auth
 		RequestID: req.RequestID,
 		Decision:  models.PlatformEnrollmentDecisionApprove,
 	}
-	resp, err := approvePlatformEnrollmentDecision(client, decisionReq)
+	resp, err := authcmd.PostPlatformEnrollmentDecision(client, decisionReq)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDockerStartApprovalFailed, err)
 	}
 
 	cmd.Printf("  %s enrollment request %s.\n", component, string(resp.State))
 	return nil
-}
-
-// approvePlatformEnrollmentDecision posts an owner decision for a pending platform
-// enrollment request and returns the gateway response.
-func approvePlatformEnrollmentDecision(client authcmd.APIClient, decisionReq models.PlatformEnrollmentDecisionRequest) (*models.PlatformEnrollmentDecisionResponse, error) {
-	if err := decisionReq.Validate(); err != nil {
-		return nil, fmt.Errorf("validate decision: %w", err)
-	}
-	respBody, err := client.Post(constants.APIPaths.AuthPlatformEnrollmentDecision, decisionReq)
-	if err != nil {
-		return nil, fmt.Errorf("post decision: %w", err)
-	}
-	var resp models.PlatformEnrollmentDecisionResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return nil, fmt.Errorf("parse decision response: %w", err)
-	}
-	return &resp, nil
 }
 
 // fetchPendingPlatformEnrollments returns the current pending platform enrollment
@@ -830,10 +846,10 @@ func isInferenceOperatorPendingRequest(req *models.PlatformEnrollmentPendingRequ
 	if req == nil || req.ComponentKind != models.PlatformComponentOperator {
 		return false
 	}
-	if req.Hostname == "inference-operator" {
+	if req.Hostname == constants.InferenceOperatorHostname {
 		return true
 	}
-	return strings.Contains(req.InstanceID, "inference-operator")
+	return strings.Contains(req.InstanceID, constants.InferenceOperatorHostname)
 }
 
 // platformEnrollmentApprovalRank assigns the documented approval order for the
@@ -900,7 +916,7 @@ func runDockerInitApprovals(cmd *cobra.Command, client authcmd.APIClient) error 
 			RequestID: next.RequestID,
 			Decision:  models.PlatformEnrollmentDecisionApprove,
 		}
-		resp, err := approvePlatformEnrollmentDecision(client, decisionReq)
+		resp, err := authcmd.PostPlatformEnrollmentDecision(client, decisionReq)
 		if err != nil {
 			return fmt.Errorf("%w: approve %s (%s): %w", constants.ErrDockerInitApprovalFailed, next.ComponentKind, next.RequestID, err)
 		}
@@ -1067,7 +1083,8 @@ func dockerBuildCmd() *cobra.Command {
 }
 
 func dockerCleanCmd() *cobra.Command {
-	var skipConfirm bool
+	var assumeYes bool
+	var skipBackup bool
 
 	cmd := &cobra.Command{
 		Use:   "clean",
@@ -1075,7 +1092,10 @@ func dockerCleanCmd() *cobra.Command {
 		Long: `Remove containers, volumes, and networks for the Docker Compose unified stack.
 
 This is a destructive operation that removes all associated Docker volumes and
-networks, including the gateway data volume. Use --yes=false to confirm first.
+networks, including the gateway data volume. Volumes cannot be recovered. The
+command asks for confirmation, then offers to back up host evaluation evidence
+first. Use --yes to skip the confirmation (the backup still runs) and
+--skip-backup to opt out of the backup.
 
 Clean always targets the bootstrapped and evaluation profiles so that operator,
 ensemble, dashboard, and inference-operator containers are removed alongside
@@ -1084,12 +1104,9 @@ the gateway, not just the default-profile gateway container.`,
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
-			if !skipConfirm {
-				cmd.Println("WARNING: This will remove ALL containers, volumes, and networks for the unified stack.")
-				if !demos.ConfirmAction(cmd, "Proceed with clean?") {
-					cmd.Println("Clean cancelled.")
-					return nil
-				}
+			proceed, err := confirmDockerVolumeWipe(cmd, assumeYes, skipBackup, shared.LoadConfig, shared.NewFileSvc)
+			if err != nil || !proceed {
+				return err
 			}
 			if err := demos.CheckDockerAvailable(); err != nil {
 				cmd.Println("Docker not available — nothing to clean.")
@@ -1109,20 +1126,31 @@ the gateway, not just the default-profile gateway container.`,
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&skipConfirm, "yes", true, "Skip interactive confirmation (default: true)")
+	cmd.Flags().BoolVar(&assumeYes, shared.FlagYes, false, "Skip the confirmation prompt (the backup still runs unless --skip-backup)")
+	shared.AddSkipBackupFlag(cmd, &skipBackup)
 	return cmd
 }
 
 func dockerResetCmd() *cobra.Command {
 	var full bool
 	var profile string
+	var assumeYes bool
+	var skipBackup bool
 
 	cmd := &cobra.Command{
 		Use:   "reset",
 		Short: "Clean and restart the Docker Compose unified stack",
-		Long:  `Clean (remove containers, volumes, networks) and restart the Docker Compose unified stack.`,
+		Long: `Clean (remove containers, volumes, networks) and restart the Docker Compose unified stack.
+
+Like 'docker clean', this permanently deletes the Docker volumes, so it asks for
+confirmation and offers to back up host evaluation evidence first. Use --yes to
+skip the confirmation (the backup still runs) and --skip-backup to opt out.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
+				return err
+			}
+			proceed, err := confirmDockerVolumeWipe(cmd, assumeYes, skipBackup, shared.LoadConfig, shared.NewFileSvc)
+			if err != nil || !proceed {
 				return err
 			}
 			cmd.Println("Cleaning Docker Compose stack...")
@@ -1152,6 +1180,8 @@ func dockerResetCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + inference operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
+	cmd.Flags().BoolVar(&assumeYes, shared.FlagYes, false, "Skip the confirmation prompt (the backup still runs unless --skip-backup)")
+	shared.AddSkipBackupFlag(cmd, &skipBackup)
 	return cmd
 }
 

@@ -122,9 +122,9 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | `internal/infra/cloudflaredns/` | Cloudflare DNS client. |
 | `internal/pkg/certutil/`, `internal/pkg/ssh/` | Certificate and SSH helpers. |
 | `internal/buildinfo/`, `internal/exitcode/`, `internal/httpclient/`, `internal/jsonschema/`, `internal/marshaler/`, `internal/pathutil/`, `internal/response/`, `internal/security/`, `internal/testutil/`, `internal/timesvc/`, `internal/uuid/`, `internal/certs/` | Shared build metadata, exit handling, HTTP, schema validation, serialization, path utilities, responses, security helpers, test infrastructure, time, UUIDs, and certificates. |
-| `protocol/` | Protobuf schemas, generated bindings, JSON registries, model schemas, conformance tests, vectors, examples, and protocol documentation. |
+| `protocol/` | Protobuf schemas, generated bindings, JSON registries, model schemas, conformance tests, vectors, and protocol documentation. |
 | `test/` | Cross-package integration tests, `test/fixtures/`, and `test/e2e/`. |
-| `eval/` | Evaluation campaign inputs, `native-boundary-compose.yml`, and examples. The Go evaluator is `internal/services/evaluation/`, exposed by `internal/cli/cmd/eval/`. |
+| `eval/` | Evaluation campaign inputs, `native-boundary-compose.yml`, and the eval data-layout README. The Go evaluator is `internal/services/evaluation/`, exposed by `internal/cli/cmd/eval/`. |
 | `ensemble/` | Python g8ee application. Index: [Ensemble documentation](../ensemble/index.md). |
 | `dashboard/` | Node.js g8ed SPA host. Index: [Dashboard documentation](../dashboard/index.md). |
 | `demos/` | Healthcare, finance, DHS, and FedRAMP demo environments. Index: [Demo index](../../demos/README.md). |
@@ -216,7 +216,7 @@ Compose profile assignment is INV-TESTMAP-02. Service names are the Compose keys
 
 | Compose service | `profiles:` |
 | --- | --- |
-| `g8e-gateway`, `g8e-operator`, `g8e-inference-operator`, `ensemble`, `dashboard` | None. They start on `docker compose up -d`. |
+| `g8e-gateway`, `g8e-data-operator`, `g8e-inference-operator`, `ensemble`, `dashboard` | None. They start on `docker compose up -d`. |
 | `g8e-gateway-secondary` | `cross-enrollment` |
 | `g8e-gateway-user`, `g8e-inference` | `g8ellama` |
 
@@ -351,7 +351,7 @@ Schemas live under `protocol/proto/g8e/`. Wire requirements: [Protocol Specifica
 | `protocol/conformance/` | Cross-language constants, model, and hash parity tests. |
 | `protocol/python/` | Python protocol package. |
 | `protocol/node/` | TypeScript protocol package. |
-| `protocol/examples/` | Go examples and MCP client configuration templates. |
+| `examples/` | Runnable Go/Python examples, external-console app, and MCP client configuration templates (demo environments stay in `demos/`). |
 | `protocol/docs/` | Protocol specifications and generated API references. |
 | `internal/tools/constgen/` | Regenerates event and action-type constants from `protocol/constants/events.json` and `protocol/constants/status.json`. `make constants` writes. `make constants-check` verifies. Outputs include `internal/constants/events_gen.go`, `internal/constants/action_types_gen.go`, `dashboard/public/js/constants/events.js`, and `protocol/python/g8e/_data/events.json`. |
 
@@ -418,7 +418,7 @@ Go module line and binary packaging rules are INV-ENV-01 and the owned-surface r
 | `make validate-cosais` | `go run ./internal/tools/cosais_validator`. |
 | `make swagger-generate` | Gateway OpenAPI from Swagger annotations. |
 
-Other tools under `internal/tools/`: `agent_harness` (typed governance client and demo scenarios), `chaos`, `doctrine_validator`, `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
+Other tools under `internal/tools/`: `agent_harness` (scripted Go governance client and demo scenarios, separate from g8ee, see INV-AGT-08 in [AI Agents](../architecture/agents.md)), `chaos`, `doctrine_validator`, `g8ebinaries`, `terminalmedia`, and `treehash` (source manifest hash used by `Makefile`).
 
 ## Procedures
 

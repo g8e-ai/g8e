@@ -511,26 +511,6 @@ func TestPKIAuthority_SignCSR_Unit(t *testing.T) {
 	})
 }
 
-func TestPKIAuthority_SignDelegatedCSR(t *testing.T) {
-
-	t.Run("Returns error when operator CA not loaded", func(t *testing.T) {
-		pki := &PKIAuthority{
-			operatorCert: nil,
-		}
-
-		key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		csr := &x509.CertificateRequest{
-			Subject: pkix.Name{CommonName: "test"},
-		}
-		csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csr, key)
-		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
-
-		_, _, err := pki.SignDelegatedCSR(string(csrPEM), "app-name", "user-id")
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrPKIOperatorCANotLoaded)
-	})
-}
-
 func TestPKIAuthority_CertsUseECDSASignatures_NotEd25519(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)

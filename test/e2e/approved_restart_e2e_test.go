@@ -31,7 +31,7 @@ import (
 // (persisted identity), that the heartbeat UpdatedAt timestamp advances
 // (pub/sub liveness), and that a command roundtrip succeeds (command
 // delivery). When run after a user-initiated operator restart
-// (docker compose restart g8e-operator), this proves the operator's persisted
+// (docker compose restart g8e-data-operator), this proves the operator's persisted
 // credentials survive restart and the gateway re-establishes the pub/sub and
 // command channels without re-enrollment. On a fresh approved stack without
 // restart, the same assertions verify baseline operator liveness.

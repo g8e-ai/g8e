@@ -3,7 +3,7 @@ doc_id: unified_stack
 title: Unified Docker Stack Guide
 audience: platform operators and evaluators
 status: current
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 version: v2.2.4
 owners:
   - docker-compose.yml
@@ -71,7 +71,7 @@ This guide covers the unified evaluation stack — how to bootstrap it, enroll o
 - Docker Engine with the Docker Compose v2 plugin. **Note: Local Go or `make` are NOT required on the host** — all builds can run inside Docker.
 - Optional: Host Go toolchain and `make` (when developing locally and using `make build`).
 - Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **3000**, **8081**, **8082**, **5173**. The mirror and explorer ports are loopback-only in the root Compose file.
-- Repository-root `.env` (copy from `.env.example`). Remove or comment out the sample `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` values when using dispatch-carried campaign authority.
+- Repository-root `.env` (copy from `.env.example`) with `G8E_OLLAMA_ENDPOINT` set. Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` unset when using dispatch-carried campaign authority.
 - `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider** (defaults to `http://127.0.0.1:11434` if unset).
 - Remote Ollama reachable from the Docker network, for example: `curl -fsS http://192.168.1.2:11434/api/version`.
 
@@ -91,7 +91,7 @@ The platform leverages Docker volume mounts (`./bin:/opt/g8e/bin:ro`) so that a 
 - **Local build (Make is gospel):** Run `make build`. The host binary is written to `bin/g8e` and `./g8e`. Restart the operators to align all versions immediately:
   ```bash
   # Pure Docker:
-  docker compose restart g8e-operator g8e-inference-operator
+  docker compose restart g8e-data-operator g8e-inference-operator
 
   # ./g8e docker CLI equivalent:
   ./g8e docker restart
@@ -119,7 +119,7 @@ The root `docker-compose.yml` defines the core platform services on the `g8e-net
 | Service | Profile | Published ports | Role |
 | --- | --- | --- | --- |
 | `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS; 8081 private mirror ingest, 8082 public mirror read/SSE, 5173 evaluation explorer (loopback) | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A, public mirror, and evaluation explorer. |
-| `g8e-operator` | default | none | **Data Operator** — governed tool/filesystem/process boundary for the Operator container runtime. |
+| `g8e-data-operator` | default | none | **Data Operator** (container hostname `data-operator`) — governed tool/filesystem/process boundary for the Operator container runtime. Evaluations identify it by that hostname and ignore every other enrolled data Operator. |
 | `g8e-inference-operator` | default | none | **Inference Operator** — governed inference to the remote Ollama provider. |
 | `ensemble` | default | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
 | `dashboard` | default | 3000 | g8ed browser static host; it is not the evaluation acceptance UI. |
@@ -148,7 +148,7 @@ Scored assignments use one campaign Gateway with two remote Operator sessions on
 ```text
 Campaign host (Linux + Docker)
   g8e-gateway ........................ PDP, pub/sub, inference dispatch fan-out
-  g8e-operator ......................... Data Operator (governed tools)
+  g8e-data-operator .................... Data Operator (governed tools)
   g8e-inference-operator ............. Inference Operator → remote Ollama
   ensemble ........................... g8ee ChatPipelineService
 
@@ -174,15 +174,15 @@ Provider host (Windows + Ollama example)
 
 Keep internal plan vocabulary separate from public campaign branding.
 
-| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (25 scenarios × eligible roles) |
+| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (26 scenarios × eligible roles) |
 | --- | --- | --- | --- | --- |
-| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **37** |
-| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **111** |
+| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **39** |
+| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **117** |
 | **Full homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-<seq>` | `.g8e/eval/model-inventory.json` (from `inventory freeze`) | all discovered models |
 
 Rules:
 
-- **Do not** use `north-star` in public run IDs or campaign IDs. The frozen scenario catalog is `north-star-25@1.0.0` (legacy slug; content is the standard 25-scenario suite).
+- **Do not** use `north-star` in public run IDs or campaign IDs. The frozen scenario catalog is `north-star-25@1.0.0` (legacy slug; content is the standard 26-scenario suite).
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
 - Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` **unset** in `.env`. Campaign authority travels on each governed dispatch from g8ee; do not rebind the inference operator per model.
@@ -191,15 +191,11 @@ Rules:
 
 Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 37 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
 
-Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/examples/README.md) for the public/private boundary.
+Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/README.md) for the public/private boundary.
 
 ```bash
 # Freeze your provider's model registry (once per provider snapshot)
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-./g8e eval models freeze \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models freeze
 
 # Single model — create campaign and start execution
 ./g8e eval campaigns create eval-init-qwen3-4b qwen3:4b
@@ -252,11 +248,7 @@ Build a three-model smoke inventory from your own provider freeze. Tags below ar
 
 ```bash
 # Full provider freeze, then create a three-model smoke campaign:
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-./g8e eval models freeze \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models freeze
 
 ./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
 ./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
@@ -266,7 +258,7 @@ Matrix size for three models: **111** assignments (3 × 37 role-eligible scenari
 
 ## Environment configuration
 
-Copy `.env.example` to `.env`, remove or comment out its sample campaign binding values, and set at minimum:
+Copy `.env.example` to `.env` and set the one required value:
 
 ```bash
 G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
@@ -274,24 +266,17 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 
 `g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are **not** startup `.env` bindings for the campaign workflow — `g8e eval runs start` resolves them from the campaign definition and the campaign controller attaches them to each governed dispatch. Setting either startup binding causes the Inference Operator to reject governed campaign requests that do not match that static binding; leave both unset for per-dispatch campaign authority.
 
+`.env` holds only secrets and user-specific endpoints or identities (INV-ENV-04 in [Developer Guidelines](../devs/devs.md)). Everything else is fixed in `docker-compose.yml` or in the `g8e` binary defaults:
+
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `G8E_PREFIX` | `g8e` | Container name prefix |
-| `G8E_HTTP_PORT` | `8080` | Gateway discovery / enrollment HTTP |
-| `G8E_HTTPS_PORT` | `8443` | Gateway mTLS API and pub/sub |
-| `G8E_ENSEMBLE_PORT` | `8000` | Ensemble API |
-| `G8E_DASHBOARD_PORT` | `3000` | Dashboard |
-| `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (CORS, WebAuthn) |
-| `G8E_PUBLIC_MIRROR_PRIVATE_PORT` | `8081` | Loopback-only authenticated public-mirror ingest listener |
-| `G8E_PUBLIC_MIRROR_PUBLIC_PORT` | `8082` | Loopback-only anonymous public-mirror read/SSE listener |
-| `G8E_EVAL_EXPLORER_PORT` | `5173` | Loopback-only evaluation explorer listener |
-| `G8E_OLLAMA_ENDPOINT` | `http://127.0.0.1:11434` | Remote Ollama URL for Inference Operator (required for live inference campaigns and `docker init`) |
-| `G8E_INFERENCE_PRIMARY_MODEL` | `gemma4:e4b` | Primary model tag passed to the Inference Operator |
-| `G8E_INFERENCE_ASSISTANT_MODEL` | `qwen3:1.7b` | Assistant model tag passed to the Inference Operator |
-| `G8E_INFERENCE_LITE_MODEL` | `smol-7b:latest` | Lite model tag passed to the Inference Operator |
-| `G8E_INFERENCE_KEEP_ALIVE` | `-1` | Ollama keep-alive passed to the Inference Operator |
+| `G8E_OLLAMA_ENDPOINT` | *(required)* | Approved Ollama URL for the Inference Operator; Compose fails fast when unset (required for live inference campaigns and `docker init`). `localhost` is the container itself, so use an address the container can reach. |
+| `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (approval links, CORS, WebAuthn); set only when you reach the stack by another name |
+| `G8E_USER_HOSTNAME` | `localhost` | Same role for the User Gateway (g8ellama profile) |
 | `G8E_INFERENCE_CAMPAIGN_ID` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
 | `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
+
+Container names (`g8e-<service>`), host ports (8080, 8443, 8000, 3000, and loopback 8081, 8082, 5173), and heartbeat interval are literals in `docker-compose.yml`. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
 
 ## Standard bootstrap workflow
 
@@ -328,7 +313,7 @@ make docker-build
 
 ### 3. Enroll the owner
 
-The stack services (`g8e-operator`, `g8e-inference-operator`, `ensemble`, `dashboard`) submit platform enrollment requests to the Gateway and poll for approval.
+The stack services (`g8e-data-operator`, `g8e-inference-operator`, `ensemble`, `dashboard`) submit platform enrollment requests to the Gateway and poll for approval.
 
 Enroll the owner identity:
 
@@ -402,7 +387,7 @@ Whenever you build locally with `make build`, the updated binary is installed to
 
 ```bash
 # Pure Docker:
-docker compose restart g8e-operator g8e-inference-operator
+docker compose restart g8e-data-operator g8e-inference-operator
 
 # ./g8e docker CLI equivalent:
 ./g8e docker restart
@@ -450,7 +435,7 @@ If a prior Docker start created `.g8e` as root, fix ownership once with `sudo ch
 
 Useful flags:
 
-- `--clean` — wipe containers/volumes/networks before init (cold start).
+- `--clean` — wipe containers/volumes/networks before init (cold start). Confirms first and offers an evidence backup; `--yes` skips the confirmation, `--skip-backup` skips the backup.
 - `--skip-build` — reuse existing images.
 - `--skip-enroll` — reuse an already-enrolled CLI identity.
 - `--skip-approvals` — start workloads without auto-approving enrollments.
@@ -572,23 +557,15 @@ Use this after the evaluation stack, Inference Operator, and **both** witness Op
    - `llama3.2:1b` (Lite role)
    - `gemma4:e2b` (Assistant role)
    - `qwen3.5:4b` (Primary role)
-3. An authenticated CLI session on the campaign host (`./g8e auth enroll user`, if not already enrolled). `./g8e eval` formation commands self-enroll a delegated **g8ee** app credential on demand using that session — the same call `mcp agent run` uses to enroll an agent — so there is nothing to copy out of the ensemble container. They verify any existing `g8ee` app cert against the gateway's current trust bundle before dispatching, and transparently re-enroll a fresh one whenever it is missing or was issued by a prior gateway PKI generation, instead of letting every assignment in the run come back `PROVIDER_FAILED`. Enrollment still fails closed with an actionable error (and falls back to `G8E_APP_CERT`/`G8E_APP_KEY` if set) when the CLI has no authenticated session to enroll with.
+3. An enrolled `g8e-eval` application identity (`./g8e auth enroll app g8e-eval`, approved once by the platform owner). `./g8e eval` formation commands present this managed application credential for inference dispatch. They verify the `g8e-eval` app cert against the gateway's current trust bundle before dispatching, failing closed with an actionable error if the credential is missing, expired, or untrusted.
 
 ### Build formation inventory
 
 Pull and freeze the catalog models:
 
 ```bash
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-
-./g8e eval models pull --formations \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
-
-./g8e eval models freeze \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models pull --formations
+./g8e eval models freeze
 ```
 
 Use `g8e eval formations list` to inspect the formations and their served tags.
@@ -653,27 +630,20 @@ Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is u
 ### Phase B — Create campaign and start run
 
 ```bash
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-
 # Single model — create campaign and start execution
 ./g8e eval campaigns create eval-smoke-mini qwen3:4b
 
-# Start execution (binds sessions, schedules matrix, and executes continuously)
-./g8e eval runs start eval-smoke-mini \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --publish --daemon
+# Start execution (schedules the matrix and executes continuously). The run
+# targets the stack's Inference Operator and its `data-operator`, binding the
+# data-operator to the CLI session when it is not already bound.
+./g8e eval runs start eval-smoke-mini --publish --daemon
 ```
 
 Alternatively, to schedule first and execute separately:
 
 ```bash
 # Persist run and assignments without executing immediately
-./g8e eval runs start eval-smoke-mini \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --prepare-only
+./g8e eval runs start eval-smoke-mini --prepare-only
 
 # Resume/execute the prepared run
 ./g8e eval runs resume <run-id> --publish --daemon
@@ -725,7 +695,7 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 | --- | --- | --- | --- |
 | `./g8e docker init` | `docker compose up -d` + exec enroll/approvals | `make up` (manual approvals) | Build images, enroll owner, start unified stack, auto-approve platform enrollments, and wait for readiness. |
 | `./g8e docker start` | `docker compose up -d` | `make up` | Starts default unified stack (all 5 core services) and offers enrollment walkthrough. |
-| `./g8e docker restart [service...]` | `docker compose restart g8e-operator g8e-inference-operator` | `make restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
+| `./g8e docker restart [service...]` | `docker compose restart g8e-data-operator g8e-inference-operator` | `make restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
 | `./g8e docker stop` | `docker compose down` | `make down` | Stops stack, preserves volumes. |
 | `./g8e docker status` | `docker compose ps` | — | Shows running containers and health status. |
 | `./g8e docker build` | `docker compose build && docker compose cp g8e-gateway:/g8e bin/g8e && cp bin/g8e ./g8e` | `make docker-build` | Build stack images in container via Makefile, export binary to `bin/g8e` and `./g8e`. |
@@ -734,12 +704,16 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 
 Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean` or `docker compose down -v`, repeat owner enrollment and platform approvals.
 
+`./g8e docker clean`, `docker reset`, and `docker init --clean` confirm before wiping volumes and offer to back up host evaluation evidence first. Pass `--yes` to skip the confirmation and `--skip-backup` to skip the backup. Raw `docker compose down -v` and `make clean-docker` have neither safeguard. Docker volumes are deleted outright; only host `.g8e/` wipes (`g8e gw clean`/`gw reset`) are renamed aside to `.g8e-<MMDDHHMM>` instead.
+
+Eval runs back up their evidence to `eval/backups/` automatically when they finish. Before a destructive wipe, take a fresh copy outside `.g8e/` with `./g8e eval backup` (or `--output-dir <dir>`), and put it back with `./g8e eval restore` (newest snapshot in `eval/backups/`, or pass `<dir>/eval-backup-<timestamp>`). See [Evaluation Programs](../architecture/evals.md#evidence-and-verification). This covers host evidence only, not the Gateway volume.
+
 ## Health checks and resources
 
 | Service | Health check |
 | --- | --- |
 | `g8e-gateway` | HTTP `GET /api/v1/health` :8080 |
-| `g8e-operator` | enrolled operator certificate present |
+| `g8e-data-operator` | enrolled operator certificate present |
 | `g8e-inference-operator` | enrolled operator certificate present |
 | `ensemble` | HTTP `GET /health` :8000 (after enrollment completes) |
 | `dashboard` | HTTP `GET /` :3000 (after enrollment completes) |
@@ -749,7 +723,7 @@ Workloads remain unhealthy while enrollment is pending.
 | Service | CPU limit | Memory limit |
 | --- | --- | --- |
 | `g8e-gateway` | 2 | 4G |
-| `g8e-operator` | 2 | 1G |
+| `g8e-data-operator` | 2 | 1G |
 | `g8e-inference-operator` | 4 | 4G |
 | `ensemble` | 2 | 2G |
 | `dashboard` | 1 | 512M |
@@ -879,4 +853,4 @@ Restarting the gateway with `docker compose up -d g8e-gateway` preserves the tru
 - [g8ee Documentation](../ensemble/index.md) — ensemble configuration and providers.
 - [g8ed Documentation](../dashboard/index.md) — dashboard development.
 - [Authentication and Identity](../architecture/auth.md) — mTLS, WebAuthn, PKI.
-- [Evaluation data layout](../../eval/examples/README.md) — public vs runtime vs private operator data.
+- [Evaluation data layout](../../eval/README.md) — public vs runtime vs private operator data.

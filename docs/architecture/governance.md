@@ -465,6 +465,6 @@ In outbound operator mode, sovereign Operators connect to the Gateway over outbo
 - [Encryption Architecture](encryption.md): Cryptographic primitives, key hierarchies, and TLS 1.3 configuration.
 - [Network Architecture](network.md): PKI topology, SPIFFE identities, and pub/sub communication channels.
 - [Event and Action Protocol](events.md): Canonical event taxonomy, routing keys, and action classifications.
-- [AI Agents and Governance Boundary](agents.md): Agent ingress paths, MCP wrappers, and tool call constraints.
+- [AI Agents and Governance Boundary](agents.md): Agent ingress paths, downstream MCP egress, and tool call constraints.
 - [Storage Architecture](storage.md): SQLite schema layouts, commitment ledgers, and document stores.
 - [Documentation Guide](../devs/docs.md): Documentation invariants, audit procedures, and metadata standards.

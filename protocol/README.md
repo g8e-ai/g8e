@@ -34,10 +34,9 @@ The Python package loads its supported JSON registries from the bundled `g8e/_da
 - `constants/`: External JSON registries, doctrine definitions, compliance catalogs, and compliance path definitions.
 - `models/`: JSON model schemas and Python error enums.
 - `schemas/`: Authenticated third-party schemas and provenance used by protocol consumers.
-- `python/`: Installable Python package, generated protobuf modules, examples, and tests.
+- `python/`: Installable Python package, generated protobuf modules, and tests.
 - `node/`: Generated TypeScript protobuf modules and their generation configuration.
 - `docs/`: Governance, MCP, A2A, constants, and generated protobuf reference documentation.
-- `examples/`: Go examples and MCP client configuration templates.
 - `conformance/`: Cross-language constants, model, and transaction-hash tests.
 - `vectors/`: Cross-language receipt, persistence-attestation, compliance, and evaluation canonicalization vectors.
 
@@ -86,11 +85,11 @@ The Go `protocol` package generates, matches, and extracts SPIFFE identities in 
 - Hub: `spiffe://g8e.local/hub/operator-listen`
 - Gateway peer: `spiffe://g8e.local/gateway/<gateway_id>`
 
-The ensemble uses the application identity `spiffe://g8e.local/app/g8ee`. See the [workload identity example](examples/workload_identity/main.go) for generation, matching, extraction, and URL parsing.
+The ensemble uses the application identity `spiffe://g8e.local/app/g8ee`. See the [workload identity example](../examples/workload-identity/main.go) for generation, matching, extraction, and URL parsing.
 
 ### MCP and A2A
 
-The [MCP specification](docs/mcp.md) defines governed tool, resource, and prompt integration. The [A2A specification](docs/a2a.md) defines typed agent-to-agent skill invocation. Reference JSON schemas and the upstream A2A protobuf are stored beside these specifications, while deployable MCP configuration templates live in `examples/mcp_server/`.
+The [MCP specification](docs/mcp.md) defines governed tool, resource, and prompt integration. The [A2A specification](docs/a2a.md) defines typed agent-to-agent skill invocation. Reference JSON schemas and the upstream A2A protobuf are stored beside these specifications, while deployable MCP configuration templates live in `examples/mcp-client-configs/`.
 
 ## Generation
 
@@ -119,7 +118,7 @@ See the [conformance test guide](conformance/README.md) for the contracts covere
 
 ## Examples
 
-The [examples overview](examples/README.md) describes the Go governance-envelope and workload-identity programs and the MCP configuration templates. Python examples for constants and models live in `python/examples/`.
+The [examples overview](../examples/README.md) describes the Go governance-envelope and workload-identity programs, the MCP configuration templates, and the Python constants and models examples.
 
 ## Versioning
 
