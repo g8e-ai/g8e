@@ -116,6 +116,7 @@ func VerifyFormationWitnessEvidence(
 			failures = append(failures, fmt.Sprintf("formation role %s observer digest mismatch", role.Role))
 		}
 		observed := observedPeakVRAMMiB(window)
+		windowsComplete := true
 		if len(role.Trace) > 0 {
 			// A g8ee-routed role spans every provider attempt in its trace; each
 			// one must have its own window, and role peak VRAM is their maximum.
@@ -126,12 +127,15 @@ func VerifyFormationWitnessEvidence(
 				extra, err := providerReader.LoadObservationWindow(ctx, extraID)
 				if err != nil {
 					failures = append(failures, fmt.Sprintf("formation role %s observer window %s load failed: %v", role.Role, extraID, err))
+					windowsComplete = false
 					continue
 				}
 				observed = max(observed, observedPeakVRAMMiB(extra))
 			}
 		}
-		if role.PeakVRAMMiB > 0 && observed > 0 && observed != role.PeakVRAMMiB {
+		// A partial peak cannot be compared with the role's full-span peak; the
+		// missing window is already reported above.
+		if windowsComplete && role.PeakVRAMMiB > 0 && observed > 0 && observed != role.PeakVRAMMiB {
 			failures = append(failures, fmt.Sprintf("formation role %s peak vram mismatch", role.Role))
 		}
 		if role.ProvenanceAttestationDigest == "" {

@@ -24,6 +24,7 @@ and avoid code duplication.
 """
 
 import logging
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
@@ -35,6 +36,60 @@ import pytest_asyncio
 # These are imported inside functions/fixtures where they're actually needed.
 
 logger = logging.getLogger(__name__)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_gateway_url():
+    """Ensure enrollment service can resolve the gateway URL for integration tests.
+
+    The AppEnrollmentService needs either G8E_GATEWAY_HTTP_URL or G8E_OPERATOR_URL
+    to contact the gateway for enrollment. Set G8E_GATEWAY_HTTP_URL to a sensible
+    default (http://localhost:8080) if neither is already configured.
+    """
+    if not os.environ.get("G8E_GATEWAY_HTTP_URL") and not os.environ.get("G8E_OPERATOR_URL"):
+        os.environ["G8E_GATEWAY_HTTP_URL"] = "http://localhost:8080"
+        logger.info("Set G8E_GATEWAY_HTTP_URL=http://localhost:8080 for integration test enrollment")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_app_credentials(_ensure_gateway_url):
+    """Ensure g8ee app credentials exist for integration tests.
+
+    Attempts platform enrollment with the gateway. If that fails (no approval,
+    gateway unavailable, etc), generates self-signed test credentials as a
+    fallback. Tests requiring proper mTLS credentials will skip gracefully.
+    """
+    import asyncio
+    from app.services.infra.app_enrollment_service import AppEnrollmentService
+    from app.constants.paths import get_app_cert_paths
+    from pathlib import Path
+
+    cert_path, key_path = get_app_cert_paths()
+
+    # Skip if credentials already exist
+    if Path(cert_path).exists() and Path(key_path).exists():
+        logger.info("App credentials already exist; skipping enrollment")
+        return
+
+    logger.info("Attempting app enrollment with gateway")
+    enrollment_service = AppEnrollmentService()
+
+    try:
+        app_identity = asyncio.run(asyncio.wait_for(
+            enrollment_service.enroll(),
+            timeout=5.0
+        ))
+        logger.info("Successfully enrolled with gateway")
+    except Exception as exc:
+        logger.warning(f"Platform enrollment unavailable: {exc}")
+        logger.info("Falling back to self-signed test credentials (mTLS tests will skip)")
+        try:
+            app_identity = asyncio.run(enrollment_service.enroll_test_identity())
+        except Exception as exc:
+            logger.error(f"Failed to generate test credentials: {exc}", exc_info=True)
+            raise
+
+    logger.info(f"App credentials ready: {cert_path}")
 
 
 def make_write_through_governance_client(cache_aside_service):
