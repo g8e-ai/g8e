@@ -1,8 +1,8 @@
 ---
 title: Connect Apps to Gateway
 parent: Guides
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 ---
 
 # Connect Apps to g8e Gateway
@@ -133,7 +133,7 @@ The Gateway provides a unified health endpoint across all services for consisten
 
 ## Connectivity Methods
 
-The command-line examples use an enrolled CLI identity. `./g8e auth enroll user` stores that identity under `.g8e/pki/` and normally installs the Gateway root CA in the operating-system trust store. On systems where the root is not installed, add `--cacert .g8e/pki/trust/g8eg-ca-bundle.pem` to each `curl` command. A deployed service instead uses its own app certificate and private key as described in [Application Enrollment](#application-enrollment).
+The command-line examples use an enrolled CLI identity. `./g8e auth enroll user` stores the CLI certificate and key in `.g8e/`, the Gateway trust bundle under `.g8e/pki/trust/`, and normally installs the Gateway root CA in the operating-system trust store. On systems where the root is not installed, add `--cacert .g8e/pki/trust/g8eg-ca-bundle.pem` to each `curl` command. A deployed service instead uses its own app certificate and private key as described in [Application Enrollment](#application-enrollment).
 
 The credential determines authorization as well as transport authentication:
 
@@ -226,8 +226,8 @@ The `/mcp` endpoint is the sole MCP surface. Standard clients begin with `initia
 
 ```bash
 curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -279,8 +279,8 @@ A2A is a JSON-RPC 2.0 HTTP protocol for agent skill invocation. The Gateway appl
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/a2a/call \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -305,8 +305,8 @@ Authenticated CLI, Operator, and policy-authorized app clients can submit canoni
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```
@@ -366,32 +366,32 @@ The Gateway provides a JSON document store with CRUD operations and query suppor
 ```bash
 # Get document
 curl https://localhost:8443/api/v1/data/settings/platform_settings \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key
 
 # Set document (allowed on infrastructure collections)
 curl -X PUT https://localhost:8443/api/v1/data/settings/platform_settings \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{"posture": "doctrine"}'
 
 # Update document (merge)
 curl -X PATCH https://localhost:8443/api/v1/data/settings/platform_settings \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{"posture": "consensus"}'
 
 # Delete document
 curl -X DELETE https://localhost:8443/api/v1/data/settings/platform_settings \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key
 
 # Query documents
 curl -X POST https://localhost:8443/api/v1/data/cases/_query \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "filters": [
@@ -420,7 +420,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.3
+go get github.com/g8e-ai/g8e/v2@v2.2.4
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -428,7 +428,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.2.3
+pip install g8e==2.2.4
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.
@@ -460,7 +460,7 @@ Generate a client certificate for CLI operations:
 This:
 1. Generates a CSR (Certificate Signing Request)
 2. Receives a signed client certificate with SPIFFE URI SAN
-3. Stores the client certificate in `.g8e/pki/cli.crt` and private key in `.g8e/pki/cli.key`
+3. Stores the client certificate in `.g8e/cli.crt` and private key in `.g8e/cli.key`
 4. Opens a browser to register a WebAuthn/FIDO2 passkey for web session authentication
 
 CLI sessions use the mTLS certificate fingerprint as L3 proof. The passkey enables browser-based authentication for console and approval flows.
@@ -515,8 +515,8 @@ Path("etl-service-enrollment.json").write_text(json.dumps(request))
 PY
 curl -X POST https://localhost:8443/api/v1/pki/apps/delegated \
   --cacert .g8e/pki/trust/g8eg-ca-bundle.pem \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d @etl-service-enrollment.json \
   -o etl-service-enrollment-response.json
@@ -689,8 +689,8 @@ Enroll a device using CSR-based enrollment with mTLS authentication. The user_id
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/pki/devices/enroll \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
@@ -710,8 +710,8 @@ curl -X POST https://localhost:8443/api/v1/pki/devices/enroll \
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/pki/csr/sign \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
@@ -779,16 +779,16 @@ The Gateway attaches the L3 proof and resubmits the envelope through the verific
 
 ```bash
 curl https://localhost:8443/api/v1/audit/receipts?operator_session_id=op-session-abc \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key
 ```
 
 ### Export Audit Receipts
 
 ```bash
 curl https://localhost:8443/api/v1/audit/receipts/export?since=2026-01-01T00:00:00Z&limit=100 \
-  --cert .g8e/pki/cli.crt \
-  --key .g8e/pki/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -o audit-export.json
 ```
 
@@ -876,7 +876,7 @@ ls -la .g8e/pki/
 Verify client certificate and key exist:
 
 ```bash
-ls -la .g8e/pki/cli.crt .g8e/pki/cli.key
+ls -la .g8e/cli.crt .g8e/cli.key
 ```
 
 Re-run login if certificate is missing or expired:

@@ -3,8 +3,8 @@ doc_id: public_spectator
 title: Public Spectator Architecture and Threat Model
 audience: architects and security reviewers
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - internal/services/gateway/public_mirror.go
   - internal/services/publicdisclosure/
@@ -384,7 +384,7 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 | --- | --- | --- |
 | Public mirror state storage | public-mirror/state.json | Runtime file exists and validates against PublicMirrorStoreState |
 | Public feed configuration | public-feed/ directory | Export config, signing key, ingest token, snapshot persist with correct permissions |
-| Public publisher commands | `g8e public init`, `g8e public config set`, `g8e public source transition`, `g8e public publish`, `g8e public push`, `g8e public rotate-key`, `g8e public restore`, `g8e public status`, `g8e public verify-assignment` | Each command implements its documented operation without fallback paths |
+| Public publisher commands | `g8e public init`, `g8e public config set`, `g8e public source transition`, `g8e public publish`, `g8e public push`, `g8e public repair-outbox`, `g8e public rotate-key`, `g8e public restore`, `g8e public status`, `g8e public verify-assignment` | Each command implements its documented operation without fallback paths |
 | Verification commands | `g8e eval boundary verify`, `g8e eval runs verify` | Verification output reports quality state without mirror involvement |
 | Disclosure validation | [internal/services/publicdisclosure/validator.go](../../internal/services/publicdisclosure/validator.go) | Validator rejects prohibited fields and validates against closed allowlist |
 | Mirror listener separation | [internal/services/gateway/public_spectator_runtime.go](../../internal/services/gateway/public_spectator_runtime.go) | Private and public listeners are separate; private routes never exposed on public listener |
@@ -394,13 +394,13 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 ### Publishing campaign records
 
 1. Run `g8e public init --source-id=<source-id> --mirror-origin=<mirror-url>` on the host to initialize the publisher.
-2. The publisher consumes canonical campaign records from the local evaluation dataset.
+2. The publisher consumes public-safe campaign records supplied to `g8e public publish <records.jsonl>`.
 3. The publisher validates each record against the closed allowlist using [internal/services/publicdisclosure/validator.go](../../internal/services/publicdisclosure/validator.go).
 4. Valid records are signed, batched, and persisted in the publisher's durable outbox.
-5. `g8e public publish` sends the batch to the private mirror listener on the authenticated `/api/v1/public-feed/batches` route.
+5. `g8e public publish <records.jsonl>` sends the batch to the private mirror listener on the authenticated `/api/v1/public-feed/batches` route.
 6. The mirror validates the batch signature and compliance, then stores it in public-mirror/state.json.
 7. The mirror acknowledges the batch back to the publisher.
-8. `g8e public push` confirms the remote mirror has accepted the batch and clears the outbox.
+8. `g8e public push` retries the durable outbox against the mirror; acknowledged entries are pruned and failed entries remain retryable.
 
 ### Key rotation
 
@@ -413,7 +413,7 @@ See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](
 
 ### Source transitions
 
-1. Run `g8e public source transition --new-source-id=<new-id>` to archive the current source and create a new one.
+1. Run `g8e public source transition --source-id=<new-id> --yes` to archive the current source and create a new one. Without `--yes` the command does not archive the current publisher state.
 2. The current publisher configuration, signing key, and outbox are archived.
 3. A new source is created with a fresh key, token, empty outbox, zero-hash predecessor, and sequence beginning at one.
 4. The mirror retains the old source's full history under its original identity.

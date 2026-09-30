@@ -34,7 +34,6 @@ func (nilStatusBackend) Status(ctx context.Context) (*models.BackendStatus, erro
 func readinessTestConfig() config.InferenceConfig {
 	return config.InferenceConfig{
 		Enabled:        true,
-		Backend:        "ollama",
 		PrimaryModel:   "gemma3:4b",
 		AssistantModel: "llama3.2:3b",
 		LiteModel:      "qwen3:1.5b",

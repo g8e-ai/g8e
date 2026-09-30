@@ -95,7 +95,7 @@ type ollamaChatRequest struct {
 	Stream    bool                `json:"stream"`
 	Think     json.RawMessage     `json:"think,omitempty"`
 	Format    json.RawMessage     `json:"format,omitempty"`
-	Options   ollamaChatOptions   `json:"options,omitempty"`
+	Options   ollamaChatOptions   `json:"options"`
 	KeepAlive json.RawMessage     `json:"keep_alive,omitempty"`
 }
 
@@ -193,6 +193,9 @@ type ollamaModelReleaseResponse struct {
 	DoneReason string `json:"done_reason"`
 }
 
+// ReleaseModel asks the provider to unload a resident model by sending an
+// empty generate request with keep_alive 0. It fails closed unless the
+// provider confirms the unload for exactly that model.
 func (b *OllamaBackend) ReleaseModel(ctx context.Context, model string) error {
 	if model == "" {
 		return fmt.Errorf("ollama_backend: release model: %w", constants.ErrInferenceModelTagInvalid)
@@ -212,7 +215,7 @@ func (b *OllamaBackend) ReleaseModel(ctx context.Context, model string) error {
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return transportError("release model", ctx, err)
+		return transportError(ctx, "release model", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -318,7 +321,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	requestStartedAt := time.Now()
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		return nil, transportError("generate", ctx, err)
+		return nil, transportError(ctx, "generate", err)
 	}
 	defer resp.Body.Close()
 
@@ -582,7 +585,7 @@ func (b *OllamaBackend) decodeChatStream(
 		}
 		if err != nil {
 			if ctx.Err() != nil {
-				return ollamaChatResponse{}, nil, nil, transportError("generate", ctx, err)
+				return ollamaChatResponse{}, nil, nil, transportError(ctx, "generate", err)
 			}
 			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: %w: %w", constants.ErrInferenceProviderResponseInvalid, err)
 		}
@@ -643,24 +646,11 @@ func (b *OllamaBackend) decodeChatStream(
 }
 
 func (b *OllamaBackend) modelDigest(ctx context.Context, model string) (string, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, b.apiURL("api", "tags"), nil)
+	tags, err := b.listTags(ctx, "model digest")
 	if err != nil {
-		return "", fmt.Errorf("ollama_backend: model digest: build request: %w", err)
-	}
-	resp, err := b.client.Do(httpReq)
-	if err != nil {
-		return "", transportError("model digest", ctx, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
-		return "", fmt.Errorf("ollama_backend: model digest: %w: status %d", constants.ErrInferenceBackendUnavailable, resp.StatusCode)
-	}
-	var tagsResp ollamaTagsResponse
-	if err := b.decodeResponse("model digest", resp.Body, &tagsResp); err != nil {
 		return "", err
 	}
-	for _, candidate := range tagsResp.Models {
+	for _, candidate := range tags {
 		if candidate.Name != model {
 			continue
 		}
@@ -676,60 +666,26 @@ func (b *OllamaBackend) modelDigest(ctx context.Context, model string) (string, 
 // Status queries Ollama's /api/tags endpoint to verify the daemon is
 // reachable and lists the models available in its store.
 func (b *OllamaBackend) Status(ctx context.Context) (*models.BackendStatus, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, b.apiURL("api", "tags"), nil)
+	tags, err := b.listTags(ctx, "status")
 	if err != nil {
-		return nil, fmt.Errorf("ollama_backend: status: build request: %w", err)
-	}
-
-	resp, err := b.client.Do(httpReq)
-	if err != nil {
-		return nil, transportError("status", ctx, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
-		return nil, fmt.Errorf("ollama_backend: status: %w: status %d", constants.ErrInferenceBackendUnavailable, resp.StatusCode)
-	}
-
-	var tagsResp ollamaTagsResponse
-	if err := b.decodeResponse("status", resp.Body, &tagsResp); err != nil {
 		return nil, err
 	}
-
-	modelsList := make([]string, 0, len(tagsResp.Models))
-	for _, m := range tagsResp.Models {
-		modelsList = append(modelsList, m.Name)
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
 	}
-
-	return &models.BackendStatus{
-		Available: true,
-		Models:    modelsList,
-	}, nil
+	return &models.BackendStatus{Available: true, Models: names}, nil
 }
 
 // ListModelVariants queries Ollama's /api/tags endpoint and returns every
 // installed model as a typed registry variant with normalized digests.
 func (b *OllamaBackend) ListModelVariants(ctx context.Context) ([]*operatorv1.InferenceModelVariant, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, b.apiURL("api", "tags"), nil)
+	tags, err := b.listTags(ctx, "list model variants")
 	if err != nil {
-		return nil, fmt.Errorf("ollama_backend: list model variants: build request: %w", err)
-	}
-	resp, err := b.client.Do(httpReq)
-	if err != nil {
-		return nil, transportError("list model variants", ctx, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
-		return nil, fmt.Errorf("ollama_backend: list model variants: %w: status %d", constants.ErrInferenceBackendUnavailable, resp.StatusCode)
-	}
-	var tagsResp ollamaTagsResponse
-	if err := b.decodeResponse("list model variants", resp.Body, &tagsResp); err != nil {
 		return nil, err
 	}
-	variants := make([]*operatorv1.InferenceModelVariant, 0, len(tagsResp.Models))
-	for _, candidate := range tagsResp.Models {
+	variants := make([]*operatorv1.InferenceModelVariant, 0, len(tags))
+	for _, candidate := range tags {
 		if candidate.Name == "" {
 			continue
 		}
@@ -743,6 +699,35 @@ func (b *OllamaBackend) ListModelVariants(ctx context.Context) ([]*operatorv1.In
 		return nil, fmt.Errorf("ollama_backend: list model variants: %w", constants.ErrInferenceModelNotFound)
 	}
 	return variants, nil
+}
+
+// listTags reads the provider's installed-model list from /api/tags.
+func (b *OllamaBackend) listTags(ctx context.Context, op string) ([]ollamaTagModel, error) {
+	var tagsResp ollamaTagsResponse
+	if err := b.getJSON(ctx, op, &tagsResp, "api", "tags"); err != nil {
+		return nil, err
+	}
+	return tagsResp.Models, nil
+}
+
+// getJSON issues a GET against a provider API path and decodes the bounded
+// JSON response into out. A non-200 status is ErrInferenceBackendUnavailable;
+// the error body is drained for connection reuse and never surfaced.
+func (b *OllamaBackend) getJSON(ctx context.Context, op string, out any, apiPath ...string) error {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, b.apiURL(apiPath...), nil)
+	if err != nil {
+		return fmt.Errorf("ollama_backend: %s: build request: %w", op, err)
+	}
+	resp, err := b.client.Do(httpReq)
+	if err != nil {
+		return transportError(ctx, op, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
+		return fmt.Errorf("ollama_backend: %s: %w: status %d", op, constants.ErrInferenceBackendUnavailable, resp.StatusCode)
+	}
+	return b.decodeResponse(op, resp.Body, out)
 }
 
 // apiURL resolves a provider API path against the validated base endpoint.
@@ -784,7 +769,7 @@ func ollamaErrorIndicatesCapabilityUnsupported(statusCode int, body []byte) bool
 // is ErrInferenceBackendTimeout; anything else is
 // ErrInferenceBackendUnavailable with the underlying transport cause
 // preserved in the chain.
-func transportError(op string, ctx context.Context, err error) error {
+func transportError(ctx context.Context, op string, err error) error {
 	switch {
 	case errors.Is(ctx.Err(), context.Canceled):
 		return fmt.Errorf("ollama_backend: %s: %w", op, context.Canceled)

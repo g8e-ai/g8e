@@ -115,7 +115,6 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 	cfg := testutil.NewTestConfig(t)
 	cfg.Inference = config.InferenceConfig{
 		Enabled:        true,
-		Backend:        "ollama",
 		PrimaryModel:   "gemma3:4b",
 		AssistantModel: "llama3.2:3b",
 		LiteModel:      "qwen3:1.5b",
@@ -137,7 +136,8 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 		},
 	}
 	scrubbingSvc := mustNewScrubbingSvc(t, logger)
-	inferenceHandler := inference.NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	inferenceHandler, err := inference.NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+	require.NoError(t, err)
 
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)

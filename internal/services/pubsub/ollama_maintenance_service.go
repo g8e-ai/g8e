@@ -9,7 +9,6 @@ package pubsub
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"google.golang.org/protobuf/proto"
@@ -100,13 +99,13 @@ func (s *OllamaMaintenanceService) HandleResidencyRequest(ctx context.Context, m
 		executionID = executionIDFromMessage(msg)
 	}
 
-	endpoint := s.ollamaEndpoint()
-	if endpoint == "" {
-		publishLFAAErrorTo(ctx, s.client, s.config, s.logger, msg, constants.Event.Operator.OllamaModelResidency.Failed, constants.ErrInferenceEndpointInvalid.Error(), s.auditStore, s.scrubbing)
+	backend, err := s.ollamaBackend()
+	if err != nil {
+		publishLFAAErrorTo(ctx, s.client, s.config, s.logger, msg, constants.Event.Operator.OllamaModelResidency.Failed, err.Error(), s.auditStore, s.scrubbing)
 		return
 	}
 
-	residency, err := inference.ReadProviderResidency(ctx, inference.ProviderResidencyOptions{Endpoint: endpoint})
+	residency, err := backend.ReadResidency(ctx)
 	if err != nil {
 		publishLFAAErrorTo(ctx, s.client, s.config, s.logger, msg, constants.Event.Operator.OllamaModelResidency.Failed, err.Error(), s.auditStore, s.scrubbing)
 		return
@@ -118,21 +117,6 @@ func (s *OllamaMaintenanceService) HandleResidencyRequest(ctx context.Context, m
 	publishLFAATypedResponseTo(ctx, s.client, s.config, s.logger, msg, constants.Event.Operator.OllamaModelResidency.Completed, payload, s.auditStore, s.scrubbing)
 }
 
-func (s *OllamaMaintenanceService) ollamaEndpoint() string {
-	if s == nil || s.config == nil {
-		return ""
-	}
-	return s.config.Inference.OllamaEndpoint
-}
-
 func (s *OllamaMaintenanceService) ollamaBackend() (*inference.OllamaBackend, error) {
-	endpoint := s.ollamaEndpoint()
-	if endpoint == "" {
-		return nil, fmt.Errorf("inference: Ollama endpoint: %w", constants.ErrInferenceEndpointInvalid)
-	}
-	backend, err := inference.NewOllamaBackend(endpoint, s.logger)
-	if err != nil {
-		return nil, err
-	}
-	return backend, nil
+	return inference.NewOllamaBackend(s.config.Inference.OllamaEndpoint, s.logger)
 }

@@ -242,6 +242,11 @@ type DispatchInferenceRequest struct {
 	RetryCount uint32
 }
 
+// hasCampaignAuthority reports whether the request carries campaign binding.
+func (r DispatchInferenceRequest) hasCampaignAuthority() bool {
+	return inference.HasCampaignAuthority(r.CampaignID, r.ModelRegistryDigest, r.ModelRegistry)
+}
+
 // DispatchInferenceResult is the output of a successful inference dispatch.
 // The InferenceResult carries ordered response parts, usage metadata, and
 // finish reason. The TransactionID correlates the dispatch with the signed
@@ -360,12 +365,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		OnInferenceProgress:     req.OnProgress,
 	})
 	if err != nil {
-		if s.observationNotifier != nil {
-			_ = s.notifyObservationFinalize(ctx, req, "", attemptStartedAt, time.Now().UTC().UnixMilli(), true)
-		}
-		if s.provenanceNotifier != nil {
-			_ = s.notifyProvenanceFinalize(ctx, req, "", attemptStartedAt, time.Now().UTC().UnixMilli(), true)
-		}
+		s.finalizeFailedAttempt(ctx, req, "", attemptStartedAt)
 		if errors.Is(err, constants.ErrDispatchResultTimeout) {
 			// The dispatch deadline expired while the provider call may
 			// still be running remotely. Record the unknown outcome and
@@ -387,28 +387,16 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	}
 	infResult := &operatorv1.InferenceResult{}
 	if err := proto.Unmarshal(result.ResultPayload, infResult); err != nil {
-		return nil, fmt.Errorf("inference dispatch: %w: %v", constants.ErrInferenceResultDecode, err)
+		return nil, fmt.Errorf("inference dispatch: %w: %w", constants.ErrInferenceResultDecode, err)
 	}
 	if err := validateInferenceResult(infResult, req); err != nil {
-		if s.observationNotifier != nil {
-			_ = s.notifyObservationFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), true)
-		}
-		if s.provenanceNotifier != nil {
-			_ = s.notifyProvenanceFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), true)
-		}
+		s.finalizeFailedAttempt(ctx, req, result.TransactionID, attemptStartedAt)
 		return nil, fmt.Errorf("inference dispatch: %w", err)
 	}
 
 	failed := result.Receipt != nil && result.Receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
-	if s.observationNotifier != nil {
-		if err := s.notifyObservationFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), failed); err != nil {
-			return nil, err
-		}
-	}
-	if s.provenanceNotifier != nil {
-		if err := s.notifyProvenanceFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), failed); err != nil {
-			return nil, err
-		}
+	if err := s.finalizeAttempt(ctx, req, result.TransactionID, attemptStartedAt, failed); err != nil {
+		return nil, err
 	}
 
 	s.logger.Info("Governed inference dispatch completed",
@@ -424,6 +412,28 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	}, nil
 }
 
+// finalizeAttempt reports the attempt outcome to both observation
+// coordinators. Each coordinator is attempted even when the other fails;
+// campaign-bound requests fail closed on an undelivered finalize.
+func (s *DispatchService) finalizeAttempt(ctx context.Context, req DispatchInferenceRequest, inferenceTransactionID string, startedAtUnixMs int64, failed bool) error {
+	completedAtUnixMs := time.Now().UTC().UnixMilli()
+	return errors.Join(
+		s.notifyObservationFinalize(ctx, req, inferenceTransactionID, startedAtUnixMs, completedAtUnixMs, failed),
+		s.notifyProvenanceFinalize(ctx, req, inferenceTransactionID, startedAtUnixMs, completedAtUnixMs, failed),
+	)
+}
+
+// finalizeFailedAttempt finalizes an attempt that already failed. The caller
+// returns the original failure, so an undelivered finalize is logged rather
+// than replacing it.
+func (s *DispatchService) finalizeFailedAttempt(ctx context.Context, req DispatchInferenceRequest, inferenceTransactionID string, startedAtUnixMs int64) {
+	if err := s.finalizeAttempt(ctx, req, inferenceTransactionID, startedAtUnixMs, true); err != nil {
+		s.logger.Warn("inference dispatch: observation finalize undelivered for failed attempt",
+			"provider_attempt_id", req.ProviderAttemptID,
+			"error", err)
+	}
+}
+
 func (s *DispatchService) notifyObservationFinalize(
 	ctx context.Context,
 	req DispatchInferenceRequest,
@@ -432,7 +442,7 @@ func (s *DispatchService) notifyObservationFinalize(
 	completedAtUnixMs int64,
 	failed bool,
 ) error {
-	if s == nil || s.observationNotifier == nil {
+	if s.observationNotifier == nil {
 		return nil
 	}
 	err := s.observationNotifier.NotifyAttemptFinalize(
@@ -448,7 +458,7 @@ func (s *DispatchService) notifyObservationFinalize(
 	if err == nil {
 		return nil
 	}
-	if req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0 {
+	if req.hasCampaignAuthority() {
 		return fmt.Errorf("inference dispatch: %w", err)
 	}
 	s.logger.Warn("inference dispatch: provider-boundary observation finalize undelivered",
@@ -465,7 +475,7 @@ func (s *DispatchService) notifyProvenanceFinalize(
 	completedAtUnixMs int64,
 	failed bool,
 ) error {
-	if s == nil || s.provenanceNotifier == nil || req.Model == "" || req.ModelDigest == "" {
+	if s.provenanceNotifier == nil || req.Model == "" || req.ModelDigest == "" {
 		return nil
 	}
 	err := s.provenanceNotifier.NotifyAttemptFinalize(
@@ -485,7 +495,7 @@ func (s *DispatchService) notifyProvenanceFinalize(
 	if err == nil {
 		return nil
 	}
-	if req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0 {
+	if req.hasCampaignAuthority() {
 		return fmt.Errorf("inference dispatch: %w", err)
 	}
 	s.logger.Warn("inference dispatch: model provenance observation finalize undelivered",
@@ -495,47 +505,19 @@ func (s *DispatchService) notifyProvenanceFinalize(
 }
 
 func validateCampaignModelRegistry(req DispatchInferenceRequest) error {
-	hasCampaignAuthority := req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0
-	if !hasCampaignAuthority {
+	if !req.hasCampaignAuthority() {
 		return nil
 	}
 	if req.CampaignID == "" || req.RunID == "" || req.AssignmentID == "" || req.EvaluationAttemptID == "" || req.ScenarioID == "" ||
 		req.Model == "" || !models.IsSHA256Hex(req.ModelDigest) || !models.IsSHA256Hex(req.ModelRegistryDigest) || len(req.ModelRegistry) == 0 {
 		return constants.ErrInferenceCampaignBindingInvalid
 	}
-	seen := make(map[string]struct{}, len(req.ModelRegistry))
-	matched := false
-	for _, variant := range req.ModelRegistry {
-		if variant == nil || variant.GetModel() == "" || !models.IsSHA256Hex(variant.GetDigest()) {
-			return constants.ErrInferenceModelRegistryInvalid
-		}
-		if _, exists := seen[variant.GetModel()]; exists {
-			return constants.ErrInferenceModelRegistryInvalid
-		}
-		seen[variant.GetModel()] = struct{}{}
-		if variant.GetModel() == req.Model && variant.GetDigest() == req.ModelDigest {
-			matched = true
-		}
-	}
-	digest, err := models.ComputeInferenceModelRegistryDigest(req.CampaignID, req.ModelRegistry)
-	if err != nil || digest != req.ModelRegistryDigest {
-		return constants.ErrInferenceModelRegistryInvalid
-	}
-	if !matched {
-		return constants.ErrInferenceModelOverrideDenied
-	}
-	return nil
+	return inference.VerifyModelRegistryBinding(req.CampaignID, req.ModelRegistryDigest, req.Model, req.ModelDigest, req.ModelRegistry)
 }
 
-// resolveInferenceOperator resolves the Inference Node's operator session
-// from the requestor's enrolled operators. With an explicit
-// TargetOperatorSessionID the target must appear in the requestor's
-// operator list (ownership) and carry inference capability; without one,
-// exactly one inference-capable session must exist. Terminated operators
-// are never selectable. Returns ErrInferenceOperatorNotFound for no match,
-// ErrInferenceOperatorNotCapable for an explicit target that lacks the
-// capability, and ErrInferenceOperatorAmbiguous for multiple matches with
-// no explicit target.
+// validateInferenceResult verifies that the terminal InferenceResult echoes the
+// request identity and carries internally consistent usage, timing and evidence
+// fields. Any mismatch fails closed.
 func validateInferenceResult(result *operatorv1.InferenceResult, req DispatchInferenceRequest) error {
 	if result.GetModel() == "" || result.GetRequestedModel() == "" || len(result.GetParts()) == 0 {
 		return constants.ErrInferenceProviderResponseInvalid
@@ -610,6 +592,15 @@ func validateInferenceResult(result *operatorv1.InferenceResult, req DispatchInf
 	return nil
 }
 
+// resolveInferenceOperator resolves the Inference Node's operator session
+// from the requestor's enrolled operators. With an explicit
+// TargetOperatorSessionID the target must appear in the requestor's
+// operator list (ownership) and carry inference capability; without one,
+// exactly one inference-capable session must exist. Terminated operators
+// are never selectable. Returns ErrInferenceOperatorNotFound for no match,
+// ErrInferenceOperatorNotCapable for an explicit target that lacks the
+// capability, and ErrInferenceOperatorAmbiguous for multiple matches with
+// no explicit target.
 func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest) (string, error) {
 	operators, err := s.operatorList.ListUserOperators(req.RequestorUserID)
 	if err != nil {

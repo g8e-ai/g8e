@@ -43,8 +43,11 @@ func (s *fileWindowStore) windowsDir() string {
 	return filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceProviderObserverDirname, constants.InferenceProviderObserverWindowsDirname)
 }
 
-func (s *fileWindowStore) windowPath(providerAttemptID string) string {
-	return filepath.Join(s.windowsDir(), providerAttemptID+constants.FileExtJSON)
+func (s *fileWindowStore) windowPath(providerAttemptID string) (string, error) {
+	if err := models.ValidateProviderAttemptID(providerAttemptID); err != nil {
+		return "", fmt.Errorf("provider observer window store: %w", err)
+	}
+	return filepath.Join(s.windowsDir(), providerAttemptID+constants.FileExtJSON), nil
 }
 
 func (s *fileWindowStore) Save(ctx context.Context, window *evalv1.ProviderBoundaryObservationWindow) error {
@@ -58,17 +61,25 @@ func (s *fileWindowStore) Save(ctx context.Context, window *evalv1.ProviderBound
 	if err != nil {
 		return fmt.Errorf("provider observer window store: marshal: %w", err)
 	}
+	path, err := s.windowPath(window.GetProviderAttemptId())
+	if err != nil {
+		return err
+	}
 	if err := s.fileSvc.MkdirAll(ctx, s.windowsDir(), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("provider observer window store: mkdir: %w", err)
 	}
-	return s.fileSvc.WriteFile(ctx, s.windowPath(window.GetProviderAttemptId()), body, constants.PermFilePrivate)
+	return s.fileSvc.WriteFile(ctx, path, body, constants.PermFilePrivate)
 }
 
 func (s *fileWindowStore) Load(ctx context.Context, providerAttemptID string) (*evalv1.ProviderBoundaryObservationWindow, error) {
 	if providerAttemptID == "" {
 		return nil, fmt.Errorf("provider observer window store: %w", constants.ErrMissingRequiredField)
 	}
-	body, err := s.fileSvc.ReadFile(ctx, s.windowPath(providerAttemptID))
+	path, err := s.windowPath(providerAttemptID)
+	if err != nil {
+		return nil, err
+	}
+	body, err := s.fileSvc.ReadFile(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +111,6 @@ func ComputeObservationDigest(window *evalv1.ProviderBoundaryObservationWindow) 
 	return models.SHA256Hex(data), nil
 }
 
-// ValidateObservationWindow verifies digest binding and required fields.
 // AttemptRecordFromObservationWindow synthesizes a provider-attempt record
 // from a durable observation window when the gateway does not have a local
 // operator attempt file (attempts are written on the inference operator host).
@@ -120,6 +130,7 @@ func AttemptRecordFromObservationWindow(window *evalv1.ProviderBoundaryObservati
 	}
 }
 
+// ValidateObservationWindow verifies digest binding and required fields.
 func ValidateObservationWindow(window *evalv1.ProviderBoundaryObservationWindow) error {
 	if window == nil || window.GetProviderAttemptId() == "" || window.GetObserverId() == "" {
 		return fmt.Errorf("provider observer: validate observation window: %w", constants.ErrMissingRequiredField)

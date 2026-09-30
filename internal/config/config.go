@@ -93,7 +93,6 @@ type LoadOptions struct {
 
 	// Inference backend (g8ellama). Disabled when InferenceEnabled is false.
 	InferenceEnabled             bool
-	InferenceBackend             string
 	InferenceOllamaEndpoint      string
 	InferencePrimaryModel        string
 	InferenceAssistantModel      string
@@ -199,19 +198,10 @@ type GatewayConfig struct {
 type InferenceConfig struct {
 	Enabled bool
 
-	// Backend selects the inference backend implementation. Currently only
-	// "ollama" is supported.
-	Backend string
-
 	// OllamaEndpoint is the HTTP endpoint of the configured Ollama provider
 	// (default: http://127.0.0.1:<InferenceOllamaDefaultPort>). For this
 	// release the provider is remote; nothing here manages a local daemon.
 	OllamaEndpoint string
-
-	// ModelsDir is the relative path to the governed model store directory,
-	// resolved via fileSvc.Resolve(constants.DefaultModelsDir) at the
-	// boundary. Not stored as an absolute path on the config struct.
-	ModelsDir string
 
 	// PrimaryModel, AssistantModel, LiteModel map each chat-tier role to an
 	// Ollama model name. Ollama routes by model name in the API call, so
@@ -222,9 +212,6 @@ type InferenceConfig struct {
 
 	CampaignID          string
 	ModelRegistryDigest string
-
-	// MaxContextTokens bounds the prompt context window (0 = backend default).
-	MaxContextTokens int
 
 	// KeepAlive is the Ollama keep-alive duration passed to /api/chat per
 	// request. Default "-1" pins all three chat roles in memory on the
@@ -677,9 +664,7 @@ func Load(opts LoadOptions) (*Config, error) {
 
 		// Inference backend (g8ellama). Disabled by default; enabled when
 		// the operator runs as an Inference Node calling the configured
-		// remote Ollama provider. The model store directory is resolved at the boundary via
-		// fileSvc.Resolve(constants.DefaultModelsDir), not stored as an
-		// absolute path here.
+		// remote Ollama provider.
 		Inference:                newInferenceConfig(opts),
 		ProviderBoundaryObserver: newProviderBoundaryObserverConfig(opts),
 		ProvenanceOperator:       newProvenanceOperatorConfig(opts),
@@ -722,17 +707,11 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 
 // newInferenceConfig builds an InferenceConfig from LoadOptions, applying
 // defaults for unset fields. The Ollama endpoint defaults to loopback on the
-// canonical Ollama port. The model store directory is the relative constant
-// (constants.DefaultModelsDir); callers resolve it to an absolute path via
-// fileSvc.Resolve at the I/O boundary.
+// canonical Ollama port.
 func newInferenceConfig(opts LoadOptions) InferenceConfig {
 	endpoint := opts.InferenceOllamaEndpoint
 	if endpoint == "" {
 		endpoint = fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
-	}
-	backend := opts.InferenceBackend
-	if backend == "" {
-		backend = "ollama"
 	}
 	keepAlive := opts.InferenceKeepAlive
 	if keepAlive == "" {
@@ -740,9 +719,7 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 	}
 	return InferenceConfig{
 		Enabled:             opts.InferenceEnabled,
-		Backend:             backend,
 		OllamaEndpoint:      endpoint,
-		ModelsDir:           constants.DefaultModelsDir,
 		PrimaryModel:        opts.InferencePrimaryModel,
 		AssistantModel:      opts.InferenceAssistantModel,
 		LiteModel:           opts.InferenceLiteModel,

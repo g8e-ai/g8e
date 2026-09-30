@@ -65,3 +65,14 @@ func TestComputeAttestationDigest_RequiresProviderAttemptID(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }
+
+func TestWindowStore_SaveAndLoadRejectPathHostileAttemptID(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store, err := NewWindowStore(storagetest.NewTestFileSvc(t, t.TempDir()))
+	require.NoError(t, err)
+
+	assert.ErrorIs(t, store.Save(ctx, testAttestationWindow(t, "a/b")), constants.ErrInferenceProviderAttemptIDInvalid)
+	_, err = store.Load(ctx, "a/b")
+	assert.ErrorIs(t, err, constants.ErrInferenceProviderAttemptIDInvalid)
+}

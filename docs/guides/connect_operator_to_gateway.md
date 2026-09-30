@@ -145,8 +145,8 @@ After approval, the Operator signs the completion transcript with both private k
 
 - `.g8e/pki/operator.crt` - Operator certificate
 - `.g8e/pki/operator.key` - Operator private key
-- `.g8e/pki/cli.crt` - CLI certificate (for local enrollment operations)
-- `.g8e/pki/cli.key` - CLI private key
+- `.g8e/cli.crt` - CLI certificate (for local enrollment operations)
+- `.g8e/cli.key` - CLI private key
 - `.g8e/pki/trust/g8eg-ca-bundle.pem` - Gateway trust bundle
 
 Once these writes succeed, the process removes the pending state and then authenticates to the Gateway over mTLS, receives its Operator ID, Operator session ID, runtime limits, governance posture, and heartbeat interval configuration. It initializes encrypted local storage, execution vaults, and replay protection, then subscribes to its command channel:

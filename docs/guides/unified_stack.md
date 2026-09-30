@@ -286,7 +286,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 | `G8E_PUBLIC_MIRROR_PUBLIC_PORT` | `8082` | Loopback-only anonymous public-mirror read/SSE listener |
 | `G8E_EVAL_EXPLORER_PORT` | `5173` | Loopback-only evaluation explorer listener |
 | `G8E_OLLAMA_ENDPOINT` | `http://127.0.0.1:11434` | Remote Ollama URL for Inference Operator (required for live inference campaigns and `docker init`) |
-| `G8E_INFERENCE_PRIMARY_MODEL` | `gemm4:e4b` | Primary model tag passed to the Inference Operator |
+| `G8E_INFERENCE_PRIMARY_MODEL` | `gemma4:e4b` | Primary model tag passed to the Inference Operator |
 | `G8E_INFERENCE_ASSISTANT_MODEL` | `qwen3:1.7b` | Assistant model tag passed to the Inference Operator |
 | `G8E_INFERENCE_LITE_MODEL` | `smol-7b:latest` | Lite model tag passed to the Inference Operator |
 | `G8E_INFERENCE_KEEP_ALIVE` | `-1` | Ollama keep-alive passed to the Inference Operator |

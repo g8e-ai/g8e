@@ -3,8 +3,8 @@ doc_id: release_process
 title: Release Process
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - VERSION
   - Makefile
@@ -96,7 +96,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 5. **Sync Python package & protocol specs:** Update `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, `protocol/python/uv.lock`, and the `Version: vX.Y.Z` headers in `protocol/docs/a2a.md`, `protocol/docs/constants.md`, `protocol/docs/mcp.md`, and `protocol/docs/spec.md`.
 6. **Regenerate downstream lockfiles:** Run `make proto` to update `ensemble/uv.lock` and protobuf bindings.
 7. **Update CHANGELOG:** Add the release table row under `## vX.Y.x` in `CHANGELOG.md`.
-8. **Generate and verify compliance evidence:** Copy the running Gateway database to `<runtime-root>/.g8e/data/g8e.db` (`docker cp` the `g8e.db`, `-wal`, and `-shm` files from the Gateway container), then run `./g8e compliance release-prepare --project-root <runtime-root> --signing-metadata <path> --signing-private-key <path>` (add `--new-key` to create the signing key). The command derives the protected scope with `ProductVersion = "X.Y.Z"` from `VERSION`, git, and the Gateway image digest, exports the assessment window, builds the external report and evidence trust policies, generates a public bundle, verifies it offline, and projects the verified `report.md` and `report.csv` into `docs/release_notes/vX.Y.x/`. It stops before projection when verification fails. Run `./g8e compliance report generate`, `report verify`, and `release-evidence` individually only for a scope authored by hand. Record the bundle path, verification result, and checksum root that the command prints in the release notes.
+8. **Generate and verify compliance evidence:** Copy the running Gateway database to `<runtime-root>/.g8e/data/g8e.db` (`docker cp` the `g8e.db`, `-wal`, and `-shm` files from the Gateway container), then run `./g8e compliance release-prepare --project-root <runtime-root> --signing-metadata <path> --signing-private-key <path>` (add `--new-key` to create the signing key). The command derives the protected scope with `ProductVersion = "X.Y.Z"` from `VERSION`, git, and the Gateway image digest, exports the assessment window, builds the external report and evidence trust policies, generates a public bundle, verifies it offline, and projects the verified `report.md` and `report.csv` into `docs/release_notes/vX.Y.x/`. The recorded source revision is the git `HEAD` of `--repo-root`, so the running Gateway MUST be built from that `HEAD` (`make build`, then `./g8e docker rebuild --full`; confirm with `g8e version` inside the Gateway container) and the assessment window MUST contain governed activity from that build; the automatic window fails when it holds no receipts. Uncommitted release changes are never part of the recorded revision. The command stops before projection when verification fails. Run `./g8e compliance report generate`, `report verify`, and `release-evidence` individually only for a scope authored by hand. Record the bundle path, verification result, and checksum root that the command prints in the release notes.
 9. **Finalize document metadata:** Update `last_updated` and `version` on every audited document.
 10. **Verification checks:** Run `./g8e test lint` and focused package integration tests.
 
@@ -108,13 +108,14 @@ git checkout main && git pull
 make release
 ```
 
-`make release` verifies `VERSION` sync, checks release notes existence, creates tags `vX.Y.Z` and `protocol/vX.Y.Z`, and pushes tags to origin. GitHub Actions workflows build binaries, sign assets, create the GitHub release, and publish to PyPI.
+`make release` rewrites any out-of-sync Python package version or protocol spec header to match `VERSION`, then aborts if that leaves the working tree dirty. It also aborts when the release notes file is missing or either tag already exists. Otherwise it creates tags `vX.Y.Z` and `protocol/vX.Y.Z` and pushes them to origin. GitHub Actions workflows build binaries, sign assets, create the GitHub release, and publish to PyPI.
 
 ## Anti-patterns
 
 - Agent running `git commit`, `git push`, or `make release` (INV-REL-DUTY-01).
 - Running `make release` from a feature branch or with unmerged changes (INV-REL-DUTY-02).
-- Updating document metadata without auditing the entire document against code (INV-REL-VER-02).
+- Updating document metadata without auditing the entire document against code (INV-DOC-FMT-02 in [Documentation Guide](docs.md)).
+- Recording a source revision for a Gateway that was built from a different commit (INV-REL-COMP-01).
 - Hand-editing compliance projections instead of generating through `g8e compliance release-evidence` (INV-REL-COMP-01, INV-REL-COMP-03).
 - Missing `make proto` to update `ensemble/uv.lock` after bumping Python version (INV-REL-VER-03).
 
