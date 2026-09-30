@@ -15,7 +15,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -128,4 +130,31 @@ func TestPlatformEnrollmentCompletionTranscriptIsDeterministicAndBound(t *testin
 	changed, err := platformEnrollmentCompletionTranscript(request)
 	require.NoError(t, err)
 	assert.NotEqual(t, first, changed)
+}
+
+// TestPlatformEnrollmentCompletionTranscriptGoldenVector pins the canonical
+// completion transcript bytes for a fixed vector. The ensemble client
+// hand-encodes the same message in Python, and its unit test
+// (ensemble/tests/unit/services/infra/app_enrollment_transcript_contract_test.py)
+// asserts these exact bytes, so a change to either side fails a test instead of
+// failing proof-of-possession verification on a live Gateway.
+func TestPlatformEnrollmentCompletionTranscriptGoldenVector(t *testing.T) {
+	const goldenHex = "0a013112147265712d303132333435363738396162636465661a40" +
+		"6161616161616161616161616161616161616161616161616161616161616161" +
+		"6161616161616161616161616161616161616161616161616161616161616161" +
+		"20022a16656e73656d626c652d636f6e74726163742d686f737432420a40" +
+		"6262626262626262626262626262626262626262626262626262626262626262" +
+		"6262626262626262626262626262626262626262626262626262626262626262"
+
+	request := &models.PlatformEnrollmentRequest{
+		ID:            "req-0123456789abcdef",
+		TokenHash:     strings.Repeat("a", 64),
+		ComponentKind: models.PlatformComponentEnsemble,
+		InstanceID:    "ensemble-contract-host",
+		Fingerprints:  models.PlatformEnrollmentCSRFingerprints{App: strings.Repeat("b", 64)},
+	}
+
+	transcript, err := platformEnrollmentCompletionTranscript(request)
+	require.NoError(t, err)
+	assert.Equal(t, goldenHex, hex.EncodeToString(transcript))
 }

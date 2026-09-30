@@ -1,7 +1,7 @@
 # Public Spectator Operations Guide
 
-Last Updated: 2026-09-28
-Version: v2.2.3
+Last Updated: 2026-09-29
+Version: v2.2.4
 
 This guide covers the gateway-owned anonymous public mirror and evaluation explorer. It is separate from the passkey-authenticated owner-local observe frontend connected with `./g8e gw connect <origin>`; see [Generator-Neutral Builder Guide](./build_observe_frontend.md) and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend).
 

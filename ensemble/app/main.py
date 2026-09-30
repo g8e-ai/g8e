@@ -164,27 +164,9 @@ async def lifespan(app: FastAPI):
                     await enrollment_service.fetch_ca_bundle()
                     app_identity = enrollment_service.load_identity()
                 except Exception:
-                    try:
-                        app_identity = await enrollment_service.enroll()
-                    except ConfigurationError:
-                        # Enrollment failed (likely no running gateway or not bootstrapped).
-                        # Fall back to test identity for local development/testing.
-                        logger.warning(
-                            "AppEnrollmentService: enrollment failed, generating test identity. "
-                            "This is for local development only; production requires full enrollment."
-                        )
-                        app_identity = await enrollment_service.enroll_test_identity()
-            else:
-                try:
                     app_identity = await enrollment_service.enroll()
-                except ConfigurationError:
-                    # Enrollment failed (likely no running gateway or not bootstrapped).
-                    # Fall back to test identity for local development/testing.
-                    logger.warning(
-                        "AppEnrollmentService: enrollment failed, generating test identity. "
-                        "This is for local development only; production requires full enrollment."
-                    )
-                    app_identity = await enrollment_service.enroll_test_identity()
+            else:
+                app_identity = await enrollment_service.enroll()
         logger.info(
             "App identity ready (app_id=%s, cert=%s)",
             app_identity.app_id,

@@ -110,6 +110,31 @@ if ! curl -sk --max-time 3 "http://${ENDPOINT}:8080/.well-known/g8e/pki/ca-bundl
 fi
 
 # ---------------------------------------------------------------------------
+# owner CLI preflight -- every phase below drives the Gateway through the
+# enrolled-owner CLI identity in $OWNER_DIR. If that identity can't talk to
+# the Gateway (untrusted CA, expired cert, not enrolled), nothing downstream
+# can work, and the per-call `2>/dev/null` below would hide why: the enroll
+# loop would just poll an empty pending list for ~15s x attempts x COUNT.
+# Prove the CLI works once, up front, and show its real error if it doesn't.
+# ---------------------------------------------------------------------------
+PREFLIGHT_ERR="$(mktemp)"
+trap 'rm -f "$PREFLIGHT_ERR"' EXIT
+if ! PREFLIGHT_LIST_JSON="$(OWNER_G8E operator list --json 2>"$PREFLIGHT_ERR")" \
+   || ! jq -e . >/dev/null 2>&1 <<< "$PREFLIGHT_LIST_JSON"; then
+  echo "ERROR: the owner CLI in $OWNER_DIR cannot query the Gateway, so no operators can be enrolled or approved." >&2
+  echo "       'g8e operator list --json' said:" >&2
+  { grep -m1 -E '^Error:' "$PREFLIGHT_ERR" || { head -3 "$PREFLIGHT_ERR"; head -3 <<< "$PREFLIGHT_LIST_JSON"; }; } | sed 's/^/         /' >&2
+  if grep -q 'unknown authority' "$PREFLIGHT_ERR"; then
+    echo "       The CLI's trust bundle ($OWNER_DIR/.g8e/pki/trust/g8eg-ca-bundle.pem) does not contain the running Gateway's CA." >&2
+    echo "       Refresh it from the Gateway (or re-run 'g8e auth enroll user'):" >&2
+    echo "         curl -s http://${ENDPOINT}:8080/.well-known/g8e/pki/ca-bundle -o $OWNER_DIR/.g8e/pki/trust/g8eg-ca-bundle.pem" >&2
+  else
+    echo "       Check that OWNER_DIR ($OWNER_DIR) holds an enrolled CLI identity (g8e auth status / g8e auth enroll user)." >&2
+  fi
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
 # capacity guard -- this is the number one failure mode for this script.
 # Each live operator process runs ~$PER_OP_RAM_MB of RSS. Refuse to
 # knowingly overcommit RAM on a host that's running other people's work
@@ -164,7 +189,7 @@ T_START=$(now)
 # shell-glob membership test over a newline-separated string silently never
 # matches -- that bug previously let pre-existing operators (including
 # witness-only ones that reject generic commands) leak into "our" fleet.
-OWNER_G8E operator list --json 2>/dev/null | jq -r '.operators[]?.operator_session_id // empty' > "$BASELINE_FILE"
+jq -r '.operators[]?.operator_session_id // empty' <<< "$PREFLIGHT_LIST_JSON" > "$BASELINE_FILE"
 
 # ---------------------------------------------------------------------------
 # Phase 1 -- create ACTUAL_COUNT directories + hardlink the binary into each.
@@ -193,6 +218,7 @@ T2=$(now)
 enrolled=0
 enroll_failed=0
 seen_ids=""
+pending_errs=0
 
 for i in $(seq 1 "$ACTUAL_COUNT"); do
   d=$(printf "%s/op-%05d" "$SANDBOX_ROOT" "$i")
@@ -215,7 +241,22 @@ for i in $(seq 1 "$ACTUAL_COUNT"); do
     newid=""
     deadline=$(( $(date +%s) + ENROLL_POLL_TIMEOUT_S ))
     while [ "$(date +%s)" -lt "$deadline" ]; do
-      ids=$(OWNER_G8E auth enroll pending 2>/dev/null | grep -oP 'Request ID:\s+\K[0-9a-f-]{36}')
+      # An empty pending list means "not there yet"; a non-zero exit means the
+      # control plane is unusable. Keep those apart -- conflating them is how
+      # this loop used to burn minutes per operator on a broken CLI.
+      if ! pending_out=$(OWNER_G8E auth enroll pending 2>&1); then
+        pending_errs=$((pending_errs + 1))
+        if [ "$pending_errs" -ge 5 ]; then
+          echo "ERROR: 'g8e auth enroll pending' failed $pending_errs times in a row; aborting. Last error:" >&2
+          echo "$pending_out" | grep -m1 -E '^Error:' >&2 || echo "$pending_out" | head -3 >&2
+          echo "Operators started so far are still running; tear down with: $0 cleanup" >&2
+          exit 1
+        fi
+        sleep 1
+        continue
+      fi
+      pending_errs=0
+      ids=$(grep -oP 'Request ID:\s+\K[0-9a-f-]{36}' <<< "$pending_out")
       for id in $ids; do
         case " $seen_ids " in
           *" $id "*) ;;

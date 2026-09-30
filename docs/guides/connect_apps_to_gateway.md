@@ -551,18 +551,19 @@ curl -X POST https://localhost:8443/mcp \
 
 The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot use delegated enrollment. Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`. The enrollment flow:
 
-1. **Request submission** (`POST /api/v1/auth/platform-enrollments/request`) — token-scoped, plain HTTP, available before owner bootstrap
-2. **Status polling** (`GET /api/v1/auth/platform-enrollments/status?token=<token>`) — token-scoped, plain HTTP, with Retry-After and backoff
-3. **Completion** (`POST /api/v1/auth/platform-enrollments/complete`) — token-scoped, plain HTTP, requires proof-of-possession signature
-4. **Approval** (`POST /api/v1/auth/platform-enrollments/pending/<request-id>/decide`) — owner-only (mTLS or web session)
-5. **Pending list** (`GET /api/v1/auth/platform-enrollments/pending`) — owner-only (mTLS or web session)
-6. **Revocation** (`POST /api/v1/auth/platform-enrollments/<request-id>/revoke`) — owner-only (mTLS or web session)
+1. **Request submission** (`POST /api/v1/auth/platform-enrollments/request`) — token-scoped, plain HTTP or HTTPS, available before owner bootstrap
+2. **Status polling** (`GET /api/v1/auth/platform-enrollments/status?token=<token>`) — token-scoped, plain HTTP or HTTPS; the client polls with bounded backoff
+3. **Completion** (`POST /api/v1/auth/platform-enrollments/complete`) — token-scoped, plain HTTP or HTTPS, requires a proof-of-possession signature over the canonical completion transcript
+4. **Pending list** (`GET /api/v1/auth/platform-enrollments/pending`) — owner-only (mTLS or web session), HTTPS only
+5. **Enrolled list** (`GET /api/v1/auth/platform-enrollments/enrolled`) — owner-only (mTLS or web session), HTTPS only
+6. **Decision** (`POST /api/v1/auth/platform-enrollments/decision`) — owner-only (mTLS or web session), HTTPS only; approves or denies a request
+7. **Revocation** (`POST /api/v1/auth/platform-enrollments/revoke`) — owner-only (mTLS or web session), HTTPS only
 
 The enrolled owner reviews requests with `g8e auth enroll pending`, approves with `g8e auth enroll approve <request-id>`, or denies with `g8e auth enroll deny <request-id>`. Use `g8e auth enroll list` to review completed or revoked enrollments and obtain request IDs for `g8e auth enroll revoke <request-id>`.
 
 The resumable client generates a P-256 key and CSR, submits a request (persisting the token and private key), polls status with bounded backoff, waits for owner approval, signs the canonical completion transcript with the private key, submits completion, validates the certificate against the pinned trust bundle and expected SPIFFE URI, and writes credentials atomically (temp-file-plus-rename).
 
-The in-tree Ensemble (`g8ee`) and Dashboard (`g8ed`) clients implement that reserved-component flow during startup and load-or-enroll on ready. See [Authentication Architecture](../architecture/auth.md), [Ensemble Architecture](../architecture/ensemble.md) (§ Component lifecycle, INV-ENS-LIFE-04), [Dashboard Architecture](../architecture/dashboard.md), and [Build a g8e-Compatible Frontend](./build_frontend.md) for their component-specific behavior.
+The in-tree Ensemble (`g8ee`) and Dashboard (`g8ed`) clients implement that reserved-component flow during startup and load-or-enroll on ready. See [Authentication Architecture](../architecture/auth.md), [Ensemble Architecture](../architecture/ensemble.md) (§ Startup Sequence and App Identity Enrollment), [Dashboard Architecture](../architecture/dashboard.md), and [Build a g8e-Compatible Frontend](./build_frontend.md) for their component-specific behavior.
 
 ---
 

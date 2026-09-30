@@ -608,6 +608,14 @@ Inspect the catalog without running:
 ./g8e eval formations show ultra-efficient-speedster
 ```
 
+Add or replace a formation in the checked-in overlay (`eval/formation-catalog-overlay.json`), or remove one. Every role needs its model tag, provider, family, quantization, parameters, and VRAM estimates; see `./g8e eval formations add --help` for the full flag set.
+
+```bash
+./g8e eval formations add my-formation --display-name "My Formation" --description "..." \
+  --primary-tag <tag> ... --assistant-tag <tag> ... --lite-tag <tag> ...
+./g8e eval formations remove my-formation
+```
+
 ### Heterogeneous campaign assignment (Phase 2)
 
 After formation smoke passes, run through the full campaign lifecycle:

@@ -3,8 +3,8 @@ doc_id: getting_started_ensemble
 title: Getting Started with g8ee
 audience: developers implementing or deploying the ensemble
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-29
+version: v2.2.4
 owners:
   - docs/ensemble/
   - ensemble/

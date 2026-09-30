@@ -159,7 +159,7 @@ The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation comma
 | `g8e eval campaigns …` | Campaign definitions (list, show, create, archive, unarchive) |
 | `g8e eval runs …` | Campaign execution and lifecycle (list, show, start, resume, cancel, logs, verify, publish, export, repair, compare, archive, unarchive) |
 | `g8e eval rollout …` | Rollout qualification queue (list, add, remove, next, retry, skip, run) |
-| `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, smoke) |
+| `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, add, remove, smoke) |
 | `g8e eval gates …` | Pre-campaign acceptance gates (chat, inference, probe) |
 | `g8e eval observer …` | Provider-boundary hardware observer (run, verify) |
 
@@ -241,7 +241,7 @@ Each persona wraps in the production modular system prompt stack: Core Safety, C
 
 **Campaign lanes and formations:** The default campaign lane is `model_role`, which schedules each frozen model variant against catalog scenarios and records role-specific results. Campaigns can also use the `system` lane. The CLI creates deterministic, persisted heterogeneous stacks with `g8e eval campaigns create <id> --formations <id>... --seed <seed>` and starts execution with `g8e eval runs start <id>`.
 
-A formation contains primary, assistant, and lite model bindings, executed in `lite → assistant → primary` order. `runs start` and `runs resume` select the formation runner with `--formation-runner`:
+A formation contains primary, assistant, and lite model bindings, executed in `lite → assistant → primary` order. `g8e eval formations add` writes a formation (all three roles required) to the checked-in overlay `eval/formation-catalog-overlay.json`, replacing any entry with the same ID; `formations remove` deletes an overlay entry or records a checked-in default as removed, and the catalog can never be left empty. The effective catalog is the built-in execution topologies merged with that overlay. `runs start` and `runs resume` select the formation runner with `--formation-runner`:
 
 | Runner | Execution | Grading | Telemetry |
 | --- | --- | --- | --- |

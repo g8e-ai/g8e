@@ -299,9 +299,11 @@ class AppEnrollmentService:
         fingerprint. The client must produce a byte-identical transcript to
         the gateway's construction.
 
-        Since the generated Python protobuf bindings are not available, we
-        construct the deterministic binary protobuf encoding manually. The
-        field numbers and types match the proto definition:
+        The deterministic binary protobuf encoding is constructed manually so
+        the signed bytes do not depend on message-library serialization. The
+        field numbers and types match the proto definition, and
+        ``app_enrollment_transcript_contract_test.py`` pins them against the
+        generated message and a golden vector shared with the Gateway's Go test:
 
         message PlatformEnrollmentCompletionTranscript {
           string protocol_version = 1;
@@ -809,74 +811,6 @@ class AppEnrollmentService:
             cert_path=cert_path,
             key_path=key_path,
             ca_cert_path=PATHS["infra"]["ca_cert_path"],
-        )
-
-    async def enroll_test_identity(self) -> AppIdentity:
-        """Generate a test identity with self-signed cert and trust bundle.
-
-        This is for local development and testing only, without requiring
-        Gateway approval. Generates a P-256 key, self-signed cert with SPIFFE
-        URI SAN, and stores them in the standard location. The cert has a 7-day
-        lifetime. The self-signed cert acts as its own trust bundle.
-
-        Not for production. Production uses the full nine-step platform enrollment.
-        """
-        cert_path, key_path = get_app_cert_paths(self._app_name)
-        ca_cert_path = PATHS["infra"]["ca_cert_path"]
-
-        # Generate P-256 key
-        private_key = ec.generate_private_key(ec.SECP256R1())
-
-        # Build self-signed cert with SPIFFE URI SAN
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, self._app_name),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "g8e"),
-        ])
-        spiffe_uri = f"spiffe://g8e.local/app/{self._app_name}"
-        cert = (
-            x509.CertificateBuilder()
-            .subject_name(subject)
-            .issuer_name(issuer)
-            .public_key(private_key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.now(UTC))
-            .not_valid_after(datetime.now(UTC) + timedelta(days=7))
-            .add_extension(
-                x509.SubjectAlternativeName([x509.UniformResourceIdentifier(spiffe_uri)]),
-                critical=False,
-            )
-            .sign(private_key, hashes.SHA256())
-        )
-
-        cert_pem = cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
-        key_pem = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        ).decode("utf-8")
-
-        # Write credentials atomically
-        cert_dir = Path(cert_path).parent
-        cert_dir.mkdir(parents=True, exist_ok=True)
-        ca_dir = Path(ca_cert_path).parent
-        ca_dir.mkdir(parents=True, exist_ok=True)
-
-        _atomic_write_file(cert_path, cert_pem, 0o600)
-        _atomic_write_file(key_path, key_pem, 0o600)
-        _atomic_write_file(ca_cert_path, cert_pem, 0o644)
-
-        logger.info(
-            "AppEnrollmentService: test identity generated (app_id=%s, cert=%s, expires=%s)",
-            spiffe_uri,
-            cert_path,
-            cert.not_valid_after_utc.isoformat(),
-        )
-
-        return AppIdentity(
-            app_id=spiffe_uri,
-            cert_path=cert_path,
-            key_path=key_path,
-            ca_cert_path=ca_cert_path,
         )
 
 
