@@ -1141,7 +1141,7 @@ func TestMcpStdioCmd_FlagsRegistered(t *testing.T) {
 	cmd := mcpStdioCmd()
 	expectedFlags := []string{
 		constants.Flag.ClientCert, constants.Flag.ClientKey, constants.Flag.CABundle,
-		constants.Flag.GatewayURL, constants.Flag.AppCert, constants.Flag.AppKey,
+		constants.Flag.GatewayURL, constants.Flag.App,
 	}
 	for _, name := range expectedFlags {
 		f := cmd.Flags().Lookup(name)

@@ -38,9 +38,7 @@ var EnvVar = struct {
 	ClientKey             EnvVarKey
 	CABundle              EnvVarKey
 	GatewayURL            EnvVarKey
-	AppID                 EnvVarKey
-	AppCert               EnvVarKey
-	AppKey                EnvVarKey
+	App                   EnvVarKey
 	DemoRunID             EnvVarKey
 	DemoScenarioID        EnvVarKey
 }{
@@ -70,9 +68,7 @@ var EnvVar = struct {
 	ClientKey:             EnvVarKey("G8E_CLIENT_KEY"),
 	CABundle:              EnvVarKey("G8E_CA_BUNDLE"),
 	GatewayURL:            EnvVarKey("G8E_GATEWAY_URL"),
-	AppID:                 EnvVarKey("G8E_APP_ID"),
-	AppCert:               EnvVarKey("G8E_APP_CERT"),
-	AppKey:                EnvVarKey("G8E_APP_KEY"),
+	App:                   EnvVarKey("G8E_APP"),
 	DemoRunID:             EnvVarKey("G8E_DEMO_RUN_ID"),
 	DemoScenarioID:        EnvVarKey("G8E_DEMO_SCENARIO_ID"),
 }

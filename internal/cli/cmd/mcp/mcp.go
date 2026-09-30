@@ -160,8 +160,7 @@ Cert and key must be supplied as a pair per tier; supplying only one half fails 
 	cmd.Flags().String(constants.Flag.ClientKey, "", "Path to CLI client key (mTLS)")
 	cmd.Flags().String(constants.Flag.CABundle, "", "Path to gateway CA bundle PEM")
 	cmd.Flags().String(constants.Flag.GatewayURL, "", "Gateway MCP endpoint URL (https only, e.g. https://g8e.local:8443/mcp)")
-	cmd.Flags().String(constants.Flag.AppCert, "", "Path to delegated app certificate (requires --app-key)")
-	cmd.Flags().String(constants.Flag.AppKey, "", "Path to delegated app key (requires --app-cert)")
+	cmd.Flags().String(constants.Flag.App, "", "Name of enrolled platform application to authenticate session")
 	return cmd
 }
 
@@ -242,11 +241,10 @@ type stdioCredentialFlags struct {
 	ClientKey  string
 	CABundle   string
 	GatewayURL string
-	AppCert    string
-	AppKey     string
+	App        string
 }
 
-// parseStdioCredentialFlags reads the six credential flags from the cobra command.
+// parseStdioCredentialFlags reads the credential flags from the cobra command.
 // The zero value is valid (all fields empty), so tests that do not exercise flags
 // pass stdioCredentialFlags{}.
 func parseStdioCredentialFlags(cmd *cobra.Command) (stdioCredentialFlags, error) {
@@ -264,11 +262,8 @@ func parseStdioCredentialFlags(cmd *cobra.Command) (stdioCredentialFlags, error)
 	if f.GatewayURL, err = cmd.Flags().GetString(constants.Flag.GatewayURL); err != nil {
 		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.GatewayURL, err)
 	}
-	if f.AppCert, err = cmd.Flags().GetString(constants.Flag.AppCert); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.AppCert, err)
-	}
-	if f.AppKey, err = cmd.Flags().GetString(constants.Flag.AppKey); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.AppKey, err)
+	if f.App, err = cmd.Flags().GetString(constants.Flag.App); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.App, err)
 	}
 	return f, nil
 }
@@ -311,9 +306,18 @@ func isCLICredentialTier(tierName string) bool {
 // CA bundle resolves: --ca-bundle flag → G8E_CA_BUNDLE env → auth.ReadTrustBundle.
 // Gateway URL resolves: --gateway-url flag → G8E_GATEWAY_URL env → default https://g8e.local:8443/mcp.
 func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags stdioCredentialFlags) (*gatewayConn, error) {
+	appName := flags.App
+	if appName == "" {
+		appName = os.Getenv(string(constants.EnvVar.App))
+	}
+	var appCert, appKey string
+	if appName != "" {
+		appCert = cfg.AppCertFile(appName)
+		appKey = cfg.AppKeyFile(appName)
+	}
+
 	certFile, keyFile, tierName, err := resolveCredentialPair([]struct{ cert, key, name string }{
-		{flags.AppCert, flags.AppKey, "app flags"},
-		{os.Getenv(string(constants.EnvVar.AppCert)), os.Getenv(string(constants.EnvVar.AppKey)), "app env"},
+		{appCert, appKey, "app"},
 		{flags.ClientCert, flags.ClientKey, "client flags"},
 		{os.Getenv(string(constants.EnvVar.ClientCert)), os.Getenv(string(constants.EnvVar.ClientKey)), "client env"},
 		{cfg.CLICertFile(), cfg.CLIKeyFile(), "CLI disk"},
@@ -1276,10 +1280,18 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		return fmt.Errorf("%w: enrollment returned empty identity", constants.ErrEnrollmentFailed)
 	}
 
-	// Enroll the agent as an external app for audit trail attribution
-	appID, appCert, appKey, err := auth.EnrollAgentApp(fileSvc, cfg, strings.ToLower(agentID))
+	// Ensure the agent application is enrolled with the gateway
+	agentAppName := strings.ToLower(agentID)
+	appClient, err := auth.NewAppPlatformEnrollmentClient(agentAppName, fileSvc, cfg, slog.Default())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+	}
+
+	if !appClient.HasValidIdentity() {
+		fmt.Fprintf(os.Stderr, "[g8e] Enrolling application %q...\n", agentAppName)
+		if _, err := appClient.Enroll(context.Background(), os.Stderr); err != nil {
+			return fmt.Errorf("%w: failed to enroll agent app %q: %w", constants.ErrEnrollmentFailed, agentAppName, err)
+		}
 	}
 
 	_, cleanup, launchArgs, err := prepareAgentLaunch(agentID, verify)
@@ -1290,7 +1302,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		defer cleanup()
 	}
 
-	return launchAgentProcess(agentID, extraArgs, launchArgs, cfg, appID, appCert, appKey)
+	return launchAgentProcess(agentID, extraArgs, launchArgs, cfg, agentAppName)
 }
 
 // prepareAgentLaunch validates the agent binary, writes the agent config, computes launch
@@ -1334,7 +1346,7 @@ func prepareAgentLaunch(agentID string, verify bool) (string, func(), []string, 
 }
 
 // launchAgentProcess spawns the agent binary with governance environment variables.
-func launchAgentProcess(agentID string, extraArgs, launchArgs []string, cfg *config.Config, appID, appCert, appKey string) error {
+func launchAgentProcess(agentID string, extraArgs, launchArgs []string, cfg *config.Config, appName string) error {
 	agentBin, err := exec.LookPath(agentID)
 	if err != nil {
 		return fmt.Errorf("%w: %q not found in PATH — is it installed?", constants.ErrAgentNotInPath, agentID)
@@ -1348,19 +1360,13 @@ func launchAgentProcess(agentID string, extraArgs, launchArgs []string, cfg *con
 	agentCmd.Stderr = os.Stderr
 	// Don't set process group for interactive agents - it breaks terminal handling
 
-	// Propagate the delegated credential to the 'g8e mcp stdio' subprocess that
-	// the agent will spawn. Identity (both app and human) is cryptographically bound
-	// in the delegated cert's URI SANs — no session headers needed.
-	// The stdio proxy will automatically fall back to IP if g8e.local DNS fails.
 	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
 	agentCmd.Env = append(os.Environ(),
 		string(constants.EnvVar.ClientCert)+"="+cfg.CLICertFile(),
 		string(constants.EnvVar.ClientKey)+"="+cfg.CLIKeyFile(),
 		string(constants.EnvVar.CABundle)+"="+cfg.ResolvedTrustBundlePath(),
 		string(constants.EnvVar.GatewayURL)+"="+gatewayURL,
-		string(constants.EnvVar.AppID)+"="+appID,
-		string(constants.EnvVar.AppCert)+"="+appCert,
-		string(constants.EnvVar.AppKey)+"="+appKey,
+		string(constants.EnvVar.App)+"="+appName,
 	)
 
 	return agentCmd.Run()

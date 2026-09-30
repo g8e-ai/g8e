@@ -391,7 +391,7 @@ func TestBuildGatewayConn_FlagResolution(t *testing.T) {
 // ─── buildGatewayConn fail-closed ─────────────────────────────────────────────
 
 func TestBuildGatewayConn_FailClosed(t *testing.T) {
-	t.Run("app-cert without app-key returns ErrIncompleteCredentialPair", func(t *testing.T) {
+	t.Run("client-cert without client-key returns ErrIncompleteCredentialPair", func(t *testing.T) {
 		tempDir := testutil.TempDir(t)
 		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 		require.NoError(t, err)
@@ -402,7 +402,7 @@ func TestBuildGatewayConn_FailClosed(t *testing.T) {
 		}
 
 		flags := stdioCredentialFlags{
-			AppCert: "/tmp/app.crt",
+			ClientCert: "/tmp/client.crt",
 		}
 
 		_, err = buildGatewayConn(fileSvc, cfg, flags)
@@ -497,8 +497,7 @@ func TestParseStdioCredentialFlags(t *testing.T) {
 			"--client-key", "/tmp/cli.key",
 			"--ca-bundle", "/tmp/ca.pem",
 			"--gateway-url", "https://g8e.local:8443/mcp",
-			"--app-cert", "/tmp/app.crt",
-			"--app-key", "/tmp/app.key",
+			"--app", "test-app",
 		}))
 
 		flags, err := parseStdioCredentialFlags(cmd)
@@ -507,7 +506,6 @@ func TestParseStdioCredentialFlags(t *testing.T) {
 		assert.Equal(t, "/tmp/cli.key", flags.ClientKey)
 		assert.Equal(t, "/tmp/ca.pem", flags.CABundle)
 		assert.Equal(t, "https://g8e.local:8443/mcp", flags.GatewayURL)
-		assert.Equal(t, "/tmp/app.crt", flags.AppCert)
-		assert.Equal(t, "/tmp/app.key", flags.AppKey)
+		assert.Equal(t, "test-app", flags.App)
 	})
 }

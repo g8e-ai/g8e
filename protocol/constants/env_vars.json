@@ -51,20 +51,10 @@
       "value": "G8E_GATEWAY_URL",
       "description": "Override for the gateway URL used by MCP stdio; defaults to https://g8e.local:8443/mcp"
     },
-    "AppID": {
-      "_go_const": "EnvVar.AppID",
-      "value": "G8E_APP_ID",
-      "description": "Application SPIFFE ID for delegated agent runs"
-    },
-    "AppCert": {
-      "_go_const": "EnvVar.AppCert",
-      "value": "G8E_APP_CERT",
-      "description": "Path to the delegated application certificate for agent runs"
-    },
-    "AppKey": {
-      "_go_const": "EnvVar.AppKey",
-      "value": "G8E_APP_KEY",
-      "description": "Path to the delegated application key for agent runs"
+    "App": {
+      "_go_const": "EnvVar.App",
+      "value": "G8E_APP",
+      "description": "Name of enrolled platform application to authenticate MCP stdio session"
     },
     "DataDir": {
       "_go_const": "",

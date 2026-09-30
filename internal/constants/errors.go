@@ -860,6 +860,11 @@ var (
 	ErrAppPolicyStoreMarshalFailed   = errors.New("failed to marshal app policy data")
 	ErrAppPolicyStoreUnmarshalFailed = errors.New("failed to unmarshal app policy")
 
+	// App platform enrollment errors
+	ErrAppIdentityNotFound  = errors.New("app identity not found")
+	ErrAppIdentityExpired   = errors.New("app identity certificate expired")
+	ErrAppIdentityUntrusted = errors.New("app identity certificate untrusted")
+
 	// MCP config errors
 	ErrMCPConfigGatewayURLInvalidScheme = errors.New("gateway URL scheme must be https")
 	ErrMCPConfigGatewayURLHostEmpty     = errors.New("gateway URL host cannot be empty")
@@ -1548,8 +1553,6 @@ var (
 	ErrDataOperatorNotFound                = errors.New("evaluation: no active data-operator session")
 	ErrDataOperatorAmbiguous               = errors.New("evaluation: multiple active data-operator sessions")
 	ErrDataOperatorNotBound                = errors.New("evaluation: data-operator session is not bound to the CLI session; run './g8e operator bind'")
-	ErrEvaluationAppCredentialStale        = errors.New("evaluation: delegated app credential is not trusted by the gateway's current PKI")
-	ErrEvaluationAppCredentialMissing      = errors.New("evaluation: no delegated app credential available")
 	ErrEvaluationScenarioRolesUnassigned   = errors.New("evaluation: scenario has no valid eligible roles")
 	ErrEvaluationRoleNotEligible           = errors.New("evaluation: role is not eligible for scenario")
 	ErrEvaluationBackupDestinationInvalid  = errors.New("evaluation: backup destination must be outside the runtime directory")
