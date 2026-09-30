@@ -111,7 +111,7 @@ func TestSelectDockerInitApprovalCandidate(t *testing.T) {
 			name: "data operator precedes inference operator",
 			pending: []models.PlatformEnrollmentPendingRequest{
 				{RequestID: "inf-1", ComponentKind: models.PlatformComponentOperator, Hostname: "inference-operator"},
-				{RequestID: "op-1", ComponentKind: models.PlatformComponentOperator, Hostname: "g8e-operator"},
+				{RequestID: "op-1", ComponentKind: models.PlatformComponentOperator, Hostname: constants.DataOperatorHostname},
 			},
 			wantID: "op-1",
 		},

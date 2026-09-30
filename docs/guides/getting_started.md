@@ -429,7 +429,7 @@ When `--endpoint` (or `-e`) is provided, the Operator automatically initiates pl
 
 ### Run the gateway and operator in Docker
 
-The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-operator` (PEP), `g8e-inference-operator`, `ensemble` (g8ee), and `dashboard` (g8ed). See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for component details. The stack starts all services in a single `docker compose up -d`:
+The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-data-operator` (PEP), `g8e-inference-operator`, `ensemble` (g8ee), and `dashboard` (g8ed). See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for component details. The stack starts all services in a single `docker compose up -d`:
 
 ```bash
 # Start the full stack

@@ -14,13 +14,13 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
-	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
@@ -35,13 +36,24 @@ import (
 const chatAcceptTracePollInterval = 2 * time.Second
 
 type chatEvalDeps struct {
-	configLoader         func(string) (*config.Config, error)
-	fileSvcFactory       func(string, *slog.Logger) (fs.RuntimeFileService, error)
-	authLoader           func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
-	clientFactory        func(harnessconfig.Config) (*harnessclient.Client, error)
-	refreshClientFactory authcmd.RefreshClientFactory
-	now                  func() time.Time
-	newID                func() string
+	configLoader      func(string) (*config.Config, error)
+	fileSvcFactory    func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	authLoader        func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
+	clientFactory     func(harnessconfig.Config) (*harnessclient.Client, error)
+	bindClientFactory func(*config.Config) chatEvalBindClient
+	now               func() time.Time
+	newID             func() string
+}
+
+// chatEvalBindClient is the part of the enrollment client that reads and
+// changes the operator sessions bound to the CLI session.
+type chatEvalBindClient interface {
+	Bind(ctx context.Context, fileSvc fs.RuntimeFileService, operatorSessionIDs []string) (auth.CLISessionBind, error)
+	SessionInfo(ctx context.Context, fileSvc fs.RuntimeFileService) (auth.CLISessionInfo, error)
+}
+
+func defaultChatEvalBindClient(cfg *config.Config) chatEvalBindClient {
+	return auth.NewEnrollmentClient(cfg, nil)
 }
 
 type chatAcceptanceCaseResult struct {
@@ -68,7 +80,7 @@ func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var model string
 	var ensembleURL string
 	var casesCSV string
-	var noAutoRefresh bool
+	var noAutoBind bool
 	cmd := &cobra.Command{
 		Use:   "chat",
 		Short: "Chat-path vertical acceptance through production POST /api/v1/chat",
@@ -104,7 +116,11 @@ func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: chat accept: %w", err)
 			}
-			selectedData, err := evaluation.SelectDataOperator(operators, "")
+			selectedData, err := operatorcapability.SelectDataOperator(operators)
+			if err != nil {
+				return fmt.Errorf("evaluation: chat accept: %w", err)
+			}
+			authContext, err = chatEvalBindDataOperator(cmd, deps.chatDeps(), cfg, fileSvc, authContext, operators, selectedData.OperatorSessionID, !noAutoBind)
 			if err != nil {
 				return fmt.Errorf("evaluation: chat accept: %w", err)
 			}
@@ -225,7 +241,7 @@ func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&model, "model", "", "Requested provider model tag")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A chat matrix)")
-	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings")
+	cmd.Flags().BoolVar(&noAutoBind, "no-auto-bind", false, "Do not bind the data-operator to the CLI session when it is not bound")
 	return cmd
 }
 
@@ -400,85 +416,99 @@ func chatEvalEnvironment(cmd *cobra.Command, deps chatEvalDeps) (*config.Config,
 	return cfg, fileSvc, authContext, nil
 }
 
-func chatEvalEnsureOperatorBinding(
+// chatEvalBoundSessionIDs reads the operator sessions bound to the CLI
+// session, primary first.
+func chatEvalBoundSessionIDs(ctx context.Context, client chatEvalBindClient, fileSvc fs.RuntimeFileService) ([]string, error) {
+	info, err := client.SessionInfo(ctx, fileSvc)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: read CLI session bindings: %w", err)
+	}
+	if len(info.BoundOperatorSessionIDs) > 0 {
+		return info.BoundOperatorSessionIDs, nil
+	}
+	if info.OperatorSessionID != "" {
+		return []string{info.OperatorSessionID}, nil
+	}
+	return nil, nil
+}
+
+// chatEvalBindSessions binds the CLI session to operatorSessionIDs in one call
+// and stores the replacement CLI session in the local credentials. Binding
+// replaces the CLI session, so the returned auth context carries the new one.
+func chatEvalBindSessions(
+	cmd *cobra.Command,
+	cfg *config.Config,
+	fileSvc fs.RuntimeFileService,
+	client chatEvalBindClient,
+	authContext *auth.ClientAuthContext,
+	operatorSessionIDs []string,
+) (*auth.ClientAuthContext, error) {
+	bind, err := client.Bind(cmd.Context(), fileSvc, operatorSessionIDs)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: bind operator sessions: %w", err)
+	}
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: load credentials after bind: %w", err)
+	}
+	if creds == nil {
+		return nil, fmt.Errorf("%w: local CLI credentials are absent after bind", constants.ErrNotAuthenticated)
+	}
+	creds.CLISessionID = bind.CLISessionID
+	creds.OperatorSessionID = bind.OperatorSessionID
+	creds.OperatorID = bind.OperatorID
+	if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
+		return nil, fmt.Errorf("evaluation: save credentials after bind: %w", err)
+	}
+	if !output.JSONEnabled(cmd) {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Bound CLI session to %d operator session(s); primary %s\n", len(bind.Bound), bind.OperatorSessionID)
+	}
+	return &auth.ClientAuthContext{
+		OperatorSessionID: bind.OperatorSessionID,
+		CLISessionID:      bind.CLISessionID,
+		UserID:            bind.UserID,
+		OperatorID:        bind.OperatorID,
+		ClientCert:        authContext.ClientCert,
+		ClientKey:         authContext.ClientKey,
+	}, nil
+}
+
+// chatEvalBindDataOperator makes the data-operator one of the operator
+// sessions bound to the CLI session. A CLI session holds many bound operators,
+// so an already-bound data-operator leaves the CLI session untouched. When it
+// is not bound, autoBind issues one bind call for the still-active bound
+// sessions plus the data-operator; otherwise ErrDataOperatorNotBound is
+// returned.
+func chatEvalBindDataOperator(
 	cmd *cobra.Command,
 	deps chatEvalDeps,
 	cfg *config.Config,
 	fileSvc fs.RuntimeFileService,
 	authContext *auth.ClientAuthContext,
 	operators []models.OperatorDocumentGo,
-	pinnedDataSessionID string,
+	dataSessionID string,
+	autoBind bool,
 ) (*auth.ClientAuthContext, error) {
-	targetSessionID := pinnedDataSessionID
-	if targetSessionID == "" {
-		active, err := evaluation.SelectDataOperator(operators, "")
-		if err != nil {
-			return authContext, nil
-		}
-		targetSessionID = active.OperatorSessionID
-	}
-	if authContext.OperatorSessionID == targetSessionID {
-		return authContext, nil
-	}
-	if deps.refreshClientFactory == nil {
-		return nil, fmt.Errorf("enrolled CLI operator session %q is not active (current data operator session %q); run './g8e auth refresh'", authContext.OperatorSessionID, targetSessionID)
-	}
-	refresh, err := deps.refreshClientFactory(cfg).Refresh(cmd.Context(), fileSvc)
+	client := deps.bindClientFactory(cfg)
+	bound, err := chatEvalBoundSessionIDs(cmd.Context(), client, fileSvc)
 	if err != nil {
-		return nil, fmt.Errorf("refresh stale operator binding: %w; run './g8e auth refresh'", err)
-	}
-	if refresh.OperatorSessionID != targetSessionID {
-		return nil, fmt.Errorf("gateway refresh returned operator session %q but active data operator is %q; rebuild the gateway image and run './g8e auth refresh'", refresh.OperatorSessionID, targetSessionID)
-	}
-	creds, err := auth.LoadCredentials(fileSvc, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("load credentials after refresh: %w", err)
-	}
-	if creds == nil {
-		return nil, fmt.Errorf("%w: local CLI credentials are absent after refresh", constants.ErrNotAuthenticated)
-	}
-	creds.CLISessionID = refresh.CLISessionID
-	creds.OperatorSessionID = refresh.OperatorSessionID
-	creds.OperatorID = refresh.OperatorID
-	if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
-		return nil, fmt.Errorf("save credentials after refresh: %w", err)
-	}
-	if !output.JSONEnabled(cmd) {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Refreshed CLI operator binding to session %s\n", refresh.OperatorSessionID)
-	}
-	return &auth.ClientAuthContext{
-		OperatorSessionID: refresh.OperatorSessionID,
-		CLISessionID:      refresh.CLISessionID,
-		UserID:            refresh.UserID,
-		OperatorID:        refresh.OperatorID,
-		ClientCert:        authContext.ClientCert,
-		ClientKey:         authContext.ClientKey,
-	}, nil
-}
-
-func chatEvalResolveDataOperator(
-	operators []models.OperatorDocumentGo,
-	authContext *auth.ClientAuthContext,
-	pinnedSessionID string,
-) (*evaluation.DataOperatorStatus, error) {
-	if pinnedSessionID != "" {
-		return evaluation.SelectDataOperator(operators, pinnedSessionID)
-	}
-	if authContext.OperatorSessionID == "" {
-		return nil, fmt.Errorf("evaluation: chat accept requires enrolled CLI operator session; run './g8e auth refresh' or pass --data-session")
-	}
-	selected, err := evaluation.SelectDataOperator(operators, authContext.OperatorSessionID)
-	if err != nil {
-		active, listErr := evaluation.SelectDataOperator(operators, "")
-		if listErr == nil {
-			return nil, fmt.Errorf("%w: enrolled CLI operator session %q is not active (current data operator session %q); run './g8e auth refresh'", err, authContext.OperatorSessionID, active.OperatorSessionID)
-		}
 		return nil, err
 	}
-	if authContext.OperatorID != "" {
-		selected.OperatorID = authContext.OperatorID
+	if slices.Contains(bound, dataSessionID) {
+		return authContext, nil
 	}
-	return selected, nil
+	if !autoBind {
+		return nil, fmt.Errorf("%w: session %s", constants.ErrDataOperatorNotBound, dataSessionID)
+	}
+	targets := make([]string, 0, len(bound)+1)
+	for _, sessionID := range bound {
+		if slices.ContainsFunc(operators, func(op models.OperatorDocumentGo) bool {
+			return op.OperatorSessionID == sessionID && op.Status == constants.OperatorStatusActive
+		}) {
+			targets = append(targets, sessionID)
+		}
+	}
+	return chatEvalBindSessions(cmd, cfg, fileSvc, client, authContext, append(targets, dataSessionID))
 }
 
 func chatEvalListOperators(

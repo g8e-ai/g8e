@@ -321,11 +321,11 @@ func TestRunsStart_ExecutesAndVerifiesWithoutPublication(t *testing.T) {
 	var out bytes.Buffer
 	env.cmd.SetOut(&out)
 	result, err := runStartFlow(env.cmd, env.deps, runStartFlowOptions{
-		CampaignID:    "eval-a",
-		RunID:         "run-a-1",
-		EnsembleURL:   ensemble.URL,
-		NoAutoRefresh: true,
-		Verify:        true,
+		CampaignID:  "eval-a",
+		RunID:       "run-a-1",
+		EnsembleURL: ensemble.URL,
+		NoAutoBind:  true,
+		Verify:      true,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -349,7 +349,7 @@ func TestRunsStart_ReleasesTheLeaseAndKeepsTheLogAfterExecution(t *testing.T) {
 	env.createCampaign(t, "eval-a")
 
 	env.cmd.SetOut(&bytes.Buffer{})
-	_, err := runStartFlow(env.cmd, env.deps, runStartFlowOptions{CampaignID: "eval-a", RunID: "run-a-1", EnsembleURL: ensemble.URL, NoAutoRefresh: true})
+	_, err := runStartFlow(env.cmd, env.deps, runStartFlowOptions{CampaignID: "eval-a", RunID: "run-a-1", EnsembleURL: ensemble.URL, NoAutoBind: true})
 	require.NoError(t, err)
 
 	_, err = env.store(t).LoadRunLease(context.Background(), "run-a-1")
@@ -383,10 +383,10 @@ func TestRunsResume_ExecutesOneAssignment(t *testing.T) {
 	var out bytes.Buffer
 	env.cmd.SetOut(&out)
 	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{
-		RunID:         runID,
-		Limit:         1,
-		EnsembleURL:   ensemble.URL,
-		NoAutoRefresh: true,
+		RunID:       runID,
+		Limit:       1,
+		EnsembleURL: ensemble.URL,
+		NoAutoBind:  true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, executed)
@@ -399,7 +399,7 @@ func TestRunsResume_DefaultsLimitToOne(t *testing.T) {
 	runID := env.prepareRun(t, "eval-a", "run-a-1")
 	ensemble, _ := env.firstAssignmentServer(t, runID)
 
-	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: runID, EnsembleURL: ensemble.URL, NoAutoRefresh: true})
+	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: runID, EnsembleURL: ensemble.URL, NoAutoBind: true})
 	require.NoError(t, err)
 	assert.Equal(t, 1, executed)
 }
@@ -422,7 +422,7 @@ func TestRunsResume_RejectsPreflightWhenGatewayUnhealthy(t *testing.T) {
 	env := setupRunEnv(t)
 	env.prepareRun(t, "eval-a", "run-a-1")
 
-	_, err := env.run(t, "runs", "resume", "run-a-1", "--no-auto-refresh")
+	_, err := env.run(t, "runs", "resume", "run-a-1", "--no-auto-bind")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
 
@@ -437,9 +437,7 @@ func TestRunsResume_ExecutesOneAssignmentViaCLI(t *testing.T) {
 	runID := env.prepareRun(t, "eval-a", "run-a-1")
 	ensemble, assignment := env.firstAssignmentServer(t, runID)
 
-	out := env.mustRun(t, "runs", "resume", runID,
-		"--ensemble-url", ensemble.URL, "--no-auto-refresh",
-		"--inference-session", testInferenceSession, "--data-session", testDataSession)
+	out := env.mustRun(t, "runs", "resume", runID, "--ensemble-url", ensemble.URL)
 	assert.Contains(t, out, assignment.GetAssignmentId())
 	assert.Contains(t, out, "Executed 1 assignment(s) for run run-a-1")
 }
@@ -452,9 +450,7 @@ func TestRunsResume_JSONOutput(t *testing.T) {
 	ensemble, _ := env.firstAssignmentServer(t, runID)
 
 	var payload runResumeJSON
-	require.NoError(t, env.runJSON(t, &payload, "runs", "resume", runID,
-		"--ensemble-url", ensemble.URL, "--no-auto-refresh",
-		"--inference-session", testInferenceSession, "--data-session", testDataSession))
+	require.NoError(t, env.runJSON(t, &payload, "runs", "resume", runID, "--ensemble-url", ensemble.URL))
 	assert.Equal(t, runID, payload.RunID)
 	assert.Equal(t, 1, payload.Executed)
 	assert.NotEmpty(t, payload.Results)
@@ -468,9 +464,7 @@ func TestRunsResume_WithPublishFlag(t *testing.T) {
 	runID := env.prepareRun(t, "eval-a", "run-a-1")
 	ensemble, assignment := env.firstAssignmentServer(t, runID)
 
-	out := env.mustRun(t, "runs", "resume", runID,
-		"--ensemble-url", ensemble.URL, "--no-auto-refresh", "--publish",
-		"--inference-session", testInferenceSession, "--data-session", testDataSession)
+	out := env.mustRun(t, "runs", "resume", runID, "--ensemble-url", ensemble.URL, "--publish")
 	assert.Contains(t, out, assignment.GetAssignmentId())
 }
 
@@ -482,7 +476,7 @@ func TestRunsResume_RefusesARunHeldByALiveProcess(t *testing.T) {
 	require.NoError(t, err)
 	env.control.setAlive(9999, true)
 
-	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: runID, Limit: 1, NoAutoRefresh: true})
+	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: runID, Limit: 1, NoAutoBind: true})
 	require.Error(t, err)
 	assert.Zero(t, executed)
 	assert.ErrorIs(t, err, constants.ErrEvaluationRunLeaseHeld)
@@ -498,7 +492,7 @@ func TestRunsResume_ReplacesAStaleLeaseAndReportsIt(t *testing.T) {
 
 	var out bytes.Buffer
 	env.cmd.SetOut(&out)
-	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: runID, Limit: 1, EnsembleURL: ensemble.URL, NoAutoRefresh: true})
+	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: runID, Limit: 1, EnsembleURL: ensemble.URL, NoAutoBind: true})
 	require.NoError(t, err)
 	assert.Equal(t, 1, executed)
 	assert.Contains(t, out.String(), "Cleared stale lease held by process 9999 on test-host")
@@ -510,7 +504,7 @@ func TestVerifyRun_PersistsAndPublishesPopulationBoundReport(t *testing.T) {
 	publication := env.recordPublication()
 	runID := env.prepareRun(t, "eval-a", "run-a-1")
 	ensemble, _ := env.firstAssignmentServer(t, runID)
-	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: runID, Limit: 1, EnsembleURL: ensemble.URL, NoAutoRefresh: true})
+	executed, err := executeRun(env.cmd, env.deps, runExecuteOptions{RunID: runID, Limit: 1, EnsembleURL: ensemble.URL, NoAutoBind: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, executed)
 
@@ -555,7 +549,7 @@ func TestRunsVerify_ViaCLIPersistsAndPublishesPopulationBoundReport(t *testing.T
 	ensemble := newTestEnsembleServer(t, env.traceForAnyRun)
 	env.createCampaign(t, "eval-a")
 	env.cmd.SetOut(&bytes.Buffer{})
-	_, err := runStartFlow(env.cmd, env.deps, runStartFlowOptions{CampaignID: "eval-a", RunID: "run-a-1", EnsembleURL: ensemble.URL, NoAutoRefresh: true})
+	_, err := runStartFlow(env.cmd, env.deps, runStartFlowOptions{CampaignID: "eval-a", RunID: "run-a-1", EnsembleURL: ensemble.URL, NoAutoBind: true})
 	require.NoError(t, err)
 
 	out := env.mustRun(t, "runs", "verify", "run-a-1")

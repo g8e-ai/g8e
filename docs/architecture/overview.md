@@ -360,7 +360,7 @@ The platform incorporates a protocol-owned compliance evidence foundation:
 
 The root `docker-compose.yml` launches the complete platform in the default profile (`docker compose up -d`):
 - `g8e-gateway`: Gateway PDP on ports 8080, 8443, 8081, 8082, 5173.
-- `g8e-operator`: Governed Data Operator running in worker mode.
+- `g8e-data-operator`: Governed Data Operator running in worker mode (container hostname `data-operator`).
 - `g8e-inference-operator`: Governed Inference Operator connecting to remote Ollama.
 - `g8e-ensemble`: First-party Python agentic ensemble on port 8000.
 - `g8e-dashboard`: Node.js static host and browser frontend on port 3000.

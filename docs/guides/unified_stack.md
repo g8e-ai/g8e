@@ -91,7 +91,7 @@ The platform leverages Docker volume mounts (`./bin:/opt/g8e/bin:ro`) so that a 
 - **Local build (Make is gospel):** Run `make build`. The host binary is written to `bin/g8e` and `./g8e`. Restart the operators to align all versions immediately:
   ```bash
   # Pure Docker:
-  docker compose restart g8e-operator g8e-inference-operator
+  docker compose restart g8e-data-operator g8e-inference-operator
 
   # ./g8e docker CLI equivalent:
   ./g8e docker restart
@@ -119,7 +119,7 @@ The root `docker-compose.yml` defines the core platform services on the `g8e-net
 | Service | Profile | Published ports | Role |
 | --- | --- | --- | --- |
 | `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS; 8081 private mirror ingest, 8082 public mirror read/SSE, 5173 evaluation explorer (loopback) | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A, public mirror, and evaluation explorer. |
-| `g8e-operator` | default | none | **Data Operator** — governed tool/filesystem/process boundary for the Operator container runtime. |
+| `g8e-data-operator` | default | none | **Data Operator** (container hostname `data-operator`) — governed tool/filesystem/process boundary for the Operator container runtime. Evaluations identify it by that hostname and ignore every other enrolled data Operator. |
 | `g8e-inference-operator` | default | none | **Inference Operator** — governed inference to the remote Ollama provider. |
 | `ensemble` | default | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
 | `dashboard` | default | 3000 | g8ed browser static host; it is not the evaluation acceptance UI. |
@@ -148,7 +148,7 @@ Scored assignments use one campaign Gateway with two remote Operator sessions on
 ```text
 Campaign host (Linux + Docker)
   g8e-gateway ........................ PDP, pub/sub, inference dispatch fan-out
-  g8e-operator ......................... Data Operator (governed tools)
+  g8e-data-operator .................... Data Operator (governed tools)
   g8e-inference-operator ............. Inference Operator → remote Ollama
   ensemble ........................... g8ee ChatPipelineService
 
@@ -195,11 +195,7 @@ Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md
 
 ```bash
 # Freeze your provider's model registry (once per provider snapshot)
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-./g8e eval models freeze \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models freeze
 
 # Single model — create campaign and start execution
 ./g8e eval campaigns create eval-init-qwen3-4b qwen3:4b
@@ -252,11 +248,7 @@ Build a three-model smoke inventory from your own provider freeze. Tags below ar
 
 ```bash
 # Full provider freeze, then create a three-model smoke campaign:
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-./g8e eval models freeze \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models freeze
 
 ./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
 ./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
@@ -328,7 +320,7 @@ make docker-build
 
 ### 3. Enroll the owner
 
-The stack services (`g8e-operator`, `g8e-inference-operator`, `ensemble`, `dashboard`) submit platform enrollment requests to the Gateway and poll for approval.
+The stack services (`g8e-data-operator`, `g8e-inference-operator`, `ensemble`, `dashboard`) submit platform enrollment requests to the Gateway and poll for approval.
 
 Enroll the owner identity:
 
@@ -402,7 +394,7 @@ Whenever you build locally with `make build`, the updated binary is installed to
 
 ```bash
 # Pure Docker:
-docker compose restart g8e-operator g8e-inference-operator
+docker compose restart g8e-data-operator g8e-inference-operator
 
 # ./g8e docker CLI equivalent:
 ./g8e docker restart
@@ -579,16 +571,8 @@ Use this after the evaluation stack, Inference Operator, and **both** witness Op
 Pull and freeze the catalog models:
 
 ```bash
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-
-./g8e eval models pull --formations \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
-
-./g8e eval models freeze \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models pull --formations
+./g8e eval models freeze
 ```
 
 Use `g8e eval formations list` to inspect the formations and their served tags.
@@ -653,27 +637,20 @@ Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is u
 ### Phase B — Create campaign and start run
 
 ```bash
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-
 # Single model — create campaign and start execution
 ./g8e eval campaigns create eval-smoke-mini qwen3:4b
 
-# Start execution (binds sessions, schedules matrix, and executes continuously)
-./g8e eval runs start eval-smoke-mini \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --publish --daemon
+# Start execution (schedules the matrix and executes continuously). The run
+# targets the stack's Inference Operator and its `data-operator`, binding the
+# data-operator to the CLI session when it is not already bound.
+./g8e eval runs start eval-smoke-mini --publish --daemon
 ```
 
 Alternatively, to schedule first and execute separately:
 
 ```bash
 # Persist run and assignments without executing immediately
-./g8e eval runs start eval-smoke-mini \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION" \
-  --prepare-only
+./g8e eval runs start eval-smoke-mini --prepare-only
 
 # Resume/execute the prepared run
 ./g8e eval runs resume <run-id> --publish --daemon
@@ -725,7 +702,7 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 | --- | --- | --- | --- |
 | `./g8e docker init` | `docker compose up -d` + exec enroll/approvals | `make up` (manual approvals) | Build images, enroll owner, start unified stack, auto-approve platform enrollments, and wait for readiness. |
 | `./g8e docker start` | `docker compose up -d` | `make up` | Starts default unified stack (all 5 core services) and offers enrollment walkthrough. |
-| `./g8e docker restart [service...]` | `docker compose restart g8e-operator g8e-inference-operator` | `make restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
+| `./g8e docker restart [service...]` | `docker compose restart g8e-data-operator g8e-inference-operator` | `make restart-operators` | Restarts Data and Inference Operators to align with newly built binary from host mount (`./bin:/opt/g8e/bin:ro`). |
 | `./g8e docker stop` | `docker compose down` | `make down` | Stops stack, preserves volumes. |
 | `./g8e docker status` | `docker compose ps` | — | Shows running containers and health status. |
 | `./g8e docker build` | `docker compose build && docker compose cp g8e-gateway:/g8e bin/g8e && cp bin/g8e ./g8e` | `make docker-build` | Build stack images in container via Makefile, export binary to `bin/g8e` and `./g8e`. |
@@ -741,7 +718,7 @@ Before a destructive wipe, copy evaluation evidence outside `.g8e/` with `./g8e 
 | Service | Health check |
 | --- | --- |
 | `g8e-gateway` | HTTP `GET /api/v1/health` :8080 |
-| `g8e-operator` | enrolled operator certificate present |
+| `g8e-data-operator` | enrolled operator certificate present |
 | `g8e-inference-operator` | enrolled operator certificate present |
 | `ensemble` | HTTP `GET /health` :8000 (after enrollment completes) |
 | `dashboard` | HTTP `GET /` :3000 (after enrollment completes) |
@@ -751,7 +728,7 @@ Workloads remain unhealthy while enrollment is pending.
 | Service | CPU limit | Memory limit |
 | --- | --- | --- |
 | `g8e-gateway` | 2 | 4G |
-| `g8e-operator` | 2 | 1G |
+| `g8e-data-operator` | 2 | 1G |
 | `g8e-inference-operator` | 4 | 4G |
 | `ensemble` | 2 | 2G |
 | `dashboard` | 1 | 512M |

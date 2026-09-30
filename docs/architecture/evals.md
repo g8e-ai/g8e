@@ -112,6 +112,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | Campaign controller and publication coordinator | `internal/services/evaluation/` | `g8e eval runs start`, `resume`, `verify`, `publish` |
 | Provider-boundary observation | `internal/services/operatorcapability/provider_boundary_observer.go`, `internal/services/inference/provider_observer/` | Observer Operator enrollment and telemetry sampling |
 | Model provenance attestation | `internal/services/operatorcapability/provenance_operator.go`, `internal/services/inference/model_provenance/` | Provenance Operator enrollment and weight hashing |
+| Data Operator selection | `internal/services/operatorcapability/data_operator.go` | `SelectDataOperator` resolves the stack's `data-operator` |
 | CLI command tree and subcommands | `internal/cli/cmd/eval/` | `./g8e eval --help` and per-subcommand help |
 | Campaign definitions and frozen artifacts | `eval/examples/` (checked-in templates), `.g8e/data/eval/campaigns/` (runtime) | `g8e eval campaigns create` and `g8e eval campaigns show` |
 | Model inventory and rollout intake | `eval/base-model-inventory.json`, `eval/rollout-intake-hf.json` | `g8e eval models list` and registry inspection |
@@ -172,19 +173,15 @@ Use `./g8e eval --help` as the command-surface reference. On `g8e eval runs star
 
 The Phase 1 suite is `core-execution-boundary@1.0.0`. It requires doctrine posture and does not use g8ee, external model providers, model judges, campaigns, scheduling, or synthetic simulators.
 
-**Run:** Start and enroll the unified stack with one active remote Operator, then execute:
+**Run:** Start and enroll the unified stack, then execute:
 
 ```bash
 ./g8e eval boundary run
 ```
 
-Pin an exact Operator session when multiple are available:
+The suite targets the stack's `data-operator` and ignores every other enrolled Operator. It takes no session flag.
 
-```bash
-./g8e eval boundary run --operator-session <session-id>
-```
-
-The suite performs two attempts: the allowed attempt writes one run-specific marker through the authenticated Gateway command ingress and the bound remote Operator; the prohibited equivalent traverses the same ingress and must be rejected by L1 without side effect. Required verdicts cover independent effect counts, target identity, terminal receipt status, receipt durability, deterministic protocol-chain validity, rejection, absence of completed alternative execution, and Gateway L1 attribution.
+The suite performs two attempts: the allowed attempt writes one run-specific marker through the authenticated Gateway command ingress and the `data-operator`; the prohibited equivalent traverses the same ingress and must be rejected by L1 without side effect. Required verdicts cover independent effect counts, target identity, terminal receipt status, receipt durability, deterministic protocol-chain validity, rejection, absence of completed alternative execution, and Gateway L1 attribution.
 
 **Verify and inspect:** Each run persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`. Re-run verification without executing new mutations:
 
@@ -205,12 +202,14 @@ Evaluation model campaigns score real models through the production g8ee `POST /
 
 | Session | Capability flag | Host | Role |
 | --- | --- | --- |
-| **Data Operator** | `inference_enabled=false` | Campaign host (Docker) | Governed tool/filesystem/process boundary for model-originated host actions |
+| **Data Operator** | role `data`, hostname `data-operator` | Campaign host (Docker) | Governed tool/filesystem/process boundary for model-originated host actions. The only data Operator evaluations consider; other enrolled data Operators are ignored. |
 | **Inference Operator** | `inference_enabled=true` | Campaign host (Docker) | Governed L4/L5 inference Policy Execution Point; sole scored path to the approved Ollama provider |
 | **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host (where Ollama/GPU runs) | Read-only GPU and system RAM sampling at the provider execution boundary |
 | **Provenance Operator** | `provenance_operator_enabled=true` | Model storage site (where weight blobs live) | Independent SHA-256 attestation of model manifests and weight blobs |
 
 Scored inference and provider maintenance never call Ollama directly from g8ee or the campaign CLI. The Gateway routes inference envelopes to the exact Inference Operator session. Tool intents route to the exact Data Operator session, observation commands to the exact Observer Operator session (when enabled), and provenance commands to the exact Provenance Operator session (when enabled). Campaign-host `--ollama-endpoint` and `G8E_OLLAMA_ENDPOINT` overrides are not accepted; the Inference Operator's enrolled `runtime_config` determines Ollama access.
+
+**Data Operator binding:** A CLI session can be bound to many Operators (`g8e operator bind`), and the Gateway accepts any bound Operator session as a request's operator identity, not only the primary one. Scored runs and `gates chat` send tool intents as the `data-operator`, so it must be one of the CLI session's bound sessions. When it is not, they issue one bind call for the still-active bound sessions plus the `data-operator`; `--no-auto-bind` turns that off and fails with `ErrDataOperatorNotBound` instead. No eval command takes an Operator session flag: the `data-operator` is identified by its hostname, and the Inference Operator by its `inference_enabled` capability.
 
 **Model inventory and rollout intake:** Model campaigns bind scored inference to frozen `served_model_tag` and `model_digest` pairs in the campaign registry. The checked-in genesis inventory (`eval/base-model-inventory.json`) is a reference snapshot; live provider runs should re-freeze digests before execution.
 

@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -616,14 +617,7 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 	if err := gwremote.PreflightCampaignModelProvenance(fileSvc, cfg, evaluation.CampaignModelBindingsFromFormation(formation)); err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	chatDeps := chatEvalDeps{
-		configLoader:   deps.configLoader,
-		fileSvcFactory: deps.fileSvcFactory,
-		authLoader:     deps.authLoader,
-		clientFactory:  deps.clientFactory,
-		now:            deps.now,
-		newID:          deps.newID,
-	}
+	chatDeps := deps.chatDeps()
 	_, _, authContext, err := chatEvalEnvironment(cmd, chatDeps)
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
@@ -644,18 +638,11 @@ func runFormationSmoke(cmd *cobra.Command, deps nativeEvalDeps, sessions operato
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	dataOperator, err := evaluation.SelectCampaignDataOperator(operators, sessions.DataSessionID)
+	dataOperator, err := operatorcapability.SelectDataOperator(operators)
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
-	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
-		configLoader:   deps.configLoader,
-		fileSvcFactory: deps.fileSvcFactory,
-		authLoader:     deps.authLoader,
-		clientFactory:  deps.clientFactory,
-		now:            deps.now,
-		newID:          deps.newID,
-	})
+	modelDispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatDeps)
 	if err != nil {
 		return nil, "", fmt.Errorf("evaluation: formations smoke: %w", err)
 	}
@@ -792,7 +779,7 @@ func buildCampaignFormationProductionDeps(
 	cfg *config.Config,
 	fileSvc fs.RuntimeFileService,
 	authContext *auth.ClientAuthContext,
-	dataOperator *evaluation.DataOperatorStatus,
+	dataOperator *operatorcapability.DataOperatorStatus,
 	operators []models.OperatorDocumentGo,
 	variants []*evalv1.ModelVariant,
 	registryDigest string,

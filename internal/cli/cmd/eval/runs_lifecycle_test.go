@@ -330,7 +330,7 @@ func TestRunsArchive_ArchivedRunsAreRejectedByMutatingCommands(t *testing.T) {
 	env.mustRun(t, "runs", "archive", "run-a-1")
 
 	for _, args := range [][]string{
-		{"runs", "resume", "run-a-1", "--no-auto-refresh"},
+		{"runs", "resume", "run-a-1", "--no-auto-bind"},
 		{"runs", "publish", "run-a-1"},
 		{"runs", "repair", "run-a-1", "--results"},
 		{"runs", "repair", "run-a-1", "--trace-digests"},

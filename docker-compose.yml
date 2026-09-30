@@ -13,7 +13,7 @@
 # Binary precedence:
 # Host binaries in ./bin are mounted read-only at /opt/g8e/bin. When present,
 # a local `make build` takes immediate precedence across all internal services.
-# Restarting the operators (`docker compose restart g8e-operator g8e-inference-operator`)
+# Restarting the operators (`docker compose restart g8e-data-operator g8e-inference-operator`)
 # aligns operator versions immediately without rebuilding images. If no host
 # binary is present, the image baked-in binary (/g8e) is used automatically.
 # See docs/guides/unified_stack.md.
@@ -118,14 +118,19 @@ services:
           cpus: '1'
           memory: 512M
 
-  g8e-operator:
+  g8e-data-operator:
     # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
-    # Data Operator for governed tool/filesystem/process boundaries.
+    # Data Operator for governed tool/filesystem/process boundaries. The
+    # `data-operator` hostname is how evaluations identify it among enrolled
+    # Operators, so it must stay in step with constants.DataOperatorHostname.
     image: g8e-gateway
-    container_name: ${G8E_PREFIX:-g8e}-operator
+    container_name: ${G8E_PREFIX:-g8e}-data-operator
+    hostname: data-operator
     working_dir: /root
     networks:
-      - g8e-net
+      g8e-net:
+        aliases:
+          - g8e-data-operator
     volumes:
       - g8e-operator-data:/root/.g8e
       - g8e-shared-tmp:/tmp
@@ -254,7 +259,7 @@ services:
     depends_on:
       g8e-gateway:
         condition: service_healthy
-      g8e-operator:
+      g8e-data-operator:
         condition: service_started
     ports:
       - "${G8E_ENSEMBLE_PORT:-8000}:8000"

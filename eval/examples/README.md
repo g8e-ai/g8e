@@ -47,23 +47,15 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 ## Typical workflow
 
 ```bash
-# Resolve the exact governed maintenance sessions (optional if single active sessions exist).
-INFERENCE_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.inference_enabled==true) | .operator_session_id' | head -1)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
-
 # 0. (Optional) Pull trending Hugging Face GGUF models through governed Operator dispatch.
 #    Catalog: eval/rollout-intake-hf.json. Applies canonical served-model aliases
 #    (for example qwen3.8:27b, glm-5.3-flash) after pull/copy.
-./g8e eval models pull --all \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models pull --all
 # Manual-create entries (sharded GGUF, pending single-file) are skipped until a
 # governed provider-side alias-creation workflow is available.
 
 # 1. Freeze provider inventory into runtime registry
-./g8e eval models freeze \
-  --inference-session "$INFERENCE_SESSION" \
-  --data-session "$DATA_SESSION"
+./g8e eval models freeze
 
 ./g8e eval models list
 

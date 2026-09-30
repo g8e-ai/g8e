@@ -33,7 +33,7 @@ type runStartFlowOptions struct {
 	Verify             bool
 	RequireObservation bool
 	RequireProvenance  bool
-	NoAutoRefresh      bool
+	NoAutoBind         bool
 	EnsembleURL        string
 	FormationRunner    string
 	JSONOutput         bool
@@ -196,7 +196,7 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 		Daemon:                   opts.Daemon,
 		EnsembleURL:              opts.EnsembleURL,
 		EnforceProviderResidency: opts.RequireObservation || opts.RequireProvenance,
-		NoAutoRefresh:            opts.NoAutoRefresh,
+		NoAutoBind:               opts.NoAutoBind,
 		FormationRunner:          opts.FormationRunner,
 		JSONOutput:               opts.JSONOutput,
 	})
@@ -289,7 +289,7 @@ Examples:
 	cmd.Flags().BoolVar(&opts.RequireProvenance, "require-provenance", false, "Fail verification when model provenance attestation windows are missing")
 	cmd.Flags().BoolVar(&opts.RequireObservation, "require-observation", false, "Fail verification when provider-boundary observation windows are missing")
 	cmd.Flags().StringVar(&opts.EnsembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().BoolVar(&opts.NoAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
+	cmd.Flags().BoolVar(&opts.NoAutoBind, "no-auto-bind", false, "Do not bind the data-operator to the CLI session when it is not bound")
 	cmd.Flags().StringVar(&opts.FormationRunner, "formation-runner", formationRunnerG8ee, formationRunnerFlagUsage)
 	return cmd
 }
@@ -333,7 +333,7 @@ type runResumeJSON struct {
 func runsResumeCmd(deps nativeEvalDeps) *cobra.Command {
 	var limit uint32
 	var ensembleURL, formationRunner string
-	var noAutoRefresh, publish, daemon bool
+	var noAutoBind, publish, daemon bool
 	cmd := &cobra.Command{
 		Use:   "resume <run>",
 		Short: "Execute the remaining queued assignments of a run",
@@ -351,7 +351,7 @@ runs until the matrix is exhausted. An archived run cannot be resumed.`,
 				Daemon:          daemon,
 				Limit:           limit,
 				EnsembleURL:     ensembleURL,
-				NoAutoRefresh:   noAutoRefresh,
+				NoAutoBind:      noAutoBind,
 				FormationRunner: formationRunner,
 				JSONOutput:      jsonOutput,
 				ResultOutput: func(result *evalv1.EvaluationAssignmentResult) {
@@ -390,7 +390,7 @@ runs until the matrix is exhausted. An archived run cannot be resumed.`,
 	cmd.Flags().BoolVar(&daemon, "daemon", false, "Run continuously until the queued matrix is exhausted")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish assignment lifecycle and terminal result projections to the public mirror")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
+	cmd.Flags().BoolVar(&noAutoBind, "no-auto-bind", false, "Do not bind the data-operator to the CLI session when it is not bound")
 	cmd.Flags().StringVar(&formationRunner, "formation-runner", formationRunnerG8ee, formationRunnerFlagUsage)
 	return cmd
 }

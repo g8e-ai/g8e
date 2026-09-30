@@ -251,7 +251,7 @@ const (
 	DockerEvaluationProfile          = "evaluation"
 	DockerG8ellamaProfile            = "g8ellama"
 	DockerGatewayContainer           = "g8e-gateway"
-	DockerOperatorContainer          = "g8e-operator"
+	DockerDataOperatorContainer      = "g8e-data-operator"
 	DockerEnsembleContainer          = "ensemble"
 	DockerDashboardContainer         = "dashboard"
 	DockerNativeTargetReaderService  = "g8e-native-target-reader"

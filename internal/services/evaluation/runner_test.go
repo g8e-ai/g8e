@@ -26,7 +26,7 @@ type runnerTestLane struct {
 	calls []ExecutionRequest
 }
 
-func (l *runnerTestLane) ResolveTarget(context.Context, string) (Target, error) {
+func (l *runnerTestLane) ResolveTarget(context.Context) (Target, error) {
 	return Target{OperatorID: "operator-1", SessionID: "session-1"}, nil
 }
 

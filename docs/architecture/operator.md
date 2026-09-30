@@ -15,7 +15,7 @@ This document describes the outbound Operator. The Gateway also has an embedded 
 
 ## Runtime and trust boundaries
 
-A remote Operator is sovereign only for the runtime visible to its process. Its filesystem, process table, services, network, and container runtime are those of that runtime; an Operator container is not automatically the Docker host. In the root Compose deployment, `g8e-gateway` and `g8e-operator` are separate containers with separate process and network namespaces and separate named volumes. Neither receives host-root, host-PID, host-network, or Docker-socket access by default. The Gateway's embedded Operator targets the Gateway container in that deployment; the outbound Operator targets the Operator container.
+A remote Operator is sovereign only for the runtime visible to its process. Its filesystem, process table, services, network, and container runtime are those of that runtime; an Operator container is not automatically the Docker host. In the root Compose deployment, `g8e-gateway` and `g8e-data-operator` are separate containers with separate process and network namespaces and separate named volumes. Neither receives host-root, host-PID, host-network, or Docker-socket access by default. The Gateway's embedded Operator targets the Gateway container in that deployment; the outbound Operator targets the Operator container.
 
 The Operator opens the connection to the Gateway and exposes no inbound MCP, A2A, or command listener. The Gateway publishes commands to a channel bound to the Operator ID and Operator session ID. The Operator publishes heartbeats, command results, and signed receipt projections back to Gateway-owned channels. SSE is delivery telemetry, not authorization or durable governance state.
 
@@ -96,7 +96,7 @@ Each operator's responsibilities and execution boundaries are strictly gated by 
 | **Observer Operator** | `--provider-boundary-observer-enabled`, `--provider-boundary-observer-id` | Read-only hardware, temperature, power, and residency observation on approved host | Read-only witness. Arbitrary command execution is hard-rejected by `ValidateWitnessCommand`. |
 | **Data Operator** | Default (or `--data-operator-enabled`) | Governed tool execution, command execution, local filesystem triage, and execution vault | Primary PEP for tool execution. Discovered by Gateway session service for tool and workflow dispatch. |
 
-The Gateway's `OperatorDocument` stores `operator_role`, `local_dir`, `account`, and `port` alongside `system_fingerprint`. Session resolution helpers (`IsGovernedDataOperator`, `SelectInferenceOperatorForHardware`, `SelectCampaignDataOperatorForHardware`, `SelectProviderBoundaryObserverForHardware`) verify that callers cannot dispatch general commands to witness operators or confuse distinct operators sharing the same machine.
+The Gateway's `OperatorDocument` stores `operator_role`, `local_dir`, `account`, and `port` alongside `system_fingerprint`. Session resolution helpers (`IsDataOperator`, `SelectDataOperator`, `SelectInferenceOperatorForHardware`, `SelectProviderBoundaryObserverForHardware`) verify that callers cannot dispatch general commands to witness operators or confuse distinct operators sharing the same machine. The unified Docker stack runs its Data Operator with the container hostname `data-operator` (`constants.DataOperatorHostname`), and `SelectDataOperator` resolves that one session; other enrolled data Operators are not considered.
 
 ## Command and receipt channels
 

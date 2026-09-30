@@ -80,8 +80,9 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-AUTH-OP-BIND-01 | The embedded operator is a binding record (not an enrollment lease) anchoring the first user's sessions. It holds no certificate and persists under the deterministic ID `embedded-operator`. |
 | INV-AUTH-OP-BIND-02 | First-user bootstrap claims the embedded-operator document, recording the user and operator session ID. The claim is the explicit human enrollment act. A same-user reclaim is idempotent; a different user's claim is rejected. |
-| INV-AUTH-OP-BIND-03 | Unified auth middleware stamps operator identity from the persisted session record, not from request headers. Headers that contradict the persisted binding are rejected. |
+| INV-AUTH-OP-BIND-03 | Unified auth middleware stamps operator identity from the persisted session record, not from request headers. Headers that name an operator session outside the persisted binding are rejected. |
 | INV-AUTH-OP-BIND-04 | CLI session refresh and rotation preserve the prior session's operator binding. Recovery prefers the embedded operator's active session. |
+| INV-AUTH-OP-BIND-05 | A CLI session bound to many operators admits every bound operator session as a request's operator identity, not only the primary. The operator ID header, when sent, MUST match the named bound session, and the bound operator MUST belong to the session's user. A session outside the persisted bound list is rejected. |
 
 ### External identity providers (`INV-AUTH-JWT`)
 
@@ -169,11 +170,11 @@ The `g8e operator bind` command manages the authenticated CLI session's persiste
 
 | Subcommand | Purpose |
 | --- | --- |
-| `bind <operator-session-id>...` | Pin the CLI session to one or more active operator sessions owned by the same user, in a single call |
+| `bind <operator-session-id>...` | Bind the CLI session to one or more active operator sessions owned by the same user, in a single call |
 | `bind list` | Show the operators currently bound to the CLI session |
 | `bind unbind` | Clear the operator binding from the CLI session |
 
-Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The bind request carries `operator_session_ids` (or the single `operator_session_id`); the gateway validates that every target operator session is active and belongs to the authenticated user before changing anything, so one rejected target binds none. It then issues one replacement CLI session server-side and returns the new `cli_session_id` with the `bound` list. The first target is the primary binding (`operator_session_id` on the CLI session, the identity the auth middleware stamps); the full list is persisted as `bound_operator_session_ids`, carried through rotation, and kept on refresh only while the primary binding survives. One call accepts at most `CLIBindMaxOperators` (5000) targets. `GET /api/v1/auth/cli/session` reports the list.
+Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The bind request carries `operator_session_ids` (or the single `operator_session_id`); the gateway validates that every target operator session is active and belongs to the authenticated user before changing anything, so one rejected target binds none. It then issues one replacement CLI session server-side and returns the new `cli_session_id` with the `bound` list. The first target is the primary binding (`operator_session_id` on the CLI session, the identity the auth middleware stamps when a request names no operator); a request whose operator headers name another bound session is stamped as that session (INV-AUTH-OP-BIND-05). The full list is persisted as `bound_operator_session_ids`, carried through rotation, and kept on refresh only while the primary binding survives. One call accepts at most `CLIBindMaxOperators` (5000) targets. `GET /api/v1/auth/cli/session` reports the list.
 
 Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details before binding.
 

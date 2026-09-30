@@ -209,7 +209,7 @@ func dockerRestartCmd() *cobra.Command {
 		Short: "Restart services in the Docker Compose unified stack",
 		Long: `Restart services in the Docker Compose unified stack.
 
-If no services are specified, restarts g8e-operator and g8e-inference-operator
+If no services are specified, restarts g8e-data-operator and g8e-inference-operator
 so they align with the current host-mounted binary (from 'make build').`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
@@ -219,7 +219,7 @@ so they align with the current host-mounted binary (from 'make build').`,
 			if len(args) > 0 {
 				restartArgs = append(restartArgs, args...)
 			} else {
-				restartArgs = append(restartArgs, "g8e-operator", "g8e-inference-operator")
+				restartArgs = append(restartArgs, "g8e-data-operator", "g8e-inference-operator")
 			}
 			cmd.Printf("Restarting %s...\n", strings.Join(restartArgs[1:], ", "))
 			if err := RunDockerCompose(restartArgs, profile); err != nil {
@@ -813,10 +813,10 @@ func isInferenceOperatorPendingRequest(req *models.PlatformEnrollmentPendingRequ
 	if req == nil || req.ComponentKind != models.PlatformComponentOperator {
 		return false
 	}
-	if req.Hostname == "inference-operator" {
+	if req.Hostname == constants.InferenceOperatorHostname {
 		return true
 	}
-	return strings.Contains(req.InstanceID, "inference-operator")
+	return strings.Contains(req.InstanceID, constants.InferenceOperatorHostname)
 }
 
 // platformEnrollmentApprovalRank assigns the documented approval order for the

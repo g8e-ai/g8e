@@ -389,7 +389,7 @@ func (f *verifierFixture) buildReport(t *testing.T) *evalv1.EvaluationReport {
 				RuntimeBoundaries: []*evalv1.EvaluationRuntimeBoundary{
 					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_EVALUATOR, ProcessIdentity: "host-side g8e eval process", RuntimeNamespace: "Docker host workspace", Endpoint: "https://localhost:8443", AuthenticatedIdentity: "user-1"},
 					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_GATEWAY, ProcessIdentity: constants.DockerGatewayContainer, RuntimeNamespace: "Gateway container", PersistentStore: "Gateway runtime volume", Endpoint: "https://localhost:8443", AuthenticatedIdentity: "cli-session-1"},
-					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_OPERATOR, ProcessIdentity: constants.DockerOperatorContainer, RuntimeNamespace: "Operator container", MountedFilesystems: []string{"Operator runtime volume", "shared controlled fixture volume"}, PersistentStore: "Operator runtime volume"},
+					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_OPERATOR, ProcessIdentity: constants.DockerDataOperatorContainer, RuntimeNamespace: "Operator container", MountedFilesystems: []string{"Operator runtime volume", "shared controlled fixture volume"}, PersistentStore: "Operator runtime volume"},
 					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_CONTROLLED_TARGET, ProcessIdentity: vTargetResource, RuntimeNamespace: "shared controlled fixture volume", MountedFilesystems: []string{"shared controlled fixture volume"}},
 				},
 			},

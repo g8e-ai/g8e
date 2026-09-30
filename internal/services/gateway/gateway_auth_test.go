@@ -1783,6 +1783,137 @@ func TestHandleCLIAuth_RejectsMismatchedOperatorHeaders(t *testing.T) {
 	}
 }
 
+// seedSecondBoundOperator persists another operator document and rebinds the
+// CLI session to both operator sessions, primary first, the way a multi-target
+// `operator bind` does.
+func seedSecondBoundOperator(t *testing.T, db *CanonicalDBService, operatorUserID, userID, cliSessionID, primarySessionID, operatorID, operatorSessionID string) {
+	t.Helper()
+	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                operatorID,
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            operatorUserID,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+	cliBytes, err := json.Marshal(&models.CLISession{
+		ID:                      cliSessionID,
+		UserID:                  userID,
+		OperatorSessionID:       primarySessionID,
+		BoundOperatorSessionIDs: []string{primarySessionID, operatorSessionID},
+		IsActive:                true,
+		ExpiresAt:               time.Now().Add(1 * time.Hour),
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+}
+
+// TestHandleCLIAuth_AdmitsEveryBoundOperatorSession verifies that a CLI
+// session bound to many operators may target any bound session, not only the
+// primary: the stamped identity is the bound operator the headers name, and a
+// session that is not bound, or whose operator belongs to another user, is
+// still rejected.
+func TestHandleCLIAuth_AdmitsEveryBoundOperatorSession(t *testing.T) {
+	const (
+		userID           = "user-multi-bind"
+		cliSessionID     = "cli-sess-multi-bind"
+		primaryID        = "op-primary"
+		primarySessionID = "op-sess-primary"
+		secondID         = "op-second"
+		secondSessionID  = "op-sess-second"
+		strayID          = "op-stray"
+		straySessionID   = "op-sess-stray"
+	)
+	tests := []struct {
+		name           string
+		operatorUserID string
+		opID           string
+		opSessionID    string
+		wantStatus     int
+		wantOperatorID string
+		wantSessionID  string
+	}{
+		{name: "no operator headers stamps the primary", operatorUserID: userID, wantStatus: http.StatusOK, wantOperatorID: primaryID, wantSessionID: primarySessionID},
+		{name: "headers naming the primary", operatorUserID: userID, opID: primaryID, opSessionID: primarySessionID, wantStatus: http.StatusOK, wantOperatorID: primaryID, wantSessionID: primarySessionID},
+		{name: "headers naming a non-primary bound operator", operatorUserID: userID, opID: secondID, opSessionID: secondSessionID, wantStatus: http.StatusOK, wantOperatorID: secondID, wantSessionID: secondSessionID},
+		{name: "session header alone naming a non-primary bound operator", operatorUserID: userID, opSessionID: secondSessionID, wantStatus: http.StatusOK, wantOperatorID: secondID, wantSessionID: secondSessionID},
+		{name: "operator id that does not match the named bound session", operatorUserID: userID, opID: primaryID, opSessionID: secondSessionID, wantStatus: http.StatusForbidden},
+		{name: "session that is not bound", operatorUserID: userID, opID: strayID, opSessionID: straySessionID, wantStatus: http.StatusForbidden},
+		{name: "bound session owned by another user", operatorUserID: "user-someone-else", opID: secondID, opSessionID: secondSessionID, wantStatus: http.StatusForbidden},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := newTestDB(t)
+			logger := testutil.NewTestLogger()
+			userSvc := NewUserService(db.GetDocStore(), logger)
+			personaSvc := NewPersonaService(db.GetDocStore(), logger)
+			res := response.NewWriter(logger)
+			auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+			seedBoundCLIAuthFixture(t, db, userID, primaryID, primarySessionID, cliSessionID)
+			seedSecondBoundOperator(t, db, tt.operatorUserID, userID, cliSessionID, primarySessionID, secondID, secondSessionID)
+			strayBytes, err := json.Marshal(&models.OperatorDocumentGo{
+				ID: strayID, OperatorSessionID: straySessionID, Status: constants.OperatorStatusActive, UserID: userID,
+				CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+			})
+			require.NoError(t, err)
+			require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), strayID, strayBytes))
+
+			var capturedCtx context.Context
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedCtx = r.Context()
+				w.WriteHeader(http.StatusOK)
+			})
+			req := cliAuthRequest(t, userID, cliSessionID)
+			if tt.opID != "" {
+				req.Header.Set(constants.HeaderOperatorID, tt.opID)
+			}
+			if tt.opSessionID != "" {
+				req.Header.Set(constants.HeaderOperatorSessionID, tt.opSessionID)
+			}
+			rr := httptest.NewRecorder()
+
+			handled := auth.handleCLIAuth(rr, req, cliSessionID, next)
+
+			require.True(t, handled)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			if tt.wantStatus != http.StatusOK {
+				assert.Contains(t, rr.Body.String(), constants.ErrOperatorBindingMismatch.Error())
+				return
+			}
+			require.NotNil(t, capturedCtx)
+			assert.Equal(t, tt.wantOperatorID, capturedCtx.Value(constants.ContextKeyOperatorID))
+			assert.Equal(t, tt.wantSessionID, capturedCtx.Value(constants.ContextKeyOperatorSessionID))
+			assert.Equal(t, []string{primarySessionID, secondSessionID}, capturedCtx.Value(constants.ContextKeyBoundOperatorSessionIDs))
+		})
+	}
+}
+
+// TestCLISessionBindsOperator verifies that bound-operator membership covers
+// every bound session, falls back to the primary for sessions persisted before
+// multi-bind, and never matches an empty session.
+func TestCLISessionBindsOperator(t *testing.T) {
+	tests := []struct {
+		name    string
+		session models.CLISession
+		target  string
+		want    bool
+	}{
+		{name: "primary of a multi-bind session", session: models.CLISession{OperatorSessionID: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "a", want: true},
+		{name: "non-primary of a multi-bind session", session: models.CLISession{OperatorSessionID: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "b", want: true},
+		{name: "session outside the bound list", session: models.CLISession{OperatorSessionID: "a", BoundOperatorSessionIDs: []string{"a", "b"}}, target: "c"},
+		{name: "primary-only session persisted before multi-bind", session: models.CLISession{OperatorSessionID: "a"}, target: "a", want: true},
+		{name: "unbound session", session: models.CLISession{}, target: "a"},
+		{name: "empty target never matches", session: models.CLISession{OperatorSessionID: "a"}, target: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, cliSessionBindsOperator(&tt.session, tt.target))
+		})
+	}
+}
+
 // TestHandleCLIAuth_RejectsOperatorHeadersOnUnboundSession verifies that a
 // caller must not assert an operator identity the session does not carry:
 // operator headers on a CLI session with no persisted binding are

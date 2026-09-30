@@ -216,7 +216,7 @@ Compose profile assignment is INV-TESTMAP-02. Service names are the Compose keys
 
 | Compose service | `profiles:` |
 | --- | --- |
-| `g8e-gateway`, `g8e-operator`, `g8e-inference-operator`, `ensemble`, `dashboard` | None. They start on `docker compose up -d`. |
+| `g8e-gateway`, `g8e-data-operator`, `g8e-inference-operator`, `ensemble`, `dashboard` | None. They start on `docker compose up -d`. |
 | `g8e-gateway-secondary` | `cross-enrollment` |
 | `g8e-gateway-user`, `g8e-inference` | `g8ellama` |
 

@@ -17,7 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-func TestSelectInferenceOperator_RequiresExactSessionWhenPinned(t *testing.T) {
+func TestSelectInferenceOperator_RequiresInferenceCapableSession(t *testing.T) {
 	t.Parallel()
 	operators := []models.OperatorDocumentGo{
 		{ID: "inf-1", OperatorSessionID: "sess-inf-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote, RuntimeConfig: &models.RuntimeConfig{InferenceEnabled: true}},

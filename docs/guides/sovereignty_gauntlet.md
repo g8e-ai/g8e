@@ -264,7 +264,7 @@ Verify every exported receipt's canonical signature and final persistence attest
 ```bash
 mkdir -p "${CAMPAIGN_DIR}/unified/verifier-pki"
 docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem"
-docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem"
+docker cp g8e-data-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem"
 cd "${REPO_ROOT}"
 ensemble/.venv/bin/python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY'
 import binascii
@@ -308,8 +308,8 @@ The public keys come from the producing environment, so the result verifies inte
 The Dockerized operator owns the execution vault and commitment ledger; it also owns Git-backed mutation state when Git integration is enabled. Generate reports inside that container, then copy them to the campaign directory:
 
 ```bash
-docker exec g8e-operator /g8e report all --out /root/reports/sovereignty-gauntlet
-docker cp g8e-operator:/root/reports/sovereignty-gauntlet/. "${CAMPAIGN_DIR}/unified/reports/"
+docker exec g8e-data-operator /g8e report all --out /root/reports/sovereignty-gauntlet
+docker cp g8e-data-operator:/root/reports/sovereignty-gauntlet/. "${CAMPAIGN_DIR}/unified/reports/"
 cat "${CAMPAIGN_DIR}/unified/reports/verification_summary.csv" | tee "${CAMPAIGN_DIR}/logs/verification-summary.txt"
 ```
 
@@ -333,7 +333,7 @@ For a public integrity claim, inspect every `SKIPPED` row. Do not advertise a sk
 The `compliance ksi` command fails closed unless the caller binds the evaluation to an assessment scope, run, assertion-assessment set, and evidence window. Run it against the same populated Operator state only when those identifiers come from the assessment being reported:
 
 ```bash
-docker exec g8e-operator /g8e compliance ksi \
+docker exec g8e-data-operator /g8e compliance ksi \
   --class C \
   --catalog docs/reference/ksi-catalog.json \
   --scope-id '<assessment-scope-id>' \

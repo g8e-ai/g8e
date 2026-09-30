@@ -292,9 +292,7 @@ func TestBoundaryEvalRun_PersistsAndPrintsFailureReportsWithExactSessionBinding(
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			report := nativeEvalTestReport("run-1")
-			var request evaluation.RunRequest
-			runner := nativeEvalRunnerStub{run: func(_ context.Context, actual evaluation.RunRequest) (*evalv1.EvaluationReport, error) {
-				request = actual
+			runner := nativeEvalRunnerStub{run: func(context.Context, evaluation.RunRequest) (*evalv1.EvaluationReport, error) {
 				return report, testCase.runErr
 			}}
 			verification := &compliancev1.ComplianceVerificationReport{ReportId: "run-1", Valid: testCase.verificationValid}
@@ -309,11 +307,10 @@ func TestBoundaryEvalRun_PersistsAndPrintsFailureReportsWithExactSessionBinding(
 			root.SetErr(&output)
 			root.SilenceErrors = true
 			root.SilenceUsage = true
-			root.SetArgs([]string{"eval", "boundary", "run", "--operator-session", "operator-session-exact"})
+			root.SetArgs([]string{"eval", "boundary", "run"})
 
 			err := root.Execute()
 			require.Error(t, err)
-			assert.Equal(t, "operator-session-exact", request.PinnedOperatorSessionID)
 			assert.Same(t, verification, store.savedVerification)
 			require.Len(t, store.savedReports, 1)
 			assert.Same(t, report, store.savedReports[0])

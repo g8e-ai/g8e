@@ -273,14 +273,21 @@ func (c *CLIRefreshController) registryOperatorBinding(userID string) (sessionID
 	if err != nil {
 		return "", "", false, err
 	}
-	var embeddedSessionID string
-	for _, op := range operators {
-		if operatorcapability.IsGovernedDataOperator(op) {
+	// The stack's data-operator is the preferred primary binding; any other
+	// data Operator is the fallback.
+	for _, isCandidate := range []func(models.OperatorDocumentGo) bool{operatorcapability.IsStackDataOperator, operatorcapability.IsDataOperator} {
+		for _, op := range operators {
+			if !isCandidate(op) {
+				continue
+			}
 			validated, validateErr := c.auth.ValidateOperatorSession(op.OperatorSessionID)
 			if validateErr == nil && validated.UserID == userID {
 				return validated.OperatorSessionID, validated.ID, true, nil
 			}
 		}
+	}
+	var embeddedSessionID string
+	for _, op := range operators {
 		if op.ID == string(constants.DocIDEmbeddedOperator) && op.Status == constants.OperatorStatusActive && op.OperatorSessionID != "" {
 			embeddedSessionID = op.OperatorSessionID
 		}

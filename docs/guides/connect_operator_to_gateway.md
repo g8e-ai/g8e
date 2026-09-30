@@ -176,7 +176,7 @@ List pending enrollment requests:
 ./g8e auth enroll pending
 ```
 
-Approve the request for the Data Operator, then verify the remote session:
+Approve the request for the Data Operator (container `g8e-data-operator`, hostname `data-operator`), then verify the remote session:
 
 ```bash
 ./g8e auth enroll approve <data-operator-request-id> --yes
@@ -265,7 +265,7 @@ This displays each Operator's ID, type (e.g., data, dashboard, ensemble), hostna
 
 ### Bind the CLI to Operators and Run Commands
 
-Pin the enrolled CLI session to one or more Operators when automation or eval scripts need a stable default target. Pass every Operator session ID to a single `bind` call; do not loop over Operators, because each call issues a replacement CLI session:
+Bind the enrolled CLI session to one or more Operators when automation needs them as targets. Any bound session is accepted as a request's operator identity, not only the first. Pass every Operator session ID to a single `bind` call; do not loop over Operators, because each call issues a replacement CLI session:
 
 ```bash
 ./g8e operator bind <operator-session-id> [<operator-session-id>...]

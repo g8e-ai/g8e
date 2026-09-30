@@ -54,7 +54,7 @@ Exercises the current headless Docker workflow from the repository root. The run
 | INV-SMOKE-06 | Ensemble executes file_create tool via LLM, obtains signed receipt, and verified read-back succeeds | `./g8e demos scenarios run ensemble-chat-file-create` completes with `ok` status and non-empty signature |
 | INV-SMOKE-07 | Direct DOCUMENT_UPDATE requests create and merge documents while preserving untouched fields | `./g8e demos scenarios run ensemble-document-update` completes with `ok` status and both fields verified |
 | INV-SMOKE-08 | Gateway exposes recent receipts, events, and audit data over mTLS; operator exports to CSV | `./g8e audit receipts`, `./g8e audit events`, and `./g8e audit export` complete successfully |
-| INV-SMOKE-09 | Operator CSV verification pass validates commitment chain, hashes, signatures, Git root, mutations, and cross-links | `docker exec g8e-operator /g8e report all` generates `verification_summary.csv` with all checks `PASS` |
+| INV-SMOKE-09 | Operator CSV verification pass validates commitment chain, hashes, signatures, Git root, mutations, and cross-links | `docker exec g8e-data-operator /g8e report all` generates `verification_summary.csv` with all checks `PASS` |
 | INV-SMOKE-10 | Gateway publishes platform binaries via HTTP discovery at `/.well-known/g8e/bin/g8e-<os>-<arch>` | `curl http://localhost:8080/.well-known/g8e/bin/g8e-linux-amd64` downloads executable matching gateway version |
 
 ## Owned surfaces
@@ -84,7 +84,7 @@ Exercises the current headless Docker workflow from the repository root. The run
 
 **Host-network commands** read the host's local CLI configuration and mTLS credentials, then query the gateway at `localhost:8443`. These include `g8e operator list`, `g8e auth enroll pending`, `g8e auth enroll approve`, `g8e auth enroll deny`, `g8e audit receipts`, `g8e audit events`, `g8e audit summary`, `g8e gw data operators`, `g8e gw data audit list`, and `g8e gw data store list`. They do not access the operator Docker volume.
 
-**Operator-filesystem commands** read persistent operator state directly from `/root/.g8e/` in the operator volume. Run these as `docker exec g8e-operator /g8e <subcommand>`. These include `g8e vault status`, `g8e report all`, and `g8e compliance ksi`. Running them through the host binary inspects the host's unrelated runtime tree.
+**Operator-filesystem commands** read persistent operator state directly from `/root/.g8e/` in the operator volume. Run these as `docker exec g8e-data-operator /g8e <subcommand>`. These include `g8e vault status`, `g8e report all`, and `g8e compliance ksi`. Running them through the host binary inspects the host's unrelated runtime tree.
 
 **Docker status.** Use `g8e docker status` for unified-stack service health, not `g8e gw status`. The latter attempts an authenticated gateway request and checks a host-local PID file, neither of which represents the gateway container before enrollment.
 
@@ -184,8 +184,8 @@ Repeat `./g8e docker status` until all four services report healthy, then run:
 ```bash
 ./g8e operator list
 ./g8e gw data operators
-docker exec g8e-operator /g8e vault status
-OPERATOR_PORTS="$(docker port g8e-operator)"
+docker exec g8e-data-operator /g8e vault status
+OPERATOR_PORTS="$(docker port g8e-data-operator)"
 test -z "${OPERATOR_PORTS}"
 curl -fsS http://localhost:8000/health
 curl -fsS -o /dev/null http://localhost:3000/
@@ -287,9 +287,9 @@ Choose an explicit output directory so the host copy cannot select stale output 
 
 ```bash
 REPORT_NAME="ux-smoke-$(date -u +%Y%m%dT%H%M%SZ)"
-docker exec g8e-operator /g8e report all --out "/root/reports/${REPORT_NAME}"
+docker exec g8e-data-operator /g8e report all --out "/root/reports/${REPORT_NAME}"
 mkdir -p "./reports/${REPORT_NAME}"
-docker cp "g8e-operator:/root/reports/${REPORT_NAME}/." "./reports/${REPORT_NAME}/"
+docker cp "g8e-data-operator:/root/reports/${REPORT_NAME}/." "./reports/${REPORT_NAME}/"
 REPORT_DIR="./reports/${REPORT_NAME}"
 cat "${REPORT_DIR}/verification_summary.csv"
 awk -F, '$1 == "commitment_chain" && $4 == "PASS" { print; found=1 } END { exit !found }' "${REPORT_DIR}/verification_summary.csv"
@@ -325,7 +325,7 @@ Expected: the downloaded file is a runnable statically linked Linux AMD64 binary
 `compliance ksi` is not an unscoped smoke command. It fails closed unless the caller supplies identifiers and an evidence window from a real assessment. If those values exist, run the evaluation against the operator-local stores:
 
 ```bash
-docker exec g8e-operator /g8e compliance ksi \
+docker exec g8e-data-operator /g8e compliance ksi \
   --class C \
   --catalog /docs/reference/ksi-catalog.json \
   --scope-id '<assessment-scope-id>' \
@@ -361,10 +361,10 @@ The second command deletes the gateway PKI, operator vault and audit data, and a
 - `g8e docker status` shows `starting`: wait and retry. If a container exits, inspect it with `./g8e docker logs <service-name>`.
 - Enrollment fails after a reset: run `./g8e auth logout` to remove stale local CLI credentials, then retry against the new gateway PKI.
 - A network command returns `404 page not found`: rebuild stale images with `./g8e docker build`, restart the stack, and compare `./g8e version` with `docker exec g8e-gateway /g8e version`.
-- Pending enrollments are empty while workloads remain unready: wait for the workloads to submit their requests, then inspect `./g8e docker logs g8e-operator`, `./g8e docker logs ensemble`, or `./g8e docker logs dashboard`.
+- Pending enrollments are empty while workloads remain unready: wait for the workloads to submit their requests, then inspect `./g8e docker logs g8e-data-operator`, `./g8e docker logs ensemble`, or `./g8e docker logs dashboard`.
 - The file scenario fails with Ollama: confirm the endpoint and model, or switch to `G8E_HARNESS_LLM_PROVIDER=fake` and unset the model and endpoint variables.
 - A scenario reports `ok` but a mutation is absent from `audit receipts`: the newest-50 API window may have advanced. Check the newest-100 `audit export` immediately, and rely on the scenario's own correlated receipt and read-back result for its per-run assertion.
-- `report all` lacks `FILE_EDIT` rows: the file scenario did not complete on the operator, or the report was run against the wrong filesystem. Re-run the scenario, then execute `/g8e report all` inside `g8e-operator`.
+- `report all` lacks `FILE_EDIT` rows: the file scenario did not complete on the operator, or the report was run against the wrong filesystem. Re-run the scenario, then execute `/g8e report all` inside `g8e-data-operator`.
 - A verification row is `SKIPPED`: the corresponding store or Git ledger was unavailable. Treat the smoke run as incomplete and inspect the operator logs instead of reporting the check as covered.
 - The downloaded binary does not execute: select the filename matching the host OS and architecture. The exact comparison in step 11 applies only to Linux AMD64.
 
@@ -375,7 +375,7 @@ The second command deletes the gateway PKI, operator vault and audit data, and a
 | Gateway and Operator use one static Go binary | `file ./g8e` and `file ./g8e-linux-amd64` both report `ELF 64-bit LSB executable, x86-64, statically linked`; downloaded binary version matches gateway container version. | Does not reproduce the release build or inspect its provenance. |
 | FIPS 140-3 approved mode is observable at runtime | `docker exec g8e-gateway /g8e version --fips` prints `FIPS 140-3 mode: enabled`. | Default image reports enforcement `disabled`; this is not strict FIPS-only operation. |
 | Secure MCP governs ensemble-selected file tool | File scenario selects `file_create`, obtains a `COMPLETED` receipt with non-empty signature, and performs governed read-back. | Fake-provider path does not call an external model. Use real Ollama provider for full LLM exercise. |
-| Operator is outbound-only | Operator registers with gateway; `docker port g8e-operator` output is empty. | Validates published ports only, not every socket or packet. |
+| Operator is outbound-only | Operator registers with gateway; `docker port g8e-data-operator` output is empty. | Validates published ports only, not every socket or packet. |
 | Mutations traverse governance pipeline | Scenarios require completed receipts for `FILE_EDIT` and `DOCUMENT_UPDATE`. | Doctrine enforces L1 while L2 and L3 audit; does not prove other postures. |
 | Operator-local evidence links receipts, commitments, mutations | `report all` verification pass validates commitment chain, Git root, mutation linkage, receipt cross-links. | CSV verifier does not verify receipt signatures or persistence attestations. |
 | Raw data remains on operator | Governed file executes and reads back through operator; operator state in Docker volume. | Smoke test does not capture network traffic; does not independently prove broader data-flow claim. |
@@ -385,7 +385,7 @@ The second command deletes the gateway PKI, operator vault and audit data, and a
 
 ## Anti-patterns
 
-- Mixing host and operator commands: do not run `./g8e report all` on the host; use `docker exec g8e-operator /g8e report all`.
+- Mixing host and operator commands: do not run `./g8e report all` on the host; use `docker exec g8e-data-operator /g8e report all`.
 - Stale images: do not skip `./g8e docker build` after source changes; rebuilt images from the current tree are required.
 - Assuming audit state persists: data removed by `./g8e docker clean` includes gateway PKI and operator vault. Export evidence before cleanup.
 - Running scenarios before enrollment: workload enrollments must be approved before scenarios execute; `./g8e auth enroll pending` and `./g8e auth enroll approve` are prerequisites.

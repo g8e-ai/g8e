@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -19,7 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
-// handleBind pins the authenticated CLI session to the requested operator
+// handleBind binds the authenticated CLI session to the requested operator
 // session(s) in a single call. The request may carry one operator session or
 // many; every target is validated (active, owned by the caller) before any
 // binding changes, so a bad target rejects the whole request. The first
@@ -216,6 +217,12 @@ func boundSessionIDsOf(session *models.CLISession) []string {
 		return []string{session.OperatorSessionID}
 	}
 	return nil
+}
+
+// cliSessionBindsOperator reports whether operatorSessionID is one of the
+// operator sessions bound to the CLI session, primary or not.
+func cliSessionBindsOperator(session *models.CLISession, operatorSessionID string) bool {
+	return operatorSessionID != "" && slices.Contains(boundSessionIDsOf(session), operatorSessionID)
 }
 
 func sameOperatorSessionIDs(a, b []string) bool {

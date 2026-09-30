@@ -41,7 +41,7 @@ This guide covers building the root Docker image, running the unified Docker Com
 | --- | --- |
 | INV-DG-IMG-01 | The Dockerfile builds only the target platform binary (linux/amd64 or linux/arm64) and does not build the full cross-platform matrix. Host cross-platform artifacts require `make build-all` on the host. |
 | INV-DG-IMG-02 | The image entrypoint is `/entrypoint.sh`, which enforces binary precedence: G8E_BIN override, /opt/g8e/bin/g8e host mount, /opt/g8e/bin/g8e-linux-${ARCH} host mount, then /g8e image-baked binary. |
-| INV-DG-COMPOSE-01 | The root docker-compose.yml default profile runs the unified stack: g8e-gateway, g8e-operator, g8e-inference-operator, ensemble, and dashboard. No services require a profile to start. |
+| INV-DG-COMPOSE-01 | The root docker-compose.yml default profile runs the unified stack: g8e-gateway, g8e-data-operator, g8e-inference-operator, ensemble, and dashboard. No services require a profile to start. |
 | INV-DG-COMPOSE-02 | The cross-enrollment profile adds g8e-gateway-secondary (operator mode, enrolls as outbound operator of primary). The g8ellama profile replaces the default gateway with g8e-gateway-user and g8e-inference (User Gateway topology). Do not combine profiles. |
 | INV-DG-COMPOSE-03 | Environment variables from `.env` or inline export override defaults. See .env.example for the complete reference. Port overrides do not change internal container listeners or service-network aliases (g8e.local, g8eg). |
 | INV-DG-ENROLL-01 | Workloads submit platform enrollment requests when reusable credentials are absent. Owner approval issues identity via the Gateway PKI. Each workload has its own runtime volume and enrolls independently. |
@@ -133,7 +133,7 @@ The root `docker-compose.yml` defines a single-host reference deployment on the 
 | Service | Profile | Published ports | Role | Persistent volume |
 | --- | --- | --- | --- | --- |
 | `g8e-gateway` | default | 8080, 8443, 8081, 8082, 5173 | Gateway PDP, PKI authority, MCP, A2A, governance, console, public spectator, evaluation explorer | `g8e-gateway-data` |
-| `g8e-operator` | default | none | Data Operator with outbound-only mTLS execution boundary | `g8e-operator-data` |
+| `g8e-data-operator` | default | none | Data Operator (hostname `data-operator`) with outbound-only mTLS execution boundary | `g8e-operator-data` |
 | `g8e-inference-operator` | default | none | Inference Operator for remote Ollama inference | `g8e-inference-data` |
 | `ensemble` | default | 8000 | g8ee FastAPI agentic ensemble | `g8e-ensemble-data` |
 | `dashboard` | default | 3000 | g8ed Express operator dashboard | `g8e-dashboard-data` |
@@ -247,7 +247,7 @@ The root Compose resource settings are:
 | Service | CPU limit | Memory limit | CPU reservation | Memory reservation |
 | --- | --- | --- | --- | --- |
 | `g8e-gateway` | 2 | 4G | 1 | 512M |
-| `g8e-operator` | 2 | 1G | 0.5 | 256M |
+| `g8e-data-operator` | 2 | 1G | 0.5 | 256M |
 | `g8e-inference-operator` | 4 | 4G | 1 | 1G |
 | `ensemble` | 2 | 2G | 0.5 | 512M |
 | `dashboard` | 1 | 512M | 0.25 | 128M |
@@ -259,7 +259,7 @@ The Data Operator, ensemble, and dashboard wait for the Gateway Compose health c
 | Service | Health check | What it means |
 | --- | --- | --- |
 | `g8e-gateway` | `wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health` | The Gateway health endpoint responds successfully. |
-| `g8e-operator` | `test -f /root/.g8e/pki/operator.crt` | The Data Operator certificate exists in its runtime volume. |
+| `g8e-data-operator` | `test -f /root/.g8e/pki/operator.crt` | The Data Operator certificate exists in its runtime volume. |
 | `g8e-inference-operator` | `test -f /root/.g8e/pki/operator.crt` | The Inference Operator certificate exists in its runtime volume. |
 | `ensemble` | HTTP request to `http://localhost:8000/health` | FastAPI startup and client initialization have completed. |
 | `dashboard` | `wget --no-verbose --tries=1 --spider http://localhost:3000/` | Express is listening after startup enrollment. |

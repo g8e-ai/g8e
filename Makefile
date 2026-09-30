@@ -876,7 +876,7 @@ clean-docker:
 .PHONY: restart-operators
 restart-operators:
 	@echo "Restarting Data and Inference Operators to align with current binary..."
-	@docker compose restart g8e-operator g8e-inference-operator
+	@docker compose restart g8e-data-operator g8e-inference-operator
 	@echo "Operators restarted."
 
 .PHONY: docker-build

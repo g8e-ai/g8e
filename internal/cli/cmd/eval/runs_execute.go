@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -33,7 +34,7 @@ type runExecuteOptions struct {
 	Limit                    uint32
 	EnsembleURL              string
 	EnforceProviderResidency bool
-	NoAutoRefresh            bool
+	NoAutoBind               bool
 	FormationRunner          string
 	JSONOutput               bool
 	ResultOutput             func(*evalv1.EvaluationAssignmentResult)
@@ -134,20 +135,6 @@ func executeRun(cmd *cobra.Command, deps nativeEvalDeps, opts runExecuteOptions)
 	return executeAssignments(cmd, deps, opts, watcher)
 }
 
-// defaultSessionPin prefers an explicit pin, then the session recorded on the
-// run when it is still active, and otherwise leaves the choice to the resolver.
-func defaultSessionPin(explicit, recorded string, candidates []operatorCandidate) string {
-	if explicit != "" {
-		return explicit
-	}
-	for _, candidate := range candidates {
-		if candidate.SessionID == recorded {
-			return recorded
-		}
-	}
-	return ""
-}
-
 func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecuteOptions, watcher *runStopWatcher) (executed int, runErr error) {
 	if opts.Daemon {
 		opts.Limit = ^uint32(0)
@@ -175,28 +162,19 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 	if err != nil {
 		return 0, err
 	}
-	inferencePin, dataPin, err := sessionPinsFromFlags(cmd)
-	if err != nil {
-		return 0, err
-	}
-	sessions, err := resolveOperatorSessionsFrom(operators,
-		defaultSessionPin(inferencePin, binding.GetInferenceOperatorSessionId(), inferenceCandidates(operators)),
-		defaultSessionPin(dataPin, binding.GetDataOperatorSessionId(), dataCandidates(operators)),
-		operatorRoleInference, operatorRoleData)
+	sessions, err := resolveOperatorSessionsFrom(operators, operatorRoleInference, operatorRoleData)
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: run execute: %w", err)
 	}
-	if !opts.NoAutoRefresh {
-		authContext, err = chatEvalEnsureOperatorBinding(cmd, chatDeps, cfg, fileSvc, authContext, operators, sessions.DataSessionID)
-		if err != nil {
-			return 0, fmt.Errorf("evaluation: run execute: %w", err)
-		}
+	authContext, err = chatEvalBindDataOperator(cmd, chatDeps, cfg, fileSvc, authContext, operators, sessions.DataSessionID, !opts.NoAutoBind)
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: run execute: %w", err)
 	}
 	selected, err := evaluation.SelectInferenceOperator(operators, sessions.InferenceSessionID)
 	if err != nil {
 		return 0, err
 	}
-	dataOperator, err := chatEvalResolveDataOperator(operators, authContext, sessions.DataSessionID)
+	dataOperator, err := operatorcapability.SelectDataOperator(operators)
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: run execute: %w", err)
 	}
@@ -384,7 +362,7 @@ func releaseResidentProviderModels(
 	opts runExecuteOptions,
 	cfg *config.Config,
 	authContext *auth.ClientAuthContext,
-	dataOperator *evaluation.DataOperatorStatus,
+	dataOperator *operatorcapability.DataOperatorStatus,
 	inferenceSessionID string,
 	endpoint string,
 ) error {
@@ -429,7 +407,7 @@ func releaseRunModels(
 	opts runExecuteOptions,
 	cfg *config.Config,
 	authContext *auth.ClientAuthContext,
-	dataOperator *evaluation.DataOperatorStatus,
+	dataOperator *operatorcapability.DataOperatorStatus,
 	operators []models.OperatorDocumentGo,
 	inferenceSessionID string,
 	spec *evalv1.EvaluationCampaignSpec,
