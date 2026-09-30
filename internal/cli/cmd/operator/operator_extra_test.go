@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -137,7 +138,7 @@ func TestOperatorDeployCmdErrorPaths(t *testing.T) {
 	t.Run("deploy fails when no credentials", func(t *testing.T) {
 		fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
 
-		cmd := operatorDeployCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, cmdtest.FileSvcFactoryFor(fileSvc))
+		cmd := operatorDeployCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, authcmd.PanickingClientFactory(), cmdtest.FileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)

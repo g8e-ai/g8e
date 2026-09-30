@@ -228,11 +228,18 @@ ssh user@192.0.2.10 /opt/g8e operator start --endpoint <gateway-host>
 
 `g8e operator deploy --hosts user@192.0.2.10 --remote-dir /opt/g8e-operator --background --endpoint <gateway-host>` performs the same copy and start in one step (see [Build Operator](build_operator.md#deployment-commands)). Approve the resulting enrollment request as described above.
 
-`operator deploy` uploads the binary as `<remote-dir>/g8e.new` and renames it over `<remote-dir>/g8e`, so redeploying into a directory whose Operator is still running does not fail with "text file busy". Each distinct `--remote-dir` is a distinct Operator identity.
+`operator deploy` uploads the binary as `<remote-dir>/g8e.new` and renames it over `<remote-dir>/g8e`, so redeploying into a directory whose Operator is still running does not fail with "text file busy". With `--background` it also stops any Operator previously started from that directory before starting the new one. Each distinct `--remote-dir` is a distinct Operator identity.
 
 ### Connect Many Operators
 
-The Gateway allows at most three live (non-terminal) Operator enrollment requests at once, platform-wide; further `operator start` processes are rejected with HTTP 429. To enroll a fleet, deploy and approve one Operator at a time: deploy, wait for its request to appear in `auth enroll pending`, approve it, then deploy the next. Once the Operators are online, bind and drive them together as described in [Bind the CLI to Operators and Run Commands](#bind-the-cli-to-operators-and-run-commands). `scripts/loadtest-operators.sh` automates this whole sequence.
+The Gateway allows at most three live (non-terminal) Operator enrollment requests at once, platform-wide; further `operator start` processes are rejected with HTTP 429. `operator deploy` handles that pacing itself:
+
+```bash
+./g8e operator deploy --hosts localhost --endpoint <gateway-host> \
+  --remote-dir ~/fleet --count 10 --background --approve
+```
+
+`--count` puts each Operator in its own `<remote-dir>/op-NNNNN` directory. `--approve` starts them one at a time, reads each worker's enrollment request ID from that directory's `start.log`, approves exactly that request as the owner, restarts a worker the Gateway rejected (up to three attempts), and then waits until every approved Operator is active. It prints each Operator's session ID; pass them to `operator bind` and `operator run` as described in [Bind the CLI to Operators and Run Commands](#bind-the-cli-to-operators-and-run-commands). Redeploying over a directory whose Operator is already enrolled replaces the running worker and needs no new approval. To tear a fleet down, `operator stop <operator-session-id>` each Operator, `auth enroll revoke <request-id>` each printed request ID, and remove the directories.
 
 ---
 

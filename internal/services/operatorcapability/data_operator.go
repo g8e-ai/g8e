@@ -12,20 +12,21 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-// IsGovernedDataOperator reports whether op is an active remote session that
-// serves the governed tool/data boundary. Inference, provider-boundary
-// observer, and provenance witness sessions are excluded.
-func IsGovernedDataOperator(op models.OperatorDocumentGo) bool {
+// IsDataOperator reports whether op is an active remote session whose role is
+// data. Inference, observer, and provenance Operators have their own roles.
+func IsDataOperator(op models.OperatorDocumentGo) bool {
 	if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
 		return false
 	}
 	if op.OperatorSessionID == "" {
 		return false
 	}
-	if op.RuntimeConfig != nil && (op.RuntimeConfig.InferenceEnabled ||
-		op.RuntimeConfig.ProviderBoundaryObserverEnabled ||
-		op.RuntimeConfig.ProvenanceOperatorEnabled) {
-		return false
-	}
-	return true
+	return GetOperatorRole(op) == constants.OperatorRoleData
+}
+
+// IsStackDataOperator reports whether op is the data-operator the unified
+// Docker stack launches: an active data Operator whose heartbeat hostname is
+// constants.DataOperatorHostname.
+func IsStackDataOperator(op models.OperatorDocumentGo) bool {
+	return IsDataOperator(op) && op.CurrentHostname == constants.DataOperatorHostname
 }

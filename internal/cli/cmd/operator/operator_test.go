@@ -248,6 +248,8 @@ func TestOperatorDeployCmd(t *testing.T) {
 			{"identity", "i"},
 			{"background", ""},
 			{"remote-dir", ""},
+			{"count", ""},
+			{"approve", ""},
 		}
 
 		for _, ef := range expectedFlags {

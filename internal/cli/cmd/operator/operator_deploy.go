@@ -264,12 +264,17 @@ func deployOperator(ctx context.Context, cmd *cobra.Command, s deploySSH, source
 	if err != nil {
 		return deployedOperator{}, err
 	}
+	if op.RequestID == "" {
+		cmd.Printf("Started operator on %s (working dir %s, already enrolled)\n", s.host, absDir)
+		return op, nil
+	}
 	cmd.Printf("Started and approved operator on %s (working dir %s, enrollment request %s)\n", s.host, absDir, op.RequestID)
 	return op, nil
 }
 
 // enrollOperator starts the worker in dir and approves the enrollment request
 // it submits, restarting the worker up to operatorDeployEnrollAttempts times.
+// The returned request ID is empty when the worker was already enrolled.
 func enrollOperator(ctx context.Context, s deploySSH, opts operatorDeployOptions, dir string) (string, error) {
 	var lastErr error
 	for attempt := 1; attempt <= operatorDeployEnrollAttempts; attempt++ {
@@ -294,7 +299,7 @@ func startAndApprove(ctx context.Context, s deploySSH, opts operatorDeployOption
 		return "", err
 	}
 	requestID, err := s.awaitRequestID(ctx, dir)
-	if err != nil {
+	if err != nil || requestID == "" {
 		return "", err
 	}
 	_, err = authcmd.PostPlatformEnrollmentDecision(opts.client, models.PlatformEnrollmentDecisionRequest{
@@ -431,7 +436,9 @@ func (s deploySSH) readStartLog(ctx context.Context, dir string) ([]byte, error)
 }
 
 // awaitRequestID returns the enrollment request ID the worker in dir printed,
-// or the worker's enrollment failure.
+// or the worker's enrollment failure. A worker that already holds issued
+// credentials submits no request and goes straight to its session; that
+// returns an empty request ID.
 func (s deploySSH) awaitRequestID(ctx context.Context, dir string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, operatorDeployEnrollTimeout)
 	defer cancel()
@@ -449,7 +456,7 @@ func (s deploySSH) awaitRequestID(ctx context.Context, dir string) (string, erro
 		if m := operatorDeployEnrollFailedPattern.Find(log); m != nil {
 			return false, fmt.Errorf("%w: %s", constants.ErrOperatorDeployFailed, m)
 		}
-		return false, nil
+		return operatorDeploySessionIDPattern.Match(log), nil
 	})
 	if err != nil {
 		return "", fmt.Errorf("await enrollment request in %s: %w", dir, err)
