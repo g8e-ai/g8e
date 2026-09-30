@@ -15,7 +15,7 @@ This document describes the outbound Operator. The Gateway also has an embedded 
 
 ## Runtime and trust boundaries
 
-A remote Operator is sovereign only for the runtime visible to its process. Its filesystem, process table, services, network, and container runtime are those of that runtime; an Operator container is not automatically the Docker host. In the root Compose deployment, `g8e-gateway` and `g8e-operator` are separate containers with separate process and network namespaces and separate named volumes. Neither receives host-root, host-PID, host-network, or Docker-socket access by default. The Gateway's embedded Operator targets the Gateway container in that deployment; the outbound Operator targets the Operator container.
+A remote Operator is sovereign only for the runtime visible to its process. Its filesystem, process table, services, network, and container runtime are those of that runtime; an Operator container is not automatically the Docker host. In the root Compose deployment, `g8e-gateway` and `g8e-data-operator` are separate containers with separate process and network namespaces and separate named volumes. Neither receives host-root, host-PID, host-network, or Docker-socket access by default. The Gateway's embedded Operator targets the Gateway container in that deployment; the outbound Operator targets the Operator container.
 
 The Operator opens the connection to the Gateway and exposes no inbound MCP, A2A, or command listener. The Gateway publishes commands to a channel bound to the Operator ID and Operator session ID. The Operator publishes heartbeats, command results, and signed receipt projections back to Gateway-owned channels. SSE is delivery telemetry, not authorization or durable governance state.
 
@@ -96,7 +96,7 @@ Each operator's responsibilities and execution boundaries are strictly gated by 
 | **Observer Operator** | `--provider-boundary-observer-enabled`, `--provider-boundary-observer-id` | Read-only hardware, temperature, power, and residency observation on approved host | Read-only witness. Arbitrary command execution is hard-rejected by `ValidateWitnessCommand`. |
 | **Data Operator** | Default (or `--data-operator-enabled`) | Governed tool execution, command execution, local filesystem triage, and execution vault | Primary PEP for tool execution. Discovered by Gateway session service for tool and workflow dispatch. |
 
-The Gateway's `OperatorDocument` stores `operator_role`, `local_dir`, `account`, and `port` alongside `system_fingerprint`. Session resolution helpers (`IsGovernedDataOperator`, `SelectInferenceOperatorForHardware`, `SelectCampaignDataOperatorForHardware`, `SelectProviderBoundaryObserverForHardware`) verify that callers cannot dispatch general commands to witness operators or confuse distinct operators sharing the same machine.
+The Gateway's `OperatorDocument` stores `operator_role`, `local_dir`, `account`, and `port` alongside `system_fingerprint`. Session resolution helpers (`IsDataOperator`, `SelectDataOperator`, `SelectInferenceOperatorForHardware`, `SelectProviderBoundaryObserverForHardware`) verify that callers cannot dispatch general commands to witness operators or confuse distinct operators sharing the same machine. The unified Docker stack runs its Data Operator with the container hostname `data-operator` (`constants.DataOperatorHostname`), and `SelectDataOperator` resolves that one session; other enrolled data Operators are not considered.
 
 ## Command and receipt channels
 
@@ -156,7 +156,7 @@ The Operator's `.g8e/` runtime tree contains local PKI material and enrollment s
 
 The reference binary registers 32 native tools in the MCP service. The catalog includes database triage, log digestion, process and resource inspection, network and TLS checks, system introspection, file operations, cloud and Kubernetes inspection, Git operations, shell execution, Operator deployment, and governed audit-receipt queries. The native catalog is compiled into the binary and is not evidence that an arbitrary external MCP server is governed.
 
-Native tools are dispatched only after the request has crossed a governed Gateway ingress or arrived as a complete envelope and passed the applicable verification path. An external MCP wrapper that forwards requests directly to another MCP server is a separate integration path and does not gain L2-L5 governance or signed Operator receipts merely by running alongside g8e. Client-native tools, direct filesystem access, unrestricted network access, and other side channels remain outside this boundary. See [AI Agents and the g8e Governance Boundary](./agents.md).
+Native tools are dispatched only after the request has crossed a governed Gateway ingress or arrived as a complete envelope and passed the applicable verification path. A third-party MCP server is governed only when it is configured as Gateway downstream egress, so its tool calls traverse the full pipeline and produce signed receipts; a server that a client talks to directly gains none of that merely by running alongside g8e. Client-native tools, direct filesystem access, unrestricted network access, and other side channels remain outside this boundary. See [AI Agents and the g8e Governance Boundary](./agents.md).
 
 ## Evidence and limitations
 

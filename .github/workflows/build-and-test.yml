@@ -157,10 +157,9 @@ jobs:
         run: python -m pytest tests/ -v
 
       - name: Run examples (smoke test)
-        working-directory: protocol/python
         run: |
-          python examples/constants_example.py
-          python examples/models_example.py
+          python examples/python/constants_example.py
+          python examples/python/models_example.py
 
   python-audit:
     name: Python Dependency Audit

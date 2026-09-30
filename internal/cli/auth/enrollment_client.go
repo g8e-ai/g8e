@@ -350,14 +350,21 @@ func (c *EnrollmentClient) Refresh(ctx context.Context, fileSvc fs.RuntimeFileSe
 	}, nil
 }
 
-// Bind pins the authenticated CLI session to the requested operator session
-// (POST /api/v1/auth/cli/bind over the public HTTPS surface). The caller's
-// existing CLI cert is used to build the mTLS client; the gateway derives
-// the user from the authenticated certificate context. When the binding
-// changes, a replacement CLI session is issued with a fresh TTL.
-func (c *EnrollmentClient) Bind(ctx context.Context, fileSvc fs.RuntimeFileService, operatorSessionID string) (CLISessionBind, error) {
-	if operatorSessionID == "" {
+// Bind pins the authenticated CLI session to the requested operator sessions
+// in a single request (POST /api/v1/auth/cli/bind over the public HTTPS
+// surface). The first ID is the primary binding. The caller's existing CLI
+// cert is used to build the mTLS client; the gateway derives the user from
+// the authenticated certificate context and validates every target before
+// changing the binding. When the binding changes, a replacement CLI session
+// is issued with a fresh TTL.
+func (c *EnrollmentClient) Bind(ctx context.Context, fileSvc fs.RuntimeFileService, operatorSessionIDs []string) (CLISessionBind, error) {
+	if len(operatorSessionIDs) == 0 {
 		return CLISessionBind{}, constants.ErrGatewayOperatorSessionIDRequired
+	}
+	for _, id := range operatorSessionIDs {
+		if id == "" {
+			return CLISessionBind{}, constants.ErrGatewayOperatorSessionIDRequired
+		}
 	}
 
 	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
@@ -376,7 +383,7 @@ func (c *EnrollmentClient) Bind(ctx context.Context, fileSvc fs.RuntimeFileServi
 
 	var resp models.CLIBindResponse
 	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIBind, models.CLIBindRequest{
-		OperatorSessionID: operatorSessionID,
+		OperatorSessionIDs: operatorSessionIDs,
 	}, &resp, headers); err != nil {
 		return CLISessionBind{}, err
 	}
@@ -386,22 +393,29 @@ func (c *EnrollmentClient) Bind(ctx context.Context, fileSvc fs.RuntimeFileServi
 	if resp.CLISessionID == "" || resp.UserID == "" || resp.OperatorSessionID == "" || resp.OperatorID == "" {
 		return CLISessionBind{}, constants.ErrMissingRequiredField
 	}
+	if len(resp.Bound) != len(operatorSessionIDs) {
+		return CLISessionBind{}, fmt.Errorf("%w: gateway bound %d of %d operator sessions", constants.ErrCLIRefreshFailed, len(resp.Bound), len(operatorSessionIDs))
+	}
 	return CLISessionBind{
 		CLISessionID:      resp.CLISessionID,
 		UserID:            resp.UserID,
 		OperatorSessionID: resp.OperatorSessionID,
 		OperatorID:        resp.OperatorID,
 		AlreadyBound:      resp.AlreadyBound,
+		Bound:             resp.Bound,
 	}, nil
 }
 
-// CLISessionBind is the result of a successful CLI operator bind.
+// CLISessionBind is the result of a successful CLI operator bind. The primary
+// binding is OperatorSessionID/OperatorID; Bound lists every bound operator,
+// primary first.
 type CLISessionBind struct {
 	CLISessionID      string
 	UserID            string
 	OperatorSessionID string
 	OperatorID        string
 	AlreadyBound      bool
+	Bound             []models.CLIBoundOperator
 }
 
 // Unbind clears the authenticated CLI session's operator binding
@@ -490,6 +504,8 @@ func (c *EnrollmentClient) SessionInfo(ctx context.Context, fileSvc fs.RuntimeFi
 		UserID:            info.UserID,
 		OperatorSessionID: info.OperatorSessionID,
 		OperatorID:        info.OperatorID,
+
+		BoundOperatorSessionIDs: info.BoundOperatorSessionIDs,
 	}, nil
 }
 
@@ -502,10 +518,11 @@ type CLISessionUnbind struct {
 
 // CLISessionInfo is the authoritative CLI session identity binding.
 type CLISessionInfo struct {
-	CLISessionID      string
-	UserID            string
-	OperatorSessionID string
-	OperatorID        string
+	CLISessionID            string
+	UserID                  string
+	OperatorSessionID       string
+	OperatorID              string
+	BoundOperatorSessionIDs []string
 }
 
 // CLISessionRefresh is the result of a successful CLI session refresh.

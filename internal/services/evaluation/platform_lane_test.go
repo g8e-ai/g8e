@@ -33,7 +33,6 @@ import (
 
 type laneTestClient struct {
 	health           *models.HealthResponse
-	operator         *models.OperatorDocumentGo
 	discovered       *models.OperatorDocumentGo
 	dispatchStatus   int
 	dispatchResponse *client.DispatchCommandResponse
@@ -53,10 +52,6 @@ type laneTestClient struct {
 
 func (c *laneTestClient) Health(context.Context) (*models.HealthResponse, []byte, error) {
 	return c.health, nil, nil
-}
-
-func (c *laneTestClient) OperatorBySession(context.Context, string) (*models.OperatorDocumentGo, []byte, error) {
-	return c.operator, nil, nil
 }
 
 func (c *laneTestClient) DiscoverRemoteOperator(context.Context) (*models.OperatorDocumentGo, []byte, error) {
@@ -152,20 +147,18 @@ func TestCommandLane_ResolveTargetAndPostureFailClosed(t *testing.T) {
 	activeRemote := &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeRemote}
 	tests := []struct {
 		name       string
-		pinned     string
 		client     *laneTestClient
 		wantTarget Target
 		wantErr    error
 	}{
-		{name: "pinned active remote operator", pinned: "session-1", client: &laneTestClient{operator: activeRemote}, wantTarget: Target{OperatorID: "operator-1", SessionID: "session-1"}},
 		{name: "discovered active remote operator", client: &laneTestClient{discovered: activeRemote}, wantTarget: Target{OperatorID: "operator-1", SessionID: "session-1"}},
-		{name: "pinned embedded operator rejected", pinned: "session-1", client: &laneTestClient{operator: &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}}, wantErr: constants.ErrEvaluationTargetUnavailable},
-		{name: "pinned inactive operator rejected", pinned: "session-1", client: &laneTestClient{operator: &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote}}, wantErr: constants.ErrEvaluationTargetUnavailable},
+		{name: "discovered embedded operator rejected", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusActive, OperatorType: constants.OperatorTypeEmbedded}}, wantErr: constants.ErrEvaluationTargetUnavailable},
+		{name: "discovered inactive operator rejected", client: &laneTestClient{discovered: &models.OperatorDocumentGo{ID: "operator-1", OperatorSessionID: "session-1", Status: constants.OperatorStatusOffline, OperatorType: constants.OperatorTypeRemote}}, wantErr: constants.ErrEvaluationTargetUnavailable},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lane := NewCommandLane(test.client, &laneTestArtifactSink{}, client.Persona{}, time.Millisecond, time.Second)
-			target, err := lane.ResolveTarget(context.Background(), test.pinned)
+			target, err := lane.ResolveTarget(context.Background())
 			if test.wantErr != nil {
 				require.ErrorIs(t, err, test.wantErr)
 				return

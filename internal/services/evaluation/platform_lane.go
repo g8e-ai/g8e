@@ -29,7 +29,6 @@ import (
 
 type laneClient interface {
 	Health(context.Context) (*models.HealthResponse, []byte, error)
-	OperatorBySession(context.Context, string) (*models.OperatorDocumentGo, []byte, error)
 	DiscoverRemoteOperator(context.Context) (*models.OperatorDocumentGo, []byte, error)
 	DispatchCommand(context.Context, client.Persona, client.DispatchCommandRequest) (int, *client.DispatchCommandResponse, []byte, error)
 	GetActionReceipt(context.Context, string, ...client.Persona) (*operatorv1.ActionReceipt, []byte, error)
@@ -61,17 +60,12 @@ func NewCommandLane(laneClient laneClient, sink ArtifactSink, persona client.Per
 	return &CommandLane{client: laneClient, sink: sink, persona: persona, pollInterval: pollInterval, pollTimeout: pollTimeout}
 }
 
-func (l *CommandLane) ResolveTarget(ctx context.Context, pinnedSessionID string) (Target, error) {
+// ResolveTarget resolves the stack's data-operator as the execution target.
+func (l *CommandLane) ResolveTarget(ctx context.Context) (Target, error) {
 	if l == nil || l.client == nil {
 		return Target{}, fmt.Errorf("%w: evaluation lane client is required", constants.ErrEvaluationTargetUnavailable)
 	}
-	var operator *models.OperatorDocumentGo
-	var err error
-	if pinnedSessionID == "" {
-		operator, _, err = l.client.DiscoverRemoteOperator(ctx)
-	} else {
-		operator, _, err = l.client.OperatorBySession(ctx, pinnedSessionID)
-	}
+	operator, _, err := l.client.DiscoverRemoteOperator(ctx)
 	if err != nil {
 		return Target{}, err
 	}

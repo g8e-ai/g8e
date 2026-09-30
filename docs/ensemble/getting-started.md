@@ -54,7 +54,7 @@ None specific to this guide. Refer to [PKI and Trust](pki.md) for workload enrol
 
 | Surface | Location | Verify |
 | --- | --- | --- |
-| Ensemble Docker configuration | `docker-compose.yml` services.ensemble | Port mapping, environment variables, volume mounts |
+| Ensemble Docker configuration | `docker-compose.yml` services.ensemble | Port mapping, launch arguments, volume mounts |
 | Ensemble startup | `ensemble/app/main.py` lifespan context manager | Bootstrap phases, service initialization order |
 | Health endpoints | `ensemble/app/routers/health_router.py` | GET `/health`, `/health/live`, `/health/details` response schemas |
 | Docker build | `ensemble/Dockerfile` | Multi-stage build, Python 3.12, runtime command |
@@ -68,7 +68,7 @@ None specific to this guide. Refer to [PKI and Trust](pki.md) for workload enrol
 
 - Docker Engine with the Docker Compose v2 plugin.
 - The repository-root `g8e` binary. Build it with `make build` if not present.
-- Host ports `8080`, `8443`, `8000`, and `3000` available (or override via environment variables).
+- Host ports `8080`, `8443`, `8000`, and `3000` available (or remap them with a checked-in `docker-compose.override.yml`).
 - A repository-root `.env`, copied from `.env.example`, with `G8E_OLLAMA_ENDPOINT` set to the approved remote Ollama endpoint. Compose evaluates this required variable even when the evaluation profile is not selected.
 - A browser with WebAuthn support for interactive owner enrollment, or a terminal for headless enrollment.
 
@@ -113,7 +113,7 @@ Responses:
 - `/health/live` returns `{"status":"alive","service":"g8ee"}`. No authentication required.
 - `/health/details` returns `{"status":"ok","service":"g8ee","timestamp":"<iso-datetime>","clients":{...}}`. No authentication required. The `clients` object reports `cache_aside_service`, `operator_kv`, `internal_http_client`, `operator_command_service`, and `chat_pipeline` status.
 
-The ensemble API listens on port 8000 inside the container. Override the published host port by setting `G8E_ENSEMBLE_PORT` before starting Compose (default: `8000`). The variable changes only the host-side port binding; the container always listens on `8000`. For manual profile commands, non-default ports, logs, workload revocation, and recovery, see [Unified Docker Stack](../guides/unified_stack.md).
+The ensemble API listens on port 8000 inside the container. The published host port is the literal `8000:8000` in `docker-compose.yml`; change it with a checked-in `docker-compose.override.yml`. The override changes only the host-side port binding; the container always listens on `8000`. For manual profile commands, non-default ports, logs, workload revocation, and recovery, see [Unified Docker Stack](../guides/unified_stack.md).
 
 #### Recovery
 
@@ -159,30 +159,24 @@ make proto
 
 #### Configuration
 
-Configure `.env` with the endpoints visible from the local process:
+Platform configuration is passed as launch arguments, not environment variables (INV-ENV-04). The defaults target a local Gateway (`http://localhost:8080`, `https://localhost:8443`), so a local run needs no arguments. To point at a Gateway elsewhere, pass the arguments to `python -m app.serve`:
 
-```dotenv
-G8E_GATEWAY_URL=https://localhost:8443
-G8E_GATEWAY_HTTPS_URL=https://localhost:8443
-G8E_GATEWAY_PUBSUB_URL=wss://localhost:8443
-```
+- `--gateway-http-url`: Plain-HTTP enrollment and discovery surface. Defaults to `http://localhost:8080`.
+- `--gateway-https-url` and `--gateway-pubsub-url`: Gateway-hosted HTTPS and WebSocket services used by ensemble transport clients.
+- `--gateway-url`: HTTPS base URL used by the internal HTTP client for Gateway event and operator-link operations.
+- `--runtime-dir`, `--pki-dir`, `--secrets-dir`, `--ca-cert-path`: Runtime, PKI, bootstrap-secrets, and trust-bundle locations. Default to `.g8e` in the project root and its `pki` and `secrets` subdirectories.
 
-Variable semantics:
-- `G8E_GATEWAY_HTTP_URL`: Optional override for the plain-HTTP enrollment and discovery surface. Defaults to `http://localhost:8080`.
-- `G8E_GATEWAY_HTTPS_URL` and `G8E_GATEWAY_PUBSUB_URL`: Gateway-hosted HTTPS and WebSocket services used by ensemble transport clients.
-- `G8E_GATEWAY_URL`: HTTPS base URL used by the internal HTTP client for Gateway event and operator-link operations.
-
-The process loads `.env` without replacing variables already present in the environment. The enrollment service obtains the Gateway CA bundle during enrollment and stores the app identity in the configured runtime tree. Do not put private keys, API keys, or copied operator credentials in documentation or source control. Governed application-record writes use the enrolled app certificate for transport and the configured Operator session binding as delegated authority; the Gateway validates both identities and applies the active posture. An application approval or mTLS fingerprint is not a substitute for required protocol L2 or L3 evidence.
+`.env` holds only secrets and user-specific endpoints (LLM API keys and endpoints); it is loaded without replacing variables already present in the environment. Provider and model selection are Gateway-backed platform settings. The enrollment service obtains the Gateway CA bundle during enrollment and stores the app identity in the configured runtime tree. Do not put private keys, API keys, or copied operator credentials in documentation or source control. Governed application-record writes use the enrolled app certificate for transport and the configured Operator session binding as delegated authority; the Gateway validates both identities and applies the active posture. An application approval or mTLS fingerprint is not a substitute for required protocol L2 or L3 evidence.
 
 #### Startup
 
 Run the development server:
 
 ```bash
-python -m app.main
+python -m app.serve
 ```
 
-This runs Uvicorn without TLS on `0.0.0.0:8443` with reload enabled. The default dev port matches the protocol HTTPS port constant, but serves plain HTTP. Do not run the local ensemble on the same host port as a Gateway TLS listener.
+This is the same launcher the container uses: it installs the bootstrap settings from its arguments, then starts Uvicorn without TLS on `0.0.0.0:8000` (`--host` and `--port` override). `python -m app.main` remains the reload-enabled developer entry point; it runs Uvicorn without TLS on `0.0.0.0:8443`, matching the protocol HTTPS port constant but serving plain HTTP, and it takes no arguments. Do not run the local ensemble on the same host port as a Gateway TLS listener.
 
 Verify it from another terminal:
 

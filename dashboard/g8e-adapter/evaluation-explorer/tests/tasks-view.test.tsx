@@ -19,7 +19,7 @@ function renderTasks(initialPath = '/tasks') {
 }
 
 describe('TasksView', () => {
-  it('lists all 25 tasks grouped by category on the overview', () => {
+  it('lists all 26 tasks grouped by category on the overview', () => {
     renderTasks();
 
     expect(screen.getByRole('heading', { name: 'Task catalog' })).toBeInTheDocument();

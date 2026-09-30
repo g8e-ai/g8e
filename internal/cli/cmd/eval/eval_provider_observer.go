@@ -44,8 +44,9 @@ type providerObserverVerifyJSON struct {
 
 func observerEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "observer",
-		Short: "Provider-boundary hardware observer",
+		Use:     "observer",
+		Aliases: []string{"observers"},
+		Short:   "Provider-boundary hardware observer",
 	}
 	cmd.AddCommand(
 		jsonLeaf(observerRunCmd(deps)),

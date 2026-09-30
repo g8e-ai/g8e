@@ -28,8 +28,7 @@ class TestChatPipelineJevRoleValidation:
         settings = G8eeUserSettings(
             llm=LLMSettings(
                 primary_provider=LLMProvider.JEV,
-                primary_model="jev-latest",
-                jev_api_key="ts_test_key",
+                primary_model="nimble",
             )
         )
 
@@ -42,8 +41,7 @@ class TestChatPipelineJevRoleValidation:
                 primary_provider=LLMProvider.OLLAMA,
                 primary_model="qwen3:0.6b",
                 assistant_provider=LLMProvider.JEV,
-                assistant_model="jev-latest",
-                jev_api_key="ts_test_key",
+                assistant_model="nimble",
             )
         )
 
@@ -58,8 +56,7 @@ class TestChatPipelineJevLiteCoexistence:
                 primary_provider=LLMProvider.OLLAMA,
                 primary_model="qwen3:0.6b",
                 lite_provider=LLMProvider.JEV,
-                lite_model="jev-latest",
-                jev_api_key="ts_test_key",
+                lite_model="nimble",
                 llm_command_gen_enabled=True,
             )
         )
@@ -73,8 +70,7 @@ class TestChatPipelineJevLiteCoexistence:
                 primary_provider=LLMProvider.OLLAMA,
                 primary_model="qwen3:0.6b",
                 lite_provider=LLMProvider.JEV,
-                lite_model="jev-latest",
-                jev_api_key="ts_test_key",
+                lite_model="nimble",
                 llm_command_gen_enabled=False,
             )
         )

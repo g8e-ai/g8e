@@ -70,6 +70,7 @@ func (c *CLISessionController) handleSessionInfo(w http.ResponseWriter, r *http.
 
 	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
 	operatorID, _ := r.Context().Value(constants.ContextKeyOperatorID).(string)
+	boundSessionIDs, _ := r.Context().Value(constants.ContextKeyBoundOperatorSessionIDs).([]string)
 
 	c.responder.JSON(w, http.StatusOK, models.CLISessionInfoResponse{
 		Success:           true,
@@ -77,5 +78,7 @@ func (c *CLISessionController) handleSessionInfo(w http.ResponseWriter, r *http.
 		UserID:            userID,
 		OperatorSessionID: operatorSessionID,
 		OperatorID:        operatorID,
+
+		BoundOperatorSessionIDs: boundSessionIDs,
 	})
 }

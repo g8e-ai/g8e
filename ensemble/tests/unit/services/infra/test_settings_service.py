@@ -285,19 +285,31 @@ class TestLLMEnvVarBootstrapDefaults:
         return SettingsService(bootstrap_service=bootstrap)
 
     def test_env_vars_populate_local_settings(self, monkeypatch):
-        """Env vars set primary provider, model, endpoint, and api_key on local settings."""
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_PROVIDER, "ollama")
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_MODEL, "gemma4:12b")
+        """Env vars set the primary endpoint and api_key (user endpoint + secret) on local settings."""
         monkeypatch.setenv(EnvVar.LLM_PRIMARY_ENDPOINT, "http://192.168.1.2:11434")
         monkeypatch.setenv(EnvVar.LLM_PRIMARY_API_KEY, "env-key")
 
         service = self._make_service()
         settings = service.get_local_settings()
 
-        assert settings.llm.primary_provider == LLMProvider.OLLAMA
-        assert settings.llm.primary_model == "gemma4:12b"
         assert settings.llm.primary_endpoint == "http://192.168.1.2:11434"
         assert settings.llm.primary_api_key == "env-key"
+
+    def test_provider_and_model_env_vars_are_ignored(self, monkeypatch):
+        """Provider and model selection is platform configuration, never read from the environment."""
+        for role in ("PRIMARY", "ASSISTANT", "LITE"):
+            monkeypatch.setenv(f"G8E_LLM_{role}_PROVIDER", "ollama")
+            monkeypatch.setenv(f"G8E_LLM_{role}_MODEL", "gemma4:12b")
+
+        service = self._make_service()
+        settings = service.get_local_settings()
+
+        assert settings.llm.primary_provider is None
+        assert settings.llm.primary_model is None
+        assert settings.llm.assistant_provider is None
+        assert settings.llm.assistant_model is None
+        assert settings.llm.lite_provider is None
+        assert settings.llm.lite_model is None
 
     def test_no_env_vars_leaves_defaults(self):
         """With no LLM env vars set, local settings retain model defaults (None)."""
@@ -322,19 +334,20 @@ class TestLLMEnvVarBootstrapDefaults:
 
     def test_platform_db_overrides_env_defaults(self, monkeypatch):
         """Platform DB values take precedence over env-var defaults (priority order)."""
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_PROVIDER, "ollama")
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_MODEL, "gemma4:12b")
+        monkeypatch.setenv(EnvVar.LLM_OPENAI_API_KEY, "env-openai-key")
+        monkeypatch.setenv(EnvVar.LLM_OLLAMA_ENDPOINT, "http://192.168.1.2:11434")
 
         service = self._make_service()
         local = service.get_local_settings()
-        assert local.llm.primary_provider == LLMProvider.OLLAMA
+        assert local.llm.openai_api_key == "env-openai-key"
 
-        # Platform DB carries a different provider and model.
+        # Platform DB carries a different provider, model, key, and endpoint.
         platform = G8eeAppSettings(
             llm=LLMSettings(
                 primary_provider=LLMProvider.OPENAI,
                 primary_model="gpt-4o",
                 openai_api_key="platform-key",
+                ollama_endpoint="http://10.0.0.9:11434",
             )
         )
 
@@ -343,34 +356,33 @@ class TestLLMEnvVarBootstrapDefaults:
         assert merged.llm.primary_provider == LLMProvider.OPENAI
         assert merged.llm.primary_model == "gpt-4o"
         assert merged.llm.openai_api_key == "platform-key"
+        assert merged.llm.ollama_endpoint == "http://10.0.0.9:11434"
 
     def test_env_defaults_preserved_when_platform_db_empty(self, monkeypatch):
         """Env-var defaults are preserved when the platform DB has no value for a field."""
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_PROVIDER, "ollama")
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_MODEL, "gemma4:12b")
+        monkeypatch.setenv(EnvVar.LLM_OPENAI_API_KEY, "env-openai-key")
         monkeypatch.setenv(EnvVar.LLM_OLLAMA_ENDPOINT, "http://192.168.1.2:11434")
 
         service = self._make_service()
         local = service.get_local_settings()
-        assert local.llm.primary_provider == LLMProvider.OLLAMA
+        assert local.llm.openai_api_key == "env-openai-key"
 
         # Platform DB has no LLM values (all None).
         platform = G8eeAppSettings()
 
         merged = service.overlay_platform_data(local, platform)
 
-        assert merged.llm.primary_provider == LLMProvider.OLLAMA
-        assert merged.llm.primary_model == "gemma4:12b"
+        assert merged.llm.openai_api_key == "env-openai-key"
         assert merged.llm.ollama_endpoint == "http://192.168.1.2:11434"
 
     def test_platform_db_fills_gaps_not_in_env(self, monkeypatch):
         """Platform DB fills fields that env vars did not set (merge semantics)."""
-        monkeypatch.setenv(EnvVar.LLM_PRIMARY_PROVIDER, "ollama")
-        # No model or api_key in env.
+        monkeypatch.setenv(EnvVar.LLM_OPENAI_API_KEY, "env-openai-key")
+        # No model or ollama api_key in env.
 
         service = self._make_service()
         local = service.get_local_settings()
-        assert local.llm.primary_provider == LLMProvider.OLLAMA
+        assert local.llm.openai_api_key == "env-openai-key"
         assert local.llm.primary_model is None
 
         platform = G8eeAppSettings(
@@ -382,7 +394,7 @@ class TestLLMEnvVarBootstrapDefaults:
 
         merged = service.overlay_platform_data(local, platform)
 
-        # Env provider wins (local set), platform model fills the gap.
-        assert merged.llm.primary_provider == LLMProvider.OLLAMA
+        # Env key wins (local set), platform model and ollama key fill the gaps.
+        assert merged.llm.openai_api_key == "env-openai-key"
         assert merged.llm.primary_model == "gemma4:12b"
         assert merged.llm.ollama_api_key == "platform-ollama-key"

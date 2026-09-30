@@ -62,7 +62,7 @@ Every governed operation reaches the L4 Warden and L5 Actuator boundary. The act
 4. **L4 Warden** reserves the nonce, checks expiry and replay state, recomputes the transaction hash, validates the state root and payload, reruns Doctrine, and verifies posture-required L2 and L3 evidence before dispatch.
 5. **L5 Actuator** persists signed pre-execution evidence, appends a commitment when the SQL commitment ledger is available, rehydrates explicitly registered protected values at the execution site, mints a transaction-bound capability, dispatches the handler, dissolves the capability, and persists the signed final outcome.
 
-A remote Operator performs L4 and L5 on the managed host. Gateway MCP and A2A calls use the Gateway's in-process Operator substrate unless routed to a configured downstream service. The exact guarantees differ for direct envelopes, Operator command relay, Gateway MCP and A2A ingress, and the external MCP wrapper; [AI Agents and the g8e Governance Boundary](../architecture/agents.md) defines those limits.
+A remote Operator performs L4 and L5 on the managed host. Gateway MCP and A2A calls use the Gateway's in-process Operator substrate unless routed to a configured downstream service. The exact guarantees differ for direct envelopes, Operator command relay, and Gateway MCP and A2A ingress; [AI Agents and the g8e Governance Boundary](../architecture/agents.md) defines those limits.
 
 ## Sovereignty and Accountability
 

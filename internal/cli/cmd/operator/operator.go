@@ -98,7 +98,7 @@ func operatorModelCmd() *cobra.Command {
 }
 
 func operatorOllamaEndpoint() (string, error) {
-	endpoint := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+	endpoint := strings.TrimSpace(os.Getenv(string(constants.EnvVar.OllamaHost)))
 	if endpoint == "" {
 		return "", fmt.Errorf("operator: model maintenance: %w", constants.ErrInferenceEndpointInvalid)
 	}
@@ -407,10 +407,10 @@ func operatorStartCmd() *cobra.Command {
 	// Inference Node calling the configured remote Ollama provider.
 	cmd.Flags().BoolVar(&inferenceEnabled, "inference-enabled", false, "Enable governed LLM inference backend (g8ellama)")
 	cmd.Flags().StringVar(&inferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Remote Ollama provider endpoint (default: http://127.0.0.1:11434)")
-	cmd.Flags().StringVar(&inferencePrimaryModel, "inference-primary-model", "", "Ollama model name for the Primary chat tier")
-	cmd.Flags().StringVar(&inferenceAssistantModel, "inference-assistant-model", "", "Ollama model name for the Assistant chat tier")
-	cmd.Flags().StringVar(&inferenceLiteModel, "inference-lite-model", "", "Ollama model name for the Lite chat tier")
-	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration (default: -1 for infinite)")
+	cmd.Flags().StringVar(&inferencePrimaryModel, "inference-primary-model", "", fmt.Sprintf("Ollama model name for the Primary chat tier (default: %s)", constants.InferenceDefaultPrimaryModel))
+	cmd.Flags().StringVar(&inferenceAssistantModel, "inference-assistant-model", "", fmt.Sprintf("Ollama model name for the Assistant chat tier (default: %s)", constants.InferenceDefaultAssistantModel))
+	cmd.Flags().StringVar(&inferenceLiteModel, "inference-lite-model", "", fmt.Sprintf("Ollama model name for the Lite chat tier (default: %s)", constants.InferenceDefaultLiteModel))
+	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", fmt.Sprintf("Ollama keep-alive duration (default: %s for infinite)", constants.InferenceDefaultKeepAlive))
 	cmd.Flags().StringVar(&inferenceCampaignID, "inference-campaign-id", "", "Frozen evaluation campaign authorized by this inference operator")
 	cmd.Flags().StringVar(&inferenceModelRegistryDigest, "inference-model-registry-digest", "", "SHA-256 digest of the frozen campaign model registry")
 	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")
@@ -633,142 +633,6 @@ func CopyFile(src, dst string) error {
 	}
 
 	return os.Chmod(dst, sourceInfo.Mode())
-}
-
-func operatorDeployCmd() *cobra.Command {
-	return operatorDeployCmdWithConfig(shared.LoadConfig, shared.NewFileSvc)
-}
-
-func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var hosts string
-	var port int
-	var identityFile string
-	var background bool
-
-	cmd := &cobra.Command{
-		Use:   "deploy",
-		Short: "Deploy the operator binary to remote hosts and start it",
-		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll user' first.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := configLoader("")
-			if err != nil {
-				return err
-			}
-
-			fileSvc, err := fileSvcFactory("", slog.Default())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-			}
-
-			creds, err := auth.LoadCredentials(fileSvc, cfg)
-			if err != nil || creds == nil {
-				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
-			}
-
-			if hosts == "" {
-				return fmt.Errorf("%w: --hosts flag is required (comma-separated list of hosts)", constants.ErrMissingRequiredField)
-			}
-
-			hostList := strings.Split(hosts, ",")
-			for i := range hostList {
-				hostList[i] = strings.TrimSpace(hostList[i])
-			}
-
-			sourceBinary, err := os.Executable()
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
-			}
-
-			if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
-				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, sourceBinary)
-			}
-
-			cmd.Printf("Deploying operator to %d hosts: %s\n", len(hostList), strings.Join(hostList, ", "))
-
-			httpPort := constants.Ports.OperatorHttp
-			httpsPort := constants.Ports.OperatorHttps
-
-			for _, host := range hostList {
-				cmd.Printf("\nDeploying to %s...\n", host)
-
-				remotePath := "~/g8e"
-				scpTarget := fmt.Sprintf("%s:%s", host, remotePath)
-
-				scpArgs := []string{}
-				if port != 0 {
-					scpArgs = append(scpArgs, "-P", fmt.Sprintf("%d", port))
-				}
-				if identityFile != "" {
-					scpArgs = append(scpArgs, "-i", identityFile)
-				}
-				scpArgs = append(scpArgs, sourceBinary, scpTarget)
-
-				scpCmd := exec.Command("scp", scpArgs...)
-				scpCmd.Stdout = cmd.OutOrStdout()
-				scpCmd.Stderr = cmd.ErrOrStderr()
-
-				if err := scpCmd.Run(); err != nil {
-					cmd.Printf("Failed to copy to %s: %v\n", host, err)
-					continue
-				}
-
-				cmd.Printf("Copied binary to %s\n", host)
-
-				sshArgs := []string{}
-				if port != 0 {
-					sshArgs = append(sshArgs, "-p", fmt.Sprintf("%d", port))
-				}
-				if identityFile != "" {
-					sshArgs = append(sshArgs, "-i", identityFile)
-				}
-				sshArgs = append(sshArgs, host, "chmod +x ~/g8e")
-
-				chmodCmd := exec.Command("ssh", sshArgs...)
-				chmodCmd.Stdout = cmd.OutOrStdout()
-				chmodCmd.Stderr = cmd.ErrOrStderr()
-
-				if err := chmodCmd.Run(); err != nil {
-					cmd.Printf("Failed to chmod on %s: %v\n", host, err)
-					continue
-				}
-
-				if background {
-					sshArgs = []string{}
-					if port != 0 {
-						sshArgs = append(sshArgs, "-p", fmt.Sprintf("%d", port))
-					}
-					if identityFile != "" {
-						sshArgs = append(sshArgs, "-i", identityFile)
-					}
-					startCommand := fmt.Sprintf("nohup ~/g8e gw start --http-port %d --https-port %d > /dev/null 2>&1 &", httpPort, httpsPort)
-					sshArgs = append(sshArgs, host, startCommand)
-
-					startCmd := exec.Command("ssh", sshArgs...)
-					startCmd.Stdout = cmd.OutOrStdout()
-					startCmd.Stderr = cmd.ErrOrStderr()
-
-					if err := startCmd.Run(); err != nil {
-						cmd.Printf("Failed to start operator on %s: %v\n", host, err)
-						continue
-					}
-
-					cmd.Printf("Started operator in background on %s\n", host)
-				} else {
-					cmd.Printf("Operator deployed to %s (use --background to auto-start)\n", host)
-				}
-			}
-
-			cmd.Println("\nDeployment complete")
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&hosts, "hosts", "", "Comma-separated list of hosts to deploy to (required)")
-	cmd.Flags().IntVarP(&port, "port", "P", 0, "SSH port to connect to on remote hosts")
-	cmd.Flags().StringVarP(&identityFile, "identity", "i", "", "SSH identity file (private key)")
-	cmd.Flags().BoolVar(&background, "background", false, "Start operator in background after deployment")
-
-	return cmd
 }
 
 func operatorStreamCmd() *cobra.Command {

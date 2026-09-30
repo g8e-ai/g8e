@@ -11,6 +11,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"time"
 
 	entitymanagerv1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1"
 	taskmanagerv1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1"
@@ -200,6 +201,9 @@ func (m *mockFileSvc) FileExists(ctx context.Context, relPath string) (bool, err
 func (m *mockFileSvc) Stat(ctx context.Context, relPath string) (os.FileInfo, error) { return nil, nil }
 func (m *mockFileSvc) Lstat(ctx context.Context, relPath string) (os.FileInfo, error) {
 	return nil, nil
+}
+func (m *mockFileSvc) ArchiveRuntime(ctx context.Context, now time.Time) (string, error) {
+	return "", nil
 }
 func (m *mockFileSvc) Remove(ctx context.Context, relPath string) error    { return nil }
 func (m *mockFileSvc) RemoveAll(ctx context.Context, relPath string) error { return nil }

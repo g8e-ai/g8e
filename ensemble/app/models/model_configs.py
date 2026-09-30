@@ -45,7 +45,7 @@ from app.constants import (
     GEMINI_3_1_PRO_CUSTOM_TOOLS,
     GEMINI_3_1_FLASH_LITE,
     GEMINI_3_FLASH,
-    JEV_LATEST,
+    OLLAMA_SYSTEM_ONE_NIMBLE,
     OLLAMA_DEFAULT_MODEL,
     OLLAMA_GEMMA4_E2B,
     OLLAMA_GEMMA4_E2B_G8EA,
@@ -409,8 +409,8 @@ OLLAMA_DEFAULT_CONFIG = LLModelConfig(
     max_output_tokens=8_192,
 )
 
-JEV_LATEST_CONFIG = LLModelConfig(
-    name=JEV_LATEST,
+SYSTEM_ONE_NIMBLE_CONFIG = LLModelConfig(
+    name=OLLAMA_SYSTEM_ONE_NIMBLE,
     supported_thinking_levels=[],
     supports_structured_output=True,
     supports_tools=False,
@@ -636,7 +636,7 @@ MODEL_REGISTRY = LLModelRegistry(
         GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG,
         GEMINI_3_1_FLASH_LITE_CONFIG,
         GEMINI_3_FLASH_CONFIG,
-        JEV_LATEST_CONFIG,
+        SYSTEM_ONE_NIMBLE_CONFIG,
     ]
 )
 

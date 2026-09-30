@@ -37,12 +37,14 @@ type stubOperatorBindClient struct {
 	called        bool
 	unbindCalled  bool
 	sessionCalled bool
-	arg           string
+	calls         int
+	args          []string
 }
 
-func (s *stubOperatorBindClient) Bind(_ context.Context, _ fs.RuntimeFileService, operatorSessionID string) (auth.CLISessionBind, error) {
+func (s *stubOperatorBindClient) Bind(_ context.Context, _ fs.RuntimeFileService, operatorSessionIDs []string) (auth.CLISessionBind, error) {
 	s.called = true
-	s.arg = operatorSessionID
+	s.calls++
+	s.args = operatorSessionIDs
 	return s.result, s.err
 }
 
@@ -76,6 +78,7 @@ func TestOperatorBindCmdWithConfig_Success(t *testing.T) {
 		UserID:            "user-001",
 		OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
 		OperatorID:        "op-data",
+		Bound:             []models.CLIBoundOperator{{OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d", OperatorID: "op-data"}},
 	}}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	cmd := operatorBindCmdWithConfig(
@@ -90,8 +93,8 @@ func TestOperatorBindCmdWithConfig_Success(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	assert.True(t, stub.called)
-	assert.Equal(t, "899b5d27-4599-4b5c-ac5a-beb86b256e7d", stub.arg)
-	assert.Contains(t, buf.String(), "CLI session bound to operator session")
+	assert.Equal(t, []string{"899b5d27-4599-4b5c-ac5a-beb86b256e7d"}, stub.args)
+	assert.Contains(t, buf.String(), "CLI session bound to 1 operator session(s)")
 
 	loaded, err := auth.LoadCredentials(fileSvc, cfg)
 	require.NoError(t, err)
@@ -99,6 +102,108 @@ func TestOperatorBindCmdWithConfig_Success(t *testing.T) {
 	assert.Equal(t, "cli-new", loaded.CLISessionID)
 	assert.Equal(t, "899b5d27-4599-4b5c-ac5a-beb86b256e7d", loaded.OperatorSessionID)
 	assert.Equal(t, "op-data", loaded.OperatorID)
+}
+
+func multiBindOperators() []models.OperatorDocumentGo {
+	return []models.OperatorDocumentGo{
+		{ID: "op-a", OperatorSessionID: "sess-a", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
+		{ID: "op-b", OperatorSessionID: "sess-b", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
+		{ID: "op-c", OperatorSessionID: "sess-c", OperatorType: constants.OperatorTypeRemote, Status: constants.OperatorStatusActive},
+	}
+}
+
+func TestOperatorBindCmdWithConfig_BindsAllOperatorsInOneCall(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: multiBindOperators()})
+	require.NoError(t, err)
+
+	stub := &stubOperatorBindClient{result: auth.CLISessionBind{
+		CLISessionID:      "cli-new",
+		UserID:            "user-001",
+		OperatorSessionID: "sess-a",
+		OperatorID:        "op-a",
+		Bound: []models.CLIBoundOperator{
+			{OperatorSessionID: "sess-a", OperatorID: "op-a"},
+			{OperatorSessionID: "sess-b", OperatorID: "op-b"},
+			{OperatorSessionID: "sess-c", OperatorID: "op-c"},
+		},
+	}}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	cmd := operatorBindCmdWithConfig(
+		loader, authcmd.MockClientFactory(&cmdtest.MockAPIClient{GetResp: listBody}),
+		func(*config.Config) operatorBindClient { return stub },
+		cmdtest.FileSvcFactoryFor(fileSvc),
+	)
+	cmd.SetArgs([]string{"sess-a", "sess-b", "sess-a", "sess-c", "--yes"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+	assert.Equal(t, 1, stub.calls, "all operators must be bound in a single bind call")
+	assert.Equal(t, []string{"sess-a", "sess-b", "sess-c"}, stub.args, "duplicates dropped, order preserved, first is primary")
+	assert.Contains(t, buf.String(), "CLI session bound to 3 operator session(s); primary sess-a")
+
+	loaded, err := auth.LoadCredentials(fileSvc, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, "cli-new", loaded.CLISessionID)
+	assert.Equal(t, "sess-a", loaded.OperatorSessionID)
+}
+
+func TestOperatorBindCmdWithConfig_UnknownOperatorBindsNothing(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: multiBindOperators()})
+	require.NoError(t, err)
+
+	stub := &stubOperatorBindClient{}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	cmd := operatorBindCmdWithConfig(
+		loader, authcmd.MockClientFactory(&cmdtest.MockAPIClient{GetResp: listBody}),
+		func(*config.Config) operatorBindClient { return stub },
+		cmdtest.FileSvcFactoryFor(fileSvc),
+	)
+	cmd.SetArgs([]string{"sess-a", "sess-missing", "--yes"})
+
+	err = cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no operator found with session id sess-missing")
+	assert.False(t, stub.called, "a bad target must not reach the bind call")
+}
+
+func TestOperatorBindCmdWithConfig_ListMultipleBound(t *testing.T) {
+	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	listBody, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: multiBindOperators()})
+	require.NoError(t, err)
+
+	stub := &stubOperatorBindClient{sessionInfo: auth.CLISessionInfo{
+		CLISessionID:            "cli-current",
+		UserID:                  "user-001",
+		OperatorSessionID:       "sess-a",
+		OperatorID:              "op-a",
+		BoundOperatorSessionIDs: []string{"sess-a", "sess-b", "sess-c"},
+	}}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	cmd := operatorBindCmdWithConfig(
+		loader, authcmd.MockClientFactory(&cmdtest.MockAPIClient{GetResp: listBody}),
+		func(*config.Config) operatorBindClient { return stub },
+		cmdtest.FileSvcFactoryFor(fileSvc),
+	)
+	cmd.SetArgs([]string{"list"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, buf.String(), "Bound operators (3)")
+	assert.Contains(t, buf.String(), "sess-b")
+	assert.Contains(t, buf.String(), "sess-c")
 }
 
 func TestOperatorBindCmdWithConfig_NotAuthenticated(t *testing.T) {

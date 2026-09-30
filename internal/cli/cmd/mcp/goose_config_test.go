@@ -38,7 +38,7 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	binaryPath, err := os.Executable()
 	require.NoError(t, err)
 
-	configPath, cleanup, err := WriteAgentConfig("goose", binaryPath)
+	configPath, cleanup, err := WriteAgentConfig("goose", binaryPath, "goose")
 	require.NoError(t, err)
 	if cleanup != nil {
 		defer cleanup()
@@ -65,7 +65,7 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	assert.Equal(t, "stdio", cfg.Extensions["g8e"].Config.Type)
 	assert.Equal(t, "g8e", cfg.Extensions["g8e"].Config.Name)
 	assert.Equal(t, binaryPath, cfg.Extensions["g8e"].Config.Cmd)
-	assert.Equal(t, []string{"mcp", "stdio"}, cfg.Extensions["g8e"].Config.Args)
+	assert.Equal(t, []string{"mcp", "stdio", "--app", "goose"}, cfg.Extensions["g8e"].Config.Args)
 
 	// Existing extension must be preserved (not wiped out)
 	assert.Contains(t, cfg.Extensions, "existing", "existing extension should be preserved")
@@ -82,7 +82,7 @@ func TestGooseGovernanceConfig(t *testing.T) {
 }
 
 func TestGooseLaunchArgs_NoProfile(t *testing.T) {
-	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json", "/fake/g8e")
+	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json", "/fake/g8e", "goose")
 	require.NoError(t, err)
 	assert.Contains(t, args, "session")
 	assert.Contains(t, args, "--no-profile")

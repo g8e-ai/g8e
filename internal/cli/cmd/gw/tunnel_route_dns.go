@@ -48,10 +48,10 @@ Set CLOUDFLARE_API_TOKEN or pass --api-token.`,
 			hostname := strings.TrimSpace(args[0])
 			token := strings.TrimSpace(apiToken)
 			if token == "" {
-				token = strings.TrimSpace(os.Getenv("CLOUDFLARE_API_TOKEN"))
+				token = strings.TrimSpace(os.Getenv(string(constants.EnvVar.CloudflareAPIToken)))
 			}
 			if token == "" {
-				token = strings.TrimSpace(os.Getenv("CF_API_TOKEN"))
+				token = strings.TrimSpace(os.Getenv(string(constants.EnvVar.CFAPIToken)))
 			}
 			if token == "" {
 				return fmt.Errorf("%w: set CLOUDFLARE_API_TOKEN or pass --api-token", constants.ErrMissingRequiredField)

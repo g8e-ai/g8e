@@ -96,7 +96,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 | ID | Rule |
 | --- | --- |
-| INV-ARCH-INGR-01 | Client-native tools, direct shell execution, external MCP wrappers, and side channels remain outside the governance boundary. Tools are governed ONLY when invoked through a g8e ingress (Gateway MCP, A2A, Governed HTTP dispatch, CLI `operator run`, or direct envelope) and executed via L5 Actuator. |
+| INV-ARCH-INGR-01 | Client-native tools, direct shell execution, MCP servers a client reaches directly, and side channels remain outside the governance boundary. Tools are governed ONLY when invoked through a g8e ingress (Gateway MCP, A2A, Governed HTTP dispatch, CLI `operator run`, or direct envelope) and executed via L5 Actuator. |
 | INV-ARCH-INGR-02 | Direct envelope submission (`POST /api/v1/governance/envelopes`) and governed HTTP dispatch (`POST /api/v1/operators/commands`) MUST NOT synthesize missing L2 votes or L3 proofs; transactions missing posture-required evidence MUST fail closed at L4 verification. |
 
 ### Identity and Trust Boundaries (`INV-ARCH-TRUST`)
@@ -138,7 +138,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 
 g8e is a zero-trust governance and execution platform designed for autonomous AI agents, human operators, and distributed target runtimes. Traditional AI agent frameworks rely on client-side sandboxes, unverified tool interfaces, or permissive external wrappers that execute raw commands without cryptographic accountability. g8e inserts a deterministic, cryptographic, five-layer governance interlock between agent intent and runtime execution.
 
-When a governed client submits intent, the platform translates it into or admits a canonical protobuf `GovernanceEnvelope`. The envelope traverses five governance layers before any mutation occurs. Universal checks (hash integrity, replay nonce reservation, expiration, state Merkle root, payload decode) and posture-required proofs fail closed throughout the pipeline: any missing proof or rule violation rejects the transaction. Client-native tools, external MCP wrappers, and direct host side channels remain outside this governance boundary. Each executing runtime maintains sovereign authority over its local execution evidence, while the Gateway coordinates platform-wide ingress, PKI, and deliberation.
+When a governed client submits intent, the platform translates it into or admits a canonical protobuf `GovernanceEnvelope`. The envelope traverses five governance layers before any mutation occurs. Universal checks (hash integrity, replay nonce reservation, expiration, state Merkle root, payload decode) and posture-required proofs fail closed throughout the pipeline: any missing proof or rule violation rejects the transaction. Client-native tools, MCP servers a client reaches directly, and direct host side channels remain outside this governance boundary. Each executing runtime maintains sovereign authority over its local execution evidence, while the Gateway coordinates platform-wide ingress, PKI, and deliberation.
 
 ### Core Binaries, Operating Modes, and First-Party Services
 
@@ -360,7 +360,7 @@ The platform incorporates a protocol-owned compliance evidence foundation:
 
 The root `docker-compose.yml` launches the complete platform in the default profile (`docker compose up -d`):
 - `g8e-gateway`: Gateway PDP on ports 8080, 8443, 8081, 8082, 5173.
-- `g8e-operator`: Governed Data Operator running in worker mode.
+- `g8e-data-operator`: Governed Data Operator running in worker mode (container hostname `data-operator`).
 - `g8e-inference-operator`: Governed Inference Operator connecting to remote Ollama.
 - `g8e-ensemble`: First-party Python agentic ensemble on port 8000.
 - `g8e-dashboard`: Node.js static host and browser frontend on port 3000.
@@ -369,7 +369,7 @@ The root `docker-compose.yml` launches the complete platform in the default prof
 
 ## Anti-patterns
 
-- **Bypassing the five-layer pipeline for client-native tools**: Assuming client-native tools or unmanaged MCP wrappers provide governance without crossing a g8e ingress (INV-ARCH-INGR-01).
+- **Bypassing the five-layer pipeline for client-native tools**: Assuming client-native tools or MCP servers a client reaches directly provide governance without crossing a g8e ingress (INV-ARCH-INGR-01).
 - **Changing governance posture at runtime**: Attempting to weaken or alter `--posture` after Gateway startup without a process restart (INV-ARCH-PIPE-02).
 - **Synthesizing missing L2/L3 proofs on direct paths**: Allowing direct envelope submission or governed HTTP dispatch to fabricate consensus votes or notary approvals (INV-ARCH-INGR-02).
 - **Treating the Gateway receipt mirror as authoritative execution truth**: Relying on Gateway receipt mirrors rather than the executing Operator's sovereign local audit store (INV-ARCH-STOR-01).

@@ -73,11 +73,14 @@ func (s *CLISessionService) PersistCLISession(cliSessionID, operatorSessionID, u
 // or operator binding when replacing a session.
 type CLISessionFields struct {
 	OperatorSessionID string
-	UserID            string
-	SystemFingerprint string
-	CertFingerprint   string
-	CertSerial        string
-	LoginMethod       string
+	// BoundOperatorSessionIDs is the full multi-bind list (primary first);
+	// empty means the session is bound only to OperatorSessionID.
+	BoundOperatorSessionIDs []string
+	UserID                  string
+	SystemFingerprint       string
+	CertFingerprint         string
+	CertSerial              string
+	LoginMethod             string
 }
 
 type cliSessionDeactivationUpdate struct {
@@ -210,19 +213,20 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 	//    leave the user without any active session.
 	cliExpiry := time.Now().UTC().Add(constants.CLISessionTTL)
 	created := models.CLISession{
-		ID:                newSessionID,
-		UserID:            newFields.UserID,
-		OperatorSessionID: newFields.OperatorSessionID,
-		SystemFingerprint: newFields.SystemFingerprint,
-		CertFingerprint:   newCertFingerprint,
-		CertSerial:        newCertSerial,
-		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         cliExpiry,
-		AbsoluteExpiresAt: cliExpiry,
-		IdleExpiresAt:     cliExpiry,
-		SessionType:       string(constants.SessionTypeCLI),
-		IsActive:          true,
-		LoginMethod:       newFields.LoginMethod,
+		ID:                      newSessionID,
+		UserID:                  newFields.UserID,
+		OperatorSessionID:       newFields.OperatorSessionID,
+		BoundOperatorSessionIDs: newFields.BoundOperatorSessionIDs,
+		SystemFingerprint:       newFields.SystemFingerprint,
+		CertFingerprint:         newCertFingerprint,
+		CertSerial:              newCertSerial,
+		CreatedAt:               time.Now().UTC(),
+		ExpiresAt:               cliExpiry,
+		AbsoluteExpiresAt:       cliExpiry,
+		IdleExpiresAt:           cliExpiry,
+		SessionType:             string(constants.SessionTypeCLI),
+		IsActive:                true,
+		LoginMethod:             newFields.LoginMethod,
 	}
 	createdBytes, err := json.Marshal(created)
 	if err != nil {
@@ -362,19 +366,20 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 	// 2. Persist the new session.
 	cliExpiry := time.Now().UTC().Add(constants.CLISessionTTL)
 	created := models.CLISession{
-		ID:                newSessionID,
-		UserID:            fields.UserID,
-		OperatorSessionID: fields.OperatorSessionID,
-		SystemFingerprint: fields.SystemFingerprint,
-		CertFingerprint:   fields.CertFingerprint,
-		CertSerial:        fields.CertSerial,
-		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         cliExpiry,
-		AbsoluteExpiresAt: cliExpiry,
-		IdleExpiresAt:     cliExpiry,
-		SessionType:       string(constants.SessionTypeCLI),
-		IsActive:          true,
-		LoginMethod:       fields.LoginMethod,
+		ID:                      newSessionID,
+		UserID:                  fields.UserID,
+		OperatorSessionID:       fields.OperatorSessionID,
+		BoundOperatorSessionIDs: fields.BoundOperatorSessionIDs,
+		SystemFingerprint:       fields.SystemFingerprint,
+		CertFingerprint:         fields.CertFingerprint,
+		CertSerial:              fields.CertSerial,
+		CreatedAt:               time.Now().UTC(),
+		ExpiresAt:               cliExpiry,
+		AbsoluteExpiresAt:       cliExpiry,
+		IdleExpiresAt:           cliExpiry,
+		SessionType:             string(constants.SessionTypeCLI),
+		IsActive:                true,
+		LoginMethod:             fields.LoginMethod,
 	}
 	createdBytes, err := json.Marshal(created)
 	if err != nil {

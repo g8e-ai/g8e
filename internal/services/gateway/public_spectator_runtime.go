@@ -16,7 +16,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +35,10 @@ type PublicSpectatorConfig struct {
 	SourceID              string
 	ExplorerRoot          string
 	TrustedProxyCIDRs     []string
+	// AllowContainerBind permits the mirror and explorer listeners to bind
+	// 0.0.0.0 so the container network can reach them. It is set only by the
+	// explicit --public-spectator-allow-container-bind gateway flag.
+	AllowContainerBind bool
 }
 
 // DefaultPublicSpectatorConfig returns loopback defaults for local development.
@@ -89,11 +92,10 @@ func NewPublicSpectatorRuntime(cfg PublicSpectatorConfig, fileSvc fs.RuntimeFile
 	if cfg.ExplorerListenAddress == "" {
 		cfg.ExplorerListenAddress = DefaultPublicSpectatorConfig().ExplorerListenAddress
 	}
-	allowContainerBind := allowContainerMirrorBind()
-	if err := ValidatePublicMirrorListenAddresses(cfg.PrivateListenAddress, cfg.PublicListenAddress, allowContainerBind); err != nil {
+	if err := ValidatePublicMirrorListenAddresses(cfg.PrivateListenAddress, cfg.PublicListenAddress, cfg.AllowContainerBind); err != nil {
 		return nil, err
 	}
-	if err := ValidatePublicExplorerListenAddress(cfg.ExplorerListenAddress, cfg.PrivateListenAddress, cfg.PublicListenAddress, allowContainerBind); err != nil {
+	if err := ValidatePublicExplorerListenAddress(cfg.ExplorerListenAddress, cfg.PrivateListenAddress, cfg.PublicListenAddress, cfg.AllowContainerBind); err != nil {
 		return nil, err
 	}
 	return &PublicSpectatorRuntime{
@@ -278,10 +280,6 @@ func (runtime *PublicSpectatorRuntime) PublicListenAddress() string {
 		return ""
 	}
 	return runtime.cfg.PublicListenAddress
-}
-
-func allowContainerMirrorBind() bool {
-	return strings.TrimSpace(os.Getenv("G8E_DOCKER_COMPOSE")) == "1"
 }
 
 func shouldServeDedicatedExplorer(cfg PublicSpectatorConfig) bool {

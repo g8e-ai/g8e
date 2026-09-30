@@ -88,8 +88,8 @@ func (c *Client) DiscoverInferenceOperator(ctx context.Context, operatorSessionI
 }
 
 // DispatchInference sends POST /api/v1/inference/dispatch using the configured
-// delegated app workload certificate. The caller must configure Auth with an
-// enrolled app cert such as g8ee; CLI session headers are not attached.
+// platform-enrolled application identity. The caller must configure Auth with an
+// enrolled app cert such as g8ee or g8e-eval; CLI session headers are not attached.
 func (c *Client) DispatchInference(ctx context.Context, req *operatorv1.InferenceDispatchRequest) (*operatorv1.InferenceDispatchResponse, []byte, error) {
 	if req == nil {
 		return nil, nil, constants.ErrMissingRequiredField

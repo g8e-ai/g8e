@@ -87,6 +87,14 @@ const (
 	OperatorRoleData       OperatorRole = "data"
 )
 
+// Hostnames the unified Docker stack gives its core Operators. The registry
+// records the hostname from each Operator's heartbeat, so these names identify
+// the stack's own Operators among any other enrolled Operators.
+const (
+	DataOperatorHostname      = "data-operator"
+	InferenceOperatorHostname = "inference-operator"
+)
+
 // UserStatus is a typed string for user status.
 type UserStatus string
 

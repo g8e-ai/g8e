@@ -17,6 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -26,7 +27,7 @@ type harnessOllamaModelCommandDispatcher struct {
 	persona harnessclient.Persona
 }
 
-func newHarnessOllamaModelCommandDispatcher(cfg *config.Config, authContext *auth.ClientAuthContext, dataOperator *evaluation.DataOperatorStatus, deps chatEvalDeps) (*harnessOllamaModelCommandDispatcher, error) {
+func newHarnessOllamaModelCommandDispatcher(cfg *config.Config, authContext *auth.ClientAuthContext, dataOperator *operatorcapability.DataOperatorStatus, deps chatEvalDeps) (*harnessOllamaModelCommandDispatcher, error) {
 	client, err := deps.clientFactory(nativeEvalClientConfig(cfg, authContext))
 	if err != nil {
 		return nil, err

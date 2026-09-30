@@ -34,8 +34,8 @@ python -c "from g8e.models import RequestContext, PlatformSettings; print('Model
 python -c "import g8e; print(f'g8e version: {g8e.__version__}')"
 
 # Run example scripts from README
-python "$PY_DIR/examples/constants_example.py"
-python "$PY_DIR/examples/models_example.py"
+python "$REPO_ROOT/examples/python/constants_example.py"
+python "$REPO_ROOT/examples/python/models_example.py"
 
 # Cleanup
 deactivate

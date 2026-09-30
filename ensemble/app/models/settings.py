@@ -29,11 +29,11 @@ from app.constants import (
     OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
     LLAMACPP_DEFAULT_ENDPOINT,
-    JEV_DEFAULT_ENDPOINT,
     JEV_DEFAULT_MODEL,
     LLMProvider,
     LogLevel,
 )
+from app.constants.bootstrap import get_bootstrap
 from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PortConstants
 from app.constants.paths import PATHS
@@ -107,16 +107,17 @@ class ComponentURLsSettings(G8eBaseModel):
     `/api/v1/sse/stream`) lives on the Governance Gateway's HTTPS surface.
     ``client_url`` is the base URL the internal HTTP client uses for SSE push,
     intent grant/revoke, and operator-link creation — all gateway endpoints.
-    It defaults to the gateway's HTTPS port. Override with the
-    ``G8E_GATEWAY_URL`` env var when the gateway is behind a different ingress
-    or hostname (e.g. ``https://g8e.local:8443`` in the unified Docker stack).
+    It defaults to the gateway's HTTPS port. Override with the ``--gateway-url``
+    launch argument (typed bootstrap settings) when the gateway is behind a
+    different ingress or hostname (e.g. ``https://g8e.local:8443`` in the
+    unified Docker stack).
     """
 
     g8ee_url: str = Field(
         default_factory=lambda: f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
     )
     client_url: str = Field(
-        default_factory=lambda: _env_or(EnvVar.GATEWAY_URL, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}")
+        default_factory=lambda: get_bootstrap().gateway_url or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
     )
 
 
@@ -244,13 +245,13 @@ class GatewaySettings(G8eBaseModel):
     """operator (Operator Gateway mode) configuration."""
 
     http_url: str = Field(
-        default_factory=lambda: _env_or(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
+        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
     )
     pubsub_url: str = Field(
-        default_factory=lambda: _env_or(EnvVar.OPERATOR_PUBSUB_URL, f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
+        default_factory=lambda: get_bootstrap().gateway_pubsub_url or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
     )
     blob_url: str = Field(
-        default_factory=lambda: _env_or(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
+        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}"
     )
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
     enable_cache_read: bool = Field(False)
@@ -310,8 +311,6 @@ class LLMSettings(_ProtocolLLMSettings):
     llamacpp_assistant_model: str | None = Field(default=None)
 
     jev_model: str | None = Field(default=JEV_DEFAULT_MODEL)
-    jev_endpoint: str | None = Field(default=JEV_DEFAULT_ENDPOINT)
-    jev_api_key: str | None = Field(default=None, repr=False)
 
     llm_max_tokens: int | None = Field(default=None)
     llm_command_gen_enabled: bool = Field(default=True)
@@ -473,8 +472,8 @@ class LLMSettings(_ProtocolLLMSettings):
                 ),
                 LLMProvider.G8E.value: (None, None, self.ollama_model),
                 LLMProvider.JEV.value: (
-                    self.jev_api_key,
-                    self.jev_endpoint,
+                    self.ollama_api_key,
+                    self.ollama_endpoint,
                     self.jev_model,
                 ),
             }
@@ -584,7 +583,7 @@ class G8eeAppSettings(G8eBaseModel):
     docs_dir: str = Field(PATHS["infra"]["docs_dir"])
 
     app_url: str = Field(
-        default_factory=lambda: _env_or(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}")
+        default_factory=lambda: get_bootstrap().gateway_https_url or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
     )
     allowed_origins: str = Field(
         default_factory=lambda: _env_or(EnvVar.ALLOWED_ORIGINS, "")

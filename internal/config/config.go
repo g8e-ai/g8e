@@ -8,6 +8,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"net"
 	"os"
@@ -133,6 +134,8 @@ type GatewayConfig struct {
 	PasskeyRpName       string         // RP Name for passkey operations (default: g8e)
 	PasskeyRpOrigins    []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
 	MCPDownstreamURL    string         // URL of the downstream MCP server to proxy discovery and execution to
+	MCPDownstreamCmd    string         // Command of the downstream MCP subprocess (mutually exclusive with MCPDownstreamURL)
+	MCPDownstreamArgs   []string       // Arguments for the downstream MCP subprocess
 	A2ADownstreamURL    string         // URL of the downstream A2A server to proxy execution to
 	EnsembleUpstreamURL string         // HTTP URL of the g8ee ensemble for browser proxy forwarding
 	PublicBaseURL       string         // Public base URL for L3 approval links (e.g., https://localhost:8443)
@@ -175,6 +178,9 @@ type GatewayConfig struct {
 	PublicSpectatorPrivateAddr string
 	// PublicSpectatorPublicAddr is the anonymous mirror read/SSE listener.
 	PublicSpectatorPublicAddr string
+	// PublicSpectatorAllowContainerBind permits the mirror and explorer listeners
+	// to bind 0.0.0.0 inside a container network.
+	PublicSpectatorAllowContainerBind bool
 	// EvalExplorerAddr is the loopback listener for the evaluation explorer SPA.
 	EvalExplorerAddr string
 	// EvalExplorerRoot overrides the built explorer dist directory.
@@ -348,6 +354,8 @@ type GatewayOptions struct {
 	PasskeyRpName       string
 	PasskeyRpOrigins    []string
 	MCPDownstreamURL    string
+	MCPDownstreamCmd    string
+	MCPDownstreamArgs   []string
 	A2ADownstreamURL    string
 	EnsembleUpstreamURL string
 	PublicBaseURL       string
@@ -469,11 +477,10 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	}
 
 	mcpDownstreamURL := opts.MCPDownstreamURL
+	mcpDownstreamCmd := opts.MCPDownstreamCmd
+	mcpDownstreamArgs := opts.MCPDownstreamArgs
 	a2aDownstreamURL := opts.A2ADownstreamURL
 	ensembleUpstreamURL := opts.EnsembleUpstreamURL
-	if ensembleUpstreamURL == "" {
-		ensembleUpstreamURL = os.Getenv("G8E_ENSEMBLE_URL")
-	}
 	secretsDir := opts.SecretsDir
 	if secretsDir == "" {
 		secretsDir = paths.Infra.SecretsDir
@@ -546,6 +553,8 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			PasskeyRpName:       passkeyRpName,
 			PasskeyRpOrigins:    opts.PasskeyRpOrigins,
 			MCPDownstreamURL:    mcpDownstreamURL,
+			MCPDownstreamCmd:    mcpDownstreamCmd,
+			MCPDownstreamArgs:   mcpDownstreamArgs,
 			A2ADownstreamURL:    a2aDownstreamURL,
 			EnsembleUpstreamURL: ensembleUpstreamURL,
 			PublicBaseURL:       opts.PublicBaseURL,
@@ -713,17 +722,13 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 	if endpoint == "" {
 		endpoint = fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
 	}
-	keepAlive := opts.InferenceKeepAlive
-	if keepAlive == "" {
-		keepAlive = "-1"
-	}
 	return InferenceConfig{
 		Enabled:             opts.InferenceEnabled,
 		OllamaEndpoint:      endpoint,
-		PrimaryModel:        opts.InferencePrimaryModel,
-		AssistantModel:      opts.InferenceAssistantModel,
-		LiteModel:           opts.InferenceLiteModel,
-		KeepAlive:           keepAlive,
+		PrimaryModel:        cmp.Or(opts.InferencePrimaryModel, constants.InferenceDefaultPrimaryModel),
+		AssistantModel:      cmp.Or(opts.InferenceAssistantModel, constants.InferenceDefaultAssistantModel),
+		LiteModel:           cmp.Or(opts.InferenceLiteModel, constants.InferenceDefaultLiteModel),
+		KeepAlive:           cmp.Or(opts.InferenceKeepAlive, constants.InferenceDefaultKeepAlive),
 		CampaignID:          opts.InferenceCampaignID,
 		ModelRegistryDigest: opts.InferenceModelRegistryDigest,
 	}

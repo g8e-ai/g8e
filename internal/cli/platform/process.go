@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -287,6 +288,12 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.MCPDownstreamURL != "" {
 		args = append(args, "--mcp-downstream-url", opts.MCPDownstreamURL)
 	}
+	if opts.MCPDownstreamCmd != "" {
+		args = append(args, "--mcp-downstream-cmd", opts.MCPDownstreamCmd)
+	}
+	if len(opts.MCPDownstreamArgs) > 0 {
+		args = append(args, "--mcp-downstream-args", strings.Join(opts.MCPDownstreamArgs, ","))
+	}
 	if opts.A2ADownstreamURL != "" {
 		args = append(args, "--a2a-downstream-url", opts.A2ADownstreamURL)
 	}
@@ -322,6 +329,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	}
 	if opts.PublicSpectatorPublicAddr != "" {
 		args = append(args, "--public-spectator-public-listen", opts.PublicSpectatorPublicAddr)
+	}
+	if opts.PublicSpectatorAllowContainerBind {
+		args = append(args, "--public-spectator-allow-container-bind")
 	}
 	if opts.EvalExplorerAddr != "" {
 		args = append(args, "--eval-explorer-listen", opts.EvalExplorerAddr)
@@ -614,16 +624,20 @@ func (pm *ProcessManager) GetLogPath() string {
 	return pm.logSvc.LogFilePath()
 }
 
-func (pm *ProcessManager) Clean() error {
+// Clean stops the Operator and renames the runtime directory aside to
+// .g8e-<MMDDHHMM> rather than deleting it. It returns the archive path, or ""
+// when there was no runtime directory to archive.
+func (pm *ProcessManager) Clean() (string, error) {
 	if err := pm.StopOperator(); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
+		return "", fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
 	}
 
-	if err := pm.fileSvc.RemoveAll(context.Background(), ""); err != nil {
-		return fmt.Errorf("%w: runtime directory: %w", constants.ErrPathValidation, err)
+	archived, err := pm.fileSvc.ArchiveRuntime(context.Background(), time.Now())
+	if err != nil {
+		return "", fmt.Errorf("%w: runtime directory: %w", constants.ErrPathValidation, err)
 	}
 
-	return nil
+	return archived, nil
 }
 
 // TailLog prints a log file, optionally following new entries (like tail -f).

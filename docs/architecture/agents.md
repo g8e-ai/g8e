@@ -3,8 +3,8 @@ doc_id: agents
 title: AI Agents and the g8e Governance Boundary
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-09-30
+version: v2.2.5
 owners:
   - internal/cli/cmd/mcp/
   - internal/services/mcp/
@@ -48,22 +48,24 @@ Describes three distinct meanings of "agent" in g8e: external coding agents (Cla
 | ID | Rule |
 | --- | --- |
 | INV-AGT-01 | AI model outputs, ensemble Tribunal consensus, multi-model voting, and application memory are advisory only. They do not produce Ed25519 protocol signatures (L2) or WebAuthn proofs (L3) and cannot satisfy governance gates. All mutations still require the Gateway and executing Operator to enforce the active posture. |
-| INV-AGT-02 | Every external agent (`claude`, `codex`, `devin`, `gemini`, `goose`) launched via `g8e mcp agent run <agent>` receives a short-lived delegated mTLS certificate carrying both the agent's SPIFFE app identity and the human requestor's SPIFFE user identity, cryptographically bound in URI SANs. Identity comes from the certificate, not headers. |
+| INV-AGT-02 | Every external agent (`claude`, `codex`, `devin`, `gemini`, `goose`) launched via `g8e mcp agent run <agent>` authenticates with an owner-approved platform application enrollment (`g8e auth enroll app <agent>`) whose mTLS certificate carries both the agent's SPIFFE app identity and the approving owner's SPIFFE user identity, cryptographically bound in URI SANs. Identity comes from the certificate, not headers. |
 | INV-AGT-03 | Devin CLI does not expose flags or config options to disable native tools. Only operations routed through g8e MCP cross the governance boundary; Devin's native file, shell, and network access remain ungoverned side channels. |
 | INV-AGT-04 | `g8e mcp stdio` fails closed immediately with `ErrIncompleteCredentialPair` when supplied a certificate without its key or vice versa. Partial credential pairs cannot degrade to a weaker tier. |
 | INV-AGT-05 | Agents retain native tools (shell, file, network access) outside their configured MCP server unless the agent's launcher or configuration options actively disable them. Governance covers only MCP-routed operations; side channels remain agent-native. |
 | INV-AGT-06 | Governed HTTP dispatch (`POST /api/v1/operators/commands`) cannot mint human L3 proofs and fails closed under `ratify` or `notary` postures when L3 proof is required. Direct envelopes and MCP/A2A submission paths support L3 suspension; HTTP dispatch does not. |
-| INV-AGT-07 | The external MCP wrapper (`g8e mcp agent run --url <url>` or `-- <command>`) provides L1 threat screening only. It does not construct envelopes, request L2/L3 proofs, persist receipts, or produce signed audit evidence. It is not equivalent to the named-agent launch path. |
+| INV-AGT-07 | Third-party MCP servers (subprocess or HTTP) are governed exclusively through Gateway downstream egress with full L1–L5 governance, envelope construction, and signed receipts. `g8e mcp agent run` is launcher-only and does not provide an external MCP wrapper or CLI reverse proxy. |
+| INV-AGT-08 | The Go agent harness (`internal/tools/agent_harness/`) is a scripted governed-client used by `g8e demos` and `g8e eval`. It contains no model, Tribunal, or ReAct loop and is not g8ee. It reaches g8ee only over HTTP (`POST /api/v1/chat` and evaluation trace reads) using the typed contract from `protocol/`, and g8ee (`ensemble/`) MUST NOT import, invoke, or name the harness. Tribunal roles, including the Auditor (`protocol/models/agents/auditor.json`), belong to g8ee and MUST NOT use harness naming. |
 
 ## Owned surfaces
 
 | Surface | Path | Verify |
 | --- | --- | --- |
 | Supported agent binaries | `g8e mcp agent list` / `g8e mcp agent run --help` | CLI lists Claude Code, Codex, Devin CLI, Gemini CLI, Goose |
-| Agent launcher and stdio | [internal/cli/cmd/mcp/mcp.go](internal/cli/cmd/mcp/mcp.go) (`runMCPAgentRun`, `launchAgentWithGovernance`, `mcpStdioCmd`) | Obtains delegated cert, enrolls human CLI, configures MCP, verifies tool disabling, starts agent |
-| MCP native tools | [internal/services/mcp/native_tool_registry.go](internal/services/mcp/native_tool_registry.go) | 31+ tools across database, filesystem, system, cloud categories |
+| Agent launcher and stdio | [internal/cli/cmd/mcp/mcp.go](internal/cli/cmd/mcp/mcp.go) (`runMCPAgentRun`, `launchAgentWithGovernance`, `mcpStdioCmd`) | Enrolls human CLI, enrolls the agent application through owner-approved platform enrollment when no valid identity exists, configures MCP, verifies tool disabling, starts agent |
+| MCP native tools | [internal/services/mcp/native_tool_registry.go](internal/services/mcp/native_tool_registry.go) | 32 tools across database, filesystem, system, cloud categories |
 | Tool interception config | [internal/services/mcp/config.go](internal/services/mcp/config.go), [`WriteAgentConfig`](internal/cli/cmd/mcp/mcp.go) | Per-agent disabling: Claude/Codex (flags), Goose (extensions), Gemini (settings), Devin (MCP server list) |
 | g8ee ensemble | [ensemble/](ensemble/) (Python), [ensemble/app/main.py](ensemble/app/main.py) | Triage, Tribunal, ReAct tool loops, outbound dispatch, SSE events |
+| Go agent harness (not an agent, not g8ee) | [internal/tools/agent_harness/](internal/tools/agent_harness/) | Typed Gateway client, persona impersonation, and scenario registry. Consumers: `internal/cli/cmd/demos/` and `internal/cli/cmd/eval/`. `grep -ri agent_harness ensemble/` returns nothing |
 
 ## Procedures
 
@@ -71,11 +73,9 @@ Describes three distinct meanings of "agent" in g8e: external coding agents (Cla
 
 Each path provides different governance guarantees:
 
-- **`g8e mcp agent run <agent>`** — Named-agent launch with full L1–L5 governance, native-tool disabling, automatic human CLI enrollment, and delegated credentials. The Gateway constructs envelopes, coordinates L2/L3 when required, and produces signed receipts. Use for Claude Code, Codex, Devin CLI, Gemini CLI, or Goose when local full governance is required.
+- **`g8e mcp agent run <agent>`** — Named-agent launch with full L1–L5 governance, native-tool disabling, automatic human CLI enrollment, and an enrolled application identity. The Gateway constructs envelopes, coordinates L2/L3 when required, and produces signed receipts. Use for Claude Code, Codex, Devin CLI, Gemini CLI, or Goose when local full governance is required.
 
-- **`g8e mcp agent run --url <url>`** — Wrap an HTTP MCP server with L1 doctrine screening only. The Gateway forwards accepted requests to the downstream server without constructing envelopes, requesting L2/L3 proofs, or signing receipts. Use for external MCP servers when minimal governance overhead is acceptable and L2–L5 protection is not required.
-
-- **`g8e mcp agent run -- <command>`** — Wrap an MCP subprocess with L1 doctrine screening only. Same governance scope as `--url`: forward accepted requests directly without envelope construction or signed audit.
+- **Gateway downstream egress (`--mcp-downstream-cmd` / `--mcp-downstream-url`)** — Connect third-party MCP servers (subprocess or HTTP) as downstream targets of the Gateway. Every `tools/call` traverses the complete L1–L5 governance pipeline and produces signed receipts in the audit vault.
 
 - **Direct MCP client to `/mcp`** — An MCP client connects directly to the Gateway `/mcp` endpoint with enrolled mTLS credentials. The Gateway constructs `GovernanceEnvelope` for every `tools/call`, `resources/read`, or `prompts/get` request and may coordinate L2/L3 when the active posture requires it.
 
@@ -104,22 +104,22 @@ g8e mcp agent run claude -- -p "fix the failing tests"
 # Skip tool interception verification (not recommended):
 g8e mcp agent run claude --verify=false
 
-# Wrap external MCP server with L1 screening only:
-g8e mcp agent run --url http://localhost:3000
-g8e mcp agent run -- npx @modelcontextprotocol/server-filesystem /tmp
+# Govern external MCP server via Gateway downstream egress:
+g8e serve gateway --mcp-downstream-cmd npx --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/tmp'
+g8e serve gateway --mcp-downstream-url http://localhost:3000/mcp
 ```
 
 ### Query agent audit trails
 
 ```bash
-# List all operations from a specific agent:
-g8e gw data audit list --operator-session-id spiffe://g8e.local/app/claude
+# List audit events, optionally for one operator session:
+g8e gw data audit list --operator-session-id <operator-session-id>
 
-# Summarize activity for an agent:
-g8e gw data audit summary --operator-session-id spiffe://g8e.local/app/claude
-
-# Replace 'claude' with the agent name (claude, codex, devin, gemini, goose)
+# Summarize audit activity:
+g8e gw data audit summary --operator-session-id <operator-session-id>
 ```
+
+The `--operator-session-id` filter selects an Operator session, not an application identity. The acting agent is recorded on each `ActionReceipt` record as `acting_app_id` (the app SPIFFE ID, for example `spiffe://g8e.local/app/claude`).
 
 ## Trust and Execution Boundaries
 
@@ -135,8 +135,8 @@ This boundary governs only operations that traverse a g8e ingress (MCP, A2A, HTT
 
 | Path | Input | Governance | Execution |
 | --- | --- | --- | --- |
-| **Launched agent** | `g8e mcp agent run <agent>` with automatic MCP configuration and delegated credentials | JSON-RPC MCP requests (tools/call, resources/read, prompts/get) are translated into `GovernanceEnvelope`, processed through L1–L5, coordinated with L2/L3 when posture requires. List and discovery methods do not execute tools. Signed `ActionReceipt` returned on success or L1/L2 rejection. | Gateway in-process Operator, built-in tool, or configured downstream MCP/A2A service |
-| **External MCP wrapper** | `g8e mcp agent run --url <url>` or `-- <command>` with stdio stdin/stdout | L1 doctrine threat screening only (`tools/call` requests only). List and discovery requests forwarded without screening. No envelope construction, no L2/L3 coordination, no signed receipt, no Gateway audit. | Wrapped external MCP server or subprocess |
+| **Launched agent** | `g8e mcp agent run <agent>` with automatic MCP configuration and an enrolled application identity | JSON-RPC MCP requests (tools/call, resources/read, prompts/get) are translated into `GovernanceEnvelope`, processed through L1–L5, coordinated with L2/L3 when posture requires. List and discovery methods do not execute tools. Signed `ActionReceipt` returned on success or L1/L2 rejection. | Gateway in-process Operator, built-in tool, or configured downstream MCP/A2A service |
+| **Gateway downstream egress** | Configured downstream via `--mcp-downstream-cmd` or `--mcp-downstream-url` on Gateway | Complete L1–L5 governance, envelope construction, posture enforcement, and signed receipts. Tools and resources discovered from downstream. | Downstream subprocess or HTTP MCP server |
 | **Gateway MCP endpoint** | JSON-RPC methods at `/mcp` with enrolled mTLS credentials | Gateway constructs `GovernanceEnvelope`, applies L1 Doctrine, attempts L2 deliberation when posture requires it, suspends for L3 approval when applicable, processes through L1–L5 | Gateway in-process Operator, built-in tool, or configured downstream MCP/A2A service |
 | **A2A call** | JSON-RPC `a2a/call` at `/api/v1/a2a/call` with enrolled mTLS app credentials | Gateway constructs `A2A_CALL` envelope, applies L1–L3 per posture, suspends for L3 when needed, processes through L1–L5 | Configured downstream A2A service through Gateway Actuator path |
 | **Governed HTTP dispatch** | Registered request `event_type` and serialized payload at `POST /api/v1/operators/commands` from enrolled app | Gateway derives `action_type`, applies L1 screening, validates session, constructs envelope with identity/nonce/expiry/hash/posture. Does not synthesize L2 votes or suspend for L3. Fails closed if L3 proof required. | Bound outbound Operator (enforced per target session) |
@@ -164,15 +164,13 @@ The launcher supports five external coding agents, each with agent-specific tool
 
 Credentials resolve in this order (first complete pair wins):
 
-1. Delegated app certificate and key flags (`--app-cert`, `--app-key`)
-2. Delegated app certificate and key environment variables (`G8E_APP_CERT`, `G8E_APP_KEY`)
-3. CLI client certificate and key flags (`--client-cert`, `--client-key`)
-4. CLI client certificate and key environment variables (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`)
-5. Enrolled CLI credentials on disk (`.g8e/auth/client.crt`, `.g8e/auth/client.key`)
+1. Application identity flag (`--app <name>`), resolving the managed certificates on disk (`.g8e/apps/<name>.crt`, `.g8e/apps/<name>.key`)
+2. CLI client certificate and key flags (`--client-cert`, `--client-key`)
+3. Enrolled CLI credentials on disk (`.g8e/cli.crt`, `.g8e/cli.key`)
 
-Each tier must provide a complete certificate and key pair. An incomplete pair fails closed immediately with `ErrIncompleteCredentialPair` rather than attempting to degrade. The CA bundle resolves from its flag, then environment variable, then the enrolled trust bundle. The Gateway URL resolves from its flag, then environment variable, then the default HTTPS MCP URL (`https://g8e.local:8443/mcp`).
+Each tier must provide a complete certificate and key pair. An incomplete pair fails closed immediately with `ErrIncompleteCredentialPair` rather than attempting to degrade. Application credentials are owner-approved platform application enrollments (`g8e auth enroll app <name>`). The CA bundle resolves from its flag, then the enrolled trust bundle. The Gateway URL resolves from its flag, then the default HTTPS MCP URL (`https://g8e.local:8443/mcp`). No credential, path, or endpoint is read from the environment (INV-ENV-04): `g8e mcp agent run` writes `--app <agent>` into the agent's generated MCP configuration and passes nothing else to the agent process.
 
-When L3 approval is required, the stdio bridge opens the approval page in the browser, waits for the matching `approval.completed` event over the authenticated SSE stream, and retries the original request. This automatic flow requires enrolled CLI credentials and a CLI session even when the MCP request itself uses delegated app credentials.
+When L3 approval is required, the stdio bridge opens the approval page in the browser, waits for the matching `approval.completed` event over the authenticated SSE stream, and retries the original request. This automatic flow requires enrolled CLI credentials and a CLI session even when the MCP request itself uses an enrolled application identity.
 
 ## Five-Layer Governance Enforcement
 
@@ -225,13 +223,13 @@ A completed Gateway MCP tool call returns tool content plus a cryptographic sign
 
 Governed file mutations record file-mutation evidence and ledger hashes when the file ledger is active. The SQL commitment chain covers all admitted executions independently of the file ledger.
 
-For audit queries, use `g8e gw data audit list` and `g8e gw data audit summary` with an optional `--operator-session-id` filter to scope results to a specific agent or human CLI identity. See [Gateway Architecture](./gateway.md) for audit API details.
+For audit queries, use `g8e gw data audit list` and `g8e gw data audit summary` with an optional `--operator-session-id` filter to scope results to one Operator session. See [Gateway Architecture](./gateway.md) for audit API details.
 
 ## Anti-patterns
 
 - Treating AI model outputs, ensemble Tribunal consensus, or application approvals as protocol L2 Consensus signatures or L3 Notary proofs (INV-AGT-01). They are advisory and do not authorize operations.
-- Passing partial credential pairs (e.g., `--app-cert` without `--app-key`) to `g8e mcp stdio`, expecting it to degrade gracefully. It fails closed immediately (INV-AGT-04).
-- Assuming the external MCP wrapper (`--url` or `-- <command>`) provides L2–L5 governance, signed receipts, or persistent audit trails. It provides L1 screening only (INV-AGT-07).
+- Passing partial credential pairs (e.g., `--client-cert` without `--client-key`) to `g8e mcp stdio`, expecting it to degrade gracefully. It fails closed immediately (INV-AGT-04).
+- Expecting `g8e mcp agent run` to wrap arbitrary third-party MCP commands or URLs. Third-party MCP servers must be configured as downstream egress on the Gateway (`--mcp-downstream-cmd` or `--mcp-downstream-url`) to receive full L1–L5 governance and signed audit receipts (INV-AGT-07).
 - Dispatching mutations via `POST /api/v1/operators/commands` under `ratify` or `notary` postures without pre-obtained L3 proofs. The HTTP dispatch path cannot suspend for user approval; it fails closed when L3 is required (INV-AGT-06).
 - Relying on Devin CLI's governance boundary when Devin retains native shell, file, and network tools outside MCP. Only MCP-routed operations cross the boundary (INV-AGT-03, INV-AGT-05).
 - Treating Server-Sent Events (SSE) as durable governance state or execution evidence. SSE is transient delivery telemetry and does not modify the state Merkle root.
@@ -243,7 +241,7 @@ For audit queries, use `g8e gw data audit list` and `g8e gw data audit summary` 
 - [Operator Architecture](./operator.md) — Policy Execution Point, outbound mTLS transport, native tools, and L4/L5 execution.
 - [Governance Architecture](./governance.md) — Five-layer verification pipeline, posture enforcement rules, and per-posture behavior.
 - [Consensus Architecture](./consensus.md) — Protocol L2 consensus, Ed25519 signer policies, deliberation mechanics, and vote verification.
-- [Authentication and Authorization](./auth.md) — mTLS identities, delegated app credentials, CLI sessions, passkey enrollment, and WebAuthn ceremonies.
+- [Authentication and Authorization](./auth.md) — mTLS identities, platform-enrolled application credentials, CLI sessions, passkey enrollment, and WebAuthn ceremonies.
 - [Network Architecture](./network.md) — PKI hierarchy, TLS 1.3/mTLS configurations, pub/sub transport, and Operator channels.
 - [Storage Architecture](./storage.md) — SQLite database topologies, audit vaults, evidence persistence, and commitment ledgers.
 - [SSE Streaming](./sse.md) — Server-Sent Events architecture for approval notifications and application telemetry.

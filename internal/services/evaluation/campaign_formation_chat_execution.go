@@ -153,6 +153,17 @@ func (e *formationChatRoleExecutor) ExecuteRole(ctx context.Context, req Formati
 	if output != "" {
 		e.priorOutputs = append(e.priorOutputs, formationRoleOutput{Role: req.Role, Output: output})
 	}
+	// Store prior role outputs in trace for grading verification of handoff.
+	if len(e.priorOutputs) > 0 {
+		priorMap := make([]map[string]string, 0, len(e.priorOutputs))
+		for _, prior := range e.priorOutputs {
+			priorMap = append(priorMap, map[string]string{
+				"role":   string(prior.Role),
+				"output": prior.Output,
+			})
+		}
+		trace["prior_role_outputs"] = priorMap
+	}
 	result := formationRoleResultFromTrace(trace)
 	result.OutputState = formationAppendRoleState(req.InputState, req.Role, output)
 	result.MutationCandidate = append([]byte(nil), result.OutputState...)

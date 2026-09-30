@@ -42,8 +42,9 @@ authenticated pending list from the gateway. The output includes request IDs,
 component kind, instance ID, hostname, state, creation time, and expiry — never
 requester tokens, token hashes, CSR PEM, or certificates.
 
-Use the request ID with 'g8e auth enroll approve <request-id>' or
-'g8e auth enroll deny <request-id>' to decide a specific request.`,
+Use request IDs, instance IDs, or hostnames with
+'g8e auth enroll approve <selector>...' or 'g8e auth enroll deny <selector>...'
+to decide specific requests, or pass --all to decide every pending request.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")

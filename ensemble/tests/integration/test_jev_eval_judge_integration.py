@@ -13,13 +13,13 @@ import os
 
 import pytest
 
-from app.constants import JEV_DEFAULT_MODEL, LLMProvider
+from app.constants import OLLAMA_DEFAULT_ENDPOINT, JEV_DEFAULT_MODEL, LLMProvider
 from app.constants.env_vars import EnvVar
 from app.models.settings import EvalJudgeSettings, G8eeUserSettings, LLMSettings
 from app.services.ai.eval_judge import EvalJudge, PASSING_THRESHOLD
 from app.decision import get_decision_provider
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires_typesafe, pytest.mark.slow]
+pytestmark = [pytest.mark.integration, pytest.mark.requires_system_one, pytest.mark.slow]
 
 FROZEN_ASSIGNMENT = {
     "user_query": "Which service failed in these logs?",
@@ -36,17 +36,13 @@ FROZEN_ASSIGNMENT = {
 
 @pytest.fixture
 def jev_settings() -> G8eeUserSettings:
-    api_key = os.environ.get(EnvVar.LLM_JEV_API_KEY) or os.environ.get(EnvVar.TYPESAFE_API_KEY)
-    if not api_key:
-        pytest.skip("TYPESAFE_API_KEY or G8E_LLM_JEV_API_KEY required")
-
     return G8eeUserSettings(
         llm=LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
             primary_model="main-model",
             lite_provider=LLMProvider.JEV,
             lite_model=JEV_DEFAULT_MODEL,
-            jev_api_key=api_key,
+            ollama_endpoint=os.environ.get(EnvVar.LLM_OLLAMA_ENDPOINT) or OLLAMA_DEFAULT_ENDPOINT,
         ),
         eval_judge=EvalJudgeSettings(eval_judge_model=JEV_DEFAULT_MODEL),
     )

@@ -205,6 +205,8 @@ const (
 	ContextKeyOperatorID ContextKey = "operator_id"
 	// ContextKeyOperatorSessionID stores the operator session ID in context.
 	ContextKeyOperatorSessionID ContextKey = "operator_session_id"
+	// ContextKeyBoundOperatorSessionIDs stores every operator session bound to the CLI session, primary first.
+	ContextKeyBoundOperatorSessionIDs ContextKey = "bound_operator_session_ids"
 	// ContextKeyCapability stores the JIT-minted execution capability in context.
 	ContextKeyCapability ContextKey = "execution_capability"
 	// ContextKeyWebSessionID stores the web session ID for cookie-authenticated requests.
@@ -235,27 +237,16 @@ const (
 	// endpoint reissues a session using the still-valid cert as proof of
 	// identity.
 	CLISessionTTL = 7 * 24 * time.Hour
-)
 
-// App enrollment type constants define the valid app_type values for external app enrollment.
-const (
-	AppTypeMCPClient       = "mcp-client"
-	AppTypeA2AGateway      = "a2a-gateway"
-	AppTypeCustom          = "custom"
-	AppTypeConsensusMember = "consensus-member"
+	// CLIBindMaxOperators caps how many operator sessions one bind call may
+	// target. 5000 UUIDs stay well inside the gateway's 512KB request limit.
+	CLIBindMaxOperators = 5000
 )
 
 // L3 notary constants
 const (
 	// L3ApprovalWindow is the maximum time between approval and L3 verification.
 	L3ApprovalWindow = 30 * time.Minute
-)
-
-// Certificate renewal constants
-const (
-	// AppCertMinValidity is the minimum remaining validity an app certificate must
-	// have to be considered valid for reuse without re-enrollment.
-	AppCertMinValidity = 7 * 24 * time.Hour
 )
 
 // Auth scheme and default identity constants.

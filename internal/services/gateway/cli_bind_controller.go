@@ -10,16 +10,23 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
-// handleBind pins the authenticated CLI session to the requested operator
-// session. When the CLI session is already bound to that operator session,
-// the current binding is returned without issuing a replacement session.
+// handleBind binds the authenticated CLI session to the requested operator
+// session(s) in a single call. The request may carry one operator session or
+// many; every target is validated (active, owned by the caller) before any
+// binding changes, so a bad target rejects the whole request. The first
+// target becomes the primary binding the auth middleware stamps on requests.
+// When the CLI session is already bound to exactly that list, the current
+// binding is returned without issuing a replacement session.
 //
 // POST /api/v1/auth/cli/bind  (RouteAuthMTLS)
 func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request) {
@@ -48,8 +55,13 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	if req.OperatorSessionID == "" {
+	targetSessionIDs := normalizeOperatorSessionIDs(req)
+	if len(targetSessionIDs) == 0 {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrGatewayOperatorSessionIDRequired.Error())
+		return
+	}
+	if len(targetSessionIDs) > constants.CLIBindMaxOperators {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Sprintf("too many operator sessions: %d (max %d)", len(targetSessionIDs), constants.CLIBindMaxOperators))
 		return
 	}
 
@@ -70,26 +82,31 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify operator session")
 		return
 	}
-	op, err := c.auth.ValidateOperatorSession(req.OperatorSessionID)
-	if err != nil {
-		var authErr *AuthError
-		if errors.As(err, &authErr) {
-			c.responder.Error(w, authErr.Status, authErr.Message)
+	bound := make([]models.CLIBoundOperator, 0, len(targetSessionIDs))
+	for _, sessionID := range targetSessionIDs {
+		op, err := c.auth.ValidateOperatorSession(sessionID)
+		if err != nil {
+			var authErr *AuthError
+			if errors.As(err, &authErr) {
+				c.responder.Error(w, authErr.Status, fmt.Sprintf("operator session %s: %s", safeTruncateID(sessionID, 8), authErr.Message))
+				return
+			}
+			c.logger.Error("CLI bind: validate operator session", "error", err, "operator_session_id_prefix", safeTruncateID(sessionID, 8))
+			c.responder.Error(w, http.StatusInternalServerError, "failed to verify operator session")
 			return
 		}
-		c.logger.Error("CLI bind: validate operator session", "error", err, "operator_session_id_prefix", safeTruncateID(req.OperatorSessionID, 8))
-		c.responder.Error(w, http.StatusInternalServerError, "failed to verify operator session")
-		return
+		if op.UserID != userID {
+			c.logger.Warn("CLI bind: operator session does not belong to authenticated user",
+				"user_id", userID,
+				"operator_user_id", op.UserID,
+				"operator_session_id_prefix", safeTruncateID(sessionID, 8),
+			)
+			c.responder.Error(w, http.StatusForbidden, "operator session does not belong to the authenticated user")
+			return
+		}
+		bound = append(bound, models.CLIBoundOperator{OperatorSessionID: sessionID, OperatorID: op.ID})
 	}
-	if op.UserID != userID {
-		c.logger.Warn("CLI bind: operator session does not belong to authenticated user",
-			"user_id", userID,
-			"operator_user_id", op.UserID,
-			"operator_session_id_prefix", safeTruncateID(req.OperatorSessionID, 8),
-		)
-		c.responder.Error(w, http.StatusForbidden, "operator session does not belong to the authenticated user")
-		return
-	}
+	primary := bound[0]
 
 	var oldSession *models.CLISession
 	if oldCLISessionID != "" {
@@ -103,14 +120,15 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	if oldSession != nil && oldSession.IsActive && oldSession.OperatorSessionID == req.OperatorSessionID {
+	if oldSession != nil && oldSession.IsActive && sameOperatorSessionIDs(boundSessionIDsOf(oldSession), targetSessionIDs) {
 		c.responder.JSON(w, http.StatusOK, models.CLIBindResponse{
 			Success:           true,
 			CLISessionID:      oldCLISessionID,
 			UserID:            userID,
-			OperatorSessionID: req.OperatorSessionID,
-			OperatorID:        op.ID,
+			OperatorSessionID: primary.OperatorSessionID,
+			OperatorID:        primary.OperatorID,
 			AlreadyBound:      true,
+			Bound:             bound,
 		})
 		return
 	}
@@ -128,12 +146,13 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		oldCLISessionID,
 		newCLISessionID,
 		CLISessionFields{
-			OperatorSessionID: req.OperatorSessionID,
-			UserID:            userID,
-			SystemFingerprint: systemFingerprint,
-			CertFingerprint:   certFingerprint,
-			CertSerial:        certSerial,
-			LoginMethod:       loginMethod,
+			OperatorSessionID:       primary.OperatorSessionID,
+			BoundOperatorSessionIDs: targetSessionIDs,
+			UserID:                  userID,
+			SystemFingerprint:       systemFingerprint,
+			CertFingerprint:         certFingerprint,
+			CertSerial:              certSerial,
+			LoginMethod:             loginMethod,
 		},
 	)
 	if err != nil {
@@ -147,20 +166,75 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	c.logger.Info("CLI session bound to operator session via controller",
+	c.logger.Info("CLI session bound to operator session(s) via controller",
 		"user_id", userID,
 		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
 		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
-		"operator_session_id_prefix", safeTruncateID(req.OperatorSessionID, 8),
+		"primary_operator_session_id_prefix", safeTruncateID(primary.OperatorSessionID, 8),
+		"operator_count", len(bound),
 	)
 
 	c.responder.JSON(w, http.StatusCreated, models.CLIBindResponse{
 		Success:           true,
 		CLISessionID:      newCLISessionID,
 		UserID:            userID,
-		OperatorSessionID: req.OperatorSessionID,
-		OperatorID:        op.ID,
+		OperatorSessionID: primary.OperatorSessionID,
+		OperatorID:        primary.OperatorID,
+		Bound:             bound,
 	})
+}
+
+// normalizeOperatorSessionIDs returns the de-duplicated, trimmed target list of
+// a bind request in request order (operator_session_id first, then
+// operator_session_ids).
+func normalizeOperatorSessionIDs(req models.CLIBindRequest) []string {
+	candidates := make([]string, 0, len(req.OperatorSessionIDs)+1)
+	candidates = append(candidates, req.OperatorSessionID)
+	candidates = append(candidates, req.OperatorSessionIDs...)
+	seen := make(map[string]struct{}, len(candidates))
+	ids := make([]string, 0, len(candidates))
+	for _, id := range candidates {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// boundSessionIDsOf returns a CLI session's bound operator sessions, primary
+// first. Sessions persisted before multi-bind carry only the primary binding.
+func boundSessionIDsOf(session *models.CLISession) []string {
+	if len(session.BoundOperatorSessionIDs) > 0 {
+		return session.BoundOperatorSessionIDs
+	}
+	if session.OperatorSessionID != "" {
+		return []string{session.OperatorSessionID}
+	}
+	return nil
+}
+
+// cliSessionBindsOperator reports whether operatorSessionID is one of the
+// operator sessions bound to the CLI session, primary or not.
+func cliSessionBindsOperator(session *models.CLISession, operatorSessionID string) bool {
+	return operatorSessionID != "" && slices.Contains(boundSessionIDsOf(session), operatorSessionID)
+}
+
+func sameOperatorSessionIDs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // handleUnbind clears the authenticated CLI session's operator binding.

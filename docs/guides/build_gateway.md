@@ -159,7 +159,7 @@ Use `--follow` to run in the foreground, which is appropriate for containers and
 ./g8e gw start --follow
 ```
 
-On first start, the gateway creates the `.g8e/` runtime tree and PKI hierarchy. A host-managed gateway defaults to plain HTTP on port 8080 and HTTPS on port 8443; use `--http-port` and `--https-port` flags to override these defaults. Docker Compose keeps the container listeners at 8080 and 8443 and changes only published host ports through `G8E_HTTP_PORT` and `G8E_HTTPS_PORT`. Confirm the resolved endpoints, then enroll the first owner:
+On first start, the gateway creates the `.g8e/` runtime tree and PKI hierarchy. A host-managed gateway defaults to plain HTTP on port 8080 and HTTPS on port 8443; use `--http-port` and `--https-port` flags to override these defaults. Docker Compose keeps the container listeners at 8080 and 8443 and changes only published host ports through a checked-in `docker-compose.override.yml`. Confirm the resolved endpoints, then enroll the first owner:
 
 ```bash
 ./g8e gw status
@@ -199,12 +199,15 @@ Consensus and notary require an enabled consensus policy, trusted signers, and a
 - `--consensus-url <url>` - Optional consensus service URL carried in startup configuration; the reference gateway currently deliberates through its in-process consensus service
 - `--consensus-bootstrap <path>` - Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup
 - `--mcp-downstream-url <url>` - URL of a downstream MCP server to proxy discovery and execution to (default: none)
+- `--mcp-downstream-cmd <command>` - Command of a downstream stdio MCP server the Gateway spawns and proxies discovery and execution to (default: none)
+- `--mcp-downstream-args <args>` - Comma-separated arguments for the downstream MCP subprocess (default: none)
 - `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
 - `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
 - `--public-spectator` - Start the in-process public mirror and Evaluation Explorer listeners (enabled by default)
 - `--public-spectator-private-listen <address>` - Authenticated mirror-ingest listener (default: `127.0.0.1:8081`)
 - `--public-spectator-public-listen <address>` - Anonymous mirror read and SSE listener (default: `127.0.0.1:8082`)
 - `--public-spectator-trusted-proxy-cidr <cidr>` - Trusted proxy CIDR permitted to supply exactly one `CF-Connecting-IP` value (repeatable)
+- `--public-spectator-allow-container-bind` - Allow the public mirror and Evaluation Explorer listeners to bind `0.0.0.0` so a container network can reach them; set only inside a container deployment
 - `--eval-explorer-listen <address>` - Evaluation Explorer listener (default: `127.0.0.1:5173`)
 - `--eval-explorer-root <dir>` - Directory containing built Evaluation Explorer assets
 - `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
@@ -227,7 +230,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.3
+go get github.com/g8e-ai/g8e/v2@v2.2.5
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -239,7 +242,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.2.3
+pip install g8e==2.2.5
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -416,17 +419,21 @@ Display the running gateway's platform settings over the enrolled CLI's mTLS con
 ./g8e gw reset
 ```
 
-> **Warning:** The current reset path removes the complete `.g8e/` runtime tree, including the existing CA, and attempts to remove operating-system g8e trust anchors despite the command's built-in help text stating that it preserves PKI. Treat reset as destructive and enroll the owner again after it completes. Use `--force`, `--y`, or `--yes` to skip the confirmation prompt.
+> **Warning:** The reset path moves the complete `.g8e/` runtime tree aside, including the existing CA, and attempts to remove operating-system g8e trust anchors; it does not preserve PKI. Treat reset as destructive and enroll the owner again after it completes. The prior tree is kept as `.g8e-<MMDDHHMM>` (see [Gateway Clean](#gateway-clean)).
+
+Reset asks for confirmation and offers an evaluation-evidence backup first. Use `--force`, `--y`, or `--yes` to skip the confirmation prompt (the backup still runs) and `--skip-backup` to opt out of the backup.
 
 ### Gateway Clean
 
-Destructively remove the local CLI-managed gateway runtime state, including databases, secrets, logs, and PKI certificates:
+Remove the local CLI-managed gateway runtime state, including databases, secrets, logs, and PKI certificates:
 
 ```bash
 ./g8e gw clean
 ```
 
-**Warning:** This permanently destroys the runtime tree and credentials and attempts to remove g8e root CA anchors from the operating system trust store. Use `--force`, `--y`, or `--yes` to skip the confirmation prompt.
+**Warning:** The runtime directory is not deleted: it is renamed to `.g8e-<MMDDHHMM>` beside `.g8e` (for example `.g8e-09301401`; a numeric suffix is added if that name is taken), and a fresh `.g8e` is created on the next start. Nothing is recoverable by the gateway itself, credentials in the new runtime are gone, and the command attempts to remove g8e root CA anchors from the operating system trust store. Delete the archived directory by hand once you no longer need it.
+
+Before renaming, `gw clean` asks for confirmation and then offers to back up evaluation evidence to `eval/backups/` (the same snapshot `g8e eval backup` writes). Use `--force`, `--y`, or `--yes` to skip the confirmation (the backup still runs) and `--skip-backup` to opt out of the backup. A backup that fails aborts the clean; rerun with `--skip-backup` to proceed without it.
 
 ### Gateway Setup
 

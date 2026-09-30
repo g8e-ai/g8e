@@ -219,17 +219,24 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Multi-bind survives a refresh only while the primary binding does.
+	var boundOperatorSessionIDs []string
+	if oldSession != nil && oldSession.OperatorSessionID == operatorSessionID {
+		boundOperatorSessionIDs = oldSession.BoundOperatorSessionIDs
+	}
+
 	newCLISessionID := uuid.NewString()
 	_, err = c.cliSessionSvc.RefreshCLISession(
 		oldCLISessionID,
 		newCLISessionID,
 		CLISessionFields{
-			OperatorSessionID: operatorSessionID,
-			UserID:            userID,
-			SystemFingerprint: systemFingerprint,
-			CertFingerprint:   certFingerprint,
-			CertSerial:        certSerial,
-			LoginMethod:       loginMethod,
+			OperatorSessionID:       operatorSessionID,
+			BoundOperatorSessionIDs: boundOperatorSessionIDs,
+			UserID:                  userID,
+			SystemFingerprint:       systemFingerprint,
+			CertFingerprint:         certFingerprint,
+			CertSerial:              certSerial,
+			LoginMethod:             loginMethod,
 		},
 	)
 	if err != nil {
@@ -266,14 +273,21 @@ func (c *CLIRefreshController) registryOperatorBinding(userID string) (sessionID
 	if err != nil {
 		return "", "", false, err
 	}
-	var embeddedSessionID string
-	for _, op := range operators {
-		if operatorcapability.IsGovernedDataOperator(op) {
+	// The stack's data-operator is the preferred primary binding; any other
+	// data Operator is the fallback.
+	for _, isCandidate := range []func(models.OperatorDocumentGo) bool{operatorcapability.IsStackDataOperator, operatorcapability.IsDataOperator} {
+		for _, op := range operators {
+			if !isCandidate(op) {
+				continue
+			}
 			validated, validateErr := c.auth.ValidateOperatorSession(op.OperatorSessionID)
 			if validateErr == nil && validated.UserID == userID {
 				return validated.OperatorSessionID, validated.ID, true, nil
 			}
 		}
+	}
+	var embeddedSessionID string
+	for _, op := range operators {
 		if op.ID == string(constants.DocIDEmbeddedOperator) && op.Status == constants.OperatorStatusActive && op.OperatorSessionID != "" {
 			embeddedSessionID = op.OperatorSessionID
 		}

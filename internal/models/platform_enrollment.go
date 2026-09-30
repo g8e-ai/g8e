@@ -21,9 +21,10 @@ type PlatformEnrollmentState string
 type PlatformEnrollmentDecision string
 
 const (
-	PlatformComponentDashboard PlatformComponentKind = "dashboard"
-	PlatformComponentEnsemble  PlatformComponentKind = "ensemble"
-	PlatformComponentOperator  PlatformComponentKind = "operator"
+	PlatformComponentDashboard   PlatformComponentKind = "dashboard"
+	PlatformComponentEnsemble    PlatformComponentKind = "ensemble"
+	PlatformComponentOperator    PlatformComponentKind = "operator"
+	PlatformComponentApplication PlatformComponentKind = "application"
 
 	PlatformEnrollmentStatePending   PlatformEnrollmentState = "pending"
 	PlatformEnrollmentStateApproved  PlatformEnrollmentState = "approved"
@@ -41,7 +42,7 @@ const (
 	PlatformOperatorName  = "g8eo"
 )
 
-func (k PlatformComponentKind) CanonicalName() (string, error) {
+func (k PlatformComponentKind) CanonicalName(appName ...string) (string, error) {
 	switch k {
 	case PlatformComponentDashboard:
 		return PlatformDashboardName, nil
@@ -49,6 +50,11 @@ func (k PlatformComponentKind) CanonicalName() (string, error) {
 		return PlatformEnsembleName, nil
 	case PlatformComponentOperator:
 		return PlatformOperatorName, nil
+	case PlatformComponentApplication:
+		if len(appName) > 0 && appName[0] != "" {
+			return appName[0], nil
+		}
+		return "", constants.ErrPlatformEnrollmentAppNameRequired
 	default:
 		return "", constants.ErrPlatformEnrollmentInvalidComponent
 	}
@@ -60,6 +66,7 @@ func (s PlatformEnrollmentState) IsTerminal() bool {
 
 type PlatformEnrollmentCreateRequest struct {
 	ComponentKind     PlatformComponentKind       `json:"component_kind"`
+	AppName           string                      `json:"app_name,omitempty"`
 	InstanceID        string                      `json:"instance_id"`
 	Hostname          string                      `json:"hostname"`
 	SystemFingerprint string                      `json:"system_fingerprint,omitempty"`
@@ -68,7 +75,7 @@ type PlatformEnrollmentCreateRequest struct {
 }
 
 func (r PlatformEnrollmentCreateRequest) ValidateShape() error {
-	if _, err := r.ComponentKind.CanonicalName(); err != nil {
+	if _, err := r.ComponentKind.CanonicalName(r.AppName); err != nil {
 		return err
 	}
 	if r.InstanceID == "" {
@@ -82,6 +89,14 @@ func (r PlatformEnrollmentCreateRequest) ValidateShape() error {
 	}
 	if len(r.Hostname) > constants.PlatformEnrollmentMaxHostnameBytes {
 		return constants.ErrPlatformEnrollmentInvalidHostname
+	}
+	if r.ComponentKind == PlatformComponentApplication {
+		if r.AppName == "" {
+			return constants.ErrPlatformEnrollmentAppNameRequired
+		}
+		if len(r.AppName) > constants.PlatformEnrollmentMaxAppNameBytes {
+			return constants.ErrPlatformEnrollmentInvalidAppName
+		}
 	}
 	if r.ComponentKind == PlatformComponentOperator {
 		if r.App != nil || r.Operator == nil || r.Operator.OperatorCSRPEM == "" || r.Operator.CLICSRPEM == "" {
@@ -259,6 +274,7 @@ type PlatformEnrollmentRequest struct {
 	TokenHash              string                              `json:"token_hash"`
 	ComponentKind          PlatformComponentKind               `json:"component_kind"`
 	ComponentName          string                              `json:"component_name"`
+	AppName                string                              `json:"app_name,omitempty"`
 	InstanceID             string                              `json:"instance_id"`
 	Hostname               string                              `json:"hostname"`
 	SystemFingerprint      string                              `json:"system_fingerprint,omitempty"`
@@ -328,7 +344,7 @@ func (r PlatformEnrollmentRequest) EnrolledMetadata() PlatformEnrollmentEnrolled
 }
 
 func (r PlatformEnrollmentRequest) ValidateStoredIdentity() error {
-	name, err := r.ComponentKind.CanonicalName()
+	name, err := r.ComponentKind.CanonicalName(r.ComponentName)
 	if err != nil {
 		return err
 	}

@@ -95,6 +95,21 @@ _ROLE_LITE = MODEL_ROLE_LITE
 _REQUEST_SCHEMA_VERSION = PLATFORM["platform"]["InferenceRequestSchemaVersion"]["value"]
 
 
+# The inference operator verifies canonical form by round-tripping through Go's
+# encoding/json, which always escapes these characters inside strings. Python
+# must emit the same escapes or the operator rejects the payload as
+# non-canonical (and this module rejects the operator's own tool-call arguments).
+_GO_JSON_STRING_ESCAPES = str.maketrans(
+    {
+        "<": "\\u003c",
+        ">": "\\u003e",
+        "&": "\\u0026",
+        "\u2028": "\\u2028",
+        "\u2029": "\\u2029",
+    }
+)
+
+
 def _canonical_json(value: object) -> str:
     from app.errors import ValidationError
 
@@ -105,7 +120,7 @@ def _canonical_json(value: object) -> str:
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
-        )
+        ).translate(_GO_JSON_STRING_ESCAPES)
     except (TypeError, ValueError) as exc:
         raise ValidationError("Governed inference content is not canonical JSON") from exc
 

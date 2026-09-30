@@ -5,7 +5,7 @@ title: MCP Protocol
 # MCP Protocol
 
 Last Updated: 2026-09-28
-Version: v2.2.4
+Version: v2.2.5
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -37,7 +37,7 @@ The gateway translates MCP tool invocations into governance envelopes:
 The gateway handles certain tools locally without downstream proxy:
 
 - **read_field**: JIT field resolution from governed collections with L1 field path validation, L1 forbidden pattern scanning on returned values, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
-- **Native tools**: The Operator includes 30 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
+- **Native tools**: The Operator includes 32 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
   - `db_discover_topology`: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map
   - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans and performance issues
   - `db_isolated_read`: Executes SELECT statements in read-only mode against a SQLite database
@@ -149,7 +149,7 @@ g8e provides two stdio MCP transport modes. Choose based on your deployment requ
 | Command | Governance | Gateway required | Downstream |
 |---|---|---|---|
 | `g8e mcp stdio` | L1-L5 full stack | Yes (running) | g8e gateway with full governance |
-| `g8e mcp agent run` | L1 inline (MITRE ATT&CK) | No | Any MCP server (subprocess or HTTP) |
+| `g8e mcp agent run <agent>` | L1-L5 full stack | Starts if needed | Governed external agent launch via gateway |
 
 ### MCP Client Configuration
 
@@ -182,7 +182,7 @@ The `show` command displays three configuration modes:
 
 **IP Address (mTLS)**: Environments without DNS or for direct IP access. Uses external interface IP without DNS setup. Suitable for Claude Code, Codex, Goose, Gemini CLI MCP clients.
 
-**Stdio Transport**: Direct native tool access without gateway. Requires g8e binary in PATH or full path in config. Suitable for Claude Code, Codex, Goose, Gemini CLI MCP clients.
+**Stdio Transport**: Stdio bridge to gateway with L1–L5 governance. Requires running gateway and enrolled credentials. Suitable for Claude Code, Codex, Goose, Gemini CLI MCP clients.
 
 #### Claude Code & Codex Custom Connector Registration
 
@@ -214,29 +214,29 @@ The unified `/mcp` endpoint supports:
 
 **Note**: The `/mcp` endpoint is available on both gateway surfaces (mTLS port 8443 and plain HTTP port 8080). For Claude Code, use the plain HTTP port (8080) for development or the public TLS port (8443) with JWT authentication for production.
 
-**Stdio Transport (Recommended for Local Development)**
+**Stdio Transport (Governed Gateway Bridge)**
 
-For local development without running the gateway, g8e can run as a stdio MCP server exposing all native tools:
+The stdio bridge connects MCP clients to the running gateway with full L1–L5 governance:
 
 ```bash
 claude mcp add g8e-stdio g8e mcp stdio
 ```
 
-This runs g8e in stdio mode with no additional flags required. All 30 native tools are available including system diagnostics, database operations, network tools, and shell execution with governance safety features.
+This runs g8e in stdio mode proxying tool calls to the gateway. All native tools are available subject to active governance posture and produce signed action receipts.
 
-**Governance Proxy for Third-Party MCP Servers**
+**Governed Downstream Egress for Third-Party MCP Servers**
 
-`g8e mcp agent run` wraps any external MCP server in L1 doctrine as a stdio reverse proxy — no gateway required. Every `tools/call` the AI makes is screened through the MITRE ATT&CK threat detection engine before being forwarded to the real server. Blocked calls return an MCP error with the violation category and MITRE ID; all other methods pass through unchanged.
+Third-party MCP servers (such as filesystem servers or custom backends) are governed through Gateway downstream egress, ensuring every tool call undergoes complete L1–L5 governance and generates signed receipts in the audit vault:
 
 ```bash
-# Wrap a subprocess MCP server (stdio)
-claude mcp add g8e-fs -- g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+# Subprocess MCP server downstream (stdio)
+g8e serve gateway \
+  --mcp-downstream-cmd npx \
+  --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/home/user'
 
-# Wrap an HTTP MCP server
-claude mcp add g8e-proxy g8e mcp agent run --url http://localhost:3000
+# HTTP MCP server downstream
+g8e serve gateway --mcp-downstream-url http://localhost:3000/mcp
 ```
-
-The downstream's `tools/list` is passed through unmodified so the AI sees the real tool's capabilities. Use this mode when you want L1 hard-gate protection around a third-party MCP server without deploying the full g8e stack. For L2-L5 governance (consensus signing, WebAuthn approval), use `g8e mcp stdio` with the gateway running.
 
 ### MCP Client Connection
 
@@ -454,7 +454,7 @@ See [SSE Streaming](../../docs/architecture/sse.md) for the full endpoint and se
 
 | Concern | File |
 |---|---|
-| Governance proxy (agent run) | `internal/cli/cmd/mcp/` (`runMCPAgentRun`) |
+| Agent launcher (agent run) | `internal/cli/cmd/mcp/` (`runMCPAgentRun`) |
 | Gateway entry | `internal/cli/cmd/gateway.go` (gatewayCmd, gatewayStartCmd) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http_router.go` |

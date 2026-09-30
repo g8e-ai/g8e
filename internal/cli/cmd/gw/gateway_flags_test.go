@@ -129,6 +129,8 @@ func TestAddGatewayFlags_RegistersAllFlags(t *testing.T) {
 		{"consensus-url", ""},
 		{"consensus-bootstrap", ""},
 		{"mcp-downstream-url", ""},
+		{"mcp-downstream-cmd", ""},
+		{"mcp-downstream-args", ""},
 		{"a2a-downstream-url", ""},
 		{"public-base-url", ""},
 		{"doctrine-dir", ""},

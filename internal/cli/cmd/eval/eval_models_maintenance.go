@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
 type governedModelMaintenanceEnv struct {
@@ -26,13 +27,9 @@ type governedModelMaintenanceEnv struct {
 	ResolveProbeRunner func() (evaluation.GovernedCapabilityProbeRunner, error)
 }
 
-// resolveGovernedModelMaintenance binds provider maintenance to the resolved
-// inference and data operator sessions.
+// resolveGovernedModelMaintenance targets provider maintenance at the inference
+// operator and the stack's data-operator.
 func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (governedModelMaintenanceEnv, error) {
-	inferencePin, dataPin, err := sessionPinsFromFlags(cmd)
-	if err != nil {
-		return governedModelMaintenanceEnv{}, err
-	}
 	chatDeps := deps.chatDeps()
 	cfg, fileSvc, authContext, err := chatEvalEnvironment(cmd, chatDeps)
 	if err != nil {
@@ -42,7 +39,7 @@ func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (g
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	sessions, err := resolveOperatorSessionsFrom(operators, inferencePin, dataPin, operatorRoleInference, operatorRoleData)
+	sessions, err := resolveOperatorSessionsFrom(operators, operatorRoleInference, operatorRoleData)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
@@ -50,7 +47,7 @@ func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (g
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
-	dataOperator, err := evaluation.SelectCampaignDataOperator(operators, sessions.DataSessionID)
+	dataOperator, err := operatorcapability.SelectDataOperator(operators)
 	if err != nil {
 		return governedModelMaintenanceEnv{}, err
 	}
@@ -69,15 +66,7 @@ func resolveGovernedModelMaintenance(cmd *cobra.Command, deps nativeEvalDeps) (g
 		},
 		ModelDispatcher: modelDispatcher,
 		ResolveProbeRunner: func() (evaluation.GovernedCapabilityProbeRunner, error) {
-			appClient, err := inferenceEvalAppClient(cfg, fileSvc, authContext, inferenceEvalDeps{
-				configLoader:     deps.configLoader,
-				fileSvcFactory:   deps.fileSvcFactory,
-				authLoader:       deps.authLoader,
-				clientFactory:    deps.clientFactory,
-				appClientFactory: deps.clientFactory,
-				now:              deps.now,
-				newID:            deps.newID,
-			})
+			appClient, err := inferenceEvalAppClient(fileSvc, cfg, authContext, deps.clientFactory)
 			if err != nil {
 				return nil, err
 			}

@@ -122,6 +122,7 @@ func testRunOperators() []models.OperatorDocumentGo {
 		{
 			ID:                "data-op",
 			OperatorSessionID: testDataSession,
+			CurrentHostname:   constants.DataOperatorHostname,
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
 			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: false},
@@ -203,16 +204,15 @@ func setupRunEnv(t *testing.T) *runEnv {
 		authLoader: func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
 			return &auth.ClientAuthContext{UserID: "user-1", CLISessionID: "cli-1", OperatorID: "operator-1"}, nil
 		},
-		runControl: testRunControl(control),
-		now:        func() time.Time { return fixedNow },
-		newID:      func() string { return "test-id" },
+		bindClientFactory: func(*config.Config) chatEvalBindClient { return &fakeBindClient{bound: []string{testDataSession}} },
+		runControl:        testRunControl(control),
+		now:               func() time.Time { return fixedNow },
+		newID:             func() string { return "test-id" },
 	}
 
 	cmd := cmdtest.SilentCobraCommand()
 	cmd.SetContext(context.Background())
 	cmd.Flags().String("project-root", root, "")
-	cmd.Flags().String(flagInferenceSession, "", "")
-	cmd.Flags().String(flagDataSession, "", "")
 	return &runEnv{root: root, deps: deps, cmd: cmd, control: control}
 }
 

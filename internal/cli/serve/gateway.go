@@ -55,18 +55,21 @@ type GatewayConfig struct {
 	ConsensusURL        string                `json:"consensus_url,omitempty"`
 	ConsensusBootstrap  string                `json:"consensus_bootstrap,omitempty"`
 	MCPDownstreamURL    string                `json:"mcp_downstream_url,omitempty"`
+	MCPDownstreamCmd    string                `json:"mcp_downstream_cmd,omitempty"`
+	MCPDownstreamArgs   []string              `json:"mcp_downstream_args,omitempty"`
 	A2ADownstreamURL    string                `json:"a2a_downstream_url,omitempty"`
 	EnsembleUpstreamURL string                `json:"ensemble_upstream_url,omitempty"`
 	PublicBaseURL       string                `json:"public_base_url,omitempty"`
 	AllowedOrigins      []string              `json:"allowed_origins,omitempty"`
 	DoctrineDir         string                `json:"doctrine_dir,omitempty"`
 
-	PublicSpectatorEnabled           bool     `json:"public_spectator_enabled"`
-	PublicSpectatorPrivateAddr       string   `json:"public_spectator_private_addr,omitempty"`
-	PublicSpectatorPublicAddr        string   `json:"public_spectator_public_addr,omitempty"`
-	EvalExplorerAddr                 string   `json:"eval_explorer_addr,omitempty"`
-	EvalExplorerRoot                 string   `json:"eval_explorer_root,omitempty"`
-	PublicSpectatorTrustedProxyCIDRs []string `json:"public_spectator_trusted_proxy_cidrs,omitempty"`
+	PublicSpectatorEnabled            bool     `json:"public_spectator_enabled"`
+	PublicSpectatorPrivateAddr        string   `json:"public_spectator_private_addr,omitempty"`
+	PublicSpectatorPublicAddr         string   `json:"public_spectator_public_addr,omitempty"`
+	PublicSpectatorAllowContainerBind bool     `json:"public_spectator_allow_container_bind,omitempty"`
+	EvalExplorerAddr                  string   `json:"eval_explorer_addr,omitempty"`
+	EvalExplorerRoot                  string   `json:"eval_explorer_root,omitempty"`
+	PublicSpectatorTrustedProxyCIDRs  []string `json:"public_spectator_trusted_proxy_cidrs,omitempty"`
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -135,6 +138,8 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		CertMode:            cfg.CertIdentityMode,
 		NetworkIdentityFile: cfg.NetworkIdentityFile,
 		MCPDownstreamURL:    cfg.MCPDownstreamURL, // empty by default — no downstream proxy
+		MCPDownstreamCmd:    cfg.MCPDownstreamCmd,
+		MCPDownstreamArgs:   cfg.MCPDownstreamArgs,
 		A2ADownstreamURL:    cfg.A2ADownstreamURL, // empty by default — no downstream proxy
 		EnsembleUpstreamURL: cfg.EnsembleUpstreamURL,
 		PublicBaseURL:       cfg.PublicBaseURL,
@@ -150,6 +155,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	gatewayCfg.Gateway.PublicSpectatorEnabled = cfg.PublicSpectatorEnabled
 	gatewayCfg.Gateway.PublicSpectatorPrivateAddr = cfg.PublicSpectatorPrivateAddr
 	gatewayCfg.Gateway.PublicSpectatorPublicAddr = cfg.PublicSpectatorPublicAddr
+	gatewayCfg.Gateway.PublicSpectatorAllowContainerBind = cfg.PublicSpectatorAllowContainerBind
 	gatewayCfg.Gateway.EvalExplorerAddr = cfg.EvalExplorerAddr
 	gatewayCfg.Gateway.EvalExplorerRoot = cfg.EvalExplorerRoot
 	gatewayCfg.Gateway.PublicSpectatorTrustedProxyCIDRs = cfg.PublicSpectatorTrustedProxyCIDRs

@@ -50,7 +50,7 @@ type LaneOutcome struct {
 }
 
 type PlatformLane interface {
-	ResolveTarget(ctx context.Context, pinnedSessionID string) (Target, error)
+	ResolveTarget(ctx context.Context) (Target, error)
 	Posture(ctx context.Context) (evalv1.EvaluationGovernancePosture, error)
 	Execute(ctx context.Context, request ExecutionRequest) (*LaneOutcome, error)
 }
@@ -60,11 +60,10 @@ type TargetObserver interface {
 }
 
 type RunRequest struct {
-	RunID                   string
-	PinnedOperatorSessionID string
-	TargetResource          string
-	Marker                  string
-	Deployment              *evalv1.EvaluationDeploymentIdentity
+	RunID          string
+	TargetResource string
+	Marker         string
+	Deployment     *evalv1.EvaluationDeploymentIdentity
 }
 
 type ReportStore interface {
@@ -98,7 +97,7 @@ func (r *Runner) Run(ctx context.Context, request RunRequest) (*evalv1.Evaluatio
 		return nil, err
 	}
 	startedAt := r.now().UTC()
-	target, targetErr := r.lane.ResolveTarget(ctx, request.PinnedOperatorSessionID)
+	target, targetErr := r.lane.ResolveTarget(ctx)
 	posture, postureErr := r.lane.Posture(ctx)
 	report := &evalv1.EvaluationReport{
 		SchemaVersion: RegistryVersion,

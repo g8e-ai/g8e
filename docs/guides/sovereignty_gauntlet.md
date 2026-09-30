@@ -82,7 +82,7 @@ The five layers are not equivalent to model reasoning or application approval: L
 | `ratify` | Required | Audited only | Required |
 | `notary` | Required | Required | Required |
 
-Gateway MCP and A2A paths can coordinate L2 deliberation and supported L3 approval. Direct envelope submission and governed HTTP dispatch to an outbound Operator do not synthesize missing L2 votes or L3 proofs. External MCP wrappers and client-native tools remain outside L2-L5 governance, signed receipts, and Gateway audit. Do not combine evidence from these paths as if it represented one uniform control.
+Gateway MCP and A2A paths can coordinate L2 deliberation and supported L3 approval. Direct envelope submission and governed HTTP dispatch to an outbound Operator do not synthesize missing L2 votes or L3 proofs. MCP servers a client reaches directly and client-native tools remain outside L2-L5 governance, signed receipts, and Gateway audit. Do not combine evidence from these paths as if it represented one uniform control.
 
 ## Validated rehearsal
 
@@ -143,9 +143,11 @@ docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}' | tee "${
 `|| true` preserves the preflight record when no authenticated stack is running; it is not a publication pass condition. After explicit approval, the clean unified-stack commands are:
 
 ```bash
-./g8e docker clean
+./g8e docker clean --yes
 ./g8e auth logout
 ```
+
+`--yes` only skips the confirmation, which the approval above supplies; the pre-clean evidence backup still runs unless `--skip-backup` is given.
 
 ## 3. Run the unified-stack proof
 
@@ -264,7 +266,7 @@ Verify every exported receipt's canonical signature and final persistence attest
 ```bash
 mkdir -p "${CAMPAIGN_DIR}/unified/verifier-pki"
 docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem"
-docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem"
+docker cp g8e-data-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem"
 cd "${REPO_ROOT}"
 ensemble/.venv/bin/python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY'
 import binascii
@@ -308,8 +310,8 @@ The public keys come from the producing environment, so the result verifies inte
 The Dockerized operator owns the execution vault and commitment ledger; it also owns Git-backed mutation state when Git integration is enabled. Generate reports inside that container, then copy them to the campaign directory:
 
 ```bash
-docker exec g8e-operator /g8e report all --out /root/reports/sovereignty-gauntlet
-docker cp g8e-operator:/root/reports/sovereignty-gauntlet/. "${CAMPAIGN_DIR}/unified/reports/"
+docker exec g8e-data-operator /g8e report all --out /root/reports/sovereignty-gauntlet
+docker cp g8e-data-operator:/root/reports/sovereignty-gauntlet/. "${CAMPAIGN_DIR}/unified/reports/"
 cat "${CAMPAIGN_DIR}/unified/reports/verification_summary.csv" | tee "${CAMPAIGN_DIR}/logs/verification-summary.txt"
 ```
 
@@ -333,7 +335,7 @@ For a public integrity claim, inspect every `SKIPPED` row. Do not advertise a sk
 The `compliance ksi` command fails closed unless the caller binds the evaluation to an assessment scope, run, assertion-assessment set, and evidence window. Run it against the same populated Operator state only when those identifiers come from the assessment being reported:
 
 ```bash
-docker exec g8e-operator /g8e compliance ksi \
+docker exec g8e-data-operator /g8e compliance ksi \
   --class C \
   --catalog docs/reference/ksi-catalog.json \
   --scope-id '<assessment-scope-id>' \

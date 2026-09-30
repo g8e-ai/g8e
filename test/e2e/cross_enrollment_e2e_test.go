@@ -27,10 +27,10 @@ import (
 // crossEnrollmentHostname is the stable substring used to identify the
 // secondary gateway's pending operator request and active operator
 // document. The secondary gateway container is named
-// ${G8E_PREFIX:-g8e}-gateway-secondary and runs `operator start -e
+// g8e-gateway-secondary and runs `operator start -e
 // g8e.local`, so its operator enrollment request carries a hostname
 // containing "gateway-secondary". Filtering on this substring avoids
-// matching the primary g8e-operator container's enrollment request.
+// matching the primary g8e-data-operator container's enrollment request.
 const crossEnrollmentHostname = "gateway-secondary"
 
 // forbiddenPendingSecrets is the list of secret-bearing strings that must

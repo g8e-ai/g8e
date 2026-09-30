@@ -207,7 +207,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		return nil, err
 	}
 
-	componentName, err := req.ComponentKind.CanonicalName()
+	componentName, err := req.ComponentKind.CanonicalName(req.AppName)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +259,7 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 		TokenHash:         tokenHash,
 		ComponentKind:     req.ComponentKind,
 		ComponentName:     componentName,
+		AppName:           req.AppName,
 		InstanceID:        req.InstanceID,
 		Hostname:          req.Hostname,
 		SystemFingerprint: req.SystemFingerprint,
@@ -473,7 +474,7 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 		return nil, constants.ErrPlatformEnrollmentInvalidState
 	}
 	targetDocumentID := ""
-	if existing.ComponentKind == models.PlatformComponentDashboard || existing.ComponentKind == models.PlatformComponentEnsemble {
+	if existing.ComponentKind == models.PlatformComponentDashboard || existing.ComponentKind == models.PlatformComponentEnsemble || existing.ComponentKind == models.PlatformComponentApplication {
 		targetDocumentID = protocol.NewWorkloadIdentity().AppSPIFFEID(existing.ComponentName)
 	}
 	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionRevoke, constants.PlatformEnrollmentIntentRevoke, &commonv1.PlatformEnrollmentGovernancePayload{
@@ -718,7 +719,7 @@ func (s *PlatformEnrollmentService) issueComponent(ctx context.Context, req *mod
 // already has downstream side effects is safe.
 func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Context, req *models.PlatformEnrollmentRequest) error {
 	switch req.ComponentKind {
-	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble:
+	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble, models.PlatformComponentApplication:
 		policyID := req.PolicyID
 		if policyID == "" {
 			policyID = uuid.NewString()
@@ -1212,6 +1213,8 @@ func payloadComponentKind(kind models.PlatformComponentKind) commonv1.PlatformCo
 		return commonv1.PlatformComponentKind_PLATFORM_COMPONENT_KIND_ENSEMBLE
 	case models.PlatformComponentOperator:
 		return commonv1.PlatformComponentKind_PLATFORM_COMPONENT_KIND_OPERATOR
+	case models.PlatformComponentApplication:
+		return commonv1.PlatformComponentKind_PLATFORM_COMPONENT_KIND_APPLICATION
 	default:
 		return commonv1.PlatformComponentKind_PLATFORM_COMPONENT_KIND_UNSPECIFIED
 	}

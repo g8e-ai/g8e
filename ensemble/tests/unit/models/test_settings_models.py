@@ -125,7 +125,7 @@ class TestLLMSettingsResolvedGenerativeLiteModel:
     def test_uses_assistant_model_when_lite_provider_is_jev(self):
         llm = LLMSettings(
             lite_provider=LLMProvider.JEV,
-            lite_model="jev-latest",
+            lite_model="nimble",
             assistant_model="gemma3:4b",
             primary_model="gemma3:12b",
         )
@@ -134,7 +134,7 @@ class TestLLMSettingsResolvedGenerativeLiteModel:
     def test_falls_back_to_primary_when_jev_lite_and_assistant_unset(self):
         llm = LLMSettings(
             lite_provider=LLMProvider.JEV,
-            lite_model="jev-latest",
+            lite_model="nimble",
             primary_model="gemma3:12b",
         )
         assert llm.resolved_generative_lite_model == "gemma3:12b"

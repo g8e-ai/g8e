@@ -182,6 +182,7 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 	if err != nil {
 		return nil, fmt.Errorf("query active operators for user %s: %w", userID, err)
 	}
+	var fallback *models.OperatorDocumentGo
 	for _, doc := range docs {
 		dataBytes, err := json.Marshal(doc.Data)
 		if err != nil {
@@ -191,15 +192,24 @@ func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID stri
 		if err := json.Unmarshal(dataBytes, &operator); err != nil {
 			return nil, fmt.Errorf("unmarshal operator document: %w", err)
 		}
-		if !operatorcapability.IsGovernedDataOperator(operator) {
-			continue
+		if operatorcapability.IsStackDataOperator(operator) {
+			return dataOperatorSession(operator), nil
 		}
-		return &models.OperatorSession{
-			ID:         operator.OperatorSessionID,
-			UserID:     operator.UserID,
-			OperatorID: operator.ID,
-			IsActive:   true,
-		}, nil
+		if fallback == nil && operatorcapability.IsDataOperator(operator) {
+			fallback = &operator
+		}
+	}
+	if fallback != nil {
+		return dataOperatorSession(*fallback), nil
 	}
 	return nil, nil
+}
+
+func dataOperatorSession(operator models.OperatorDocumentGo) *models.OperatorSession {
+	return &models.OperatorSession{
+		ID:         operator.OperatorSessionID,
+		UserID:     operator.UserID,
+		OperatorID: operator.ID,
+		IsActive:   true,
+	}
 }

@@ -89,7 +89,7 @@ class TestDecisionAnswerSerialization:
 class TestEvaluateResponseSerialization:
     def test_evaluate_response_round_trip(self):
         response = EvaluateResponse(
-            model="jev-latest",
+            model="nimble",
             answers={
                 "topic": ChoiceAnswer(
                     choice="billing",

@@ -5,11 +5,10 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import os
 from pathlib import Path
 from typing import TypedDict, cast
 
-from app.constants.env_vars import EnvVar
+from app.constants.bootstrap import get_bootstrap
 from app.constants.generated_paths import PortConstants
 from app.utils.path import resolve_project_root
 
@@ -45,23 +44,18 @@ def _resolve_host_path(raw_path: str | None, default: Path) -> Path:
 
 
 def resolve_runtime_dir() -> Path:
-    """Resolve the ``.g8e`` runtime directory (``G8E_RUNTIME_DIR`` or ``<project>/.g8e``)."""
+    """Resolve the ``.g8e`` runtime directory (``--runtime-dir`` or ``<project>/.g8e``)."""
     return _resolve_host_path(
-        os.environ.get(EnvVar.RUNTIME_DIR),
+        get_bootstrap().runtime_dir,
         resolve_project_root() / ".g8e",
     )
 
 
 def _host_runtime_paths() -> tuple[Path, Path]:
+    bootstrap = get_bootstrap()
     runtime_dir = resolve_runtime_dir()
-    pki_dir = _resolve_host_path(
-        os.environ.get(EnvVar.PKI_DIR),
-        runtime_dir / "pki",
-    )
-    secrets_dir = _resolve_host_path(
-        os.environ.get(EnvVar.SECRETS_DIR),
-        runtime_dir / "secrets",
-    )
+    pki_dir = _resolve_host_path(bootstrap.pki_dir, runtime_dir / "pki")
+    secrets_dir = _resolve_host_path(bootstrap.secrets_dir, runtime_dir / "secrets")
     return pki_dir, secrets_dir
 
 
@@ -75,7 +69,7 @@ def _load_paths() -> PathsDict:
     app_cert_dir = str(Path(default_pki_dir) / "issued" / "apps")
 
     default_ca_cert_path = str(Path(default_pki_dir) / "trust" / "g8eg-ca-bundle.pem")
-    ca_cert_path = os.environ.get(EnvVar.CA_CERT_PATH) or default_ca_cert_path
+    ca_cert_path = get_bootstrap().ca_cert_path or default_ca_cert_path
     pending_enrollment_dir = str(Path(default_pki_dir) / "pending-enrollment")
 
     paths = {
@@ -83,8 +77,8 @@ def _load_paths() -> PathsDict:
             "db_path": str(project_root / ".g8e" / "db"),
             "ca_cert_path": ca_cert_path,
             "app_cert_dir": app_cert_dir,
-            "pki_dir": os.environ.get(EnvVar.PKI_DIR, default_pki_dir),
-            "secrets_dir": os.environ.get(EnvVar.SECRETS_DIR, default_secrets_dir),
+            "pki_dir": default_pki_dir,
+            "secrets_dir": default_secrets_dir,
             "docs_dir": str(project_root / "docs"),
             "ssh_config_path": str(project_root / ".g8e" / "ssh_config"),
             "pending_enrollment_dir": pending_enrollment_dir,
@@ -118,9 +112,8 @@ _paths_cache: PathsDict | None = None
 def get_paths() -> PathsDict:
     """Get paths, loading from file system on first call and caching thereafter.
 
-    This function resolves environment variables and file system state dynamically
-    on each call, making it test-friendly. Tests can monkeypatch environment variables
-    and call reload_paths() to force re-resolution.
+    Resolution reads the typed bootstrap settings (``app.constants.bootstrap``).
+    Tests install settings with ``configure_bootstrap``, which calls reload_paths().
     """
     global _paths_cache
     if _paths_cache is None:
@@ -131,8 +124,8 @@ def get_paths() -> PathsDict:
 def reload_paths() -> None:
     """Clear the paths cache to force re-resolution on next get_paths() call.
 
-    This is primarily for tests that need to monkeypatch environment variables
-    and verify path resolution changes.
+    This is primarily for tests that change bootstrap settings and verify path
+    resolution changes.
     """
     global _paths_cache
     _paths_cache = None

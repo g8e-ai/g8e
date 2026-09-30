@@ -111,7 +111,7 @@ TEST_EXCLUDE_PKGS := \
 # the coverage threshold (e.g. generated protobuf code, example programs).
 COVERAGE_ONLY_EXCLUDE_PKGS := \
 	g8e/v2/protocol/proto \
-	g8e/v2/protocol/examples \
+	g8e/v2/examples \
 	adapters/lattice/gen \
 	node_modules
 
@@ -695,7 +695,7 @@ ensemble-test:
 .PHONY: test-external
 test-external:
 	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
-	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_typesafe"
+	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api or requires_system_one"
 
 .PHONY: ensemble-lint
 ensemble-lint:
@@ -876,7 +876,7 @@ clean-docker:
 .PHONY: restart-operators
 restart-operators:
 	@echo "Restarting Data and Inference Operators to align with current binary..."
-	@docker compose restart g8e-operator g8e-inference-operator
+	@docker compose restart g8e-data-operator g8e-inference-operator
 	@echo "Operators restarted."
 
 .PHONY: docker-build

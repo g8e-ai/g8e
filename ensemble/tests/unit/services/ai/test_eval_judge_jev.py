@@ -40,7 +40,7 @@ def _jev_grade_response(
     noul: float = 0.82,
 ) -> EvaluateResponse:
     return EvaluateResponse(
-        model="jev-latest",
+        model="nimble",
         answers={
             "rubric_score": ScoreAnswer(
                 score=score_index,
@@ -68,21 +68,21 @@ def fake_decision_provider() -> FakeDecisionProvider:
 def jev_judge(fake_decision_provider: FakeDecisionProvider) -> EvalJudge:
     return EvalJudge(
         decision_provider=fake_decision_provider,
-        model="jev-latest",
+        model="nimble",
     )
 
 
 class TestEvalJudgeJevConstruction:
     def test_requires_provider_or_decision_provider(self):
         with pytest.raises(EvalJudgeError, match="LLM provider or decision provider"):
-            EvalJudge(provider=None, decision_provider=None, model="jev-latest")
+            EvalJudge(provider=None, decision_provider=None, model="nimble")
 
     def test_rejects_both_providers(self, fake_decision_provider: FakeDecisionProvider):
         with pytest.raises(EvalJudgeError, match="not both"):
             EvalJudge(
                 provider=object(),
                 decision_provider=fake_decision_provider,
-                model="jev-latest",
+                model="nimble",
             )
 
 
@@ -155,7 +155,7 @@ class TestEvalJudgeJevErrorPaths:
     ):
         fake_decision_provider.add_response(
             EvaluateResponse(
-                model="jev-latest",
+                model="nimble",
                 answers={"meets_passing_threshold": NoulAnswer(noul=0.5)},
                 usage=EvaluateUsage(input_tokens=10, output_tokens=5),
             )
@@ -195,7 +195,7 @@ class TestEvalJudgeJevErrorPaths:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise RateLimitError("Jev rate limit exceeded.", component="typesafe")
+                raise RateLimitError("System One rate limit exceeded.", component="ollama")
             return _jev_grade_response()
 
         fake_decision_provider.evaluate = flaky_evaluate  # type: ignore[method-assign]

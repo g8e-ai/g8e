@@ -41,7 +41,7 @@ This guide covers building the root Docker image, running the unified Docker Com
 | --- | --- |
 | INV-DG-IMG-01 | The Dockerfile builds only the target platform binary (linux/amd64 or linux/arm64) and does not build the full cross-platform matrix. Host cross-platform artifacts require `make build-all` on the host. |
 | INV-DG-IMG-02 | The image entrypoint is `/entrypoint.sh`, which enforces binary precedence: G8E_BIN override, /opt/g8e/bin/g8e host mount, /opt/g8e/bin/g8e-linux-${ARCH} host mount, then /g8e image-baked binary. |
-| INV-DG-COMPOSE-01 | The root docker-compose.yml default profile runs the unified stack: g8e-gateway, g8e-operator, g8e-inference-operator, ensemble, and dashboard. No services require a profile to start. |
+| INV-DG-COMPOSE-01 | The root docker-compose.yml default profile runs the unified stack: g8e-gateway, g8e-data-operator, g8e-inference-operator, ensemble, and dashboard. No services require a profile to start. |
 | INV-DG-COMPOSE-02 | The cross-enrollment profile adds g8e-gateway-secondary (operator mode, enrolls as outbound operator of primary). The g8ellama profile replaces the default gateway with g8e-gateway-user and g8e-inference (User Gateway topology). Do not combine profiles. |
 | INV-DG-COMPOSE-03 | Environment variables from `.env` or inline export override defaults. See .env.example for the complete reference. Port overrides do not change internal container listeners or service-network aliases (g8e.local, g8eg). |
 | INV-DG-ENROLL-01 | Workloads submit platform enrollment requests when reusable credentials are absent. Owner approval issues identity via the Gateway PKI. Each workload has its own runtime volume and enrolls independently. |
@@ -133,7 +133,7 @@ The root `docker-compose.yml` defines a single-host reference deployment on the 
 | Service | Profile | Published ports | Role | Persistent volume |
 | --- | --- | --- | --- | --- |
 | `g8e-gateway` | default | 8080, 8443, 8081, 8082, 5173 | Gateway PDP, PKI authority, MCP, A2A, governance, console, public spectator, evaluation explorer | `g8e-gateway-data` |
-| `g8e-operator` | default | none | Data Operator with outbound-only mTLS execution boundary | `g8e-operator-data` |
+| `g8e-data-operator` | default | none | Data Operator (hostname `data-operator`) with outbound-only mTLS execution boundary | `g8e-operator-data` |
 | `g8e-inference-operator` | default | none | Inference Operator for remote Ollama inference | `g8e-inference-data` |
 | `ensemble` | default | 8000 | g8ee FastAPI agentic ensemble | `g8e-ensemble-data` |
 | `dashboard` | default | 3000 | g8ed Express operator dashboard | `g8e-dashboard-data` |
@@ -194,7 +194,7 @@ The CLI wraps the root Compose file and prepares the host `.g8e` runtime tree be
 
 `docker start` launches the complete unified stack and walks through owner and workload enrollment. A missing request or skipped prompt is non-fatal; finish it later with `auth enroll pending` and `auth enroll approve`.
 
-`docker init` is the automated evaluation bootstrap. It requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT` set, builds unless `--skip-build` is supplied, starts the complete stack, enrolls the owner, auto-approves all platform workloads, and waits for ensemble health. Useful flags are `--clean` (destructive volume wipe), `--skip-build`, `--skip-enroll`, `--skip-approvals`, and `--headless`.
+`docker init` is the automated evaluation bootstrap. It requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT` set, builds unless `--skip-build` is supplied, starts the complete stack, enrolls the owner, auto-approves all platform workloads, and waits for ensemble health. Useful flags are `--clean` (destructive volume wipe; confirms and offers an evidence backup first, with `--yes` and `--skip-backup` as for `docker clean`), `--skip-build`, `--skip-enroll`, `--skip-approvals`, and `--headless`.
 
 The CLI walkthrough assumes host gateway ports 8080 and 8443. With remapped ports, use manual enrollment commands and specify both endpoints:
 
@@ -206,36 +206,34 @@ The CLI walkthrough assumes host gateway ports 8080 and 8443. With remapped port
 
 ### Compose configuration
 
-Copy `.env.example` to `.env`, or export overrides before invoking Compose:
+Copy `.env.example` to `.env`. It holds only secrets and user-specific endpoints or identities (INV-ENV-04 in [Developer Guidelines](../devs/devs.md)):
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `G8E_PREFIX` | `g8e` | Prefixes container names. It does not rename Compose services, the network, or volumes. |
-| `G8E_HTTP_PORT` | `8080` | Host port mapped to Gateway container port 8080. |
-| `G8E_HTTPS_PORT` | `8443` | Host port mapped to Gateway container port 8443. |
-| `G8E_PUBLIC_MIRROR_PRIVATE_PORT` | `8081` | Loopback-only host port for the Gateway private mirror ingest surface. |
-| `G8E_PUBLIC_MIRROR_PUBLIC_PORT` | `8082` | Loopback-only host port for the public mirror read/SSE surface. |
-| `G8E_EVAL_EXPLORER_PORT` | `5173` | Loopback-only host port for the embedded evaluation explorer. |
-| `G8E_ENSEMBLE_PORT` | `8000` | Host port mapped to the ensemble container port 8000. |
-| `G8E_DASHBOARD_PORT` | `3000` | Host port mapped to the dashboard container port 3000. |
-| `G8E_HOSTNAME` | `localhost` | Browser-visible hostname used for the Gateway public URL, CORS, and passkey RP settings. |
-| `G8E_OLLAMA_ENDPOINT` | unset | Approved remote Ollama URL. Required by the g8ellama profile. |
-| `G8E_HEARTBEAT_INTERVAL_SECONDS` | 30 | Operator heartbeat interval in seconds. |
-| `G8E_USER_HTTP_PORT` | 8090 | Host port mapped to User Gateway HTTP (container 8080, g8ellama profile). |
-| `G8E_USER_HTTPS_PORT` | 8453 | Host port mapped to User Gateway HTTPS (container 8443, g8ellama profile). |
-| `G8E_USER_HOSTNAME` | localhost | Public User Gateway hostname for CORS and passkey configuration (g8ellama profile). |
-| `G8E_USER_DASHBOARD_PORT` | 3001 | Separate dashboard for User Gateway (not deployed by default). |
-| `G8E_INFERENCE_PRIMARY_MODEL` | qwen3:4b | Primary model name on remote provider (g8ellama, default profile with Ollama). |
-| `G8E_INFERENCE_ASSISTANT_MODEL` | qwen3:1.7b | Assistant model name on remote provider. |
-| `G8E_INFERENCE_LITE_MODEL` | qwen3:0.6b | Lite model name on remote provider. |
-| `G8E_INFERENCE_KEEP_ALIVE` | -1 | Ollama keep-alive duration (-1 = infinite). |
-| `G8E_INFERENCE_CAMPAIGN_ID` | eval-smoke-mini | Frozen campaign identity for the inference operator (evaluation). |
-| `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | ce4ce367... | Model registry SHA-256 digest (evaluation). |
+| `G8E_OLLAMA_ENDPOINT` | *(required)* | Approved remote Ollama URL for the Inference Operator. Compose fails fast when it is unset. |
+| `G8E_HOSTNAME` | `localhost` | Browser-visible hostname used for the Gateway public URL, CORS, and passkey RP settings. Set only when you reach the stack by another name. |
+| `G8E_USER_HOSTNAME` | `localhost` | Public User Gateway hostname for CORS and passkey configuration (g8ellama profile). |
 
-Example:
+Container names (`g8e-<service>`), host ports, and the operator heartbeat interval are literals in `docker-compose.yml`:
 
-```bash
-G8E_HTTP_PORT=18080 G8E_HTTPS_PORT=18443 G8E_DASHBOARD_PORT=13000 docker compose up -d --build
+| Service | Published host ports |
+| --- | --- |
+| `g8e-gateway` | 8080 (HTTP), 8443 (HTTPS), and loopback-only 8081 (mirror ingest), 8082 (public mirror read/SSE), 5173 (evaluation explorer) |
+| `ensemble` | 8000 |
+| `dashboard` | 3000 |
+| `g8e-gateway-user` (g8ellama profile) | 8090 (HTTP), 8453 (HTTPS) |
+
+The Inference Operator model roles and keep-alive are the `g8e operator start` defaults; `./g8e operator start --help` lists them alongside the `--inference-*` flags. To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`. Do not put them in `.env`. The static campaign binding (`G8E_INFERENCE_CAMPAIGN_ID`, `G8E_INFERENCE_MODEL_REGISTRY_DIGEST`) is left unset; see the [Unified Docker Stack](./unified_stack.md#environment-configuration).
+
+Example override that remaps the gateway host ports:
+
+```yaml
+# docker-compose.override.yml
+services:
+  g8e-gateway:
+    ports: !override
+      - "18080:8080"
+      - "18443:8443"
 ```
 
 Host-port overrides do not change the Gateway's internal listeners or service-network URLs. The Compose network aliases `g8e.local` and `g8eg` remain the internal names used by the workloads.
@@ -247,7 +245,7 @@ The root Compose resource settings are:
 | Service | CPU limit | Memory limit | CPU reservation | Memory reservation |
 | --- | --- | --- | --- | --- |
 | `g8e-gateway` | 2 | 4G | 1 | 512M |
-| `g8e-operator` | 2 | 1G | 0.5 | 256M |
+| `g8e-data-operator` | 2 | 1G | 0.5 | 256M |
 | `g8e-inference-operator` | 4 | 4G | 1 | 1G |
 | `ensemble` | 2 | 2G | 0.5 | 512M |
 | `dashboard` | 1 | 512M | 0.25 | 128M |
@@ -259,7 +257,7 @@ The Data Operator, ensemble, and dashboard wait for the Gateway Compose health c
 | Service | Health check | What it means |
 | --- | --- | --- |
 | `g8e-gateway` | `wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health` | The Gateway health endpoint responds successfully. |
-| `g8e-operator` | `test -f /root/.g8e/pki/operator.crt` | The Data Operator certificate exists in its runtime volume. |
+| `g8e-data-operator` | `test -f /root/.g8e/pki/operator.crt` | The Data Operator certificate exists in its runtime volume. |
 | `g8e-inference-operator` | `test -f /root/.g8e/pki/operator.crt` | The Inference Operator certificate exists in its runtime volume. |
 | `ensemble` | HTTP request to `http://localhost:8000/health` | FastAPI startup and client initialization have completed. |
 | `dashboard` | `wget --no-verbose --tries=1 --spider http://localhost:3000/` | Express is listening after startup enrollment. |
@@ -317,17 +315,7 @@ G8E_OLLAMA_ENDPOINT=http://approved-provider:11434 docker compose --profile g8el
 
 The User Gateway publishes on ports 8090 (HTTP) and 8453 (HTTPS), distinct from the default gateway. The User Gateway owns the state Merkle root and governance posture. The Inference Node runs as an outbound operator of the User Gateway and calls the approved remote Ollama provider. No Ollama daemon runs in this stack.
 
-Environment variables for the g8ellama topology:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `G8E_USER_HTTP_PORT` | 8090 | Host port mapped to User Gateway HTTP (container 8080) |
-| `G8E_USER_HTTPS_PORT` | 8453 | Host port mapped to User Gateway HTTPS (container 8443) |
-| `G8E_USER_HOSTNAME` | localhost | Public User Gateway hostname for CORS, passkey RP ID/origin |
-| `G8E_INFERENCE_PRIMARY_MODEL` | qwen3:4b | Primary model name on remote provider |
-| `G8E_INFERENCE_ASSISTANT_MODEL` | qwen3:1.7b | Assistant model name on remote provider |
-| `G8E_INFERENCE_LITE_MODEL` | qwen3:0.6b | Lite model name on remote provider |
-| `G8E_INFERENCE_KEEP_ALIVE` | -1 | Ollama keep-alive duration (-1 = infinite) |
+Environment variables for the g8ellama topology: `G8E_OLLAMA_ENDPOINT` (required) and `G8E_USER_HOSTNAME` (public User Gateway hostname for CORS and passkey RP ID/origin, default `localhost`). The Inference Node uses the `g8e operator start` default model roles and keep-alive.
 
 The g8ellama profile is separate from the default and cross-enrollment topologies; do not combine profiles.
 
@@ -358,9 +346,9 @@ The primary gateway is reachable at the default ports (8080, 8443). The secondar
 | `./g8e docker build [--no-cache]` | Builds images, exports the runtime binary to `./g8e`, and reports success only after export. |
 | `./g8e docker binaries export [--image <ref>] [--output <dir>]` | Exports and validates a full g8e-binary set from an image that contains `/opt/g8e/bin`; standard Gateway images ship only the runtime binary. |
 | `./g8e docker logs [service] [-f] [--profile <name>]` | Displays or follows Compose logs. |
-| `./g8e docker reset [--full] [--profile <name>]` | Removes containers, volumes, and networks, then starts the specified scope. Destructive. |
+| `./g8e docker reset [--full] [--profile <name>] [--yes] [--skip-backup]` | Removes containers, volumes, and networks, then starts the specified scope. Destructive; confirms and offers an evidence backup first (see `docker clean`). |
 | `./g8e docker rebuild [--full] [--profile <name>] [--no-cache]` | Stops services, rebuilds images with provenance, exports the runtime binary to `./g8e`, and starts the specified scope. Cache reuse is the default. |
-| `./g8e docker clean` | Removes containers, volumes, networks, and orphans across all profiles. Confirmation is skipped by default; use `--yes=false` to prompt. Destructive. |
+| `./g8e docker clean [--yes] [--skip-backup]` | Removes containers, volumes, networks, and orphans across all profiles. Destructive and not recoverable: Docker volumes cannot be renamed aside. It prompts for confirmation (`--yes` skips it; end of input aborts), then offers to back up host evaluation evidence to `eval/backups/` (runs automatically with `--yes` unless `--skip-backup`). A failed backup aborts. The host `.g8e/` directory is not touched. |
 
 If a workload remains unhealthy, inspect the relevant service logs and `./g8e auth enroll pending`. If a volume was removed, treat all prior identities as invalid and repeat owner and workload enrollment. If a previous Docker invocation created the host `.g8e` tree as root, repair ownership before CLI enrollment, for example `sudo chown -R $(id -u):$(id -g) .g8e`.
 

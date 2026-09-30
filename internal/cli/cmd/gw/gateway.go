@@ -8,7 +8,6 @@
 package gw
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -69,18 +68,21 @@ type GatewayFlags struct {
 	ConsensusURL        string
 	ConsensusBootstrap  string
 	MCPDownstreamURL    string
+	MCPDownstreamCmd    string
+	MCPDownstreamArgs   string
 	A2ADownstreamURL    string
 	EnsembleUpstreamURL string
 	PublicBaseURL       string
 	AllowedOrigins      []string
 	DoctrineDir         string
 
-	PublicSpectatorEnabled           bool
-	PublicSpectatorPrivateAddr       string
-	PublicSpectatorPublicAddr        string
-	EvalExplorerAddr                 string
-	EvalExplorerRoot                 string
-	PublicSpectatorTrustedProxyCIDRs []string
+	PublicSpectatorEnabled            bool
+	PublicSpectatorPrivateAddr        string
+	PublicSpectatorPublicAddr         string
+	PublicSpectatorAllowContainerBind bool
+	EvalExplorerAddr                  string
+	EvalExplorerRoot                  string
+	PublicSpectatorTrustedProxyCIDRs  []string
 }
 
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
@@ -105,14 +107,17 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.ConsensusURL, "consensus-url", "", "URL of the Consensus service for L2 deliberation (e.g. https://localhost:8443/consensus/v1/deliberate)")
 	cmd.Flags().StringVar(&f.ConsensusBootstrap, "consensus-bootstrap", "", "Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup (for deterministic demo deployments)")
 	cmd.Flags().StringVar(&f.MCPDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
+	cmd.Flags().StringVar(&f.MCPDownstreamCmd, "mcp-downstream-cmd", "", "Command of a downstream MCP subprocess to proxy discovery and execution to (default: none)")
+	cmd.Flags().StringVar(&f.MCPDownstreamArgs, "mcp-downstream-args", "", "Comma-separated arguments for the downstream MCP subprocess (default: none)")
 	cmd.Flags().StringVar(&f.A2ADownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
-	cmd.Flags().StringVar(&f.EnsembleUpstreamURL, "ensemble-upstream-url", "", "HTTP URL of the g8ee ensemble for browser proxy forwarding (default: G8E_ENSEMBLE_URL or http://127.0.0.1:8000)")
+	cmd.Flags().StringVar(&f.EnsembleUpstreamURL, "ensemble-upstream-url", "", "HTTP URL of the g8ee ensemble for browser proxy forwarding (default: http://127.0.0.1:8000)")
 	cmd.Flags().StringVar(&f.PublicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
 	cmd.Flags().StringArrayVar(&f.AllowedOrigins, "cors-origin", nil, "Allowed CORS origin for cross-origin browser access (repeatable, e.g. https://lovable.dev)")
 	cmd.Flags().StringVar(&f.DoctrineDir, "doctrine-dir", "", "Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)")
 	cmd.Flags().BoolVar(&f.PublicSpectatorEnabled, "public-spectator", true, "Start the in-process public mirror and evaluation explorer listeners")
 	cmd.Flags().StringVar(&f.PublicSpectatorPrivateAddr, "public-spectator-private-listen", "", fmt.Sprintf("Loopback address for authenticated public mirror ingest (default: 127.0.0.1:%d)", constants.PublicSpectatorPrivatePort))
 	cmd.Flags().StringVar(&f.PublicSpectatorPublicAddr, "public-spectator-public-listen", "", fmt.Sprintf("Loopback address for anonymous public mirror reads (default: 127.0.0.1:%d)", constants.PublicSpectatorPublicPort))
+	cmd.Flags().BoolVar(&f.PublicSpectatorAllowContainerBind, "public-spectator-allow-container-bind", false, "Allow the public mirror and explorer listeners to bind 0.0.0.0 so a container network can reach them (set only inside a container deployment)")
 	cmd.Flags().StringVar(&f.EvalExplorerAddr, "eval-explorer-listen", "", fmt.Sprintf("Loopback address for the evaluation explorer SPA (default: 127.0.0.1:%d)", constants.EvalExplorerDefaultPort))
 	cmd.Flags().StringVar(&f.EvalExplorerRoot, "eval-explorer-root", "", "Directory containing the built evaluation explorer dist assets")
 	cmd.Flags().StringArrayVar(&f.PublicSpectatorTrustedProxyCIDRs, "public-spectator-trusted-proxy-cidr", nil, "Trusted proxy CIDR allowed to provide exactly one CF-Connecting-IP address (repeatable)")
@@ -158,9 +163,6 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	if f.DoctrineDir == "" {
 		f.DoctrineDir = os.Getenv(string(constants.EnvVar.DoctrineDir))
 	}
-	if f.EnsembleUpstreamURL == "" {
-		f.EnsembleUpstreamURL = os.Getenv("G8E_ENSEMBLE_URL")
-	}
 	return f
 }
 
@@ -169,37 +171,54 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 // gateway config struct.
 func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	return serve.GatewayConfig{
-		Posture:                          g8econfig.GatewayPosture(f.Posture),
-		HTTPPort:                         f.HTTPPort,
-		HTTPSPort:                        f.HTTPSPort,
-		DataDir:                          f.DataDir,
-		PKIDir:                           f.PKIDir,
-		SecretsDir:                       f.SecretsDir,
-		VaultDir:                         f.VaultDir,
-		VaultKeyPath:                     f.VaultKeyPath,
-		PasskeyRpID:                      f.PasskeyRpID,
-		PasskeyRpName:                    f.PasskeyRpName,
-		PasskeyRpOrigins:                 f.PasskeyRpOrigins,
-		RateLimitRPS:                     f.RateLimitRPS,
-		RateLimitBurst:                   f.RateLimitBurst,
-		LogLevel:                         f.LogLevel,
-		CertIdentityMode:                 f.CertIdentityMode,
-		ConsensusID:                      f.ConsensusID,
-		ConsensusURL:                     f.ConsensusURL,
-		ConsensusBootstrap:               f.ConsensusBootstrap,
-		MCPDownstreamURL:                 f.MCPDownstreamURL,
-		A2ADownstreamURL:                 f.A2ADownstreamURL,
-		EnsembleUpstreamURL:              f.EnsembleUpstreamURL,
-		PublicBaseURL:                    f.PublicBaseURL,
-		AllowedOrigins:                   f.AllowedOrigins,
-		DoctrineDir:                      f.DoctrineDir,
-		PublicSpectatorEnabled:           f.PublicSpectatorEnabled,
-		PublicSpectatorPrivateAddr:       f.PublicSpectatorPrivateAddr,
-		PublicSpectatorPublicAddr:        f.PublicSpectatorPublicAddr,
-		EvalExplorerAddr:                 f.EvalExplorerAddr,
-		EvalExplorerRoot:                 f.EvalExplorerRoot,
-		PublicSpectatorTrustedProxyCIDRs: f.PublicSpectatorTrustedProxyCIDRs,
+		Posture:                           g8econfig.GatewayPosture(f.Posture),
+		HTTPPort:                          f.HTTPPort,
+		HTTPSPort:                         f.HTTPSPort,
+		DataDir:                           f.DataDir,
+		PKIDir:                            f.PKIDir,
+		SecretsDir:                        f.SecretsDir,
+		VaultDir:                          f.VaultDir,
+		VaultKeyPath:                      f.VaultKeyPath,
+		PasskeyRpID:                       f.PasskeyRpID,
+		PasskeyRpName:                     f.PasskeyRpName,
+		PasskeyRpOrigins:                  f.PasskeyRpOrigins,
+		RateLimitRPS:                      f.RateLimitRPS,
+		RateLimitBurst:                    f.RateLimitBurst,
+		LogLevel:                          f.LogLevel,
+		CertIdentityMode:                  f.CertIdentityMode,
+		ConsensusID:                       f.ConsensusID,
+		ConsensusURL:                      f.ConsensusURL,
+		ConsensusBootstrap:                f.ConsensusBootstrap,
+		MCPDownstreamURL:                  f.MCPDownstreamURL,
+		MCPDownstreamCmd:                  f.MCPDownstreamCmd,
+		MCPDownstreamArgs:                 parseDownstreamArgs(f.MCPDownstreamArgs),
+		A2ADownstreamURL:                  f.A2ADownstreamURL,
+		EnsembleUpstreamURL:               f.EnsembleUpstreamURL,
+		PublicBaseURL:                     f.PublicBaseURL,
+		AllowedOrigins:                    f.AllowedOrigins,
+		DoctrineDir:                       f.DoctrineDir,
+		PublicSpectatorEnabled:            f.PublicSpectatorEnabled,
+		PublicSpectatorPrivateAddr:        f.PublicSpectatorPrivateAddr,
+		PublicSpectatorPublicAddr:         f.PublicSpectatorPublicAddr,
+		PublicSpectatorAllowContainerBind: f.PublicSpectatorAllowContainerBind,
+		EvalExplorerAddr:                  f.EvalExplorerAddr,
+		EvalExplorerRoot:                  f.EvalExplorerRoot,
+		PublicSpectatorTrustedProxyCIDRs:  f.PublicSpectatorTrustedProxyCIDRs,
 	}
+}
+
+func parseDownstreamArgs(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	res := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			res = append(res, trimmed)
+		}
+	}
+	return res
 }
 
 // wizardRunner is the function signature for launching the interactive wizard.
@@ -911,28 +930,32 @@ Gateway over mTLS.`,
 
 func gatewayResetCmd() *cobra.Command {
 	var force bool
+	var skipBackup bool
 
 	cmd := &cobra.Command{
 		Use:   string(constants.HistoryEventTypeReset),
-		Short: "Reset Gateway data and secrets (preserves CA)",
-		Long: `Reset the g8e Gateway by stopping all services, wiping SQLite databases and
-bootstrap secrets, then restarting with a fresh database. Existing TLS/PKI
-certificates and keys are preserved. Use --force to skip the confirmation prompt.`,
+		Short: "Reset Gateway data and secrets, then restart (.g8e is renamed to .g8e-<MMDDHHMM>)",
+		Long: `Reset the g8e Gateway by stopping all services, running the same full runtime
+cleanup as 'gw clean', then starting a new gateway. The runtime directory is not
+deleted: it is renamed to .g8e-<MMDDHHMM> so it can be recovered.
+
+Before proceeding, reset asks whether to back up evaluation evidence first.
+Use --skip-backup to opt out and --yes/--force to skip the prompts (the backup
+still runs unless --skip-backup is also given).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !force {
-				cmd.Println("This command will:")
-				cmd.Println("  1. Stop all running g8e services")
-				cmd.Println("  2. Wipe the SQLite databases and bootstrap secrets")
-				cmd.Println("  3. Preserve your existing TLS/PKI certificates and keys")
-				cmd.Println("  4. Restart the services with a fresh database")
-				cmd.Print("\nContinue? [y/N]: ")
-				reader := bufio.NewReader(cmd.InOrStdin())
-				response, _ := reader.ReadString('\n')
-				response = strings.TrimSpace(response)
-				if response != "y" && response != "Y" {
-					cmd.Println("Aborted")
-					return nil
-				}
+			proceed, err := shared.ConfirmDestructive(cmd, shared.DestructiveOptions{
+				Effects: []string{
+					"Stop all running g8e services",
+					"Rename the runtime directory (.g8e) aside to .g8e-<MMDDHHMM>; databases, secrets, logs and TLS/PKI are no longer used",
+					"Remove g8e root CA anchors from the OS trust store; CLI credentials become invalid",
+					"Start a fresh gateway with a new trust domain",
+				},
+				AssumeYes:  force,
+				SkipBackup: skipBackup,
+				Backup:     shared.EvalEvidenceBackup(shared.LoadConfig, shared.NewFileSvc),
+			})
+			if err != nil || !proceed {
+				return err
 			}
 
 			stopCmd := gatewayStopCmd()
@@ -945,7 +968,8 @@ certificates and keys are preserved. Use --force to skip the confirmation prompt
 			}
 
 			cleanCmd := gatewayCleanCmd()
-			cleanCmd.SetArgs([]string{"--force"})
+			// Reset already confirmed and offered the backup above.
+			cleanCmd.SetArgs([]string{"--force", "--" + shared.FlagSkipBackup})
 			cleanCmd.SetOut(cmd.OutOrStdout())
 			cleanCmd.SetErr(cmd.ErrOrStderr())
 			cleanCmd.SetIn(cmd.InOrStdin())
@@ -969,6 +993,7 @@ certificates and keys are preserved. Use --force to skip the confirmation prompt
 	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation prompt")
 	cmd.Flags().BoolVar(&force, "y", false, "Skip confirmation prompt (shorthand)")
 	cmd.Flags().BoolVar(&force, "yes", false, "Skip confirmation prompt (shorthand)")
+	shared.AddSkipBackupFlag(cmd, &skipBackup)
 
 	return cmd
 }
@@ -999,39 +1024,40 @@ func gatewayCleanCmdWithConfig(
 	trustInstallerFactory func() (systemTrustCleaner, error),
 ) *cobra.Command {
 	var force bool
+	var skipBackup bool
 
 	cmd := &cobra.Command{
 		Use:   "clean",
-		Short: "Destructively remove all Gateway state",
-		Long: `Destructively remove all g8e Gateway state: stops all services, completely
-deletes the entire runtime directory including all SQLite databases, bootstrap
-secrets, logs, and TLS/PKI certificates/keys. All trust routes and credentials
-are permanently destroyed. CLI credentials become invalid after this operation.
-Use --force to skip the confirmation prompt.`,
+		Short: "Destructively remove all Gateway state (.g8e is renamed to .g8e-<MMDDHHMM>)",
+		Long: `Remove all g8e Gateway state: stops all services and moves the entire runtime
+directory (SQLite databases, bootstrap secrets, logs, TLS/PKI certificates/keys)
+out of the way. The directory is not deleted: it is renamed to
+.g8e-<MMDDHHMM> (for example .g8e-09301401) so it can be recovered by hand.
+Trust routes and credentials in the new runtime are gone, and CLI credentials
+become invalid after this operation.
+
+Before proceeding, clean asks whether to back up evaluation evidence first.
+Use --skip-backup to opt out and --yes/--force to skip the prompts (the backup
+still runs unless --skip-backup is also given).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			if !force {
-				cmd.Println("WARNING: This command will:")
-				cmd.Println("  1. Stop all running g8e services")
-				cmd.Println("  2. Completely delete the entire runtime directory")
-				cmd.Println("  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys")
-				cmd.Println("  4. All trust routes and credentials will be permanently destroyed")
-				cmd.Println("  5. Remove g8e root CA anchors from the OS trust store")
-				cmd.Println()
-				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
-				cmd.Println("You will need to run './g8e auth enroll user' again after restarting the gateway.")
-				cmd.Print("\nContinue? [y/N]: ")
-				reader := bufio.NewReader(cmd.InOrStdin())
-				response, _ := reader.ReadString('\n')
-				response = strings.TrimSpace(response)
-				if response != "y" && response != "Y" {
-					cmd.Println("Aborted")
-					return nil
-				}
+			proceed, err := shared.ConfirmDestructive(cmd, shared.DestructiveOptions{
+				Effects: []string{
+					"Stop all running g8e services",
+					"Rename the runtime directory (.g8e) aside to .g8e-<MMDDHHMM>; nothing is deleted, but the gateway starts over with no databases, secrets, logs, or TLS/PKI",
+					"Remove g8e root CA anchors from the OS trust store",
+					"CLI credentials become invalid; run './g8e auth enroll user' again after restarting the gateway",
+				},
+				AssumeYes:  force,
+				SkipBackup: skipBackup,
+				Backup:     shared.EvalEvidenceBackup(configLoader, fileSvcFactory),
+			})
+			if err != nil || !proceed {
+				return err
 			}
 
 			fileSvc, err := fileSvcFactory("", slog.Default())
@@ -1071,11 +1097,16 @@ Use --force to skip the confirmation prompt.`,
 				}
 			}
 
-			if err := pm.Clean(); err != nil {
+			archived, err := pm.Clean()
+			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
-			cmd.Println("Clean complete. All runtime state and credentials destroyed.")
+			if archived == "" {
+				cmd.Println("Clean complete. No runtime directory existed.")
+			} else {
+				cmd.Printf("Clean complete. Previous runtime state moved to %s (delete it manually once you no longer need it).\n", archived)
+			}
 			return nil
 		},
 	}
@@ -1083,6 +1114,7 @@ Use --force to skip the confirmation prompt.`,
 	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation prompt")
 	cmd.Flags().BoolVar(&force, "y", false, "Skip confirmation prompt (shorthand)")
 	cmd.Flags().BoolVar(&force, "yes", false, "Skip confirmation prompt (shorthand)")
+	shared.AddSkipBackupFlag(cmd, &skipBackup)
 
 	return cmd
 }

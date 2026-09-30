@@ -156,3 +156,5 @@ test-results/
 # --- Auditor output (generated during tests) ---
 auditor-out/
 auditor-out/*
+# --- Eval evidence backups (g8e eval backup / automatic post-run snapshots) ---
+/eval/backups/

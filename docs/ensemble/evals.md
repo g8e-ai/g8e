@@ -61,7 +61,7 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 
 | ID | Rule |
 | --- | --- |
-| INV-EVAL-TRACE-01 | `EvaluationTraceService` persists one immutable JSON trace per assignment and evaluation attempt at `$G8E_RUNTIME_DIR/data/evaluation/traces/<assignment-id>/<evaluation-attempt-id>.json`. When `G8E_RUNTIME_DIR` is unset, g8ee uses `.g8e` in the project root. |
+| INV-EVAL-TRACE-01 | `EvaluationTraceService` persists one immutable JSON trace per assignment and evaluation attempt at `<runtime-dir>/data/evaluation/traces/<assignment-id>/<evaluation-attempt-id>.json`. `<runtime-dir>` is the `--runtime-dir` launch argument; when it is not given, g8ee uses `.g8e` in the project root. |
 | INV-EVAL-TRACE-02 | Assignment and attempt IDs are validated as safe filenames before filesystem access. Trace writes use canonical JSON and atomic temporary-file replacement (write to `.json.tmp`, then replace). |
 | INV-EVAL-TRACE-03 | Trace schema version is `4` (`3` added `arguments_json`, `command`, and `result_json` to tool calls; `4` added the terminal `error` field).  Digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch. |
 | INV-EVAL-TRACE-04 | The authenticated, read-only lookup is `GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}`. The response is `{ "trace": <typed trace> }`. Missing traces return not-found. Unsafe path parameters are rejected. |
@@ -132,10 +132,10 @@ The Tribunal, Marshal, and Auditor remain application-layer behavior in the norm
 `EvaluationTraceService` stores one JSON trace per assignment and evaluation attempt at:
 
 ```text
-$G8E_RUNTIME_DIR/data/evaluation/traces/<assignment-id>/<evaluation-attempt-id>.json
+<runtime-dir>/data/evaluation/traces/<assignment-id>/<evaluation-attempt-id>.json
 ```
 
-When `G8E_RUNTIME_DIR` is unset, g8ee uses the project runtime `.g8e` directory. Assignment and attempt IDs are validated as safe filenames before filesystem access. Trace writes use canonical JSON and an atomic temporary-file replacement. The digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch.
+`<runtime-dir>` is the `--runtime-dir` launch argument (`/root/.g8e` in the unified Compose stack); when it is not given, g8ee uses the project runtime `.g8e` directory. Assignment and attempt IDs are validated as safe filenames before filesystem access. Trace writes use canonical JSON and an atomic temporary-file replacement. The digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch.
 
 The authenticated, read-only lookup is:
 

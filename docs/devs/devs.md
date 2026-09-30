@@ -63,7 +63,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | ID | Rule |
 | --- | --- |
 | INV-BOUND-01 | A governed operation MUST enter as typed intent or a canonical protobuf `GovernanceEnvelope`. The active posture determines whether L2 consensus and L3 notary evidence gate execution. L1 doctrine, L4 verification, and L5 actuation stay on every governed execution path. |
-| INV-BOUND-02 | The governance guarantee MUST apply only to operations that traverse a g8e ingress. An external MCP wrapper performs inline L1 screening and MUST NOT be described as adding an envelope, L2 through L5, a signed receipt, or Gateway audit. Client-native tools and other side channels stay outside the boundary. |
+| INV-BOUND-02 | The governance guarantee MUST apply only to operations that traverse a g8e ingress. There is no CLI-side MCP wrapper or reverse proxy: third-party MCP servers are governed only as Gateway downstream egress (INV-AGT-07), and any forwarding path that does not cross a g8e ingress MUST NOT be described as adding an envelope, L2 through L5, a signed receipt, or Gateway audit. Client-native tools and other side channels stay outside the boundary. |
 | INV-BOUND-03 | A mutation added to a governed ingress MUST be classified with the canonical action and event registries, represented by a typed payload, wrapped in a `GovernanceEnvelope`, verified by L4, and dispatched by L5. MUST NOT call mutation handlers directly to skip envelope construction or the verification gauntlet. |
 | INV-BOUND-04 | The Gateway in-process Operator substrate MUST stay in `internal/services/gateway/embedded/`. The outbound Operator runtime is `G8eoService` in `internal/services/g8eo.go`. `G8eoService` MUST NOT construct `mcp.GatewayService`. |
 
@@ -74,6 +74,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-ENV-01 | The Go toolchain MUST satisfy the `go` line in `go.mod` (1.26.6). Setup scripts read that line and also check `git`, `make`, Node.js 22+, and `npm`. |
 | INV-ENV-02 | Commands in this guide MUST be run from the repository root unless the owning component guide says otherwise. |
 | INV-ENV-03 | CLI behavior MUST be taken from `./g8e <command> --help`. This file MUST NOT grow a flag inventory. |
+| INV-ENV-04 | Environment variables MUST be read only for secrets (API keys, tokens, encryption keys), user-specific endpoints or identities that have no correct universal default (for example the approved Ollama endpoint, the hostname the browser uses), and host facts the OS provides (`HOME`, `USER`, `SHELL`, `LANG`, `TERM`, `TZ`, `SystemRoot`). All other platform configuration (ports, container prefix, model roles, paths, service URLs, app names) MUST be a typed default in code and vary per deployment only through explicit, checked-in command flags. MUST NOT add an env fallback behind a flag, and MUST NOT key a code path or security check off an env switch. Every env key MUST be declared with a `category` in `protocol/constants/env_vars.json`; raw-string keys outside the registry are a violation (INV-TYPE-06). |
 
 ### CLI layout (`INV-CLI`)
 
@@ -136,6 +137,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | INV-FS-07 | Gateway startup configuration carries `DataDir`, `PKIDir`, `SecretsDir`, and `VaultDir` (`internal/cli/serve/gateway.go`). Those absolute paths MUST stay at the CLI and startup boundary. Service code MUST receive the file service. MUST NOT add a duplicate directory field only to route runtime I/O. |
 | INV-FS-08 | A command constructor under `internal/cli/cmd/<group>/` that touches runtime state MUST accept a file-service factory. Factory initialization failure MUST wrap `constants.ErrFileServiceInit` and preserve the underlying error. Every new factory injection point MUST have a matching case in `internal/cli/cmd/<group>/factory_error_<group>_test.go` that proves downstream dependencies are not called. |
 | INV-FS-09 | Tests MUST use `testutil.TempDir` and `testutil.TestPaths` for isolated roots. `testutil.TempDir` returns an absolute base directory. Pass that directory to `fs.NewRuntimeFileService` and `paths.InitWithBase`. MUST NOT append `.g8e` yourself. |
+| INV-FS-10 | A command that clears the runtime root MUST call `fileSvc.ArchiveRuntime`, which renames `.g8e/` to `.g8e-<MMDDHHMM>`. MUST NOT call `RemoveAll("")` on the runtime root. A destructive `clean` or `reset` command MUST gate on `shared.ConfirmDestructive` (confirmation, backup offer, `--skip-backup`) before it mutates anything. |
 
 Consumers pass relative paths from `internal/constants/paths.go` into `ReadFile`, `WriteFile`, `Stat`, `FileExists`, `ReadDir`, `Rename`, `Remove`, `RemoveAll`, and the other `RuntimeFileService` methods. Startup constructs the service and calls `CreateRuntimeTree` (`internal/cli/serve/gateway.go`, `internal/cli/serve/operator.go`).
 

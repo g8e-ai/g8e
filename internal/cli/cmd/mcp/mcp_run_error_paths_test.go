@@ -10,11 +10,9 @@ package mcp
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -62,13 +60,11 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 			ProjectRoot: tempDir,
 			RuntimeDir:  filepath.Dir(certPath),
 		}
-		// Set env to point to non-existent CA bundle
-		t.Setenv(string(constants.EnvVar.CABundle), filepath.Join(tempDir, "nonexistent-ca.pem"))
-		// Also set cert/key env to the generated test certs
-		t.Setenv(string(constants.EnvVar.ClientCert), certPath)
-		t.Setenv(string(constants.EnvVar.ClientKey), keyPath)
-
-		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
+		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   filepath.Join(tempDir, "nonexistent-ca.pem"),
+		})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
@@ -79,17 +75,17 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 		require.NoError(t, err)
 
-		t.Setenv(string(constants.EnvVar.ClientCert), certPath)
-		t.Setenv(string(constants.EnvVar.ClientKey), keyPath)
-		t.Setenv(string(constants.EnvVar.CABundle), caPath)
-		t.Setenv(string(constants.EnvVar.GatewayURL), "https://127.0.0.1:9999/mcp")
-
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 			RuntimeDir:  filepath.Dir(certPath),
 		}
 
-		conn, err := buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
+		conn, err := buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   caPath,
+			GatewayURL: "https://127.0.0.1:9999/mcp",
+		})
 		require.NoError(t, err)
 		assert.NotNil(t, conn)
 		assert.Equal(t, "https://127.0.0.1:9999/mcp", conn.gatewayURL)
@@ -170,229 +166,6 @@ func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 		_, err := proxySessionToGateway(session, req)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mcp: execute request")
-	})
-}
-
-// ─── runMCPAgentRun subprocess start failure ─────────────────────────────────
-
-func TestRunMCPAgentRun_SubprocessStartFailure(t *testing.T) {
-	t.Run("returns ErrProcessStartFailed for non-existent command", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"nonexistent-command-xyz-12345"}, "", false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrProcessStartFailed)
-	})
-}
-
-// ─── runMCPAgentRun HTTP proxy mode with empty stdin ─────────────────────────
-
-func TestRunMCPAgentRun_HTTPProxyEmptyStdin(t *testing.T) {
-	t.Run("returns nil with empty stdin and --url flag", func(t *testing.T) {
-		// Create a mock downstream server
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      float64(1),
-				Result:  mcpProxyStatusResult{Status: "ok"},
-			})
-		}))
-		defer server.Close()
-
-		// Replace os.Stdin with an empty pipe
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		_ = w.Close() // close write end so reads get EOF immediately
-		defer r.Close()
-
-		originalStdin := os.Stdin
-		os.Stdin = r
-		t.Cleanup(func() { os.Stdin = originalStdin })
-
-		err = runMCPAgentRun(nil, server.URL, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
-		require.NoError(t, err)
-	})
-}
-
-// ─── runMCPAgentRun HTTP proxy with L1 blocked tool call ─────────────────────
-
-func TestRunMCPAgentRun_HTTPProxyL1Blocked(t *testing.T) {
-	t.Run("L1 blocks dangerous tool call and sends error response", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      float64(1),
-				Result:  mcpProxyStatusResult{Status: "ok"},
-			})
-		}))
-		defer server.Close()
-
-		// Create a pipe with a tools/call request that triggers L1 block
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		defer r.Close()
-
-		// Write a tools/call request with a dangerous command (rm -rf)
-		go func() {
-			defer w.Close()
-			req := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_bash","arguments":{"command":"rm -rf /var/log/g8e"}}}` + "\n"
-			_, _ = w.Write([]byte(req))
-		}()
-
-		originalStdin := os.Stdin
-		os.Stdin = r
-		t.Cleanup(func() { os.Stdin = originalStdin })
-
-		err = runMCPAgentRun(nil, server.URL, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
-		require.NoError(t, err)
-	})
-}
-
-// ─── runMCPAgentRun HTTP proxy with notification (dropped) ───────────────────
-
-func TestRunMCPAgentRun_HTTPProxyNotificationDropped(t *testing.T) {
-	t.Run("notifications are silently dropped", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(JSONRPCResponse{JSONRPC: "2.0"})
-		}))
-		defer server.Close()
-
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		defer r.Close()
-
-		go func() {
-			defer w.Close()
-			// A notification (no id field) should be dropped
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n"))
-		}()
-
-		originalStdin := os.Stdin
-		os.Stdin = r
-		t.Cleanup(func() { os.Stdin = originalStdin })
-
-		err = runMCPAgentRun(nil, server.URL, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
-		require.NoError(t, err)
-	})
-}
-
-// ─── runMCPAgentRun HTTP proxy with parse error ──────────────────────────────
-
-func TestRunMCPAgentRun_HTTPProxyParseError(t *testing.T) {
-	t.Run("invalid JSON sends parse error and continues", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(JSONRPCResponse{JSONRPC: "2.0"})
-		}))
-		defer server.Close()
-
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		defer r.Close()
-
-		go func() {
-			defer w.Close()
-			_, _ = w.Write([]byte("not valid json\n"))
-		}()
-
-		originalStdin := os.Stdin
-		os.Stdin = r
-		t.Cleanup(func() { os.Stdin = originalStdin })
-
-		err = runMCPAgentRun(nil, server.URL, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
-		require.NoError(t, err)
-	})
-}
-
-// ─── runMCPAgentRun HTTP proxy with empty lines ──────────────────────────────
-
-func TestRunMCPAgentRun_HTTPProxyEmptyLines(t *testing.T) {
-	t.Run("empty lines are skipped", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(JSONRPCResponse{JSONRPC: "2.0"})
-		}))
-		defer server.Close()
-
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		defer r.Close()
-
-		go func() {
-			defer w.Close()
-			_, _ = w.Write([]byte("\n\n\n"))
-		}()
-
-		originalStdin := os.Stdin
-		os.Stdin = r
-		t.Cleanup(func() { os.Stdin = originalStdin })
-
-		err = runMCPAgentRun(nil, server.URL, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
-		require.NoError(t, err)
-	})
-}
-
-// ─── runMCPAgentRun HTTP proxy with downstream error on initialize ───────────
-
-func TestRunMCPAgentRun_HTTPProxyInitializeFallback(t *testing.T) {
-	t.Run("initialize falls back to handleInitialize on downstream error", func(t *testing.T) {
-		// Server that returns 500 to trigger downstream error
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`error`))
-		}))
-		defer server.Close()
-
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		defer r.Close()
-
-		go func() {
-			defer w.Close()
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"initialize"}` + "\n"))
-		}()
-
-		originalStdin := os.Stdin
-		os.Stdin = r
-		t.Cleanup(func() { os.Stdin = originalStdin })
-
-		err = runMCPAgentRun(nil, server.URL, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
-		require.NoError(t, err)
-	})
-}
-
-// ─── runMCPAgentRun HTTP proxy with downstream error on non-initialize ───────
-
-func TestRunMCPAgentRun_HTTPProxyDownstreamError(t *testing.T) {
-	t.Run("non-initialize downstream error sends error response", func(t *testing.T) {
-		// Server that returns 500 to trigger downstream error
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`error`))
-		}))
-		defer server.Close()
-
-		r, w, err := os.Pipe()
-		require.NoError(t, err)
-		defer r.Close()
-
-		go func() {
-			defer w.Close()
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}` + "\n"))
-		}()
-
-		originalStdin := os.Stdin
-		os.Stdin = r
-		t.Cleanup(func() { os.Stdin = originalStdin })
-
-		err = runMCPAgentRun(nil, server.URL, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
-		require.NoError(t, err)
 	})
 }
 
@@ -532,30 +305,28 @@ func TestBuildGatewayConn_FlagResolution(t *testing.T) {
 		assert.NotNil(t, conn)
 	})
 
-	t.Run("flag beats env for cert/key", func(t *testing.T) {
+	t.Run("ambient G8E_* env credentials are ignored", func(t *testing.T) {
 		certPath, keyPath, caPath := generateTestCerts(t)
 		tempDir := testutil.TempDir(t)
 		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 		require.NoError(t, err)
 
-		// Set env to wrong values, flags to correct values
-		t.Setenv(string(constants.EnvVar.ClientCert), "/nonexistent/env-cert.crt")
-		t.Setenv(string(constants.EnvVar.ClientKey), "/nonexistent/env-key.key")
-		t.Setenv(string(constants.EnvVar.CABundle), caPath)
+		// Valid credentials supplied only through the retired env channel must not
+		// be consulted: with no flags and no managed trust bundle the bridge fails
+		// closed rather than silently adopting them.
+		t.Setenv("G8E_CLIENT_CERT", certPath)
+		t.Setenv("G8E_CLIENT_KEY", keyPath)
+		t.Setenv("G8E_CA_BUNDLE", caPath)
+		t.Setenv("G8E_GATEWAY_URL", "https://127.0.0.1:9999/mcp")
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 			RuntimeDir:  tempDir,
 		}
 
-		flags := stdioCredentialFlags{
-			ClientCert: certPath,
-			ClientKey:  keyPath,
-		}
-
-		conn, err := buildGatewayConn(fileSvc, cfg, flags)
-		require.NoError(t, err)
-		assert.NotNil(t, conn)
+		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
 
 	t.Run("gateway-url flag honored verbatim", func(t *testing.T) {
@@ -615,7 +386,7 @@ func TestBuildGatewayConn_FlagResolution(t *testing.T) {
 // ─── buildGatewayConn fail-closed ─────────────────────────────────────────────
 
 func TestBuildGatewayConn_FailClosed(t *testing.T) {
-	t.Run("app-cert without app-key returns ErrIncompleteCredentialPair", func(t *testing.T) {
+	t.Run("client-cert without client-key returns ErrIncompleteCredentialPair", func(t *testing.T) {
 		tempDir := testutil.TempDir(t)
 		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 		require.NoError(t, err)
@@ -626,7 +397,7 @@ func TestBuildGatewayConn_FailClosed(t *testing.T) {
 		}
 
 		flags := stdioCredentialFlags{
-			AppCert: "/tmp/app.crt",
+			ClientCert: "/tmp/client.crt",
 		}
 
 		_, err = buildGatewayConn(fileSvc, cfg, flags)
@@ -721,8 +492,7 @@ func TestParseStdioCredentialFlags(t *testing.T) {
 			"--client-key", "/tmp/cli.key",
 			"--ca-bundle", "/tmp/ca.pem",
 			"--gateway-url", "https://g8e.local:8443/mcp",
-			"--app-cert", "/tmp/app.crt",
-			"--app-key", "/tmp/app.key",
+			"--app", "test-app",
 		}))
 
 		flags, err := parseStdioCredentialFlags(cmd)
@@ -731,7 +501,6 @@ func TestParseStdioCredentialFlags(t *testing.T) {
 		assert.Equal(t, "/tmp/cli.key", flags.ClientKey)
 		assert.Equal(t, "/tmp/ca.pem", flags.CABundle)
 		assert.Equal(t, "https://g8e.local:8443/mcp", flags.GatewayURL)
-		assert.Equal(t, "/tmp/app.crt", flags.AppCert)
-		assert.Equal(t, "/tmp/app.key", flags.AppKey)
+		assert.Equal(t, "test-app", flags.App)
 	})
 }

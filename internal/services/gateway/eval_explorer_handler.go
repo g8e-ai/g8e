@@ -119,11 +119,6 @@ func resolveEvalExplorerFS(rootOverride string) (fs.FS, error) {
 			return os.DirFS(root), nil
 		}
 	}
-	if envRoot := strings.TrimSpace(os.Getenv("G8E_EVAL_EXPLORER_ROOT")); envRoot != "" {
-		if info, err := os.Stat(envRoot); err == nil && info.IsDir() {
-			return os.DirFS(envRoot), nil
-		}
-	}
 	if embedded, err := gwexplorer.StaticFS(); err == nil {
 		if _, err := fs.Stat(embedded, "index.html"); err == nil {
 			return embedded, nil

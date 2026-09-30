@@ -373,7 +373,7 @@ func TestShortDigest(t *testing.T) {
 	assert.Equal(t, "0123456789ab", shortDigest("0123456789abcdef"))
 }
 
-func TestModelsDiff_RequiresOneProviderSession(t *testing.T) {
+func TestModelsDiff_RejectsSeveralInferenceOperators(t *testing.T) {
 	root := testutil.TempDir(t)
 	seedModelScopes(t, root)
 
@@ -386,9 +386,7 @@ func TestModelsDiff_RequiresOneProviderSession(t *testing.T) {
 	command.SetErr(&out)
 	command.SetArgs([]string{"models", "diff", "--project-root", root})
 	err := command.Execute()
-	require.ErrorIs(t, err, constants.ErrOperatorSessionAmbiguous)
-	assert.ErrorContains(t, err, "infer-session")
-	assert.ErrorContains(t, err, "infer-session-2")
+	require.ErrorIs(t, err, constants.ErrInferenceOperatorAmbiguous)
 }
 
 func TestModelsPull_SelectorAndFormationsAreExclusive(t *testing.T) {

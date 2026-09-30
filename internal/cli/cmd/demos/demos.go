@@ -208,11 +208,7 @@ func demosScenariosCmd() *cobra.Command {
 		Short: "List and run demo scenarios against a real Gateway/Operator",
 		Long: `List and run demo scenarios against a REAL g8e Gateway + Operator,
 exercising the full protocol surface (MCP, A2A, A2A protobuf, and official
-governance envelopes with mock consensus + principal signing).
-
-Subcommands:
-  list    List all scenarios in run order
-  run     Run one or more scenarios against a real Gateway/Operator`,
+governance envelopes with mock consensus + principal signing).`,
 	}
 
 	cmd.AddCommand(

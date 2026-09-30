@@ -32,6 +32,7 @@ const (
 	PlatformEnrollmentProtocolVersion          = "1"
 	PlatformEnrollmentMaxHostnameBytes         = 253
 	PlatformEnrollmentMaxInstanceIDBytes       = 128
+	PlatformEnrollmentMaxAppNameBytes          = 64
 	PlatformEnrollmentMaxReasonBytes           = 512
 	PlatformEnrollmentMaxRequestBytes    int64 = 64 * 1024
 

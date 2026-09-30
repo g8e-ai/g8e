@@ -1,7 +1,7 @@
 # Constants System
 
 Last Updated: 2026-09-28
-Version: v2.2.4
+Version: v2.2.5
 
 ## Overview
 
@@ -301,9 +301,11 @@ Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `
 - `PasskeyRpID` (`G8E_PASSKEY_RP_ID`), `PasskeyRpName` (`G8E_PASSKEY_RP_NAME`), `PasskeyRpOrigins` (`G8E_PASSKEY_RP_ORIGINS`)
 - `PublicBaseURL` (`G8E_PUBLIC_BASE_URL`), `AllowedOrigins` (`G8E_ALLOWED_ORIGINS`)
 - Lattice: `LatticeEndpoint` (`LATTICE_ENDPOINT`), `LatticeClientID` (`LATTICE_CLIENT_ID`), `LatticeClientSecret` (`LATTICE_CLIENT_SECRET`), `LatticeSandboxesToken` (`SANDBOXES_TOKEN`), `LatticeEntityName` (`LATTICE_ENTITY_NAME`), `LatticePostureFloor` (`LATTICE_POSTURE_FLOOR`)
-- Client/operator: `ClientCert` (`G8E_CLIENT_CERT`), `ClientKey` (`G8E_CLIENT_KEY`), `CABundle` (`G8E_CA_BUNDLE`), `GatewayURL` (`G8E_GATEWAY_URL`)
-- App: `AppID` (`G8E_APP_ID`), `AppCert` (`G8E_APP_CERT`), `AppKey` (`G8E_APP_KEY`)
-- `Shell` (`SHELL`), `Lang` (`LANG`), `Term` (`TERM`), `TZ` (`TZ`)
+- Host facts: `Shell` (`SHELL`), `Lang` (`LANG`), `Term` (`TERM`), `TZ` (`TZ`), `Home` (`HOME`), `User` (`USER`), `SSHAuthSock` (`SSH_AUTH_SOCK`)
+- Secrets: `CloudflareAPIToken` (`CLOUDFLARE_API_TOKEN`), `CFAPIToken` (`CF_API_TOKEN`)
+- Other: `OllamaHost` (`OLLAMA_HOST`), `DemoRunID` (`G8E_DEMO_RUN_ID`), `DemoScenarioID` (`G8E_DEMO_SCENARIO_ID`), `HarnessPollTimeout`, `HarnessLLMProvider`, `HarnessLLMModel`, `HarnessLLMEndpoint` (`G8E_HARNESS_*`), `TestReexec` (`G8E_TEST_REEXEC`)
+
+Every key is declared in [protocol/constants/env_vars.json](../constants/env_vars.json) with a `category` of `secret`, `user_endpoint`, `host`, or `violation` (INV-ENV-04 in [docs/devs/devs.md](../../docs/devs/devs.md)). A `violation` is platform configuration that still arrives through the environment; that set is held in a ratchet test (`internal/constants/env_vars_registry_test.go`) and may only shrink. Production Go code reads the environment only through these typed keys, never a raw string. There are no environment variables for MCP stdio credentials, CA bundle, gateway URL, or application selection; those are flags (`--app`, `--client-cert`, `--client-key`, `--ca-bundle`, `--gateway-url`).
 
 ### Field Paths (`field_paths.go`)
 
