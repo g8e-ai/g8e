@@ -113,18 +113,7 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		Use:     "eval",
 		Aliases: []string{"evals"},
 		Short:   "Run and verify g8e evaluation programs",
-		Long: `Platform evaluation programs and their supporting workflows.
-
-  models      Model catalog and registry
-  campaigns   Frozen evaluation definitions
-  runs        Executions of a campaign
-  rollout     Per-model init qualification queue
-  formations  Heterogeneous model sets
-  gates       Pre-campaign acceptance gates
-  boundary    Native execution-boundary suite (no models)
-  observer    Provider-boundary hardware observer
-  backup      Copy evaluation evidence outside .g8e/
-  restore     Restore evaluation evidence from a backup`,
+		Long:    `Platform evaluation programs and their supporting workflows.`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
 	bindSessionFlags(cmd)
