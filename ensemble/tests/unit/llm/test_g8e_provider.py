@@ -788,3 +788,41 @@ class TestG8EProviderUnsupportedContent:
     def test_invalid_part_shape_or_role_rejected(self, content: Content):
         with pytest.raises(ValidationError):
             _contents_to_messages([content], None)
+
+
+class TestG8EProviderCanonicalJSON:
+    """Python must emit the escaped form Go's encoding/json round-trip produces."""
+
+    def test_tool_result_escapes_go_html_characters(self):
+        contents = [
+            Content(
+                role="tool",
+                parts=[
+                    Part(
+                        tool_response=ToolResponse(
+                            name="get_command_constraints",
+                            response={
+                                "pattern": ":(){ :|:& };:",
+                                "substring": "> /dev/sd",
+                                "tag": "<b>  </b>",
+                            },
+                        )
+                    )
+                ],
+            )
+        ]
+        messages = _contents_to_messages(contents, None)
+        assert messages[0].parts[0].tool_result.result_json == (
+            '{"pattern":":(){ :|:\\u0026 };:","substring":"\\u003e /dev/sd",'
+            '"tag":"\\u003cb\\u003e\\u2028\\u2029\\u003c/b\\u003e"}'
+        )
+
+    def test_tool_call_arguments_escape_go_html_characters(self):
+        contents = [
+            Content(
+                role="model",
+                parts=[Part(tool_call=ToolCall(name="inspect", args={"q": "a&b"}))],
+            )
+        ]
+        messages = _contents_to_messages(contents, None)
+        assert messages[0].parts[0].tool_call.arguments_json == '{"q":"a\\u0026b"}'

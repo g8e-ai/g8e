@@ -19,6 +19,6 @@ const EvaluationAppName = "g8e-eval"
 const (
 	InferenceDefaultPrimaryModel   = "gemma4:e4b"
 	InferenceDefaultAssistantModel = "qwen3:1.7b"
-	InferenceDefaultLiteModel      = "smol-7b:latest"
+	InferenceDefaultLiteModel      = "qwen3.5:0.8b"
 	InferenceDefaultKeepAlive      = "-1"
 )
