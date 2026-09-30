@@ -72,7 +72,7 @@ func TestCampaignControllerInitializeScheduleAndResume(t *testing.T) {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestCampaignControllerInitializeScheduleAndResume(t *testing.T) {
 
 	count, err := controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 3, count)
 
 	first, ok, err := controller.ResumeNextAssignment(context.Background(), req.RunID)
 	require.NoError(t, err)

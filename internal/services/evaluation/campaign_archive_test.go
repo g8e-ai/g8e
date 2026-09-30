@@ -45,7 +45,7 @@ func newArchiveFixture(t *testing.T) *archiveFixture {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	digest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func newArchiveFixture(t *testing.T) *archiveFixture {
 		require.NoError(t, err)
 		count, err := controller.ScheduleHomogeneousRun(context.Background(), runID)
 		require.NoError(t, err)
-		require.Equal(t, 1, count)
+		require.Equal(t, 3, count)
 		fixture.runIDs = append(fixture.runIDs, runID)
 	}
 	return fixture

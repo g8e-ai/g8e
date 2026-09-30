@@ -44,7 +44,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, report)
 	assert.Equal(t, req.RunID, report.RunID)
-	assert.Equal(t, uint32(1), report.AssignmentCount)
+	assert.Equal(t, uint32(3), report.AssignmentCount)
 	assert.Equal(t, uint32(1), report.TerminalResultCount)
 	assert.Len(t, report.Files, 8)
 	var assignmentFile CampaignExportFile
@@ -113,7 +113,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	assert.Equal(t, 1, assignmentCount)
 	var modelSummaryCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM model_summaries`).Scan(&modelSummaryCount))
-	assert.Equal(t, 3, modelSummaryCount)
+	assert.Equal(t, 2, modelSummaryCount)
 }
 
 func TestBuildCampaignExportSchemaDocumentUsesTypedFileAndTableContracts(t *testing.T) {
@@ -211,7 +211,7 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	truncated := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: catalog.GetSchemaVersion(),
 		CatalogRef:    catalog.GetCatalogRef(),
-		Scenarios:     catalog.GetScenarios()[:1],
+		Scenarios:     catalog.GetScenarios()[:3],
 	}
 	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
 	require.NoError(t, err)
@@ -338,7 +338,7 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	modelSummariesJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "model_summaries.jsonl"))
 	require.NoError(t, err)
 	modelLines := strings.Split(strings.TrimSpace(string(modelSummariesJSONL)), "\n")
-	require.Len(t, modelLines, 3)
+	require.Len(t, modelLines, 2)
 	for _, line := range modelLines {
 		var ms modelSummaryRecord
 		require.NoError(t, json.Unmarshal([]byte(line), &ms))
