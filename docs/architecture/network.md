@@ -148,7 +148,7 @@ Canonical formats defined in `protocol/workload_identity.go`:
 | **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | Interactive CLI tool or developer client session. |
 | **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | Delegated tool, agent, or application running under an operator. |
 | **Ensemble (`g8ee`)** | `spiffe://g8e.local/app/g8ee` | System-level event broker authorized to push SSE events across all sessions. |
-| **User Principal** | `spiffe://g8e.local/user/<user_id>` | Human delegator identity embedded as secondary SAN on delegated credentials. |
+| **User Principal** | `spiffe://g8e.local/user/<user_id>` | Approving owner identity embedded as secondary SAN on platform-enrolled application credentials. |
 | **Governance Gateway** | `spiffe://g8e.local/hub/operator-listen` | Gateway hub identity embedded in the serving certificate URI SAN. |
 | **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | Federated gateway peer identity. |
 

@@ -5,7 +5,7 @@ title: MCP Protocol
 # MCP Protocol
 
 Last Updated: 2026-09-28
-Version: v2.2.4
+Version: v2.2.5
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -37,7 +37,7 @@ The gateway translates MCP tool invocations into governance envelopes:
 The gateway handles certain tools locally without downstream proxy:
 
 - **read_field**: JIT field resolution from governed collections with L1 field path validation, L1 forbidden pattern scanning on returned values, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
-- **Native tools**: The Operator includes 30 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
+- **Native tools**: The Operator includes 32 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
   - `db_discover_topology`: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map
   - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans and performance issues
   - `db_isolated_read`: Executes SELECT statements in read-only mode against a SQLite database

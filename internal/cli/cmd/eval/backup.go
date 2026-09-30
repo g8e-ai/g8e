@@ -10,21 +10,20 @@ package eval
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
 // defaultEvalBackupDir is where backups go unless --output-dir says otherwise:
 // eval/backups under the project root, outside the .g8e/ runtime tree.
 func defaultEvalBackupDir(cfg *config.Config) string {
-	return filepath.Join(cfg.ProjectRoot, filepath.FromSlash(constants.EvaluationBackupDefaultDir))
+	return shared.DefaultEvalBackupDir(cfg)
 }
 
 // autoBackupEval snapshots evaluation evidence into the default backup

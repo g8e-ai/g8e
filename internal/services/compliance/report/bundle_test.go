@@ -183,6 +183,10 @@ func (s *recordingBundleFileService) Remove(context.Context, string) error {
 	panic("unexpected Remove")
 }
 
+func (s *recordingBundleFileService) ArchiveRuntime(context.Context, time.Time) (string, error) {
+	panic("unexpected ArchiveRuntime")
+}
+
 func (s *recordingBundleFileService) RemoveAll(_ context.Context, relPath string) error {
 	s.removedPaths = append(s.removedPaths, relPath)
 	for filePath := range s.files {

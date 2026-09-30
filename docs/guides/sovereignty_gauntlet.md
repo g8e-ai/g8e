@@ -143,9 +143,11 @@ docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}' | tee "${
 `|| true` preserves the preflight record when no authenticated stack is running; it is not a publication pass condition. After explicit approval, the clean unified-stack commands are:
 
 ```bash
-./g8e docker clean
+./g8e docker clean --yes
 ./g8e auth logout
 ```
+
+`--yes` only skips the confirmation, which the approval above supplies; the pre-clean evidence backup still runs unless `--skip-backup` is given.
 
 ## 3. Run the unified-stack proof
 

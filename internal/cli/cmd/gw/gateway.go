@@ -8,7 +8,6 @@
 package gw
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -931,28 +930,32 @@ Gateway over mTLS.`,
 
 func gatewayResetCmd() *cobra.Command {
 	var force bool
+	var skipBackup bool
 
 	cmd := &cobra.Command{
 		Use:   string(constants.HistoryEventTypeReset),
-		Short: "Reset Gateway data and secrets (preserves CA)",
-		Long: `Reset the g8e Gateway by stopping all services, wiping SQLite databases and
-bootstrap secrets, then restarting with a fresh database. Existing TLS/PKI
-certificates and keys are preserved. Use --force to skip the confirmation prompt.`,
+		Short: "Reset Gateway data and secrets, then restart (.g8e is renamed to .g8e-<MMDDHHMM>)",
+		Long: `Reset the g8e Gateway by stopping all services, running the same full runtime
+cleanup as 'gw clean', then starting a new gateway. The runtime directory is not
+deleted: it is renamed to .g8e-<MMDDHHMM> so it can be recovered.
+
+Before proceeding, reset asks whether to back up evaluation evidence first.
+Use --skip-backup to opt out and --yes/--force to skip the prompts (the backup
+still runs unless --skip-backup is also given).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !force {
-				cmd.Println("This command will:")
-				cmd.Println("  1. Stop all running g8e services")
-				cmd.Println("  2. Wipe the SQLite databases and bootstrap secrets")
-				cmd.Println("  3. Preserve your existing TLS/PKI certificates and keys")
-				cmd.Println("  4. Restart the services with a fresh database")
-				cmd.Print("\nContinue? [y/N]: ")
-				reader := bufio.NewReader(cmd.InOrStdin())
-				response, _ := reader.ReadString('\n')
-				response = strings.TrimSpace(response)
-				if response != "y" && response != "Y" {
-					cmd.Println("Aborted")
-					return nil
-				}
+			proceed, err := shared.ConfirmDestructive(cmd, shared.DestructiveOptions{
+				Effects: []string{
+					"Stop all running g8e services",
+					"Rename the runtime directory (.g8e) aside to .g8e-<MMDDHHMM>; databases, secrets, logs and TLS/PKI are no longer used",
+					"Remove g8e root CA anchors from the OS trust store; CLI credentials become invalid",
+					"Start a fresh gateway with a new trust domain",
+				},
+				AssumeYes:  force,
+				SkipBackup: skipBackup,
+				Backup:     shared.EvalEvidenceBackup(shared.LoadConfig, shared.NewFileSvc),
+			})
+			if err != nil || !proceed {
+				return err
 			}
 
 			stopCmd := gatewayStopCmd()
@@ -965,7 +968,8 @@ certificates and keys are preserved. Use --force to skip the confirmation prompt
 			}
 
 			cleanCmd := gatewayCleanCmd()
-			cleanCmd.SetArgs([]string{"--force"})
+			// Reset already confirmed and offered the backup above.
+			cleanCmd.SetArgs([]string{"--force", "--" + shared.FlagSkipBackup})
 			cleanCmd.SetOut(cmd.OutOrStdout())
 			cleanCmd.SetErr(cmd.ErrOrStderr())
 			cleanCmd.SetIn(cmd.InOrStdin())
@@ -989,6 +993,7 @@ certificates and keys are preserved. Use --force to skip the confirmation prompt
 	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation prompt")
 	cmd.Flags().BoolVar(&force, "y", false, "Skip confirmation prompt (shorthand)")
 	cmd.Flags().BoolVar(&force, "yes", false, "Skip confirmation prompt (shorthand)")
+	shared.AddSkipBackupFlag(cmd, &skipBackup)
 
 	return cmd
 }
@@ -1019,39 +1024,40 @@ func gatewayCleanCmdWithConfig(
 	trustInstallerFactory func() (systemTrustCleaner, error),
 ) *cobra.Command {
 	var force bool
+	var skipBackup bool
 
 	cmd := &cobra.Command{
 		Use:   "clean",
-		Short: "Destructively remove all Gateway state",
-		Long: `Destructively remove all g8e Gateway state: stops all services, completely
-deletes the entire runtime directory including all SQLite databases, bootstrap
-secrets, logs, and TLS/PKI certificates/keys. All trust routes and credentials
-are permanently destroyed. CLI credentials become invalid after this operation.
-Use --force to skip the confirmation prompt.`,
+		Short: "Destructively remove all Gateway state (.g8e is renamed to .g8e-<MMDDHHMM>)",
+		Long: `Remove all g8e Gateway state: stops all services and moves the entire runtime
+directory (SQLite databases, bootstrap secrets, logs, TLS/PKI certificates/keys)
+out of the way. The directory is not deleted: it is renamed to
+.g8e-<MMDDHHMM> (for example .g8e-09301401) so it can be recovered by hand.
+Trust routes and credentials in the new runtime are gone, and CLI credentials
+become invalid after this operation.
+
+Before proceeding, clean asks whether to back up evaluation evidence first.
+Use --skip-backup to opt out and --yes/--force to skip the prompts (the backup
+still runs unless --skip-backup is also given).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			if !force {
-				cmd.Println("WARNING: This command will:")
-				cmd.Println("  1. Stop all running g8e services")
-				cmd.Println("  2. Completely delete the entire runtime directory")
-				cmd.Println("  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys")
-				cmd.Println("  4. All trust routes and credentials will be permanently destroyed")
-				cmd.Println("  5. Remove g8e root CA anchors from the OS trust store")
-				cmd.Println()
-				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
-				cmd.Println("You will need to run './g8e auth enroll user' again after restarting the gateway.")
-				cmd.Print("\nContinue? [y/N]: ")
-				reader := bufio.NewReader(cmd.InOrStdin())
-				response, _ := reader.ReadString('\n')
-				response = strings.TrimSpace(response)
-				if response != "y" && response != "Y" {
-					cmd.Println("Aborted")
-					return nil
-				}
+			proceed, err := shared.ConfirmDestructive(cmd, shared.DestructiveOptions{
+				Effects: []string{
+					"Stop all running g8e services",
+					"Rename the runtime directory (.g8e) aside to .g8e-<MMDDHHMM>; nothing is deleted, but the gateway starts over with no databases, secrets, logs, or TLS/PKI",
+					"Remove g8e root CA anchors from the OS trust store",
+					"CLI credentials become invalid; run './g8e auth enroll user' again after restarting the gateway",
+				},
+				AssumeYes:  force,
+				SkipBackup: skipBackup,
+				Backup:     shared.EvalEvidenceBackup(configLoader, fileSvcFactory),
+			})
+			if err != nil || !proceed {
+				return err
 			}
 
 			fileSvc, err := fileSvcFactory("", slog.Default())
@@ -1091,11 +1097,16 @@ Use --force to skip the confirmation prompt.`,
 				}
 			}
 
-			if err := pm.Clean(); err != nil {
+			archived, err := pm.Clean()
+			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
-			cmd.Println("Clean complete. All runtime state and credentials destroyed.")
+			if archived == "" {
+				cmd.Println("Clean complete. No runtime directory existed.")
+			} else {
+				cmd.Printf("Clean complete. Previous runtime state moved to %s (delete it manually once you no longer need it).\n", archived)
+			}
 			return nil
 		},
 	}
@@ -1103,6 +1114,7 @@ Use --force to skip the confirmation prompt.`,
 	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation prompt")
 	cmd.Flags().BoolVar(&force, "y", false, "Skip confirmation prompt (shorthand)")
 	cmd.Flags().BoolVar(&force, "yes", false, "Skip confirmation prompt (shorthand)")
+	shared.AddSkipBackupFlag(cmd, &skipBackup)
 
 	return cmd
 }

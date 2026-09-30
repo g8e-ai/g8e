@@ -624,16 +624,20 @@ func (pm *ProcessManager) GetLogPath() string {
 	return pm.logSvc.LogFilePath()
 }
 
-func (pm *ProcessManager) Clean() error {
+// Clean stops the Operator and renames the runtime directory aside to
+// .g8e-<MMDDHHMM> rather than deleting it. It returns the archive path, or ""
+// when there was no runtime directory to archive.
+func (pm *ProcessManager) Clean() (string, error) {
 	if err := pm.StopOperator(); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
+		return "", fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
 	}
 
-	if err := pm.fileSvc.RemoveAll(context.Background(), ""); err != nil {
-		return fmt.Errorf("%w: runtime directory: %w", constants.ErrPathValidation, err)
+	archived, err := pm.fileSvc.ArchiveRuntime(context.Background(), time.Now())
+	if err != nil {
+		return "", fmt.Errorf("%w: runtime directory: %w", constants.ErrPathValidation, err)
 	}
 
-	return nil
+	return archived, nil
 }
 
 // TailLog prints a log file, optionally following new entries (like tail -f).

@@ -180,6 +180,8 @@ var (
 	ErrFileRenameFailed     = errors.New("file rename failed")
 	ErrFileRemoveFailed     = errors.New("file remove failed")
 	ErrDirRemoveFailed      = errors.New("directory remove failed")
+	ErrRuntimeArchiveFailed = errors.New("runtime directory archive failed")
+	ErrDestructiveBackup    = errors.New("pre-clean backup failed; fix the error or re-run with --skip-backup")
 	ErrEnforcePermissions   = errors.New("failed to enforce permissions")
 	ErrInvalidRegex         = errors.New("invalid regex pattern")
 	ErrGrepFailed           = errors.New("failed to perform grep")

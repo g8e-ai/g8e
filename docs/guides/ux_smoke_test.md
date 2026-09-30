@@ -111,7 +111,7 @@ Record any containers left by a previous run, remove the unified-stack container
 
 ```bash
 docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}'
-./g8e docker clean
+./g8e docker clean --yes
 ./g8e auth logout
 docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}'
 ```
@@ -351,7 +351,7 @@ Stop containers while preserving volumes:
 Permanently remove all unified-stack containers and volumes:
 
 ```bash
-./g8e docker clean
+./g8e docker clean --yes
 ```
 
 The second command deletes the gateway PKI, operator vault and audit data, and all workload state.

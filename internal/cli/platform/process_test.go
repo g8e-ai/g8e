@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -490,17 +491,24 @@ func TestClean(t *testing.T) {
 	}
 
 	// Run clean
-	if err := pm.Clean(); err != nil {
+	archived, err := pm.Clean()
+	if err != nil {
 		t.Fatalf("Clean failed: %v", err)
 	}
 
-	// Verify runtimeDir was removed
+	// Verify runtimeDir was renamed aside, not deleted
 	runtimeExists, err := fileSvc.FileExists(context.Background(), "test.txt")
 	if err != nil {
 		t.Fatalf("FileExists failed: %v", err)
 	}
 	if runtimeExists {
-		t.Error("runtimeDir should be removed")
+		t.Error("runtimeDir should be moved out of place")
+	}
+	if !strings.HasPrefix(filepath.Base(archived), constants.RuntimeDirname+"-") {
+		t.Fatalf("archive %q should be named %s-<MMDDHHMM>", archived, constants.RuntimeDirname)
+	}
+	if _, err := os.Stat(filepath.Join(archived, "test.txt")); err != nil {
+		t.Errorf("archived runtime should retain prior state: %v", err)
 	}
 }
 
@@ -848,8 +856,12 @@ func TestCleanWithNonExistentRuntime(t *testing.T) {
 	}
 
 	// Don't create runtime directory - it should not error
-	if err := pm.Clean(); err != nil {
+	archived, err := pm.Clean()
+	if err != nil {
 		t.Errorf("Clean should not error when runtime doesn't exist: %v", err)
+	}
+	if archived != "" {
+		t.Errorf("nothing to archive, got %q", archived)
 	}
 }
 

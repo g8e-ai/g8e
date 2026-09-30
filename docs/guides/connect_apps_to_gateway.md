@@ -536,15 +536,15 @@ The platform owner approves the request from an authenticated CLI:
 ./g8e auth enroll approve req-12345
 ```
 
-Upon approval, the enrollment client completes the proof-of-possession ceremony, receives a 7-day certificate carrying `spiffe://g8e.local/app/etl-service` and the approving user's SPIFFE SAN, and atomically writes the certificate and private key to `.g8e/pki/issued/apps/etl-service.crt` and `.g8e/pki/issued/apps/etl-service.key`. It also establishes the default `AppPolicy` required for application authentication.
+Upon approval, the enrollment client completes the proof-of-possession ceremony, receives a 7-day certificate carrying `spiffe://g8e.local/app/etl-service` and the approving user's SPIFFE SAN, and writes the certificate and private key to `.g8e/apps/etl-service.crt` and `.g8e/apps/etl-service.key`. It also establishes the default `AppPolicy` required for application authentication.
 
 The application can then connect to MCP using `--app etl-service` or by presenting its client certificate:
 
 ```bash
 curl -X POST https://localhost:8443/mcp \
   --cacert .g8e/pki/trust/g8eg-ca-bundle.pem \
-  --cert .g8e/pki/issued/apps/etl-service.crt \
-  --key .g8e/pki/issued/apps/etl-service.key \
+  --cert .g8e/apps/etl-service.crt \
+  --key .g8e/apps/etl-service.key \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```

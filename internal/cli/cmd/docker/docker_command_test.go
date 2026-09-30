@@ -294,12 +294,58 @@ func TestDockerClean_WithComposeFileButNoDockerSucceeds(t *testing.T) {
 	writeRootCompose(t)
 
 	cmd := dockerCleanCmd()
+	require.NoError(t, cmd.Flags().Set("yes", "true"))
+	require.NoError(t, cmd.Flags().Set("skip-backup", "true"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, nil)
 	assert.NoError(t, err, "clean should succeed when Docker is available (no-op on stopped containers)")
+}
+
+func TestDockerClean_PromptsByDefaultAndDeclineStopsBeforeDocker(t *testing.T) {
+	writeRootCompose(t)
+
+	cmd := dockerCleanCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetIn(strings.NewReader("n\n"))
+
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Permanently delete the Docker data volumes")
+	assert.Contains(t, buf.String(), "Aborted")
+	assert.NotContains(t, buf.String(), "Cleaning Docker Compose stack")
+}
+
+func TestDockerClean_NonInteractiveWithoutYesDoesNotWipe(t *testing.T) {
+	writeRootCompose(t)
+
+	cmd := dockerCleanCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetIn(strings.NewReader(""))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+	assert.Contains(t, buf.String(), "Aborted")
+	assert.NotContains(t, buf.String(), "Cleaning Docker Compose stack")
+}
+
+func TestDockerReset_DeclineStopsBeforeDocker(t *testing.T) {
+	writeRootCompose(t)
+
+	cmd := dockerResetCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetIn(strings.NewReader("n\n"))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+	assert.Contains(t, buf.String(), "Aborted")
+	assert.NotContains(t, buf.String(), "Cleaning Docker Compose stack")
 }
 
 func TestDockerReset_WithComposeFileButNoDocker(t *testing.T) {
@@ -309,6 +355,8 @@ func TestDockerReset_WithComposeFileButNoDocker(t *testing.T) {
 	writeRootCompose(t)
 
 	cmd := dockerResetCmd()
+	require.NoError(t, cmd.Flags().Set("yes", "true"))
+	require.NoError(t, cmd.Flags().Set("skip-backup", "true"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

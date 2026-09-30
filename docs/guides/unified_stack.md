@@ -174,15 +174,15 @@ Provider host (Windows + Ollama example)
 
 Keep internal plan vocabulary separate from public campaign branding.
 
-| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (25 scenarios × eligible roles) |
+| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (26 scenarios × eligible roles) |
 | --- | --- | --- | --- | --- |
-| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **37** |
-| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **111** |
+| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **39** |
+| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **117** |
 | **Full homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-<seq>` | `.g8e/eval/model-inventory.json` (from `inventory freeze`) | all discovered models |
 
 Rules:
 
-- **Do not** use `north-star` in public run IDs or campaign IDs. The frozen scenario catalog is `north-star-25@1.0.0` (legacy slug; content is the standard 25-scenario suite).
+- **Do not** use `north-star` in public run IDs or campaign IDs. The frozen scenario catalog is `north-star-25@1.0.0` (legacy slug; content is the standard 26-scenario suite).
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
 - Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` **unset** in `.env`. Campaign authority travels on each governed dispatch from g8ee; do not rebind the inference operator per model.
@@ -435,7 +435,7 @@ If a prior Docker start created `.g8e` as root, fix ownership once with `sudo ch
 
 Useful flags:
 
-- `--clean` — wipe containers/volumes/networks before init (cold start).
+- `--clean` — wipe containers/volumes/networks before init (cold start). Confirms first and offers an evidence backup; `--yes` skips the confirmation, `--skip-backup` skips the backup.
 - `--skip-build` — reuse existing images.
 - `--skip-enroll` — reuse an already-enrolled CLI identity.
 - `--skip-approvals` — start workloads without auto-approving enrollments.
@@ -703,6 +703,8 @@ Campaign data publishes through Go (`CampaignPublicationCoordinator` → `Public
 | `./g8e docker clean` | `docker compose down -v --remove-orphans` | `make clean-docker` | Destructive wipe of containers, volumes, networks. |
 
 Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean` or `docker compose down -v`, repeat owner enrollment and platform approvals.
+
+`./g8e docker clean`, `docker reset`, and `docker init --clean` confirm before wiping volumes and offer to back up host evaluation evidence first. Pass `--yes` to skip the confirmation and `--skip-backup` to skip the backup. Raw `docker compose down -v` and `make clean-docker` have neither safeguard. Docker volumes are deleted outright; only host `.g8e/` wipes (`g8e gw clean`/`gw reset`) are renamed aside to `.g8e-<MMDDHHMM>` instead.
 
 Eval runs back up their evidence to `eval/backups/` automatically when they finish. Before a destructive wipe, take a fresh copy outside `.g8e/` with `./g8e eval backup` (or `--output-dir <dir>`), and put it back with `./g8e eval restore` (newest snapshot in `eval/backups/`, or pass `<dir>/eval-backup-<timestamp>`). See [Evaluation Programs](../architecture/evals.md#evidence-and-verification). This covers host evidence only, not the Gateway volume.
 

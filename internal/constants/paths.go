@@ -400,6 +400,11 @@ const (
 	OperatorLaunchProfileFilename = "operator-launch-profile.json"
 )
 
+// RuntimeArchiveTimestampLayout is the MMDDHHMM suffix appended to
+// RuntimeDirname when a destructive clean renames the runtime tree aside
+// (.g8e-09301401) instead of deleting it.
+const RuntimeArchiveTimestampLayout = "01021504"
+
 // Runtime directory constants for the .g8e/ state tree.
 const (
 	ProjectRootFromTestDir = "../../"

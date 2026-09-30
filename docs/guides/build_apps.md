@@ -111,37 +111,15 @@ The CLI certificate carries a SPIFFE identity of the form `spiffe://g8e.local/cl
 
 ### External Application Credentials
 
-External applications obtain short-lived delegated credentials from `POST /api/v1/pki/apps/delegated`. The request is authenticated by an enrolled human CLI certificate and contains a client-generated P-256 CSR, `app_name`, `app_type`, and optional `organization_id`. The returned client-auth certificate is valid for one hour and contains both the app and requesting-user SPIFFE identities. The Gateway also creates the default app policy needed by app authentication.
-
-Create the P-256 key and CSR locally, then place the CSR and application metadata in `app-enrollment.json`:
+External applications obtain credentials through owner-approved platform enrollment. The Gateway exposes no delegated application enrollment route; the earlier `POST /api/v1/pki/apps/delegated` endpoint is removed. Enroll an application by name:
 
 ```bash
-openssl ecparam -name prime256v1 -genkey -noout -out app.key
-openssl req -new -key app.key -out app.csr -subj "/CN=example-app"
+./g8e auth enroll app example-app
 ```
 
-```json
-{
-  "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\\n...\\n-----END CERTIFICATE REQUEST-----\\n",
-  "app_name": "example-app",
-  "app_type": "mcp-client",
-  "organization_id": "optional-organization-id"
-}
-```
+The command generates a P-256 key and CSR locally, submits a platform enrollment request of kind `application`, prints the approval command, and polls until the first owner decides. The Gateway receives only the CSR. Reserved first-party names (`g8ed`, `g8ee`, `g8eo`) are rejected for applications.
 
-Submit the CSR with the enrolled CLI credentials:
-
-```bash
-curl -X POST https://localhost:8443/api/v1/pki/apps/delegated \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
-  -H "Content-Type: application/json" \
-  -d @app-enrollment.json
-```
-
-Replace the example CSR with the contents of `app.csr`. The response includes `app_cert`, `cert_chain`, `trust_bundle`, `app_id`, and `expires_at`. Store the private key locally; the Gateway receives only the CSR. Delegated enrollment establishes identity only. It does not grant L2 signing authority. An administrator separately enrolls trusted Ed25519 signer keys and a consensus policy when an external service produces protocol L2 votes.
-
-The reserved first-party names `g8ed`, `g8ee`, and `g8eo` use the owner-approved platform enrollment protocol instead of delegated enrollment. That resumable flow uses the request, status, and completion endpoints under `/api/v1/auth/platform-enrollments/`; the first owner reviews requests with:
+The first owner reviews requests with:
 
 ```bash
 ./g8e auth enroll pending
@@ -149,7 +127,11 @@ The reserved first-party names `g8ed`, `g8ee`, and `g8eo` use the owner-approved
 # or: ./g8e auth enroll deny <request-id>
 ```
 
-See [Authentication and Authorization](../architecture/auth.md) for both enrollment protocols and certificate lifetimes.
+After approval, the command stores the client-auth certificate and key as `.g8e/apps/<name>.crt` and `.g8e/apps/<name>.key`, and the Gateway creates the default app policy needed by app authentication. The certificate carries both the app SPIFFE identity and the approving owner's user SPIFFE identity. Enrollment establishes identity only. It does not grant L2 signing authority. An administrator separately enrolls trusted Ed25519 signer keys and a consensus policy when an external service produces protocol L2 votes.
+
+Use the enrolled identity by name, for example `g8e mcp stdio --app example-app`; the command resolves the managed certificate and key and reads nothing from the environment. Applications that do not use the CLI call the request, status, and completion endpoints under `/api/v1/auth/platform-enrollments/` directly.
+
+See [Authentication and Authorization](../architecture/auth.md) for the enrollment protocol, approval, and revocation.
 
 ### App Authorization
 
@@ -164,7 +146,7 @@ An app certificate is accepted only while its `AppPolicy` exists. The current au
 The Go protocol packages are part of the platform module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.3
+go get github.com/g8e-ai/g8e/v2@v2.2.5
 ```
 
 Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers. Host-operation dispatch uses registered request `event_type` values at `POST /api/v1/operators/commands`; the historical `CommandIntent` pub/sub shape was removed in v2.1.14 and is no longer available.
@@ -174,7 +156,7 @@ Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. T
 Install the Python protocol package from PyPI:
 
 ```bash
-pip install g8e==2.2.3
+pip install g8e==2.2.5
 ```
 
 The package requires Python 3.10 or later. It includes generated protobuf modules, Pydantic models, protocol constants, deterministic transaction hashing, and receipt parsing and verification helpers. `G8E_PROTOCOL_DIR` overrides the bundled protocol constants directory for development.

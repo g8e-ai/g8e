@@ -323,9 +323,9 @@ func TestGatewayResetCmd_WarningMessagesPrintedBeforePrompt(t *testing.T) {
 	err := cmd.RunE(cmd, nil)
 	require.NoError(t, err)
 	output := buf.String()
-	assert.Contains(t, output, "This command will:")
+	assert.Contains(t, output, "destructive operation")
 	assert.Contains(t, output, "Stop all running g8e services")
-	assert.Contains(t, output, "Wipe the SQLite databases")
+	assert.Contains(t, output, "Rename the runtime directory (.g8e) aside")
 	assert.Contains(t, output, "Aborted")
 }
 
@@ -348,7 +348,7 @@ func TestGatewayCleanCmd_WarningMessagesPrintedBeforePrompt(t *testing.T) {
 	require.NoError(t, err)
 	output := buf.String()
 	assert.Contains(t, output, "WARNING")
-	assert.Contains(t, output, "permanently destroyed")
+	assert.Contains(t, output, "Rename the runtime directory (.g8e) aside")
 	assert.Contains(t, output, "Aborted")
 }
 

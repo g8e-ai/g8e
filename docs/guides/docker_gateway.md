@@ -194,7 +194,7 @@ The CLI wraps the root Compose file and prepares the host `.g8e` runtime tree be
 
 `docker start` launches the complete unified stack and walks through owner and workload enrollment. A missing request or skipped prompt is non-fatal; finish it later with `auth enroll pending` and `auth enroll approve`.
 
-`docker init` is the automated evaluation bootstrap. It requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT` set, builds unless `--skip-build` is supplied, starts the complete stack, enrolls the owner, auto-approves all platform workloads, and waits for ensemble health. Useful flags are `--clean` (destructive volume wipe), `--skip-build`, `--skip-enroll`, `--skip-approvals`, and `--headless`.
+`docker init` is the automated evaluation bootstrap. It requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT` set, builds unless `--skip-build` is supplied, starts the complete stack, enrolls the owner, auto-approves all platform workloads, and waits for ensemble health. Useful flags are `--clean` (destructive volume wipe; confirms and offers an evidence backup first, with `--yes` and `--skip-backup` as for `docker clean`), `--skip-build`, `--skip-enroll`, `--skip-approvals`, and `--headless`.
 
 The CLI walkthrough assumes host gateway ports 8080 and 8443. With remapped ports, use manual enrollment commands and specify both endpoints:
 
@@ -346,9 +346,9 @@ The primary gateway is reachable at the default ports (8080, 8443). The secondar
 | `./g8e docker build [--no-cache]` | Builds images, exports the runtime binary to `./g8e`, and reports success only after export. |
 | `./g8e docker binaries export [--image <ref>] [--output <dir>]` | Exports and validates a full g8e-binary set from an image that contains `/opt/g8e/bin`; standard Gateway images ship only the runtime binary. |
 | `./g8e docker logs [service] [-f] [--profile <name>]` | Displays or follows Compose logs. |
-| `./g8e docker reset [--full] [--profile <name>]` | Removes containers, volumes, and networks, then starts the specified scope. Destructive. |
+| `./g8e docker reset [--full] [--profile <name>] [--yes] [--skip-backup]` | Removes containers, volumes, and networks, then starts the specified scope. Destructive; confirms and offers an evidence backup first (see `docker clean`). |
 | `./g8e docker rebuild [--full] [--profile <name>] [--no-cache]` | Stops services, rebuilds images with provenance, exports the runtime binary to `./g8e`, and starts the specified scope. Cache reuse is the default. |
-| `./g8e docker clean` | Removes containers, volumes, networks, and orphans across all profiles. Confirmation is skipped by default; use `--yes=false` to prompt. Destructive. |
+| `./g8e docker clean [--yes] [--skip-backup]` | Removes containers, volumes, networks, and orphans across all profiles. Destructive and not recoverable: Docker volumes cannot be renamed aside. It prompts for confirmation (`--yes` skips it; end of input aborts), then offers to back up host evaluation evidence to `eval/backups/` (runs automatically with `--yes` unless `--skip-backup`). A failed backup aborts. The host `.g8e/` directory is not touched. |
 
 If a workload remains unhealthy, inspect the relevant service logs and `./g8e auth enroll pending`. If a volume was removed, treat all prior identities as invalid and repeat owner and workload enrollment. If a previous Docker invocation created the host `.g8e` tree as root, repair ownership before CLI enrollment, for example `sudo chown -R $(id -u):$(id -g) .g8e`.
 
