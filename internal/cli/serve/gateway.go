@@ -55,6 +55,8 @@ type GatewayConfig struct {
 	ConsensusURL        string                `json:"consensus_url,omitempty"`
 	ConsensusBootstrap  string                `json:"consensus_bootstrap,omitempty"`
 	MCPDownstreamURL    string                `json:"mcp_downstream_url,omitempty"`
+	MCPDownstreamCmd    string                `json:"mcp_downstream_cmd,omitempty"`
+	MCPDownstreamArgs   []string              `json:"mcp_downstream_args,omitempty"`
 	A2ADownstreamURL    string                `json:"a2a_downstream_url,omitempty"`
 	EnsembleUpstreamURL string                `json:"ensemble_upstream_url,omitempty"`
 	PublicBaseURL       string                `json:"public_base_url,omitempty"`
@@ -135,6 +137,8 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		CertMode:            cfg.CertIdentityMode,
 		NetworkIdentityFile: cfg.NetworkIdentityFile,
 		MCPDownstreamURL:    cfg.MCPDownstreamURL, // empty by default — no downstream proxy
+		MCPDownstreamCmd:    cfg.MCPDownstreamCmd,
+		MCPDownstreamArgs:   cfg.MCPDownstreamArgs,
 		A2ADownstreamURL:    cfg.A2ADownstreamURL, // empty by default — no downstream proxy
 		EnsembleUpstreamURL: cfg.EnsembleUpstreamURL,
 		PublicBaseURL:       cfg.PublicBaseURL,

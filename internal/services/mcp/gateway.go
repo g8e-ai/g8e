@@ -105,6 +105,9 @@ type GatewayService struct {
 	signingKey             ed25519.PrivateKey
 	keyID                  string
 	downstreamURL          string
+	downstreamCmd          string
+	downstreamArgs         []string
+	subprocessDownstream   *SubprocessDownstream
 	dbService              FieldReader
 	sessionValidator       SessionValidator
 	auditLogger            AuditLogger
@@ -209,6 +212,8 @@ type Dependencies struct {
 	SigningKey             ed25519.PrivateKey
 	KeyID                  string
 	DownstreamURL          string
+	DownstreamCmd          string
+	DownstreamArgs         []string
 	DBService              FieldReader
 	SessionValidator       SessionValidator
 	AuditLogger            AuditLogger
@@ -220,6 +225,10 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	_, validPosture := constants.GetGovernancePostureRequirements(deps.Posture)
 	if deps.Posture != "" && !validPosture {
 		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, ratify, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)
+	}
+
+	if deps.DownstreamURL != "" && deps.DownstreamCmd != "" {
+		return nil, fmt.Errorf("gateway: cannot configure both HTTP downstream (%s) and subprocess downstream (%s): %w", deps.DownstreamURL, deps.DownstreamCmd, constants.ErrGatewayDownstreamMutuallyExclusive)
 	}
 
 	if deps.AuditStore == nil {
@@ -243,6 +252,11 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		nativeToolHandler.SetAuditReceiptQuery(deps.AuditReceiptQuery)
 	}
 
+	var subprocessDownstream *SubprocessDownstream
+	if deps.DownstreamCmd != "" {
+		subprocessDownstream = NewSubprocessDownstream(deps.DownstreamCmd, deps.DownstreamArgs, deps.Logger)
+	}
+
 	g := &GatewayService{
 		logger:                 deps.Logger,
 		responder:              deps.Responder,
@@ -263,6 +277,9 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		signingKey:             deps.SigningKey,
 		keyID:                  deps.KeyID,
 		downstreamURL:          deps.DownstreamURL,
+		downstreamCmd:          deps.DownstreamCmd,
+		downstreamArgs:         deps.DownstreamArgs,
+		subprocessDownstream:   subprocessDownstream,
 		dbService:              deps.DBService,
 		sessionValidator:       deps.SessionValidator,
 		auditLogger:            deps.AuditLogger,
@@ -367,6 +384,28 @@ func (g *GatewayService) isCircuitOpen() bool {
 	return true
 }
 
+func (g *GatewayService) hasDownstream() bool {
+	return g.downstreamURL != "" || g.subprocessDownstream != nil
+}
+
+func (g *GatewayService) downstreamTarget() string {
+	if g.downstreamURL != "" {
+		return g.downstreamURL
+	}
+	if g.subprocessDownstream != nil {
+		return g.subprocessDownstream.Command()
+	}
+	return ""
+}
+
+// Close terminates any active downstream subprocess resources.
+func (g *GatewayService) Close() error {
+	if g.subprocessDownstream != nil {
+		return g.subprocessDownstream.Close()
+	}
+	return nil
+}
+
 func (g *GatewayService) recordFailure() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -376,7 +415,7 @@ func (g *GatewayService) recordFailure() {
 	if g.failureCount >= g.maxFailures {
 		if !g.circuitOpen {
 			if g.logger != nil {
-				g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.downstreamURL, "failures", g.failureCount)
+				g.logger.Warn("MCP downstream circuit breaker OPENED", "target", g.downstreamTarget(), "failures", g.failureCount)
 			}
 		}
 		g.circuitOpen = true
@@ -389,7 +428,7 @@ func (g *GatewayService) recordSuccess() {
 
 	if g.circuitOpen {
 		if g.logger != nil {
-			g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.downstreamURL)
+			g.logger.Info("MCP downstream circuit breaker CLOSED", "target", g.downstreamTarget())
 		}
 	}
 	g.failureCount = 0
@@ -1289,7 +1328,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		return summary, nil
 	}
 
-	if g.downstreamURL == "" {
+	if !g.hasDownstream() {
 		return "", constants.ErrGatewayNoDownstreamConfigured
 	}
 
@@ -1308,52 +1347,66 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		return "", fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	mcpReq := &response.JSONRPCRequest{
-		JSONRPC: "2.0",
-		Method:  "tools/call",
-		Params:  mcpParams,
-		ID:      1,
-	}
+	var resultRaw json.RawMessage
 
-	reqBody, err := json.Marshal(mcpReq)
-	if err != nil {
-		return "", fmt.Errorf("gateway: %w", constants.ErrInternal)
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post(g.downstreamURL, "application/json", strings.NewReader(string(reqBody)))
-	if err != nil {
-		g.recordFailure()
-		return "", fmt.Errorf("gateway: %w", constants.ErrGatewayDownstreamUnavailable)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			g.logger.Error("Failed to close response body", "error", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode >= 500 {
+	if g.subprocessDownstream != nil {
+		raw, err := g.subprocessDownstream.Call(ctx, "tools/call", json.RawMessage(mcpParams))
+		if err != nil {
 			g.recordFailure()
+			return "", fmt.Errorf("gateway: %w", constants.ErrGatewayDownstreamUnavailable)
 		}
-		return "", fmt.Errorf("gateway: %w", constants.ErrGatewayDownstreamHTTPError)
-	}
+		g.recordSuccess()
+		resultRaw = raw
+	} else {
+		mcpReq := &response.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/call",
+			Params:  mcpParams,
+			ID:      1,
+		}
 
-	g.recordSuccess()
+		reqBody, err := json.Marshal(mcpReq)
+		if err != nil {
+			return "", fmt.Errorf("gateway: %w", constants.ErrInternal)
+		}
 
-	// Parse MCP response
-	var mcpResp JSONRPCResponse
-	if err := json.NewDecoder(resp.Body).Decode(&mcpResp); err != nil {
-		return "", fmt.Errorf("gateway: %w", constants.ErrInternal)
-	}
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Post(g.downstreamURL, "application/json", strings.NewReader(string(reqBody)))
+		if err != nil {
+			g.recordFailure()
+			return "", fmt.Errorf("gateway: %w", constants.ErrGatewayDownstreamUnavailable)
+		}
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				g.logger.Error("Failed to close response body", "error", err)
+			}
+		}()
 
-	if mcpResp.Error != nil {
-		return "", fmt.Errorf("gateway: %w", constants.ErrGatewayMCPError)
+		if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode >= 500 {
+				g.recordFailure()
+			}
+			return "", fmt.Errorf("gateway: %w", constants.ErrGatewayDownstreamHTTPError)
+		}
+
+		g.recordSuccess()
+
+		// Parse MCP response
+		var mcpResp JSONRPCResponse
+		if err := json.NewDecoder(resp.Body).Decode(&mcpResp); err != nil {
+			return "", fmt.Errorf("gateway: %w", constants.ErrInternal)
+		}
+
+		if mcpResp.Error != nil {
+			return "", fmt.Errorf("gateway: %w", constants.ErrGatewayMCPError)
+		}
+
+		resultRaw = mcpResp.Result
 	}
 
 	// Extract result from MCP response
 	var callResult CallToolResult
-	if err := json.Unmarshal(mcpResp.Result, &callResult); err != nil {
+	if err := json.Unmarshal(resultRaw, &callResult); err != nil {
 		return "", fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 

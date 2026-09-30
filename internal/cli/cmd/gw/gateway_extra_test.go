@@ -53,7 +53,7 @@ func TestGatewayStartCmdFlags(t *testing.T) {
 			"passkey-rp-id", "passkey-rp-name",
 			"rate-limit-rps", "rate-limit-burst",
 			"log", "cert-mode", "consensus-id", "consensus-url",
-			"mcp-downstream-url", "a2a-downstream-url", "follow",
+			"mcp-downstream-url", "mcp-downstream-cmd", "mcp-downstream-args", "a2a-downstream-url", "follow",
 			"doctrine-dir",
 		}
 		for _, flagName := range expectedFlags {

@@ -109,6 +109,13 @@ List pending platform enrollment requests and approve or deny each workload usin
 # Approve the Inference Operator
 ./g8e auth enroll approve <inference-operator-request-id> --yes
 
+# Approve several requests at once (request IDs, instance IDs, or hostnames)
+./g8e auth enroll approve <request-id-1> <request-id-2> --yes
+./g8e auth enroll approve <hostname> --yes
+
+# Approve every pending request
+./g8e auth enroll approve --all --yes
+
 # Reject a request instead of approving it
 ./g8e auth enroll deny <request-id> --yes
 ```

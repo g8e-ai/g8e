@@ -69,6 +69,8 @@ type GatewayFlags struct {
 	ConsensusURL        string
 	ConsensusBootstrap  string
 	MCPDownstreamURL    string
+	MCPDownstreamCmd    string
+	MCPDownstreamArgs   string
 	A2ADownstreamURL    string
 	EnsembleUpstreamURL string
 	PublicBaseURL       string
@@ -105,6 +107,8 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.ConsensusURL, "consensus-url", "", "URL of the Consensus service for L2 deliberation (e.g. https://localhost:8443/consensus/v1/deliberate)")
 	cmd.Flags().StringVar(&f.ConsensusBootstrap, "consensus-bootstrap", "", "Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup (for deterministic demo deployments)")
 	cmd.Flags().StringVar(&f.MCPDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
+	cmd.Flags().StringVar(&f.MCPDownstreamCmd, "mcp-downstream-cmd", "", "Command of a downstream MCP subprocess to proxy discovery and execution to (default: none)")
+	cmd.Flags().StringVar(&f.MCPDownstreamArgs, "mcp-downstream-args", "", "Comma-separated arguments for the downstream MCP subprocess (default: none)")
 	cmd.Flags().StringVar(&f.A2ADownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
 	cmd.Flags().StringVar(&f.EnsembleUpstreamURL, "ensemble-upstream-url", "", "HTTP URL of the g8ee ensemble for browser proxy forwarding (default: G8E_ENSEMBLE_URL or http://127.0.0.1:8000)")
 	cmd.Flags().StringVar(&f.PublicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
@@ -188,6 +192,8 @@ func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 		ConsensusURL:                     f.ConsensusURL,
 		ConsensusBootstrap:               f.ConsensusBootstrap,
 		MCPDownstreamURL:                 f.MCPDownstreamURL,
+		MCPDownstreamCmd:                 f.MCPDownstreamCmd,
+		MCPDownstreamArgs:                parseDownstreamArgs(f.MCPDownstreamArgs),
 		A2ADownstreamURL:                 f.A2ADownstreamURL,
 		EnsembleUpstreamURL:              f.EnsembleUpstreamURL,
 		PublicBaseURL:                    f.PublicBaseURL,
@@ -200,6 +206,20 @@ func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 		EvalExplorerRoot:                 f.EvalExplorerRoot,
 		PublicSpectatorTrustedProxyCIDRs: f.PublicSpectatorTrustedProxyCIDRs,
 	}
+}
+
+func parseDownstreamArgs(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	res := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			res = append(res, trimmed)
+		}
+	}
+	return res
 }
 
 // wizardRunner is the function signature for launching the interactive wizard.

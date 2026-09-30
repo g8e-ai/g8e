@@ -10,6 +10,7 @@ package authcmd
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -39,15 +40,29 @@ func approvePlatformEnrollmentCmd() *cobra.Command {
 			verb:       "approve",
 			promptVerb: "Approve",
 			decision:   models.PlatformEnrollmentDecisionApprove,
-			short:      "Approve a pending platform workload enrollment request via mTLS",
-			long: `Approve a pending platform workload enrollment request (dashboard,
+			short:      "Approve pending platform workload enrollment requests via mTLS",
+			long: `Approve one or more pending platform workload enrollment requests (dashboard,
 ensemble, or operator) from the authenticated CLI identity (mTLS).
 
+Name requests with any mix of space-separated selectors, each matched against
+the pending list by request ID, instance ID, or hostname (case-insensitive). A
+selector that matches several requests (for example a hostname running both an
+operator and an ensemble) approves all of them. Use --all to approve every
+pending request. Every selector must match a pending request or nothing is
+approved.
+
 The command fetches the pending list to display the component kind, hostname,
-instance ID, CSR fingerprints, creation time, and expiry before posting the
-decision, unless --yes is supplied for non-interactive automation. The approver
-must hold a valid, non-revoked CLI certificate bound to the active first user
-(the persistent owner); the gateway enforces this server-side.
+instance ID, CSR fingerprints, creation time, and expiry of every matched
+request, then asks for a single confirmation before posting the decisions,
+unless --yes is supplied for non-interactive automation. The approver must hold
+a valid, non-revoked CLI certificate bound to the active first user (the
+persistent owner); the gateway enforces this server-side.
+
+Examples:
+  g8e auth enroll approve 4d669cdb-34b6-4977-b7f5-175ba2c762b7 29ed21d0-d495-471b-8126-000b5bd76146
+  g8e auth enroll approve web-01.example.com
+  g8e auth enroll approve i-0abc123def456 --yes
+  g8e auth enroll approve --all --yes
 
 Use --reason to attach an optional bounded approval note (max ` + fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes) + ` bytes).
 
@@ -65,15 +80,20 @@ func denyPlatformEnrollmentCmd() *cobra.Command {
 			verb:       "deny",
 			promptVerb: "Deny",
 			decision:   models.PlatformEnrollmentDecisionDeny,
-			short:      "Deny a pending platform workload enrollment request via mTLS",
-			long: `Deny a pending platform workload enrollment request (dashboard,
+			short:      "Deny pending platform workload enrollment requests via mTLS",
+			long: `Deny one or more pending platform workload enrollment requests (dashboard,
 ensemble, or operator) from the authenticated CLI identity (mTLS).
 
+Selectors work as in 'g8e auth enroll approve': space-separated request IDs,
+instance IDs, or hostnames, or --all for every pending request. Every selector
+must match a pending request or nothing is denied.
+
 The command fetches the pending list to display the component kind, hostname,
-instance ID, CSR fingerprints, creation time, and expiry before posting the
-decision, unless --yes is supplied for non-interactive automation. The approver
-must hold a valid, non-revoked CLI certificate bound to the active first user
-(the persistent owner); the gateway enforces this server-side.
+instance ID, CSR fingerprints, creation time, and expiry of every matched
+request, then asks for a single confirmation before posting the decisions,
+unless --yes is supplied for non-interactive automation. The approver must hold
+a valid, non-revoked CLI certificate bound to the active first user (the
+persistent owner); the gateway enforces this server-side.
 
 Use --reason to attach an optional bounded denial note (max ` + fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes) + ` bytes).
 
@@ -187,14 +207,22 @@ func platformEnrollmentDecisionCmdWithConfig(
 	var (
 		reason string
 		yes    bool
+		all    bool
 	)
 	cmd := &cobra.Command{
-		Use:   spec.verb + " <request-id>",
+		Use:   spec.verb + " <request-id|instance-id|hostname>... | --all",
 		Short: spec.short,
 		Long:  spec.long,
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if all && len(args) > 0 {
+				return fmt.Errorf("enroll %s: --all cannot be combined with explicit selectors", spec.verb)
+			}
+			if !all && len(args) == 0 {
+				return fmt.Errorf("enroll %s: specify one or more request IDs, instance IDs, or hostnames, or use --all", spec.verb)
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			requestID := args[0]
 			cfg, err := configLoader("")
 			if err != nil {
 				return err
@@ -220,16 +248,47 @@ func platformEnrollmentDecisionCmdWithConfig(
 				return fmt.Errorf("enroll %s: parse pending list: %w", spec.verb, err)
 			}
 
-			req := findPendingRequest(pendingResp.Requests, requestID)
-			if req == nil {
-				return fmt.Errorf("enroll %s: %w: %s", spec.verb, constants.ErrPlatformEnrollmentRequestNotFound, requestID)
+			var targets []models.PlatformEnrollmentPendingRequest
+			if all {
+				targets = pendingResp.Requests
+				if len(targets) == 0 {
+					cmd.Printf("No pending platform enrollment requests.\n")
+					return nil
+				}
+			} else {
+				var unmatched []string
+				targets, unmatched = selectPendingRequests(pendingResp.Requests, args)
+				if len(unmatched) > 0 {
+					return fmt.Errorf("enroll %s: %w: %s", spec.verb, constants.ErrPlatformEnrollmentRequestNotFound, strings.Join(unmatched, ", "))
+				}
 			}
 
-			PrintPlatformEnrollmentRequestDetails(cmd, req)
+			// Validate every decision before any is posted so a bad --reason
+			// cannot leave a batch partially decided.
+			decisions := make([]models.PlatformEnrollmentDecisionRequest, len(targets))
+			for i := range targets {
+				decisions[i] = models.PlatformEnrollmentDecisionRequest{
+					RequestID: targets[i].RequestID,
+					Decision:  spec.decision,
+					Reason:    reason,
+				}
+				if err := decisions[i].Validate(); err != nil {
+					return fmt.Errorf("enroll %s: %w", spec.verb, err)
+				}
+			}
+
+			for i := range targets {
+				PrintPlatformEnrollmentRequestDetails(cmd, &targets[i])
+				cmd.Printf("\n")
+			}
 
 			if !yes {
 				reader := bufio.NewReader(os.Stdin)
-				fmt.Printf("\n%s this platform enrollment request? (y/N): ", spec.promptVerb)
+				if len(targets) == 1 {
+					fmt.Printf("%s this platform enrollment request? (y/N): ", spec.promptVerb)
+				} else {
+					fmt.Printf("%s these %d platform enrollment requests? (y/N): ", spec.promptVerb, len(targets))
+				}
 				response, _ := reader.ReadString('\n')
 				response = strings.TrimSpace(strings.ToLower(response))
 				if response != "y" && response != "yes" {
@@ -238,29 +297,21 @@ func platformEnrollmentDecisionCmdWithConfig(
 				}
 			}
 
-			decisionReq := models.PlatformEnrollmentDecisionRequest{
-				RequestID: requestID,
-				Decision:  spec.decision,
-				Reason:    reason,
+			// Each request is decided independently; a failure does not stop the
+			// remaining requests, and every failure is reported in the final error.
+			var failures []error
+			for _, decision := range decisions {
+				resp, err := PostPlatformEnrollmentDecision(client, decision)
+				if err != nil {
+					cmd.Printf("Platform enrollment request %s failed: %v\n", decision.RequestID, err)
+					failures = append(failures, fmt.Errorf("%s: %w", decision.RequestID, err))
+					continue
+				}
+				cmd.Printf("Platform enrollment request %s %s.\n", decision.RequestID, string(resp.State))
 			}
-			if err := decisionReq.Validate(); err != nil {
-				return fmt.Errorf("enroll %s: %w", spec.verb, err)
+			if len(failures) > 0 {
+				return fmt.Errorf("enroll %s: %d of %d requests failed: %w", spec.verb, len(failures), len(decisions), errors.Join(failures...))
 			}
-
-			respBody, err := client.Post(
-				constants.APIPaths.AuthPlatformEnrollmentDecision,
-				decisionReq,
-			)
-			if err != nil {
-				return fmt.Errorf("enroll %s: post decision: %w", spec.verb, err)
-			}
-
-			var resp models.PlatformEnrollmentDecisionResponse
-			if err := json.Unmarshal(respBody, &resp); err != nil {
-				return fmt.Errorf("enroll %s: parse response: %w", spec.verb, err)
-			}
-
-			cmd.Printf("Platform enrollment request %s.\n", string(resp.State))
 			return nil
 		},
 	}
@@ -269,6 +320,8 @@ func platformEnrollmentDecisionCmdWithConfig(
 		"Optional bounded note attached to the decision (max "+fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes)+" bytes).")
 	cmd.Flags().BoolVar(&yes, "yes", false,
 		"Skip the interactive confirmation prompt (non-interactive automation).")
+	cmd.Flags().BoolVar(&all, "all", false,
+		"Apply the decision to every pending request instead of naming selectors.")
 	return cmd
 }
 
@@ -289,16 +342,34 @@ func PostPlatformEnrollmentDecision(client APIClient, decisionReq models.Platfor
 	return &resp, nil
 }
 
-// findPendingRequest looks up a request ID in the pending list. Returns nil if
-// the request is not found (it may have been decided, expired, or completed
-// since the pending list was last fetched).
-func findPendingRequest(requests []models.PlatformEnrollmentPendingRequest, requestID string) *models.PlatformEnrollmentPendingRequest {
-	for i := range requests {
-		if requests[i].RequestID == requestID {
-			return &requests[i]
+// selectPendingRequests resolves each selector against the pending list by exact
+// request ID, exact instance ID, or case-insensitive hostname. A selector that
+// matches several requests (for example a hostname running both an operator and
+// an ensemble) selects all of them. Results are de-duplicated and keep pending
+// list order. Selectors that match nothing are returned in unmatched (they may
+// have been decided, expired, or completed since the list was fetched).
+func selectPendingRequests(requests []models.PlatformEnrollmentPendingRequest, selectors []string) (selected []models.PlatformEnrollmentPendingRequest, unmatched []string) {
+	chosen := make(map[string]struct{}, len(requests))
+	for _, selector := range selectors {
+		selector = strings.TrimSpace(selector)
+		matched := false
+		for i := range requests {
+			req := &requests[i]
+			if req.RequestID == selector || req.InstanceID == selector || strings.EqualFold(req.Hostname, selector) {
+				chosen[req.RequestID] = struct{}{}
+				matched = true
+			}
+		}
+		if !matched {
+			unmatched = append(unmatched, selector)
 		}
 	}
-	return nil
+	for _, req := range requests {
+		if _, ok := chosen[req.RequestID]; ok {
+			selected = append(selected, req)
+		}
+	}
+	return selected, unmatched
 }
 
 // printPlatformEnrollmentRequestDetails displays the owner-visible metadata for

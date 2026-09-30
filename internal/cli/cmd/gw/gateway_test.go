@@ -232,6 +232,8 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 			ConsensusURL:                     "https://localhost:8443/consensus/v1/deliberate",
 			ConsensusBootstrap:               "/etc/g8e/consensus-bootstrap.json",
 			MCPDownstreamURL:                 "https://downstream.example.com/mcp",
+			MCPDownstreamCmd:                 "npx",
+			MCPDownstreamArgs:                []string{"-y", "@modelcontextprotocol/server-filesystem", "/tmp"},
 			A2ADownstreamURL:                 "https://downstream.example.com/a2a",
 			PublicBaseURL:                    "https://demo.g8e.ai",
 			AllowedOrigins:                   []string{"https://lovable.dev"},

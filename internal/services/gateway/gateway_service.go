@@ -412,6 +412,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		SigningKey:             actuatorPriv,
 		KeyID:                  actuatorKeyID,
 		DownstreamURL:          cfg.Gateway.MCPDownstreamURL,
+		DownstreamCmd:          cfg.Gateway.MCPDownstreamCmd,
+		DownstreamArgs:         cfg.Gateway.MCPDownstreamArgs,
 		DBService:              docStore,
 		SessionValidator:       cmdSvc,
 		AuditLogger:            auditLogger,
@@ -1365,6 +1367,11 @@ func (ls *GatewayModeService) closeResources() {
 	if ls.db != nil {
 		if err := ls.db.Close(); err != nil {
 			ls.logger.Error("Database close error", "state", string(constants.ConnectionStateError), "error", err)
+		}
+	}
+	if ls.mcpGateway != nil {
+		if err := ls.mcpGateway.Close(); err != nil {
+			ls.logger.Error("MCP gateway close error", "state", string(constants.ConnectionStateError), "error", err)
 		}
 	}
 }

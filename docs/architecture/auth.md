@@ -189,7 +189,7 @@ The workload enrollment flow is:
 1. The workload generates its private keys locally and submits its certificate requests with a system fingerprint.
 2. The gateway creates a token-scoped request that expires after 30 minutes.
 3. The active first user reviews the request in the Console or with `g8e auth enroll pending`.
-4. The owner approves or denies the request. CLI approval uses `g8e auth enroll approve <request-id> --yes`; denial uses `g8e auth enroll deny <request-id> --yes`.
+4. The owner approves or denies the request. CLI approval uses `g8e auth enroll approve <selector>... --yes`; denial uses `g8e auth enroll deny <selector>... --yes`. Each space-separated selector matches a pending request by request ID, instance ID, or hostname, and `--all` decides every pending request. Every selector must match or nothing is decided; matched requests are shown and confirmed once, then decided independently.
 5. After approval, the workload proves possession of every requested private key and receives its certificate, trust bundle, and session or application policy.
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
 7. The active first owner can revoke the completed request by its request ID. Revocation records the actor, reason, timestamp, governance envelope, and receipt identifiers on the enrollment record.

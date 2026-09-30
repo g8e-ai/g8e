@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -286,6 +287,12 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	}
 	if opts.MCPDownstreamURL != "" {
 		args = append(args, "--mcp-downstream-url", opts.MCPDownstreamURL)
+	}
+	if opts.MCPDownstreamCmd != "" {
+		args = append(args, "--mcp-downstream-cmd", opts.MCPDownstreamCmd)
+	}
+	if len(opts.MCPDownstreamArgs) > 0 {
+		args = append(args, "--mcp-downstream-args", strings.Join(opts.MCPDownstreamArgs, ","))
 	}
 	if opts.A2ADownstreamURL != "" {
 		args = append(args, "--a2a-downstream-url", opts.A2ADownstreamURL)

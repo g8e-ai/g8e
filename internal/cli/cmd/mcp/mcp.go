@@ -8,7 +8,6 @@
 package mcp
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -25,7 +24,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
@@ -36,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	authcmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/mcptransport"
 	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	g8econfig "github.com/g8e-ai/g8e/v2/internal/config"
@@ -43,7 +42,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 )
@@ -74,27 +72,13 @@ func Cmd() *cobra.Command {
 }
 
 // JSONRPCRequest represents a JSON-RPC 2.0 request.
-type JSONRPCRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      interface{}     `json:"id"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
-}
+type JSONRPCRequest = mcptransport.JSONRPCRequest
 
 // JSONRPCResponse represents a JSON-RPC 2.0 response.
-type JSONRPCResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *RPCError   `json:"error,omitempty"`
-}
+type JSONRPCResponse = mcptransport.JSONRPCResponse
 
 // RPCError represents a JSON-RPC error object.
-type RPCError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
-}
+type RPCError = mcptransport.JSONRPCError
 
 // ToolsListResult is the result payload for tools/list.
 type ToolsListResult struct {
@@ -106,12 +90,6 @@ type Tool struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description"`
 	InputSchema *mcp.InputSchema `json:"inputSchema"`
-}
-
-// CallToolRequest is the params object for tools/call.
-type CallToolRequest struct {
-	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 
 // MCPToolsCapability declares the tools capability for the MCP initialize handshake.
@@ -493,53 +471,17 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func(string
 		}
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
-	encoder := json.NewEncoder(os.Stdout)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		var req JSONRPCRequest
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			logger.Error("Failed to parse JSON-RPC request", "error", err)
-			sendError(encoder, nil, constants.JSONRPCErrorCodeParseError, constants.JSONRPCErrorMessageParseError)
-			continue
-		}
-
-		// MCP notifications are fire-and-forget. They must not receive a
-		// response — drop them silently.
-		if req.ID == nil && req.Method != "" {
-			logger.Debug("Dropping MCP notification", "method", req.Method)
-			continue
-		}
-
-		// The initialize handshake is answered locally so the agent gets an
-		// immediate response without a gateway round-trip.
+	handler := mcptransport.HandlerFunc(func(ctx context.Context, req mcptransport.JSONRPCRequest) (mcptransport.JSONRPCResponse, error) {
 		if req.Method == "initialize" {
-			handleInitialize(encoder, req.ID)
-			continue
+			return mcptransport.NewInitializeResponse(req.ID, "g8e", "dev"), nil
 		}
-
 		logger.Info("Proxying MCP request", "method", req.Method, "id", req.ID)
+		return proxySessionToGatewayWithRetryContext(ctx, conn, req, logger)
+	})
 
-		resp, err := proxySessionToGatewayWithRetryContext(cmd.Context(), conn, req, logger)
-		if err != nil {
-			logger.Error("Failed to proxy to gateway", "error", err)
-			sendError(encoder, req.ID, -32603, fmt.Sprintf("gateway proxy error: %v", err))
-			continue
-		}
-
-		if err := encoder.Encode(resp); err != nil {
-			logger.Error("Failed to encode response", "error", err)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error("Error reading stdin", "error", err)
-		return fmt.Errorf("mcp: read stdin: %w", err)
+	if err := mcptransport.ServeStdio(cmd.Context(), os.Stdin, os.Stdout, logger, handler); err != nil {
+		logger.Error("MCP stdio proxy terminated with error", "error", err)
+		return fmt.Errorf("mcp: serve stdio: %w", err)
 	}
 
 	logger.Info("g8e MCP governance proxy shutting down")
@@ -654,32 +596,6 @@ func extractTxHashFromApprovalURL(approvalURL string) string {
 	return path
 }
 
-// proxyToGateway is a low-level helper used by the L1-only governance proxy
-// and test code. It does not attach CLI session headers; use
-// proxySessionToGateway when a bound session is available.
-func proxyToGateway(client *http.Client, gatewayURL string, req JSONRPCRequest) (JSONRPCResponse, error) {
-	reqBody, err := json.Marshal(req)
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: marshal request: %w", err)
-	}
-
-	httpResp, err := client.Post(gatewayURL, "application/json", strings.NewReader(string(reqBody)))
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: post request: %w", err)
-	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(httpResp.Body)
-		return JSONRPCResponse{}, fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, httpResp.StatusCode, string(body))
-	}
-
-	var resp JSONRPCResponse
-	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: decode response: %w", err)
-	}
-	return resp, nil
-}
 
 func isL3ApprovalResponse(resp JSONRPCResponse) bool {
 	if resp.Result == nil {
@@ -937,13 +853,12 @@ func agentRunCmdWithConfig(
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	enrollerFactory authcmd.EnrollerFactory,
 ) *cobra.Command {
-	var downstreamURL string
 	var verify bool
 
 	cmd := &cobra.Command{
-		Use:   "run [--url <url>] [-- <command> [args...]]",
-		Short: "Govern any MCP server via g8e reverse proxy",
-		Long: `Launch an AI agent or wrap an MCP server with g8e governance.
+		Use:   "run <agent> [-- <args...>]",
+		Short: "Launch an AI agent with g8e governance",
+		Long: `Launch an AI agent configured to use g8e as its governed MCP provider.
 
 LAUNCH AN AGENT (one command does everything):
 
@@ -971,13 +886,11 @@ LAUNCH AN AGENT (one command does everything):
   Extra args are forwarded to the agent:
     g8e mcp agent run claude -- -p "fix the failing tests"
 
-WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
-
-  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
-  g8e mcp agent run --url http://localhost:3000
-
-  Intercepts all tools/call requests, screens them through L1 doctrine
-  (MITRE ATT&CK threat detection), and blocks violations before forwarding.
+EXTERNAL MCP SERVERS:
+  To govern external third-party MCP servers (stdio subprocess or HTTP), attach
+  them directly to the gateway via downstream egress flags:
+    g8e serve gateway --mcp-downstream-cmd npx --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/path'
+    g8e serve gateway --mcp-downstream-url http://localhost:3000
 
 AUDIT TRAIL:
   When launching an agent, the agent is automatically enrolled as an external app
@@ -1013,103 +926,12 @@ the gateway and use 'g8e mcp stdio'.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPAgentRun(args, downstreamURL, verify, fileSvcFactory, enrollerFactory)
+			return runMCPAgentRun(args, verify, fileSvcFactory, enrollerFactory)
 		},
 	}
 
-	cmd.Flags().StringVar(&downstreamURL, "url", "", "URL of the downstream MCP server")
 	cmd.Flags().BoolVar(&verify, "verify", true, "Verify tool interception config before launching agent (use --verify=false to skip)")
 	return cmd
-}
-
-// mcpDownstreamProxy abstracts the downstream MCP server (HTTP or subprocess).
-type mcpDownstreamProxy interface {
-	forward(req JSONRPCRequest) (JSONRPCResponse, error)
-	stop()
-}
-
-// httpMCPProxy forwards MCP requests to an HTTP downstream server.
-type httpMCPProxy struct {
-	url    string
-	client *http.Client
-}
-
-func (d *httpMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error) {
-	return proxyToGateway(d.client, d.url, req)
-}
-
-func (d *httpMCPProxy) stop() {}
-
-// subprocessMCPProxy manages an MCP subprocess connected via stdio.
-type subprocessMCPProxy struct {
-	command string
-	args    []string
-	logger  *slog.Logger
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	scanner *bufio.Scanner
-	mu      sync.Mutex
-}
-
-func (d *subprocessMCPProxy) start() error {
-	d.cmd = exec.Command(d.command, d.args...) //nolint:gosec
-	setSysProcAttr(d.cmd)
-
-	stdin, err := d.cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-	}
-	d.stdin = stdin
-
-	stdout, err := d.cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-	}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-	d.scanner = scanner
-	d.cmd.Stderr = os.Stderr
-
-	if err := d.cmd.Start(); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-	}
-	d.logger.Info("Downstream MCP subprocess started", "command", d.command, "pid", d.cmd.Process.Pid)
-	return nil
-}
-
-func (d *subprocessMCPProxy) stop() {
-	if d.stdin != nil {
-		_ = d.stdin.Close()
-	}
-	if d.cmd != nil && d.cmd.Process != nil {
-		_ = d.cmd.Process.Kill()
-		_ = d.cmd.Wait()
-	}
-}
-
-func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
-	}
-	if _, err := fmt.Fprintf(d.stdin, "%s\n", reqBytes); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
-	}
-
-	if !d.scanner.Scan() {
-		if err := d.scanner.Err(); err != nil {
-			return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-		}
-		return JSONRPCResponse{}, fmt.Errorf("%w: subprocess closed", constants.ErrProcessInterrupted)
-	}
-	var resp JSONRPCResponse
-	if err := json.Unmarshal(d.scanner.Bytes(), &resp); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-	return resp, nil
 }
 
 // startGatewayIfNeeded starts the gateway if it is not already running and
@@ -1736,132 +1558,21 @@ func verifyGeminiInterception(configPath string) error {
 	return nil
 }
 
-func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
-	if downstreamURL == "" && len(args) == 0 {
-		return fmt.Errorf("specify an agent name or MCP server\n\nLaunch an agent with governance:\n  g8e mcp agent run claude\n\nWrap an MCP server subprocess:\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /\n\nWrap an HTTP MCP server:\n  g8e mcp agent run --url http://localhost:3000")
+func runMCPAgentRun(args []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
+	if len(args) == 0 {
+		return fmt.Errorf("specify an agent name to launch with g8e governance\n\nUsage:\n  g8e mcp agent run <agent> [-- <args...>]\n\nSupported agents:\n  claude, codex, devin, gemini, goose")
 	}
 
-	// Named agent → launch it with g8e as its governed MCP provider.
-	if downstreamURL == "" && len(args) > 0 {
-		firstArg := strings.ToLower(args[0])
-		for _, a := range getSupportedAgents() {
-			if strings.ToLower(a.ID) == firstArg {
-				return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory, enrollerFactory)
-			}
+	firstArg := strings.ToLower(args[0])
+	for _, a := range getSupportedAgents() {
+		if strings.ToLower(a.ID) == firstArg {
+			return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory, enrollerFactory)
 		}
 	}
 
-	// MCP server (--url or -- command) → run as L1 governance reverse proxy.
-	return runMCPProxy(args, downstreamURL)
+	return fmt.Errorf("%w: %q (supported agents: claude, codex, devin, gemini, goose)", constants.ErrAgentNotFound, args[0])
 }
 
-// runMCPProxy runs an L1 governance reverse proxy in front of a downstream MCP
-// server (HTTP via --url, or subprocess via -- command).
-func runMCPProxy(args []string, downstreamURL string) error {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
-	var ds mcpDownstreamProxy
-	if downstreamURL != "" {
-		ds = &httpMCPProxy{
-			url:    downstreamURL,
-			client: &http.Client{Timeout: 30 * time.Second},
-		}
-	} else {
-		proc := &subprocessMCPProxy{
-			command: args[0],
-			args:    args[1:],
-			logger:  logger,
-		}
-		if err := proc.start(); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-		}
-		ds = proc
-	}
-	defer ds.stop()
-
-	l1 := governance.NewL1Doctrine()
-	logger.Info("g8e MCP governance proxy started")
-
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-	encoder := json.NewEncoder(os.Stdout)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		var req JSONRPCRequest
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			sendError(encoder, nil, constants.JSONRPCErrorCodeParseError, constants.JSONRPCErrorMessageParseError)
-			continue
-		}
-
-		// Drop notifications.
-		if req.ID == nil && req.Method != "" {
-			continue
-		}
-
-		logger.Info("g8e intercepted", "method", req.Method, "id", req.ID)
-
-		if req.Method == "tools/call" {
-			var callParams CallToolRequest
-			if err := json.Unmarshal(req.Params, &callParams); err != nil {
-				sendError(encoder, req.ID, -32600, "invalid tools/call params")
-				continue
-			}
-
-			argsJSON := "{}"
-			if len(callParams.Arguments) > 0 {
-				argsJSON = string(callParams.Arguments)
-			}
-
-			signals, err := l1.AnalyzeMCPArguments(argsJSON)
-			if err != nil {
-				logger.Warn("L1 analysis error", "tool", callParams.Name, "error", err)
-			}
-
-			var violations []string
-			for _, sig := range signals {
-				if sig.BlockRecommended {
-					violations = append(violations, fmt.Sprintf("%s [%s, MITRE: %s]",
-						sig.Indicator, sig.Category, sig.MitreAttack))
-				}
-			}
-
-			if len(violations) > 0 {
-				logger.Warn("g8e L1 BLOCKED", "tool", callParams.Name, "violations", violations)
-				sendSuccess(encoder, req.ID, mcp.CallToolResult{
-					IsError: true,
-					Content: []mcp.TextContent{{
-						Type: "text",
-						Text: fmt.Sprintf("g8e governance blocked tool call %q:\n- %s",
-							callParams.Name, strings.Join(violations, "\n- ")),
-					}},
-				})
-				continue
-			}
-
-			logger.Info("g8e L1 approved", "tool", callParams.Name)
-		}
-
-		resp, err := ds.forward(req)
-		if err != nil {
-			if req.Method == "initialize" {
-				handleInitialize(encoder, req.ID)
-				continue
-			}
-			sendError(encoder, req.ID, -32603, fmt.Sprintf("downstream error: %v", err))
-			continue
-		}
-		if err := encoder.Encode(resp); err != nil {
-			logger.Error("Failed to encode response", "error", err)
-		}
-	}
-
-	return scanner.Err()
-}
 
 func extractURLFromText(text string) string {
 	urlPattern := regexp.MustCompile(`https://[^\s"']+` + regexp.QuoteMeta(constants.APIPaths.ApprovePagePrefix) + `[^\s"']*`)

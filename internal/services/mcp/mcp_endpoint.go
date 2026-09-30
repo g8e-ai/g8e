@@ -287,7 +287,7 @@ func (g *GatewayService) mcpInitialize(params json.RawMessage) InitializeResult 
 // configured it returns the native tools compiled into the Operator; otherwise
 // it proxies tools/list to the downstream server.
 func (g *GatewayService) listToolsResult(ctx context.Context) (interface{}, error) {
-	if g.downstreamURL == "" {
+	if !g.hasDownstream() {
 		var nativeTools []NativeTool
 		if g.nativeToolHandler != nil {
 			nativeTools = g.nativeToolHandler.registry.List()
@@ -311,7 +311,7 @@ func (g *GatewayService) listToolsResult(ctx context.Context) (interface{}, erro
 
 // listResourcesResult returns the resource catalog (empty with no downstream).
 func (g *GatewayService) listResourcesResult(ctx context.Context) (interface{}, error) {
-	if g.downstreamURL == "" {
+	if !g.hasDownstream() {
 		return ResourcesListResult{Resources: []Resource{}}, nil
 	}
 	raw, err := g.proxyListMethod(ctx, "resources/list")
@@ -323,7 +323,7 @@ func (g *GatewayService) listResourcesResult(ctx context.Context) (interface{}, 
 
 // listPromptsResult returns the prompt catalog (empty with no downstream).
 func (g *GatewayService) listPromptsResult(ctx context.Context) (interface{}, error) {
-	if g.downstreamURL == "" {
+	if !g.hasDownstream() {
 		return PromptsListResult{Prompts: []Prompt{}}, nil
 	}
 	raw, err := g.proxyListMethod(ctx, "prompts/list")
@@ -349,11 +349,21 @@ type downstreamJSONRPCRequest struct {
 
 // proxyMCPMethod forwards a JSON-RPC method to the downstream MCP server.
 func (g *GatewayService) proxyMCPMethod(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
-	if g.downstreamURL == "" {
+	if !g.hasDownstream() {
 		return nil, constants.ErrGatewayNoDownstreamConfigured
 	}
 	if g.isCircuitOpen() {
 		return nil, fmt.Errorf("mcp_endpoint: downstream MCP server is temporarily unavailable (circuit open)")
+	}
+
+	if g.subprocessDownstream != nil {
+		result, err := g.subprocessDownstream.Call(ctx, method, params)
+		if err != nil {
+			g.recordFailure()
+			return nil, fmt.Errorf("mcp_endpoint: failed to query downstream MCP subprocess: %w", err)
+		}
+		g.recordSuccess()
+		return result, nil
 	}
 
 	reqBody, err := json.Marshal(downstreamJSONRPCRequest{

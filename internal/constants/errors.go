@@ -471,6 +471,7 @@ var (
 	ErrGatewayInvalidPosture                   = errors.New("invalid posture")
 	ErrGatewayForbiddenPattern                 = errors.New("forbidden pattern detected")
 	ErrGatewayDownstreamHTTPError              = errors.New("downstream server returned HTTP error")
+	ErrGatewayDownstreamMutuallyExclusive      = errors.New("cannot configure both HTTP and subprocess downstream MCP servers")
 	ErrGatewayMCPError                         = errors.New("MCP error")
 	ErrGatewayA2AError                         = errors.New("A2A error")
 	ErrGatewayAlreadyRunning                   = errors.New("gateway service already running")
