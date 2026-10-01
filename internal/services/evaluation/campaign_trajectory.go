@@ -92,26 +92,36 @@ func decodeTraceWorkspace(trace EvaluationTrace) (ScenarioWorkspace, error) {
 	}, nil
 }
 
-func decodeTraceSeedHistoryEvents(trace EvaluationTrace) ([]InvestigationSeedHistoryEvent, error) {
+// traceSeed is the part of the seed echoed in a trace's evaluation_context that
+// grading reads.
+type traceSeed struct {
+	Turns         []InvestigationSeedTurn         `json:"turns"`
+	HistoryEvents []InvestigationSeedHistoryEvent `json:"history_events"`
+}
+
+func decodeTraceSeed(trace EvaluationTrace) (traceSeed, error) {
 	evalCtx, ok := evaluationTrace(trace["evaluation_context"])
 	if !ok {
-		return nil, nil
+		return traceSeed{}, nil
 	}
 	rawSeed, ok := evalCtx["seed"]
 	if !ok || rawSeed == nil {
-		return nil, nil
+		return traceSeed{}, nil
 	}
 	data, err := json.Marshal(rawSeed)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: decode trace seed: %w", err)
+		return traceSeed{}, fmt.Errorf("evaluation: decode trace seed: %w", err)
 	}
-	var seed struct {
-		HistoryEvents []InvestigationSeedHistoryEvent `json:"history_events"`
-	}
+	var seed traceSeed
 	if err := json.Unmarshal(data, &seed); err != nil {
-		return nil, fmt.Errorf("evaluation: decode trace seed: %w", err)
+		return traceSeed{}, fmt.Errorf("evaluation: decode trace seed: %w", err)
 	}
-	return seed.HistoryEvents, nil
+	return seed, nil
+}
+
+func decodeTraceSeedHistoryEvents(trace EvaluationTrace) ([]InvestigationSeedHistoryEvent, error) {
+	seed, err := decodeTraceSeed(trace)
+	return seed.HistoryEvents, err
 }
 
 func validateToolCall(call traceToolCall, validators []ToolArgumentValidator, ws ScenarioWorkspace) (bool, string) {

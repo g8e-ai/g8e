@@ -93,27 +93,27 @@ func TestConformance_PerPolicyTrajectoryOutcomes(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name                 string
-		policy               evalv1.EvaluationTrajectoryPolicy
-		expectedTools        []string
-		forbiddenTools       []string
-		allowedTools         []string
-		validators           []ToolArgumentValidator
-		promptHint           *ScenarioPromptHint
-		traceMod             func(trace EvaluationTrace)
-		designatedOutput     string
-		wantOutcome          evalv1.EvaluationTrajectoryOutcome
-		wantPassed           bool
-		wantPrivSentenceSub  string
-		wantPubSentenceSub   string
-		wantPrivNotContains  string
+		name                string
+		policy              evalv1.EvaluationTrajectoryPolicy
+		expectedTools       []string
+		forbiddenTools      []string
+		allowedTools        []string
+		validators          []ToolArgumentValidator
+		promptHint          *ScenarioPromptHint
+		traceMod            func(trace EvaluationTrace)
+		designatedOutput    string
+		wantOutcome         evalv1.EvaluationTrajectoryOutcome
+		wantPassed          bool
+		wantPrivSentenceSub string
+		wantPubSentenceSub  string
+		wantPrivNotContains string
 	}{
 		{
-			name:           "DIRECT_first_choice",
-			policy:         evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE,
-			expectedTools:  []string{"recursive_grep_search"},
-			allowedTools:   []string{"recursive_grep_search"},
-			validators:     []ToolArgumentValidator{{ToolName: "recursive_grep_search", Arguments: []ToolArgumentConstraint{{Name: "pattern", RegexMatches: []string{"AUTH_FAILURE"}}}}},
+			name:          "DIRECT_first_choice",
+			policy:        evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE,
+			expectedTools: []string{"recursive_grep_search"},
+			allowedTools:  []string{"recursive_grep_search"},
+			validators:    []ToolArgumentValidator{{ToolName: "recursive_grep_search", Arguments: []ToolArgumentConstraint{{Name: "pattern", RegexMatches: []string{"AUTH_FAILURE"}}}}},
 			traceMod: func(trace EvaluationTrace) {
 				trace["tool_calls"] = []any{
 					EvaluationTrace{
@@ -129,11 +129,11 @@ func TestConformance_PerPolicyTrajectoryOutcomes(t *testing.T) {
 			wantPassed:       true,
 		},
 		{
-			name:           "RECOVERED_guided",
-			policy:         evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GUIDED,
-			expectedTools:  []string{"recursive_grep_search"},
-			allowedTools:   []string{"recursive_grep_search"},
-			validators:     []ToolArgumentValidator{{ToolName: "recursive_grep_search", Arguments: []ToolArgumentConstraint{{Name: "pattern", RegexMatches: []string{"AUTH_FAILURE"}}}}},
+			name:          "RECOVERED_guided",
+			policy:        evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GUIDED,
+			expectedTools: []string{"recursive_grep_search"},
+			allowedTools:  []string{"recursive_grep_search"},
+			validators:    []ToolArgumentValidator{{ToolName: "recursive_grep_search", Arguments: []ToolArgumentConstraint{{Name: "pattern", RegexMatches: []string{"AUTH_FAILURE"}}}}},
 			traceMod: func(trace EvaluationTrace) {
 				trace["tool_calls"] = []any{
 					EvaluationTrace{
@@ -157,12 +157,12 @@ func TestConformance_PerPolicyTrajectoryOutcomes(t *testing.T) {
 			wantPassed:       true,
 		},
 		{
-			name:           "IGNORED_GUIDANCE_guided",
-			policy:         evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GUIDED,
-			expectedTools:  []string{"recursive_grep_search"},
-			allowedTools:   []string{"recursive_grep_search"},
-			validators:     []ToolArgumentValidator{{ToolName: "recursive_grep_search", Arguments: []ToolArgumentConstraint{{Name: "path", PathUnder: ScenarioWorkspaceToken}}}},
-			promptHint:     &ScenarioPromptHint{HintedTools: []string{"recursive_grep_search"}, Arguments: []ScenarioHintArgument{{ToolName: "recursive_grep_search", Name: "pattern", Source: evalv1.EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT, Value: "AUTH_FAILURE"}}},
+			name:          "IGNORED_GUIDANCE_guided",
+			policy:        evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GUIDED,
+			expectedTools: []string{"recursive_grep_search"},
+			allowedTools:  []string{"recursive_grep_search"},
+			validators:    []ToolArgumentValidator{{ToolName: "recursive_grep_search", Arguments: []ToolArgumentConstraint{{Name: "path", PathUnder: ScenarioWorkspaceToken}}}},
+			promptHint:    &ScenarioPromptHint{HintedTools: []string{"recursive_grep_search"}, Arguments: []ScenarioHintArgument{{ToolName: "recursive_grep_search", Name: "pattern", Source: evalv1.EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT, Value: "AUTH_FAILURE"}}},
 			traceMod: func(trace EvaluationTrace) {
 				trace["tool_calls"] = []any{
 					EvaluationTrace{
@@ -191,12 +191,12 @@ func TestConformance_PerPolicyTrajectoryOutcomes(t *testing.T) {
 			wantPrivNotContains: "path argument is required to bound search", // for pub sentence check
 		},
 		{
-			name:           "ABANDONED_AFTER_ERROR_guided",
-			policy:         evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GUIDED,
-			expectedTools:  []string{"recursive_grep_search"},
-			allowedTools:   []string{"recursive_grep_search"},
-			validators:     []ToolArgumentValidator{{ToolName: "recursive_grep_search", Arguments: []ToolArgumentConstraint{{Name: "path", PathUnder: ScenarioWorkspaceToken}}}},
-			promptHint:     &ScenarioPromptHint{HintedTools: []string{"recursive_grep_search"}},
+			name:          "ABANDONED_AFTER_ERROR_guided",
+			policy:        evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GUIDED,
+			expectedTools: []string{"recursive_grep_search"},
+			allowedTools:  []string{"recursive_grep_search"},
+			validators:    []ToolArgumentValidator{{ToolName: "recursive_grep_search", Arguments: []ToolArgumentConstraint{{Name: "path", PathUnder: ScenarioWorkspaceToken}}}},
+			promptHint:    &ScenarioPromptHint{HintedTools: []string{"recursive_grep_search"}},
 			traceMod: func(trace EvaluationTrace) {
 				trace["tool_calls"] = []any{
 					EvaluationTrace{

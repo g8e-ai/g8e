@@ -41,7 +41,7 @@ func workspaceFromTrace(trace EvaluationTrace) *ScenarioWorkspace {
 	if !ok {
 		return nil
 	}
-	wsData, ok := evalCtx["workspace"].(map[string]interface{})
+	wsData, ok := evaluationTrace(evalCtx["workspace"])
 	if !ok {
 		return nil
 	}

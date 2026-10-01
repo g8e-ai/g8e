@@ -105,11 +105,12 @@ func homogeneousAssignmentExecutionRequest(t *testing.T, role string) Assignment
 		ScenarioGold:  loadScenarioGold(t, "instruction-exact-format"),
 		GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		Binding: CampaignExecutionBinding{
-			InferenceOperatorSessionID: "session-1",
-			DataOperatorID:             "data-op",
-			DataOperatorSessionID:      "data-session",
-			ModelRegistryDigest:        "d" + repeatHex('d', 63),
-			ModelRegistry:              InferenceVariantsFromEvalRegistry([]*evalv1.ModelVariant{assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous).Homogeneous.GetCandidateVariant()}),
+			InferenceOperatorSessionID:   "session-1",
+			DataOperatorID:               "data-op",
+			DataOperatorSessionID:        "data-session",
+			DataOperatorWorkingDirectory: "/home/operator",
+			ModelRegistryDigest:          "d" + repeatHex('d', 63),
+			ModelRegistry:                InferenceVariantsFromEvalRegistry([]*evalv1.ModelVariant{assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous).Homogeneous.GetCandidateVariant()}),
 		},
 	}
 }

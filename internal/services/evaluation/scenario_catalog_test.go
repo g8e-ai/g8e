@@ -91,7 +91,9 @@ func TestValidateScenarioContract_RejectsContractViolations(t *testing.T) {
 		{"required argument has two hint sources", toolArgGrepPattern, func(b *ScenarioBlueprint) {
 			b.Gold.PromptHint.Arguments = append(b.Gold.PromptHint.Arguments, hintArg("recursive_grep_search", "pattern", sourcePrompt, "AUTH_FAILURE"))
 		}, constants.ErrEvaluationPromptUnanswerable},
-		{"prompt source value missing from prompt", toolArgGrepPattern, func(b *ScenarioBlueprint) { b.Input.UserPrompt = "Search " + ScenarioWorkspaceToken + " for the failures." }, constants.ErrEvaluationPromptUnanswerable},
+		{"prompt source value missing from prompt", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Input.UserPrompt = "Search " + ScenarioWorkspaceToken + " for the failures."
+		}, constants.ErrEvaluationPromptUnanswerable},
 		{"seed source value missing from seed", recoveryErrorGuidedRetry, func(b *ScenarioBlueprint) {
 			b.Gold.PromptHint.Arguments[0].Value = "PAYMENT_TIMEOUT"
 		}, constants.ErrEvaluationPromptUnanswerable},

@@ -10,6 +10,7 @@ package evaluation
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -323,8 +324,13 @@ func gradeHeterogeneousPipelineCriteria(req HeterogeneousScenarioGradingRequest)
 	return grades
 }
 
+// verifyHeterogeneousHandoffChain checks, from the digest-bound role traces
+// alone, that every role ran in an investigation seeded with exactly the
+// outputs of the roles before it: Lite with none, Assistant with Lite's, and
+// Primary with Lite's and Assistant's, each the turn the runner builds from the
+// earlier role's recorded designated output.
 func verifyHeterogeneousHandoffChain(roleTraces []RoleTrace) bool {
-	if len(roleTraces) != 3 {
+	if len(roleTraces) != len(formationHandoffRoles) {
 		return false
 	}
 	roleOutputs := make(map[FormationRole]string)
@@ -334,54 +340,22 @@ func verifyHeterogeneousHandoffChain(roleTraces []RoleTrace) bool {
 		}
 	}
 	for _, rt := range roleTraces {
-		switch rt.Role {
-		case FormationRoleLite:
-			if priors, ok := rt.Trace["prior_role_outputs"]; ok && priors != nil {
+		var want []string
+		for _, prior := range formationHandoffRoles {
+			if prior == rt.Role {
+				break
+			}
+			if roleOutputs[prior] == "" {
 				return false
 			}
-		case FormationRoleAssistant:
-			if !hasPriorOutput(rt.Trace, FormationRoleLite, roleOutputs[FormationRoleLite]) {
-				return false
-			}
-		case FormationRolePrimary:
-			if !hasPriorOutput(rt.Trace, FormationRoleLite, roleOutputs[FormationRoleLite]) {
-				return false
-			}
-			if !hasPriorOutput(rt.Trace, FormationRoleAssistant, roleOutputs[FormationRoleAssistant]) {
-				return false
-			}
+			want = append(want, formationHandoffTurnContent(prior, roleOutputs[prior]))
+		}
+		got, err := traceHandoffTurnContents(rt.Trace)
+		if err != nil || !slices.Equal(got, want) {
+			return false
 		}
 	}
 	return true
-}
-
-func hasPriorOutput(trace EvaluationTrace, role FormationRole, expectedOutput string) bool {
-	if expectedOutput == "" {
-		return false
-	}
-	priorOutputs, ok := trace["prior_role_outputs"].([]any)
-	if !ok {
-		return false
-	}
-	for _, prior := range priorOutputs {
-		var roleVal, outputVal any
-		switch m := prior.(type) {
-		case map[string]any:
-			roleVal = m["role"]
-			outputVal = m["output"]
-		case map[string]string:
-			roleVal = m["role"]
-			outputVal = m["output"]
-		default:
-			continue
-		}
-		roleStr, roleIsStr := roleVal.(string)
-		outputStr, outputIsStr := outputVal.(string)
-		if roleIsStr && outputIsStr && roleStr == string(role) && outputStr == expectedOutput {
-			return true
-		}
-	}
-	return false
 }
 
 func gradeRoleCriteria(req ScenarioGradingRequest, trajPassed, contentPassed, semanticPassed bool) []*evalv1.DeterministicGrade {

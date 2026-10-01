@@ -272,12 +272,12 @@ func executeAssignments(cmd *cobra.Command, deps nativeEvalDeps, opts runExecute
 		controller = controller.WithPublication(publication)
 	}
 	executionBinding := evaluation.CampaignExecutionBinding{
-		InferenceOperatorSessionID:  selected.OperatorSessionID,
-		DataOperatorID:              dataOperator.OperatorID,
-		DataOperatorSessionID:       dataOperator.OperatorSessionID,
+		InferenceOperatorSessionID:   selected.OperatorSessionID,
+		DataOperatorID:               dataOperator.OperatorID,
+		DataOperatorSessionID:        dataOperator.OperatorSessionID,
 		DataOperatorWorkingDirectory: dataOperator.WorkingDirectory,
-		ModelRegistryDigest:         spec.GetModelRegistryDigest(),
-		ModelRegistry:               evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
+		ModelRegistryDigest:          spec.GetModelRegistryDigest(),
+		ModelRegistry:                evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
 	}
 	if err := gwremote.PreflightProviderObservationDelivery(fileSvc, cfg); err != nil {
 		return executed, fmt.Errorf("evaluation: run execute: %w", err)

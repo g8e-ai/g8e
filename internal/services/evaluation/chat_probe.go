@@ -80,7 +80,7 @@ type ChatProbeRequest struct {
 	Message                 string
 	GradingMethod           evalv1.EvaluationGradingMethod
 	GoldSummary             *ChatProbeGoldSummary
-	Seed                    any
+	Seed                    *harnessclient.EnsembleInvestigationSeed
 	Workspace               *ScenarioWorkspace
 }
 
@@ -141,11 +141,7 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 			ForbiddenTools:   nonNullStringSlice(req.GoldSummary.ForbiddenTools),
 		}
 	}
-	if req.Seed != nil {
-		if s, ok := req.Seed.(*harnessclient.EnsembleInvestigationSeed); ok {
-			evalContext.Seed = s
-		}
-	}
+	evalContext.Seed = req.Seed
 	if req.Workspace != nil {
 		evalContext.Workspace = &harnessclient.EnsembleEvaluationWorkspace{
 			Root:                     req.Workspace.Root,

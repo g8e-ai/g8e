@@ -97,7 +97,7 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	if err != nil {
 		return nil, err
 	}
-	if err := e.materializeWorkspaceFiles(ctx, req, &ws); err != nil {
+	if err := e.materializeWorkspaceFiles(ctx, req, ws); err != nil {
 		return nil, assignmentExecutionError("evaluation: execute assignment: materialize workspace files", err)
 	}
 	chatReq, err := BuildChatProbeRequest(probeReq, e.dataOperatorID, e.dataOperatorSessionID)
@@ -150,12 +150,7 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 // the chat request is sent. It fails closed when a scenario needs a writer and
 // none is configured, rather than letting the assignment run against fixture
 // content the model can never actually read.
-func (e *CampaignChatExecutor) materializeWorkspaceFiles(_ context.Context, req AssignmentExecutionRequest, ws *ScenarioWorkspace) error {
-	if len(req.ScenarioInput.WorkspaceFiles) == 0 {
-		return nil
-	}
-	if e.fileWriter == nil {
-		return fmt.Errorf("evaluation: scenario %s requires a workspace file writer", req.Assignment.GetScenarioId())
-	}
-	return fmt.Errorf("evaluation: workspace materialization lands in WP5")
+func (e *CampaignChatExecutor) materializeWorkspaceFiles(ctx context.Context, req AssignmentExecutionRequest, ws ScenarioWorkspace) error {
+	target := Target{OperatorID: e.dataOperatorID, SessionID: e.dataOperatorSessionID}
+	return materializeScenarioWorkspace(ctx, e.fileWriter, target, req.Assignment.GetRunId(), req.Assignment.GetScenarioId(), req.AttemptID, ws, req.ScenarioInput.WorkspaceFiles)
 }

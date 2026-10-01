@@ -50,6 +50,17 @@ type EnsembleEvaluationContext struct {
 	Workspace               *EnsembleEvaluationWorkspace   `json:"workspace,omitempty"`
 }
 
+// EnsembleSeedMaxText mirrors the Python EVALUATION_SEED_MAX_TEXT: the maximum
+// number of characters in any one seed text field.
+const EnsembleSeedMaxText = 8000
+
+// Seed turn senders accepted by the Python EvaluationSeedSender.
+const (
+	EnsembleSeedSenderUser      = "user"
+	EnsembleSeedSenderPrimary   = "primary"
+	EnsembleSeedSenderAssistant = "assistant"
+)
+
 // EnsembleInvestigationSeed mirrors the Python EvaluationInvestigationSeed:
 // the investigation state a scored turn runs in, which g8ee applies through
 // its own investigation and memory services before triage.

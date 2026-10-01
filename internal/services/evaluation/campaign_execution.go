@@ -20,24 +20,24 @@ import (
 // CampaignExecutionBinding pins the exact governed execution authorities for one
 // scored assignment submitted through production POST /api/v1/chat.
 type CampaignExecutionBinding struct {
-	InferenceOperatorSessionID string
-	DataOperatorID             string
-	DataOperatorSessionID      string
+	InferenceOperatorSessionID   string
+	DataOperatorID               string
+	DataOperatorSessionID        string
 	DataOperatorWorkingDirectory string
-	ModelRegistryDigest        string
-	ModelRegistry              []*operatorv1.InferenceModelVariant
+	ModelRegistryDigest          string
+	ModelRegistry                []*operatorv1.InferenceModelVariant
 }
 
 // BuildCampaignChatRequest constructs the production chat request for one
 // homogeneous model-role assignment using the frozen scenario input fixture.
-// The workspace parameter is used to render the prompt and seed with
-// workspace-specific substitutions.
+// ws renders the prompt and seed and is echoed on the request. The executor
+// derives it from the binding's working directory and fails closed when that
+// is missing; import and verification pass the workspace recorded in the trace
+// (nil for a trace that carries none), so the binding's working directory is
+// not required here.
 func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID string, input ScenarioInputFixture, binding CampaignExecutionBinding, grading CampaignChatGradingContext, ws *ScenarioWorkspace) (ChatProbeRequest, error) {
 	if assignment == nil || attemptID == "" || binding.InferenceOperatorSessionID == "" || binding.DataOperatorID == "" || binding.DataOperatorSessionID == "" {
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: %w", constants.ErrMissingRequiredField)
-	}
-	if binding.DataOperatorWorkingDirectory == "" {
-		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: %w", constants.ErrEvaluationWorkspaceUnavailable)
 	}
 	if IsHeterogeneousAssignment(assignment) {
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: heterogeneous assignments execute through formation runner")
@@ -90,8 +90,13 @@ func buildChatProbeGoldSummary(message string, grading CampaignChatGradingContex
 	}
 }
 
+// buildHarnessInvestigationSeed converts a frozen fixture seed to the wire seed,
+// rendering every string through the workspace. A fixture without a case title
+// carries no seed (catalog 1.0.0 fixtures predate seeds, and every 1.1.0
+// scenario has a title), so the request sends none and the trace is not
+// expected to echo one.
 func buildHarnessInvestigationSeed(seed *InvestigationSeed, ws *ScenarioWorkspace) *harnessclient.EnsembleInvestigationSeed {
-	if seed == nil {
+	if seed == nil || seed.CaseTitle == "" {
 		return nil
 	}
 	harnesseSeed := &harnessclient.EnsembleInvestigationSeed{
@@ -142,8 +147,8 @@ func buildHarnessInvestigationSeed(seed *InvestigationSeed, ws *ScenarioWorkspac
 			CommunicationPreferences: cm.CommunicationPreferences,
 			TechnicalBackground:      cm.TechnicalBackground,
 			ResponseStyle:            cm.ResponseStyle,
-			ProblemSolvingApproach:    cm.ProblemSolvingApproach,
-			InteractionStyle:          cm.InteractionStyle,
+			ProblemSolvingApproach:   cm.ProblemSolvingApproach,
+			InteractionStyle:         cm.InteractionStyle,
 		}
 		if ws != nil {
 			memory.InvestigationSummary = ws.Render(memory.InvestigationSummary)

@@ -8,6 +8,7 @@
 package evaluation
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -84,6 +85,30 @@ func (w ScenarioWorkspace) Validate(runID, attemptID string) error {
 	}
 	if expected.Root != w.Root {
 		return fmt.Errorf("%w: workspace root %q is not the attempt-scoped root %q", constants.ErrEvaluationWorkspaceUnavailable, w.Root, expected.Root)
+	}
+	return nil
+}
+
+// materializeScenarioWorkspace writes every fixture file, decoys included, at
+// its path under the attempt-scoped workspace on the bound Data Operator and
+// returns on the first failure, so a scored request is never sent against an
+// empty or partial workspace. A scenario with files and no writer fails closed
+// with ErrEvaluationWorkspaceUnavailable.
+func materializeScenarioWorkspace(ctx context.Context, writer WorkspaceFileWriter, target Target, runID, scenarioID, attemptID string, ws ScenarioWorkspace, files []ScenarioWorkspaceFile) error {
+	if len(files) == 0 {
+		return nil
+	}
+	if writer == nil {
+		return fmt.Errorf("%w: scenario %s requires a workspace file writer", constants.ErrEvaluationWorkspaceUnavailable, scenarioID)
+	}
+	for _, file := range files {
+		absPath, err := ws.FilePath(file.RelPath)
+		if err != nil {
+			return fmt.Errorf("%w: scenario %s: %v", constants.ErrEvaluationWorkspaceUnavailable, scenarioID, err)
+		}
+		if err := writer.WriteWorkspaceFile(ctx, target, runID, scenarioID, attemptID, absPath, ws.Render(file.Content)); err != nil {
+			return fmt.Errorf("write workspace file %s: %w", absPath, err)
+		}
 	}
 	return nil
 }
