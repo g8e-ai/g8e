@@ -223,6 +223,27 @@ func TestG8eoService_Start_InferenceReadinessGate(t *testing.T) {
 	}
 }
 
+// An Inference Operator whose provider is not ready must fail before bootstrap
+// claims a session. The bootstrap port is closed here, so a claim attempt would
+// surface ErrNotAuthenticated (after its retry backoff outlasts the start
+// timeout) instead of the provider error.
+func TestG8eoService_Start_InferenceProviderFailureDoesNotClaimSession(t *testing.T) {
+	endpoint := fakeOllamaWithModels(t, "", http.StatusServiceUnavailable)
+	service := newStartableG8eoService(t, func(cfg *config.Config) {
+		cfg.HTTPSPort = 1
+		cfg.Inference = config.InferenceConfig{Enabled: true, OllamaEndpoint: endpoint, PrimaryModel: "qwen3:4b"}
+	})
+
+	sessionBefore := service.config.OperatorSessionId
+
+	err := startWithTimeout(t, service)
+
+	require.ErrorIs(t, err, constants.ErrInferenceBackendUnavailable)
+	assert.NotErrorIs(t, err, constants.ErrNotAuthenticated)
+	assert.Equal(t, sessionBefore, service.config.OperatorSessionId, "no Operator session may be claimed behind an unready inference provider")
+	assert.False(t, service.running)
+}
+
 func TestG8eoService_Start_EnablesProviderBoundaryObserverAndProvenanceOperator(t *testing.T) {
 	storageRoot := testutil.TempDir(t)
 	service := newStartableG8eoService(t, func(cfg *config.Config) {

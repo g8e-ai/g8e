@@ -69,7 +69,7 @@ The startup command accepts numerous flags controlling enrollment, runtime behav
 | `--lattice-posture-floor <posture>` | Minimum governance posture for Lattice (default: consensus). |
 | `--lattice-sandboxes-token <token>` | Sandbox authorization token for Lattice. |
 
-The inference, observer, provenance, and Lattice options configure specialized roles that supplement the Operator's core governance path. See [Evaluations](./evals.md) and [Model Provenance](./model-provenance.md) for evaluation roles. Use `./g8e operator start --help` as the authoritative command-surface reference.
+The inference, observer, provenance, and Lattice options configure specialized roles that supplement the Operator's core governance path. See [Evaluations](./evals.md) and [Model Provenance](./model-provenance.md) for evaluation roles. Use `./g8e operator start --help` as the authoritative command-surface reference. An Inference Operator verifies its provider (reachability and every configured role model) before it requests bootstrap, so a provider that is down or missing a model fails startup without claiming an Operator session; a failing Inference Operator therefore never heartbeats, reports no hostname in `g8e operators list`, and ages to `stale`.
 
 ## Multi-Operator Coexistence and Role Separation on the Same System
 
