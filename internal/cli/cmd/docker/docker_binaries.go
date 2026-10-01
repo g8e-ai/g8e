@@ -269,8 +269,12 @@ func publishDockerArchive(ctx context.Context, runner dockerBinaryRunner, publis
 	reader, writer := io.Pipe()
 	copyErr := make(chan error, 1)
 	go func() {
-		copyErr <- runner.CopyContainerPath(ctx, container, constants.G8eBinariesArchiveRoot+"/.", writer)
-		_ = writer.Close()
+		err := runner.CopyContainerPath(ctx, container, constants.G8eBinariesArchiveRoot+"/.", writer)
+		// CloseWithError(nil) is a plain EOF. A failed copy must surface as a
+		// stream error so the publisher cannot mistake a truncated or empty
+		// archive for a manifest-less one and mask the real cause.
+		_ = writer.CloseWithError(err)
+		copyErr <- err
 	}()
 	manifest, publishErr := publisher.PublishMatching(reader, provenance)
 	if publishErr != nil {
