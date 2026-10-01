@@ -8,13 +8,16 @@
 package operatorcapability
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func TestIsDataOperator_ExcludesOtherRoles(t *testing.T) {
@@ -145,4 +148,117 @@ func TestIsStackDataOperator_RequiresDataOperatorHostname(t *testing.T) {
 	inference := stack
 	inference.RuntimeConfig = &models.RuntimeConfig{InferenceEnabled: true}
 	assert.False(t, IsStackDataOperator(inference))
+}
+
+func TestExtractWorkingDirectory_FromEnvironmentDetails(t *testing.T) {
+	t.Parallel()
+
+	hr := &operatorv1.HeartbeatResult{
+		Environment: &operatorv1.EnvironmentDetails{Pwd: "/home/deploy"},
+	}
+	hb, err := protojson.Marshal(hr)
+	require.NoError(t, err)
+
+	pwd := extractWorkingDirectory(hb)
+	assert.Equal(t, "/home/deploy", pwd)
+}
+
+func TestExtractWorkingDirectory_FallbackToSystemIdentity(t *testing.T) {
+	t.Parallel()
+
+	hr := &operatorv1.HeartbeatResult{
+		SystemIdentity: &operatorv1.SystemIdentity{Pwd: "/root"},
+	}
+	hb, err := protojson.Marshal(hr)
+	require.NoError(t, err)
+
+	pwd := extractWorkingDirectory(hb)
+	assert.Equal(t, "/root", pwd)
+}
+
+func TestExtractWorkingDirectory_EnvironmentTakesPrecedence(t *testing.T) {
+	t.Parallel()
+
+	hr := &operatorv1.HeartbeatResult{
+		Environment:    &operatorv1.EnvironmentDetails{Pwd: "/home/deploy"},
+		SystemIdentity: &operatorv1.SystemIdentity{Pwd: "/root"},
+	}
+	hb, err := protojson.Marshal(hr)
+	require.NoError(t, err)
+
+	pwd := extractWorkingDirectory(hb)
+	assert.Equal(t, "/home/deploy", pwd)
+}
+
+func TestExtractWorkingDirectory_EmptyHeartbeat(t *testing.T) {
+	t.Parallel()
+	pwd := extractWorkingDirectory(nil)
+	assert.Empty(t, pwd)
+
+	pwd = extractWorkingDirectory([]byte{})
+	assert.Empty(t, pwd)
+}
+
+func TestExtractWorkingDirectory_InvalidJSON(t *testing.T) {
+	t.Parallel()
+	pwd := extractWorkingDirectory([]byte("not json"))
+	assert.Empty(t, pwd)
+}
+
+func TestExtractWorkingDirectory_NoPwdInHeartbeat(t *testing.T) {
+	t.Parallel()
+
+	hr := &operatorv1.HeartbeatResult{
+		SystemIdentity: &operatorv1.SystemIdentity{Hostname: "test"},
+	}
+	hb, err := protojson.Marshal(hr)
+	require.NoError(t, err)
+
+	pwd := extractWorkingDirectory(hb)
+	assert.Empty(t, pwd)
+}
+
+func TestActiveDataOperators_IncludesWorkingDirectory(t *testing.T) {
+	t.Parallel()
+
+	hr := &operatorv1.HeartbeatResult{
+		Environment: &operatorv1.EnvironmentDetails{Pwd: "/home/deploy"},
+	}
+	hb, err := protojson.Marshal(hr)
+	require.NoError(t, err)
+
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "stack",
+			OperatorSessionID: "sess-stack",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			CurrentHostname:   constants.DataOperatorHostname,
+			LatestHeartbeat:   json.RawMessage(hb),
+		},
+	}
+
+	statuses := ActiveDataOperators(operators)
+	require.Len(t, statuses, 1)
+	assert.Equal(t, "stack", statuses[0].OperatorID)
+	assert.Equal(t, "/home/deploy", statuses[0].WorkingDirectory)
+}
+
+func TestActiveDataOperators_EmptyHeartbeatLeavesWorkingDirectoryEmpty(t *testing.T) {
+	t.Parallel()
+
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "stack",
+			OperatorSessionID: "sess-stack",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			CurrentHostname:   constants.DataOperatorHostname,
+			LatestHeartbeat:   nil,
+		},
+	}
+
+	statuses := ActiveDataOperators(operators)
+	require.Len(t, statuses, 1)
+	assert.Empty(t, statuses[0].WorkingDirectory)
 }

@@ -84,12 +84,17 @@ function ToolDecisionRecord({ record }: { record: PublicToolDecisionActivityReco
 }
 
 function ToolCallRecord({ record }: { record: PublicToolCallActivityRecord }) {
-  const summary = `${record.tool_label || 'Unlabeled tool'} · Execution: ${label(record.execution_outcome)}`;
+  const turn = record.loop_turn ? `Turn ${record.loop_turn} · ` : '';
+  const guidance = record.guidance_shown ? ' · guidance shown' : '';
+  const summary = `${turn}${record.tool_label || 'Unlabeled tool'} · Execution: ${label(record.execution_outcome)}${guidance}`;
   return (
     <details className="activity-record-details">
       <summary className="activity-record-summary">{summary}</summary>
       <div className="activity-record-expanded">
         <DetailRow label="Tool label">{record.tool_label || 'Unlabeled tool'}</DetailRow>
+        {record.loop_turn ? <DetailRow label="Loop turn">{record.loop_turn}</DetailRow> : null}
+        {record.error_type ? <DetailRow label="Error type">{record.error_type}</DetailRow> : null}
+        {record.guidance_shown ? <DetailRow label="Guidance">Error guidance was shown to the model</DetailRow> : null}
         <DetailRow label="Execution outcome">{label(record.execution_outcome)}</DetailRow>
         <DetailRow label="Semantic outcome">{label(record.semantic_outcome)}</DetailRow>
         <DetailRow label="Evidence source">{label(record.evidence_source)}</DetailRow>
@@ -141,6 +146,18 @@ function ActivityFamily<T>({ title, family, renderRecord }: { title: string; fam
   );
 }
 
+/** Orders tool calls by the loop turn that issued them; unreported turns keep their order. */
+function inLoopTurnOrder(
+  family: PublicActivityFamily<PublicToolCallActivityRecord>,
+): PublicActivityFamily<PublicToolCallActivityRecord> {
+  if (family.availability !== 'observed') return family;
+  const records = family.records
+    .map((record, index) => ({ record, index }))
+    .sort((a, b) => (a.record.loop_turn ?? 0) - (b.record.loop_turn ?? 0) || a.index - b.index)
+    .map(({ record }) => record);
+  return { ...family, records };
+}
+
 export function AssignmentActivitySummary({ activity }: { activity: PublicAssignmentActivity | undefined }) {
   return (
     <section className="assignment-activity">
@@ -148,7 +165,7 @@ export function AssignmentActivitySummary({ activity }: { activity: PublicAssign
       {activity ? <div className="activity-families">
         <ActivityFamily title="Model activity" family={activity.model_activity} renderRecord={(record) => <ModelRecord record={record as PublicModelActivityRecord} />} />
         <ActivityFamily title="Tool decisions" family={activity.tool_decisions} renderRecord={(record) => <ToolDecisionRecord record={record as PublicToolDecisionActivityRecord} />} />
-        <ActivityFamily title="Tool calls" family={activity.tool_calls} renderRecord={(record) => <ToolCallRecord record={record as PublicToolCallActivityRecord} />} />
+        <ActivityFamily title="Tool calls" family={inLoopTurnOrder(activity.tool_calls)} renderRecord={(record) => <ToolCallRecord record={record as PublicToolCallActivityRecord} />} />
         <ActivityFamily title="Policy decisions" family={activity.policy_decisions} renderRecord={(record) => <PolicyRecord record={record as PublicPolicyDecisionActivityRecord} />} />
         <ActivityFamily title="Governed actions" family={activity.governed_actions} renderRecord={(record) => <GovernedActionRecord record={record as PublicGovernedActionActivityRecord} />} />
       </div> : null}

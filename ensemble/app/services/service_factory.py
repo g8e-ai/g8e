@@ -24,6 +24,7 @@ from app.services.ai.ssh_inventory_service import SshInventoryService, default_s
 from app.services.ai.tool_service import AIToolService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.data.attachment_store_service import AttachmentService
+from app.services.evaluation.investigation_seed import InvestigationSeedService
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.investigation.memory_data_service import MemoryDataService
@@ -101,6 +102,7 @@ class DataServices:
 @dataclass(frozen=True)
 class DomainServices:
     investigation_service: InvestigationService | InvestigationServiceProtocol
+    investigation_seed_service: InvestigationSeedService
     memory_generation_service: MemoryGenerationService
     reputation_service: ReputationService
     ssh_inventory_service: SshInventoryService
@@ -147,6 +149,7 @@ class AllServices:
     reputation_data_service: ReputationDataService
     stake_resolution_data_service: StakeResolutionDataService
     investigation_service: InvestigationService | InvestigationServiceProtocol
+    investigation_seed_service: InvestigationSeedService
     memory_generation_service: MemoryGenerationService
     reputation_service: ReputationService
     ssh_inventory_service: SshInventoryService
@@ -253,6 +256,12 @@ class ServiceFactory:
             event_service=core_services.event_service,
         )
 
+        investigation_seed_service = InvestigationSeedService(
+            investigation_service=investigation_service,
+            case_service=data_services.case_data_service,
+            memory_service=cast(MemoryDataService, data_services.memory_data_service),
+        )
+
         memory_generation_service = MemoryGenerationService(
             memory_crud=data_services.memory_data_service,
         )
@@ -267,6 +276,7 @@ class ServiceFactory:
 
         return DomainServices(
             investigation_service=investigation_service,
+            investigation_seed_service=investigation_seed_service,
             memory_generation_service=memory_generation_service,
             reputation_service=reputation_service,
             ssh_inventory_service=ssh_inventory_service,
@@ -431,6 +441,7 @@ class ServiceFactory:
             reputation_data_service=data_services.reputation_data_service,
             stake_resolution_data_service=data_services.stake_resolution_data_service,
             investigation_service=domain_services.investigation_service,
+            investigation_seed_service=domain_services.investigation_seed_service,
             memory_generation_service=domain_services.memory_generation_service,
             reputation_service=domain_services.reputation_service,
             ssh_inventory_service=domain_services.ssh_inventory_service,

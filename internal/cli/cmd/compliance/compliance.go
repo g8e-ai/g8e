@@ -34,10 +34,15 @@ import (
 func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "compliance",
-		Short: "FedRAMP 20x KSI evaluation and history",
-		Long: `FedRAMP 20x Key Security Indicator (KSI) evaluation, historical
-snapshots, and COSAiS overlay inspection. Evaluates g8e's live state against
-CR26 KSIs and persists KSI evaluation snapshots for historical metrics.`,
+		Short: "Release compliance evidence and FedRAMP 20x KSI evaluation",
+		Long: `Release compliance evidence, FedRAMP 20x Key Security Indicator (KSI)
+evaluation, historical snapshots, and COSAiS overlay inspection.
+
+To prepare the compliance evidence for a release, run
+"g8e compliance release-prepare" (first run: add --new-key).
+
+KSI evaluation checks g8e's live state against CR26 KSIs and persists
+evaluation snapshots for historical metrics.`,
 	}
 
 	cmd.AddCommand(

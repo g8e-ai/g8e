@@ -601,6 +601,212 @@ func (PublicGradeExplanationCode) EnumDescriptor() ([]byte, []int) {
 	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{9}
 }
 
+// EvaluationTrajectoryPolicy decides how a scenario grades the ordered tool
+// trajectory the model produced in its guided loop.
+type EvaluationTrajectoryPolicy int32
+
+const (
+	EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED EvaluationTrajectoryPolicy = 0
+	// No tool is expected; graded on the final output.
+	EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_ANSWER EvaluationTrajectoryPolicy = 1
+	// The first tool choice is the test: the expected tool must be called and
+	// no forbidden tool may be called.
+	EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE EvaluationTrajectoryPolicy = 2
+	// Graded on the final outcome after a legitimate guided trajectory; a
+	// correction that follows returned guidance passes as RECOVERED.
+	EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GUIDED EvaluationTrajectoryPolicy = 3
+	// No unauthorized effect plus an acceptable response to governance.
+	EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_GOVERNED EvaluationTrajectoryPolicy = 4
+)
+
+// Enum value maps for EvaluationTrajectoryPolicy.
+var (
+	EvaluationTrajectoryPolicy_name = map[int32]string{
+		0: "EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED",
+		1: "EVALUATION_TRAJECTORY_POLICY_ANSWER",
+		2: "EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE",
+		3: "EVALUATION_TRAJECTORY_POLICY_GUIDED",
+		4: "EVALUATION_TRAJECTORY_POLICY_GOVERNED",
+	}
+	EvaluationTrajectoryPolicy_value = map[string]int32{
+		"EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED":  0,
+		"EVALUATION_TRAJECTORY_POLICY_ANSWER":       1,
+		"EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE": 2,
+		"EVALUATION_TRAJECTORY_POLICY_GUIDED":       3,
+		"EVALUATION_TRAJECTORY_POLICY_GOVERNED":     4,
+	}
+)
+
+func (x EvaluationTrajectoryPolicy) Enum() *EvaluationTrajectoryPolicy {
+	p := new(EvaluationTrajectoryPolicy)
+	*p = x
+	return p
+}
+
+func (x EvaluationTrajectoryPolicy) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EvaluationTrajectoryPolicy) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_eval_v1_eval_proto_enumTypes[10].Descriptor()
+}
+
+func (EvaluationTrajectoryPolicy) Type() protoreflect.EnumType {
+	return &file_g8e_eval_v1_eval_proto_enumTypes[10]
+}
+
+func (x EvaluationTrajectoryPolicy) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EvaluationTrajectoryPolicy.Descriptor instead.
+func (EvaluationTrajectoryPolicy) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{10}
+}
+
+// EvaluationTrajectoryOutcome is the closed vocabulary for what the model did
+// across its guided loop.
+type EvaluationTrajectoryOutcome int32
+
+const (
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED                        EvaluationTrajectoryOutcome = 0
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_DIRECT                             EvaluationTrajectoryOutcome = 1
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_RECOVERED                          EvaluationTrajectoryOutcome = 2
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL                  EvaluationTrajectoryOutcome = 3
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL                       EvaluationTrajectoryOutcome = 4
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL                         EvaluationTrajectoryOutcome = 5
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS                    EvaluationTrajectoryOutcome = 6
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE                   EvaluationTrajectoryOutcome = 7
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR              EvaluationTrajectoryOutcome = 8
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL                EvaluationTrajectoryOutcome = 9
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED                     EvaluationTrajectoryOutcome = 10
+	EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION EvaluationTrajectoryOutcome = 11
+)
+
+// Enum value maps for EvaluationTrajectoryOutcome.
+var (
+	EvaluationTrajectoryOutcome_name = map[int32]string{
+		0:  "EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED",
+		1:  "EVALUATION_TRAJECTORY_OUTCOME_DIRECT",
+		2:  "EVALUATION_TRAJECTORY_OUTCOME_RECOVERED",
+		3:  "EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL",
+		4:  "EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL",
+		5:  "EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL",
+		6:  "EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS",
+		7:  "EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE",
+		8:  "EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR",
+		9:  "EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL",
+		10: "EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED",
+		11: "EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION",
+	}
+	EvaluationTrajectoryOutcome_value = map[string]int32{
+		"EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED":                        0,
+		"EVALUATION_TRAJECTORY_OUTCOME_DIRECT":                             1,
+		"EVALUATION_TRAJECTORY_OUTCOME_RECOVERED":                          2,
+		"EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL":                  3,
+		"EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL":                       4,
+		"EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL":                         5,
+		"EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS":                    6,
+		"EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE":                   7,
+		"EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR":              8,
+		"EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL":                9,
+		"EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED":                     10,
+		"EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION": 11,
+	}
+)
+
+func (x EvaluationTrajectoryOutcome) Enum() *EvaluationTrajectoryOutcome {
+	p := new(EvaluationTrajectoryOutcome)
+	*p = x
+	return p
+}
+
+func (x EvaluationTrajectoryOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EvaluationTrajectoryOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_eval_v1_eval_proto_enumTypes[11].Descriptor()
+}
+
+func (EvaluationTrajectoryOutcome) Type() protoreflect.EnumType {
+	return &file_g8e_eval_v1_eval_proto_enumTypes[11]
+}
+
+func (x EvaluationTrajectoryOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EvaluationTrajectoryOutcome.Descriptor instead.
+func (EvaluationTrajectoryOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{11}
+}
+
+// EvaluationHintArgumentSource names where a hinted tool argument's value is
+// derivable from, so catalog lint can prove a prompt is answerable.
+type EvaluationHintArgumentSource int32
+
+const (
+	EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED EvaluationHintArgumentSource = 0
+	// The literal value appears in the rendered prompt.
+	EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT EvaluationHintArgumentSource = 1
+	// The value appears in the scenario's investigation seed.
+	EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_SEED EvaluationHintArgumentSource = 2
+	// The value is the attempt-scoped fixture workspace named in the prompt.
+	EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE EvaluationHintArgumentSource = 3
+	// The value comes from the bound-operator context g8ee supplies.
+	EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT EvaluationHintArgumentSource = 4
+	// Free-text rationale the model authors (for example a justification).
+	EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED EvaluationHintArgumentSource = 5
+)
+
+// Enum value maps for EvaluationHintArgumentSource.
+var (
+	EvaluationHintArgumentSource_name = map[int32]string{
+		0: "EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED",
+		1: "EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT",
+		2: "EVALUATION_HINT_ARGUMENT_SOURCE_SEED",
+		3: "EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE",
+		4: "EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT",
+		5: "EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED",
+	}
+	EvaluationHintArgumentSource_value = map[string]int32{
+		"EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED":      0,
+		"EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT":           1,
+		"EVALUATION_HINT_ARGUMENT_SOURCE_SEED":             2,
+		"EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE":        3,
+		"EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT": 4,
+		"EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED":   5,
+	}
+)
+
+func (x EvaluationHintArgumentSource) Enum() *EvaluationHintArgumentSource {
+	p := new(EvaluationHintArgumentSource)
+	*p = x
+	return p
+}
+
+func (x EvaluationHintArgumentSource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EvaluationHintArgumentSource) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_eval_v1_eval_proto_enumTypes[12].Descriptor()
+}
+
+func (EvaluationHintArgumentSource) Type() protoreflect.EnumType {
+	return &file_g8e_eval_v1_eval_proto_enumTypes[12]
+}
+
+func (x EvaluationHintArgumentSource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EvaluationHintArgumentSource.Descriptor instead.
+func (EvaluationHintArgumentSource) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{12}
+}
+
 type PublicActivityAvailability int32
 
 const (
@@ -637,11 +843,11 @@ func (x PublicActivityAvailability) String() string {
 }
 
 func (PublicActivityAvailability) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[10].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[13].Descriptor()
 }
 
 func (PublicActivityAvailability) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[10]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[13]
 }
 
 func (x PublicActivityAvailability) Number() protoreflect.EnumNumber {
@@ -650,7 +856,7 @@ func (x PublicActivityAvailability) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PublicActivityAvailability.Descriptor instead.
 func (PublicActivityAvailability) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{10}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{13}
 }
 
 type PublicUnavailableReason int32
@@ -698,11 +904,11 @@ func (x PublicUnavailableReason) String() string {
 }
 
 func (PublicUnavailableReason) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[11].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[14].Descriptor()
 }
 
 func (PublicUnavailableReason) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[11]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[14]
 }
 
 func (x PublicUnavailableReason) Number() protoreflect.EnumNumber {
@@ -711,7 +917,7 @@ func (x PublicUnavailableReason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PublicUnavailableReason.Descriptor instead.
 func (PublicUnavailableReason) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{11}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{14}
 }
 
 type PublicFinishState int32
@@ -756,11 +962,11 @@ func (x PublicFinishState) String() string {
 }
 
 func (PublicFinishState) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[12].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[15].Descriptor()
 }
 
 func (PublicFinishState) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[12]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[15]
 }
 
 func (x PublicFinishState) Number() protoreflect.EnumNumber {
@@ -769,7 +975,7 @@ func (x PublicFinishState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PublicFinishState.Descriptor instead.
 func (PublicFinishState) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{12}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{15}
 }
 
 type PublicEvidenceSource int32
@@ -805,11 +1011,11 @@ func (x PublicEvidenceSource) String() string {
 }
 
 func (PublicEvidenceSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[13].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[16].Descriptor()
 }
 
 func (PublicEvidenceSource) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[13]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[16]
 }
 
 func (x PublicEvidenceSource) Number() protoreflect.EnumNumber {
@@ -818,7 +1024,7 @@ func (x PublicEvidenceSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PublicEvidenceSource.Descriptor instead.
 func (PublicEvidenceSource) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{13}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{16}
 }
 
 type PublicVerificationProvenance int32
@@ -854,11 +1060,11 @@ func (x PublicVerificationProvenance) String() string {
 }
 
 func (PublicVerificationProvenance) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[14].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[17].Descriptor()
 }
 
 func (PublicVerificationProvenance) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[14]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[17]
 }
 
 func (x PublicVerificationProvenance) Number() protoreflect.EnumNumber {
@@ -867,7 +1073,7 @@ func (x PublicVerificationProvenance) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PublicVerificationProvenance.Descriptor instead.
 func (PublicVerificationProvenance) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{14}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{17}
 }
 
 type PublicReceiptStatus int32
@@ -903,11 +1109,11 @@ func (x PublicReceiptStatus) String() string {
 }
 
 func (PublicReceiptStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[15].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[18].Descriptor()
 }
 
 func (PublicReceiptStatus) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[15]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[18]
 }
 
 func (x PublicReceiptStatus) Number() protoreflect.EnumNumber {
@@ -916,7 +1122,7 @@ func (x PublicReceiptStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PublicReceiptStatus.Descriptor instead.
 func (PublicReceiptStatus) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{15}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{18}
 }
 
 type PublicToolScoreDimension int32
@@ -976,11 +1182,11 @@ func (x PublicToolScoreDimension) String() string {
 }
 
 func (PublicToolScoreDimension) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[16].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[19].Descriptor()
 }
 
 func (PublicToolScoreDimension) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[16]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[19]
 }
 
 func (x PublicToolScoreDimension) Number() protoreflect.EnumNumber {
@@ -989,7 +1195,7 @@ func (x PublicToolScoreDimension) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PublicToolScoreDimension.Descriptor instead.
 func (PublicToolScoreDimension) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{16}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{19}
 }
 
 type ProviderHardwareMetricAvailability int32
@@ -1025,11 +1231,11 @@ func (x ProviderHardwareMetricAvailability) String() string {
 }
 
 func (ProviderHardwareMetricAvailability) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[17].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[20].Descriptor()
 }
 
 func (ProviderHardwareMetricAvailability) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[17]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[20]
 }
 
 func (x ProviderHardwareMetricAvailability) Number() protoreflect.EnumNumber {
@@ -1038,7 +1244,7 @@ func (x ProviderHardwareMetricAvailability) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProviderHardwareMetricAvailability.Descriptor instead.
 func (ProviderHardwareMetricAvailability) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{17}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{20}
 }
 
 type EvaluationGovernancePosture int32
@@ -1080,11 +1286,11 @@ func (x EvaluationGovernancePosture) String() string {
 }
 
 func (EvaluationGovernancePosture) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[18].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[21].Descriptor()
 }
 
 func (EvaluationGovernancePosture) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[18]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[21]
 }
 
 func (x EvaluationGovernancePosture) Number() protoreflect.EnumNumber {
@@ -1093,7 +1299,7 @@ func (x EvaluationGovernancePosture) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationGovernancePosture.Descriptor instead.
 func (EvaluationGovernancePosture) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{18}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{21}
 }
 
 type EvaluationRuntimeComponent int32
@@ -1135,11 +1341,11 @@ func (x EvaluationRuntimeComponent) String() string {
 }
 
 func (EvaluationRuntimeComponent) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[19].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[22].Descriptor()
 }
 
 func (EvaluationRuntimeComponent) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[19]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[22]
 }
 
 func (x EvaluationRuntimeComponent) Number() protoreflect.EnumNumber {
@@ -1148,7 +1354,7 @@ func (x EvaluationRuntimeComponent) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationRuntimeComponent.Descriptor instead.
 func (EvaluationRuntimeComponent) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{19}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{22}
 }
 
 type EvaluationAttemptStatus int32
@@ -1196,11 +1402,11 @@ func (x EvaluationAttemptStatus) String() string {
 }
 
 func (EvaluationAttemptStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[20].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[23].Descriptor()
 }
 
 func (EvaluationAttemptStatus) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[20]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[23]
 }
 
 func (x EvaluationAttemptStatus) Number() protoreflect.EnumNumber {
@@ -1209,7 +1415,7 @@ func (x EvaluationAttemptStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationAttemptStatus.Descriptor instead.
 func (EvaluationAttemptStatus) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{20}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{23}
 }
 
 type EvaluationObservationSource int32
@@ -1251,11 +1457,11 @@ func (x EvaluationObservationSource) String() string {
 }
 
 func (EvaluationObservationSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[21].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[24].Descriptor()
 }
 
 func (EvaluationObservationSource) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[21]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[24]
 }
 
 func (x EvaluationObservationSource) Number() protoreflect.EnumNumber {
@@ -1264,7 +1470,7 @@ func (x EvaluationObservationSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationObservationSource.Descriptor instead.
 func (EvaluationObservationSource) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{21}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{24}
 }
 
 type EvaluationEvidenceAuthority int32
@@ -1306,11 +1512,11 @@ func (x EvaluationEvidenceAuthority) String() string {
 }
 
 func (EvaluationEvidenceAuthority) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[22].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[25].Descriptor()
 }
 
 func (EvaluationEvidenceAuthority) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[22]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[25]
 }
 
 func (x EvaluationEvidenceAuthority) Number() protoreflect.EnumNumber {
@@ -1319,7 +1525,7 @@ func (x EvaluationEvidenceAuthority) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationEvidenceAuthority.Descriptor instead.
 func (EvaluationEvidenceAuthority) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{22}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{25}
 }
 
 type EvaluationComparator int32
@@ -1367,11 +1573,11 @@ func (x EvaluationComparator) String() string {
 }
 
 func (EvaluationComparator) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[23].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[26].Descriptor()
 }
 
 func (EvaluationComparator) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[23]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[26]
 }
 
 func (x EvaluationComparator) Number() protoreflect.EnumNumber {
@@ -1380,7 +1586,7 @@ func (x EvaluationComparator) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationComparator.Descriptor instead.
 func (EvaluationComparator) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{23}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{26}
 }
 
 type EvaluationVerdictStatus int32
@@ -1425,11 +1631,11 @@ func (x EvaluationVerdictStatus) String() string {
 }
 
 func (EvaluationVerdictStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[24].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[27].Descriptor()
 }
 
 func (EvaluationVerdictStatus) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[24]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[27]
 }
 
 func (x EvaluationVerdictStatus) Number() protoreflect.EnumNumber {
@@ -1438,7 +1644,7 @@ func (x EvaluationVerdictStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationVerdictStatus.Descriptor instead.
 func (EvaluationVerdictStatus) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{24}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{27}
 }
 
 type EvaluationMetricDirection int32
@@ -1477,11 +1683,11 @@ func (x EvaluationMetricDirection) String() string {
 }
 
 func (EvaluationMetricDirection) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[25].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[28].Descriptor()
 }
 
 func (EvaluationMetricDirection) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[25]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[28]
 }
 
 func (x EvaluationMetricDirection) Number() protoreflect.EnumNumber {
@@ -1490,7 +1696,7 @@ func (x EvaluationMetricDirection) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationMetricDirection.Descriptor instead.
 func (EvaluationMetricDirection) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{25}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{28}
 }
 
 type EvaluationMissingDataPolicy int32
@@ -1529,11 +1735,11 @@ func (x EvaluationMissingDataPolicy) String() string {
 }
 
 func (EvaluationMissingDataPolicy) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[26].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[29].Descriptor()
 }
 
 func (EvaluationMissingDataPolicy) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[26]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[29]
 }
 
 func (x EvaluationMissingDataPolicy) Number() protoreflect.EnumNumber {
@@ -1542,7 +1748,7 @@ func (x EvaluationMissingDataPolicy) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationMissingDataPolicy.Descriptor instead.
 func (EvaluationMissingDataPolicy) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{26}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{29}
 }
 
 type EvaluationMetricUnit int32
@@ -1578,11 +1784,11 @@ func (x EvaluationMetricUnit) String() string {
 }
 
 func (EvaluationMetricUnit) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[27].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[30].Descriptor()
 }
 
 func (EvaluationMetricUnit) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[27]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[30]
 }
 
 func (x EvaluationMetricUnit) Number() protoreflect.EnumNumber {
@@ -1591,7 +1797,7 @@ func (x EvaluationMetricUnit) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationMetricUnit.Descriptor instead.
 func (EvaluationMetricUnit) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{27}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{30}
 }
 
 // ProviderBoundaryObservationPhase identifies one lifecycle transition for a
@@ -1629,11 +1835,11 @@ func (x ProviderBoundaryObservationPhase) String() string {
 }
 
 func (ProviderBoundaryObservationPhase) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[28].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[31].Descriptor()
 }
 
 func (ProviderBoundaryObservationPhase) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[28]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[31]
 }
 
 func (x ProviderBoundaryObservationPhase) Number() protoreflect.EnumNumber {
@@ -1642,7 +1848,7 @@ func (x ProviderBoundaryObservationPhase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProviderBoundaryObservationPhase.Descriptor instead.
 func (ProviderBoundaryObservationPhase) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{28}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{31}
 }
 
 // ProviderBoundaryObservationAttemptStatus mirrors the terminal provider-attempt
@@ -1683,11 +1889,11 @@ func (x ProviderBoundaryObservationAttemptStatus) String() string {
 }
 
 func (ProviderBoundaryObservationAttemptStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[29].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[32].Descriptor()
 }
 
 func (ProviderBoundaryObservationAttemptStatus) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[29]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[32]
 }
 
 func (x ProviderBoundaryObservationAttemptStatus) Number() protoreflect.EnumNumber {
@@ -1696,7 +1902,7 @@ func (x ProviderBoundaryObservationAttemptStatus) Number() protoreflect.EnumNumb
 
 // Deprecated: Use ProviderBoundaryObservationAttemptStatus.Descriptor instead.
 func (ProviderBoundaryObservationAttemptStatus) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{29}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{32}
 }
 
 // ModelManifestVerificationStatus reports signed-manifest verification outcome.
@@ -1739,11 +1945,11 @@ func (x ModelManifestVerificationStatus) String() string {
 }
 
 func (ModelManifestVerificationStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[30].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[33].Descriptor()
 }
 
 func (ModelManifestVerificationStatus) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[30]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[33]
 }
 
 func (x ModelManifestVerificationStatus) Number() protoreflect.EnumNumber {
@@ -1752,7 +1958,7 @@ func (x ModelManifestVerificationStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ModelManifestVerificationStatus.Descriptor instead.
 func (ModelManifestVerificationStatus) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{30}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{33}
 }
 
 // ModelProvenanceObservationPhase identifies one lifecycle transition for a
@@ -1790,11 +1996,11 @@ func (x ModelProvenanceObservationPhase) String() string {
 }
 
 func (ModelProvenanceObservationPhase) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[31].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[34].Descriptor()
 }
 
 func (ModelProvenanceObservationPhase) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[31]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[34]
 }
 
 func (x ModelProvenanceObservationPhase) Number() protoreflect.EnumNumber {
@@ -1803,7 +2009,7 @@ func (x ModelProvenanceObservationPhase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ModelProvenanceObservationPhase.Descriptor instead.
 func (ModelProvenanceObservationPhase) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{31}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{34}
 }
 
 // ModelProvenanceObservationAttemptStatus mirrors the terminal provider-attempt
@@ -1844,11 +2050,11 @@ func (x ModelProvenanceObservationAttemptStatus) String() string {
 }
 
 func (ModelProvenanceObservationAttemptStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[32].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[35].Descriptor()
 }
 
 func (ModelProvenanceObservationAttemptStatus) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[32]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[35]
 }
 
 func (x ModelProvenanceObservationAttemptStatus) Number() protoreflect.EnumNumber {
@@ -1857,7 +2063,7 @@ func (x ModelProvenanceObservationAttemptStatus) Number() protoreflect.EnumNumbe
 
 // Deprecated: Use ModelProvenanceObservationAttemptStatus.Descriptor instead.
 func (ModelProvenanceObservationAttemptStatus) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{32}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{35}
 }
 
 type EvaluationWitnessPolicy int32
@@ -1893,11 +2099,11 @@ func (x EvaluationWitnessPolicy) String() string {
 }
 
 func (EvaluationWitnessPolicy) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_eval_v1_eval_proto_enumTypes[33].Descriptor()
+	return file_g8e_eval_v1_eval_proto_enumTypes[36].Descriptor()
 }
 
 func (EvaluationWitnessPolicy) Type() protoreflect.EnumType {
-	return &file_g8e_eval_v1_eval_proto_enumTypes[33]
+	return &file_g8e_eval_v1_eval_proto_enumTypes[36]
 }
 
 func (x EvaluationWitnessPolicy) Number() protoreflect.EnumNumber {
@@ -1906,7 +2112,7 @@ func (x EvaluationWitnessPolicy) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EvaluationWitnessPolicy.Descriptor instead.
 func (EvaluationWitnessPolicy) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{33}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{36}
 }
 
 type EvaluationRuntimeBoundary struct {
@@ -3550,6 +3756,122 @@ func (x *PublicToolScoreDimensionRequirement) GetRequired() bool {
 	return false
 }
 
+// PromptHintArgument names one required argument of a hinted tool and where
+// its value is derivable from. Values stay in the private input fixture.
+type PromptHintArgument struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	ArgumentName  string                       `protobuf:"bytes,1,opt,name=argument_name,json=argumentName,proto3" json:"argument_name,omitempty"`
+	Source        EvaluationHintArgumentSource `protobuf:"varint,2,opt,name=source,proto3,enum=g8e.eval.v1.EvaluationHintArgumentSource" json:"source,omitempty"`
+	ToolName      string                       `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PromptHintArgument) Reset() {
+	*x = PromptHintArgument{}
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PromptHintArgument) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PromptHintArgument) ProtoMessage() {}
+
+func (x *PromptHintArgument) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PromptHintArgument.ProtoReflect.Descriptor instead.
+func (*PromptHintArgument) Descriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *PromptHintArgument) GetArgumentName() string {
+	if x != nil {
+		return x.ArgumentName
+	}
+	return ""
+}
+
+func (x *PromptHintArgument) GetSource() EvaluationHintArgumentSource {
+	if x != nil {
+		return x.Source
+	}
+	return EvaluationHintArgumentSource_EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED
+}
+
+func (x *PromptHintArgument) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+// PromptHint records which tools a scenario prompt hints at and where each
+// required argument comes from, so a failure can say the opportunity was real.
+type PromptHint struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HintedTools   []string               `protobuf:"bytes,1,rep,name=hinted_tools,json=hintedTools,proto3" json:"hinted_tools,omitempty"`
+	Arguments     []*PromptHintArgument  `protobuf:"bytes,2,rep,name=arguments,proto3" json:"arguments,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PromptHint) Reset() {
+	*x = PromptHint{}
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PromptHint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PromptHint) ProtoMessage() {}
+
+func (x *PromptHint) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PromptHint.ProtoReflect.Descriptor instead.
+func (*PromptHint) Descriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *PromptHint) GetHintedTools() []string {
+	if x != nil {
+		return x.HintedTools
+	}
+	return nil
+}
+
+func (x *PromptHint) GetArguments() []*PromptHintArgument {
+	if x != nil {
+		return x.Arguments
+	}
+	return nil
+}
+
 // EvaluationScenarioDefinition describes one frozen typed scenario.
 type EvaluationScenarioDefinition struct {
 	state                     protoimpl.MessageState                 `protogen:"open.v1"`
@@ -3569,14 +3891,16 @@ type EvaluationScenarioDefinition struct {
 	// eligible_roles lists the model roles that perform this task in g8ee. The
 	// homogeneous scheduler assigns the scenario only to these roles; the frozen
 	// catalog digest binds the set.
-	EligibleRoles []ModelCampaignRole `protobuf:"varint,14,rep,packed,name=eligible_roles,json=eligibleRoles,proto3,enum=g8e.eval.v1.ModelCampaignRole" json:"eligible_roles,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	EligibleRoles    []ModelCampaignRole        `protobuf:"varint,14,rep,packed,name=eligible_roles,json=eligibleRoles,proto3,enum=g8e.eval.v1.ModelCampaignRole" json:"eligible_roles,omitempty"`
+	TrajectoryPolicy EvaluationTrajectoryPolicy `protobuf:"varint,15,opt,name=trajectory_policy,json=trajectoryPolicy,proto3,enum=g8e.eval.v1.EvaluationTrajectoryPolicy" json:"trajectory_policy,omitempty"`
+	PromptHint       *PromptHint                `protobuf:"bytes,16,opt,name=prompt_hint,json=promptHint,proto3" json:"prompt_hint,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *EvaluationScenarioDefinition) Reset() {
 	*x = EvaluationScenarioDefinition{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[16]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3588,7 +3912,7 @@ func (x *EvaluationScenarioDefinition) String() string {
 func (*EvaluationScenarioDefinition) ProtoMessage() {}
 
 func (x *EvaluationScenarioDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[16]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3601,7 +3925,7 @@ func (x *EvaluationScenarioDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationScenarioDefinition.ProtoReflect.Descriptor instead.
 func (*EvaluationScenarioDefinition) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{16}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *EvaluationScenarioDefinition) GetScenarioId() string {
@@ -3702,6 +4026,20 @@ func (x *EvaluationScenarioDefinition) GetEligibleRoles() []ModelCampaignRole {
 	return nil
 }
 
+func (x *EvaluationScenarioDefinition) GetTrajectoryPolicy() EvaluationTrajectoryPolicy {
+	if x != nil {
+		return x.TrajectoryPolicy
+	}
+	return EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED
+}
+
+func (x *EvaluationScenarioDefinition) GetPromptHint() *PromptHint {
+	if x != nil {
+		return x.PromptHint
+	}
+	return nil
+}
+
 // ModelVariant is one frozen provider-backed model identity in a campaign.
 type ModelVariant struct {
 	state                  protoimpl.MessageState        `protogen:"open.v1"`
@@ -3720,7 +4058,7 @@ type ModelVariant struct {
 
 func (x *ModelVariant) Reset() {
 	*x = ModelVariant{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[17]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3732,7 +4070,7 @@ func (x *ModelVariant) String() string {
 func (*ModelVariant) ProtoMessage() {}
 
 func (x *ModelVariant) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[17]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3745,7 +4083,7 @@ func (x *ModelVariant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelVariant.ProtoReflect.Descriptor instead.
 func (*ModelVariant) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{17}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ModelVariant) GetVariantId() string {
@@ -3824,7 +4162,7 @@ type ModelCapabilityObservation struct {
 
 func (x *ModelCapabilityObservation) Reset() {
 	*x = ModelCapabilityObservation{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[18]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3836,7 +4174,7 @@ func (x *ModelCapabilityObservation) String() string {
 func (*ModelCapabilityObservation) ProtoMessage() {}
 
 func (x *ModelCapabilityObservation) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[18]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3849,7 +4187,7 @@ func (x *ModelCapabilityObservation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelCapabilityObservation.ProtoReflect.Descriptor instead.
 func (*ModelCapabilityObservation) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{18}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ModelCapabilityObservation) GetCapability() ModelCapabilityKind {
@@ -3884,7 +4222,7 @@ type RoleAssignment struct {
 
 func (x *RoleAssignment) Reset() {
 	*x = RoleAssignment{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[19]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3896,7 +4234,7 @@ func (x *RoleAssignment) String() string {
 func (*RoleAssignment) ProtoMessage() {}
 
 func (x *RoleAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[19]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3909,7 +4247,7 @@ func (x *RoleAssignment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleAssignment.ProtoReflect.Descriptor instead.
 func (*RoleAssignment) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{19}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RoleAssignment) GetDesignatedRole() ModelCampaignRole {
@@ -3940,7 +4278,7 @@ type HeterogeneousStackDefinition struct {
 
 func (x *HeterogeneousStackDefinition) Reset() {
 	*x = HeterogeneousStackDefinition{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[20]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3952,7 +4290,7 @@ func (x *HeterogeneousStackDefinition) String() string {
 func (*HeterogeneousStackDefinition) ProtoMessage() {}
 
 func (x *HeterogeneousStackDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[20]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3965,7 +4303,7 @@ func (x *HeterogeneousStackDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeterogeneousStackDefinition.ProtoReflect.Descriptor instead.
 func (*HeterogeneousStackDefinition) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{20}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *HeterogeneousStackDefinition) GetStackId() string {
@@ -4030,7 +4368,7 @@ type EvaluationAssignment struct {
 
 func (x *EvaluationAssignment) Reset() {
 	*x = EvaluationAssignment{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[21]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4042,7 +4380,7 @@ func (x *EvaluationAssignment) String() string {
 func (*EvaluationAssignment) ProtoMessage() {}
 
 func (x *EvaluationAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[21]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4055,7 +4393,7 @@ func (x *EvaluationAssignment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationAssignment.ProtoReflect.Descriptor instead.
 func (*EvaluationAssignment) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{21}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *EvaluationAssignment) GetSchemaVersion() string {
@@ -4200,7 +4538,7 @@ type HomogeneousAssignmentTarget struct {
 
 func (x *HomogeneousAssignmentTarget) Reset() {
 	*x = HomogeneousAssignmentTarget{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[22]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4212,7 +4550,7 @@ func (x *HomogeneousAssignmentTarget) String() string {
 func (*HomogeneousAssignmentTarget) ProtoMessage() {}
 
 func (x *HomogeneousAssignmentTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[22]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4225,7 +4563,7 @@ func (x *HomogeneousAssignmentTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HomogeneousAssignmentTarget.ProtoReflect.Descriptor instead.
 func (*HomogeneousAssignmentTarget) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{22}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *HomogeneousAssignmentTarget) GetCandidateVariant() *ModelVariant {
@@ -4251,7 +4589,7 @@ type HeterogeneousAssignmentTarget struct {
 
 func (x *HeterogeneousAssignmentTarget) Reset() {
 	*x = HeterogeneousAssignmentTarget{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[23]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4263,7 +4601,7 @@ func (x *HeterogeneousAssignmentTarget) String() string {
 func (*HeterogeneousAssignmentTarget) ProtoMessage() {}
 
 func (x *HeterogeneousAssignmentTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[23]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4276,7 +4614,7 @@ func (x *HeterogeneousAssignmentTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeterogeneousAssignmentTarget.ProtoReflect.Descriptor instead.
 func (*HeterogeneousAssignmentTarget) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{23}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *HeterogeneousAssignmentTarget) GetStack() *HeterogeneousStackDefinition {
@@ -4312,7 +4650,7 @@ type ProviderBoundaryHardwareSample struct {
 
 func (x *ProviderBoundaryHardwareSample) Reset() {
 	*x = ProviderBoundaryHardwareSample{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[24]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4324,7 +4662,7 @@ func (x *ProviderBoundaryHardwareSample) String() string {
 func (*ProviderBoundaryHardwareSample) ProtoMessage() {}
 
 func (x *ProviderBoundaryHardwareSample) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[24]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4337,7 +4675,7 @@ func (x *ProviderBoundaryHardwareSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderBoundaryHardwareSample.ProtoReflect.Descriptor instead.
 func (*ProviderBoundaryHardwareSample) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{24}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ProviderBoundaryHardwareSample) GetObservedAtUnixNanos() uint64 {
@@ -4473,7 +4811,7 @@ type ProviderBoundaryObservationWindow struct {
 
 func (x *ProviderBoundaryObservationWindow) Reset() {
 	*x = ProviderBoundaryObservationWindow{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[25]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4485,7 +4823,7 @@ func (x *ProviderBoundaryObservationWindow) String() string {
 func (*ProviderBoundaryObservationWindow) ProtoMessage() {}
 
 func (x *ProviderBoundaryObservationWindow) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[25]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4498,7 +4836,7 @@ func (x *ProviderBoundaryObservationWindow) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ProviderBoundaryObservationWindow.ProtoReflect.Descriptor instead.
 func (*ProviderBoundaryObservationWindow) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{25}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ProviderBoundaryObservationWindow) GetSchemaVersion() string {
@@ -4595,7 +4933,7 @@ type ProviderBoundaryObservationCommand struct {
 
 func (x *ProviderBoundaryObservationCommand) Reset() {
 	*x = ProviderBoundaryObservationCommand{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[26]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4607,7 +4945,7 @@ func (x *ProviderBoundaryObservationCommand) String() string {
 func (*ProviderBoundaryObservationCommand) ProtoMessage() {}
 
 func (x *ProviderBoundaryObservationCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[26]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4620,7 +4958,7 @@ func (x *ProviderBoundaryObservationCommand) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ProviderBoundaryObservationCommand.ProtoReflect.Descriptor instead.
 func (*ProviderBoundaryObservationCommand) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{26}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ProviderBoundaryObservationCommand) GetProviderAttemptId() string {
@@ -4683,7 +5021,7 @@ type ProviderBoundaryObservationCompleted struct {
 
 func (x *ProviderBoundaryObservationCompleted) Reset() {
 	*x = ProviderBoundaryObservationCompleted{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[27]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4695,7 +5033,7 @@ func (x *ProviderBoundaryObservationCompleted) String() string {
 func (*ProviderBoundaryObservationCompleted) ProtoMessage() {}
 
 func (x *ProviderBoundaryObservationCompleted) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[27]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4708,7 +5046,7 @@ func (x *ProviderBoundaryObservationCompleted) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ProviderBoundaryObservationCompleted.ProtoReflect.Descriptor instead.
 func (*ProviderBoundaryObservationCompleted) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{27}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ProviderBoundaryObservationCompleted) GetWindow() *ProviderBoundaryObservationWindow {
@@ -4731,7 +5069,7 @@ type ModelWeightAttestation struct {
 
 func (x *ModelWeightAttestation) Reset() {
 	*x = ModelWeightAttestation{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[28]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4743,7 +5081,7 @@ func (x *ModelWeightAttestation) String() string {
 func (*ModelWeightAttestation) ProtoMessage() {}
 
 func (x *ModelWeightAttestation) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[28]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4756,7 +5094,7 @@ func (x *ModelWeightAttestation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelWeightAttestation.ProtoReflect.Descriptor instead.
 func (*ModelWeightAttestation) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{28}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ModelWeightAttestation) GetBlobDigest() string {
@@ -4804,7 +5142,7 @@ type ModelProvenanceAttestationWindow struct {
 
 func (x *ModelProvenanceAttestationWindow) Reset() {
 	*x = ModelProvenanceAttestationWindow{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[29]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4816,7 +5154,7 @@ func (x *ModelProvenanceAttestationWindow) String() string {
 func (*ModelProvenanceAttestationWindow) ProtoMessage() {}
 
 func (x *ModelProvenanceAttestationWindow) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[29]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4829,7 +5167,7 @@ func (x *ModelProvenanceAttestationWindow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelProvenanceAttestationWindow.ProtoReflect.Descriptor instead.
 func (*ModelProvenanceAttestationWindow) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{29}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ModelProvenanceAttestationWindow) GetSchemaVersion() string {
@@ -4952,7 +5290,7 @@ type ModelProvenanceObservationCommand struct {
 
 func (x *ModelProvenanceObservationCommand) Reset() {
 	*x = ModelProvenanceObservationCommand{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[30]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4964,7 +5302,7 @@ func (x *ModelProvenanceObservationCommand) String() string {
 func (*ModelProvenanceObservationCommand) ProtoMessage() {}
 
 func (x *ModelProvenanceObservationCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[30]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4977,7 +5315,7 @@ func (x *ModelProvenanceObservationCommand) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ModelProvenanceObservationCommand.ProtoReflect.Descriptor instead.
 func (*ModelProvenanceObservationCommand) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{30}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ModelProvenanceObservationCommand) GetProviderAttemptId() string {
@@ -5068,7 +5406,7 @@ type ModelProvenanceObservationCompleted struct {
 
 func (x *ModelProvenanceObservationCompleted) Reset() {
 	*x = ModelProvenanceObservationCompleted{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[31]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5080,7 +5418,7 @@ func (x *ModelProvenanceObservationCompleted) String() string {
 func (*ModelProvenanceObservationCompleted) ProtoMessage() {}
 
 func (x *ModelProvenanceObservationCompleted) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[31]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5093,7 +5431,7 @@ func (x *ModelProvenanceObservationCompleted) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ModelProvenanceObservationCompleted.ProtoReflect.Descriptor instead.
 func (*ModelProvenanceObservationCompleted) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{31}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ModelProvenanceObservationCompleted) GetWindow() *ModelProvenanceAttestationWindow {
@@ -5138,13 +5476,18 @@ type ModelInferenceRecord struct {
 	GovernedReceiptRef             *v1.ComplianceEvidenceReference `protobuf:"bytes,30,opt,name=governed_receipt_ref,json=governedReceiptRef,proto3" json:"governed_receipt_ref,omitempty"`
 	ResultDigest                   string                          `protobuf:"bytes,31,opt,name=result_digest,json=resultDigest,proto3" json:"result_digest,omitempty"`
 	ProviderBoundaryObservationRef *v1.ComplianceEvidenceReference `protobuf:"bytes,32,opt,name=provider_boundary_observation_ref,json=providerBoundaryObservationRef,proto3" json:"provider_boundary_observation_ref,omitempty"`
-	unknownFields                  protoimpl.UnknownFields
-	sizeCache                      protoimpl.SizeCache
+	// Tool names as sent to the provider for this call, captured at the
+	// provider boundary. tools_declared_reported distinguishes "none declared"
+	// from "not reported".
+	ToolsDeclared         []string `protobuf:"bytes,33,rep,name=tools_declared,json=toolsDeclared,proto3" json:"tools_declared,omitempty"`
+	ToolsDeclaredReported bool     `protobuf:"varint,34,opt,name=tools_declared_reported,json=toolsDeclaredReported,proto3" json:"tools_declared_reported,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ModelInferenceRecord) Reset() {
 	*x = ModelInferenceRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[32]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5156,7 +5499,7 @@ func (x *ModelInferenceRecord) String() string {
 func (*ModelInferenceRecord) ProtoMessage() {}
 
 func (x *ModelInferenceRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[32]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5169,7 +5512,7 @@ func (x *ModelInferenceRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelInferenceRecord.ProtoReflect.Descriptor instead.
 func (*ModelInferenceRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{32}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ModelInferenceRecord) GetInferenceRecordId() string {
@@ -5396,6 +5739,20 @@ func (x *ModelInferenceRecord) GetProviderBoundaryObservationRef() *v1.Complianc
 	return nil
 }
 
+func (x *ModelInferenceRecord) GetToolsDeclared() []string {
+	if x != nil {
+		return x.ToolsDeclared
+	}
+	return nil
+}
+
+func (x *ModelInferenceRecord) GetToolsDeclaredReported() bool {
+	if x != nil {
+		return x.ToolsDeclaredReported
+	}
+	return false
+}
+
 type ToolDecisionRecord struct {
 	state               protoimpl.MessageState  `protogen:"open.v1"`
 	DecisionId          string                  `protobuf:"bytes,1,opt,name=decision_id,json=decisionId,proto3" json:"decision_id,omitempty"`
@@ -5412,7 +5769,7 @@ type ToolDecisionRecord struct {
 
 func (x *ToolDecisionRecord) Reset() {
 	*x = ToolDecisionRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[33]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5424,7 +5781,7 @@ func (x *ToolDecisionRecord) String() string {
 func (*ToolDecisionRecord) ProtoMessage() {}
 
 func (x *ToolDecisionRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[33]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5437,7 +5794,7 @@ func (x *ToolDecisionRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolDecisionRecord.ProtoReflect.Descriptor instead.
 func (*ToolDecisionRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{33}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ToolDecisionRecord) GetDecisionId() string {
@@ -5505,13 +5862,18 @@ type ToolCallRecord struct {
 	SchemaOutcome      EvaluationVerdictStatus         `protobuf:"varint,5,opt,name=schema_outcome,json=schemaOutcome,proto3,enum=g8e.eval.v1.EvaluationVerdictStatus" json:"schema_outcome,omitempty"`
 	SemanticOutcome    EvaluationVerdictStatus         `protobuf:"varint,6,opt,name=semantic_outcome,json=semanticOutcome,proto3,enum=g8e.eval.v1.EvaluationVerdictStatus" json:"semantic_outcome,omitempty"`
 	GovernedBindingRef *v1.ComplianceEvidenceReference `protobuf:"bytes,7,opt,name=governed_binding_ref,json=governedBindingRef,proto3" json:"governed_binding_ref,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Tool-loop turn whose model response issued the call (1-based; 0 = not
+	// reported). The model-visible guidance text stays in the private trace.
+	LoopTurn      uint32 `protobuf:"varint,8,opt,name=loop_turn,json=loopTurn,proto3" json:"loop_turn,omitempty"`
+	ErrorType     string `protobuf:"bytes,9,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	GuidanceShown bool   `protobuf:"varint,10,opt,name=guidance_shown,json=guidanceShown,proto3" json:"guidance_shown,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolCallRecord) Reset() {
 	*x = ToolCallRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[34]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5523,7 +5885,7 @@ func (x *ToolCallRecord) String() string {
 func (*ToolCallRecord) ProtoMessage() {}
 
 func (x *ToolCallRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[34]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5536,7 +5898,7 @@ func (x *ToolCallRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolCallRecord.ProtoReflect.Descriptor instead.
 func (*ToolCallRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{34}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ToolCallRecord) GetCallId() string {
@@ -5588,6 +5950,27 @@ func (x *ToolCallRecord) GetGovernedBindingRef() *v1.ComplianceEvidenceReference
 	return nil
 }
 
+func (x *ToolCallRecord) GetLoopTurn() uint32 {
+	if x != nil {
+		return x.LoopTurn
+	}
+	return 0
+}
+
+func (x *ToolCallRecord) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+func (x *ToolCallRecord) GetGuidanceShown() bool {
+	if x != nil {
+		return x.GuidanceShown
+	}
+	return false
+}
+
 type EscalationRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EscalationId  string                 `protobuf:"bytes,1,opt,name=escalation_id,json=escalationId,proto3" json:"escalation_id,omitempty"`
@@ -5602,7 +5985,7 @@ type EscalationRecord struct {
 
 func (x *EscalationRecord) Reset() {
 	*x = EscalationRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[35]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5614,7 +5997,7 @@ func (x *EscalationRecord) String() string {
 func (*EscalationRecord) ProtoMessage() {}
 
 func (x *EscalationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[35]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5627,7 +6010,7 @@ func (x *EscalationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EscalationRecord.ProtoReflect.Descriptor instead.
 func (*EscalationRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{35}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *EscalationRecord) GetEscalationId() string {
@@ -5685,7 +6068,7 @@ type HandoffRecord struct {
 
 func (x *HandoffRecord) Reset() {
 	*x = HandoffRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[36]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5697,7 +6080,7 @@ func (x *HandoffRecord) String() string {
 func (*HandoffRecord) ProtoMessage() {}
 
 func (x *HandoffRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[36]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5710,7 +6093,7 @@ func (x *HandoffRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandoffRecord.ProtoReflect.Descriptor instead.
 func (*HandoffRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{36}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *HandoffRecord) GetHandoffId() string {
@@ -5761,7 +6144,7 @@ type RecoveryRecord struct {
 
 func (x *RecoveryRecord) Reset() {
 	*x = RecoveryRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[37]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5773,7 +6156,7 @@ func (x *RecoveryRecord) String() string {
 func (*RecoveryRecord) ProtoMessage() {}
 
 func (x *RecoveryRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[37]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5786,7 +6169,7 @@ func (x *RecoveryRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecoveryRecord.ProtoReflect.Descriptor instead.
 func (*RecoveryRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{37}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RecoveryRecord) GetRecoveryId() string {
@@ -5841,7 +6224,7 @@ type GovernedActionBinding struct {
 
 func (x *GovernedActionBinding) Reset() {
 	*x = GovernedActionBinding{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[38]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5853,7 +6236,7 @@ func (x *GovernedActionBinding) String() string {
 func (*GovernedActionBinding) ProtoMessage() {}
 
 func (x *GovernedActionBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[38]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5866,7 +6249,7 @@ func (x *GovernedActionBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GovernedActionBinding.ProtoReflect.Descriptor instead.
 func (*GovernedActionBinding) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{38}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GovernedActionBinding) GetBindingId() string {
@@ -5945,7 +6328,7 @@ type DeterministicGrade struct {
 
 func (x *DeterministicGrade) Reset() {
 	*x = DeterministicGrade{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[39]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5957,7 +6340,7 @@ func (x *DeterministicGrade) String() string {
 func (*DeterministicGrade) ProtoMessage() {}
 
 func (x *DeterministicGrade) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[39]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5970,7 +6353,7 @@ func (x *DeterministicGrade) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeterministicGrade.ProtoReflect.Descriptor instead.
 func (*DeterministicGrade) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{39}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *DeterministicGrade) GetGradeId() string {
@@ -6022,7 +6405,7 @@ type SemanticGrade struct {
 
 func (x *SemanticGrade) Reset() {
 	*x = SemanticGrade{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[40]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6034,7 +6417,7 @@ func (x *SemanticGrade) String() string {
 func (*SemanticGrade) ProtoMessage() {}
 
 func (x *SemanticGrade) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[40]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6047,7 +6430,7 @@ func (x *SemanticGrade) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SemanticGrade.ProtoReflect.Descriptor instead.
 func (*SemanticGrade) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{40}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *SemanticGrade) GetGradeId() string {
@@ -6106,7 +6489,7 @@ type DecomposedScoreRecord struct {
 
 func (x *DecomposedScoreRecord) Reset() {
 	*x = DecomposedScoreRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[41]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6118,7 +6501,7 @@ func (x *DecomposedScoreRecord) String() string {
 func (*DecomposedScoreRecord) ProtoMessage() {}
 
 func (x *DecomposedScoreRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[41]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6131,7 +6514,7 @@ func (x *DecomposedScoreRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecomposedScoreRecord.ProtoReflect.Descriptor instead.
 func (*DecomposedScoreRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{41}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *DecomposedScoreRecord) GetScoreId() string {
@@ -6188,7 +6571,7 @@ type GraderModelCallRecord struct {
 
 func (x *GraderModelCallRecord) Reset() {
 	*x = GraderModelCallRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[42]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6200,7 +6583,7 @@ func (x *GraderModelCallRecord) String() string {
 func (*GraderModelCallRecord) ProtoMessage() {}
 
 func (x *GraderModelCallRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[42]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6213,7 +6596,7 @@ func (x *GraderModelCallRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GraderModelCallRecord.ProtoReflect.Descriptor instead.
 func (*GraderModelCallRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{42}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GraderModelCallRecord) GetGraderCallId() string {
@@ -6257,7 +6640,7 @@ type PolicyDecisionRecord struct {
 
 func (x *PolicyDecisionRecord) Reset() {
 	*x = PolicyDecisionRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[43]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6269,7 +6652,7 @@ func (x *PolicyDecisionRecord) String() string {
 func (*PolicyDecisionRecord) ProtoMessage() {}
 
 func (x *PolicyDecisionRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[43]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6282,7 +6665,7 @@ func (x *PolicyDecisionRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyDecisionRecord.ProtoReflect.Descriptor instead.
 func (*PolicyDecisionRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{43}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *PolicyDecisionRecord) GetDecisionId() string {
@@ -6349,13 +6732,20 @@ type EvaluationAssignmentResult struct {
 	GovernedActionsCaptured  bool                                `protobuf:"varint,24,opt,name=governed_actions_captured,json=governedActionsCaptured,proto3" json:"governed_actions_captured,omitempty"`
 	PolicyDecisionsCaptured  bool                                `protobuf:"varint,25,opt,name=policy_decisions_captured,json=policyDecisionsCaptured,proto3" json:"policy_decisions_captured,omitempty"`
 	ScoredInferenceSpanNanos *uint64                             `protobuf:"varint,26,opt,name=scored_inference_span_nanos,json=scoredInferenceSpanNanos,proto3,oneof" json:"scored_inference_span_nanos,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	TrajectoryOutcome        EvaluationTrajectoryOutcome         `protobuf:"varint,27,opt,name=trajectory_outcome,json=trajectoryOutcome,proto3,enum=g8e.eval.v1.EvaluationTrajectoryOutcome" json:"trajectory_outcome,omitempty"`
+	GuidedRetryCount         uint32                              `protobuf:"varint,28,opt,name=guided_retry_count,json=guidedRetryCount,proto3" json:"guided_retry_count,omitempty"`
+	// Private one-sentence failure reason (may quote the hint values and the
+	// start of the model output). Empty when the scenario passed.
+	FailureReason string `protobuf:"bytes,29,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"`
+	// Public-safe failure reason built only from public fields.
+	PublicFailureReason string `protobuf:"bytes,30,opt,name=public_failure_reason,json=publicFailureReason,proto3" json:"public_failure_reason,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *EvaluationAssignmentResult) Reset() {
 	*x = EvaluationAssignmentResult{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[44]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6367,7 +6757,7 @@ func (x *EvaluationAssignmentResult) String() string {
 func (*EvaluationAssignmentResult) ProtoMessage() {}
 
 func (x *EvaluationAssignmentResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[44]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6380,7 +6770,7 @@ func (x *EvaluationAssignmentResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationAssignmentResult.ProtoReflect.Descriptor instead.
 func (*EvaluationAssignmentResult) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{44}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *EvaluationAssignmentResult) GetSchemaVersion() string {
@@ -6565,6 +6955,34 @@ func (x *EvaluationAssignmentResult) GetScoredInferenceSpanNanos() uint64 {
 	return 0
 }
 
+func (x *EvaluationAssignmentResult) GetTrajectoryOutcome() EvaluationTrajectoryOutcome {
+	if x != nil {
+		return x.TrajectoryOutcome
+	}
+	return EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED
+}
+
+func (x *EvaluationAssignmentResult) GetGuidedRetryCount() uint32 {
+	if x != nil {
+		return x.GuidedRetryCount
+	}
+	return 0
+}
+
+func (x *EvaluationAssignmentResult) GetFailureReason() string {
+	if x != nil {
+		return x.FailureReason
+	}
+	return ""
+}
+
+func (x *EvaluationAssignmentResult) GetPublicFailureReason() string {
+	if x != nil {
+		return x.PublicFailureReason
+	}
+	return ""
+}
+
 type CampaignComplianceSourceArtifact struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RuntimePath   string                 `protobuf:"bytes,1,opt,name=runtime_path,json=runtimePath,proto3" json:"runtime_path,omitempty"`
@@ -6576,7 +6994,7 @@ type CampaignComplianceSourceArtifact struct {
 
 func (x *CampaignComplianceSourceArtifact) Reset() {
 	*x = CampaignComplianceSourceArtifact{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[45]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6588,7 +7006,7 @@ func (x *CampaignComplianceSourceArtifact) String() string {
 func (*CampaignComplianceSourceArtifact) ProtoMessage() {}
 
 func (x *CampaignComplianceSourceArtifact) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[45]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6601,7 +7019,7 @@ func (x *CampaignComplianceSourceArtifact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CampaignComplianceSourceArtifact.ProtoReflect.Descriptor instead.
 func (*CampaignComplianceSourceArtifact) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{45}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *CampaignComplianceSourceArtifact) GetRuntimePath() string {
@@ -6640,7 +7058,7 @@ type CampaignComplianceSourceInventory struct {
 
 func (x *CampaignComplianceSourceInventory) Reset() {
 	*x = CampaignComplianceSourceInventory{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[46]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6652,7 +7070,7 @@ func (x *CampaignComplianceSourceInventory) String() string {
 func (*CampaignComplianceSourceInventory) ProtoMessage() {}
 
 func (x *CampaignComplianceSourceInventory) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[46]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6665,7 +7083,7 @@ func (x *CampaignComplianceSourceInventory) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use CampaignComplianceSourceInventory.ProtoReflect.Descriptor instead.
 func (*CampaignComplianceSourceInventory) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{46}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *CampaignComplianceSourceInventory) GetSchemaVersion() string {
@@ -6745,7 +7163,7 @@ type EvaluationVerificationReport struct {
 
 func (x *EvaluationVerificationReport) Reset() {
 	*x = EvaluationVerificationReport{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[47]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6757,7 +7175,7 @@ func (x *EvaluationVerificationReport) String() string {
 func (*EvaluationVerificationReport) ProtoMessage() {}
 
 func (x *EvaluationVerificationReport) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[47]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6770,7 +7188,7 @@ func (x *EvaluationVerificationReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationVerificationReport.ProtoReflect.Descriptor instead.
 func (*EvaluationVerificationReport) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{47}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *EvaluationVerificationReport) GetSchemaVersion() string {
@@ -6925,7 +7343,7 @@ type EvaluationVerifiedPopulationEntry struct {
 
 func (x *EvaluationVerifiedPopulationEntry) Reset() {
 	*x = EvaluationVerifiedPopulationEntry{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[48]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6937,7 +7355,7 @@ func (x *EvaluationVerifiedPopulationEntry) String() string {
 func (*EvaluationVerifiedPopulationEntry) ProtoMessage() {}
 
 func (x *EvaluationVerifiedPopulationEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[48]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6950,7 +7368,7 @@ func (x *EvaluationVerifiedPopulationEntry) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use EvaluationVerifiedPopulationEntry.ProtoReflect.Descriptor instead.
 func (*EvaluationVerifiedPopulationEntry) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{48}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *EvaluationVerifiedPopulationEntry) GetAssignmentId() string {
@@ -7048,7 +7466,7 @@ type EvaluationVerifiedPopulation struct {
 
 func (x *EvaluationVerifiedPopulation) Reset() {
 	*x = EvaluationVerifiedPopulation{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[49]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7060,7 +7478,7 @@ func (x *EvaluationVerifiedPopulation) String() string {
 func (*EvaluationVerifiedPopulation) ProtoMessage() {}
 
 func (x *EvaluationVerifiedPopulation) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[49]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7073,7 +7491,7 @@ func (x *EvaluationVerifiedPopulation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationVerifiedPopulation.ProtoReflect.Descriptor instead.
 func (*EvaluationVerifiedPopulation) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{49}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *EvaluationVerifiedPopulation) GetSchemaVersion() string {
@@ -7161,7 +7579,7 @@ type PublicCampaignIdentity struct {
 
 func (x *PublicCampaignIdentity) Reset() {
 	*x = PublicCampaignIdentity{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[50]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7173,7 +7591,7 @@ func (x *PublicCampaignIdentity) String() string {
 func (*PublicCampaignIdentity) ProtoMessage() {}
 
 func (x *PublicCampaignIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[50]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7186,7 +7604,7 @@ func (x *PublicCampaignIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicCampaignIdentity.ProtoReflect.Descriptor instead.
 func (*PublicCampaignIdentity) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{50}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *PublicCampaignIdentity) GetCampaignId() string {
@@ -7251,7 +7669,7 @@ type PublicModelVariantIdentity struct {
 
 func (x *PublicModelVariantIdentity) Reset() {
 	*x = PublicModelVariantIdentity{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[51]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7263,7 +7681,7 @@ func (x *PublicModelVariantIdentity) String() string {
 func (*PublicModelVariantIdentity) ProtoMessage() {}
 
 func (x *PublicModelVariantIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[51]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7276,7 +7694,7 @@ func (x *PublicModelVariantIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicModelVariantIdentity.ProtoReflect.Descriptor instead.
 func (*PublicModelVariantIdentity) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{51}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *PublicModelVariantIdentity) GetVariantId() string {
@@ -7333,7 +7751,7 @@ type PublicAssignmentLifecycleRecord struct {
 
 func (x *PublicAssignmentLifecycleRecord) Reset() {
 	*x = PublicAssignmentLifecycleRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[52]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7345,7 +7763,7 @@ func (x *PublicAssignmentLifecycleRecord) String() string {
 func (*PublicAssignmentLifecycleRecord) ProtoMessage() {}
 
 func (x *PublicAssignmentLifecycleRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[52]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7358,7 +7776,7 @@ func (x *PublicAssignmentLifecycleRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicAssignmentLifecycleRecord.ProtoReflect.Descriptor instead.
 func (*PublicAssignmentLifecycleRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{52}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *PublicAssignmentLifecycleRecord) GetAssignmentId() string {
@@ -7460,7 +7878,7 @@ type PublicModelCallSummary struct {
 
 func (x *PublicModelCallSummary) Reset() {
 	*x = PublicModelCallSummary{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[53]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7472,7 +7890,7 @@ func (x *PublicModelCallSummary) String() string {
 func (*PublicModelCallSummary) ProtoMessage() {}
 
 func (x *PublicModelCallSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[53]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7485,7 +7903,7 @@ func (x *PublicModelCallSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicModelCallSummary.ProtoReflect.Descriptor instead.
 func (*PublicModelCallSummary) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{53}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *PublicModelCallSummary) GetAssignmentId() string {
@@ -7598,13 +8016,15 @@ type PublicScenarioSummary struct {
 	ForbiddenTools      []string                               `protobuf:"bytes,8,rep,name=forbidden_tools,json=forbiddenTools,proto3" json:"forbidden_tools,omitempty"`
 	Criteria            []*PublicScenarioCriterion             `protobuf:"bytes,9,rep,name=criteria,proto3" json:"criteria,omitempty"`
 	ToolScoreDimensions []*PublicToolScoreDimensionRequirement `protobuf:"bytes,10,rep,name=tool_score_dimensions,json=toolScoreDimensions,proto3" json:"tool_score_dimensions,omitempty"`
+	TrajectoryPolicy    EvaluationTrajectoryPolicy             `protobuf:"varint,11,opt,name=trajectory_policy,json=trajectoryPolicy,proto3,enum=g8e.eval.v1.EvaluationTrajectoryPolicy" json:"trajectory_policy,omitempty"`
+	PromptHint          *PromptHint                            `protobuf:"bytes,12,opt,name=prompt_hint,json=promptHint,proto3" json:"prompt_hint,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PublicScenarioSummary) Reset() {
 	*x = PublicScenarioSummary{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[54]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7616,7 +8036,7 @@ func (x *PublicScenarioSummary) String() string {
 func (*PublicScenarioSummary) ProtoMessage() {}
 
 func (x *PublicScenarioSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[54]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7629,7 +8049,7 @@ func (x *PublicScenarioSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicScenarioSummary.ProtoReflect.Descriptor instead.
 func (*PublicScenarioSummary) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{54}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *PublicScenarioSummary) GetScenarioId() string {
@@ -7702,6 +8122,20 @@ func (x *PublicScenarioSummary) GetToolScoreDimensions() []*PublicToolScoreDimen
 	return nil
 }
 
+func (x *PublicScenarioSummary) GetTrajectoryPolicy() EvaluationTrajectoryPolicy {
+	if x != nil {
+		return x.TrajectoryPolicy
+	}
+	return EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED
+}
+
+func (x *PublicScenarioSummary) GetPromptHint() *PromptHint {
+	if x != nil {
+		return x.PromptHint
+	}
+	return nil
+}
+
 type PublicSemanticGradeSummary struct {
 	state           protoimpl.MessageState     `protogen:"open.v1"`
 	CriterionId     string                     `protobuf:"bytes,1,opt,name=criterion_id,json=criterionId,proto3" json:"criterion_id,omitempty"`
@@ -7715,7 +8149,7 @@ type PublicSemanticGradeSummary struct {
 
 func (x *PublicSemanticGradeSummary) Reset() {
 	*x = PublicSemanticGradeSummary{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[55]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7727,7 +8161,7 @@ func (x *PublicSemanticGradeSummary) String() string {
 func (*PublicSemanticGradeSummary) ProtoMessage() {}
 
 func (x *PublicSemanticGradeSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[55]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7740,7 +8174,7 @@ func (x *PublicSemanticGradeSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicSemanticGradeSummary.ProtoReflect.Descriptor instead.
 func (*PublicSemanticGradeSummary) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{55}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *PublicSemanticGradeSummary) GetCriterionId() string {
@@ -7799,7 +8233,7 @@ type PublicModelActivityRecord struct {
 
 func (x *PublicModelActivityRecord) Reset() {
 	*x = PublicModelActivityRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[56]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7811,7 +8245,7 @@ func (x *PublicModelActivityRecord) String() string {
 func (*PublicModelActivityRecord) ProtoMessage() {}
 
 func (x *PublicModelActivityRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[56]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7824,7 +8258,7 @@ func (x *PublicModelActivityRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicModelActivityRecord.ProtoReflect.Descriptor instead.
 func (*PublicModelActivityRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{56}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *PublicModelActivityRecord) GetModelRole() ModelCampaignRole {
@@ -7933,7 +8367,7 @@ type PublicToolDecisionActivityRecord struct {
 
 func (x *PublicToolDecisionActivityRecord) Reset() {
 	*x = PublicToolDecisionActivityRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[57]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7945,7 +8379,7 @@ func (x *PublicToolDecisionActivityRecord) String() string {
 func (*PublicToolDecisionActivityRecord) ProtoMessage() {}
 
 func (x *PublicToolDecisionActivityRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[57]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7958,7 +8392,7 @@ func (x *PublicToolDecisionActivityRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicToolDecisionActivityRecord.ProtoReflect.Descriptor instead.
 func (*PublicToolDecisionActivityRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{57}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *PublicToolDecisionActivityRecord) GetToolLabel() string {
@@ -8016,13 +8450,16 @@ type PublicToolCallActivityRecord struct {
 	ExecutionOutcome EvaluationVerdictStatus `protobuf:"varint,2,opt,name=execution_outcome,json=executionOutcome,proto3,enum=g8e.eval.v1.EvaluationVerdictStatus" json:"execution_outcome,omitempty"`
 	SemanticOutcome  EvaluationVerdictStatus `protobuf:"varint,3,opt,name=semantic_outcome,json=semanticOutcome,proto3,enum=g8e.eval.v1.EvaluationVerdictStatus" json:"semantic_outcome,omitempty"`
 	EvidenceSource   PublicEvidenceSource    `protobuf:"varint,4,opt,name=evidence_source,json=evidenceSource,proto3,enum=g8e.eval.v1.PublicEvidenceSource" json:"evidence_source,omitempty"`
+	LoopTurn         uint32                  `protobuf:"varint,5,opt,name=loop_turn,json=loopTurn,proto3" json:"loop_turn,omitempty"`
+	ErrorType        string                  `protobuf:"bytes,6,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	GuidanceShown    bool                    `protobuf:"varint,7,opt,name=guidance_shown,json=guidanceShown,proto3" json:"guidance_shown,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PublicToolCallActivityRecord) Reset() {
 	*x = PublicToolCallActivityRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[58]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8034,7 +8471,7 @@ func (x *PublicToolCallActivityRecord) String() string {
 func (*PublicToolCallActivityRecord) ProtoMessage() {}
 
 func (x *PublicToolCallActivityRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[58]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8047,7 +8484,7 @@ func (x *PublicToolCallActivityRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicToolCallActivityRecord.ProtoReflect.Descriptor instead.
 func (*PublicToolCallActivityRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{58}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *PublicToolCallActivityRecord) GetToolLabel() string {
@@ -8078,6 +8515,27 @@ func (x *PublicToolCallActivityRecord) GetEvidenceSource() PublicEvidenceSource 
 	return PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_UNSPECIFIED
 }
 
+func (x *PublicToolCallActivityRecord) GetLoopTurn() uint32 {
+	if x != nil {
+		return x.LoopTurn
+	}
+	return 0
+}
+
+func (x *PublicToolCallActivityRecord) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+func (x *PublicToolCallActivityRecord) GetGuidanceShown() bool {
+	if x != nil {
+		return x.GuidanceShown
+	}
+	return false
+}
+
 type PublicPolicyDecisionActivityRecord struct {
 	state          protoimpl.MessageState          `protogen:"open.v1"`
 	ToolLabel      string                          `protobuf:"bytes,1,opt,name=tool_label,json=toolLabel,proto3" json:"tool_label,omitempty"`
@@ -8089,7 +8547,7 @@ type PublicPolicyDecisionActivityRecord struct {
 
 func (x *PublicPolicyDecisionActivityRecord) Reset() {
 	*x = PublicPolicyDecisionActivityRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[59]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8101,7 +8559,7 @@ func (x *PublicPolicyDecisionActivityRecord) String() string {
 func (*PublicPolicyDecisionActivityRecord) ProtoMessage() {}
 
 func (x *PublicPolicyDecisionActivityRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[59]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8114,7 +8572,7 @@ func (x *PublicPolicyDecisionActivityRecord) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use PublicPolicyDecisionActivityRecord.ProtoReflect.Descriptor instead.
 func (*PublicPolicyDecisionActivityRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{59}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *PublicPolicyDecisionActivityRecord) GetToolLabel() string {
@@ -8150,7 +8608,7 @@ type PublicGovernedActionActivityRecord struct {
 
 func (x *PublicGovernedActionActivityRecord) Reset() {
 	*x = PublicGovernedActionActivityRecord{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[60]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8162,7 +8620,7 @@ func (x *PublicGovernedActionActivityRecord) String() string {
 func (*PublicGovernedActionActivityRecord) ProtoMessage() {}
 
 func (x *PublicGovernedActionActivityRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[60]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8175,7 +8633,7 @@ func (x *PublicGovernedActionActivityRecord) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use PublicGovernedActionActivityRecord.ProtoReflect.Descriptor instead.
 func (*PublicGovernedActionActivityRecord) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{60}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *PublicGovernedActionActivityRecord) GetActionLabel() string {
@@ -8217,7 +8675,7 @@ type PublicModelActivity struct {
 
 func (x *PublicModelActivity) Reset() {
 	*x = PublicModelActivity{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[61]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8229,7 +8687,7 @@ func (x *PublicModelActivity) String() string {
 func (*PublicModelActivity) ProtoMessage() {}
 
 func (x *PublicModelActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[61]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8242,7 +8700,7 @@ func (x *PublicModelActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicModelActivity.ProtoReflect.Descriptor instead.
 func (*PublicModelActivity) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{61}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *PublicModelActivity) GetAvailability() PublicActivityAvailability {
@@ -8277,7 +8735,7 @@ type PublicToolDecisionActivity struct {
 
 func (x *PublicToolDecisionActivity) Reset() {
 	*x = PublicToolDecisionActivity{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[62]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8289,7 +8747,7 @@ func (x *PublicToolDecisionActivity) String() string {
 func (*PublicToolDecisionActivity) ProtoMessage() {}
 
 func (x *PublicToolDecisionActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[62]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8302,7 +8760,7 @@ func (x *PublicToolDecisionActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicToolDecisionActivity.ProtoReflect.Descriptor instead.
 func (*PublicToolDecisionActivity) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{62}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *PublicToolDecisionActivity) GetAvailability() PublicActivityAvailability {
@@ -8337,7 +8795,7 @@ type PublicToolCallActivity struct {
 
 func (x *PublicToolCallActivity) Reset() {
 	*x = PublicToolCallActivity{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[63]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8349,7 +8807,7 @@ func (x *PublicToolCallActivity) String() string {
 func (*PublicToolCallActivity) ProtoMessage() {}
 
 func (x *PublicToolCallActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[63]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8362,7 +8820,7 @@ func (x *PublicToolCallActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicToolCallActivity.ProtoReflect.Descriptor instead.
 func (*PublicToolCallActivity) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{63}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *PublicToolCallActivity) GetAvailability() PublicActivityAvailability {
@@ -8397,7 +8855,7 @@ type PublicPolicyDecisionActivity struct {
 
 func (x *PublicPolicyDecisionActivity) Reset() {
 	*x = PublicPolicyDecisionActivity{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[64]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8409,7 +8867,7 @@ func (x *PublicPolicyDecisionActivity) String() string {
 func (*PublicPolicyDecisionActivity) ProtoMessage() {}
 
 func (x *PublicPolicyDecisionActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[64]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8422,7 +8880,7 @@ func (x *PublicPolicyDecisionActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicPolicyDecisionActivity.ProtoReflect.Descriptor instead.
 func (*PublicPolicyDecisionActivity) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{64}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *PublicPolicyDecisionActivity) GetAvailability() PublicActivityAvailability {
@@ -8457,7 +8915,7 @@ type PublicGovernedActionActivity struct {
 
 func (x *PublicGovernedActionActivity) Reset() {
 	*x = PublicGovernedActionActivity{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[65]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8469,7 +8927,7 @@ func (x *PublicGovernedActionActivity) String() string {
 func (*PublicGovernedActionActivity) ProtoMessage() {}
 
 func (x *PublicGovernedActionActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[65]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8482,7 +8940,7 @@ func (x *PublicGovernedActionActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicGovernedActionActivity.ProtoReflect.Descriptor instead.
 func (*PublicGovernedActionActivity) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{65}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *PublicGovernedActionActivity) GetAvailability() PublicActivityAvailability {
@@ -8519,7 +8977,7 @@ type PublicAssignmentActivitySummary struct {
 
 func (x *PublicAssignmentActivitySummary) Reset() {
 	*x = PublicAssignmentActivitySummary{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[66]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8531,7 +8989,7 @@ func (x *PublicAssignmentActivitySummary) String() string {
 func (*PublicAssignmentActivitySummary) ProtoMessage() {}
 
 func (x *PublicAssignmentActivitySummary) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[66]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8544,7 +9002,7 @@ func (x *PublicAssignmentActivitySummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicAssignmentActivitySummary.ProtoReflect.Descriptor instead.
 func (*PublicAssignmentActivitySummary) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{66}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *PublicAssignmentActivitySummary) GetModelActivity() *PublicModelActivity {
@@ -8593,7 +9051,7 @@ type PublicEvidenceBinding struct {
 
 func (x *PublicEvidenceBinding) Reset() {
 	*x = PublicEvidenceBinding{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[67]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8605,7 +9063,7 @@ func (x *PublicEvidenceBinding) String() string {
 func (*PublicEvidenceBinding) ProtoMessage() {}
 
 func (x *PublicEvidenceBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[67]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8618,7 +9076,7 @@ func (x *PublicEvidenceBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicEvidenceBinding.ProtoReflect.Descriptor instead.
 func (*PublicEvidenceBinding) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{67}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *PublicEvidenceBinding) GetSha256() string {
@@ -8656,7 +9114,7 @@ type PublicVerificationMetadata struct {
 
 func (x *PublicVerificationMetadata) Reset() {
 	*x = PublicVerificationMetadata{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[68]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8668,7 +9126,7 @@ func (x *PublicVerificationMetadata) String() string {
 func (*PublicVerificationMetadata) ProtoMessage() {}
 
 func (x *PublicVerificationMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[68]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8681,7 +9139,7 @@ func (x *PublicVerificationMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicVerificationMetadata.ProtoReflect.Descriptor instead.
 func (*PublicVerificationMetadata) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{68}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *PublicVerificationMetadata) GetProvenance() PublicVerificationProvenance {
@@ -8747,13 +9205,17 @@ type PublicAssignmentResultProjection struct {
 	ActivitySummary          *PublicAssignmentActivitySummary    `protobuf:"bytes,17,opt,name=activity_summary,json=activitySummary,proto3" json:"activity_summary,omitempty"`
 	EvidenceBindings         []*PublicEvidenceBinding            `protobuf:"bytes,18,rep,name=evidence_bindings,json=evidenceBindings,proto3" json:"evidence_bindings,omitempty"`
 	VerificationMetadata     *PublicVerificationMetadata         `protobuf:"bytes,19,opt,name=verification_metadata,json=verificationMetadata,proto3" json:"verification_metadata,omitempty"`
+	TrajectoryOutcome        EvaluationTrajectoryOutcome         `protobuf:"varint,20,opt,name=trajectory_outcome,json=trajectoryOutcome,proto3,enum=g8e.eval.v1.EvaluationTrajectoryOutcome" json:"trajectory_outcome,omitempty"`
+	GuidedRetryCount         uint32                              `protobuf:"varint,21,opt,name=guided_retry_count,json=guidedRetryCount,proto3" json:"guided_retry_count,omitempty"`
+	FailureReason            string                              `protobuf:"bytes,22,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"`
+	ToolsDeclared            []string                            `protobuf:"bytes,23,rep,name=tools_declared,json=toolsDeclared,proto3" json:"tools_declared,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
 
 func (x *PublicAssignmentResultProjection) Reset() {
 	*x = PublicAssignmentResultProjection{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[69]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8765,7 +9227,7 @@ func (x *PublicAssignmentResultProjection) String() string {
 func (*PublicAssignmentResultProjection) ProtoMessage() {}
 
 func (x *PublicAssignmentResultProjection) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[69]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8778,7 +9240,7 @@ func (x *PublicAssignmentResultProjection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublicAssignmentResultProjection.ProtoReflect.Descriptor instead.
 func (*PublicAssignmentResultProjection) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{69}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *PublicAssignmentResultProjection) GetAssignmentId() string {
@@ -8910,6 +9372,34 @@ func (x *PublicAssignmentResultProjection) GetEvidenceBindings() []*PublicEviden
 func (x *PublicAssignmentResultProjection) GetVerificationMetadata() *PublicVerificationMetadata {
 	if x != nil {
 		return x.VerificationMetadata
+	}
+	return nil
+}
+
+func (x *PublicAssignmentResultProjection) GetTrajectoryOutcome() EvaluationTrajectoryOutcome {
+	if x != nil {
+		return x.TrajectoryOutcome
+	}
+	return EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED
+}
+
+func (x *PublicAssignmentResultProjection) GetGuidedRetryCount() uint32 {
+	if x != nil {
+		return x.GuidedRetryCount
+	}
+	return 0
+}
+
+func (x *PublicAssignmentResultProjection) GetFailureReason() string {
+	if x != nil {
+		return x.FailureReason
+	}
+	return ""
+}
+
+func (x *PublicAssignmentResultProjection) GetToolsDeclared() []string {
+	if x != nil {
+		return x.ToolsDeclared
 	}
 	return nil
 }
@@ -9091,7 +9581,15 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\brequired\x18\x05 \x01(\bR\brequired\"\x86\x01\n" +
 	"#PublicToolScoreDimensionRequirement\x12C\n" +
 	"\tdimension\x18\x01 \x01(\x0e2%.g8e.eval.v1.PublicToolScoreDimensionR\tdimension\x12\x1a\n" +
-	"\brequired\x18\x02 \x01(\bR\brequired\"\x8e\a\n" +
+	"\brequired\x18\x02 \x01(\bR\brequired\"\x99\x01\n" +
+	"\x12PromptHintArgument\x12#\n" +
+	"\rargument_name\x18\x01 \x01(\tR\fargumentName\x12A\n" +
+	"\x06source\x18\x02 \x01(\x0e2).g8e.eval.v1.EvaluationHintArgumentSourceR\x06source\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\"n\n" +
+	"\n" +
+	"PromptHint\x12!\n" +
+	"\fhinted_tools\x18\x01 \x03(\tR\vhintedTools\x12=\n" +
+	"\targuments\x18\x02 \x03(\v2\x1f.g8e.eval.v1.PromptHintArgumentR\targuments\"\x9e\b\n" +
 	"\x1cEvaluationScenarioDefinition\x12\x1f\n" +
 	"\vscenario_id\x18\x01 \x01(\tR\n" +
 	"scenarioId\x12)\n" +
@@ -9108,7 +9606,10 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x11gold_criteria_ref\x18\v \x01(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\x0fgoldCriteriaRef\x12M\n" +
 	"\x0fpublic_criteria\x18\f \x03(\v2$.g8e.eval.v1.PublicScenarioCriterionR\x0epublicCriteria\x12q\n" +
 	"\x1cpublic_tool_score_dimensions\x18\r \x03(\v20.g8e.eval.v1.PublicToolScoreDimensionRequirementR\x19publicToolScoreDimensions\x12E\n" +
-	"\x0eeligible_roles\x18\x0e \x03(\x0e2\x1e.g8e.eval.v1.ModelCampaignRoleR\religibleRoles\"\x98\x03\n" +
+	"\x0eeligible_roles\x18\x0e \x03(\x0e2\x1e.g8e.eval.v1.ModelCampaignRoleR\religibleRoles\x12T\n" +
+	"\x11trajectory_policy\x18\x0f \x01(\x0e2'.g8e.eval.v1.EvaluationTrajectoryPolicyR\x10trajectoryPolicy\x128\n" +
+	"\vprompt_hint\x18\x10 \x01(\v2\x17.g8e.eval.v1.PromptHintR\n" +
+	"promptHint\"\x98\x03\n" +
 	"\fModelVariant\x12\x1d\n" +
 	"\n" +
 	"variant_id\x18\x01 \x01(\tR\tvariantId\x12%\n" +
@@ -9247,7 +9748,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\vcampaign_id\x18\v \x01(\tR\n" +
 	"campaignId\"l\n" +
 	"#ModelProvenanceObservationCompleted\x12E\n" +
-	"\x06window\x18\x01 \x01(\v2-.g8e.eval.v1.ModelProvenanceAttestationWindowR\x06window\"\x91\r\n" +
+	"\x06window\x18\x01 \x01(\v2-.g8e.eval.v1.ModelProvenanceAttestationWindowR\x06window\"\xf0\r\n" +
 	"\x14ModelInferenceRecord\x12.\n" +
 	"\x13inference_record_id\x18\x01 \x01(\tR\x11inferenceRecordId\x12.\n" +
 	"\x13provider_attempt_id\x18\x02 \x01(\tR\x11providerAttemptId\x12#\n" +
@@ -9286,7 +9787,9 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x10privacy_attested\x18\x1d \x01(\bR\x0fprivacyAttested\x12`\n" +
 	"\x14governed_receipt_ref\x18\x1e \x01(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\x12governedReceiptRef\x12#\n" +
 	"\rresult_digest\x18\x1f \x01(\tR\fresultDigest\x12y\n" +
-	"!provider_boundary_observation_ref\x18  \x01(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\x1eproviderBoundaryObservationRefB\b\n" +
+	"!provider_boundary_observation_ref\x18  \x01(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\x1eproviderBoundaryObservationRef\x12%\n" +
+	"\x0etools_declared\x18! \x03(\tR\rtoolsDeclared\x126\n" +
+	"\x17tools_declared_reported\x18\" \x01(\bR\x15toolsDeclaredReportedB\b\n" +
 	"\x06_top_pB\b\n" +
 	"\x06_top_kB\a\n" +
 	"\x05_seedB\x12\n" +
@@ -9304,7 +9807,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\bselected\x18\x05 \x01(\bR\bselected\x121\n" +
 	"\x14permission_compliant\x18\x06 \x01(\bR\x13permissionCompliant\x12 \n" +
 	"\vunnecessary\x18\a \x01(\bR\vunnecessary\x12>\n" +
-	"\aoutcome\x18\b \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\aoutcome\"\x92\x03\n" +
+	"\aoutcome\x18\b \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\aoutcome\"\xf5\x03\n" +
 	"\x0eToolCallRecord\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\x12#\n" +
 	"\rassignment_id\x18\x02 \x01(\tR\fassignmentId\x12\x1b\n" +
@@ -9312,7 +9815,12 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x0earguments_hash\x18\x04 \x01(\tR\rargumentsHash\x12K\n" +
 	"\x0eschema_outcome\x18\x05 \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\rschemaOutcome\x12O\n" +
 	"\x10semantic_outcome\x18\x06 \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\x0fsemanticOutcome\x12`\n" +
-	"\x14governed_binding_ref\x18\a \x01(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\x12governedBindingRef\"\x91\x02\n" +
+	"\x14governed_binding_ref\x18\a \x01(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\x12governedBindingRef\x12\x1b\n" +
+	"\tloop_turn\x18\b \x01(\rR\bloopTurn\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\t \x01(\tR\terrorType\x12%\n" +
+	"\x0eguidance_shown\x18\n" +
+	" \x01(\bR\rguidanceShown\"\x91\x02\n" +
 	"\x10EscalationRecord\x12#\n" +
 	"\rescalation_id\x18\x01 \x01(\tR\fescalationId\x12#\n" +
 	"\rassignment_id\x18\x02 \x01(\tR\fassignmentId\x12;\n" +
@@ -9380,7 +9888,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\rassignment_id\x18\x02 \x01(\tR\fassignmentId\x12\x1b\n" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12F\n" +
 	"\aoutcome\x18\x04 \x01(\x0e2,.g8e.eval.v1.EvaluationPolicyDecisionOutcomeR\aoutcome\x12\x16\n" +
-	"\x06detail\x18\x05 \x01(\tR\x06detail\"\x81\r\n" +
+	"\x06detail\x18\x05 \x01(\tR\x06detail\"\xe3\x0e\n" +
 	"\x1aEvaluationAssignmentResult\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\tR\rschemaVersion\x12#\n" +
 	"\rassignment_id\x18\x02 \x01(\tR\fassignmentId\x12\x15\n" +
@@ -9412,7 +9920,11 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x13tool_calls_captured\x18\x17 \x01(\bR\x11toolCallsCaptured\x12:\n" +
 	"\x19governed_actions_captured\x18\x18 \x01(\bR\x17governedActionsCaptured\x12:\n" +
 	"\x19policy_decisions_captured\x18\x19 \x01(\bR\x17policyDecisionsCaptured\x12B\n" +
-	"\x1bscored_inference_span_nanos\x18\x1a \x01(\x04H\x00R\x18scoredInferenceSpanNanos\x88\x01\x01B\x1e\n" +
+	"\x1bscored_inference_span_nanos\x18\x1a \x01(\x04H\x00R\x18scoredInferenceSpanNanos\x88\x01\x01\x12W\n" +
+	"\x12trajectory_outcome\x18\x1b \x01(\x0e2(.g8e.eval.v1.EvaluationTrajectoryOutcomeR\x11trajectoryOutcome\x12,\n" +
+	"\x12guided_retry_count\x18\x1c \x01(\rR\x10guidedRetryCount\x12%\n" +
+	"\x0efailure_reason\x18\x1d \x01(\tR\rfailureReason\x122\n" +
+	"\x15public_failure_reason\x18\x1e \x01(\tR\x13publicFailureReasonB\x1e\n" +
 	"\x1c_scored_inference_span_nanos\"|\n" +
 	" CampaignComplianceSourceArtifact\x12!\n" +
 	"\fruntime_path\x18\x01 \x01(\tR\vruntimePath\x12\x16\n" +
@@ -9536,7 +10048,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\n" +
 	"input_hash\x18\r \x01(\tR\tinputHash\x12\x1f\n" +
 	"\voutput_hash\x18\x0e \x01(\tR\n" +
-	"outputHash\"\xc1\x04\n" +
+	"outputHash\"\xd1\x05\n" +
 	"\x15PublicScenarioSummary\x12\x1f\n" +
 	"\vscenario_id\x18\x01 \x01(\tR\n" +
 	"scenarioId\x12)\n" +
@@ -9549,7 +10061,10 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x0fforbidden_tools\x18\b \x03(\tR\x0eforbiddenTools\x12@\n" +
 	"\bcriteria\x18\t \x03(\v2$.g8e.eval.v1.PublicScenarioCriterionR\bcriteria\x12d\n" +
 	"\x15tool_score_dimensions\x18\n" +
-	" \x03(\v20.g8e.eval.v1.PublicToolScoreDimensionRequirementR\x13toolScoreDimensions\"\xc8\x02\n" +
+	" \x03(\v20.g8e.eval.v1.PublicToolScoreDimensionRequirementR\x13toolScoreDimensions\x12T\n" +
+	"\x11trajectory_policy\x18\v \x01(\x0e2'.g8e.eval.v1.EvaluationTrajectoryPolicyR\x10trajectoryPolicy\x128\n" +
+	"\vprompt_hint\x18\f \x01(\v2\x17.g8e.eval.v1.PromptHintR\n" +
+	"promptHint\"\xc8\x02\n" +
 	"\x1aPublicSemanticGradeSummary\x12!\n" +
 	"\fcriterion_id\x18\x01 \x01(\tR\vcriterionId\x12<\n" +
 	"\x06status\x18\x02 \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\x06status\x12K\n" +
@@ -9588,13 +10103,17 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x14permission_compliant\x18\x04 \x01(\bR\x13permissionCompliant\x12 \n" +
 	"\vunnecessary\x18\x05 \x01(\bR\vunnecessary\x12>\n" +
 	"\aoutcome\x18\x06 \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\aoutcome\x12J\n" +
-	"\x0fevidence_source\x18\a \x01(\x0e2!.g8e.eval.v1.PublicEvidenceSourceR\x0eevidenceSource\"\xad\x02\n" +
+	"\x0fevidence_source\x18\a \x01(\x0e2!.g8e.eval.v1.PublicEvidenceSourceR\x0eevidenceSource\"\x90\x03\n" +
 	"\x1cPublicToolCallActivityRecord\x12\x1d\n" +
 	"\n" +
 	"tool_label\x18\x01 \x01(\tR\ttoolLabel\x12Q\n" +
 	"\x11execution_outcome\x18\x02 \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\x10executionOutcome\x12O\n" +
 	"\x10semantic_outcome\x18\x03 \x01(\x0e2$.g8e.eval.v1.EvaluationVerdictStatusR\x0fsemanticOutcome\x12J\n" +
-	"\x0fevidence_source\x18\x04 \x01(\x0e2!.g8e.eval.v1.PublicEvidenceSourceR\x0eevidenceSource\"\xd7\x01\n" +
+	"\x0fevidence_source\x18\x04 \x01(\x0e2!.g8e.eval.v1.PublicEvidenceSourceR\x0eevidenceSource\x12\x1b\n" +
+	"\tloop_turn\x18\x05 \x01(\rR\bloopTurn\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\x06 \x01(\tR\terrorType\x12%\n" +
+	"\x0eguidance_shown\x18\a \x01(\bR\rguidanceShown\"\xd7\x01\n" +
 	"\"PublicPolicyDecisionActivityRecord\x12\x1d\n" +
 	"\n" +
 	"tool_label\x18\x01 \x01(\tR\ttoolLabel\x12F\n" +
@@ -9645,7 +10164,7 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x18verifier_release_version\x18\x03 \x01(\tR\x16verifierReleaseVersion\x12:\n" +
 	"\x19verifier_contract_version\x18\x04 \x01(\tR\x17verifierContractVersion\x12#\n" +
 	"\rreport_digest\x18\x05 \x01(\tR\freportDigest\x12+\n" +
-	"\x11population_digest\x18\x06 \x01(\tR\x10populationDigest\"\xf6\t\n" +
+	"\x11population_digest\x18\x06 \x01(\tR\x10populationDigest\"\xcb\v\n" +
 	" PublicAssignmentResultProjection\x12#\n" +
 	"\rassignment_id\x18\x01 \x01(\tR\fassignmentId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n" +
@@ -9668,7 +10187,11 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\x18semantic_grade_summaries\x18\x10 \x03(\v2'.g8e.eval.v1.PublicSemanticGradeSummaryR\x16semanticGradeSummaries\x12W\n" +
 	"\x10activity_summary\x18\x11 \x01(\v2,.g8e.eval.v1.PublicAssignmentActivitySummaryR\x0factivitySummary\x12O\n" +
 	"\x11evidence_bindings\x18\x12 \x03(\v2\".g8e.eval.v1.PublicEvidenceBindingR\x10evidenceBindings\x12\\\n" +
-	"\x15verification_metadata\x18\x13 \x01(\v2'.g8e.eval.v1.PublicVerificationMetadataR\x14verificationMetadata*\x8b\x01\n" +
+	"\x15verification_metadata\x18\x13 \x01(\v2'.g8e.eval.v1.PublicVerificationMetadataR\x14verificationMetadata\x12W\n" +
+	"\x12trajectory_outcome\x18\x14 \x01(\x0e2(.g8e.eval.v1.EvaluationTrajectoryOutcomeR\x11trajectoryOutcome\x12,\n" +
+	"\x12guided_retry_count\x18\x15 \x01(\rR\x10guidedRetryCount\x12%\n" +
+	"\x0efailure_reason\x18\x16 \x01(\tR\rfailureReason\x12%\n" +
+	"\x0etools_declared\x18\x17 \x03(\tR\rtoolsDeclared*\x8b\x01\n" +
 	"\x0eEvaluationLane\x12\x1f\n" +
 	"\x1bEVALUATION_LANE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18EVALUATION_LANE_PLATFORM\x10\x01\x12\x1e\n" +
@@ -9736,7 +10259,34 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"2PUBLIC_GRADE_EXPLANATION_CODE_EVIDENCE_UNAVAILABLE\x10\x03\x12-\n" +
 	")PUBLIC_GRADE_EXPLANATION_CODE_UNSUPPORTED\x10\x04\x122\n" +
 	".PUBLIC_GRADE_EXPLANATION_CODE_INVALID_EVIDENCE\x10\x05\x124\n" +
-	"0PUBLIC_GRADE_EXPLANATION_CODE_GRADER_UNAVAILABLE\x10\x06*\xd4\x01\n" +
+	"0PUBLIC_GRADE_EXPLANATION_CODE_GRADER_UNAVAILABLE\x10\x06*\xf6\x01\n" +
+	"\x1aEvaluationTrajectoryPolicy\x12,\n" +
+	"(EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED\x10\x00\x12'\n" +
+	"#EVALUATION_TRAJECTORY_POLICY_ANSWER\x10\x01\x12-\n" +
+	")EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE\x10\x02\x12'\n" +
+	"#EVALUATION_TRAJECTORY_POLICY_GUIDED\x10\x03\x12)\n" +
+	"%EVALUATION_TRAJECTORY_POLICY_GOVERNED\x10\x04*\x85\x05\n" +
+	"\x1bEvaluationTrajectoryOutcome\x12-\n" +
+	")EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED\x10\x00\x12(\n" +
+	"$EVALUATION_TRAJECTORY_OUTCOME_DIRECT\x10\x01\x12+\n" +
+	"'EVALUATION_TRAJECTORY_OUTCOME_RECOVERED\x10\x02\x123\n" +
+	"/EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL\x10\x03\x12.\n" +
+	"*EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL\x10\x04\x12,\n" +
+	"(EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL\x10\x05\x121\n" +
+	"-EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS\x10\x06\x122\n" +
+	".EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE\x10\a\x127\n" +
+	"3EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR\x10\b\x125\n" +
+	"1EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL\x10\t\x120\n" +
+	",EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED\x10\n" +
+	"\x12D\n" +
+	"@EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION\x10\v*\xbe\x02\n" +
+	"\x1cEvaluationHintArgumentSource\x12/\n" +
+	"+EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED\x10\x00\x12*\n" +
+	"&EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT\x10\x01\x12(\n" +
+	"$EVALUATION_HINT_ARGUMENT_SOURCE_SEED\x10\x02\x12-\n" +
+	")EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE\x10\x03\x124\n" +
+	"0EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT\x10\x04\x122\n" +
+	".EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED\x10\x05*\xd4\x01\n" +
 	"\x1aPublicActivityAvailability\x12,\n" +
 	"(PUBLIC_ACTIVITY_AVAILABILITY_UNSPECIFIED\x10\x00\x12)\n" +
 	"%PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED\x10\x01\x12,\n" +
@@ -9888,8 +10438,8 @@ func file_g8e_eval_v1_eval_proto_rawDescGZIP() []byte {
 	return file_g8e_eval_v1_eval_proto_rawDescData
 }
 
-var file_g8e_eval_v1_eval_proto_enumTypes = make([]protoimpl.EnumInfo, 34)
-var file_g8e_eval_v1_eval_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
+var file_g8e_eval_v1_eval_proto_enumTypes = make([]protoimpl.EnumInfo, 37)
+var file_g8e_eval_v1_eval_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
 var file_g8e_eval_v1_eval_proto_goTypes = []any{
 	(EvaluationLane)(0),                           // 0: g8e.eval.v1.EvaluationLane
 	(ModelCampaignRole)(0),                        // 1: g8e.eval.v1.ModelCampaignRole
@@ -9901,324 +10451,337 @@ var file_g8e_eval_v1_eval_proto_goTypes = []any{
 	(EvaluationUsageAvailability)(0),              // 7: g8e.eval.v1.EvaluationUsageAvailability
 	(EvaluationPolicyDecisionOutcome)(0),          // 8: g8e.eval.v1.EvaluationPolicyDecisionOutcome
 	(PublicGradeExplanationCode)(0),               // 9: g8e.eval.v1.PublicGradeExplanationCode
-	(PublicActivityAvailability)(0),               // 10: g8e.eval.v1.PublicActivityAvailability
-	(PublicUnavailableReason)(0),                  // 11: g8e.eval.v1.PublicUnavailableReason
-	(PublicFinishState)(0),                        // 12: g8e.eval.v1.PublicFinishState
-	(PublicEvidenceSource)(0),                     // 13: g8e.eval.v1.PublicEvidenceSource
-	(PublicVerificationProvenance)(0),             // 14: g8e.eval.v1.PublicVerificationProvenance
-	(PublicReceiptStatus)(0),                      // 15: g8e.eval.v1.PublicReceiptStatus
-	(PublicToolScoreDimension)(0),                 // 16: g8e.eval.v1.PublicToolScoreDimension
-	(ProviderHardwareMetricAvailability)(0),       // 17: g8e.eval.v1.ProviderHardwareMetricAvailability
-	(EvaluationGovernancePosture)(0),              // 18: g8e.eval.v1.EvaluationGovernancePosture
-	(EvaluationRuntimeComponent)(0),               // 19: g8e.eval.v1.EvaluationRuntimeComponent
-	(EvaluationAttemptStatus)(0),                  // 20: g8e.eval.v1.EvaluationAttemptStatus
-	(EvaluationObservationSource)(0),              // 21: g8e.eval.v1.EvaluationObservationSource
-	(EvaluationEvidenceAuthority)(0),              // 22: g8e.eval.v1.EvaluationEvidenceAuthority
-	(EvaluationComparator)(0),                     // 23: g8e.eval.v1.EvaluationComparator
-	(EvaluationVerdictStatus)(0),                  // 24: g8e.eval.v1.EvaluationVerdictStatus
-	(EvaluationMetricDirection)(0),                // 25: g8e.eval.v1.EvaluationMetricDirection
-	(EvaluationMissingDataPolicy)(0),              // 26: g8e.eval.v1.EvaluationMissingDataPolicy
-	(EvaluationMetricUnit)(0),                     // 27: g8e.eval.v1.EvaluationMetricUnit
-	(ProviderBoundaryObservationPhase)(0),         // 28: g8e.eval.v1.ProviderBoundaryObservationPhase
-	(ProviderBoundaryObservationAttemptStatus)(0), // 29: g8e.eval.v1.ProviderBoundaryObservationAttemptStatus
-	(ModelManifestVerificationStatus)(0),          // 30: g8e.eval.v1.ModelManifestVerificationStatus
-	(ModelProvenanceObservationPhase)(0),          // 31: g8e.eval.v1.ModelProvenanceObservationPhase
-	(ModelProvenanceObservationAttemptStatus)(0),  // 32: g8e.eval.v1.ModelProvenanceObservationAttemptStatus
-	(EvaluationWitnessPolicy)(0),                  // 33: g8e.eval.v1.EvaluationWitnessPolicy
-	(*EvaluationRuntimeBoundary)(nil),             // 34: g8e.eval.v1.EvaluationRuntimeBoundary
-	(*EvaluationDeploymentIdentity)(nil),          // 35: g8e.eval.v1.EvaluationDeploymentIdentity
-	(*EvaluationValue)(nil),                       // 36: g8e.eval.v1.EvaluationValue
-	(*EvaluationRun)(nil),                         // 37: g8e.eval.v1.EvaluationRun
-	(*EvaluationAttempt)(nil),                     // 38: g8e.eval.v1.EvaluationAttempt
-	(*EvaluationObservation)(nil),                 // 39: g8e.eval.v1.EvaluationObservation
-	(*EvaluationTargetState)(nil),                 // 40: g8e.eval.v1.EvaluationTargetState
-	(*EvaluationAssertion)(nil),                   // 41: g8e.eval.v1.EvaluationAssertion
-	(*EvaluationVerdict)(nil),                     // 42: g8e.eval.v1.EvaluationVerdict
-	(*EvaluationMetric)(nil),                      // 43: g8e.eval.v1.EvaluationMetric
-	(*EvaluationReport)(nil),                      // 44: g8e.eval.v1.EvaluationReport
-	(*ModelCampaignBinding)(nil),                  // 45: g8e.eval.v1.ModelCampaignBinding
-	(*EvaluationCampaignSpec)(nil),                // 46: g8e.eval.v1.EvaluationCampaignSpec
-	(*EvaluationScenarioCatalog)(nil),             // 47: g8e.eval.v1.EvaluationScenarioCatalog
-	(*PublicScenarioCriterion)(nil),               // 48: g8e.eval.v1.PublicScenarioCriterion
-	(*PublicToolScoreDimensionRequirement)(nil),   // 49: g8e.eval.v1.PublicToolScoreDimensionRequirement
-	(*EvaluationScenarioDefinition)(nil),          // 50: g8e.eval.v1.EvaluationScenarioDefinition
-	(*ModelVariant)(nil),                          // 51: g8e.eval.v1.ModelVariant
-	(*ModelCapabilityObservation)(nil),            // 52: g8e.eval.v1.ModelCapabilityObservation
-	(*RoleAssignment)(nil),                        // 53: g8e.eval.v1.RoleAssignment
-	(*HeterogeneousStackDefinition)(nil),          // 54: g8e.eval.v1.HeterogeneousStackDefinition
-	(*EvaluationAssignment)(nil),                  // 55: g8e.eval.v1.EvaluationAssignment
-	(*HomogeneousAssignmentTarget)(nil),           // 56: g8e.eval.v1.HomogeneousAssignmentTarget
-	(*HeterogeneousAssignmentTarget)(nil),         // 57: g8e.eval.v1.HeterogeneousAssignmentTarget
-	(*ProviderBoundaryHardwareSample)(nil),        // 58: g8e.eval.v1.ProviderBoundaryHardwareSample
-	(*ProviderBoundaryObservationWindow)(nil),     // 59: g8e.eval.v1.ProviderBoundaryObservationWindow
-	(*ProviderBoundaryObservationCommand)(nil),    // 60: g8e.eval.v1.ProviderBoundaryObservationCommand
-	(*ProviderBoundaryObservationCompleted)(nil),  // 61: g8e.eval.v1.ProviderBoundaryObservationCompleted
-	(*ModelWeightAttestation)(nil),                // 62: g8e.eval.v1.ModelWeightAttestation
-	(*ModelProvenanceAttestationWindow)(nil),      // 63: g8e.eval.v1.ModelProvenanceAttestationWindow
-	(*ModelProvenanceObservationCommand)(nil),     // 64: g8e.eval.v1.ModelProvenanceObservationCommand
-	(*ModelProvenanceObservationCompleted)(nil),   // 65: g8e.eval.v1.ModelProvenanceObservationCompleted
-	(*ModelInferenceRecord)(nil),                  // 66: g8e.eval.v1.ModelInferenceRecord
-	(*ToolDecisionRecord)(nil),                    // 67: g8e.eval.v1.ToolDecisionRecord
-	(*ToolCallRecord)(nil),                        // 68: g8e.eval.v1.ToolCallRecord
-	(*EscalationRecord)(nil),                      // 69: g8e.eval.v1.EscalationRecord
-	(*HandoffRecord)(nil),                         // 70: g8e.eval.v1.HandoffRecord
-	(*RecoveryRecord)(nil),                        // 71: g8e.eval.v1.RecoveryRecord
-	(*GovernedActionBinding)(nil),                 // 72: g8e.eval.v1.GovernedActionBinding
-	(*DeterministicGrade)(nil),                    // 73: g8e.eval.v1.DeterministicGrade
-	(*SemanticGrade)(nil),                         // 74: g8e.eval.v1.SemanticGrade
-	(*DecomposedScoreRecord)(nil),                 // 75: g8e.eval.v1.DecomposedScoreRecord
-	(*GraderModelCallRecord)(nil),                 // 76: g8e.eval.v1.GraderModelCallRecord
-	(*PolicyDecisionRecord)(nil),                  // 77: g8e.eval.v1.PolicyDecisionRecord
-	(*EvaluationAssignmentResult)(nil),            // 78: g8e.eval.v1.EvaluationAssignmentResult
-	(*CampaignComplianceSourceArtifact)(nil),      // 79: g8e.eval.v1.CampaignComplianceSourceArtifact
-	(*CampaignComplianceSourceInventory)(nil),     // 80: g8e.eval.v1.CampaignComplianceSourceInventory
-	(*EvaluationVerificationReport)(nil),          // 81: g8e.eval.v1.EvaluationVerificationReport
-	(*EvaluationVerifiedPopulationEntry)(nil),     // 82: g8e.eval.v1.EvaluationVerifiedPopulationEntry
-	(*EvaluationVerifiedPopulation)(nil),          // 83: g8e.eval.v1.EvaluationVerifiedPopulation
-	(*PublicCampaignIdentity)(nil),                // 84: g8e.eval.v1.PublicCampaignIdentity
-	(*PublicModelVariantIdentity)(nil),            // 85: g8e.eval.v1.PublicModelVariantIdentity
-	(*PublicAssignmentLifecycleRecord)(nil),       // 86: g8e.eval.v1.PublicAssignmentLifecycleRecord
-	(*PublicModelCallSummary)(nil),                // 87: g8e.eval.v1.PublicModelCallSummary
-	(*PublicScenarioSummary)(nil),                 // 88: g8e.eval.v1.PublicScenarioSummary
-	(*PublicSemanticGradeSummary)(nil),            // 89: g8e.eval.v1.PublicSemanticGradeSummary
-	(*PublicModelActivityRecord)(nil),             // 90: g8e.eval.v1.PublicModelActivityRecord
-	(*PublicToolDecisionActivityRecord)(nil),      // 91: g8e.eval.v1.PublicToolDecisionActivityRecord
-	(*PublicToolCallActivityRecord)(nil),          // 92: g8e.eval.v1.PublicToolCallActivityRecord
-	(*PublicPolicyDecisionActivityRecord)(nil),    // 93: g8e.eval.v1.PublicPolicyDecisionActivityRecord
-	(*PublicGovernedActionActivityRecord)(nil),    // 94: g8e.eval.v1.PublicGovernedActionActivityRecord
-	(*PublicModelActivity)(nil),                   // 95: g8e.eval.v1.PublicModelActivity
-	(*PublicToolDecisionActivity)(nil),            // 96: g8e.eval.v1.PublicToolDecisionActivity
-	(*PublicToolCallActivity)(nil),                // 97: g8e.eval.v1.PublicToolCallActivity
-	(*PublicPolicyDecisionActivity)(nil),          // 98: g8e.eval.v1.PublicPolicyDecisionActivity
-	(*PublicGovernedActionActivity)(nil),          // 99: g8e.eval.v1.PublicGovernedActionActivity
-	(*PublicAssignmentActivitySummary)(nil),       // 100: g8e.eval.v1.PublicAssignmentActivitySummary
-	(*PublicEvidenceBinding)(nil),                 // 101: g8e.eval.v1.PublicEvidenceBinding
-	(*PublicVerificationMetadata)(nil),            // 102: g8e.eval.v1.PublicVerificationMetadata
-	(*PublicAssignmentResultProjection)(nil),      // 103: g8e.eval.v1.PublicAssignmentResultProjection
-	(*v1.VersionedReference)(nil),                 // 104: g8e.compliance.v1.VersionedReference
-	(*v1.ComplianceEvidenceReference)(nil),        // 105: g8e.compliance.v1.ComplianceEvidenceReference
-	(*timestamppb.Timestamp)(nil),                 // 106: google.protobuf.Timestamp
+	(EvaluationTrajectoryPolicy)(0),               // 10: g8e.eval.v1.EvaluationTrajectoryPolicy
+	(EvaluationTrajectoryOutcome)(0),              // 11: g8e.eval.v1.EvaluationTrajectoryOutcome
+	(EvaluationHintArgumentSource)(0),             // 12: g8e.eval.v1.EvaluationHintArgumentSource
+	(PublicActivityAvailability)(0),               // 13: g8e.eval.v1.PublicActivityAvailability
+	(PublicUnavailableReason)(0),                  // 14: g8e.eval.v1.PublicUnavailableReason
+	(PublicFinishState)(0),                        // 15: g8e.eval.v1.PublicFinishState
+	(PublicEvidenceSource)(0),                     // 16: g8e.eval.v1.PublicEvidenceSource
+	(PublicVerificationProvenance)(0),             // 17: g8e.eval.v1.PublicVerificationProvenance
+	(PublicReceiptStatus)(0),                      // 18: g8e.eval.v1.PublicReceiptStatus
+	(PublicToolScoreDimension)(0),                 // 19: g8e.eval.v1.PublicToolScoreDimension
+	(ProviderHardwareMetricAvailability)(0),       // 20: g8e.eval.v1.ProviderHardwareMetricAvailability
+	(EvaluationGovernancePosture)(0),              // 21: g8e.eval.v1.EvaluationGovernancePosture
+	(EvaluationRuntimeComponent)(0),               // 22: g8e.eval.v1.EvaluationRuntimeComponent
+	(EvaluationAttemptStatus)(0),                  // 23: g8e.eval.v1.EvaluationAttemptStatus
+	(EvaluationObservationSource)(0),              // 24: g8e.eval.v1.EvaluationObservationSource
+	(EvaluationEvidenceAuthority)(0),              // 25: g8e.eval.v1.EvaluationEvidenceAuthority
+	(EvaluationComparator)(0),                     // 26: g8e.eval.v1.EvaluationComparator
+	(EvaluationVerdictStatus)(0),                  // 27: g8e.eval.v1.EvaluationVerdictStatus
+	(EvaluationMetricDirection)(0),                // 28: g8e.eval.v1.EvaluationMetricDirection
+	(EvaluationMissingDataPolicy)(0),              // 29: g8e.eval.v1.EvaluationMissingDataPolicy
+	(EvaluationMetricUnit)(0),                     // 30: g8e.eval.v1.EvaluationMetricUnit
+	(ProviderBoundaryObservationPhase)(0),         // 31: g8e.eval.v1.ProviderBoundaryObservationPhase
+	(ProviderBoundaryObservationAttemptStatus)(0), // 32: g8e.eval.v1.ProviderBoundaryObservationAttemptStatus
+	(ModelManifestVerificationStatus)(0),          // 33: g8e.eval.v1.ModelManifestVerificationStatus
+	(ModelProvenanceObservationPhase)(0),          // 34: g8e.eval.v1.ModelProvenanceObservationPhase
+	(ModelProvenanceObservationAttemptStatus)(0),  // 35: g8e.eval.v1.ModelProvenanceObservationAttemptStatus
+	(EvaluationWitnessPolicy)(0),                  // 36: g8e.eval.v1.EvaluationWitnessPolicy
+	(*EvaluationRuntimeBoundary)(nil),             // 37: g8e.eval.v1.EvaluationRuntimeBoundary
+	(*EvaluationDeploymentIdentity)(nil),          // 38: g8e.eval.v1.EvaluationDeploymentIdentity
+	(*EvaluationValue)(nil),                       // 39: g8e.eval.v1.EvaluationValue
+	(*EvaluationRun)(nil),                         // 40: g8e.eval.v1.EvaluationRun
+	(*EvaluationAttempt)(nil),                     // 41: g8e.eval.v1.EvaluationAttempt
+	(*EvaluationObservation)(nil),                 // 42: g8e.eval.v1.EvaluationObservation
+	(*EvaluationTargetState)(nil),                 // 43: g8e.eval.v1.EvaluationTargetState
+	(*EvaluationAssertion)(nil),                   // 44: g8e.eval.v1.EvaluationAssertion
+	(*EvaluationVerdict)(nil),                     // 45: g8e.eval.v1.EvaluationVerdict
+	(*EvaluationMetric)(nil),                      // 46: g8e.eval.v1.EvaluationMetric
+	(*EvaluationReport)(nil),                      // 47: g8e.eval.v1.EvaluationReport
+	(*ModelCampaignBinding)(nil),                  // 48: g8e.eval.v1.ModelCampaignBinding
+	(*EvaluationCampaignSpec)(nil),                // 49: g8e.eval.v1.EvaluationCampaignSpec
+	(*EvaluationScenarioCatalog)(nil),             // 50: g8e.eval.v1.EvaluationScenarioCatalog
+	(*PublicScenarioCriterion)(nil),               // 51: g8e.eval.v1.PublicScenarioCriterion
+	(*PublicToolScoreDimensionRequirement)(nil),   // 52: g8e.eval.v1.PublicToolScoreDimensionRequirement
+	(*PromptHintArgument)(nil),                    // 53: g8e.eval.v1.PromptHintArgument
+	(*PromptHint)(nil),                            // 54: g8e.eval.v1.PromptHint
+	(*EvaluationScenarioDefinition)(nil),          // 55: g8e.eval.v1.EvaluationScenarioDefinition
+	(*ModelVariant)(nil),                          // 56: g8e.eval.v1.ModelVariant
+	(*ModelCapabilityObservation)(nil),            // 57: g8e.eval.v1.ModelCapabilityObservation
+	(*RoleAssignment)(nil),                        // 58: g8e.eval.v1.RoleAssignment
+	(*HeterogeneousStackDefinition)(nil),          // 59: g8e.eval.v1.HeterogeneousStackDefinition
+	(*EvaluationAssignment)(nil),                  // 60: g8e.eval.v1.EvaluationAssignment
+	(*HomogeneousAssignmentTarget)(nil),           // 61: g8e.eval.v1.HomogeneousAssignmentTarget
+	(*HeterogeneousAssignmentTarget)(nil),         // 62: g8e.eval.v1.HeterogeneousAssignmentTarget
+	(*ProviderBoundaryHardwareSample)(nil),        // 63: g8e.eval.v1.ProviderBoundaryHardwareSample
+	(*ProviderBoundaryObservationWindow)(nil),     // 64: g8e.eval.v1.ProviderBoundaryObservationWindow
+	(*ProviderBoundaryObservationCommand)(nil),    // 65: g8e.eval.v1.ProviderBoundaryObservationCommand
+	(*ProviderBoundaryObservationCompleted)(nil),  // 66: g8e.eval.v1.ProviderBoundaryObservationCompleted
+	(*ModelWeightAttestation)(nil),                // 67: g8e.eval.v1.ModelWeightAttestation
+	(*ModelProvenanceAttestationWindow)(nil),      // 68: g8e.eval.v1.ModelProvenanceAttestationWindow
+	(*ModelProvenanceObservationCommand)(nil),     // 69: g8e.eval.v1.ModelProvenanceObservationCommand
+	(*ModelProvenanceObservationCompleted)(nil),   // 70: g8e.eval.v1.ModelProvenanceObservationCompleted
+	(*ModelInferenceRecord)(nil),                  // 71: g8e.eval.v1.ModelInferenceRecord
+	(*ToolDecisionRecord)(nil),                    // 72: g8e.eval.v1.ToolDecisionRecord
+	(*ToolCallRecord)(nil),                        // 73: g8e.eval.v1.ToolCallRecord
+	(*EscalationRecord)(nil),                      // 74: g8e.eval.v1.EscalationRecord
+	(*HandoffRecord)(nil),                         // 75: g8e.eval.v1.HandoffRecord
+	(*RecoveryRecord)(nil),                        // 76: g8e.eval.v1.RecoveryRecord
+	(*GovernedActionBinding)(nil),                 // 77: g8e.eval.v1.GovernedActionBinding
+	(*DeterministicGrade)(nil),                    // 78: g8e.eval.v1.DeterministicGrade
+	(*SemanticGrade)(nil),                         // 79: g8e.eval.v1.SemanticGrade
+	(*DecomposedScoreRecord)(nil),                 // 80: g8e.eval.v1.DecomposedScoreRecord
+	(*GraderModelCallRecord)(nil),                 // 81: g8e.eval.v1.GraderModelCallRecord
+	(*PolicyDecisionRecord)(nil),                  // 82: g8e.eval.v1.PolicyDecisionRecord
+	(*EvaluationAssignmentResult)(nil),            // 83: g8e.eval.v1.EvaluationAssignmentResult
+	(*CampaignComplianceSourceArtifact)(nil),      // 84: g8e.eval.v1.CampaignComplianceSourceArtifact
+	(*CampaignComplianceSourceInventory)(nil),     // 85: g8e.eval.v1.CampaignComplianceSourceInventory
+	(*EvaluationVerificationReport)(nil),          // 86: g8e.eval.v1.EvaluationVerificationReport
+	(*EvaluationVerifiedPopulationEntry)(nil),     // 87: g8e.eval.v1.EvaluationVerifiedPopulationEntry
+	(*EvaluationVerifiedPopulation)(nil),          // 88: g8e.eval.v1.EvaluationVerifiedPopulation
+	(*PublicCampaignIdentity)(nil),                // 89: g8e.eval.v1.PublicCampaignIdentity
+	(*PublicModelVariantIdentity)(nil),            // 90: g8e.eval.v1.PublicModelVariantIdentity
+	(*PublicAssignmentLifecycleRecord)(nil),       // 91: g8e.eval.v1.PublicAssignmentLifecycleRecord
+	(*PublicModelCallSummary)(nil),                // 92: g8e.eval.v1.PublicModelCallSummary
+	(*PublicScenarioSummary)(nil),                 // 93: g8e.eval.v1.PublicScenarioSummary
+	(*PublicSemanticGradeSummary)(nil),            // 94: g8e.eval.v1.PublicSemanticGradeSummary
+	(*PublicModelActivityRecord)(nil),             // 95: g8e.eval.v1.PublicModelActivityRecord
+	(*PublicToolDecisionActivityRecord)(nil),      // 96: g8e.eval.v1.PublicToolDecisionActivityRecord
+	(*PublicToolCallActivityRecord)(nil),          // 97: g8e.eval.v1.PublicToolCallActivityRecord
+	(*PublicPolicyDecisionActivityRecord)(nil),    // 98: g8e.eval.v1.PublicPolicyDecisionActivityRecord
+	(*PublicGovernedActionActivityRecord)(nil),    // 99: g8e.eval.v1.PublicGovernedActionActivityRecord
+	(*PublicModelActivity)(nil),                   // 100: g8e.eval.v1.PublicModelActivity
+	(*PublicToolDecisionActivity)(nil),            // 101: g8e.eval.v1.PublicToolDecisionActivity
+	(*PublicToolCallActivity)(nil),                // 102: g8e.eval.v1.PublicToolCallActivity
+	(*PublicPolicyDecisionActivity)(nil),          // 103: g8e.eval.v1.PublicPolicyDecisionActivity
+	(*PublicGovernedActionActivity)(nil),          // 104: g8e.eval.v1.PublicGovernedActionActivity
+	(*PublicAssignmentActivitySummary)(nil),       // 105: g8e.eval.v1.PublicAssignmentActivitySummary
+	(*PublicEvidenceBinding)(nil),                 // 106: g8e.eval.v1.PublicEvidenceBinding
+	(*PublicVerificationMetadata)(nil),            // 107: g8e.eval.v1.PublicVerificationMetadata
+	(*PublicAssignmentResultProjection)(nil),      // 108: g8e.eval.v1.PublicAssignmentResultProjection
+	(*v1.VersionedReference)(nil),                 // 109: g8e.compliance.v1.VersionedReference
+	(*v1.ComplianceEvidenceReference)(nil),        // 110: g8e.compliance.v1.ComplianceEvidenceReference
+	(*timestamppb.Timestamp)(nil),                 // 111: google.protobuf.Timestamp
 }
 var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
-	19,  // 0: g8e.eval.v1.EvaluationRuntimeBoundary.component:type_name -> g8e.eval.v1.EvaluationRuntimeComponent
-	104, // 1: g8e.eval.v1.EvaluationDeploymentIdentity.topology_ref:type_name -> g8e.compliance.v1.VersionedReference
-	34,  // 2: g8e.eval.v1.EvaluationDeploymentIdentity.runtime_boundaries:type_name -> g8e.eval.v1.EvaluationRuntimeBoundary
-	105, // 3: g8e.eval.v1.EvaluationValue.artifact_reference:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	104, // 4: g8e.eval.v1.EvaluationRun.suite_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35,  // 5: g8e.eval.v1.EvaluationRun.deployment:type_name -> g8e.eval.v1.EvaluationDeploymentIdentity
-	18,  // 6: g8e.eval.v1.EvaluationRun.active_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
+	22,  // 0: g8e.eval.v1.EvaluationRuntimeBoundary.component:type_name -> g8e.eval.v1.EvaluationRuntimeComponent
+	109, // 1: g8e.eval.v1.EvaluationDeploymentIdentity.topology_ref:type_name -> g8e.compliance.v1.VersionedReference
+	37,  // 2: g8e.eval.v1.EvaluationDeploymentIdentity.runtime_boundaries:type_name -> g8e.eval.v1.EvaluationRuntimeBoundary
+	110, // 3: g8e.eval.v1.EvaluationValue.artifact_reference:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	109, // 4: g8e.eval.v1.EvaluationRun.suite_ref:type_name -> g8e.compliance.v1.VersionedReference
+	38,  // 5: g8e.eval.v1.EvaluationRun.deployment:type_name -> g8e.eval.v1.EvaluationDeploymentIdentity
+	21,  // 6: g8e.eval.v1.EvaluationRun.active_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
 	0,   // 7: g8e.eval.v1.EvaluationRun.lane:type_name -> g8e.eval.v1.EvaluationLane
-	106, // 8: g8e.eval.v1.EvaluationRun.started_at:type_name -> google.protobuf.Timestamp
-	106, // 9: g8e.eval.v1.EvaluationRun.completed_at:type_name -> google.protobuf.Timestamp
-	105, // 10: g8e.eval.v1.EvaluationRun.final_verification_report_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	45,  // 11: g8e.eval.v1.EvaluationRun.campaign_binding:type_name -> g8e.eval.v1.ModelCampaignBinding
-	104, // 12: g8e.eval.v1.EvaluationAttempt.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	20,  // 13: g8e.eval.v1.EvaluationAttempt.status:type_name -> g8e.eval.v1.EvaluationAttemptStatus
-	106, // 14: g8e.eval.v1.EvaluationAttempt.started_at:type_name -> google.protobuf.Timestamp
-	106, // 15: g8e.eval.v1.EvaluationAttempt.completed_at:type_name -> google.protobuf.Timestamp
-	104, // 16: g8e.eval.v1.EvaluationObservation.observation_type:type_name -> g8e.compliance.v1.VersionedReference
-	21,  // 17: g8e.eval.v1.EvaluationObservation.source:type_name -> g8e.eval.v1.EvaluationObservationSource
-	106, // 18: g8e.eval.v1.EvaluationObservation.observed_at:type_name -> google.protobuf.Timestamp
-	22,  // 19: g8e.eval.v1.EvaluationObservation.authority:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
-	36,  // 20: g8e.eval.v1.EvaluationObservation.value:type_name -> g8e.eval.v1.EvaluationValue
-	105, // 21: g8e.eval.v1.EvaluationObservation.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	106, // 22: g8e.eval.v1.EvaluationTargetState.observed_at:type_name -> google.protobuf.Timestamp
-	23,  // 23: g8e.eval.v1.EvaluationAssertion.comparator:type_name -> g8e.eval.v1.EvaluationComparator
-	36,  // 24: g8e.eval.v1.EvaluationAssertion.expected:type_name -> g8e.eval.v1.EvaluationValue
-	104, // 25: g8e.eval.v1.EvaluationAssertion.required_observation_types:type_name -> g8e.compliance.v1.VersionedReference
-	22,  // 26: g8e.eval.v1.EvaluationAssertion.required_authorities:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
-	104, // 27: g8e.eval.v1.EvaluationVerdict.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
-	24,  // 28: g8e.eval.v1.EvaluationVerdict.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	105, // 29: g8e.eval.v1.EvaluationVerdict.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	104, // 30: g8e.eval.v1.EvaluationVerdict.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
-	106, // 31: g8e.eval.v1.EvaluationVerdict.evaluated_at:type_name -> google.protobuf.Timestamp
-	27,  // 32: g8e.eval.v1.EvaluationMetric.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
-	25,  // 33: g8e.eval.v1.EvaluationMetric.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
-	104, // 34: g8e.eval.v1.EvaluationMetric.eligible_population_ref:type_name -> g8e.compliance.v1.VersionedReference
-	26,  // 35: g8e.eval.v1.EvaluationMetric.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
-	105, // 36: g8e.eval.v1.EvaluationMetric.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	37,  // 37: g8e.eval.v1.EvaluationReport.run:type_name -> g8e.eval.v1.EvaluationRun
-	38,  // 38: g8e.eval.v1.EvaluationReport.attempts:type_name -> g8e.eval.v1.EvaluationAttempt
-	39,  // 39: g8e.eval.v1.EvaluationReport.observations:type_name -> g8e.eval.v1.EvaluationObservation
-	41,  // 40: g8e.eval.v1.EvaluationReport.assertions:type_name -> g8e.eval.v1.EvaluationAssertion
-	42,  // 41: g8e.eval.v1.EvaluationReport.verdicts:type_name -> g8e.eval.v1.EvaluationVerdict
-	43,  // 42: g8e.eval.v1.EvaluationReport.metrics:type_name -> g8e.eval.v1.EvaluationMetric
-	105, // 43: g8e.eval.v1.EvaluationReport.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	24,  // 44: g8e.eval.v1.EvaluationReport.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	78,  // 45: g8e.eval.v1.EvaluationReport.assignment_results:type_name -> g8e.eval.v1.EvaluationAssignmentResult
-	81,  // 46: g8e.eval.v1.EvaluationReport.campaign_verification_report:type_name -> g8e.eval.v1.EvaluationVerificationReport
-	104, // 47: g8e.eval.v1.ModelCampaignBinding.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
-	104, // 48: g8e.eval.v1.EvaluationCampaignSpec.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
-	51,  // 49: g8e.eval.v1.EvaluationCampaignSpec.model_registry:type_name -> g8e.eval.v1.ModelVariant
-	18,  // 50: g8e.eval.v1.EvaluationCampaignSpec.governance_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
-	104, // 51: g8e.eval.v1.EvaluationScenarioCatalog.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
-	50,  // 52: g8e.eval.v1.EvaluationScenarioCatalog.scenarios:type_name -> g8e.eval.v1.EvaluationScenarioDefinition
+	111, // 8: g8e.eval.v1.EvaluationRun.started_at:type_name -> google.protobuf.Timestamp
+	111, // 9: g8e.eval.v1.EvaluationRun.completed_at:type_name -> google.protobuf.Timestamp
+	110, // 10: g8e.eval.v1.EvaluationRun.final_verification_report_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	48,  // 11: g8e.eval.v1.EvaluationRun.campaign_binding:type_name -> g8e.eval.v1.ModelCampaignBinding
+	109, // 12: g8e.eval.v1.EvaluationAttempt.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	23,  // 13: g8e.eval.v1.EvaluationAttempt.status:type_name -> g8e.eval.v1.EvaluationAttemptStatus
+	111, // 14: g8e.eval.v1.EvaluationAttempt.started_at:type_name -> google.protobuf.Timestamp
+	111, // 15: g8e.eval.v1.EvaluationAttempt.completed_at:type_name -> google.protobuf.Timestamp
+	109, // 16: g8e.eval.v1.EvaluationObservation.observation_type:type_name -> g8e.compliance.v1.VersionedReference
+	24,  // 17: g8e.eval.v1.EvaluationObservation.source:type_name -> g8e.eval.v1.EvaluationObservationSource
+	111, // 18: g8e.eval.v1.EvaluationObservation.observed_at:type_name -> google.protobuf.Timestamp
+	25,  // 19: g8e.eval.v1.EvaluationObservation.authority:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
+	39,  // 20: g8e.eval.v1.EvaluationObservation.value:type_name -> g8e.eval.v1.EvaluationValue
+	110, // 21: g8e.eval.v1.EvaluationObservation.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	111, // 22: g8e.eval.v1.EvaluationTargetState.observed_at:type_name -> google.protobuf.Timestamp
+	26,  // 23: g8e.eval.v1.EvaluationAssertion.comparator:type_name -> g8e.eval.v1.EvaluationComparator
+	39,  // 24: g8e.eval.v1.EvaluationAssertion.expected:type_name -> g8e.eval.v1.EvaluationValue
+	109, // 25: g8e.eval.v1.EvaluationAssertion.required_observation_types:type_name -> g8e.compliance.v1.VersionedReference
+	25,  // 26: g8e.eval.v1.EvaluationAssertion.required_authorities:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
+	109, // 27: g8e.eval.v1.EvaluationVerdict.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
+	27,  // 28: g8e.eval.v1.EvaluationVerdict.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	110, // 29: g8e.eval.v1.EvaluationVerdict.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	109, // 30: g8e.eval.v1.EvaluationVerdict.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	111, // 31: g8e.eval.v1.EvaluationVerdict.evaluated_at:type_name -> google.protobuf.Timestamp
+	30,  // 32: g8e.eval.v1.EvaluationMetric.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
+	28,  // 33: g8e.eval.v1.EvaluationMetric.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
+	109, // 34: g8e.eval.v1.EvaluationMetric.eligible_population_ref:type_name -> g8e.compliance.v1.VersionedReference
+	29,  // 35: g8e.eval.v1.EvaluationMetric.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
+	110, // 36: g8e.eval.v1.EvaluationMetric.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	40,  // 37: g8e.eval.v1.EvaluationReport.run:type_name -> g8e.eval.v1.EvaluationRun
+	41,  // 38: g8e.eval.v1.EvaluationReport.attempts:type_name -> g8e.eval.v1.EvaluationAttempt
+	42,  // 39: g8e.eval.v1.EvaluationReport.observations:type_name -> g8e.eval.v1.EvaluationObservation
+	44,  // 40: g8e.eval.v1.EvaluationReport.assertions:type_name -> g8e.eval.v1.EvaluationAssertion
+	45,  // 41: g8e.eval.v1.EvaluationReport.verdicts:type_name -> g8e.eval.v1.EvaluationVerdict
+	46,  // 42: g8e.eval.v1.EvaluationReport.metrics:type_name -> g8e.eval.v1.EvaluationMetric
+	110, // 43: g8e.eval.v1.EvaluationReport.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	27,  // 44: g8e.eval.v1.EvaluationReport.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	83,  // 45: g8e.eval.v1.EvaluationReport.assignment_results:type_name -> g8e.eval.v1.EvaluationAssignmentResult
+	86,  // 46: g8e.eval.v1.EvaluationReport.campaign_verification_report:type_name -> g8e.eval.v1.EvaluationVerificationReport
+	109, // 47: g8e.eval.v1.ModelCampaignBinding.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	109, // 48: g8e.eval.v1.EvaluationCampaignSpec.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	56,  // 49: g8e.eval.v1.EvaluationCampaignSpec.model_registry:type_name -> g8e.eval.v1.ModelVariant
+	21,  // 50: g8e.eval.v1.EvaluationCampaignSpec.governance_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
+	109, // 51: g8e.eval.v1.EvaluationScenarioCatalog.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	55,  // 52: g8e.eval.v1.EvaluationScenarioCatalog.scenarios:type_name -> g8e.eval.v1.EvaluationScenarioDefinition
 	4,   // 53: g8e.eval.v1.PublicScenarioCriterion.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
-	16,  // 54: g8e.eval.v1.PublicToolScoreDimensionRequirement.dimension:type_name -> g8e.eval.v1.PublicToolScoreDimension
-	2,   // 55: g8e.eval.v1.EvaluationScenarioDefinition.category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
-	4,   // 56: g8e.eval.v1.EvaluationScenarioDefinition.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
-	105, // 57: g8e.eval.v1.EvaluationScenarioDefinition.input_fixture_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	105, // 58: g8e.eval.v1.EvaluationScenarioDefinition.gold_criteria_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	48,  // 59: g8e.eval.v1.EvaluationScenarioDefinition.public_criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
-	49,  // 60: g8e.eval.v1.EvaluationScenarioDefinition.public_tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
-	1,   // 61: g8e.eval.v1.EvaluationScenarioDefinition.eligible_roles:type_name -> g8e.eval.v1.ModelCampaignRole
-	52,  // 62: g8e.eval.v1.ModelVariant.capability_observations:type_name -> g8e.eval.v1.ModelCapabilityObservation
-	5,   // 63: g8e.eval.v1.ModelCapabilityObservation.capability:type_name -> g8e.eval.v1.ModelCapabilityKind
-	24,  // 64: g8e.eval.v1.ModelCapabilityObservation.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	1,   // 65: g8e.eval.v1.RoleAssignment.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	53,  // 66: g8e.eval.v1.HeterogeneousStackDefinition.primary_slot:type_name -> g8e.eval.v1.RoleAssignment
-	53,  // 67: g8e.eval.v1.HeterogeneousStackDefinition.assistant_slot:type_name -> g8e.eval.v1.RoleAssignment
-	53,  // 68: g8e.eval.v1.HeterogeneousStackDefinition.lite_slot:type_name -> g8e.eval.v1.RoleAssignment
-	104, // 69: g8e.eval.v1.EvaluationAssignment.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	0,   // 70: g8e.eval.v1.EvaluationAssignment.lane:type_name -> g8e.eval.v1.EvaluationLane
-	3,   // 71: g8e.eval.v1.EvaluationAssignment.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	106, // 72: g8e.eval.v1.EvaluationAssignment.queued_at:type_name -> google.protobuf.Timestamp
-	106, // 73: g8e.eval.v1.EvaluationAssignment.started_at:type_name -> google.protobuf.Timestamp
-	106, // 74: g8e.eval.v1.EvaluationAssignment.completed_at:type_name -> google.protobuf.Timestamp
-	56,  // 75: g8e.eval.v1.EvaluationAssignment.homogeneous:type_name -> g8e.eval.v1.HomogeneousAssignmentTarget
-	57,  // 76: g8e.eval.v1.EvaluationAssignment.heterogeneous:type_name -> g8e.eval.v1.HeterogeneousAssignmentTarget
-	51,  // 77: g8e.eval.v1.HomogeneousAssignmentTarget.candidate_variant:type_name -> g8e.eval.v1.ModelVariant
-	1,   // 78: g8e.eval.v1.HomogeneousAssignmentTarget.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	54,  // 79: g8e.eval.v1.HeterogeneousAssignmentTarget.stack:type_name -> g8e.eval.v1.HeterogeneousStackDefinition
-	17,  // 80: g8e.eval.v1.ProviderBoundaryHardwareSample.vram_bytes_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
-	17,  // 81: g8e.eval.v1.ProviderBoundaryHardwareSample.gpu_utilization_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
-	17,  // 82: g8e.eval.v1.ProviderBoundaryHardwareSample.temperature_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
-	17,  // 83: g8e.eval.v1.ProviderBoundaryHardwareSample.power_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
-	17,  // 84: g8e.eval.v1.ProviderBoundaryHardwareSample.clock_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
-	17,  // 85: g8e.eval.v1.ProviderBoundaryHardwareSample.host_ram_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
-	58,  // 86: g8e.eval.v1.ProviderBoundaryObservationWindow.samples:type_name -> g8e.eval.v1.ProviderBoundaryHardwareSample
-	28,  // 87: g8e.eval.v1.ProviderBoundaryObservationCommand.phase:type_name -> g8e.eval.v1.ProviderBoundaryObservationPhase
-	29,  // 88: g8e.eval.v1.ProviderBoundaryObservationCommand.attempt_status:type_name -> g8e.eval.v1.ProviderBoundaryObservationAttemptStatus
-	59,  // 89: g8e.eval.v1.ProviderBoundaryObservationCompleted.window:type_name -> g8e.eval.v1.ProviderBoundaryObservationWindow
-	30,  // 90: g8e.eval.v1.ModelProvenanceAttestationWindow.manifest_verification_status:type_name -> g8e.eval.v1.ModelManifestVerificationStatus
-	62,  // 91: g8e.eval.v1.ModelProvenanceAttestationWindow.weight_attestations:type_name -> g8e.eval.v1.ModelWeightAttestation
-	31,  // 92: g8e.eval.v1.ModelProvenanceObservationCommand.phase:type_name -> g8e.eval.v1.ModelProvenanceObservationPhase
-	32,  // 93: g8e.eval.v1.ModelProvenanceObservationCommand.attempt_status:type_name -> g8e.eval.v1.ModelProvenanceObservationAttemptStatus
-	63,  // 94: g8e.eval.v1.ModelProvenanceObservationCompleted.window:type_name -> g8e.eval.v1.ModelProvenanceAttestationWindow
-	1,   // 95: g8e.eval.v1.ModelInferenceRecord.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	51,  // 96: g8e.eval.v1.ModelInferenceRecord.model_variant:type_name -> g8e.eval.v1.ModelVariant
-	7,   // 97: g8e.eval.v1.ModelInferenceRecord.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
-	6,   // 98: g8e.eval.v1.ModelInferenceRecord.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
-	105, // 99: g8e.eval.v1.ModelInferenceRecord.governed_receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	105, // 100: g8e.eval.v1.ModelInferenceRecord.provider_boundary_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	24,  // 101: g8e.eval.v1.ToolDecisionRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	24,  // 102: g8e.eval.v1.ToolCallRecord.schema_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	24,  // 103: g8e.eval.v1.ToolCallRecord.semantic_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	105, // 104: g8e.eval.v1.ToolCallRecord.governed_binding_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	1,   // 105: g8e.eval.v1.EscalationRecord.from_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	1,   // 106: g8e.eval.v1.EscalationRecord.to_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	1,   // 107: g8e.eval.v1.HandoffRecord.from_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	1,   // 108: g8e.eval.v1.HandoffRecord.to_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	24,  // 109: g8e.eval.v1.RecoveryRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	105, // 110: g8e.eval.v1.GovernedActionBinding.receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	105, // 111: g8e.eval.v1.GovernedActionBinding.persistence_attestation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	105, // 112: g8e.eval.v1.GovernedActionBinding.effect_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	24,  // 113: g8e.eval.v1.DeterministicGrade.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	24,  // 114: g8e.eval.v1.SemanticGrade.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	105, // 115: g8e.eval.v1.SemanticGrade.grader_call_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	27,  // 116: g8e.eval.v1.DecomposedScoreRecord.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
-	25,  // 117: g8e.eval.v1.DecomposedScoreRecord.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
-	26,  // 118: g8e.eval.v1.DecomposedScoreRecord.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
-	105, // 119: g8e.eval.v1.GraderModelCallRecord.inference_record_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	8,   // 120: g8e.eval.v1.PolicyDecisionRecord.outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
-	0,   // 121: g8e.eval.v1.EvaluationAssignmentResult.lane:type_name -> g8e.eval.v1.EvaluationLane
-	3,   // 122: g8e.eval.v1.EvaluationAssignmentResult.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	66,  // 123: g8e.eval.v1.EvaluationAssignmentResult.model_inferences:type_name -> g8e.eval.v1.ModelInferenceRecord
-	67,  // 124: g8e.eval.v1.EvaluationAssignmentResult.tool_decisions:type_name -> g8e.eval.v1.ToolDecisionRecord
-	68,  // 125: g8e.eval.v1.EvaluationAssignmentResult.tool_calls:type_name -> g8e.eval.v1.ToolCallRecord
-	69,  // 126: g8e.eval.v1.EvaluationAssignmentResult.escalations:type_name -> g8e.eval.v1.EscalationRecord
-	70,  // 127: g8e.eval.v1.EvaluationAssignmentResult.handoffs:type_name -> g8e.eval.v1.HandoffRecord
-	71,  // 128: g8e.eval.v1.EvaluationAssignmentResult.recoveries:type_name -> g8e.eval.v1.RecoveryRecord
-	72,  // 129: g8e.eval.v1.EvaluationAssignmentResult.governed_actions:type_name -> g8e.eval.v1.GovernedActionBinding
-	73,  // 130: g8e.eval.v1.EvaluationAssignmentResult.deterministic_grades:type_name -> g8e.eval.v1.DeterministicGrade
-	74,  // 131: g8e.eval.v1.EvaluationAssignmentResult.semantic_grades:type_name -> g8e.eval.v1.SemanticGrade
-	75,  // 132: g8e.eval.v1.EvaluationAssignmentResult.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
-	76,  // 133: g8e.eval.v1.EvaluationAssignmentResult.grader_calls:type_name -> g8e.eval.v1.GraderModelCallRecord
-	105, // 134: g8e.eval.v1.EvaluationAssignmentResult.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	106, // 135: g8e.eval.v1.EvaluationAssignmentResult.completed_at:type_name -> google.protobuf.Timestamp
-	77,  // 136: g8e.eval.v1.EvaluationAssignmentResult.policy_decisions:type_name -> g8e.eval.v1.PolicyDecisionRecord
-	33,  // 137: g8e.eval.v1.CampaignComplianceSourceInventory.provider_observation_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
-	33,  // 138: g8e.eval.v1.CampaignComplianceSourceInventory.model_provenance_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
-	79,  // 139: g8e.eval.v1.CampaignComplianceSourceInventory.artifacts:type_name -> g8e.eval.v1.CampaignComplianceSourceArtifact
-	24,  // 140: g8e.eval.v1.EvaluationVerificationReport.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	105, // 141: g8e.eval.v1.EvaluationVerificationReport.report_digest_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	106, // 142: g8e.eval.v1.EvaluationVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
-	33,  // 143: g8e.eval.v1.EvaluationVerificationReport.provider_observation_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
-	33,  // 144: g8e.eval.v1.EvaluationVerificationReport.model_provenance_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
-	3,   // 145: g8e.eval.v1.EvaluationVerifiedPopulationEntry.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	1,   // 146: g8e.eval.v1.EvaluationVerifiedPopulationEntry.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	104, // 147: g8e.eval.v1.EvaluationVerifiedPopulation.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
-	0,   // 148: g8e.eval.v1.EvaluationVerifiedPopulation.lane:type_name -> g8e.eval.v1.EvaluationLane
-	82,  // 149: g8e.eval.v1.EvaluationVerifiedPopulation.entries:type_name -> g8e.eval.v1.EvaluationVerifiedPopulationEntry
-	0,   // 150: g8e.eval.v1.PublicCampaignIdentity.lane:type_name -> g8e.eval.v1.EvaluationLane
-	2,   // 151: g8e.eval.v1.PublicAssignmentLifecycleRecord.scenario_category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
-	0,   // 152: g8e.eval.v1.PublicAssignmentLifecycleRecord.lane:type_name -> g8e.eval.v1.EvaluationLane
-	1,   // 153: g8e.eval.v1.PublicAssignmentLifecycleRecord.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	3,   // 154: g8e.eval.v1.PublicAssignmentLifecycleRecord.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	106, // 155: g8e.eval.v1.PublicAssignmentLifecycleRecord.observed_at:type_name -> google.protobuf.Timestamp
-	1,   // 156: g8e.eval.v1.PublicModelCallSummary.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	7,   // 157: g8e.eval.v1.PublicModelCallSummary.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
-	6,   // 158: g8e.eval.v1.PublicModelCallSummary.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
-	2,   // 159: g8e.eval.v1.PublicScenarioSummary.category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
-	4,   // 160: g8e.eval.v1.PublicScenarioSummary.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
-	48,  // 161: g8e.eval.v1.PublicScenarioSummary.criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
-	49,  // 162: g8e.eval.v1.PublicScenarioSummary.tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
-	24,  // 163: g8e.eval.v1.PublicSemanticGradeSummary.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	4,   // 164: g8e.eval.v1.PublicSemanticGradeSummary.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
-	9,   // 165: g8e.eval.v1.PublicSemanticGradeSummary.explanation_code:type_name -> g8e.eval.v1.PublicGradeExplanationCode
-	1,   // 166: g8e.eval.v1.PublicModelActivityRecord.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	7,   // 167: g8e.eval.v1.PublicModelActivityRecord.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
-	12,  // 168: g8e.eval.v1.PublicModelActivityRecord.finish_state:type_name -> g8e.eval.v1.PublicFinishState
-	6,   // 169: g8e.eval.v1.PublicModelActivityRecord.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
-	24,  // 170: g8e.eval.v1.PublicToolDecisionActivityRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	13,  // 171: g8e.eval.v1.PublicToolDecisionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
-	24,  // 172: g8e.eval.v1.PublicToolCallActivityRecord.execution_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	24,  // 173: g8e.eval.v1.PublicToolCallActivityRecord.semantic_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	13,  // 174: g8e.eval.v1.PublicToolCallActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
-	8,   // 175: g8e.eval.v1.PublicPolicyDecisionActivityRecord.outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
-	13,  // 176: g8e.eval.v1.PublicPolicyDecisionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
-	8,   // 177: g8e.eval.v1.PublicGovernedActionActivityRecord.reported_policy_outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
-	15,  // 178: g8e.eval.v1.PublicGovernedActionActivityRecord.receipt_status:type_name -> g8e.eval.v1.PublicReceiptStatus
-	13,  // 179: g8e.eval.v1.PublicGovernedActionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
-	10,  // 180: g8e.eval.v1.PublicModelActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	11,  // 181: g8e.eval.v1.PublicModelActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	90,  // 182: g8e.eval.v1.PublicModelActivity.records:type_name -> g8e.eval.v1.PublicModelActivityRecord
-	10,  // 183: g8e.eval.v1.PublicToolDecisionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	11,  // 184: g8e.eval.v1.PublicToolDecisionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	91,  // 185: g8e.eval.v1.PublicToolDecisionActivity.records:type_name -> g8e.eval.v1.PublicToolDecisionActivityRecord
-	10,  // 186: g8e.eval.v1.PublicToolCallActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	11,  // 187: g8e.eval.v1.PublicToolCallActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	92,  // 188: g8e.eval.v1.PublicToolCallActivity.records:type_name -> g8e.eval.v1.PublicToolCallActivityRecord
-	10,  // 189: g8e.eval.v1.PublicPolicyDecisionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	11,  // 190: g8e.eval.v1.PublicPolicyDecisionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	93,  // 191: g8e.eval.v1.PublicPolicyDecisionActivity.records:type_name -> g8e.eval.v1.PublicPolicyDecisionActivityRecord
-	10,  // 192: g8e.eval.v1.PublicGovernedActionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
-	11,  // 193: g8e.eval.v1.PublicGovernedActionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
-	94,  // 194: g8e.eval.v1.PublicGovernedActionActivity.records:type_name -> g8e.eval.v1.PublicGovernedActionActivityRecord
-	95,  // 195: g8e.eval.v1.PublicAssignmentActivitySummary.model_activity:type_name -> g8e.eval.v1.PublicModelActivity
-	96,  // 196: g8e.eval.v1.PublicAssignmentActivitySummary.tool_decisions:type_name -> g8e.eval.v1.PublicToolDecisionActivity
-	97,  // 197: g8e.eval.v1.PublicAssignmentActivitySummary.tool_calls:type_name -> g8e.eval.v1.PublicToolCallActivity
-	98,  // 198: g8e.eval.v1.PublicAssignmentActivitySummary.policy_decisions:type_name -> g8e.eval.v1.PublicPolicyDecisionActivity
-	99,  // 199: g8e.eval.v1.PublicAssignmentActivitySummary.governed_actions:type_name -> g8e.eval.v1.PublicGovernedActionActivity
-	14,  // 200: g8e.eval.v1.PublicVerificationMetadata.provenance:type_name -> g8e.eval.v1.PublicVerificationProvenance
-	24,  // 201: g8e.eval.v1.PublicVerificationMetadata.verifier_state:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	2,   // 202: g8e.eval.v1.PublicAssignmentResultProjection.scenario_category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
-	0,   // 203: g8e.eval.v1.PublicAssignmentResultProjection.lane:type_name -> g8e.eval.v1.EvaluationLane
-	1,   // 204: g8e.eval.v1.PublicAssignmentResultProjection.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
-	3,   // 205: g8e.eval.v1.PublicAssignmentResultProjection.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
-	24,  // 206: g8e.eval.v1.PublicAssignmentResultProjection.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	75,  // 207: g8e.eval.v1.PublicAssignmentResultProjection.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
-	106, // 208: g8e.eval.v1.PublicAssignmentResultProjection.completed_at:type_name -> google.protobuf.Timestamp
-	88,  // 209: g8e.eval.v1.PublicAssignmentResultProjection.scenario_summary:type_name -> g8e.eval.v1.PublicScenarioSummary
-	89,  // 210: g8e.eval.v1.PublicAssignmentResultProjection.semantic_grade_summaries:type_name -> g8e.eval.v1.PublicSemanticGradeSummary
-	100, // 211: g8e.eval.v1.PublicAssignmentResultProjection.activity_summary:type_name -> g8e.eval.v1.PublicAssignmentActivitySummary
-	101, // 212: g8e.eval.v1.PublicAssignmentResultProjection.evidence_bindings:type_name -> g8e.eval.v1.PublicEvidenceBinding
-	102, // 213: g8e.eval.v1.PublicAssignmentResultProjection.verification_metadata:type_name -> g8e.eval.v1.PublicVerificationMetadata
-	214, // [214:214] is the sub-list for method output_type
-	214, // [214:214] is the sub-list for method input_type
-	214, // [214:214] is the sub-list for extension type_name
-	214, // [214:214] is the sub-list for extension extendee
-	0,   // [0:214] is the sub-list for field type_name
+	19,  // 54: g8e.eval.v1.PublicToolScoreDimensionRequirement.dimension:type_name -> g8e.eval.v1.PublicToolScoreDimension
+	12,  // 55: g8e.eval.v1.PromptHintArgument.source:type_name -> g8e.eval.v1.EvaluationHintArgumentSource
+	53,  // 56: g8e.eval.v1.PromptHint.arguments:type_name -> g8e.eval.v1.PromptHintArgument
+	2,   // 57: g8e.eval.v1.EvaluationScenarioDefinition.category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
+	4,   // 58: g8e.eval.v1.EvaluationScenarioDefinition.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
+	110, // 59: g8e.eval.v1.EvaluationScenarioDefinition.input_fixture_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	110, // 60: g8e.eval.v1.EvaluationScenarioDefinition.gold_criteria_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	51,  // 61: g8e.eval.v1.EvaluationScenarioDefinition.public_criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
+	52,  // 62: g8e.eval.v1.EvaluationScenarioDefinition.public_tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
+	1,   // 63: g8e.eval.v1.EvaluationScenarioDefinition.eligible_roles:type_name -> g8e.eval.v1.ModelCampaignRole
+	10,  // 64: g8e.eval.v1.EvaluationScenarioDefinition.trajectory_policy:type_name -> g8e.eval.v1.EvaluationTrajectoryPolicy
+	54,  // 65: g8e.eval.v1.EvaluationScenarioDefinition.prompt_hint:type_name -> g8e.eval.v1.PromptHint
+	57,  // 66: g8e.eval.v1.ModelVariant.capability_observations:type_name -> g8e.eval.v1.ModelCapabilityObservation
+	5,   // 67: g8e.eval.v1.ModelCapabilityObservation.capability:type_name -> g8e.eval.v1.ModelCapabilityKind
+	27,  // 68: g8e.eval.v1.ModelCapabilityObservation.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	1,   // 69: g8e.eval.v1.RoleAssignment.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	58,  // 70: g8e.eval.v1.HeterogeneousStackDefinition.primary_slot:type_name -> g8e.eval.v1.RoleAssignment
+	58,  // 71: g8e.eval.v1.HeterogeneousStackDefinition.assistant_slot:type_name -> g8e.eval.v1.RoleAssignment
+	58,  // 72: g8e.eval.v1.HeterogeneousStackDefinition.lite_slot:type_name -> g8e.eval.v1.RoleAssignment
+	109, // 73: g8e.eval.v1.EvaluationAssignment.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	0,   // 74: g8e.eval.v1.EvaluationAssignment.lane:type_name -> g8e.eval.v1.EvaluationLane
+	3,   // 75: g8e.eval.v1.EvaluationAssignment.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
+	111, // 76: g8e.eval.v1.EvaluationAssignment.queued_at:type_name -> google.protobuf.Timestamp
+	111, // 77: g8e.eval.v1.EvaluationAssignment.started_at:type_name -> google.protobuf.Timestamp
+	111, // 78: g8e.eval.v1.EvaluationAssignment.completed_at:type_name -> google.protobuf.Timestamp
+	61,  // 79: g8e.eval.v1.EvaluationAssignment.homogeneous:type_name -> g8e.eval.v1.HomogeneousAssignmentTarget
+	62,  // 80: g8e.eval.v1.EvaluationAssignment.heterogeneous:type_name -> g8e.eval.v1.HeterogeneousAssignmentTarget
+	56,  // 81: g8e.eval.v1.HomogeneousAssignmentTarget.candidate_variant:type_name -> g8e.eval.v1.ModelVariant
+	1,   // 82: g8e.eval.v1.HomogeneousAssignmentTarget.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	59,  // 83: g8e.eval.v1.HeterogeneousAssignmentTarget.stack:type_name -> g8e.eval.v1.HeterogeneousStackDefinition
+	20,  // 84: g8e.eval.v1.ProviderBoundaryHardwareSample.vram_bytes_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
+	20,  // 85: g8e.eval.v1.ProviderBoundaryHardwareSample.gpu_utilization_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
+	20,  // 86: g8e.eval.v1.ProviderBoundaryHardwareSample.temperature_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
+	20,  // 87: g8e.eval.v1.ProviderBoundaryHardwareSample.power_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
+	20,  // 88: g8e.eval.v1.ProviderBoundaryHardwareSample.clock_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
+	20,  // 89: g8e.eval.v1.ProviderBoundaryHardwareSample.host_ram_availability:type_name -> g8e.eval.v1.ProviderHardwareMetricAvailability
+	63,  // 90: g8e.eval.v1.ProviderBoundaryObservationWindow.samples:type_name -> g8e.eval.v1.ProviderBoundaryHardwareSample
+	31,  // 91: g8e.eval.v1.ProviderBoundaryObservationCommand.phase:type_name -> g8e.eval.v1.ProviderBoundaryObservationPhase
+	32,  // 92: g8e.eval.v1.ProviderBoundaryObservationCommand.attempt_status:type_name -> g8e.eval.v1.ProviderBoundaryObservationAttemptStatus
+	64,  // 93: g8e.eval.v1.ProviderBoundaryObservationCompleted.window:type_name -> g8e.eval.v1.ProviderBoundaryObservationWindow
+	33,  // 94: g8e.eval.v1.ModelProvenanceAttestationWindow.manifest_verification_status:type_name -> g8e.eval.v1.ModelManifestVerificationStatus
+	67,  // 95: g8e.eval.v1.ModelProvenanceAttestationWindow.weight_attestations:type_name -> g8e.eval.v1.ModelWeightAttestation
+	34,  // 96: g8e.eval.v1.ModelProvenanceObservationCommand.phase:type_name -> g8e.eval.v1.ModelProvenanceObservationPhase
+	35,  // 97: g8e.eval.v1.ModelProvenanceObservationCommand.attempt_status:type_name -> g8e.eval.v1.ModelProvenanceObservationAttemptStatus
+	68,  // 98: g8e.eval.v1.ModelProvenanceObservationCompleted.window:type_name -> g8e.eval.v1.ModelProvenanceAttestationWindow
+	1,   // 99: g8e.eval.v1.ModelInferenceRecord.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	56,  // 100: g8e.eval.v1.ModelInferenceRecord.model_variant:type_name -> g8e.eval.v1.ModelVariant
+	7,   // 101: g8e.eval.v1.ModelInferenceRecord.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
+	6,   // 102: g8e.eval.v1.ModelInferenceRecord.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
+	110, // 103: g8e.eval.v1.ModelInferenceRecord.governed_receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	110, // 104: g8e.eval.v1.ModelInferenceRecord.provider_boundary_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	27,  // 105: g8e.eval.v1.ToolDecisionRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	27,  // 106: g8e.eval.v1.ToolCallRecord.schema_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	27,  // 107: g8e.eval.v1.ToolCallRecord.semantic_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	110, // 108: g8e.eval.v1.ToolCallRecord.governed_binding_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	1,   // 109: g8e.eval.v1.EscalationRecord.from_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	1,   // 110: g8e.eval.v1.EscalationRecord.to_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	1,   // 111: g8e.eval.v1.HandoffRecord.from_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	1,   // 112: g8e.eval.v1.HandoffRecord.to_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	27,  // 113: g8e.eval.v1.RecoveryRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	110, // 114: g8e.eval.v1.GovernedActionBinding.receipt_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	110, // 115: g8e.eval.v1.GovernedActionBinding.persistence_attestation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	110, // 116: g8e.eval.v1.GovernedActionBinding.effect_observation_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	27,  // 117: g8e.eval.v1.DeterministicGrade.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	27,  // 118: g8e.eval.v1.SemanticGrade.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	110, // 119: g8e.eval.v1.SemanticGrade.grader_call_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	30,  // 120: g8e.eval.v1.DecomposedScoreRecord.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
+	28,  // 121: g8e.eval.v1.DecomposedScoreRecord.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
+	29,  // 122: g8e.eval.v1.DecomposedScoreRecord.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
+	110, // 123: g8e.eval.v1.GraderModelCallRecord.inference_record_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	8,   // 124: g8e.eval.v1.PolicyDecisionRecord.outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
+	0,   // 125: g8e.eval.v1.EvaluationAssignmentResult.lane:type_name -> g8e.eval.v1.EvaluationLane
+	3,   // 126: g8e.eval.v1.EvaluationAssignmentResult.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
+	71,  // 127: g8e.eval.v1.EvaluationAssignmentResult.model_inferences:type_name -> g8e.eval.v1.ModelInferenceRecord
+	72,  // 128: g8e.eval.v1.EvaluationAssignmentResult.tool_decisions:type_name -> g8e.eval.v1.ToolDecisionRecord
+	73,  // 129: g8e.eval.v1.EvaluationAssignmentResult.tool_calls:type_name -> g8e.eval.v1.ToolCallRecord
+	74,  // 130: g8e.eval.v1.EvaluationAssignmentResult.escalations:type_name -> g8e.eval.v1.EscalationRecord
+	75,  // 131: g8e.eval.v1.EvaluationAssignmentResult.handoffs:type_name -> g8e.eval.v1.HandoffRecord
+	76,  // 132: g8e.eval.v1.EvaluationAssignmentResult.recoveries:type_name -> g8e.eval.v1.RecoveryRecord
+	77,  // 133: g8e.eval.v1.EvaluationAssignmentResult.governed_actions:type_name -> g8e.eval.v1.GovernedActionBinding
+	78,  // 134: g8e.eval.v1.EvaluationAssignmentResult.deterministic_grades:type_name -> g8e.eval.v1.DeterministicGrade
+	79,  // 135: g8e.eval.v1.EvaluationAssignmentResult.semantic_grades:type_name -> g8e.eval.v1.SemanticGrade
+	80,  // 136: g8e.eval.v1.EvaluationAssignmentResult.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
+	81,  // 137: g8e.eval.v1.EvaluationAssignmentResult.grader_calls:type_name -> g8e.eval.v1.GraderModelCallRecord
+	110, // 138: g8e.eval.v1.EvaluationAssignmentResult.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	111, // 139: g8e.eval.v1.EvaluationAssignmentResult.completed_at:type_name -> google.protobuf.Timestamp
+	82,  // 140: g8e.eval.v1.EvaluationAssignmentResult.policy_decisions:type_name -> g8e.eval.v1.PolicyDecisionRecord
+	11,  // 141: g8e.eval.v1.EvaluationAssignmentResult.trajectory_outcome:type_name -> g8e.eval.v1.EvaluationTrajectoryOutcome
+	36,  // 142: g8e.eval.v1.CampaignComplianceSourceInventory.provider_observation_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
+	36,  // 143: g8e.eval.v1.CampaignComplianceSourceInventory.model_provenance_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
+	84,  // 144: g8e.eval.v1.CampaignComplianceSourceInventory.artifacts:type_name -> g8e.eval.v1.CampaignComplianceSourceArtifact
+	27,  // 145: g8e.eval.v1.EvaluationVerificationReport.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	110, // 146: g8e.eval.v1.EvaluationVerificationReport.report_digest_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	111, // 147: g8e.eval.v1.EvaluationVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
+	36,  // 148: g8e.eval.v1.EvaluationVerificationReport.provider_observation_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
+	36,  // 149: g8e.eval.v1.EvaluationVerificationReport.model_provenance_policy:type_name -> g8e.eval.v1.EvaluationWitnessPolicy
+	3,   // 150: g8e.eval.v1.EvaluationVerifiedPopulationEntry.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
+	1,   // 151: g8e.eval.v1.EvaluationVerifiedPopulationEntry.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	109, // 152: g8e.eval.v1.EvaluationVerifiedPopulation.catalog_ref:type_name -> g8e.compliance.v1.VersionedReference
+	0,   // 153: g8e.eval.v1.EvaluationVerifiedPopulation.lane:type_name -> g8e.eval.v1.EvaluationLane
+	87,  // 154: g8e.eval.v1.EvaluationVerifiedPopulation.entries:type_name -> g8e.eval.v1.EvaluationVerifiedPopulationEntry
+	0,   // 155: g8e.eval.v1.PublicCampaignIdentity.lane:type_name -> g8e.eval.v1.EvaluationLane
+	2,   // 156: g8e.eval.v1.PublicAssignmentLifecycleRecord.scenario_category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
+	0,   // 157: g8e.eval.v1.PublicAssignmentLifecycleRecord.lane:type_name -> g8e.eval.v1.EvaluationLane
+	1,   // 158: g8e.eval.v1.PublicAssignmentLifecycleRecord.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	3,   // 159: g8e.eval.v1.PublicAssignmentLifecycleRecord.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
+	111, // 160: g8e.eval.v1.PublicAssignmentLifecycleRecord.observed_at:type_name -> google.protobuf.Timestamp
+	1,   // 161: g8e.eval.v1.PublicModelCallSummary.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	7,   // 162: g8e.eval.v1.PublicModelCallSummary.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
+	6,   // 163: g8e.eval.v1.PublicModelCallSummary.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
+	2,   // 164: g8e.eval.v1.PublicScenarioSummary.category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
+	4,   // 165: g8e.eval.v1.PublicScenarioSummary.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
+	51,  // 166: g8e.eval.v1.PublicScenarioSummary.criteria:type_name -> g8e.eval.v1.PublicScenarioCriterion
+	52,  // 167: g8e.eval.v1.PublicScenarioSummary.tool_score_dimensions:type_name -> g8e.eval.v1.PublicToolScoreDimensionRequirement
+	10,  // 168: g8e.eval.v1.PublicScenarioSummary.trajectory_policy:type_name -> g8e.eval.v1.EvaluationTrajectoryPolicy
+	54,  // 169: g8e.eval.v1.PublicScenarioSummary.prompt_hint:type_name -> g8e.eval.v1.PromptHint
+	27,  // 170: g8e.eval.v1.PublicSemanticGradeSummary.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	4,   // 171: g8e.eval.v1.PublicSemanticGradeSummary.grading_method:type_name -> g8e.eval.v1.EvaluationGradingMethod
+	9,   // 172: g8e.eval.v1.PublicSemanticGradeSummary.explanation_code:type_name -> g8e.eval.v1.PublicGradeExplanationCode
+	1,   // 173: g8e.eval.v1.PublicModelActivityRecord.model_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	7,   // 174: g8e.eval.v1.PublicModelActivityRecord.usage_availability:type_name -> g8e.eval.v1.EvaluationUsageAvailability
+	15,  // 175: g8e.eval.v1.PublicModelActivityRecord.finish_state:type_name -> g8e.eval.v1.PublicFinishState
+	6,   // 176: g8e.eval.v1.PublicModelActivityRecord.load_state:type_name -> g8e.eval.v1.EvaluationLoadState
+	27,  // 177: g8e.eval.v1.PublicToolDecisionActivityRecord.outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	16,  // 178: g8e.eval.v1.PublicToolDecisionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
+	27,  // 179: g8e.eval.v1.PublicToolCallActivityRecord.execution_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	27,  // 180: g8e.eval.v1.PublicToolCallActivityRecord.semantic_outcome:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	16,  // 181: g8e.eval.v1.PublicToolCallActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
+	8,   // 182: g8e.eval.v1.PublicPolicyDecisionActivityRecord.outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
+	16,  // 183: g8e.eval.v1.PublicPolicyDecisionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
+	8,   // 184: g8e.eval.v1.PublicGovernedActionActivityRecord.reported_policy_outcome:type_name -> g8e.eval.v1.EvaluationPolicyDecisionOutcome
+	18,  // 185: g8e.eval.v1.PublicGovernedActionActivityRecord.receipt_status:type_name -> g8e.eval.v1.PublicReceiptStatus
+	16,  // 186: g8e.eval.v1.PublicGovernedActionActivityRecord.evidence_source:type_name -> g8e.eval.v1.PublicEvidenceSource
+	13,  // 187: g8e.eval.v1.PublicModelActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	14,  // 188: g8e.eval.v1.PublicModelActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	95,  // 189: g8e.eval.v1.PublicModelActivity.records:type_name -> g8e.eval.v1.PublicModelActivityRecord
+	13,  // 190: g8e.eval.v1.PublicToolDecisionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	14,  // 191: g8e.eval.v1.PublicToolDecisionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	96,  // 192: g8e.eval.v1.PublicToolDecisionActivity.records:type_name -> g8e.eval.v1.PublicToolDecisionActivityRecord
+	13,  // 193: g8e.eval.v1.PublicToolCallActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	14,  // 194: g8e.eval.v1.PublicToolCallActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	97,  // 195: g8e.eval.v1.PublicToolCallActivity.records:type_name -> g8e.eval.v1.PublicToolCallActivityRecord
+	13,  // 196: g8e.eval.v1.PublicPolicyDecisionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	14,  // 197: g8e.eval.v1.PublicPolicyDecisionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	98,  // 198: g8e.eval.v1.PublicPolicyDecisionActivity.records:type_name -> g8e.eval.v1.PublicPolicyDecisionActivityRecord
+	13,  // 199: g8e.eval.v1.PublicGovernedActionActivity.availability:type_name -> g8e.eval.v1.PublicActivityAvailability
+	14,  // 200: g8e.eval.v1.PublicGovernedActionActivity.unavailable_reason:type_name -> g8e.eval.v1.PublicUnavailableReason
+	99,  // 201: g8e.eval.v1.PublicGovernedActionActivity.records:type_name -> g8e.eval.v1.PublicGovernedActionActivityRecord
+	100, // 202: g8e.eval.v1.PublicAssignmentActivitySummary.model_activity:type_name -> g8e.eval.v1.PublicModelActivity
+	101, // 203: g8e.eval.v1.PublicAssignmentActivitySummary.tool_decisions:type_name -> g8e.eval.v1.PublicToolDecisionActivity
+	102, // 204: g8e.eval.v1.PublicAssignmentActivitySummary.tool_calls:type_name -> g8e.eval.v1.PublicToolCallActivity
+	103, // 205: g8e.eval.v1.PublicAssignmentActivitySummary.policy_decisions:type_name -> g8e.eval.v1.PublicPolicyDecisionActivity
+	104, // 206: g8e.eval.v1.PublicAssignmentActivitySummary.governed_actions:type_name -> g8e.eval.v1.PublicGovernedActionActivity
+	17,  // 207: g8e.eval.v1.PublicVerificationMetadata.provenance:type_name -> g8e.eval.v1.PublicVerificationProvenance
+	27,  // 208: g8e.eval.v1.PublicVerificationMetadata.verifier_state:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	2,   // 209: g8e.eval.v1.PublicAssignmentResultProjection.scenario_category:type_name -> g8e.eval.v1.EvaluationScenarioCategory
+	0,   // 210: g8e.eval.v1.PublicAssignmentResultProjection.lane:type_name -> g8e.eval.v1.EvaluationLane
+	1,   // 211: g8e.eval.v1.PublicAssignmentResultProjection.designated_role:type_name -> g8e.eval.v1.ModelCampaignRole
+	3,   // 212: g8e.eval.v1.PublicAssignmentResultProjection.lifecycle_status:type_name -> g8e.eval.v1.EvaluationAssignmentLifecycleStatus
+	27,  // 213: g8e.eval.v1.PublicAssignmentResultProjection.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	80,  // 214: g8e.eval.v1.PublicAssignmentResultProjection.decomposed_scores:type_name -> g8e.eval.v1.DecomposedScoreRecord
+	111, // 215: g8e.eval.v1.PublicAssignmentResultProjection.completed_at:type_name -> google.protobuf.Timestamp
+	93,  // 216: g8e.eval.v1.PublicAssignmentResultProjection.scenario_summary:type_name -> g8e.eval.v1.PublicScenarioSummary
+	94,  // 217: g8e.eval.v1.PublicAssignmentResultProjection.semantic_grade_summaries:type_name -> g8e.eval.v1.PublicSemanticGradeSummary
+	105, // 218: g8e.eval.v1.PublicAssignmentResultProjection.activity_summary:type_name -> g8e.eval.v1.PublicAssignmentActivitySummary
+	106, // 219: g8e.eval.v1.PublicAssignmentResultProjection.evidence_bindings:type_name -> g8e.eval.v1.PublicEvidenceBinding
+	107, // 220: g8e.eval.v1.PublicAssignmentResultProjection.verification_metadata:type_name -> g8e.eval.v1.PublicVerificationMetadata
+	11,  // 221: g8e.eval.v1.PublicAssignmentResultProjection.trajectory_outcome:type_name -> g8e.eval.v1.EvaluationTrajectoryOutcome
+	222, // [222:222] is the sub-list for method output_type
+	222, // [222:222] is the sub-list for method input_type
+	222, // [222:222] is the sub-list for extension type_name
+	222, // [222:222] is the sub-list for extension extendee
+	0,   // [0:222] is the sub-list for field type_name
 }
 
 func init() { file_g8e_eval_v1_eval_proto_init() }
@@ -10232,20 +10795,20 @@ func file_g8e_eval_v1_eval_proto_init() {
 		(*EvaluationValue_StringValue)(nil),
 		(*EvaluationValue_ArtifactReference)(nil),
 	}
-	file_g8e_eval_v1_eval_proto_msgTypes[21].OneofWrappers = []any{
+	file_g8e_eval_v1_eval_proto_msgTypes[23].OneofWrappers = []any{
 		(*EvaluationAssignment_Homogeneous)(nil),
 		(*EvaluationAssignment_Heterogeneous)(nil),
 	}
-	file_g8e_eval_v1_eval_proto_msgTypes[32].OneofWrappers = []any{}
-	file_g8e_eval_v1_eval_proto_msgTypes[44].OneofWrappers = []any{}
-	file_g8e_eval_v1_eval_proto_msgTypes[56].OneofWrappers = []any{}
+	file_g8e_eval_v1_eval_proto_msgTypes[34].OneofWrappers = []any{}
+	file_g8e_eval_v1_eval_proto_msgTypes[46].OneofWrappers = []any{}
+	file_g8e_eval_v1_eval_proto_msgTypes[58].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_eval_v1_eval_proto_rawDesc), len(file_g8e_eval_v1_eval_proto_rawDesc)),
-			NumEnums:      34,
-			NumMessages:   70,
+			NumEnums:      37,
+			NumMessages:   72,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

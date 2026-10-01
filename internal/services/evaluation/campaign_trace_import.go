@@ -32,6 +32,30 @@ func ValidateHomogeneousCampaignTrace(req ChatProbeRequest, trace EvaluationTrac
 	return validateHomogeneousRoleTrace(trace, req.DesignatedModelRole, modelCalls)
 }
 
+// workspaceFromTrace extracts the ScenarioWorkspace from a trace's evaluation_context.
+func workspaceFromTrace(trace EvaluationTrace) *ScenarioWorkspace {
+	if len(trace) == 0 {
+		return nil
+	}
+	evalCtx, ok := evaluationTrace(trace["evaluation_context"])
+	if !ok {
+		return nil
+	}
+	wsData, ok := evaluationTrace(evalCtx["workspace"])
+	if !ok {
+		return nil
+	}
+	root, _ := wsData["root"].(string)
+	opWd, _ := wsData["operator_working_directory"].(string)
+	if root == "" || opWd == "" {
+		return nil
+	}
+	return &ScenarioWorkspace{
+		Root:                     root,
+		OperatorWorkingDirectory: opWd,
+	}
+}
+
 // ImportAssignmentResultFromTrace materializes one terminal assignment result
 // from a validated g8ee trace and optional content-addressed trace evidence.
 func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace EvaluationTrace, traceEvidence *compliancev1.ComplianceEvidenceReference, now time.Time, newID func(string) string) (*evalv1.EvaluationAssignmentResult, error) {
@@ -44,12 +68,13 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace Evalu
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	ws := workspaceFromTrace(trace)
 	probeReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{
 		GradingMethod:    req.GradingMethod,
 		ScenarioGold:     req.ScenarioGold,
 		ScenarioTools:    req.ScenarioTools,
 		RequiredConcepts: req.RequiredConcepts,
-	})
+	}, ws)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +123,10 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace Evalu
 		GovernedActionsCaptured:  traceFieldCaptured(trace, "governed_actions"),
 		PolicyDecisionsCaptured:  traceFieldCaptured(trace, "policy_decisions"),
 		ScoredInferenceSpanNanos: scoredSpan,
+		TrajectoryOutcome:        grading.Trajectory.Outcome,
+		GuidedRetryCount:         grading.Trajectory.GuidedRetryCount,
+		FailureReason:            grading.Trajectory.FailureReason,
+		PublicFailureReason:      grading.Trajectory.PublicFailureReason,
 		CompletedAt:              timestamppb.New(now),
 	}
 	if traceEvidence != nil {
@@ -179,6 +208,9 @@ func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (
 		CriterionId: "role-invoked",
 		Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		Detail:      "designated model role was not invoked",
+	}
+	if status == "failed" && trace["provider_tool_rejection"] != nil {
+		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, grade
 	}
 	modelCalls, _ := trace["model_calls"].([]any)
 	// A failed trace with zero model calls never reached governed inference — that
@@ -266,6 +298,14 @@ func toolCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace Eva
 		if callID == "" {
 			callID = newID("tool-call")
 		}
+		var loopTurn uint32
+		if rawTurn, present := call["loop_turn"]; present && rawTurn != nil {
+			if converted, err := uint32Value(rawTurn); err == nil {
+				loopTurn = converted
+			}
+		}
+		errType := stringValue(call["error_type"])
+		guidanceShown := stringValue(call["error"]) != "" || stringValue(call["suggestion"]) != ""
 		record := &evalv1.ToolCallRecord{
 			CallId:          callID,
 			AssignmentId:    assignment.GetAssignmentId(),
@@ -273,6 +313,9 @@ func toolCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace Eva
 			ArgumentsHash:   stringValue(call["arguments_hash"]),
 			SchemaOutcome:   toolCallOutcome(boolValue(call["success"])),
 			SemanticOutcome: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
+			LoopTurn:        loopTurn,
+			ErrorType:       errType,
+			GuidanceShown:   guidanceShown,
 		}
 		if executionID := stringValue(call["execution_id"]); executionID != "" && boolValue(call["is_operator_tool"]) {
 			record.GovernedBindingRef = &compliancev1.ComplianceEvidenceReference{
@@ -423,6 +466,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 	records := make([]*evalv1.ModelInferenceRecord, 0, len(modelCalls))
 	var monotonicStarts []uint64
 	var monotonicEnds []uint64
+	scoredCallsCount := 0
 	for _, rawCall := range modelCalls {
 		call, ok := evaluationTrace(rawCall)
 		if !ok {
@@ -454,6 +498,19 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			PrivacyAttested:     true,
 			UsageAvailability:   evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE,
 			FinishReason:        stringValue(call["finish_reason"]),
+		}
+		if rawTools, present := call["tools_declared"]; present && rawTools != nil {
+			record.ToolsDeclaredReported = true
+			if toolList, ok := rawTools.([]any); ok {
+				record.ToolsDeclared = make([]string, 0, len(toolList))
+				for _, t := range toolList {
+					if s, ok := t.(string); ok {
+						record.ToolsDeclared = append(record.ToolsDeclared, s)
+					}
+				}
+			} else if strList, ok := rawTools.([]string); ok {
+				record.ToolsDeclared = append([]string(nil), strList...)
+			}
 		}
 		if reported, present := call["usage_reported"]; present {
 			value, ok := reported.(bool)
@@ -524,16 +581,20 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 				SchemaRef:    "g8e.operator.v1.ActionReceipt",
 			}
 		}
-		if start, end, complete, err := monotonicCallBounds(call); err != nil {
-			return nil, nil, err
-		} else if complete {
-			monotonicStarts = append(monotonicStarts, start)
-			monotonicEnds = append(monotonicEnds, end)
+		agentRole := stringValue(call["agent_role"])
+		if agentRole != memoryCodexAgentRole {
+			scoredCallsCount++
+			if start, end, complete, err := monotonicCallBounds(call); err != nil {
+				return nil, nil, err
+			} else if complete {
+				monotonicStarts = append(monotonicStarts, start)
+				monotonicEnds = append(monotonicEnds, end)
+			}
 		}
 		records = append(records, record)
 	}
 	var span *uint64
-	if len(records) > 0 && len(monotonicStarts) == len(records) {
+	if scoredCallsCount > 0 && len(monotonicStarts) == scoredCallsCount {
 		minStart, maxEnd := monotonicStarts[0], monotonicEnds[0]
 		for index := 1; index < len(monotonicStarts); index++ {
 			if monotonicStarts[index] < minStart {

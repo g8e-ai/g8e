@@ -1,7 +1,7 @@
 # Public Spectator Operations Guide
 
-Last Updated: 2026-09-29
-Version: v2.2.4
+Last Updated: 2026-10-01
+Version: v2.2.6
 
 This guide covers the gateway-owned anonymous public mirror and evaluation explorer. It is separate from the passkey-authenticated owner-local observe frontend connected with `./g8e gw connect <origin>`; see [Generator-Neutral Builder Guide](./build_observe_frontend.md) and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend).
 
@@ -19,9 +19,9 @@ The unified Compose deployment binds host ports 8081, 8082, and 5173 to loopback
 
 Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-feed/batches`. Host `g8e public init` is not required for Docker or evaluation campaigns.
 
-Campaign publication emits public-safe assignment records with the enriched `1.1.0` result envelope and Evaluation Explorer summaries with view schema `1.5.0`.
+Campaign publication emits public-safe assignment records with the enriched `1.2.0` result envelope (`1.0.0` and `1.1.0` remain readable) and Evaluation Explorer summaries with view schema `1.5.0`.
 Assignment Details use a compact layout with approved scenario context, typed grades, and a Model Response section (the model's recorded output and, for assignments that did not complete, a failure diagnosis with failing criteria) when the public record carries `model_response` or `failure_output`. When the record carries `role_transcripts`, the section shows each role's tool calls in order, with the tool, pretty-printed arguments and their SHA-256, the resolved command, the outcome, and a collapsible result. It then shows the role's response and trace digest. Formations list Lite, Assistant, and Primary under their own headings.
-The Tasks view lists the frozen 26-scenario catalog with disclosure-safe prompts, pass criteria, and source links.
+The Tasks view lists the frozen 27-scenario default-suite catalog with disclosure-safe prompts, pass criteria, and source links.
 Empty sections and values absent from the public record are omitted.
 
 Evaluation summaries carry typed pass-rate, latency-p50, and output-throughput-p50 metrics with observed, eligible, and unavailable contributor counts; model evaluations omit system-only routing and correlation metrics.

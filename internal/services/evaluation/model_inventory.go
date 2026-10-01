@@ -26,7 +26,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-const StandardScenarioCount = 26
+const StandardScenarioCount = 27
 
 // ModelInventoryFreeze is the immutable model registry derived from
 // a complete provider inventory query and optional capability probes.
@@ -189,13 +189,6 @@ func ValidateModelRegistry(freeze *ModelInventoryFreeze) error {
 		}
 		seenTags[variant.GetServedModelTag()] = struct{}{}
 		seenIDs[variant.GetVariantId()] = struct{}{}
-	}
-	expectedCells := ComputeHomogeneousMatrixSize(uint64(len(freeze.Variants)))
-	if freeze.HomogeneousCellCount != expectedCells {
-		return fmt.Errorf("evaluation: validate model registry: homogeneous matrix size mismatch")
-	}
-	if expectedCells == 0 {
-		return fmt.Errorf("evaluation: validate model registry: empty smoke matrix")
 	}
 	return nil
 }

@@ -53,6 +53,77 @@ class InferenceModelVariant(G8eBaseModel):
     digest: str = Field(..., pattern=r"^[0-9a-f]{64}$")
 
 
+EvaluationSeedSender = Literal["user", "primary", "assistant"]
+EvaluationSeedActor = Literal["g8eo", "system", "user"]
+
+# Bounds keep a seed a small, reviewable fixture rather than a bulk-write channel.
+EVALUATION_SEED_MAX_TURNS = 16
+EVALUATION_SEED_MAX_HISTORY_EVENTS = 16
+EVALUATION_SEED_MAX_TEXT = 8000
+
+
+class EvaluationSeedTurn(G8eBaseModel):
+    """One prior conversation turn written before the scored turn."""
+
+    sender: EvaluationSeedSender
+    content: str = Field(..., min_length=1, max_length=EVALUATION_SEED_MAX_TEXT)
+
+
+class EvaluationSeedHistoryEvent(G8eBaseModel):
+    """One prior history-trail event, optionally a prior tool call with the
+    real result payload the model was shown at the time."""
+
+    event_type: str = Field(..., pattern=r"^g8e\.v1\.operator\.[a-z0-9_.]+$")
+    actor: EvaluationSeedActor
+    summary: str = Field(..., min_length=1, max_length=EVALUATION_SEED_MAX_TEXT)
+    tool_name: str | None = Field(default=None, max_length=128)
+    execution_id: str | None = Field(default=None, max_length=128)
+    arguments_json: str | None = Field(default=None, max_length=EVALUATION_SEED_MAX_TEXT)
+    command: str | None = Field(default=None, max_length=EVALUATION_SEED_MAX_TEXT)
+    error: str | None = Field(default=None, max_length=EVALUATION_SEED_MAX_TEXT)
+    error_type: str | None = Field(default=None, max_length=128)
+
+
+class EvaluationSeedMemory(G8eBaseModel):
+    """Case memory for the seeded investigation (never a user-wide memory)."""
+
+    investigation_summary: str = Field(default="", max_length=EVALUATION_SEED_MAX_TEXT)
+    communication_preferences: str = Field(default="", max_length=EVALUATION_SEED_MAX_TEXT)
+    technical_background: str = Field(default="", max_length=EVALUATION_SEED_MAX_TEXT)
+    response_style: str = Field(default="", max_length=EVALUATION_SEED_MAX_TEXT)
+    problem_solving_approach: str = Field(default="", max_length=EVALUATION_SEED_MAX_TEXT)
+    interaction_style: str = Field(default="", max_length=EVALUATION_SEED_MAX_TEXT)
+
+
+class EvaluationInvestigationSeed(G8eBaseModel):
+    """Investigation state a scored turn runs in, applied through the same
+    investigation and memory services the live chat path writes."""
+
+    case_title: str = Field(..., min_length=1, max_length=200)
+    case_description: str = Field(default="", max_length=EVALUATION_SEED_MAX_TEXT)
+    turns: list[EvaluationSeedTurn] = Field(
+        default_factory=list, max_length=EVALUATION_SEED_MAX_TURNS
+    )
+    history_events: list[EvaluationSeedHistoryEvent] = Field(
+        default_factory=list, max_length=EVALUATION_SEED_MAX_HISTORY_EVENTS
+    )
+    case_memory: EvaluationSeedMemory | None = Field(default=None)
+
+
+class EvaluationWorkspace(G8eBaseModel):
+    """Attempt-scoped fixture workspace on the bound Data Operator."""
+
+    root: str = Field(..., pattern=r"^/", max_length=1024)
+    operator_working_directory: str = Field(..., pattern=r"^/", max_length=1024)
+
+    @model_validator(mode="after")
+    def validate_root_under_working_directory(self):
+        base = self.operator_working_directory.rstrip("/")
+        if ".." in self.root.split("/") or not self.root.startswith(base + "/"):
+            raise ValueError("workspace root must be strictly under the operator working directory")
+        return self
+
+
 class EvaluationInferenceContext(G8eBaseModel):
     campaign_id: str = Field(..., min_length=1)
     run_id: str = Field(..., min_length=1)
@@ -66,6 +137,8 @@ class EvaluationInferenceContext(G8eBaseModel):
     designated_model_role: DesignatedModelRole | None = Field(default=None)
     grading_method: EvaluationGradingMethod = Field(default="deterministic")
     gold_summary: EvaluationGoldSummary | None = Field(default=None)
+    seed: EvaluationInvestigationSeed | None = Field(default=None)
+    workspace: EvaluationWorkspace | None = Field(default=None)
 
     @model_validator(mode="after")
     def validate_unique_models(self):

@@ -154,7 +154,7 @@ func buildPublicToolCallActivity(result *evalv1.EvaluationAssignmentResult) (*ev
 		if record == nil || !validPublicLabel(record.GetToolName()) || !validVerdict(record.GetSchemaOutcome()) || !validVerdict(record.GetSemanticOutcome()) {
 			return nil, fmt.Errorf("evaluation: build public assignment evidence: malformed tool call: %w", constants.ErrEvidenceArtifactMalformed)
 		}
-		records = append(records, &evalv1.PublicToolCallActivityRecord{ToolLabel: record.GetToolName(), ExecutionOutcome: record.GetSchemaOutcome(), SemanticOutcome: record.GetSemanticOutcome(), EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED})
+		records = append(records, &evalv1.PublicToolCallActivityRecord{ToolLabel: record.GetToolName(), ExecutionOutcome: record.GetSchemaOutcome(), SemanticOutcome: record.GetSemanticOutcome(), EvidenceSource: evalv1.PublicEvidenceSource_PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED, LoopTurn: record.GetLoopTurn(), ErrorType: record.GetErrorType(), GuidanceShown: record.GetGuidanceShown()})
 	}
 	return publicToolCallActivityObserved(records), nil
 }

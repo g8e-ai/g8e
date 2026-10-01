@@ -27,39 +27,32 @@ func testHeterogeneousVariants() []*evalv1.ModelVariant {
 	}
 }
 
-func TestGenerateHeterogeneousStackSet_IncludesHypothesesAndCoverage(t *testing.T) {
+// A stack set persisted under the pre-formation generation rule must keep
+// validating so its runs stay resumable and verifiable.
+func TestValidateHeterogeneousStackSet_AcceptsAPersistedLegacyRuleSet(t *testing.T) {
 	set, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       42,
 		Variants:   testHeterogeneousVariants(),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, HeterogeneousStackGenerationRule, set.GenerationRule)
-	assert.GreaterOrEqual(t, len(set.Stacks), len(preregisteredHeterogeneousHypotheses))
-	assert.Equal(t, len(preregisteredHeterogeneousHypotheses), set.Coverage.HypothesisStackCount)
 	for _, variantID := range set.VariantIDs {
-		roles := set.Coverage.VariantRoleCoverage[variantID]
-		assert.Len(t, roles, 3)
+		assert.Len(t, set.Coverage.VariantRoleCoverage[variantID], 3)
 	}
 	require.NoError(t, ValidateHeterogeneousStackSet(set))
 }
 
-func TestGenerateHeterogeneousStackSet_IsDeterministic(t *testing.T) {
-	req := HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
-		Seed:       7,
+func TestValidateHeterogeneousStackSet_RejectsAVariantMissingARole(t *testing.T) {
+	set, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
+		CampaignID: "heterogeneous-campaign",
 		Variants:   testHeterogeneousVariants(),
-	}
-	left, err := GenerateHeterogeneousStackSet(req)
+	})
 	require.NoError(t, err)
-	right, err := GenerateHeterogeneousStackSet(req)
+	set.Stacks = set.Stacks[:1]
+	set.SetDigest, err = ComputeHeterogeneousStackSetDigest(set)
 	require.NoError(t, err)
-	assert.Equal(t, left.SetDigest, right.SetDigest)
-	assert.Equal(t, len(left.Stacks), len(right.Stacks))
-	for index := range left.Stacks {
-		assert.Equal(t, left.Stacks[index].GetStackId(), right.Stacks[index].GetStackId())
-		assert.Equal(t, left.Stacks[index].GetStackDigest(), right.Stacks[index].GetStackDigest())
-	}
+	assert.ErrorContains(t, ValidateHeterogeneousStackSet(set), "missing role coverage")
 }
 
 func TestComputeHeterogeneousStackDigest_RejectsDuplicateVariants(t *testing.T) {

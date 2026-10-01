@@ -20,7 +20,7 @@ function evaluation(overrides: Partial<EvaluationSummary> = {}): EvaluationSumma
     observed_at: '2026-09-22T12:05:00Z',
     run_id: 'eval-heterogeneous-run',
     campaign_id: 'formation-run',
-    suite_id: 'north-star-25',
+    suite_id: 'default-suite',
     arm: 'ultra-light-speedster',
     evaluation_unit: 'system',
     model_role_mapping: {

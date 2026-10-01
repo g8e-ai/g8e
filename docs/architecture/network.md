@@ -3,8 +3,8 @@ doc_id: network
 title: Network Architecture
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - internal/services/gateway/
   - internal/services/network/
@@ -246,7 +246,7 @@ The platform coordinates real-time command dispatch, execution receipts, and tel
 - **Channel Partitioning**:
   - `cmd:<operator_id>:<operator_session_id>`: Gateway dispatches governed commands to the designated Operator session.
   - `results:<operator_id>:<operator_session_id>`: Operator publishes terminal command execution results back to the Gateway.
-  - `heartbeat:<operator_id>:<operator_session_id>`: Operator sends periodic liveness pings (default interval: 30 seconds). Heartbeats are lightweight transport telemetry and do not produce compliance ledger commitments.
+  - `heartbeat:<operator_id>:<operator_session_id>`: Operator sends periodic liveness pings (default interval: 30 seconds). Heartbeats are lightweight transport telemetry and do not produce compliance ledger commitments. The Gateway records each one as `last_heartbeat_at` on the Operator document; more than 60 seconds without one marks an `active` remote Operator `stale` (see [Liveness and Staleness](operator.md#liveness-and-staleness)).
   - `receipts:<operator_id>:<operator_session_id>`: Operator publishes signed L5 execution receipts for audit capture.
   - `audit:<operator_id>:<operator_session_id>`: Gateway streams compliance and audit events.
 - **Channel Access Control**: The WebSocket handler validates that every subscribe and publish request targets channels matching the caller's authenticated SPIFFE identity URI SAN.

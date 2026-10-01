@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -103,40 +104,45 @@ func main() {
 	if err != nil {
 		fatal("%v", err)
 	}
+	if err := execute(root, *write, os.Stdout); err != nil {
+		fatal("%v", err)
+	}
+}
 
+// execute validates the registries under root, then either writes the
+// generated constant files (write) or verifies the committed ones match.
+func execute(root string, write bool, stdout io.Writer) error {
 	eventsPath := filepath.Join(root, "protocol/constants/events.json")
 	statusPath := filepath.Join(root, "protocol/constants/status.json")
 
 	events, err := loadRegistry(eventsPath)
 	if err != nil {
-		fatal("%v", err)
+		return err
 	}
 	actionTypeMeta, err := loadActionTypeMeta(statusPath)
 	if err != nil {
-		fatal("%v", err)
+		return err
 	}
 	actionTypes := actionTypeValues(actionTypeMeta)
 
 	if err := validateRegistry(events, actionTypes); err != nil {
-		fatal("%v", err)
+		return err
 	}
 
 	out, err := generateAll(root, events, actionTypeMeta)
 	if err != nil {
-		fatal("%v", err)
+		return err
 	}
 
-	if *write {
+	if write {
 		if err := writeGenerated(root, out); err != nil {
-			fatal("%v", err)
+			return err
 		}
-		fmt.Println("generated constants from protocol/constants/events.json")
-		return
+		fmt.Fprintln(stdout, "generated constants from protocol/constants/events.json")
+		return nil
 	}
 
-	if err := verifyGenerated(root, out); err != nil {
-		fatal("%v", err)
-	}
+	return verifyGenerated(root, out)
 }
 
 func actionTypeValues(actionTypes map[string]actionTypeMeta) map[string]struct{} {

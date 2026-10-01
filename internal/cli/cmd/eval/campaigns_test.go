@@ -91,7 +91,7 @@ func TestCampaignsShow_ReportsSpecAndRuns(t *testing.T) {
 	assert.Equal(t, []string{"qwen3:4b"}, payload.Models)
 	require.Len(t, payload.Runs, 1)
 	assert.Equal(t, "run-a-1", payload.Runs[0].RunID)
-	assert.Equal(t, uint64(39), payload.CellsPer)
+	assert.Equal(t, uint64(41), payload.CellsPer)
 }
 
 func TestCampaignsShow_RejectsUnknownCampaign(t *testing.T) {
@@ -123,7 +123,7 @@ func TestCampaignsCreate_JSONReportsFrozenSpec(t *testing.T) {
 	assert.Equal(t, "eval-a", payload.CampaignID)
 	assert.Equal(t, campaignLaneModelRole, payload.Lane)
 	assert.Equal(t, 1, payload.ModelCount)
-	assert.Equal(t, uint64(39), payload.CellsPerRun)
+	assert.Equal(t, uint64(41), payload.CellsPerRun)
 	assert.NotEmpty(t, payload.ModelRegistryDigest)
 	assert.NotEmpty(t, payload.CatalogDigest)
 }
@@ -167,7 +167,8 @@ func TestCampaignsCreate_RejectsConflictingModes(t *testing.T) {
 	}{
 		{name: "formations and all-formations", args: []string{"campaigns", "create", "eval-f", "--formations", "qwen-powerhouse", "--all-formations"}, want: "mutually exclusive"},
 		{name: "formations with a model selector", args: []string{"campaigns", "create", "eval-f", "qwen3:4b", "--all-formations"}, want: "take no model selector"},
-		{name: "unknown lane", args: []string{"campaigns", "create", "eval-f", "--all", "--lane", "warp"}, want: "--lane must be"},
+		{name: "the removed lane flag", args: []string{"campaigns", "create", "eval-f", "--all", "--lane", "system"}, want: "unknown flag: --lane"},
+		{name: "the removed seed flag", args: []string{"campaigns", "create", "eval-f", "--all-formations", "--seed", "17"}, want: "unknown flag: --seed"},
 		{name: "positional models with a filter", args: []string{"campaigns", "create", "eval-f", "qwen3:4b", "--family", "qwen"}, want: "cannot be combined"},
 	}
 	for _, test := range tests {
@@ -209,60 +210,48 @@ func TestCampaignsCreate_ConflictsWhenTheSpecDiffers(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrEvaluationCampaignConflict)
 }
 
-func TestCampaignsCreate_SystemLanePersistsStacks(t *testing.T) {
+func TestCampaignsCreate_RejectsMultiModelModelRoleCampaign(t *testing.T) {
 	env := setupRunEnv(t)
 	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, threeModelRegistry()...)
 
-	out := env.mustRun(t, "campaigns", "create", "eval-sys", "--all", "--lane", "system", "--seed", "17")
-	assert.Contains(t, out, "Lane: system")
-	assert.Contains(t, out, "Stacks:")
+	_, err := env.run(t, "campaigns", "create", "eval-many", "--all")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvaluationCampaignSubjectInvalid)
 
-	stackSet, err := env.store(t).LoadHeterogeneousStackSet(context.Background(), "eval-sys")
-	require.NoError(t, err)
-	assert.NotEmpty(t, stackSet.Stacks)
-
-	var payload campaignShowJSON
-	require.NoError(t, env.runJSON(t, &payload, "campaigns", "show", "eval-sys"))
-	assert.Equal(t, campaignLaneSystem, payload.Lane)
-	assert.Equal(t, len(stackSet.Stacks), payload.StackCount)
-}
-
-func TestCampaignsCreate_SystemLaneSchedulesHeterogeneousAssignments(t *testing.T) {
-	env := setupRunEnv(t)
-	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, threeModelRegistry()...)
-	env.mustRun(t, "campaigns", "create", "eval-sys", "--all", "--lane", "system", "--seed", "17")
-
-	env.startPrepared(t, "eval-sys", "run-sys-1")
-
-	assignments, err := env.store(t).ListAssignments(context.Background(), "run-sys-1")
-	require.NoError(t, err)
-	require.NotEmpty(t, assignments)
-	assert.NotNil(t, assignments[0].GetHeterogeneous())
+	_, err = env.run(t, "campaigns", "show", "eval-many")
+	require.Error(t, err, "a rejected create must not persist the campaign")
 }
 
 func TestCampaignsCreate_AllFormationsMaterializesEveryCatalogStack(t *testing.T) {
 	env := setupRunEnv(t)
 	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, testFormationCatalogCLIVariants()...)
 
-	out := env.mustRun(t, "campaigns", "create", "eval-formations", "--all-formations", "--seed", "17")
+	out := env.mustRun(t, "campaigns", "create", "eval-formations", "--all-formations")
 	assert.Contains(t, out, "Lane: system")
+	assert.Contains(t, out, "Stacks:")
 
 	stackSet, err := env.store(t).LoadHeterogeneousStackSet(context.Background(), "eval-formations")
 	require.NoError(t, err)
 	assert.Len(t, stackSet.Stacks, 5)
 	assert.Equal(t, evaluation.FormationCatalogStackGenerationRule, stackSet.GenerationRule)
 
+	var payload campaignShowJSON
+	require.NoError(t, env.runJSON(t, &payload, "campaigns", "show", "eval-formations"))
+	assert.Equal(t, campaignLaneSystem, payload.Lane)
+	assert.Equal(t, len(stackSet.Stacks), payload.StackCount)
+
 	env.startPrepared(t, "eval-formations", "run-formations-1")
 	assignments, err := env.store(t).ListAssignments(context.Background(), "run-formations-1")
 	require.NoError(t, err)
 	assert.Len(t, assignments, 5*evaluation.StandardScenarioCount)
+	assert.NotNil(t, assignments[0].GetHeterogeneous())
 }
 
 func TestCampaignsCreate_FormationSubsetSchedulesOnlyThoseFormations(t *testing.T) {
 	env := setupRunEnv(t)
 	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, testFormationCatalogCLIVariants()...)
 
-	env.mustRun(t, "campaigns", "create", "eval-two", "--formations", "qwen-powerhouse", "--formations", "ultra-efficient-speedster", "--seed", "17")
+	env.mustRun(t, "campaigns", "create", "eval-two", "--formations", "qwen-powerhouse", "--formations", "ultra-efficient-speedster")
 
 	stackSet, err := env.store(t).LoadHeterogeneousStackSet(context.Background(), "eval-two")
 	require.NoError(t, err)

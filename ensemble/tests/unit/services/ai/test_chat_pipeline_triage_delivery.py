@@ -309,6 +309,161 @@ async def test_prepare_chat_context_passes_lite_model_to_triage():
     assert captured["model_override"] == "gemma3:1b"
 
 
+def _pipeline_for_prepare_chat_context() -> ChatPipelineService:
+    """A pipeline whose collaborators are stubbed just far enough for
+    ``_prepare_chat_context`` to reach ``request_builder.get_generation_config``."""
+    from app.models.agents.triage import TriageResult
+
+    svc = _make_pipeline()
+    svc.investigation_service.get_investigation_context = AsyncMock(
+        return_value=build_enriched_context(investigation_id="inv-1")
+    )
+    svc.investigation_service.get_enriched_investigation_context = AsyncMock(
+        return_value=build_enriched_context(investigation_id="inv-1")
+    )
+    svc.investigation_service.investigation_data_service.update_investigation_raw = AsyncMock()
+    svc.investigation_service.investigation_data_service.get_chat_messages = AsyncMock(
+        return_value=[]
+    )
+    svc.memory_service = MagicMock()
+    svc.memory_service.get_user_memories = AsyncMock(return_value=[])
+    svc.memory_service.get_case_memories = AsyncMock(return_value=[])
+    svc.request_builder = MagicMock()
+    svc.request_builder.format_attachment_parts = MagicMock(return_value=[])
+    svc.request_builder.build_contents_from_history = MagicMock(
+        return_value=BuiltContents(contents=[], scrubbing_observations=[])
+    )
+    svc.request_builder.get_generation_config = MagicMock(return_value=PrimaryLLMSettings())
+    svc.triage_agent.triage = AsyncMock(
+        return_value=TriageResult(
+            complexity=TriageComplexityClassification.COMPLEX,
+            complexity_confidence=TriageConfidence.HIGH,
+            intent=TriageIntentClassification.INFORMATION,
+            intent_confidence=TriageConfidence.HIGH,
+            intent_summary="ok",
+        )
+    )
+    return svc
+
+
+async def _prepare(svc: ChatPipelineService, g8e_ctx) -> AgentInputs:
+    from app.models.settings import G8eeUserSettings, LLMSettings
+
+    with patch("app.services.ai.chat_pipeline.resolve_model", return_value="qwen3.5:4b"):
+        return await svc._prepare_chat_context(
+            message="hello",
+            g8e_context=g8e_ctx,
+            request_settings=G8eeUserSettings(llm=LLMSettings()),
+            attachments=[],
+            sentinel_mode=True,
+            model_overrides=ModelOverrideResolver(
+                primary_model="qwen3.5:4b",
+                assistant_model="qwen3.5:4b",
+                lite_model="qwen3.5:4b",
+            ),
+        )
+
+
+async def test_prepare_chat_context_hands_the_evaluation_context_to_generation_config():
+    """The scored request's context is what lifts the tool gate (INV-EVAL-CAMP-07)."""
+    from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+
+    evaluation_context = EvaluationInferenceContext(
+        campaign_id="campaign-1",
+        run_id="run-1",
+        assignment_id="assignment-1",
+        evaluation_attempt_id="attempt-1",
+        scenario_id="tool-select-grep",
+        model_registry_digest="d" * 64,
+        model_registry=[InferenceModelVariant(model="qwen3.5:4b", digest="a" * 64)],
+        target_operator_session_id="session-1",
+    )
+    svc = _pipeline_for_prepare_chat_context()
+    g8e_ctx = build_g8e_http_context(
+        investigation_id="inv-1", case_id="case-1", web_session_id="web-1", user_id="user-1"
+    ).model_copy(update={"evaluation_context": evaluation_context})
+
+    await _prepare(svc, g8e_ctx)
+
+    kwargs = svc.request_builder.get_generation_config.call_args.kwargs
+    assert kwargs["evaluation_context"] is evaluation_context
+    assert kwargs["model_override"] == "qwen3.5:4b"
+
+
+async def test_prepare_chat_context_production_request_carries_no_evaluation_context():
+    svc = _pipeline_for_prepare_chat_context()
+    g8e_ctx = build_g8e_http_context(
+        investigation_id="inv-1", case_id="case-1", web_session_id="web-1", user_id="user-1"
+    )
+
+    await _prepare(svc, g8e_ctx)
+
+    assert svc.request_builder.get_generation_config.call_args.kwargs["evaluation_context"] is None
+
+
+def _scored_context():
+    from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+
+    return build_g8e_http_context(
+        investigation_id="inv-1", case_id="case-1", web_session_id="web-1", user_id="user-1"
+    ).model_copy(
+        update={
+            "evaluation_context": EvaluationInferenceContext(
+                campaign_id="campaign-1",
+                run_id="run-1",
+                assignment_id="assignment-1",
+                evaluation_attempt_id="attempt-1",
+                scenario_id="tool-select-grep",
+                model_registry_digest="d" * 64,
+                model_registry=[InferenceModelVariant(model="qwen3.5:4b", digest="a" * 64)],
+                target_operator_session_id="session-1",
+            )
+        }
+    )
+
+
+async def test_prepare_chat_context_scored_request_reads_case_memories_but_not_user_memories():
+    """User-wide memories are artifacts of other assignments and would leak one
+    scenario into the next; case memories (which the seed may have written) are
+    still read. The suppression is recorded on the inputs for the trace."""
+    from app.constants import InvestigationStatus
+    from app.models.memory import InvestigationMemory
+
+    case_memory = InvestigationMemory(
+        case_id="case-1",
+        investigation_id="inv-1",
+        user_id="test-user-id",
+        status=InvestigationStatus.OPEN,
+        case_title="Checkout payment timeouts",
+        investigation_summary="Customers see timeouts at checkout.",
+    )
+    svc = _pipeline_for_prepare_chat_context()
+    svc.memory_service.get_case_memories = AsyncMock(return_value=[case_memory])
+
+    inputs = await _prepare(svc, _scored_context())
+
+    svc.memory_service.get_user_memories.assert_not_awaited()
+    svc.memory_service.get_case_memories.assert_awaited_once()
+    assert inputs.case_memories == [case_memory]
+    assert inputs.user_memories == []
+    assert inputs.user_memories_suppressed is True
+
+
+async def test_prepare_chat_context_production_request_still_reads_user_memories():
+    """Characterization: only a request carrying an evaluation_context skips the
+    user-wide memory read."""
+    svc = _pipeline_for_prepare_chat_context()
+    g8e_ctx = build_g8e_http_context(
+        investigation_id="inv-1", case_id="case-1", web_session_id="web-1", user_id="user-1"
+    )
+
+    inputs = await _prepare(svc, g8e_ctx)
+
+    svc.memory_service.get_user_memories.assert_awaited_once()
+    svc.memory_service.get_case_memories.assert_awaited_once()
+    assert inputs.user_memories_suppressed is False
+
+
 async def test_run_chat_impl_rejects_unknown_provider_override():
     """An unknown provider override surfaces as a ValueError - not a
     silent bad-value in an enum-typed field."""

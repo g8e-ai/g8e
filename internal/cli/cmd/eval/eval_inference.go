@@ -157,7 +157,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 					return err
 				}
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nPhase 1A inference acceptance: %d passed, %d failed\n", len(cases)-failures, failures)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nInference acceptance: %d passed, %d failed\n", len(cases)-failures, failures)
 			}
 			if failures > 0 {
 				return fmt.Errorf("evaluation: gates inference: %w: %d", constants.ErrEvaluationInferenceCasesFailed, failures)
@@ -167,7 +167,7 @@ func gatesInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&model, "model", "", "Requested provider model tag")
 	cmd.Flags().StringVar(&role, "role", "primary", "Default governed model role for cases that do not override it")
-	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A inference matrix)")
+	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: every inference acceptance case)")
 	return cmd
 }
 

@@ -90,26 +90,53 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             expect(ctx.setOperatorBound).not.toHaveBeenCalled();
         });
 
-        it('binds all unbound status listeners to setOperatorUnbound', () => {
+        const unboundStatuses = [
+            EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
+            EventType.OPERATOR_STATUS_UPDATED_AVAILABLE,
+            EventType.OPERATOR_STATUS_UPDATED_UNAVAILABLE,
+            EventType.OPERATOR_STATUS_UPDATED_OFFLINE,
+            EventType.OPERATOR_STATUS_UPDATED_STALE,
+            EventType.OPERATOR_STATUS_UPDATED_STOPPED,
+            EventType.OPERATOR_STATUS_UPDATED_TERMINATED,
+        ];
+
+        it('unbinds the terminal on every unbound status event for the bound operator', () => {
             const ctx = createMixinContext({ setOperatorUnbound: vi.fn() });
-            
+            ctx.boundOperator = { operator_id: 'op-bound' };
+
             ctx.bindEventBusListeners();
-            
-            const unboundStatuses = [
-                EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
-                EventType.OPERATOR_STATUS_UPDATED_AVAILABLE,
-                EventType.OPERATOR_STATUS_UPDATED_UNAVAILABLE,
-                EventType.OPERATOR_STATUS_UPDATED_OFFLINE,
-                EventType.OPERATOR_STATUS_UPDATED_STALE,
-                EventType.OPERATOR_STATUS_UPDATED_STOPPED,
-                EventType.OPERATOR_STATUS_UPDATED_TERMINATED,
-            ];
-            
+
             for (const statusEvent of unboundStatuses) {
-                ctx.eventBus.emit(statusEvent);
+                ctx.eventBus.emit(statusEvent, { operator_id: 'op-bound' });
             }
-            
+
             expect(ctx.setOperatorUnbound).toHaveBeenCalledTimes(unboundStatuses.length);
+        });
+
+        it('keeps the terminal bound when the status event is about a different operator', () => {
+            const ctx = createMixinContext({ setOperatorUnbound: vi.fn() });
+            ctx.boundOperator = { operator_id: 'op-bound' };
+
+            ctx.bindEventBusListeners();
+
+            for (const statusEvent of unboundStatuses) {
+                ctx.eventBus.emit(statusEvent, { operator_id: 'op-other' });
+            }
+
+            expect(ctx.setOperatorUnbound).not.toHaveBeenCalled();
+        });
+
+        it('ignores unbound status events while no operator is bound', () => {
+            const ctx = createMixinContext({ setOperatorUnbound: vi.fn() });
+            ctx.boundOperator = null;
+
+            ctx.bindEventBusListeners();
+
+            for (const statusEvent of unboundStatuses) {
+                ctx.eventBus.emit(statusEvent, { operator_id: 'op-other' });
+            }
+
+            expect(ctx.setOperatorUnbound).not.toHaveBeenCalled();
         });
 
         it('binds OPERATOR_PANEL_LIST_UPDATED listener', () => {

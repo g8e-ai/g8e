@@ -245,3 +245,87 @@ describe('campaign projection wire contract', () => {
   });
 });
 
+
+describe('campaign result envelope 1.2.0 (trajectory fields)', () => {
+  const baseRecord = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
+  const toolCallFamily = {
+    availability: 'PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED',
+    records: [
+      {
+        tool_label: 'recursive_grep_search',
+        execution_outcome: 'EVALUATION_VERDICT_STATUS_FAIL',
+        semantic_outcome: 'EVALUATION_VERDICT_STATUS_FAIL',
+        evidence_source: 'PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED',
+        loop_turn: 2,
+        error_type: 'validation.error',
+        guidance_shown: true,
+      },
+    ],
+  } as const;
+  const trajectoryRecord = {
+    ...baseRecord,
+    scenario_summary: {
+      ...baseRecord.scenario_summary!,
+      trajectory_policy: 'EVALUATION_TRAJECTORY_POLICY_GUIDED',
+      prompt_hint: {
+        hinted_tools: ['recursive_grep_search'],
+        arguments: [
+          { tool_name: 'recursive_grep_search', argument_name: 'pattern', source: 'EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT' },
+        ],
+      },
+    },
+    activity_summary: { ...baseRecord.activity_summary!, tool_calls: toolCallFamily },
+    trajectory_outcome: 'EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE',
+    guided_retry_count: 1,
+    failure_reason: '`recursive_grep_search` was declared to the model and hinted by the prompt. The model made no tool call.',
+    tools_declared: ['recursive_grep_search', 'file_read_on_operator'],
+  };
+  const envelope = (schemaVersion: string, record: unknown) => ({
+    ...fixtureCampaignResultEnvelope,
+    schema_version: schemaVersion,
+    record,
+  });
+
+  it('accepts trajectory fields at envelope 1.2.0', () => {
+    expect(() => decodeCampaignProjectionEnvelope(envelope('1.2.0', trajectoryRecord))).not.toThrow();
+  });
+
+  it('keeps accepting 1.1.0 envelopes without trajectory fields', () => {
+    expect(() => decodeCampaignProjectionEnvelope(envelope('1.1.0', baseRecord))).not.toThrow();
+  });
+
+  it.each([
+    ['trajectory_outcome', { trajectory_outcome: 'EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL' }],
+    ['failure_reason', { failure_reason: 'The model made no tool call.' }],
+    ['tools_declared', { tools_declared: ['file_read_on_operator'] }],
+    ['scenario policy', { scenario_summary: trajectoryRecord.scenario_summary }],
+    ['tool call guidance', { activity_summary: trajectoryRecord.activity_summary }],
+  ])('rejects %s on a 1.1.0 envelope', (_label, extra) => {
+    expect(() => decodeCampaignProjectionEnvelope(envelope('1.1.0', { ...baseRecord, ...extra }))).toThrow(
+      /require campaign envelope 1\.2\.0/,
+    );
+  });
+
+  it.each([
+    ['an unknown trajectory outcome', { trajectory_outcome: 'EVALUATION_TRAJECTORY_OUTCOME_MYSTERY' }],
+    ['a non-integer retry count', { guided_retry_count: 1.5 }],
+    ['an oversized failure reason', { failure_reason: 'x'.repeat(513) }],
+    ['a hint with a value field', {
+      scenario_summary: {
+        ...trajectoryRecord.scenario_summary,
+        prompt_hint: {
+          hinted_tools: ['recursive_grep_search'],
+          arguments: [{ tool_name: 'recursive_grep_search', argument_name: 'pattern', source: 'EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT', value: 'AUTH_FAILURE' }],
+        },
+      },
+    }],
+    ['an unknown hint source', {
+      scenario_summary: {
+        ...trajectoryRecord.scenario_summary,
+        prompt_hint: { hinted_tools: [], arguments: [{ tool_name: 'a', argument_name: 'b', source: 'EVALUATION_HINT_ARGUMENT_SOURCE_GUESS' }] },
+      },
+    }],
+  ])('rejects %s', (_label, extra) => {
+    expect(() => decodeCampaignProjectionEnvelope(envelope('1.2.0', { ...trajectoryRecord, ...extra }))).toThrow();
+  });
+});

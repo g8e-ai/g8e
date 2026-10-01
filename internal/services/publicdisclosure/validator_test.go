@@ -96,6 +96,36 @@ func TestValidateAssignmentRecordAcceptsCurrentSchemas(t *testing.T) {
 	require.NoError(t, ValidateAssignmentRecord("1.1.0", result))
 }
 
+func TestValidateAssignmentRecordTrajectoryFieldsRequireEnvelope120(t *testing.T) {
+	record := func(version, extra string) []byte {
+		return []byte(`{"schema_version":"` + version + `","message_type":"PublicAssignmentResultProjection","idempotency_key":"run-1:assignment-1:result","record":{"assignment_id":"assignment-1","run_id":"run-1","scenario_id":"scenario-1","result_digest":"` + strings.Repeat("a", 64) + `"` + extra + `}}`)
+	}
+	tests := []struct {
+		name    string
+		version string
+		extra   string
+		wantErr bool
+	}{
+		{name: "1.2.0 accepts trajectory outcome", version: "1.2.0", extra: `,"trajectory_outcome":"EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE","guided_retry_count":1,"failure_reason":"The model made no tool call.","tools_declared":["recursive_grep_search"]`},
+		{name: "1.2.0 accepts a record without trajectory fields", version: "1.2.0"},
+		{name: "1.1.0 rejects trajectory outcome", version: "1.1.0", extra: `,"trajectory_outcome":"EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL"`, wantErr: true},
+		{name: "1.1.0 rejects failure reason", version: "1.1.0", extra: `,"failure_reason":"The model made no tool call."`, wantErr: true},
+		{name: "1.1.0 rejects tools declared", version: "1.1.0", extra: `,"tools_declared":["file_read_on_operator"]`, wantErr: true},
+		{name: "1.1.0 rejects tool call guidance fields", version: "1.1.0", extra: `,"activity_summary":{"tool_calls":{"availability":"PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED","records":[{"tool_label":"recursive_grep_search","guidance_shown":true}]}}`, wantErr: true},
+		{name: "1.1.0 still accepts a record without trajectory fields", version: "1.1.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateAssignmentRecord(tt.version, record(tt.version, tt.extra))
+			if tt.wantErr {
+				assert.ErrorIs(t, err, constants.ErrEvidenceSchemaMismatch)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestValidatePublicDisclosureEvents(t *testing.T) {
 	event := []byte(`{"schema_version":"1.5.0","kind":"assignment_completed","dataset_id":"ds","quality_state":"live_in_progress","observed_at":"2026-01-01T00:00:00Z","event_id":"event-1","run_id":"run-1","lifecycle_status":"completed","completed":1,"total":1}`)
 	require.NoError(t, ValidatePublicFeedRecord(models.PublicFeedRecordTypeEvent, event))

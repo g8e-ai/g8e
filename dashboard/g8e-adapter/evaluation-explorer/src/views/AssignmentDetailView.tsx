@@ -17,7 +17,7 @@ import { RoleTranscripts } from '../components/RoleTranscripts';
 import { ScenarioContextCard } from '../components/ScenarioContextCard';
 import { TaskExpectationSection, TaskPromptSection, TaskProvidedSection } from '../components/TaskPromptSection';
 import { UnifiedGradeBadges } from '../components/UnifiedGradeBadges';
-import { SCENARIO_TASK_BY_ID } from '../content/scenario-catalog';
+import { SCENARIO_TASK_BY_ID } from '../content/scenario-task';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import {
@@ -114,11 +114,34 @@ function toolActionSummaries(activity: AssignmentResult['activity_summary']): st
   return lines;
 }
 
+function trajectoryOutcomeLabel(outcome: string): string {
+  return outcome.replace(/_/g, ' ').toUpperCase();
+}
+
+/** Trajectory outcome badge, guided retries, and the tools declared to the model. */
+function FailureTrajectoryMeta({ assignment }: { assignment: AssignmentResult }) {
+  const { trajectory_outcome: outcome, guided_retry_count: retries, tools_declared: declared } = assignment;
+  if (!outcome && !retries && declared === undefined) return null;
+  return (
+    <div className="failure-trajectory-meta">
+      {outcome ? <span className="task-flag failure-trajectory-badge">{trajectoryOutcomeLabel(outcome)}</span> : null}
+      {retries ? <span className="failure-trajectory-retries">Guided retries: {retries}</span> : null}
+      {declared !== undefined ? (
+        <p className="failure-tools-declared">
+          <strong>Tools declared:</strong>{' '}
+          {declared.length > 0 ? declared.join(', ') : 'none'}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) {
   const isFailure = assignment.terminal_status !== 'completed';
   const transcripts = assignment.role_transcripts ?? [];
   const hasResponse = Boolean(assignment.model_response);
   const hasFailureOutput = Boolean(assignment.failure_output);
+  const hasFailureReason = Boolean(assignment.failure_reason);
   const toolActions = hasResponse ? [] : toolActionSummaries(assignment.activity_summary);
 
   const failingChips = assignmentGradeChips(assignment).filter(
@@ -129,9 +152,13 @@ function ModelResponseSection({ assignment }: { assignment: AssignmentResult }) 
     <section className="assignment-model-response" aria-label="What the model did">
       <h2>What the model did</h2>
 
-      {isFailure && (hasFailureOutput || failingChips.length > 0 || assignment.missingness_reason) ? (
+      {isFailure && (hasFailureReason || hasFailureOutput || failingChips.length > 0 || assignment.missingness_reason) ? (
         <div className="assignment-failure-callout" role="alert">
           <h3>Failure Diagnosis ({terminalLabel(assignment.terminal_status)})</h3>
+          {hasFailureReason ? (
+            <p className="failure-reason">{assignment.failure_reason}</p>
+          ) : null}
+          <FailureTrajectoryMeta assignment={assignment} />
           {hasFailureOutput ? (
             <p className="failure-output-detail">{assignment.failure_output}</p>
           ) : null}

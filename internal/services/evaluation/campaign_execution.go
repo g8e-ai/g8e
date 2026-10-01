@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -19,16 +20,22 @@ import (
 // CampaignExecutionBinding pins the exact governed execution authorities for one
 // scored assignment submitted through production POST /api/v1/chat.
 type CampaignExecutionBinding struct {
-	InferenceOperatorSessionID string
-	DataOperatorID             string
-	DataOperatorSessionID      string
-	ModelRegistryDigest        string
-	ModelRegistry              []*operatorv1.InferenceModelVariant
+	InferenceOperatorSessionID   string
+	DataOperatorID               string
+	DataOperatorSessionID        string
+	DataOperatorWorkingDirectory string
+	ModelRegistryDigest          string
+	ModelRegistry                []*operatorv1.InferenceModelVariant
 }
 
 // BuildCampaignChatRequest constructs the production chat request for one
 // homogeneous model-role assignment using the frozen scenario input fixture.
-func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID string, input ScenarioInputFixture, binding CampaignExecutionBinding, grading CampaignChatGradingContext) (ChatProbeRequest, error) {
+// ws renders the prompt and seed and is echoed on the request. The executor
+// derives it from the binding's working directory and fails closed when that
+// is missing; import and verification pass the workspace recorded in the trace
+// (nil for a trace that carries none), so the binding's working directory is
+// not required here.
+func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID string, input ScenarioInputFixture, binding CampaignExecutionBinding, grading CampaignChatGradingContext, ws *ScenarioWorkspace) (ChatProbeRequest, error) {
 	if assignment == nil || attemptID == "" || binding.InferenceOperatorSessionID == "" || binding.DataOperatorID == "" || binding.DataOperatorSessionID == "" {
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: %w", constants.ErrMissingRequiredField)
 	}
@@ -47,7 +54,8 @@ func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID
 	if input.UserPrompt == "" {
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: scenario %s missing user prompt", assignment.GetScenarioId())
 	}
-	message := renderScenarioMessage(input.UserPrompt, input.InlineContext)
+	message := renderScenarioMessage(input.UserPrompt, input.InlineContext, ws)
+	harnessSeed := buildHarnessInvestigationSeed(&input.Seed, ws)
 	return ChatProbeRequest{
 		AssignmentID:            assignment.GetAssignmentId(),
 		EvaluationAttemptID:     attemptID,
@@ -64,6 +72,8 @@ func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID
 		Message:                 message,
 		GradingMethod:           grading.GradingMethod,
 		GoldSummary:             buildChatProbeGoldSummary(message, grading),
+		Seed:                    harnessSeed,
+		Workspace:               ws,
 	}, nil
 }
 
@@ -78,6 +88,79 @@ func buildChatProbeGoldSummary(message string, grading CampaignChatGradingContex
 		ExpectedTools:    nonNullStringSlice(grading.ScenarioTools.ExpectedTools),
 		ForbiddenTools:   nonNullStringSlice(grading.ScenarioTools.ForbiddenTools),
 	}
+}
+
+// buildHarnessInvestigationSeed converts a frozen fixture seed to the wire seed,
+// rendering every string through the workspace. A fixture without a case title
+// carries no seed (catalog 1.0.0 fixtures predate seeds, and every 1.1.0
+// scenario has a title), so the request sends none and the trace is not
+// expected to echo one.
+func buildHarnessInvestigationSeed(seed *InvestigationSeed, ws *ScenarioWorkspace) *harnessclient.EnsembleInvestigationSeed {
+	if seed == nil || seed.CaseTitle == "" {
+		return nil
+	}
+	harnesseSeed := &harnessclient.EnsembleInvestigationSeed{
+		CaseTitle:       seed.CaseTitle,
+		CaseDescription: seed.CaseDescription,
+	}
+	if ws != nil {
+		harnesseSeed.CaseTitle = ws.Render(harnesseSeed.CaseTitle)
+		harnesseSeed.CaseDescription = ws.Render(harnesseSeed.CaseDescription)
+	}
+	for _, turn := range seed.Turns {
+		content := turn.Content
+		if ws != nil {
+			content = ws.Render(content)
+		}
+		harnesseSeed.Turns = append(harnesseSeed.Turns, harnessclient.EnsembleSeedTurn{
+			Sender:  turn.Sender,
+			Content: content,
+		})
+	}
+	for _, event := range seed.HistoryEvents {
+		summary := event.Summary
+		arguments := event.ArgumentsJSON
+		command := event.Command
+		errorText := event.Error
+		if ws != nil {
+			summary = ws.Render(summary)
+			arguments = ws.Render(arguments)
+			command = ws.Render(command)
+			errorText = ws.Render(errorText)
+		}
+		harnesseSeed.HistoryEvents = append(harnesseSeed.HistoryEvents, harnessclient.EnsembleSeedHistoryEvent{
+			EventType:     event.EventType,
+			Actor:         event.Actor,
+			Summary:       summary,
+			ToolName:      event.ToolName,
+			ExecutionID:   event.ExecutionID,
+			ArgumentsJSON: arguments,
+			Command:       command,
+			Error:         errorText,
+			ErrorType:     event.ErrorType,
+		})
+	}
+	if seed.CaseMemory != nil {
+		cm := seed.CaseMemory
+		memory := &harnessclient.EnsembleSeedMemory{
+			InvestigationSummary:     cm.InvestigationSummary,
+			CommunicationPreferences: cm.CommunicationPreferences,
+			TechnicalBackground:      cm.TechnicalBackground,
+			ResponseStyle:            cm.ResponseStyle,
+			ProblemSolvingApproach:   cm.ProblemSolvingApproach,
+			InteractionStyle:         cm.InteractionStyle,
+		}
+		if ws != nil {
+			memory.InvestigationSummary = ws.Render(memory.InvestigationSummary)
+			memory.CommunicationPreferences = ws.Render(memory.CommunicationPreferences)
+			memory.TechnicalBackground = ws.Render(memory.TechnicalBackground)
+			memory.ResponseStyle = ws.Render(memory.ResponseStyle)
+			memory.ProblemSolvingApproach = ws.Render(memory.ProblemSolvingApproach)
+			memory.InteractionStyle = ws.Render(memory.InteractionStyle)
+		}
+		harnesseSeed.CaseMemory = memory
+	}
+	return harnesseSeed
 }
 
 func nonNullStringSlice(values []string) []string {
@@ -102,8 +185,10 @@ func modelCampaignRoleLabel(role evalv1.ModelCampaignRole) (string, error) {
 
 // ScenarioToolExpectations carries frozen scenario tool constraints for grading.
 type ScenarioToolExpectations struct {
-	ExpectedTools  []string
-	ForbiddenTools []string
+	AllowedTools     []string
+	ExpectedTools    []string
+	ForbiddenTools   []string
+	TrajectoryPolicy evalv1.EvaluationTrajectoryPolicy
 }
 
 // CampaignChatGradingContext carries private grading inputs for one chat assignment.

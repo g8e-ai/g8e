@@ -33,9 +33,8 @@ func normalizeRuntimeEvalPath(rawPath string) string {
 
 func runsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "runs",
-		Aliases: []string{"run"},
-		Short:   "Start, follow, verify, and publish campaign runs",
+		Use:   "runs",
+		Short: "Start, follow, verify, and publish campaign runs",
 		Long: `A run is one execution of a campaign. Runs have a lifecycle: start, resume,
 cancel, verify, publish, and export, and they can be archived.`,
 	}
@@ -394,11 +393,20 @@ func runsRepairCmd(deps nativeEvalDeps) *cobra.Command {
 			if err := evaluation.RejectArchivedRun(cmd.Context(), fileSvc, runID); err != nil {
 				return fmt.Errorf("evaluation: runs repair: %w", err)
 			}
-			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			store := evaluation.NewStore(fileSvc)
+			controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
 			payload := runRepairJSON{RunID: runID}
 			var message string
 			if results {
-				_, artifacts, err := evaluation.LoadScenarioCatalog()
+				run, err := store.LoadRun(cmd.Context(), runID)
+				if err != nil {
+					return fmt.Errorf("evaluation: runs repair: %w", err)
+				}
+				catalog, err := store.LoadScenarioCatalog(cmd.Context(), run.GetCampaignBinding().GetCampaignId())
+				if err != nil {
+					return fmt.Errorf("evaluation: runs repair: %w", err)
+				}
+				artifacts, err := store.LoadScenarioArtifacts(cmd.Context(), run.GetCampaignBinding().GetCampaignId(), catalog)
 				if err != nil {
 					return fmt.Errorf("evaluation: runs repair: %w", err)
 				}

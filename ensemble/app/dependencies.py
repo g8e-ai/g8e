@@ -39,6 +39,7 @@ from .services.investigation.investigation_service import InvestigationService
 from .services.investigation.investigation_data_service import InvestigationDataService
 from .services.investigation.memory_data_service import MemoryDataService
 from .services.ai.memory_generation_service import MemoryGenerationService
+from .services.evaluation.investigation_seed import InvestigationSeedService
 from .services.ai.grounding.grounding_service import GroundingService
 from .services.ai.grounding.web_search_provider import WebSearchProvider
 from .services.ai.chat_pipeline import ChatPipelineService
@@ -155,6 +156,17 @@ async def get_g8ee_investigation_service(request: Request) -> InvestigationServi
     if not service:
         logger.error("Investigation Domain Service not found in app state")
         raise ServiceUnavailableError("Investigation Domain Service not available")
+    return service
+
+
+async def get_g8ee_investigation_seed_service(request: Request) -> InvestigationSeedService:
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.investigation_seed_service
+    if not service:
+        logger.error(
+            "Investigation Seed Service not found in app state - g8ee initialization may have failed"
+        )
+        raise ServiceUnavailableError("Investigation Seed Service not available")
     return service
 
 
@@ -469,6 +481,7 @@ __all__ = [
     "get_g8ee_gateway_operator_client",
     "get_g8ee_grounding_service",
     "get_g8ee_investigation_data_service",
+    "get_g8ee_investigation_seed_service",
     "get_g8ee_investigation_service",
     "get_g8ee_kv_cache_client",
     "get_g8ee_memory_generation_service",

@@ -15,6 +15,7 @@ from g8e.eval.v1.trace_digest import marshal_canonical_json
 from app.constants import CommandErrorType
 from app.models.agent import StreamChunkData
 from app.models.evaluation_trace import (
+    EvaluationErrorAnalysisSummary,
     EvaluationGovernedActionRecord,
     EvaluationPolicyDecisionRecord,
     EvaluationToolCallRecord,
@@ -29,6 +30,29 @@ if TYPE_CHECKING:
 
 def _canonical_json(value: object) -> str:
     return marshal_canonical_json(value).decode()
+
+
+def _model_visible_text(result: object, field: str) -> str | None:
+    """A non-empty string field of the result the model was shown, or ``None``."""
+    value = getattr(result, field, None)
+    return value if isinstance(value, str) and value else None
+
+
+def _error_analysis_summary(result: object) -> EvaluationErrorAnalysisSummary | None:
+    """Summarize the LLM error analysis attached to a failed operator command."""
+    if not isinstance(result, CommandExecutionResult):
+        return None
+    for candidate in (result.execution_result, *(result.execution_results or [])):
+        analysis = candidate.error_analysis if candidate is not None else None
+        if analysis is not None:
+            return EvaluationErrorAnalysisSummary(
+                error_category=str(analysis.error_category),
+                root_cause=analysis.root_cause,
+                suggested_fix=analysis.suggested_fix,
+                suggested_command=analysis.suggested_command,
+                should_escalate=analysis.should_escalate,
+            )
+    return None
 
 
 def _policy_outcome_from_result(result: CommandExecutionResult) -> str:
@@ -96,6 +120,10 @@ def record_tool_call_completed(
             is_operator_tool=bool(chunk.is_operator_tool),
             execution_id=execution_id,
             error_type=chunk.error_type,
+            loop_turn=chunk.loop_turn,
+            error=_model_visible_text(chunk.result, "error"),
+            suggestion=_model_visible_text(chunk.result, "suggestion"),
+            error_analysis=_error_analysis_summary(chunk.result),
         )
     )
     if not isinstance(chunk.result, CommandExecutionResult):

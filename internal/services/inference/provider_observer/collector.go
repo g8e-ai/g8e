@@ -25,6 +25,14 @@ type HardwareCollector interface {
 	Collect(ctx context.Context, observedAt time.Time) (*evalv1.ProviderBoundaryHardwareSample, error)
 }
 
+// DefaultCollector returns the standard provider-boundary hardware collector.
+func DefaultCollector() HardwareCollector {
+	return &CompositeCollector{
+		GPU: NewNvidiaSMICollector(),
+		RAM: NewHostRAMCollector(),
+	}
+}
+
 // CompositeCollector merges GPU and host RAM collectors into one sample.
 type CompositeCollector struct {
 	GPU HardwareCollector

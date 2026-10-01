@@ -10,6 +10,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -26,20 +27,24 @@ type doctrineEntry struct {
 }
 
 func main() {
-	if err := validate(); err != nil {
+	overlayPath := filepath.Join(constants.DefaultOverlayDirPath, constants.COSAiSOverlaysFilename)
+	doctrineGlob := filepath.Join(constants.DemosDirname, "*", constants.DemosDoctrineDir, "*.json")
+	if err := validate(overlayPath, doctrineGlob, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func validate() error {
-	overlayPath := filepath.Join(constants.DefaultOverlayDirPath, constants.COSAiSOverlaysFilename)
+// validate loads the overlay catalog at overlayPath, gathers detector
+// overlay_ids from every doctrine file matching doctrineGlob, and reports
+// finalized overlays that no detector covers. Progress is written to out.
+func validate(overlayPath, doctrineGlob string, out io.Writer) error {
 	overlayCatalog, err := compliance.LoadOverlayCatalog(overlayPath)
 	if err != nil {
 		return fmt.Errorf("cosais coverage: load overlay catalog: %w", err)
 	}
 
-	detectorOverlayIDs, err := collectDetectorOverlayIDs()
+	detectorOverlayIDs, err := collectDetectorOverlayIDs(doctrineGlob)
 	if err != nil {
 		return err
 	}
@@ -51,37 +56,38 @@ func validate() error {
 		}
 	}
 	if finalized == 0 {
-		fmt.Println("PASS: No finalized COSAiS overlays yet.")
-		fmt.Println("      Detector overlay_ids will be checked when NIST finalizes.")
+		fmt.Fprintln(out, "PASS: No finalized COSAiS overlays yet.")
+		fmt.Fprintln(out, "      Detector overlay_ids will be checked when NIST finalizes.")
 		return nil
 	}
 
 	uncovered := compliance.CheckFinalizedOverlayCoverage(overlayCatalog, detectorOverlayIDs)
 	if len(uncovered) > 0 {
-		fmt.Println("FAIL: Finalized COSAiS overlays without detector coverage:")
+		fmt.Fprintln(out, "FAIL: Finalized COSAiS overlays without detector coverage:")
 		for _, id := range uncovered {
-			fmt.Printf("  - %s\n", id)
+			fmt.Fprintf(out, "  - %s\n", id)
 		}
-		fmt.Println()
-		fmt.Println("Action required: populate overlay_ids in doctrine JSON files")
-		fmt.Println("to reference each finalized overlay, then re-run:")
-		fmt.Println("  make validate-cosais")
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Action required: populate overlay_ids in doctrine JSON files")
+		fmt.Fprintln(out, "to reference each finalized overlay, then re-run:")
+		fmt.Fprintln(out, "  make validate-cosais")
 		return fmt.Errorf("cosais coverage: %d finalized overlay(s) lack detector coverage", len(uncovered))
 	}
 
-	fmt.Printf("PASS: All %d finalized COSAiS overlay(s) have detector coverage.\n", finalized)
+	fmt.Fprintf(out, "PASS: All %d finalized COSAiS overlay(s) have detector coverage.\n", finalized)
 	return nil
 }
 
-func collectDetectorOverlayIDs() ([]string, error) {
-	pattern := filepath.Join(constants.DemosDirname, "*", constants.DemosDoctrineDir, "*.json")
+// collectDetectorOverlayIDs flattens overlay_ids across every doctrine file
+// matching pattern. It errors when no file matches so a mislocated working
+// directory cannot silently report zero coverage.
+func collectDetectorOverlayIDs(pattern string) ([]string, error) {
 	paths, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("cosais coverage: list doctrine files: %w", err)
 	}
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("cosais coverage: no doctrine directories found under %s/*/%s/",
-			constants.DemosDirname, constants.DemosDoctrineDir)
+		return nil, fmt.Errorf("cosais coverage: no doctrine files match %s", pattern)
 	}
 
 	overlayIDs := make([]string, 0)

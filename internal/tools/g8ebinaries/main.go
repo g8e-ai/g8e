@@ -31,15 +31,23 @@ func main() {
 	listTargets := flag.Bool("list-targets", false, "print catalogued target platforms")
 	flag.Parse()
 	if *listTargets {
-		for _, target := range g8ebinaries.Targets() {
-			fmt.Printf("%s/%s ", target.OS, target.Arch)
-		}
+		fmt.Print(formatTargets())
 		return
 	}
 	if err := generate(*root, *version, *buildID, *buildTime, *revision, *treeHash); err != nil {
 		fmt.Fprintf(os.Stderr, "g8e-binaries: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// formatTargets renders the catalogued platforms as "os/arch " tokens, each
+// followed by a space, which the Makefile splits into its PLATFORMS list.
+func formatTargets() string {
+	var b strings.Builder
+	for _, target := range g8ebinaries.Targets() {
+		fmt.Fprintf(&b, "%s/%s ", target.OS, target.Arch)
+	}
+	return b.String()
 }
 
 func generate(root, version, buildID, buildTime, revision, treeHash string) error {

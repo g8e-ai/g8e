@@ -176,7 +176,7 @@ func TestResolveFormationBinding_UsesCatalogBindForFormationStack(t *testing.T) 
 
 func TestResolveFormationBinding_FallsBackToHeterogeneousStack(t *testing.T) {
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       17,
 		Variants:   testHeterogeneousVariants(),
 	})

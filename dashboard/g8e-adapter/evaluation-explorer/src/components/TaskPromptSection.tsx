@@ -1,7 +1,11 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-import type { ScenarioTaskDefinition } from '../content/scenario-catalog';
+import {
+  formatHintArguments,
+  TRAJECTORY_POLICY_META,
+  type ScenarioTaskDefinition,
+} from '../content/scenario-task';
 
 function taskHasToolBoundaries(task: ScenarioTaskDefinition): boolean {
   return Boolean(task.allowedTools?.length || task.expectedTools?.length || task.forbiddenTools?.length);
@@ -46,10 +50,8 @@ export function TaskProvidedSection({
   className?: string;
 }) {
   const hasInlineContext = Boolean(task.inlineContext && task.inlineContext.length > 0);
-  const hasSimulatedFiles = Boolean(task.simulatedFiles && task.simulatedFiles.length > 0);
-  const hasAttachments = hasInlineContext || hasSimulatedFiles;
-  const hasTools = Boolean(task.allowedTools && task.allowedTools.length > 0);
-  const hasSystemContext = Boolean(task.systemContext);
+  const hasWorkspaceFiles = Boolean(task.workspaceFiles && task.workspaceFiles.length > 0);
+  const hasAttachments = hasInlineContext || hasWorkspaceFiles;
 
   return (
     <section
@@ -75,14 +77,14 @@ export function TaskProvidedSection({
         </div>
       ) : null}
 
-      {hasSimulatedFiles ? (
+      {hasWorkspaceFiles ? (
         <div className="task-attachments-list">
-          {task.simulatedFiles!.map((file, idx) => (
-            <div key={`${file.label}-${idx}`} className="task-attachment-item">
+          {task.workspaceFiles!.map((file, idx) => (
+            <div key={`${file.relPath}-${idx}`} className="task-attachment-item">
               <div className="task-attachment-header">
                 <span className="task-attachment-label">{file.label}</span>
-                <span className="task-attachment-kind">{file.kind}</span>
-                <span className="task-attachment-path">{file.path}</span>
+                <span className="task-attachment-kind">{file.decoy ? 'decoy file' : 'workspace file'}</span>
+                <span className="task-attachment-path">{file.relPath}</span>
               </div>
               <pre className="task-attachment-content"><code>{file.content}</code></pre>
             </div>
@@ -94,20 +96,17 @@ export function TaskProvidedSection({
         <p className="task-provided-none">No synthetic content provided (raw prompt only).</p>
       ) : null}
 
-      {hasSystemContext ? (
-        <p className="task-system-context">
-          <strong>System context:</strong> {task.systemContext}
-        </p>
-      ) : null}
+      <p className="task-system-context">
+        The model is always offered the full production tool set. The scenario&apos;s allowed tools
+        are graded, not hidden.
+      </p>
 
-      {hasTools ? (
+      {task.promptHint ? (
         <div className="task-provided-tools">
-          <strong>Allowed tools:</strong>
-          <div className="task-tool-chips">
-            {task.allowedTools!.map((tool) => (
-              <code key={tool} className="task-tool-chip">{tool}</code>
-            ))}
-          </div>
+          <strong>Prompt hint:</strong>{' '}
+          <span>
+            {task.promptHint.hintedTools.join(', ')} ({formatHintArguments(task.promptHint)})
+          </span>
         </div>
       ) : null}
     </section>
@@ -130,21 +129,26 @@ export function TaskExpectationSection({
         <h2>Pass criteria</h2>
         <p className="task-section-note">{gradingMethodNote(task)}</p>
         <p>{task.expectedBehavior}</p>
+        <p className="task-section-note">
+          <strong>{TRAJECTORY_POLICY_META[task.trajectoryPolicy].label}.</strong>{' '}
+          {TRAJECTORY_POLICY_META[task.trajectoryPolicy].note}
+        </p>
       </section>
 
       {taskHasToolBoundaries(task) ? (
         <section className="task-detail-section" aria-label="Tool boundaries">
           <h2>Tool boundaries</h2>
           <p className="task-section-note">
-            Three separate policy dimensions, not one whitelist. A tool may appear in both{' '}
-            <strong>Allowed</strong> and <strong>Forbidden</strong>: available as a choice, but
-            calling it fails the scenario. Common in tool-selection and security-policy tasks.
+            The model is offered every production tool. <strong>Allowed</strong> tools are what the
+            scenario permits: calling any other tool and having it succeed fails the scenario.{' '}
+            <strong>Forbidden</strong> tools are the ones the scenario must not see used. No tool
+            is both.
           </p>
           <div className="task-tool-grid">
             {task.allowedTools?.length ? (
               <div>
                 <h3>Allowed tools</h3>
-                <p className="task-tool-column-note">Exposed to the model during the scenario.</p>
+                <p className="task-tool-column-note">Permitted by the scenario.</p>
                 <ul>
                   {task.allowedTools.map((tool) => (
                     <li key={tool}><code>{tool}</code></li>

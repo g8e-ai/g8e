@@ -16,7 +16,7 @@ import {
   visibleStreamEvents,
 } from '../views/derived';
 import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
-import { SCENARIO_TASK_BY_ID } from '../content/scenario-catalog';
+import { SCENARIO_TASK_BY_ID } from '../content/scenario-task';
 import { MODEL_ROLES, type AssignmentResult, type LiveEvent, type MetricValue, type PublicModelActivityRecord } from '../contract/types';
 import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
 const STREAM_PAGE_SIZE = 25;

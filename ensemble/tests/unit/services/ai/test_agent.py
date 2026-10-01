@@ -669,6 +669,86 @@ class TestMaxTurnLimitApproval:
         # Exactly max-turn provider calls, then abort (no approval possible)
         assert provider.generate_content_stream_primary.call_count == 2
 
+    async def _run_at_a_two_turn_limit(self, agent, context, provider):
+        event_service = make_event_service()
+        with (
+            patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2),
+            patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec,
+        ):
+
+            async def _fake_exec(*, result_out, **kwargs):
+                result_out.append([])
+                if False:
+                    yield
+
+            mock_exec.side_effect = _fake_exec
+
+            return [
+                chunk
+                async for chunk in agent._stream_with_tool_loop(
+                    inputs=context,
+                    event_service=event_service,
+                    llm_provider=provider,
+                )
+            ]
+
+    async def test_scored_run_stops_at_the_limit_without_asking_a_human_to_approve(self):
+        """No human is present to answer the continue-approval, so a scored run
+        (evaluation_context set) must deny it immediately instead of waiting,
+        and the COMPLETE chunk must say the limit was reached."""
+        from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.factories import build_g8e_http_context
+
+        approval_service = FakeApprovalService(approved=True)  # would approve if it were asked
+        provider = self._make_tool_calling_provider()
+        agent = make_g8e_agent(approval_service=approval_service)
+        g8e_context = build_g8e_http_context(
+            web_session_id="web-test-001", user_id="user-test-001"
+        ).model_copy(
+            update={
+                "evaluation_context": EvaluationInferenceContext(
+                    campaign_id="campaign-1",
+                    run_id="run-1",
+                    assignment_id="assignment-1",
+                    evaluation_attempt_id="attempt-1",
+                    scenario_id="scenario-1",
+                    model_registry_digest="d" * 64,
+                    model_registry=[InferenceModelVariant(model="test-model", digest="a" * 64)],
+                    target_operator_session_id="session-1",
+                )
+            }
+        )
+        context = make_agent_inputs(g8e_context=g8e_context, active_agent=ReasoningAgent.SAGE)
+        make_gen_config()
+
+        chunks = await self._run_at_a_two_turn_limit(agent, context, provider)
+
+        assert approval_service.agent_continue_approval_calls == []
+        assert provider.generate_content_stream_primary.call_count == 2
+        complete = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
+        assert complete.data.tool_turn_limit_reached is True
+        assert complete.data.finish_reason == "tool_turn_limit"
+
+    async def test_production_run_reaching_the_limit_still_asks_for_approval(self):
+        """Characterization: the immediate denial is keyed on evaluation_context;
+        a production request still waits on the human."""
+        from tests.fakes.fake_approval_service import FakeApprovalService
+
+        approval_service = FakeApprovalService(approved=False)
+        provider = self._make_tool_calling_provider()
+        agent = make_g8e_agent(approval_service=approval_service)
+        context = make_agent_inputs()
+        make_gen_config()
+
+        chunks = await self._run_at_a_two_turn_limit(agent, context, provider)
+
+        assert len(approval_service.agent_continue_approval_calls) == 1
+        complete = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
+        assert complete.data.tool_turn_limit_reached is True
+        assert complete.data.finish_reason == "stopped_by_operator"
+
 
 # =============================================================================
 # TEST: _stream_with_tool_loop - Token Accumulation

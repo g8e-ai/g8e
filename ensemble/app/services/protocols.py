@@ -16,6 +16,8 @@ from app.constants import (
     FileOperation,
     HistoryActor,
 )
+from g8e.models.internal_api import EvaluationInferenceContext
+
 from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,
@@ -851,7 +853,12 @@ class ResultHandlerServiceProtocol(Protocol):
 class ToolExecutorProtocol(Protocol):
     """Protocol for AI tool registration and execution."""
 
-    def get_tools(self, agent_mode: AgentMode, model_to_use: str | None) -> list[types.ToolGroup]:
+    def get_tools(
+        self,
+        agent_mode: AgentMode,
+        model_to_use: str | None,
+        evaluation_context: EvaluationInferenceContext | None = None,
+    ) -> list[types.ToolGroup]:
         raise NotImplementedError
 
     async def execute_tool_call(

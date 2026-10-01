@@ -380,6 +380,12 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
+	aggregateState.Suite = methodologySuiteFromCatalog(catalog)
+	if RunAggregateComplete(assignments, results, aggregateState) {
+		if aggregateState.ProviderEnvironment, err = observationReader.ObservedProviderEnvironment(ctx, results); err != nil {
+			return nil, err
+		}
+	}
 	aggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, boundReport, exportedAt)
 	if err != nil {
 		return nil, err
@@ -536,8 +542,8 @@ func (e *CampaignExporter) buildAssignmentExportRecord(
 		verificationStatus = "verified"
 	}
 	record := CampaignExportAssignmentRecord{SchemaVersion: campaignExportSchemaVersion, RecordType: publicMessageTypeAssignmentResult}
-	generatedCatalog, artifacts, catalogErr := LoadScenarioCatalog()
-	if catalogErr == nil && generatedCatalog.GetCatalogDigest() == catalog.GetCatalogDigest() {
+	artifacts, artifactsErr := store.LoadScenarioArtifacts(ctx, run.GetCampaignBinding().GetCampaignId(), catalog)
+	if artifactsErr == nil {
 		scenario, resolveErr := ResolvePublicScenarioContext(ctx, store, run, catalog, assignment, artifacts)
 		if resolveErr == nil {
 			composed, composeErr := BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{

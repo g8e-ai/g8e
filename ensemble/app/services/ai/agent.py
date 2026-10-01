@@ -28,7 +28,7 @@ import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import app.llm.llm_types as types
-from app.errors import ValidationError
+from app.errors import ToolsNotSupportedError, ValidationError
 from app.constants import (
     AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
@@ -92,6 +92,24 @@ def _resolve_agent_model_role(inputs: AgentInputs) -> str:
         if inputs.active_agent == ReasoningAgent.DASH
         else "primary"
     )
+
+
+def _agent_role_for_telemetry(inputs: AgentInputs) -> str:
+    """Return the persona a model call is attributed to.
+
+    The chat pipeline always assigns an active agent. A scored request without
+    one would be attributed to a role the grader cannot recognise, so it fails
+    loudly instead of reporting ``unknown``.
+    """
+    if inputs.active_agent:
+        return inputs.active_agent.value
+    if inputs.g8e_context.evaluation_context is not None:
+        raise ValidationError(
+            "active_agent is required for evaluation requests",
+            field="active_agent",
+            component="g8ee",
+        )
+    return "unknown"
 
 
 def _agent_generation_stream(
@@ -251,7 +269,11 @@ class g8eEnsemble:
                         logger.error("[AGENT] Fatal error after streaming started: %s", e)
                     yield StreamChunkFromModel(
                         type=StreamChunkFromModelType.ERROR,
-                        data=StreamChunkData(error=str(e), model_calls=model_calls),
+                        data=StreamChunkData(
+                            error=str(e),
+                            model_calls=model_calls,
+                            provider_tool_rejection=isinstance(e, ToolsNotSupportedError),
+                        ),
                     )
                     return
 
@@ -372,10 +394,22 @@ class g8eEnsemble:
         tool_response_sizes: list[int] = []
 
         loop_turn = 0
+        tool_turn_limit_reached = False
         try:
             while True:
                 loop_turn += 1
                 if loop_turn > AGENT_MAX_TOOL_TURNS:
+                    tool_turn_limit_reached = True
+                    if inputs.g8e_context.evaluation_context is not None:
+                        # A scored run has no human to answer the continue-approval,
+                        # so the request would stall until it times out. Deny it
+                        # immediately; the trace records tool_turn_limit_reached.
+                        logger.warning(
+                            "[AGENT] Scored run reached max tool turns (%d); stopping without approval",
+                            AGENT_MAX_TOOL_TURNS,
+                        )
+                        final_finish_reason = "tool_turn_limit"
+                        break
                     if self._approval_service is None:
                         logger.error(
                             "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
@@ -434,6 +468,7 @@ class g8eEnsemble:
                 )
                 monotonic_start = time.monotonic()
                 model_role = _resolve_agent_model_role(inputs)
+                agent_role = _agent_role_for_telemetry(inputs)
                 try:
                     stream_response = _agent_generation_stream(
                         llm_provider,
@@ -454,9 +489,7 @@ class g8eEnsemble:
                     model_calls.append(
                         build_model_call_telemetry(
                             provider=llm_provider,
-                            agent_role=inputs.active_agent.value
-                            if inputs.active_agent
-                            else "unknown",
+                            agent_role=agent_role,
                             model_role=model_role,
                             model=model_name,
                             monotonic_start=monotonic_start,
@@ -472,7 +505,7 @@ class g8eEnsemble:
                 model_calls.append(
                     build_model_call_telemetry(
                         provider=llm_provider,
-                        agent_role=inputs.active_agent.value if inputs.active_agent else "unknown",
+                        agent_role=agent_role,
                         model_role=model_role,
                         model=model_name,
                         monotonic_start=monotonic_start,
@@ -529,7 +562,9 @@ class g8eEnsemble:
                     request_settings=inputs.request_settings,
                     event_service=event_service,
                 ):
-                    yield chunk
+                    yield chunk.model_copy(
+                        update={"data": chunk.data.model_copy(update={"loop_turn": loop_turn})}
+                    )
 
                 fc_responses: list[ToolCallResponse] = fc_responses_out[0]
 
@@ -604,5 +639,6 @@ class g8eEnsemble:
                 token_usage=token_usage,
                 model_calls=model_calls,
                 tool_response_sizes=tool_response_sizes if tool_response_sizes else None,
+                tool_turn_limit_reached=tool_turn_limit_reached or None,
             ),
         )

@@ -8,7 +8,7 @@ import "github.com/g8e-ai/g8e/v2/internal/services/publicdisclosure"
 
 const (
 	campaignProjectionEnvelopeHistoricalVersion = "1.0.0"
-	campaignProjectionEnvelopeEnrichedVersion   = "1.1.0"
+	campaignProjectionEnvelopeEnrichedVersion   = "1.2.0"
 )
 
 // ValidatePublicAssignmentRecord exposes the shared disclosure validator to

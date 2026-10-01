@@ -5,7 +5,7 @@ title: MCP Protocol
 # MCP Protocol
 
 Last Updated: 2026-09-28
-Version: v2.2.5
+Version: v2.2.6
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -174,6 +174,12 @@ To list all supported agents:
 
 ```bash
 g8e mcp agent list
+```
+
+To check an agent's launcher config and tool lockdown without installing or starting the agent (writes only to an isolated temporary directory, so it is safe in CI):
+
+```bash
+g8e mcp agent verify <agent>
 ```
 
 The `show` command displays three configuration modes:
@@ -455,6 +461,7 @@ See [SSE Streaming](../../docs/architecture/sse.md) for the full endpoint and se
 | Concern | File |
 |---|---|
 | Agent launcher (agent run) | `internal/cli/cmd/mcp/` (`runMCPAgentRun`) |
+| Supported-agent registry (config, launch args, verify hooks) | `internal/cli/agent/` |
 | Gateway entry | `internal/cli/cmd/gateway.go` (gatewayCmd, gatewayStartCmd) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http_router.go` |
