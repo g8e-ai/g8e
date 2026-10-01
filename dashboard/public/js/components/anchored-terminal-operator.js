@@ -26,14 +26,8 @@ export class TerminalOperatorMixin {
             EventType.OPERATOR_STATUS_UPDATED_STOPPED,
             EventType.OPERATOR_STATUS_UPDATED_TERMINATED,
         ];
-        // A status event concerns one Operator of the user's fleet; only the
-        // one this terminal has bound takes the terminal out of bound state.
         for (const eventType of unboundStatuses) {
-            this.eventBus.on(eventType, (data) => {
-                if (this.boundOperator && data?.operator_id === this.boundOperator.operator_id) {
-                    this.setOperatorUnbound();
-                }
-            });
+            this.eventBus.on(eventType, () => this.setOperatorUnbound());
         }
 
         this.eventBus.on(EventType.OPERATOR_PANEL_LIST_UPDATED, (data) => {

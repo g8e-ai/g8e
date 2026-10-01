@@ -14,13 +14,11 @@ stateDiagram-v2
 
     Bound --> Available: Unbind<br/>(producer unbinds)
 
-    Active --> Stale: No heartbeat > 60s<br/>(checked on every operator<br/>document read)
-
     Bound --> Stale: Heartbeat missed<br/>(no heartbeat > 2 intervals)
 
     Available --> Stale: Heartbeat missed
 
-    Stale --> Active: Heartbeat received<br/>(Gateway restores active)
+    Stale --> Bound: Rebind<br/>(producer re-binds<br/>after recovery)
 
     Stale --> Offline: Connection lost
 
@@ -49,7 +47,7 @@ stateDiagram-v2
 
     note right of Stale
         Stale operators are unusable
-        until their next heartbeat.
+        until bound again.
         STALE and OFFLINE statuses
         can authenticate (for bootstrap
         and recovery); TERMINATED is
@@ -102,28 +100,29 @@ Only the **producer** (the human or intent producer who owns the session) can bi
 
 ### 4. Heartbeats
 
-Every remote Operator emits heartbeat telemetry every **30 seconds** (default; `--heartbeat-interval` accepts 0-30 seconds so the 60-second stale window always spans at least two beats).
+Bound Operators emit heartbeat telemetry every **30 seconds** (default; configurable via `--heartbeat-interval`).
 
 - **Heartbeat interval**: `heartbeatIntervalOrDefault` defaults to 30s (`internal/config/config.go`).
 - **Heartbeat scheduler**: `HeartbeatService.StartScheduler` runs a periodic ticker (`internal/services/pubsub/heartbeat_service.go`).
 - **Heartbeat payload**: System telemetry wrapped in a `GovernanceEnvelope` with `operator_id`.
-- **Gateway handling**: `handleHeartbeatPublish` is the sole heartbeat persistence path. It decodes the authoritative `GovernanceEnvelope.payload` (falling back to `intent_data` only when payload bytes are absent), stores canonical `HeartbeatResult` protojson with protobuf field names in `latest_heartbeat_snapshot`, denormalizes `system_identity.hostname` to `current_hostname`, stamps `last_heartbeat_at` with the Gateway clock, restores a `stale` Operator to `active`, and updates `updated_at` (`internal/services/gateway/gateway_service.go`).
+- **Gateway handling**: `handleHeartbeatPublish` is the sole heartbeat persistence path. It decodes the authoritative `GovernanceEnvelope.payload` (falling back to `intent_data` only when payload bytes are absent), stores canonical `HeartbeatResult` protojson with protobuf field names in `latest_heartbeat_snapshot`, denormalizes `system_identity.hostname` to `current_hostname`, and updates `updated_at` (`internal/services/gateway/gateway_service.go`).
 - **Ensemble handling**: g8ee is not on the heartbeat channel. Application consumers receive Gateway-owned operator events through the Gateway protocol and SSE bridge.
 - **Protocol events**:
-  - `g8e.v1.operator.heartbeat.sent` — Operator sent heartbeat (published by the Operator)
-  - `g8e.v1.operator.heartbeat.requested` — Gateway requested on-demand heartbeat (handled by the Operator)
-  - `g8e.v1.operator.heartbeat.received` and `g8e.v1.operator.heartbeat.missed` are registered in the event registry but not published; the Gateway records receipt as `last_heartbeat_at` and derives silence as `stale` (see below).
+  - `g8e.v1.operator.heartbeat.sent` — Operator sent heartbeat
+  - `g8e.v1.operator.heartbeat.received` — Gateway received heartbeat
+  - `g8e.v1.operator.heartbeat.missed` — Heartbeat missed (interval elapsed without receipt)
+  - `g8e.v1.operator.heartbeat.requested` — Gateway requested on-demand heartbeat
 
 ### 5. Stale Detection
 
-A remote Operator in `active` status with no heartbeat for more than **60 seconds** (2 × 30s default interval, `constants.OperatorHeartbeatStaleAfter`) is moved to `stale`.
+If a heartbeat is not received after **60 seconds** (2 × 30s default interval), the Operator is considered stale per protocol semantics.
 
-- **Mechanism**: The Gateway document store evaluates staleness before every read of the `operators` collection (`DocGet`, `DocQuery`, `DocList`, `GetField`) and persists the transition with a conditional update (`internal/services/gateway/operator_staleness.go`). No reader can observe a silent Operator as `active`. If reconciliation fails, the read fails closed. A Gateway sweep runs the same reconciliation every 15 seconds so the transition does not depend on a reader.
-- **Last sign of life**: The Gateway-stamped `last_heartbeat_at`, falling back to `claimed_at` and then `created_at` for an Operator that has not heartbeated yet. The Operator never supplies it. The embedded Operator is exempt.
 - **Status**: `OperatorStatusStale` (`internal/constants/status.go`).
-- **Observation**: The transition is persisted on the operator document and observed through `g8e operator list`, `g8e operator show`, and the operator API. The Gateway also publishes `g8e.v1.operator.status.updated.stale` to the owner's web sessions, whichever reader or sweep applied the transition.
-- **Impact**: Stale Operators are **unusable**: every capability selector and every CLI command that requires `active` rejects them. However, `STALE` and `OFFLINE` statuses can still authenticate (to support bootstrap and recovery) — only `TERMINATED` is a hard-gate rejection (`internal/services/gateway/gateway_auth.go`).
-- **Recovery**: The next heartbeat restores a `stale` Operator to `active` and the Gateway publishes `g8e.v1.operator.status.updated.active` so a dashboard showing the Operator stale clears it. A heartbeat never revives a `stopped` or `terminated` Operator.
+- **Protocol event**: `g8e.v1.operator.status.updated.stale`.
+- **Impact**: Stale Operators are **unusable** until they are bound again. However, `STALE` and `OFFLINE` statuses can still authenticate (to support bootstrap and recovery) — only `TERMINATED` is a hard-gate rejection (`internal/services/gateway/gateway_auth.go`).
+- **Recovery**: A stale operator that reconnects and is re-bound by its producer transitions back to `bound`.
+
+Consumers can also evaluate freshness from `latest_heartbeat_snapshot` timestamps on the operator document.
 
 ### 6. Remote Stop
 
@@ -131,7 +130,7 @@ Operators can be stopped remotely via stop event signals:
 
 - **Protocol event**: `g8e.v1.operator.shutdown.requested` (`EventOperatorShutdownRequested`).
 - **Acknowledgment**: `g8e.v1.operator.shutdown.acknowledged` (`EventOperatorShutdownAcknowledged`).
-- **Status transition**: The Operator transitions to `stopped` (`OperatorStatusStopped`) and the Gateway publishes `g8e.v1.operator.status.updated.stopped` to the owner's web sessions.
+- **Status transition**: The Operator transitions to `stopped` (`OperatorStatusStopped`).
 - **Recovery**: A stopped Operator can be restarted (re-enroll or reconnect), transitioning back to `active`.
 
 `g8e operator stop` is a governed command sent only to the selected remote session. The Gateway marks a target stopped only after the exact session acknowledges shutdown. Revocation is different: it invalidates the workload identity, deactivates sessions, disconnects matching pub/sub channels, and is terminal for that enrollment.
@@ -144,7 +143,7 @@ Termination is a permanent, irreversible action:
 - **Implementation**: `TerminateOperator` in `RegistrationService` (`internal/services/gateway/registration_service.go`).
 - **Authorization**: Only the operator's owner (`op.UserID`) can terminate. Wrong owner → rejected.
 - **Status**: `OperatorStatusTerminated` (`internal/constants/status.go`).
-- **Observation**: Recorded on the operator document (`termination_reason` is set when supplied). The Gateway publishes `g8e.v1.operator.status.updated.terminated` to the owner's web sessions after `TerminateOperator` persists it. Terminations that the platform enrollment flow applies (a lease superseded by re-enrollment, or a revoked enrollment) are not pushed.
+- **Protocol event**: `g8e.v1.operator.status.updated.terminated`.
 - **Impact**: The operator's identity is permanently rejected at the auth middleware. Terminated operators cannot authenticate, connect, or be recovered.
 
 ## Operator Status Reference
@@ -161,8 +160,6 @@ Termination is a permanent, irreversible action:
 | `unavailable` | Manually marked unavailable | No | No |
 
 ## Protocol Events Reference
-
-These constants are registered in the event registry. The Gateway publishes the heartbeat, shutdown request, and shutdown acknowledgment events above; The Gateway also publishes `status.updated.stale`, `status.updated.stopped`, `status.updated.terminated`, and the `status.updated.active` that follows a heartbeat recovery; g8ee publishes the bind and unbind updates (`status.updated.bound` and the `status.updated.active` after an unbind). `heartbeat.received`, `heartbeat.missed`, and `status.updated.offline`, `available`, and `unavailable` are registered but not published: no Gateway path moves an Operator into those statuses on a transition. The pushed events are telemetry and carry the transition (`operator_id`, `status`, `name`, `timestamp`); the operator document stays the source of truth.
 
 | Event | Constant | Description |
 |---|---|---|

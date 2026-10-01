@@ -350,9 +350,6 @@ func operatorStartCmd() *cobra.Command {
 		Short: "Start the g8e Operator in foreground (worker mode)",
 		Long:  `Start the g8e Operator in foreground as a worker. This connects to the Gateway and executes commands. This is the re-exec target for remote deployment and can also be run directly for debugging.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateHeartbeatInterval(heartbeatInterval); err != nil {
-				return err
-			}
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			opts := serve.ServeOperatorOptions{
 				LogLevel:                        logLevel,
@@ -398,7 +395,7 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&executionVault, "execution-vault", "s", true, "Enable execution vault (data stays in working directory)")
 	cmd.Flags().BoolVarP(&noGit, "no-git", "G", false, "Disable Git integration")
 	cmd.Flags().StringVarP(&logLevel, "log", "l", "info", "Log level: info, error, debug")
-	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat interval in seconds (0-30; the Gateway marks an Operator stale after 60 seconds without a heartbeat)")
+	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat interval in seconds")
 	cmd.Flags().StringVar(&latticeEndpoint, "lattice-endpoint", "", "Lattice gRPC endpoint URL")
 	cmd.Flags().StringVar(&latticeClientID, "lattice-client-id", "", "OAuth2 client ID")
 	cmd.Flags().StringVar(&latticeClientSecret, "lattice-client-secret", "", "OAuth2 client secret")
@@ -423,21 +420,6 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&provenanceOperatorModelStorageRoot, "model-storage-root", "", "Root directory containing content-addressed model weight blobs (for example ~/.ollama/models)")
 
 	return cmd
-}
-
-// validateHeartbeatInterval rejects heartbeat intervals the Gateway would read
-// as silence. The Gateway marks an Operator stale after
-// constants.OperatorHeartbeatStaleAfter without a heartbeat, so the interval
-// may be at most half of that to tolerate one missed beat. Zero selects the
-// default.
-func validateHeartbeatInterval(seconds int) error {
-	interval := time.Duration(seconds) * time.Second
-	maxInterval := constants.OperatorHeartbeatStaleAfter / 2
-	if interval < 0 || interval > maxInterval {
-		return fmt.Errorf("%w: %s is outside 0 (default) to %s; the Gateway marks an Operator stale after %s without a heartbeat",
-			constants.ErrOperatorHeartbeatIntervalInvalid, interval, maxInterval, constants.OperatorHeartbeatStaleAfter)
-	}
-	return nil
 }
 
 func operatorCpCmd() *cobra.Command {

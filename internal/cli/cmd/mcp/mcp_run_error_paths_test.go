@@ -124,7 +124,7 @@ func TestStartGatewayIfNeeded_ConfigLoadError(t *testing.T) {
 		}
 		t.Cleanup(func() { shared.ConfigLoad = originalLoad })
 
-		err := startGatewayIfNeeded(shared.NewFileSvc, "")
+		err := startGatewayIfNeeded(shared.NewFileSvc)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mcp: load config")
 	})
@@ -142,7 +142,7 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 		}
 		t.Cleanup(func() { shared.ConfigLoad = originalLoad })
 
-		err := launchAgentWithGovernance("claude", nil, false, "", shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+		err := launchAgentWithGovernance("claude", nil, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrGatewayNotReady)
 	})

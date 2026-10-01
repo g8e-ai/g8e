@@ -214,7 +214,7 @@ Copy `.env.example` to `.env`. It holds only secrets and user-specific endpoints
 | `G8E_HOSTNAME` | `localhost` | Browser-visible hostname used for the Gateway public URL, CORS, and passkey RP settings. Set only when you reach the stack by another name. |
 | `G8E_USER_HOSTNAME` | `localhost` | Public User Gateway hostname for CORS and passkey configuration (g8ellama profile). |
 
-Container names (`g8e-<service>`) and host ports are literals in `docker-compose.yml`. The compose operators use the `g8e operator start` default heartbeat interval of 30 seconds; the Gateway marks an Operator `stale` after 60 seconds without a heartbeat, so `--heartbeat-interval` accepts at most 30:
+Container names (`g8e-<service>`), host ports, and the operator heartbeat interval are literals in `docker-compose.yml`:
 
 | Service | Published host ports |
 | --- | --- |

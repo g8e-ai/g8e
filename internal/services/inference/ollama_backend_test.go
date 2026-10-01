@@ -663,7 +663,7 @@ func TestOllamaBackend_GenerateNonOKStatusReturnsErrInferenceGenerateFailed(t *t
 	assert.ErrorIs(t, err, constants.ErrInferenceGenerateFailed)
 }
 
-func TestOllamaBackend_GenerateToolsUnsupportedReturnsErrInferenceToolsUnsupported(t *testing.T) {
+func TestOllamaBackend_GenerateToolsUnsupportedReturnsErrInferenceCapabilityUnsupported(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
@@ -687,7 +687,7 @@ func TestOllamaBackend_GenerateToolsUnsupportedReturnsErrInferenceToolsUnsupport
 
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.ErrorIs(t, err, constants.ErrInferenceToolsUnsupported)
+	assert.ErrorIs(t, err, constants.ErrInferenceCapabilityUnsupported)
 }
 
 func TestOllamaBackend_GenerateRequestTimeoutReturnsErrInferenceBackendTimeout(t *testing.T) {

@@ -631,7 +631,7 @@ export function MethodologyView() {
             </article>
           </div>
           <p className="docs-reading-note">
-            <strong>Read the UI in this order:</strong> dataset → role → quality state → denominator → metric. Compare values across dataset boundaries only where the Explorer offers it: the runs must declare the same provider environment and evaluated suites, and each stays a separate run that is never pooled or averaged. Never treat a live run as terminal evidence.
+            <strong>Read the UI in this order:</strong> dataset → role → quality state → denominator → metric. Never compare values across dataset boundaries or treat a live run as terminal evidence.
           </p>
         </DocsSection>
 

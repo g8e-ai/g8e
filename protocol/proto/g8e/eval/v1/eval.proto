@@ -101,55 +101,6 @@ enum PublicGradeExplanationCode {
   PUBLIC_GRADE_EXPLANATION_CODE_GRADER_UNAVAILABLE = 6;
 }
 
-// EvaluationTrajectoryPolicy decides how a scenario grades the ordered tool
-// trajectory the model produced in its guided loop.
-enum EvaluationTrajectoryPolicy {
-  EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED = 0;
-  // No tool is expected; graded on the final output.
-  EVALUATION_TRAJECTORY_POLICY_ANSWER = 1;
-  // The first tool choice is the test: the expected tool must be called and
-  // no forbidden tool may be called.
-  EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE = 2;
-  // Graded on the final outcome after a legitimate guided trajectory; a
-  // correction that follows returned guidance passes as RECOVERED.
-  EVALUATION_TRAJECTORY_POLICY_GUIDED = 3;
-  // No unauthorized effect plus an acceptable response to governance.
-  EVALUATION_TRAJECTORY_POLICY_GOVERNED = 4;
-}
-
-// EvaluationTrajectoryOutcome is the closed vocabulary for what the model did
-// across its guided loop.
-enum EvaluationTrajectoryOutcome {
-  EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED = 0;
-  EVALUATION_TRAJECTORY_OUTCOME_DIRECT = 1;
-  EVALUATION_TRAJECTORY_OUTCOME_RECOVERED = 2;
-  EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL = 3;
-  EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL = 4;
-  EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL = 5;
-  EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS = 6;
-  EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE = 7;
-  EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR = 8;
-  EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL = 9;
-  EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED = 10;
-  EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION = 11;
-}
-
-// EvaluationHintArgumentSource names where a hinted tool argument's value is
-// derivable from, so catalog lint can prove a prompt is answerable.
-enum EvaluationHintArgumentSource {
-  EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED = 0;
-  // The literal value appears in the rendered prompt.
-  EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT = 1;
-  // The value appears in the scenario's investigation seed.
-  EVALUATION_HINT_ARGUMENT_SOURCE_SEED = 2;
-  // The value is the attempt-scoped fixture workspace named in the prompt.
-  EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE = 3;
-  // The value comes from the bound-operator context g8ee supplies.
-  EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT = 4;
-  // Free-text rationale the model authors (for example a justification).
-  EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED = 5;
-}
-
 enum PublicActivityAvailability {
   PUBLIC_ACTIVITY_AVAILABILITY_UNSPECIFIED = 0;
   PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED = 1;
@@ -477,21 +428,6 @@ message PublicToolScoreDimensionRequirement {
   bool required = 2;
 }
 
-// PromptHintArgument names one required argument of a hinted tool and where
-// its value is derivable from. Values stay in the private input fixture.
-message PromptHintArgument {
-  string argument_name = 1;
-  EvaluationHintArgumentSource source = 2;
-  string tool_name = 3;
-}
-
-// PromptHint records which tools a scenario prompt hints at and where each
-// required argument comes from, so a failure can say the opportunity was real.
-message PromptHint {
-  repeated string hinted_tools = 1;
-  repeated PromptHintArgument arguments = 2;
-}
-
 // EvaluationScenarioDefinition describes one frozen typed scenario.
 message EvaluationScenarioDefinition {
   string scenario_id = 1;
@@ -511,8 +447,6 @@ message EvaluationScenarioDefinition {
   // homogeneous scheduler assigns the scenario only to these roles; the frozen
   // catalog digest binds the set.
   repeated ModelCampaignRole eligible_roles = 14;
-  EvaluationTrajectoryPolicy trajectory_policy = 15;
-  PromptHint prompt_hint = 16;
 }
 
 // ModelVariant is one frozen provider-backed model identity in a campaign.
@@ -763,11 +697,6 @@ message ModelInferenceRecord {
   g8e.compliance.v1.ComplianceEvidenceReference governed_receipt_ref = 30;
   string result_digest = 31;
   g8e.compliance.v1.ComplianceEvidenceReference provider_boundary_observation_ref = 32;
-  // Tool names as sent to the provider for this call, captured at the
-  // provider boundary. tools_declared_reported distinguishes "none declared"
-  // from "not reported".
-  repeated string tools_declared = 33;
-  bool tools_declared_reported = 34;
 }
 
 message ToolDecisionRecord {
@@ -789,11 +718,6 @@ message ToolCallRecord {
   EvaluationVerdictStatus schema_outcome = 5;
   EvaluationVerdictStatus semantic_outcome = 6;
   g8e.compliance.v1.ComplianceEvidenceReference governed_binding_ref = 7;
-  // Tool-loop turn whose model response issued the call (1-based; 0 = not
-  // reported). The model-visible guidance text stays in the private trace.
-  uint32 loop_turn = 8;
-  string error_type = 9;
-  bool guidance_shown = 10;
 }
 
 message EscalationRecord {
@@ -902,13 +826,6 @@ message EvaluationAssignmentResult {
   bool governed_actions_captured = 24;
   bool policy_decisions_captured = 25;
   optional uint64 scored_inference_span_nanos = 26;
-  EvaluationTrajectoryOutcome trajectory_outcome = 27;
-  uint32 guided_retry_count = 28;
-  // Private one-sentence failure reason (may quote the hint values and the
-  // start of the model output). Empty when the scenario passed.
-  string failure_reason = 29;
-  // Public-safe failure reason built only from public fields.
-  string public_failure_reason = 30;
 }
 
 enum EvaluationWitnessPolicy {
@@ -1045,8 +962,6 @@ message PublicScenarioSummary {
   repeated string forbidden_tools = 8;
   repeated PublicScenarioCriterion criteria = 9;
   repeated PublicToolScoreDimensionRequirement tool_score_dimensions = 10;
-  EvaluationTrajectoryPolicy trajectory_policy = 11;
-  PromptHint prompt_hint = 12;
 }
 
 message PublicSemanticGradeSummary {
@@ -1088,9 +1003,6 @@ message PublicToolCallActivityRecord {
   EvaluationVerdictStatus execution_outcome = 2;
   EvaluationVerdictStatus semantic_outcome = 3;
   PublicEvidenceSource evidence_source = 4;
-  uint32 loop_turn = 5;
-  string error_type = 6;
-  bool guidance_shown = 7;
 }
 
 message PublicPolicyDecisionActivityRecord {
@@ -1179,8 +1091,4 @@ message PublicAssignmentResultProjection {
   PublicAssignmentActivitySummary activity_summary = 17;
   repeated PublicEvidenceBinding evidence_bindings = 18;
   PublicVerificationMetadata verification_metadata = 19;
-  EvaluationTrajectoryOutcome trajectory_outcome = 20;
-  uint32 guided_retry_count = 21;
-  string failure_reason = 22;
-  repeated string tools_declared = 23;
 }

@@ -183,7 +183,7 @@ func TestPrepareAgentLaunch_UnsupportedAgent(t *testing.T) {
 
 	_, _, _, err := prepareAgentLaunch("cursor", "cursor", true)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrAgentNotFound)
+	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 // ─── prepareAgentLaunch: agent binary not in PATH ────────────────────────────
@@ -192,11 +192,13 @@ func TestPrepareAgentLaunch_AgentNotInPath(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
 
-	// A registered agent whose binary is not installed fails closed before any
-	// config is written.
+	// Ensure "nonexistent-agent-xyz" is not in PATH
+	originalPath := os.Getenv("PATH")
 	t.Setenv("PATH", "")
 
-	_, _, _, err := prepareAgentLaunch("claude", "claude", true)
+	_, _, _, err := prepareAgentLaunch("nonexistent-agent-xyz", "nonexistent-agent-xyz", true)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotInPath)
+
+	_ = originalPath // silence linter
 }

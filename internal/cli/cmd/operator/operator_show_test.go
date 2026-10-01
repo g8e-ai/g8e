@@ -215,48 +215,6 @@ func TestOperatorShowCmdWithConfig_JSONOutput(t *testing.T) {
 	assert.Equal(t, "json-host", payload.Heartbeat.SystemIdentity.Hostname)
 }
 
-func TestOperatorShowCmdWithConfig_ReportsLastHeartbeatAndStaleStatus(t *testing.T) {
-	fileSvc, cfg := cmdtest.NewCmdTestEnv(t)
-	saveTestCredentials(t, fileSvc, cfg, "user-001")
-
-	lastHeartbeat := time.Date(2026, time.September, 30, 12, 34, 56, 0, time.UTC)
-	slotResp := models.OperatorSlotResponse{
-		Success: true,
-		Operators: []models.OperatorDocumentGo{
-			{
-				ID:                "op-stale",
-				OperatorSessionID: "session-stale",
-				Status:            constants.OperatorStatusStale,
-				LastHeartbeatAt:   &lastHeartbeat,
-			},
-		},
-	}
-	respJSON, _ := json.Marshal(slotResp)
-
-	loader := func(string) (*config.Config, error) { return cfg, nil }
-	client := &cmdtest.MockAPIClient{GetResp: respJSON}
-
-	textCmd := operatorShowCmdWithConfig(loader, authcmd.MockClientFactory(client), cmdtest.FileSvcFactoryFor(fileSvc))
-	var textBuf bytes.Buffer
-	textCmd.SetOut(&textBuf)
-	textCmd.SetErr(&textBuf)
-	require.NoError(t, textCmd.RunE(textCmd, []string{"session-stale"}))
-	assert.Contains(t, textBuf.String(), "Status:    stale")
-	assert.Contains(t, textBuf.String(), "Last heartbeat: 2026-09-30 12:34:56 UTC")
-
-	jsonCmd := operatorShowCmdWithConfig(loader, authcmd.MockClientFactory(client), cmdtest.FileSvcFactoryFor(fileSvc))
-	cmdtest.EnableGlobalJSON(t, jsonCmd)
-	var jsonBuf bytes.Buffer
-	jsonCmd.SetOut(&jsonBuf)
-	jsonCmd.SetErr(&jsonBuf)
-	require.NoError(t, jsonCmd.RunE(jsonCmd, []string{"session-stale"}))
-	var payload operatorShowOutput
-	require.NoError(t, json.Unmarshal(jsonBuf.Bytes(), &payload))
-	assert.Equal(t, constants.OperatorStatusStale, payload.Status)
-	require.NotNil(t, payload.LastHeartbeatAt)
-	assert.True(t, payload.LastHeartbeatAt.Equal(lastHeartbeat))
-}
-
 func TestOperatorShowCmdWithConfig_ConfigLoadError(t *testing.T) {
 	failLoader := func(string) (*config.Config, error) {
 		return nil, fmt.Errorf("config load error")

@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/agent"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
@@ -158,16 +157,15 @@ func TestMCPConfigOutput_AgentShowContainsAllSections(t *testing.T) {
 	shared.ConfigLoad = func(string) (*config.Config, error) { return cfg, nil }
 	t.Cleanup(func() { shared.ConfigLoad = originalConfigLoad })
 
-	for _, integration := range agent.All() {
-		agentID := string(integration.ID)
-		t.Run(agentID, func(t *testing.T) {
+	for _, agent := range getSupportedAgents() {
+		t.Run(agent.ID, func(t *testing.T) {
 			cmd := &cobra.Command{}
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
 
-			require.NoError(t, printAgentShow(cmd, agentID),
-				"printAgentShow must succeed for agent %s with a temp-rooted config", agentID)
+			require.NoError(t, printAgentShow(cmd, agent.ID),
+				"printAgentShow must succeed for agent %s with a temp-rooted config", agent.ID)
 
 			output := buf.String()
 			assert.Contains(t, output, "g8e Gateway MCP Configurations",

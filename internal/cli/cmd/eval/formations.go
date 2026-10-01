@@ -89,23 +89,6 @@ type formationRunJSON struct {
 	Roles                []formationRunRoleJSON `json:"roles"`
 }
 
-func extractModelName(tag string) string {
-	parts := strings.Split(tag, ":")
-	if len(parts) > 0 {
-		base := parts[0]
-		base = strings.TrimPrefix(base, "hf.co/")
-		base = strings.TrimPrefix(base, "milkey/")
-		base = strings.TrimPrefix(base, "kitsonk/")
-		base = strings.TrimPrefix(base, "Impulse2000/")
-		base = strings.TrimPrefix(base, "Randomblock1/")
-		if idx := strings.LastIndex(base, "/"); idx != -1 {
-			base = base[idx+1:]
-		}
-		return base
-	}
-	return tag
-}
-
 func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -149,81 +132,12 @@ func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 				return err
 			}
-			type tableRow struct {
-				id          string
-				displayName string
-				primary     string
-				assistant   string
-				lite        string
-				vram        string
-			}
-			var rows []tableRow
-			for i, formation := range topologies.Formations() {
-				summary := summaries[i]
-				primary, _ := formation.Model(evaluation.FormationRolePrimary)
-				assistant, _ := formation.Model(evaluation.FormationRoleAssistant)
-				lite, _ := formation.Model(evaluation.FormationRoleLite)
-				primaryStr := fmt.Sprintf("%s (%s)", primary.ServedModelTag, primary.Provider)
-				assistantStr := fmt.Sprintf("%s (%s)", assistant.ServedModelTag, assistant.Provider)
-				liteStr := fmt.Sprintf("%s (%s)", lite.ServedModelTag, lite.Provider)
-				vramStr := fmt.Sprintf("%d/%d", summary.EstimatedVRAMMiB, summary.MaxVRAMMiB)
-				displayName := summary.DisplayName
-				if strings.HasPrefix(summary.ID, "heterogeneous-") {
-					displayName = fmt.Sprintf("%s / %s / %s",
-						extractModelName(primary.ServedModelTag),
-						extractModelName(assistant.ServedModelTag),
-						extractModelName(lite.ServedModelTag))
+			for _, summary := range summaries {
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%d MiB / %d MiB\tsovereign=%d delegated_primary=%t\n",
+					summary.ID, summary.DisplayName, summary.EstimatedVRAMMiB, summary.MaxVRAMMiB, summary.SovereignModelCount, summary.DelegatedPrimary)
+				if err != nil {
+					return err
 				}
-				rows = append(rows, tableRow{
-					id:          summary.ID,
-					displayName: displayName,
-					primary:     primaryStr,
-					assistant:   assistantStr,
-					lite:        liteStr,
-					vram:        vramStr,
-				})
-			}
-			widths := [6]int{
-				len("Formation ID"),
-				len("Display Name"),
-				len("Primary"),
-				len("Assistant"),
-				len("Lite"),
-				len("VRAM"),
-			}
-			for _, row := range rows {
-				if len(row.id) > widths[0] {
-					widths[0] = len(row.id)
-				}
-				if len(row.displayName) > widths[1] {
-					widths[1] = len(row.displayName)
-				}
-				if len(row.primary) > widths[2] {
-					widths[2] = len(row.primary)
-				}
-				if len(row.assistant) > widths[3] {
-					widths[3] = len(row.assistant)
-				}
-				if len(row.lite) > widths[4] {
-					widths[4] = len(row.lite)
-				}
-				if len(row.vram) > widths[5] {
-					widths[5] = len(row.vram)
-				}
-			}
-			headerFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds\n",
-				widths[0], widths[1], widths[2], widths[3], widths[4], widths[5])
-			separatorFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds  %%-%ds\n",
-				widths[0], widths[1], widths[2], widths[3], widths[4], widths[5])
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), headerFmt,
-				"Formation ID", "Display Name", "Primary", "Assistant", "Lite", "VRAM")
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), separatorFmt,
-				strings.Repeat("-", widths[0]), strings.Repeat("-", widths[1]),
-				strings.Repeat("-", widths[2]), strings.Repeat("-", widths[3]),
-				strings.Repeat("-", widths[4]), strings.Repeat("-", widths[5]))
-			for _, row := range rows {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), headerFmt,
-					row.id, row.displayName, row.primary, row.assistant, row.lite, row.vram)
 			}
 			return nil
 		},

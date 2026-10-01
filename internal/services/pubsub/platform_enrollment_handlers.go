@@ -465,9 +465,6 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	); err != nil {
 		return nil, "", "", "", "", "", fmt.Errorf("persist operator doc: %w", err)
 	}
-	if err := h.supersedeOperatorLeases(user.ID, req.SystemFingerprint, operatorID); err != nil {
-		return nil, "", "", "", "", "", fmt.Errorf("supersede prior operator leases: %w", err)
-	}
 
 	creds := &models.PlatformEnrollmentOperatorCredentials{
 		OperatorCert:      operatorCertPEM,
@@ -486,60 +483,6 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 		Operator:      creds,
 	}
 	return resp, operatorID, operatorSessionID, cliSessionID, cliCertSerial, cliCertFingerprint, nil
-}
-
-// supersedeOperatorLeases terminates every other non-terminated remote Operator
-// document the owner holds for the same system fingerprint and deactivates its
-// Operator session. The fingerprint folds in host, directory, account, port, and
-// role, so a matching fingerprint is the same Operator identity enrolling again,
-// not a second Operator. Without this, each re-enrollment left the previous
-// lease active beside the new one and a role that must resolve to exactly one
-// Operator (provider-boundary observer, provenance, inference) became ambiguous.
-// The new document is persisted first so a failure here leaves a redundant
-// lease, never zero; a retried issuance supersedes whatever it left behind.
-func (h *PlatformEnrollmentHandler) supersedeOperatorLeases(ownerID, systemFingerprint, replacementID string) error {
-	if systemFingerprint == "" {
-		return nil
-	}
-	docs, err := h.deps.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), []models.DocFilter{
-		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", ownerID))},
-		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", systemFingerprint))},
-		{Field: "operator_type", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorTypeRemote))},
-		{Field: "status", Op: "!=", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusTerminated))},
-	}, "", 0)
-	if err != nil {
-		return fmt.Errorf("query operators for fingerprint: %w", err)
-	}
-	reason := fmt.Sprintf("superseded by re-enrollment as operator %s", replacementID)
-	for _, doc := range docs {
-		if doc.ID == replacementID {
-			continue
-		}
-		var sessionID string
-		if raw, ok := doc.Data["operator_session_id"]; ok {
-			if err := json.Unmarshal(raw, &sessionID); err != nil {
-				return fmt.Errorf("decode operator session of %s: %w", doc.ID, err)
-			}
-		}
-		if sessionID != "" {
-			if err := h.deps.OperatorSessions.DeactivateOperatorSession(sessionID); err != nil &&
-				!errors.Is(err, constants.ErrGatewayOperatorSessionInvalid) {
-				return fmt.Errorf("deactivate operator session of %s: %w", doc.ID, err)
-			}
-		}
-		update, err := json.Marshal(platformOperatorTerminationUpdate{
-			Status:            string(constants.OperatorStatusTerminated),
-			UpdatedAt:         time.Now().UTC(),
-			TerminationReason: reason,
-		})
-		if err != nil {
-			return fmt.Errorf("marshal termination of %s: %w", doc.ID, err)
-		}
-		if _, err := h.deps.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), doc.ID, update); err != nil {
-			return fmt.Errorf("terminate superseded operator %s: %w", doc.ID, err)
-		}
-	}
-	return nil
 }
 
 // HandlePersistPolicy writes the app policy document via DocSet at the

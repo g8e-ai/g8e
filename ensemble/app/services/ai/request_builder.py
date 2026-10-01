@@ -29,7 +29,6 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from g8e.models.events import ScrubbingTelemetry
-from g8e.models.internal_api import EvaluationInferenceContext
 
 import app.llm.llm_types as types
 from app.constants import ATTACHMENT_FILENAMES_PREFIX_TEMPLATE, AgentMode
@@ -55,10 +54,7 @@ class BuiltContents:
 @runtime_checkable
 class ToolExecutorProtocol(Protocol):
     def get_tools(
-        self,
-        agent_mode: AgentMode,
-        model_to_use: str | None,
-        evaluation_context: EvaluationInferenceContext | None = None,
+        self, agent_mode: AgentMode, model_to_use: str | None
     ) -> list[types.ToolGroup]: ...
     @property
     def g8e_web_search_available(self) -> bool: ...
@@ -231,7 +227,6 @@ class AIRequestBuilder:
         agent_mode: AgentMode,
         max_tokens: int | None = None,
         model_override: str | None = None,
-        evaluation_context: EvaluationInferenceContext | None = None,
     ) -> PrimaryLLMSettings:
         """
         Build PrimaryLLMSettings for main-model generate_content calls.
@@ -242,9 +237,6 @@ class AIRequestBuilder:
             agent_mode: G8E_BOUND (execute) or G8E_NOT_BOUND (advise)
             max_tokens: Maximum output tokens override
             model_override: Model name override (Pro, Flash, etc.)
-            evaluation_context: Set for scored evaluation requests; the full
-                production tool set is then declared regardless of the model's
-                registry entry (see ``resolve_tool_gate``).
 
         Returns:
             PrimaryLLMSettings ready for generate_content_stream_primary()
@@ -254,11 +246,7 @@ class AIRequestBuilder:
             raise ConfigurationError(
                 "No LLM model configured. Set a primary_model in user settings."
             )
-        tools = (
-            self.tool_executor.get_tools(agent_mode, model, evaluation_context=evaluation_context)
-            if self.tool_executor
-            else []
-        )
+        tools = self.tool_executor.get_tools(agent_mode, model) if self.tool_executor else []
 
         return AIGenerationConfigBuilder.build_primary_settings(
             model=model,

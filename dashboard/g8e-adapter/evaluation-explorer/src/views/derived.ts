@@ -21,13 +21,11 @@ import { MODEL_ROLE_WIRE_ORDER, MODEL_ROLES } from '../content/roles';
 import type {
   AssignmentResult,
   CatalogSnapshot,
-  EnvironmentSource,
   EvaluationSummary,
   LiveEvent,
   MetricValue,
   ModelRole,
   ModelSummary,
-  ProviderEnvironment,
   PublicGradeExplanationCode,
   PublicSemanticGradeSummary,
   QualityState,
@@ -926,72 +924,6 @@ export function roleLeaderRows(models: ModelSummary[]): RoleLeaderRow[] {
     role,
     leader: modelRoleLeaderboardRows(models, role)[0],
   }));
-}
-
-export type ComparisonCompatibility =
-  | { compatible: true; crossDataset: false }
-  | { compatible: true; crossDataset: true; environmentSource: EnvironmentSource }
-  | { compatible: false; reason: string };
-
-const PROVIDER_ENVIRONMENT_FIELDS = [
-  'source',
-  'processor',
-  'memory',
-  'graphics',
-  'storage',
-  'system_type',
-] as const satisfies readonly (keyof ProviderEnvironment)[];
-
-function providerEnvironmentKey(environment: ProviderEnvironment): string {
-  return PROVIDER_ENVIRONMENT_FIELDS.map((field) => environment[field] ?? '').join('\u0000');
-}
-
-/** Whether the selected models can be compared side by side.
- *
- *  Datasets are run-scoped and the site never combines incompatible ones, so
- *  models from different datasets are comparable only when every dataset
- *  declares the same provider environment and evaluated the same suites; then
- *  the runs are directly comparable and each stays a separate run. A dataset
- *  that does not declare its environment or has no evaluation suite makes the
- *  selection incompatible: the check fails closed rather than assuming. */
-export function comparisonCompatibility(
-  models: ModelSummary[],
-  catalogs: CatalogSnapshot[],
-  evaluations: EvaluationSummary[],
-): ComparisonCompatibility {
-  const datasetIds = Array.from(new Set(models.map((model) => model.dataset_id)));
-  if (datasetIds.length <= 1) return { compatible: true, crossDataset: false };
-  let environmentKey: string | undefined;
-  let environmentSource: EnvironmentSource | undefined;
-  let suiteKey: string | undefined;
-  for (const datasetId of datasetIds) {
-    const environment = catalogs.find((catalog) => catalog.dataset_id === datasetId)?.provider_environment;
-    if (!environment) {
-      return { compatible: false, reason: 'a selected dataset does not declare its provider environment' };
-    }
-    const suiteIds = Array.from(
-      new Set(evaluations.filter((run) => run.dataset_id === datasetId).map((run) => run.suite_id)),
-    ).sort();
-    if (suiteIds.length === 0) {
-      return { compatible: false, reason: 'a selected dataset has no evaluation suite' };
-    }
-    const nextEnvironmentKey = providerEnvironmentKey(environment);
-    const nextSuiteKey = suiteIds.join('\u0000');
-    if (environmentKey === undefined || suiteKey === undefined) {
-      environmentKey = nextEnvironmentKey;
-      environmentSource = environment.source;
-      suiteKey = nextSuiteKey;
-      continue;
-    }
-    if (nextEnvironmentKey !== environmentKey) {
-      return { compatible: false, reason: 'the datasets ran on different provider environments' };
-    }
-    if (nextSuiteKey !== suiteKey) {
-      return { compatible: false, reason: 'the datasets evaluated different suites' };
-    }
-  }
-  // The source is part of the environment key, so every dataset agrees on it.
-  return { compatible: true, crossDataset: true, environmentSource: environmentSource ?? 'declared' };
 }
 
 export interface SystemLeaderboardRow {

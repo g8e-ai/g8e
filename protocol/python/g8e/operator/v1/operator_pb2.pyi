@@ -78,7 +78,6 @@ class ReceiptFailureCode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID: _ClassVar[ReceiptFailureCode]
     RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID: _ClassVar[ReceiptFailureCode]
     RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID: _ClassVar[ReceiptFailureCode]
-    RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED: _ClassVar[ReceiptFailureCode]
 
 class ModelRole(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -175,7 +174,6 @@ RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH: ReceiptFailureCode
 RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID: ReceiptFailureCode
 RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID: ReceiptFailureCode
 RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID: ReceiptFailureCode
-RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED: ReceiptFailureCode
 MODEL_ROLE_UNSPECIFIED: ModelRole
 MODEL_ROLE_PRIMARY: ModelRole
 MODEL_ROLE_ASSISTANT: ModelRole
