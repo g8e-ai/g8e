@@ -20,23 +20,37 @@ import (
 
 // renderScenarioMessage composes the outgoing chat message text from the
 // frozen user prompt and any inline synthetic content. Content is appended
-// beneath the prompt, each block introduced by its label, so the model
+// beneath the prompt in labeled blocks with no stray header, so the model
 // receives it as literal message text rather than through any attachment
-// mechanism.
-func renderScenarioMessage(userPrompt string, inlineContext []ScenarioInlineContent) string {
-	if len(inlineContext) == 0 {
-		return userPrompt
-	}
+// mechanism. The prompt and content are rendered with workspace substitution.
+func renderScenarioMessage(userPrompt string, inlineContext []ScenarioInlineContent, ws *ScenarioWorkspace) string {
 	var b strings.Builder
-	b.WriteString(userPrompt)
-	b.WriteString("\n\nBelow:")
+	prompt := strings.TrimSpace(userPrompt)
+	if ws != nil {
+		prompt = ws.Render(prompt)
+	}
+	b.WriteString(prompt)
 	for _, item := range inlineContext {
 		b.WriteString("\n\n")
-		if item.Label != "" {
-			b.WriteString(item.Label)
-			b.WriteString(":\n")
+		if item.Label != "" || item.Kind != "" {
+			b.WriteString("[")
+			if item.Label != "" {
+				b.WriteString(item.Label)
+				if item.Kind != "" {
+					b.WriteString(" (")
+					b.WriteString(item.Kind)
+					b.WriteString(")")
+				}
+			} else if item.Kind != "" {
+				b.WriteString(item.Kind)
+			}
+			b.WriteString("]\n")
 		}
-		b.WriteString(item.Content)
+		content := item.Content
+		if ws != nil {
+			content = ws.Render(content)
+		}
+		b.WriteString(content)
 	}
 	return b.String()
 }

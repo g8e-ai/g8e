@@ -32,6 +32,30 @@ func ValidateHomogeneousCampaignTrace(req ChatProbeRequest, trace EvaluationTrac
 	return validateHomogeneousRoleTrace(trace, req.DesignatedModelRole, modelCalls)
 }
 
+// workspaceFromTrace extracts the ScenarioWorkspace from a trace's evaluation_context.
+func workspaceFromTrace(trace EvaluationTrace) *ScenarioWorkspace {
+	if len(trace) == 0 {
+		return nil
+	}
+	evalCtx, ok := evaluationTrace(trace["evaluation_context"])
+	if !ok {
+		return nil
+	}
+	wsData, ok := evalCtx["workspace"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	root, _ := wsData["root"].(string)
+	opWd, _ := wsData["operator_working_directory"].(string)
+	if root == "" || opWd == "" {
+		return nil
+	}
+	return &ScenarioWorkspace{
+		Root:                     root,
+		OperatorWorkingDirectory: opWd,
+	}
+}
+
 // ImportAssignmentResultFromTrace materializes one terminal assignment result
 // from a validated g8ee trace and optional content-addressed trace evidence.
 func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace EvaluationTrace, traceEvidence *compliancev1.ComplianceEvidenceReference, now time.Time, newID func(string) string) (*evalv1.EvaluationAssignmentResult, error) {
@@ -44,12 +68,13 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace Evalu
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	ws := workspaceFromTrace(trace)
 	probeReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{
 		GradingMethod:    req.GradingMethod,
 		ScenarioGold:     req.ScenarioGold,
 		ScenarioTools:    req.ScenarioTools,
 		RequiredConcepts: req.RequiredConcepts,
-	})
+	}, ws)
 	if err != nil {
 		return nil, err
 	}

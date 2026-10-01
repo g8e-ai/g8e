@@ -84,16 +84,20 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	if e == nil || e.client == nil {
 		return nil, fmt.Errorf("evaluation: execute assignment: chat executor is required")
 	}
+	ws, err := NewScenarioWorkspace(req.Binding.DataOperatorWorkingDirectory, req.Assignment.GetRunId(), req.AttemptID)
+	if err != nil {
+		return nil, assignmentExecutionError("evaluation: execute assignment: build scenario workspace", err)
+	}
 	probeReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{
 		GradingMethod:    req.GradingMethod,
 		ScenarioGold:     req.ScenarioGold,
 		ScenarioTools:    req.ScenarioTools,
 		RequiredConcepts: req.RequiredConcepts,
-	})
+	}, &ws)
 	if err != nil {
 		return nil, err
 	}
-	if err := e.materializeWorkspaceFiles(ctx, req); err != nil {
+	if err := e.materializeWorkspaceFiles(ctx, req, &ws); err != nil {
 		return nil, assignmentExecutionError("evaluation: execute assignment: materialize workspace files", err)
 	}
 	chatReq, err := BuildChatProbeRequest(probeReq, e.dataOperatorID, e.dataOperatorSessionID)
@@ -146,7 +150,7 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 // the chat request is sent. It fails closed when a scenario needs a writer and
 // none is configured, rather than letting the assignment run against fixture
 // content the model can never actually read.
-func (e *CampaignChatExecutor) materializeWorkspaceFiles(_ context.Context, req AssignmentExecutionRequest) error {
+func (e *CampaignChatExecutor) materializeWorkspaceFiles(_ context.Context, req AssignmentExecutionRequest, ws *ScenarioWorkspace) error {
 	if len(req.ScenarioInput.WorkspaceFiles) == 0 {
 		return nil
 	}

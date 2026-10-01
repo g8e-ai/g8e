@@ -124,7 +124,7 @@ func (e *formationChatRoleExecutor) ExecuteRole(ctx context.Context, req Formati
 		ModelRegistry:           e.registry,
 		EvaluationLane:          "model_role",
 		DesignatedModelRole:     string(req.Role),
-		Message:                 formationRoleChatMessage(e.input, e.priorOutputs),
+		Message:                 formationRoleChatMessage(e.input, e.priorOutputs, nil),
 		GradingMethod:           evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 	}
 	chatReq, err := BuildChatProbeRequest(probeReq, r.dataOperatorID, e.runContext.DataSessionID)
@@ -189,8 +189,8 @@ func (r *CampaignFormationChatRunner) materializeWorkspaceFiles(_ context.Contex
 // is necessarily textual here, matching the cumulative state the
 // direct-dispatch runner already builds via formationAppendRoleState
 // (formation_production_adapter.go).
-func formationRoleChatMessage(input ScenarioInputFixture, priorOutputs []formationRoleOutput) string {
-	base := renderScenarioMessage(input.UserPrompt, input.InlineContext)
+func formationRoleChatMessage(input ScenarioInputFixture, priorOutputs []formationRoleOutput, ws *ScenarioWorkspace) string {
+	base := renderScenarioMessage(input.UserPrompt, input.InlineContext, ws)
 	if len(priorOutputs) == 0 {
 		return base
 	}

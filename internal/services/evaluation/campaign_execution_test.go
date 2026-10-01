@@ -28,7 +28,8 @@ func TestBuildCampaignChatRequest_MessageIncludesInlineContext(t *testing.T) {
 		syntheticInlineContent("log", "synthetic-service-log", "2026-09-16T08:05:11Z ERROR service=checkout-api upstream=payments.internal.example reason=timeout"),
 	}
 
-	chatReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{GradingMethod: req.GradingMethod})
+	req.Binding.DataOperatorWorkingDirectory = "/tmp/operator"
+	chatReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{GradingMethod: req.GradingMethod}, nil)
 	require.NoError(t, err)
 
 	assert.True(t, strings.HasPrefix(chatReq.Message, req.ScenarioInput.UserPrompt))
@@ -39,8 +40,9 @@ func TestBuildCampaignChatRequest_MessageIncludesInlineContext(t *testing.T) {
 func TestBuildCampaignChatRequest_MessageIsBarePromptWithoutInlineContext(t *testing.T) {
 	t.Parallel()
 	req := homogeneousAssignmentExecutionRequest(t, "primary")
+	req.Binding.DataOperatorWorkingDirectory = "/tmp/operator"
 
-	chatReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{GradingMethod: req.GradingMethod})
+	chatReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{GradingMethod: req.GradingMethod}, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, req.ScenarioInput.UserPrompt, chatReq.Message)
