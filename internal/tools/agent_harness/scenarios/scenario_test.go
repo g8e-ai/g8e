@@ -973,7 +973,7 @@ func TestRegistryUniqueNames(t *testing.T) {
 
 func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
-	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(ensembleScenarios()) + len(dhsScenarios()) + len(financeScenarios()) + len(fedrampScenarios())
+	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(agentLauncherScenarios()) + len(governanceScenarios()) + len(ensembleScenarios()) + len(dhsScenarios()) + len(financeScenarios()) + len(fedrampScenarios())
 
 	assert.Equal(t, expectedCount, len(scenarios), "Registry should have correct scenario count")
 }
@@ -1055,6 +1055,9 @@ func TestRegistryPostureDeclarations(t *testing.T) {
 		"a2a-plain":    Doctrine,
 		"a2a-secured":  Doctrine,
 		"a2a-protobuf": Doctrine,
+
+		// Launcher scenarios — registry-driven agent config verification plus a plain MCP tools/list
+		"agent-launcher-config": Doctrine,
 
 		// Governance scenarios — SubmitMaximal with Ensemble/Authenticator
 		"consensus":        Consensus, // Ensemble, no Authenticator, expects admission
