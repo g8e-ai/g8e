@@ -720,7 +720,7 @@ class TestMaxTurnLimitApproval:
                 )
             }
         )
-        context = make_agent_inputs(g8e_context=g8e_context)
+        context = make_agent_inputs(g8e_context=g8e_context, active_agent=ReasoningAgent.SAGE)
         make_gen_config()
 
         chunks = await self._run_at_a_two_turn_limit(agent, context, provider)

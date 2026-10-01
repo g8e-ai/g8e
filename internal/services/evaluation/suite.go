@@ -129,6 +129,15 @@ func BuiltinScenarioSuite(id string) (ScenarioSuite, bool) {
 	}
 }
 
+// reservedSuiteID reports whether a custom suite may not use the ID: the
+// built-in suites and the default suite's pre-rename ID.
+func reservedSuiteID(id string) bool {
+	if _, builtin := BuiltinScenarioSuite(id); builtin {
+		return true
+	}
+	return id == LegacyDefaultSuiteID
+}
+
 // BuiltinSuiteIDs lists the built-in suite IDs in display order.
 func BuiltinSuiteIDs() []string {
 	return []string{DefaultSuiteID, SmokeSuiteID}
@@ -137,11 +146,15 @@ func BuiltinSuiteIDs() []string {
 // CatalogRecomputesGrades reports whether verification regrades the stored
 // results of a campaign frozen from this catalog. Every suite grades from the
 // fixtures frozen with its campaign, so a custom suite is always regraded. Only
-// a built-in default suite at a version other than the current one is not: its
-// stored grades were produced against fixtures this build no longer carries.
+// a built-in default suite at a version other than the current one, or under
+// its pre-rename ID, is not: its stored grades were produced against fixtures
+// this build no longer carries.
 func CatalogRecomputesGrades(ref *compliancev1.VersionedReference) bool {
 	if ref == nil || ref.GetVersion() == "" {
 		return true
+	}
+	if ref.GetId() == LegacyDefaultSuiteID {
+		return false
 	}
 	return ref.GetId() != DefaultSuiteID || ref.GetVersion() == DefaultSuiteVersion
 }

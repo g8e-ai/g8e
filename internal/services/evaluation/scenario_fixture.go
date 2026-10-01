@@ -26,6 +26,11 @@ const (
 	DefaultSuiteID      = "default-suite"
 	DefaultSuiteVersion = "1.1.0"
 
+	// LegacyDefaultSuiteID is the catalog id the built-in suite carried before
+	// it was renamed. Campaigns frozen under it (north-star-25@1.0.0) exist on
+	// disk, so it stays reserved and is treated as the built-in suite's lineage.
+	LegacyDefaultSuiteID = "north-star-25"
+
 	scenarioSyntheticLabel     = "SYNTHETIC - controlled evaluation fixture"
 	scenarioInputSchemaVersion = "1.2.0"
 	scenarioGoldSchemaVersion  = "1.1.0"

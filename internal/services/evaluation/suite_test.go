@@ -168,6 +168,7 @@ func TestCatalogRecomputesGrades(t *testing.T) {
 	assert.True(t, CatalogRecomputesGrades(versioned(DefaultSuiteID, DefaultSuiteVersion)))
 	assert.False(t, CatalogRecomputesGrades(versioned(DefaultSuiteID, "0.9.0")), "an older default-suite version was graded against fixtures this build no longer carries")
 	assert.True(t, CatalogRecomputesGrades(versioned("my-suite", "3.1.4")), "a custom suite grades from its own frozen fixtures at any version")
+	assert.False(t, CatalogRecomputesGrades(versioned(LegacyDefaultSuiteID, "1.0.0")), "campaigns frozen before the suite rename carry the legacy built-in id and were graded against fixtures this build no longer carries")
 }
 
 func TestSuiteStore_CreateListResolveUpdateDelete(t *testing.T) {
@@ -232,6 +233,12 @@ func TestSuiteStore_BuiltinSuitesAreReadOnlyAndReserved(t *testing.T) {
 	assert.ErrorIs(t, store.UpdateSuite(ctx, shadow), constants.ErrEvaluationSuiteBuiltin)
 	assert.ErrorIs(t, store.DeleteSuite(ctx, DefaultSuiteID), constants.ErrEvaluationSuiteBuiltin)
 	assert.ErrorIs(t, store.DeleteSuite(ctx, SmokeSuiteID), constants.ErrEvaluationSuiteBuiltin)
+
+	// The pre-rename catalog id stays reserved: a custom suite named after it
+	// would be mistaken for an old built-in run and skip grade recomputation.
+	legacy := customSuite(t, LegacyDefaultSuiteID, "1.0.0", "instruction-exact-format")
+	assert.ErrorIs(t, store.CreateSuite(ctx, legacy), constants.ErrEvaluationSuiteBuiltin)
+	assert.ErrorIs(t, store.UpdateSuite(ctx, legacy), constants.ErrEvaluationSuiteBuiltin)
 }
 
 func TestSuiteStore_InvalidSuiteIsNeverStored(t *testing.T) {

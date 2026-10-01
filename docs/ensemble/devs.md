@@ -3,8 +3,8 @@ doc_id: ensemble-devs
 title: Ensemble Development Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-01
+version: v2.2.5
 owners:
   - ensemble/
   - ensemble/app/
@@ -46,7 +46,7 @@ The in-tree `g8e` Python package under [protocol/python/](../../protocol/python/
 
 Ensemble-only values live under [ensemble/app/constants/](../../ensemble/app/constants/). These include internal API paths, environment variable names, runtime paths, provider configuration, message-sender identifiers, and mappings that have no protocol equivalent. [app/constants/generated_paths.py](../../ensemble/app/constants/generated_paths.py) and related generated modules expose values copied from the protocol package; update their source rather than hand-editing generated output.
 
-Generated Python protobuf modules are placed in [protocol/python/g8e/proto/](../../protocol/python/g8e/proto/) by the canonical protocol generator. The ensemble Make target does not generate them: `cd ensemble && make proto` runs the generator in check mode and fails when the canonical stubs are stale. To regenerate all language outputs, run `make proto` from the repository root; the Python portion invokes [protocol/python/scripts/generate_protos.py](../../protocol/python/scripts/generate_protos.py).
+Generated Python protobuf modules (`<package>_pb2.py` and `.pyi`, for example `eval/v1/eval_pb2.py`) are placed under [protocol/python/g8e/](../../protocol/python/g8e/) by the canonical protocol generator. The ensemble Make target does not generate them: `cd ensemble && make proto` runs the generator in check mode and fails when the canonical stubs are stale. To regenerate all language outputs, run `make proto` from the repository root; the Python portion invokes [protocol/python/scripts/generate_protos.py](../../protocol/python/scripts/generate_protos.py).
 
 The application model hub is `app.models.base`. It re-exports the protocol `G8eBaseModel`, `UTCDatetime`, Pydantic helpers, and the ensemble lifecycle bases:
 
@@ -150,6 +150,14 @@ Production chat declares tools through `AIToolService.get_tools()`, which consul
 - The `g8e` provider records the tool names it actually sent (`LLMProvider.declared_tool_names`, captured immediately before dispatch and cleared per call by `prepare_provider_call`). `build_model_call_telemetry` copies that capture onto the call's `ModelCallTelemetry.tools_declared` (`None` = not reported, `[]` = none declared), on both successful and failed calls, so the trace's `model_calls` carry what was actually sent and it is never recomputed from the registry.
 - If the provider refuses the declaration, the `g8e` provider raises `ToolsNotSupportedError`. The Gateway reports its typed `inference: tools unsupported` (backed by `RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED`, with legacy fallback to `inference: requested capability unsupported`), so the fingerprint lives in `app/llm/providers/_capability.py` with the other provider-rejection heuristics, and it is attributed to tools when the call declared tools. The agent loop turns that error into a `provider_tool_rejection` record on the trace and the assignment finalizes as a failed trace, not an infrastructure error.
 
+### Agent tool registry export
+
+The Go evaluation catalog must lint each scenario prompt against the real tool schemas and seed prior failed tool calls with the guidance g8ee really returns. It never copies either by hand. [ensemble/app/services/evaluation/agent_tool_registry_export.py](../../ensemble/app/services/evaluation/agent_tool_registry_export.py) renders them from `TOOL_SPECS` and from the real tool handlers (`forbidden_command_violation`, `tool_execution_failure`, and the recursive grep path validation) into [protocol/constants/agenttools/agent-tool-registry.json](../../protocol/constants/agenttools/agent-tool-registry.json): per tool its name, scope, agent modes, required arguments, and arguments, plus named guidance vectors such as `recursive_grep_search.missing_path`.
+
+- `make agent-tool-registry` regenerates the JSON, which the Go package `protocol/constants/agenttools` embeds. Never hand-edit the JSON.
+- `make agent-tool-registry-check` fails when the committed registry no longer matches what g8ee produces. Run it after changing a tool schema, a tool's validation, or a guidance message; the same comparison runs in `ensemble/tests/unit/services/evaluation/test_agent_tool_registry_export.py`, so a pydantic upgrade that rewords a validation error also fails the unit suite.
+- Pass `PYTHON` as a make argument (`make PYTHON=<venv>/bin/python agent-tool-registry-check`); the Makefile assigns it with `:=`, so a `PYTHON=` environment prefix is ignored.
+
 ## Service and test wiring
 
 `ServiceFactory.create_all_services()` constructs the production graph in dependency order: core services (HTTP, events, settings), data services (CRUD for investigations, operators, memories, cases, reputation), domain services (investigation logic, memory generation, reputation scoring, SSH inventory), and operator-adjacent services (authentication, API keys, certificates). It then assembles attachment, approval, tool execution, the g8e ensemble agent, and the chat pipeline. The chat pipeline creates its trace service unless injected. Operator heartbeat persistence and evaluation are Gateway-owned; g8ee has no heartbeat subscription.
@@ -158,7 +166,7 @@ Tests can inject fakes via [ensemble/tests/fakes/](../../ensemble/tests/fakes/).
 
 ## Protobuf and generated artifacts
 
-Protocol definitions consumed by g8ee are maintained under [protocol/proto/g8e/](../../protocol/proto/g8e/). Generated Python protobuf modules live in [protocol/python/g8e/proto/](../../protocol/python/g8e/proto/) with protocol-package ownership. Do not hand-edit generated Python modules. The ensemble `make proto` target verifies that canonical stubs are current via [protocol/python/scripts/generate_protos.py](../../protocol/python/scripts/generate_protos.py) with `--check`. Run the protocol root's `make proto` to regenerate all language outputs, then run parity tests ([tests/test_constants_parity.py](../../ensemble/tests/test_constants_parity.py)) and relevant unit tests under [tests/unit/constants/](../../ensemble/tests/unit/constants/) and [tests/unit/clients/](../../ensemble/tests/unit/clients/).
+Protocol definitions consumed by g8ee are maintained under [protocol/proto/g8e/](../../protocol/proto/g8e/). Generated Python protobuf modules live under [protocol/python/g8e/](../../protocol/python/g8e/) (one `<package>/v1/` directory per proto package) with protocol-package ownership. Do not hand-edit generated Python modules. The ensemble `make proto` target verifies that canonical stubs are current via [protocol/python/scripts/generate_protos.py](../../protocol/python/scripts/generate_protos.py) with `--check`. Run the protocol root's `make proto` to regenerate all language outputs, then run parity tests ([tests/test_constants_parity.py](../../ensemble/tests/test_constants_parity.py)) and relevant unit tests under [tests/unit/constants/](../../ensemble/tests/unit/constants/) and [tests/unit/clients/](../../ensemble/tests/unit/clients/).
 
 ## Related documentation
 

@@ -44,12 +44,7 @@ func evaluateContentCheck(output string, check ScenarioContentCheck, ws Scenario
 
 	// LeadingLabel check
 	if check.LeadingLabel != "" {
-		fields := strings.Fields(trimmed)
-		var firstWord string
-		if len(fields) > 0 {
-			firstWord = fields[0]
-		}
-		cleanedFirst := cleanContentLabel(firstWord)
+		cleanedFirst := leadingWord(trimmed)
 		cleanedExpected := cleanContentLabel(ws.Render(check.LeadingLabel))
 		if cleanedFirst != cleanedExpected {
 			return false, fmt.Sprintf("leading label mismatch: got %q, want %q", cleanedFirst, cleanedExpected)
@@ -121,6 +116,22 @@ func evaluateContentCheck(output string, check ScenarioContentCheck, ws Scenario
 	}
 
 	return true, ""
+}
+
+// leadingWord returns the lowercased first alphanumeric word of text, ignoring
+// leading emphasis and quote marks, so "Yes, they contradict" and "**Yes**."
+// both lead with "yes" while "Yesterday" does not. A LeadingLabel is therefore
+// a single alphanumeric word.
+func leadingWord(text string) string {
+	cleaned := strings.TrimLeft(strings.TrimSpace(text), "*_`\"' ")
+	end := len(cleaned)
+	for i, r := range cleaned {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			end = i
+			break
+		}
+	}
+	return strings.ToLower(cleaned[:end])
 }
 
 func cleanContentLabel(s string) string {

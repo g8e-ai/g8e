@@ -2391,6 +2391,7 @@ definitions:
     - 16
     - 17
     - 18
+    - 19
     format: int32
     type: integer
     x-enum-varnames:

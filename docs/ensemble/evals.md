@@ -3,8 +3,8 @@ doc_id: ensemble-evals
 title: Ensemble Evaluations
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-29
-version: v2.2.4
+last_updated: 2026-10-01
+version: v2.2.5
 owners:
   - ensemble/app/services/evaluation/
   - protocol/python/g8e/models/internal_api.py
@@ -56,6 +56,8 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | INV-EVAL-CONTEXT-04 | The `target_operator_session_id` identifies the intended governed-Operator execution session. The `evaluation_lane` is `model_role` or `system` (defaults to `system`). |
 | INV-EVAL-CONTEXT-05 | For the `model_role` lane, `designated_model_role` is required and MUST be `primary`, `assistant`, or `lite`. For the `system` lane, `designated_model_role` MUST NOT be present. |
 | INV-EVAL-CONTEXT-06 | The `grading_method` is `deterministic` or `semantic_judge` (defaults to `deterministic`). The `gold_summary` is required for `semantic_judge` and carries the user prompt, expected behavior, required and forbidden concepts, and expected and forbidden tools. |
+| INV-EVAL-CONTEXT-07 | An optional `seed` (`EvaluationInvestigationSeed`) describes the investigation a scored turn runs in: `case_title`, optional `case_description`, `turns` (sender `user`, `primary`, or `assistant`), `history_events`, and optional `case_memory`. The model bounds it to 16 turns, 16 history events, and 8000 characters per text field. A seed is accepted only when `resource_creation.create_case` is true; otherwise the request fails with HTTP 400 before anything is written, so a seed can never write into an existing investigation. |
+| INV-EVAL-CONTEXT-08 | An optional `workspace` (`EvaluationWorkspace`) carries the attempt-scoped fixture `root` and the Data Operator's `operator_working_directory`; the root MUST be strictly under the working directory with no `..` segment. g8ee only echoes it into the trace; the Go campaign executor owns writing the fixtures. |
 
 ### Trace schema and persistence (`INV-EVAL-TRACE`)
 
@@ -63,7 +65,7 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | --- | --- |
 | INV-EVAL-TRACE-01 | `EvaluationTraceService` persists one immutable JSON trace per assignment and evaluation attempt at `<runtime-dir>/data/evaluation/traces/<assignment-id>/<evaluation-attempt-id>.json`. `<runtime-dir>` is the `--runtime-dir` launch argument; when it is not given, g8ee uses `.g8e` in the project root. |
 | INV-EVAL-TRACE-02 | Assignment and attempt IDs are validated as safe filenames before filesystem access. Trace writes use canonical JSON and atomic temporary-file replacement (write to `.json.tmp`, then replace). |
-| INV-EVAL-TRACE-03 | Trace schema version is `4` (`3` added `arguments_json`, `command`, and `result_json` to tool calls; `4` added the terminal `error` field).  Digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch. |
+| INV-EVAL-TRACE-03 | Trace schema version is `6` (`3` added `arguments_json`, `command`, and `result_json` to tool calls; `4` added the terminal `error` field; `5` added `tool_gate`, `provider_tool_rejection`, per-call `tools_declared`, and the guidance fields; `6` added `seed_application`, `user_memories_suppressed`, and `tool_turn_limit_reached`). Digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch. |
 | INV-EVAL-TRACE-04 | The authenticated, read-only lookup is `GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}`. The response is `{ "trace": <typed trace> }`. Missing traces return not-found. Unsafe path parameters are rejected. |
 
 ### Role control and model selection (`INV-EVAL-ROLE`)
@@ -73,6 +75,16 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | INV-EVAL-ROLE-01 | For the `model_role` lane, `apply_homogeneous_role_control` runs after triage and records the designated role, the natural role from triage, whether they agree, and the triage complexity. The designated role overrides normal triage routing. |
 | INV-EVAL-ROLE-02 | The `primary` role activates `ReasoningAgent.SAGE` with `SagePersona`. The `assistant` and `lite` roles activate `ReasoningAgent.DASH` with `DashPersona`, with model resolution taken from the designated tier and request overrides. Resolution uses `resolve_model_for_designated_role`, which reads only that tier's own override and settings value and never falls back to another tier; a missing model raises a `ValidationError`. |
 | INV-EVAL-ROLE-03 | A `lite` assignment always resolves the lite tier; the normal simple/complex routing rule does not override that assignment. The `system` lane does not apply homogeneous role control and follows normal triage routing. |
+
+### Seeded investigations and eval-only divergences (`INV-EVAL-SEED`)
+
+| ID | Rule |
+| --- | --- |
+| INV-EVAL-SEED-01 | `InvestigationSeedService.apply` writes a seed through the same investigation, case, and memory services the live chat path uses, in this order: case and investigation title and description, conversation turns, history events, then case memory. It returns the counts it wrote (`EvaluationSeedApplication`). It never writes user-wide memories. |
+| INV-EVAL-SEED-02 | A history event's `event_type` MUST be one of eight operator events (`OPERATOR_COMMAND_EXECUTION`, `OPERATOR_COMMAND_FAILED`, `OPERATOR_COMMAND_APPROVAL_REJECTED`, `OPERATOR_FILESYSTEM_GREP_COMPLETED`, `OPERATOR_FILESYSTEM_GREP_FAILED`, `OPERATOR_FILESYSTEM_READ_COMPLETED`, `OPERATOR_FILESYSTEM_READ_FAILED`, `OPERATOR_FILE_EDIT_FAILED`). Any other type is refused before any write, and a write failure surfaces rather than leaving a partial seed. |
+| INV-EVAL-SEED-03 | The router applies the seed synchronously after inline case creation and before the chat task is scheduled, and does not schedule AI title generation for a seeded request, so the realistic seeded title stands. If `apply` raises, the already-begun trace is closed through `EvaluationTraceService.finalize_crashed` and the error is re-raised, so the Go side sees an HTTP error rather than a stuck `running` trace. |
+| INV-EVAL-SEED-04 | Every eval-only divergence from production chat is keyed on `evaluation_context` and recorded in the trace: `tool_gate: bypassed_for_eval`; `user_memories_suppressed: true` (user-wide memories, which are artifacts of other assignments, are not read; case memories still are); and `tool_turn_limit_reached: true` (at `AGENT_MAX_TOOL_TURNS` the continue-approval is denied immediately and the run ends with finish reason `tool_turn_limit`, because no human is present to answer). A production request takes none of these branches. |
+| INV-EVAL-SEED-05 | A pipeline crash on a scored request still finalizes a terminal trace (`failed`, keeping any triage already recorded and never overwriting a terminal trace), so the Go waiter gets a result instead of timing out. |
 
 ### Semantic grading (`INV-EVAL-GRADE`)
 
@@ -89,11 +101,14 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | --- | --- | --- |
 | Evaluation request model | [protocol/python/g8e/models/internal_api.py](../../protocol/python/g8e/models/internal_api.py) | `EvaluationInferenceContext`, `EvaluationLane`, `DesignatedModelRole`, `EvaluationGoldSummary` |
 | Trace service implementation | [ensemble/app/services/evaluation/trace_service.py](../../ensemble/app/services/evaluation/trace_service.py) | `EvaluationTraceService.begin()`, `finalize()`, `load()` |
+| Investigation seed application | [ensemble/app/services/evaluation/investigation_seed.py](../../ensemble/app/services/evaluation/investigation_seed.py) | `InvestigationSeedService.apply()`, `SEEDABLE_HISTORY_EVENTS` |
+| Agent tool registry export | [ensemble/app/services/evaluation/agent_tool_registry_export.py](../../ensemble/app/services/evaluation/agent_tool_registry_export.py) | `make agent-tool-registry-check`; see [Ensemble Development Guide](devs.md) |
 | Eval tool-gate decision | [ensemble/app/services/evaluation/tool_gate.py](../../ensemble/app/services/evaluation/tool_gate.py) | `resolve_tool_gate()`; applied by `AIToolService.get_tools()` |
 | Role control implementation | [ensemble/app/services/evaluation/role_control.py](../../ensemble/app/services/evaluation/role_control.py) | `apply_homogeneous_role_control()`, `resolve_role_outcome()` |
 | Semantic grader implementation | [ensemble/app/services/evaluation/semantic_grader.py](../../ensemble/app/services/evaluation/semantic_grader.py) | `grade_campaign_assignment_semantically()` |
 | Chat pipeline integration | [ensemble/app/services/ai/chat_pipeline.py](../../ensemble/app/services/ai/chat_pipeline.py) | Trace begin/finalize in `_finalize_evaluation_assignment()` |
 | Evaluation trace tests | [ensemble/tests/integration/test_evaluation_trace_digest_integration.py](../../ensemble/tests/integration/test_evaluation_trace_digest_integration.py) | Trace digest validation |
+| Seeded-fact integration test | [ensemble/tests/integration/test_investigation_seed_integration.py](../../ensemble/tests/integration/test_investigation_seed_integration.py) | Seeded history is returned by the real `query_investigation_context` handler |
 
 ## Procedures
 
@@ -109,6 +124,8 @@ The campaign controller sends the normal g8ee chat request with an `evaluation_c
 - `designated_model_role` is `primary`, `assistant`, or `lite` for the `model_role` lane and is required in that lane. It is not allowed in the `system` lane.
 - `grading_method` is `deterministic` or `semantic_judge`. It defaults to `deterministic`.
 - `gold_summary` is required for `semantic_judge` and carries the private user prompt, expected behavior, required concepts, expected tools, and forbidden tools used by the judge.
+- `seed` (optional) is the investigation the turn runs in; see [Seeded investigations](#seeded-investigations).
+- `workspace` (optional) is the attempt-scoped fixture workspace the Go executor prepared on the Data Operator. It is echoed in the trace and not otherwise used by g8ee.
 
 The request also carries the usual typed `RequestContext` and optional LLM overrides. The Go harness mirrors this contract in `internal/tools/agent_harness/client/ensemble.go`; the protocol model in `protocol/python/g8e/models/internal_api.py` is the contract source for the Python service.
 
@@ -116,7 +133,7 @@ The chat endpoint returns after starting the background chat task. The campaign 
 
 ## Evaluation execution path
 
-A scored request uses the normal `ChatPipelineService` rather than an evaluation-only inference shortcut:
+A scored request uses the normal `ChatPipelineService` rather than an evaluation-only inference shortcut. When it carries a seed, the router has already written the seeded investigation (see [Seeded investigations](#seeded-investigations)) before the chat task starts:
 
 1. g8ee performs triage and records the triage model telemetry in the assignment trace.
 2. For the `model_role` lane, `apply_homogeneous_role_control` runs after triage. It records the designated role, the natural role implied by triage, whether they agree, and the triage complexity. `primary` dynamically activates `ReasoningAgent.SAGE` with `SagePersona`; `assistant` and `lite` activate `ReasoningAgent.DASH` with `DashPersona`, with model resolution taken from the designated tier and its request overrides, with no cross-tier fallback.
@@ -124,7 +141,8 @@ A scored request uses the normal `ChatPipelineService` rather than an evaluation
 4. The system lane does not apply homogeneous role control and follows normal triage routing: complex turns use the primary Sage path, and other turns use the assistant Dash path.
 5. The full production tool set for the agent mode is declared to the scored model, for any model tag, registered or not. The request's `evaluation_context` lifts the static `supports_tools` gate that production chat applies (`tool_gate: bypassed_for_eval`); no capability probe, table, or label withholds tools or alters a verdict. The tool names actually sent to the provider are recorded on each model call as `tools_declared`. If the provider itself rejects the declaration, g8ee records a `provider_tool_rejection` and finalizes the trace as `failed`; that is an explicit scored reason, not an infrastructure error.
 6. The sequential ReAct loop (`G8eAgent._stream_with_tool_loop`) records model calls and tool activity against the bound remote Data Operator without synthetic mocks. Both Tier 1 fast smoke gate assignments (`--gate-smoke`) and full qualification assignments drive this identical production ReAct loop. Governed operator tool calls retain the bound Operator ID and session ID, execution binding, and receipt status in the trace. Failed tool results are classified as policy `deny` for known policy or validation blocks, or `refused` for other failures. Every tool result, including a failure, returns to the model, and the trace keeps the guidance the model was shown (see [Tool and governed-action evidence](#tool-and-governed-action-evidence)).
-7. Before finalizing the trace, g8ee waits for the background memory-generation task, subject to its evaluation barrier timeout, and includes its model telemetry when available.
+   A scored run does not read user-wide memories (`user_memories_suppressed`), and when the tool loop reaches `AGENT_MAX_TOOL_TURNS` it ends immediately (`tool_turn_limit_reached`) instead of waiting for a human to approve continuing (INV-EVAL-SEED-04).
+7. Before finalizing the trace, g8ee waits for the background memory-generation task, subject to its evaluation barrier timeout, and includes its model telemetry when available. The memory update reports `agent_role: codex`; the Go importer excludes it from the scored inference span and from latency and token aggregates. A memory-task failure or timeout still finalizes the trace as `completed`.
 8. For `semantic_judge`, g8ee invokes the evaluation judge after the interaction completes, then finalizes the trace. Deterministic assignments do not invoke the semantic judge.
 
 The Tribunal, Marshal, and Auditor remain application-layer behavior in the normal agent path. Tribunal agreement is not protocol L2 consensus and does not authorize a campaign action. Governed tool execution and its authoritative receipt remain owned by the Gateway and target Operator.
@@ -147,9 +165,11 @@ GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}
 
 The response is `{ "trace": <typed trace> }`. Missing traces return a not-found response, and unsafe path parameters are rejected. The Go campaign client polls this endpoint after submitting the chat request and imports the trace into the campaign's run-scoped evidence; g8ee does not write the Go campaign run store.
 
-A trace has schema version `5` and can contain:
+A trace has schema version `6` and can contain:
 
-- evaluation context and the g8ee chat execution ID;
+- evaluation context (including the echoed `seed` and `workspace`) and the g8ee chat execution ID;
+- `seed_application`, the counts of what the seed actually wrote (`turns`, `history_events`, `case_memory`), which proves the investigation was seeded and not merely requested;
+- `user_memories_suppressed` and `tool_turn_limit_reached`, the two eval-only divergences besides `tool_gate`;
 - triage and model-call telemetry;
 - controlled-role assignment and `invoked` or `role_not_invoked` outcome;
 - the designated-role output;
@@ -161,6 +181,16 @@ A trace has schema version `5` and can contain:
 - finish reason, terminal status, the terminal stream `error` message for a failed assignment, completion timestamp, and trace digest.
 
 The trace is campaign evidence, not an independent authorization record. It does not replace the Operator's local audit evidence, signed receipt, Gateway verification, or campaign verifier.
+
+## Seeded investigations
+
+A scored turn runs in an investigation that already has history, the way a real g8ee turn does. `InvestigationSeedService` ([ensemble/app/services/evaluation/investigation_seed.py](../../ensemble/app/services/evaluation/investigation_seed.py)) is constructed from the investigation, case, and memory services (no globals) and writes the seed in the order of INV-EVAL-SEED-01. The internal chat router calls it between inline case creation and scheduling the chat task. What the model can see follows from where each part is written:
+
+- Conversation turns become chat contents and are shown to the model inline. `SYSTEM`-sender messages are never shown to the model, so seeds do not use them.
+- History events go to the history trail. They are not inline; the model reaches them only through the real `query_investigation_context` handler (`history_trail`, `operator_actions`). A fact the model must look up therefore belongs in a history event. The summary line carries `tool_name` and `arguments_json` when present, because the history metadata has no field for them.
+- Case memory is written as the case's memory record; user-wide memories are never written.
+
+The seeded case title is the realistic scenario title; AI title generation is skipped for seeded requests so the title is never a harness label. Seed contracts and bounds are in INV-EVAL-CONTEXT-07; the Go side that builds and grades seeds is described in [Evaluations](../architecture/evals.md#scenario-fixtures-trajectories-and-grading).
 
 ## Tool and governed-action evidence
 
@@ -186,7 +216,7 @@ For campaign startup, enrollment, witness operators, smoke workflows, and recove
 
 ## Testing
 
-The g8ee evaluation implementation has focused unit coverage under `ensemble/tests/unit/services/evaluation/` and related chat-pipeline tests. The integration suite includes protocol trace-digest compatibility and trace persistence checks under `ensemble/tests/integration/test_evaluation_trace_digest_integration.py`. These tests validate g8ee trace construction, role control, tool evidence, semantic grading, and persistence; they do not replace Go campaign verification or prove platform-level evaluation results.
+The g8ee evaluation implementation has focused unit coverage under `ensemble/tests/unit/services/evaluation/` and related chat-pipeline tests. The integration suite includes protocol trace-digest compatibility and trace persistence checks under `ensemble/tests/integration/test_evaluation_trace_digest_integration.py`, and the seeded-fact check under `ensemble/tests/integration/test_investigation_seed_integration.py`. Unit tests under `ensemble/tests/unit/routers/test_internal_router_evaluation_seed.py` pin the router rules (HTTP 400 without `create_case`, ordering, no title generation, production requests never touching the seed service), and `ensemble/tests/unit/services/ai/` characterizes that production chat still reads user memories and still asks for continue-approval. These tests validate g8ee trace construction, role control, tool evidence, semantic grading, and persistence; they do not replace Go campaign verification or prove platform-level evaluation results.
 
 See [Ensemble Tests](tests.md) for component test tiers and commands.
 
