@@ -18,6 +18,13 @@ import {
 } from './shared';
 import type { EnvironmentSource, ModelSummary } from '../contract/types';
 
+/** What a shared environment does and does not establish, by how it was sourced. */
+function environmentNote(source: EnvironmentSource): string {
+  return source === 'observed'
+    ? ' The match is on observed GPU memory and system RAM capacity only; the processor and GPU model are not observed.'
+    : ' A declared environment is the operator’s claim, not an observation.';
+}
+
 export function ModelComparisonPanel({
   models,
   environmentSource,
@@ -36,9 +43,7 @@ export function ModelComparisonPanel({
           <h2 id="comparison-heading">Side-by-side comparison</h2>
           <p className="comparison-panel-lede">
             {crossDataset
-              ? `Comparing ${models.length} models from separate runs that share ${environmentSource === 'observed' ? 'an observed' : 'a declared'} provider environment and evaluated the same suites.${
-                  environmentSource === 'declared' ? ' A declared environment is the operator’s claim, not an observation.' : ''
-                } Each value comes from that model's own run. This is not a superiority claim.`
+              ? `Comparing ${models.length} models from separate runs that share ${environmentSource === 'observed' ? 'an observed' : 'a declared'} provider environment and evaluated the same suites.${environmentNote(environmentSource)} Each value comes from that model's own run. This is not a superiority claim.`
               : `Comparing ${models.length} models from the same dataset. This is not a superiority claim.`}
           </p>
         </div>

@@ -49,10 +49,12 @@ describe('ModelComparisonPanel', () => {
     expect(screen.getByTitle('ds-b')).toBeInTheDocument();
   });
 
-  it('does not call an observed environment a claim', () => {
+  it('states that an observed match is on capacity only', () => {
     renderPanel('observed', [model('model-a', 'ds-a'), model('model-b', 'ds-b')]);
 
     expect(screen.getByText(/share an observed provider environment/)).toBeInTheDocument();
+    expect(screen.getByText(/GPU memory and system RAM capacity only/)).toBeInTheDocument();
+    expect(screen.getByText(/processor and GPU model are not observed/)).toBeInTheDocument();
     expect(screen.queryByText(/claim, not an observation/)).not.toBeInTheDocument();
   });
 });

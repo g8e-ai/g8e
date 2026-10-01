@@ -224,12 +224,7 @@ Optional rollout queue (multi-model tracking):
 ./g8e eval rollout run --until 1
 ```
 
-To compare models side by side in the explorer, declare the Ollama host's hardware once (each model's run is its own dataset, and the explorer only compares datasets that share an environment):
-
-```bash
-cp examples/eval/provider-environment.example.json .g8e/eval/provider-environment.json
-# edit processor, memory, graphics, storage, system_type to match the provider
-```
+To compare models side by side in the explorer, run them with the Provider Observer enrolled. Each model's run is its own dataset, and the explorer compares datasets that report the same GPU memory and system RAM, which the observer supplies once a run completes; there is nothing to configure.
 
 List the variants available to queue:
 
