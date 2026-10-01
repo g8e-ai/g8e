@@ -7,7 +7,7 @@
 import type { ScenarioTaskDefinition } from './scenario-task';
 
 export const SCENARIO_CATALOG_VERSION = "1.1.0";
-export const SCENARIO_CATALOG_ID = "north-star-25@1.1.0";
+export const SCENARIO_CATALOG_ID = "default-suite@1.1.0";
 
 export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = [
   {

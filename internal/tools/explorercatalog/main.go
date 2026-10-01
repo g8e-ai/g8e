@@ -144,7 +144,7 @@ export const SCENARIO_CATALOG_VERSION = %q;
 export const SCENARIO_CATALOG_ID = %q;
 
 export const SCENARIO_TASKS: readonly ScenarioTaskDefinition[] = %s;
-`, evaluation.StandardCatalogVersion, evaluation.StandardCatalogID+"@"+evaluation.StandardCatalogVersion, body)
+`, evaluation.DefaultSuiteVersion, evaluation.DefaultSuiteID+"@"+evaluation.DefaultSuiteVersion, body)
 	return out.Bytes(), nil
 }
 

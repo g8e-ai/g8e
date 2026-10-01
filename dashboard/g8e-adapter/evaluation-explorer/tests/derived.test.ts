@@ -552,7 +552,7 @@ function evaluationSummary(
     kind: 'evaluation_summary',
     quality_state: 'live_in_progress',
     observed_at: '2026-09-17T00:00:00Z',
-    suite_id: 'north-star-25',
+    suite_id: 'default-suite',
     arm: 'platform',
     evaluation_unit: 'model',
     model_role_mapping: {},
@@ -618,7 +618,7 @@ describe('recentCampaignRows', () => {
       'init-campaign',
       'Exploratory baseline (2026-09-14 r2)',
     ]);
-    expect(rows[0]?.detail).toBe('north-star-25');
+    expect(rows[0]?.detail).toBe('default-suite');
     expect(rows[0]?.runId).toBe('eval-init-qwen3-4b-1789657337');
   });
 });

@@ -62,9 +62,9 @@ func TestEvalCmd_ContainsProgramGroups(t *testing.T) {
 		names = append(names, child.Name())
 	}
 	assert.ElementsMatch(t, []string{
-		"backup", "boundary", "campaigns", "formations", "gates", "models", "observer", "restore", "rollout", "runs",
+		"backup", "boundary", "campaigns", "formations", "gates", "models", "observer", "restore", "rollout", "runs", "suites",
 	}, names)
-	assert.Len(t, names, 10)
+	assert.Len(t, names, 11)
 	assert.Contains(t, command.Aliases, "evals")
 
 	var boundary *cobra.Command

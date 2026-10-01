@@ -23,7 +23,7 @@ func TestStoreHeterogeneousStackSet_RoundTrip(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       11,
 		Variants:   testHeterogeneousVariants(),
 	})

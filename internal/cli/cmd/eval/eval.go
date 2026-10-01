@@ -122,6 +122,7 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		modelsEvalCmd(deps),
 		campaignsEvalCmd(deps),
 		runsEvalCmd(deps),
+		suitesEvalCmd(deps),
 		rolloutEvalCmd(deps),
 		formationsEvalCmd(deps),
 		gatesEvalCmd(deps),

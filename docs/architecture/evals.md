@@ -45,6 +45,7 @@ Defines g8e's platform evaluation programs: the native execution-boundary suite 
   - [Evaluation programs](#evaluation-programs)
   - [CLI surface](#cli-surface)
   - [Native execution-boundary suite](#native-execution-boundary-suite)
+  - [Evaluation suites](#evaluation-suites)
   - [Model campaign evaluations](#model-campaign-evaluations)
   - [Witness operator roles](#witness-operator-roles)
   - [Evidence and verification](#evidence-and-verification)
@@ -77,6 +78,8 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-EVAL-CAMP-05 | Each catalog scenario MUST declare `eligible_roles`: the model roles that perform that task in g8ee (`ensemble/app/constants/chat_model_call_sites.py`). The homogeneous scheduler MUST assign a scenario only to its eligible roles and MUST fail closed (`ErrEvaluationScenarioRolesUnassigned`) on a scenario with none. `ValidateHomogeneousAssignmentMatrix` MUST reject an assignment for a role the scenario does not declare (`ErrEvaluationRoleNotEligible`). The frozen catalog digest binds the eligible-role sets. |
 | INV-EVAL-CAMP-06 | A model-role run MUST have exactly one subject model: `CampaignController.StartRun` rejects a `model_role` run whose campaign freezes any other number of models (`ErrEvaluationCampaignSubjectInvalid`), and `g8e eval campaigns create` rejects the same selection before persisting it. Many models are qualified through `g8e eval rollout`, one campaign per model, so the provider holds one model and each campaign's drain releases it. System-lane campaigns are exempt because `FormationRunner` releases each formation's models. The scheduler and `Store.ListAssignments` share one order (`assignmentExecutionLess`: served model tag, variant ID, scenario ID, role, repetition, then identity). Execution order MUST NOT be derived from assignment identity hashes alone. Runs started before this rule remain resumable, verifiable, and publishable. |
 | INV-EVAL-CAMP-07 | A scored request MUST declare the full production tool set for the agent mode regardless of the model's registry entry. The tool-gate bypass is keyed only on the request's `evaluation_context`, never on an environment variable. The g8ee trace MUST record, on each model call, the tool names actually sent to the provider (`tools_declared`, captured at the provider boundary) and, on the trace, the deciding gate (`tool_gate`), and MUST record a provider refusal of the declaration as `provider_tool_rejection`. No static table, capability probe, or recorded capability observation may withhold tools from a scored request. |
+| INV-EVAL-CAMP-08 | A campaign scores exactly one suite and freezes it at creation: `g8e eval campaigns create --suite <id>` (default `default-suite`) materializes the suite's catalog and fixture artifacts into the campaign directory. Every later reader of a campaign's scenarios (execution, verification, publication, export, repair) MUST load the campaign's frozen catalog and artifacts (`Store.LoadScenarioCatalog`, `Store.LoadScenarioArtifacts`) and MUST NOT regenerate them from a built-in or stored suite, so editing or deleting a suite never alters a campaign that used it. |
+| INV-EVAL-CAMP-09 | Suites are managed only through `g8e eval suites`. `default-suite` and `smoke-suite` are built in and read-only (`ErrEvaluationSuiteBuiltin`); custom suites persist as authoring files under `.g8e/data/eval/suites/<id>.json` through `RuntimeFileService`. A suite MUST pass the full scenario contract (`MaterializeSuite`: tool registry, trajectory policy shape, argument validators, prompt hints, workspace fixtures) before it is stored or frozen. Changing a stored suite's content MUST change its version, so one `id@version` never names two catalogs. The built-in suites' scenario-count and category gates (`ValidateDefaultSuiteCatalog`) apply only to them, never to a custom suite. |
 
 ### Witness Separation (`INV-EVAL-WIT`)
 
@@ -149,18 +152,19 @@ Two programs exercise the evaluation topology:
 | Program | Suite / catalog | Proves | Does not use |
 | --- | --- | --- |
 | **Execution-boundary** | `core-execution-boundary@1.0.0` | One allowed governed mutation and one doctrine-prohibited equivalent through the real Gateway and remote Operator | g8ee, model providers, model judges, campaigns, synthetic simulators |
-| **Model campaign** | `north-star-25@1.0.0` (standard scenario catalog) | Governed model-role scoring through production inference, tool scenarios, heterogeneous system-lane formations, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from campaign CLI or g8ee |
+| **Model campaign** | `default-suite@1.1.0` (built-in suite) or any custom suite (`g8e eval suites`) | Governed model-role scoring through production inference, tool scenarios, heterogeneous system-lane formations, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from campaign CLI or g8ee |
 
 Both programs persist canonical, content-addressed run evidence beneath `.g8e/data/eval/runs/` with campaign definitions and frozen artifacts stored separately beneath `.g8e/data/eval/campaigns/<campaign-id>/`. Verification is independent of execution: `g8e eval boundary verify` and `g8e eval runs verify` recompute bindings and signatures without executing new scored actions.
 
 ### CLI surface
 
-The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across ten top-level subcommands:
+The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across eleven top-level subcommands:
 
 | Subcommand | Purpose |
 | --- | --- |
 | `g8e eval boundary …` | Run, list, verify, and show native execution-boundary test suites |
 | `g8e eval models …` | Catalog and registry management (list, show, add, remove, import, freeze, pull, diff) |
+| `g8e eval suites …` (alias `suite`) | Scenario suites (list, show, export, create, update, delete) |
 | `g8e eval campaigns …` | Campaign definitions (list, show, create, archive, unarchive) |
 | `g8e eval runs …` | Campaign execution and lifecycle (list, show, start, resume, cancel, logs, verify, publish, export, repair, compare, archive, unarchive) |
 | `g8e eval rollout …` | Rollout qualification queue (list, add, remove, next, retry, skip, run) |
@@ -198,6 +202,31 @@ Add `--json` to emit canonical protojson. Verification resolves every declared a
 **Trust boundaries:** The Gateway is the Policy Decision Point and owns ingress authentication, envelope construction, L1-L3 decisions, and coordination state. The selected remote Operator is the Policy Execution Point and owns L4-L5 execution and authoritative local evidence. The Gateway receipt query is a verified mirror of Operator-authored evidence, not an independent read.
 
 The native suite reads terminal fixture state through a short-lived `g8e-native-target-reader` process defined only in `eval/native-boundary-compose.yml`. It is not an Observer Operator and not a unified-stack service. The evaluator invokes it explicitly with `docker compose run --rm`; it has no network, workload identity, runtime volume, credentials, or writeable target mount. It mounts only the shared controlled fixture volume read-only with all Linux capabilities dropped so it can read root-owned fixture state without mutations or network crossings.
+
+### Evaluation suites
+
+A suite is a named, versioned set of scenarios that a model campaign scores. Two are built in and read-only: `default-suite` (the full scenario set, defined in `internal/services/evaluation/scenario_catalog_definitions.go`) and `smoke-suite` (its five-scenario screening subset, used by `g8e eval rollout run --gate-smoke`). Everything else is a custom suite managed with `g8e eval suites`:
+
+| Command | Purpose |
+| --- | --- |
+| `g8e eval suites list` | Built-in and custom suites with version, scenario count, and source |
+| `g8e eval suites show <suite>` | One suite's catalog digest and scenario table |
+| `g8e eval suites export <suite>` | The suite's full definition file on stdout, the template for a custom suite |
+| `g8e eval suites create <file>` | Validate and store a new custom suite (`-` reads stdin) |
+| `g8e eval suites update <file>` | Replace a custom suite; changed content requires a new `version` |
+| `g8e eval suites delete <suite>` | Delete a custom suite |
+
+A suite is authored as one JSON file (`schema_version: 1.0.0`) holding `id`, `version`, an optional `description`, and `scenarios`. Each scenario carries its public metadata (`category`, `grading_method`, `trajectory_policy`, `eligible_roles`, tool sets, `required_concepts`), the private prompt fixture (`input`), and the private gold criteria (`gold`). Enum fields are lowercase names such as `tool_selection`, `semantic_judge`, `guided`, or `lite`; a prompt hint's argument `source` is also a name (`prompt`, `seed`, `workspace`, `operator_context`, `model_authored`). Unknown fields are rejected so a misspelled criterion cannot silently drop out of scoring. The quickest start is to export a built-in suite, edit `id`, `version`, and the scenarios, and `create` it:
+
+```bash
+./g8e eval suites export default-suite > my-suite.json
+./g8e eval suites create my-suite.json
+./g8e eval campaigns create my-campaign qwen3:4b --suite my-suite
+```
+
+`create` and `update` run every scenario through the same contract the built-in suites pass: tool names must exist in the agent tool registry, the trajectory policy decides which tool sets and hints are required, every argument validator and prompt hint must be answerable from the prompt, seed, or workspace, and a scenario that is not judge-graded needs a content check so it can fail. Seeds may reference guidance vectors by ID; the registry's real model-visible error text is substituted at build time (INV-EVAL-CAMP-08, INV-EVAL-CAMP-09).
+
+A campaign copies its suite at creation, so deleting or editing a suite never affects an existing campaign, run, or verification. The public explorer's Tasks catalog is generated from `default-suite` only (`make explorer-catalog`); a custom suite's tasks are not published there.
 
 ### Model campaign evaluations
 

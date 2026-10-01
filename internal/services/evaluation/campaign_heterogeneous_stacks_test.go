@@ -29,7 +29,7 @@ func testHeterogeneousVariants() []*evalv1.ModelVariant {
 
 func TestGenerateHeterogeneousStackSet_IncludesHypothesesAndCoverage(t *testing.T) {
 	set, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       42,
 		Variants:   testHeterogeneousVariants(),
 	})
@@ -46,7 +46,7 @@ func TestGenerateHeterogeneousStackSet_IncludesHypothesesAndCoverage(t *testing.
 
 func TestGenerateHeterogeneousStackSet_IsDeterministic(t *testing.T) {
 	req := HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       7,
 		Variants:   testHeterogeneousVariants(),
 	}

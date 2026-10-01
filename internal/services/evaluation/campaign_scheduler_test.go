@@ -26,7 +26,7 @@ func TestBuildHomogeneousAssignmentMatrix_MaterializesFullCrossProduct(t *testin
 		{VariantId: "gemma3-4b", ProviderClass: "ollama", ServedModelTag: "gemma3:4b", ModelDigest: repeatHex('b', 64)},
 	}
 	assignments, err := BuildHomogeneousAssignmentMatrix(HomogeneousScheduleRequest{
-		CampaignID:      "north-star-smoke",
+		CampaignID:      "smoke-campaign",
 		RunID:           "run-1",
 		Catalog:         catalog,
 		Variants:        variants,
@@ -36,7 +36,7 @@ func TestBuildHomogeneousAssignmentMatrix_MaterializesFullCrossProduct(t *testin
 	require.NoError(t, err)
 	assert.Len(t, assignments, 82)
 	inventory := &ModelInventoryFreeze{
-		CampaignID:           "north-star-smoke",
+		CampaignID:           "smoke-campaign",
 		RegistryDigest:       repeatHex('c', 64),
 		Variants:             variants,
 		HomogeneousCellCount: 82,

@@ -182,7 +182,7 @@ Keep internal plan vocabulary separate from public campaign branding.
 
 Rules:
 
-- **Do not** use `north-star` in public run IDs or campaign IDs. The frozen scenario catalog is `north-star-25@1.0.0` (legacy slug; content is the standard 26-scenario suite).
+- Campaigns score a suite (`g8e eval campaigns create --suite <id>`); the default is the built-in `default-suite`. Campaigns frozen before the suite rename carry the legacy catalog ID `north-star-25` in their frozen spec; that identity is historical and is never used for new campaigns, run IDs, or campaign IDs.
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
 - Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` **unset** in `.env`. Campaign authority travels on each governed dispatch from g8ee; do not rebind the inference operator per model.

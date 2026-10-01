@@ -23,8 +23,8 @@ func TestGenerate_EmitsEveryCatalogScenarioWithoutHintValues(t *testing.T) {
 	text := string(out)
 
 	assert.Contains(t, text, "DO NOT EDIT")
-	assert.Equal(t, evaluation.StandardCatalogScenarioCount, strings.Count(text, `"trajectoryPolicy":`))
-	assert.Contains(t, text, `SCENARIO_CATALOG_ID = "north-star-25@`+evaluation.StandardCatalogVersion+`"`)
+	assert.Equal(t, evaluation.DefaultSuiteScenarioCount, strings.Count(text, `"trajectoryPolicy":`))
+	assert.Contains(t, text, `SCENARIO_CATALOG_ID = "`+evaluation.DefaultSuiteID+`@`+evaluation.DefaultSuiteVersion+`"`)
 	assert.Contains(t, text, `"promptHint":`)
 	// Hint arguments publish where a value comes from, never the value itself.
 	assert.NotContains(t, text, `"value":`)

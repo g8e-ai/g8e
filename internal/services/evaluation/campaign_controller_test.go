@@ -48,10 +48,10 @@ func testCampaignInitRequest(t *testing.T) CampaignInitRequest {
 	t.Helper()
 	catalog, artifacts, err := LoadScenarioCatalog()
 	require.NoError(t, err)
-	inventory, err := MaterializeModelRegistry("north-star-smoke", []*evalv1.ModelVariant{testModelVariant()})
+	inventory, err := MaterializeModelRegistry("smoke-campaign", []*evalv1.ModelVariant{testModelVariant()})
 	require.NoError(t, err)
 	return CampaignInitRequest{
-		CampaignID:                 "north-star-smoke",
+		CampaignID:                 "smoke-campaign",
 		RunID:                      "run-smoke-1",
 		Catalog:                    catalog,
 		Inventory:                  inventory,

@@ -100,7 +100,7 @@ func homogeneousAssignmentExecutionRequest(t *testing.T, role string) Assignment
 		AttemptID:  "attempt-1",
 		ScenarioInput: ScenarioInputFixture{
 			ScenarioID: "instruction-exact-format",
-			UserPrompt: "Reply with exactly: NORTH-STAR-OK",
+			UserPrompt: "Reply with exactly: SUITE-OK",
 		},
 		ScenarioGold:  loadScenarioGold(t, "instruction-exact-format"),
 		GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,

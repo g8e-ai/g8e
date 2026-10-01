@@ -934,6 +934,11 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	state.Suite = methodologySuiteFromCatalog(catalog)
 	if RunAggregateComplete(assignments, results, state) {
 		// Only a finished run claims an environment: a live dataset is
 		// provisional and must not be matched against another run's.

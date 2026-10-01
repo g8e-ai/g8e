@@ -805,7 +805,7 @@ describe('EvalStore campaign ingest', () => {
         observed_at: '2026-09-16T14:00:00.000Z',
         source_revision_label: 'g8e-eval-campaign',
         run_id: runId,
-        suite_id: 'north-star-25',
+        suite_id: 'default-suite',
         arm: 'homogeneous-model-role',
         evaluation_unit: 'model',
         model_role_mapping: {},

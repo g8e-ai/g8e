@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-// Task catalog — frozen north-star-25 scenarios grouped by behavior category.
+// Task catalog — the frozen default-suite scenarios grouped by behavior category.
 
 import { useEffect, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';

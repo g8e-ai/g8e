@@ -277,15 +277,16 @@ func qualifyRolloutEntry(cmd *cobra.Command, fileSvc fs.RuntimeFileService, runG
 // whenever a run was started, including when it then failed.
 func runRolloutGate(cmd *cobra.Command, deps nativeEvalDeps, fileSvc fs.RuntimeFileService, variant *evalv1.ModelVariant, entry evaluation.CampaignQueueModel, gate string) (*rolloutRunSuccess, error) {
 	campaignID := entry.CampaignID
-	smoke := gate == rolloutGateSmoke
-	if smoke {
+	suiteID := evaluation.DefaultSuiteID
+	if gate == rolloutGateSmoke {
 		campaignID += rolloutSmokeCampaignSuffix
+		suiteID = evaluation.SmokeSuiteID
 	}
 	if _, err := createCampaign(cmd.Context(), deps, fileSvc, campaignCreateSpec{
 		CampaignID:  campaignID,
 		Variants:    []*evalv1.ModelVariant{variant},
 		Repetitions: 1,
-		Smoke:       smoke,
+		SuiteID:     suiteID,
 	}); err != nil {
 		return nil, err
 	}

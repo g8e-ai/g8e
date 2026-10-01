@@ -21,13 +21,13 @@ func TestBuildHeterogeneousAssignmentMatrix_MaterializesStacksByScenarios(t *tes
 	catalog, _, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       11,
 		Variants:   testHeterogeneousVariants(),
 	})
 	require.NoError(t, err)
 	assignments, err := BuildHeterogeneousAssignmentMatrix(HeterogeneousScheduleRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		RunID:      "run-heterogeneous-1",
 		Catalog:    catalog,
 		StackSet:   stackSet,

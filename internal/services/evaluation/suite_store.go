@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 // suitesRootDir is where custom suites persist. Suites are authored content,
@@ -31,12 +32,30 @@ func suitePath(id string) string {
 
 // ResolveSuite returns the suite with the given ID: a built-in suite, or a
 // custom one from the suite store. The second result reports a built-in suite.
-func (s *Store) ResolveSuite(ctx context.Context, id string) (SuiteDefinition, bool, error) {
-	if def, ok := BuiltinSuiteDefinition(id); ok {
+func (s *Store) ResolveSuite(ctx context.Context, id string) (ScenarioSuite, bool, error) {
+	if def, ok := BuiltinScenarioSuite(id); ok {
 		return def, true, nil
 	}
 	def, err := s.loadCustomSuite(ctx, id)
 	return def, false, err
+}
+
+// LoadSuiteCatalog materializes the suite with the given ID into the catalog
+// and fixture artifacts a campaign freezes. Built-in suites go through their
+// own strict gates; a custom suite is validated against the full scenario
+// contract as it materializes.
+func (s *Store) LoadSuiteCatalog(ctx context.Context, id string) (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
+	switch id {
+	case DefaultSuiteID:
+		return LoadScenarioCatalog()
+	case SmokeSuiteID:
+		return LoadSmokeGateScenarioCatalog()
+	}
+	def, err := s.loadCustomSuite(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	return MaterializeSuite(def)
 }
 
 // ListSuites returns every built-in suite followed by every custom suite in ID
@@ -48,7 +67,7 @@ func (s *Store) ListSuites(ctx context.Context) ([]SuiteSummary, error) {
 	}
 	summaries := make([]SuiteSummary, 0, len(BuiltinSuiteIDs()))
 	for _, id := range BuiltinSuiteIDs() {
-		def, _ := BuiltinSuiteDefinition(id)
+		def, _ := BuiltinScenarioSuite(id)
 		summaries = append(summaries, def.Summary(true))
 	}
 	entries, err := s.files.ReadDir(ctx, suitesRootDir())
@@ -76,14 +95,14 @@ func (s *Store) ListSuites(ctx context.Context) ([]SuiteSummary, error) {
 
 // CreateSuite validates and stores a new custom suite. It fails when a suite
 // with that ID already exists, built-in or custom.
-func (s *Store) CreateSuite(ctx context.Context, def SuiteDefinition) error {
+func (s *Store) CreateSuite(ctx context.Context, def ScenarioSuite) error {
 	if err := s.requireSuiteStore(); err != nil {
 		return err
 	}
 	if _, _, err := MaterializeSuite(def); err != nil {
 		return err
 	}
-	if _, builtin := BuiltinSuiteDefinition(def.ID); builtin {
+	if _, builtin := BuiltinScenarioSuite(def.ID); builtin {
 		return fmt.Errorf("evaluation: create suite %q: %w", def.ID, constants.ErrEvaluationSuiteBuiltin)
 	}
 	exists, err := s.files.FileExists(ctx, suitePath(def.ID))
@@ -99,11 +118,11 @@ func (s *Store) CreateSuite(ctx context.Context, def SuiteDefinition) error {
 // UpdateSuite replaces an existing custom suite. Changing a suite's content
 // requires a new version, so one id@version never names two different
 // catalogs; resubmitting identical content is a no-op.
-func (s *Store) UpdateSuite(ctx context.Context, def SuiteDefinition) error {
+func (s *Store) UpdateSuite(ctx context.Context, def ScenarioSuite) error {
 	if err := s.requireSuiteStore(); err != nil {
 		return err
 	}
-	if _, builtin := BuiltinSuiteDefinition(def.ID); builtin {
+	if _, builtin := BuiltinScenarioSuite(def.ID); builtin {
 		return fmt.Errorf("evaluation: update suite %q: %w", def.ID, constants.ErrEvaluationSuiteBuiltin)
 	}
 	next, _, err := MaterializeSuite(def)
@@ -133,7 +152,7 @@ func (s *Store) DeleteSuite(ctx context.Context, id string) error {
 	if err := s.requireSuiteStore(); err != nil {
 		return err
 	}
-	if _, builtin := BuiltinSuiteDefinition(id); builtin {
+	if _, builtin := BuiltinScenarioSuite(id); builtin {
 		return fmt.Errorf("evaluation: delete suite %q: %w", id, constants.ErrEvaluationSuiteBuiltin)
 	}
 	if _, err := s.loadCustomSuite(ctx, id); err != nil {
@@ -152,29 +171,29 @@ func (s *Store) requireSuiteStore() error {
 	return nil
 }
 
-func (s *Store) loadCustomSuite(ctx context.Context, id string) (SuiteDefinition, error) {
+func (s *Store) loadCustomSuite(ctx context.Context, id string) (ScenarioSuite, error) {
 	if s == nil || s.files == nil || !suiteIDPattern.MatchString(id) {
-		return SuiteDefinition{}, fmt.Errorf("evaluation: load suite %q: %w", id, constants.ErrNotFound)
+		return ScenarioSuite{}, fmt.Errorf("evaluation: load suite %q: %w", id, constants.ErrNotFound)
 	}
 	body, err := s.files.ReadFile(ctx, suitePath(id))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
-			return SuiteDefinition{}, fmt.Errorf("evaluation: load suite %q: %w", id, constants.ErrNotFound)
+			return ScenarioSuite{}, fmt.Errorf("evaluation: load suite %q: %w", id, constants.ErrNotFound)
 		}
-		return SuiteDefinition{}, fmt.Errorf("evaluation: load suite %q: %w", id, err)
+		return ScenarioSuite{}, fmt.Errorf("evaluation: load suite %q: %w", id, err)
 	}
-	def, err := DecodeSuiteDefinition(body)
+	def, err := DecodeScenarioSuite(body)
 	if err != nil {
-		return SuiteDefinition{}, fmt.Errorf("evaluation: load suite %q: %w", id, err)
+		return ScenarioSuite{}, fmt.Errorf("evaluation: load suite %q: %w", id, err)
 	}
 	if def.ID != id {
-		return SuiteDefinition{}, fmt.Errorf("evaluation: load suite %q: %w: stored suite names id %q", id, constants.ErrEvaluationSuiteInvalid, def.ID)
+		return ScenarioSuite{}, fmt.Errorf("evaluation: load suite %q: %w: stored suite names id %q", id, constants.ErrEvaluationSuiteInvalid, def.ID)
 	}
 	return def, nil
 }
 
-func (s *Store) writeSuite(ctx context.Context, def SuiteDefinition) error {
-	body, err := EncodeSuiteDefinition(def)
+func (s *Store) writeSuite(ctx context.Context, def ScenarioSuite) error {
+	body, err := EncodeScenarioSuite(def)
 	if err != nil {
 		return err
 	}

@@ -139,7 +139,7 @@ func TestBuildScenarioCatalog_RejectsABlueprintThatBreaksTheContract(t *testing.
 	blueprint := toolArgGrepPattern()
 	blueprint.Gold.PromptHint = nil
 
-	_, _, err = materializeScenarioBlueprint(blueprint, registry)
+	_, _, err = materializeScenarioBlueprint(DefaultSuiteID, blueprint, registry)
 
 	require.ErrorIs(t, err, constants.ErrEvaluationScenarioContractInvalid)
 }
@@ -192,7 +192,7 @@ func TestBuildScenarioCatalog_RejectsUnknownGuidanceVector(t *testing.T) {
 	blueprint := recoveryErrorGuidedRetry()
 	blueprint.Input.Seed.HistoryEvents[0].GuidanceVectorID = "no_such_tool.no_such_vector"
 
-	_, _, err = materializeScenarioBlueprint(blueprint, registry)
+	_, _, err = materializeScenarioBlueprint(DefaultSuiteID, blueprint, registry)
 
 	require.ErrorIs(t, err, constants.ErrEvaluationScenarioContractInvalid)
 }

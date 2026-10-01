@@ -38,13 +38,13 @@ const (
 	roleEnumPrefix             = "MODEL_CAMPAIGN_ROLE_"
 )
 
-// SuiteDefinition is the authoring record of one evaluation suite: a named,
+// ScenarioSuite is the authoring record of one evaluation suite: a named,
 // versioned set of scenarios a campaign can freeze. It is the file format
 // `g8e eval suites` reads and writes. Enum-valued fields are lowercase names
 // (for example "tool_selection"), never numbers. A campaign freezes the
 // materialized catalog and fixture artifacts at creation, so editing or
 // deleting a suite never changes a campaign that already used it.
-type SuiteDefinition struct {
+type ScenarioSuite struct {
 	SchemaVersion string          `json:"schema_version"`
 	ID            string          `json:"id"`
 	Version       string          `json:"version"`
@@ -81,7 +81,7 @@ type SuiteGold struct {
 // SuitePromptHint is ScenarioPromptHint with named argument sources.
 type SuitePromptHint struct {
 	HintedTools []string                `json:"hinted_tools"`
-	Arguments   []SuiteHintArgumentSpec `json:"arguments"`
+	Arguments   []SuiteHintArgumentSpec `json:"arguments,omitempty"`
 }
 
 // SuiteHintArgumentSpec is ScenarioHintArgument with a named source such as
@@ -102,30 +102,30 @@ type SuiteSummary struct {
 	ScenarioCount int    `json:"scenario_count"`
 }
 
-// DefaultSuiteDefinition returns the built-in default suite as an authoring
+// DefaultScenarioSuite returns the built-in default suite as an authoring
 // record, so it can be exported and used as a template for a custom suite.
-func DefaultSuiteDefinition() SuiteDefinition {
+func DefaultScenarioSuite() ScenarioSuite {
 	return suiteDefinitionFromBlueprints(DefaultSuiteID, DefaultSuiteVersion,
 		"The built-in suite: every scenario the platform scores by default, across instruction adherence, tool use, analysis, routing, verification, security, recovery, and final response.",
 		scenarioBlueprints())
 }
 
-// SmokeSuiteDefinition returns the built-in smoke suite as an authoring record.
-func SmokeSuiteDefinition() SuiteDefinition {
+// SmokeScenarioSuite returns the built-in smoke suite as an authoring record.
+func SmokeScenarioSuite() ScenarioSuite {
 	return suiteDefinitionFromBlueprints(SmokeSuiteID, DefaultSuiteVersion,
 		"The built-in screening subset of the default suite: five high-discrimination scenarios for a fast pre-qualification pass.",
 		smokeSuiteBlueprints())
 }
 
-// BuiltinSuiteDefinition returns the built-in suite with the given ID.
-func BuiltinSuiteDefinition(id string) (SuiteDefinition, bool) {
+// BuiltinScenarioSuite returns the built-in suite with the given ID.
+func BuiltinScenarioSuite(id string) (ScenarioSuite, bool) {
 	switch id {
 	case DefaultSuiteID:
-		return DefaultSuiteDefinition(), true
+		return DefaultScenarioSuite(), true
 	case SmokeSuiteID:
-		return SmokeSuiteDefinition(), true
+		return SmokeScenarioSuite(), true
 	default:
-		return SuiteDefinition{}, false
+		return ScenarioSuite{}, false
 	}
 }
 
@@ -147,27 +147,27 @@ func CatalogRecomputesGrades(ref *compliancev1.VersionedReference) bool {
 }
 
 // Summary projects a definition to its listing form.
-func (d SuiteDefinition) Summary(builtin bool) SuiteSummary {
+func (d ScenarioSuite) Summary(builtin bool) SuiteSummary {
 	return SuiteSummary{ID: d.ID, Version: d.Version, Description: d.Description, Builtin: builtin, ScenarioCount: len(d.Scenarios)}
 }
 
-// DecodeSuiteDefinition parses one suite authoring file. Unknown fields are
+// DecodeScenarioSuite parses one suite authoring file. Unknown fields are
 // rejected so a misspelled criterion cannot be silently dropped from scoring.
-func DecodeSuiteDefinition(body []byte) (SuiteDefinition, error) {
+func DecodeScenarioSuite(body []byte) (ScenarioSuite, error) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
-	var def SuiteDefinition
+	var def ScenarioSuite
 	if err := decoder.Decode(&def); err != nil {
-		return SuiteDefinition{}, fmt.Errorf("evaluation: decode suite definition: %w: %w", constants.ErrEvaluationSuiteInvalid, err)
+		return ScenarioSuite{}, fmt.Errorf("evaluation: decode suite definition: %w: %w", constants.ErrEvaluationSuiteInvalid, err)
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return SuiteDefinition{}, fmt.Errorf("evaluation: decode suite definition: %w: trailing content after the definition", constants.ErrEvaluationSuiteInvalid)
+		return ScenarioSuite{}, fmt.Errorf("evaluation: decode suite definition: %w: trailing content after the definition", constants.ErrEvaluationSuiteInvalid)
 	}
 	return def, nil
 }
 
-// EncodeSuiteDefinition renders one suite authoring file.
-func EncodeSuiteDefinition(def SuiteDefinition) ([]byte, error) {
+// EncodeScenarioSuite renders one suite authoring file.
+func EncodeScenarioSuite(def ScenarioSuite) ([]byte, error) {
 	body, err := json.MarshalIndent(def, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: encode suite definition: %w", err)
@@ -177,7 +177,7 @@ func EncodeSuiteDefinition(def SuiteDefinition) ([]byte, error) {
 
 // ValidateSuiteIdentity checks the parts of a definition that do not need the
 // scenario contract: schema, identity, and scenario identity uniqueness.
-func ValidateSuiteIdentity(def SuiteDefinition) error {
+func ValidateSuiteIdentity(def ScenarioSuite) error {
 	if def.SchemaVersion != SuiteSchemaVersion {
 		return suiteInvalid("schema_version must be %q, got %q", SuiteSchemaVersion, def.SchemaVersion)
 	}
@@ -210,7 +210,7 @@ func ValidateSuiteIdentity(def SuiteDefinition) error {
 // (tool registry, trajectory policy shape, argument validators, prompt hints,
 // workspace fixtures) and materializes its catalog and fixture artifacts. A
 // definition that fails any check cannot be stored or frozen.
-func MaterializeSuite(def SuiteDefinition) (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
+func MaterializeSuite(def ScenarioSuite) (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
 	if err := ValidateSuiteIdentity(def); err != nil {
 		return nil, nil, err
 	}
@@ -236,8 +236,8 @@ func suiteInvalid(format string, args ...any) error {
 	return fmt.Errorf("evaluation: suite definition: %w: %s", constants.ErrEvaluationSuiteInvalid, fmt.Sprintf(format, args...))
 }
 
-func suiteDefinitionFromBlueprints(id, version, description string, blueprints []ScenarioBlueprint) SuiteDefinition {
-	def := SuiteDefinition{SchemaVersion: SuiteSchemaVersion, ID: id, Version: version, Description: description, Scenarios: make([]SuiteScenario, 0, len(blueprints))}
+func suiteDefinitionFromBlueprints(id, version, description string, blueprints []ScenarioBlueprint) ScenarioSuite {
+	def := ScenarioSuite{SchemaVersion: SuiteSchemaVersion, ID: id, Version: version, Description: description, Scenarios: make([]SuiteScenario, 0, len(blueprints))}
 	for _, blueprint := range blueprints {
 		def.Scenarios = append(def.Scenarios, suiteScenarioFromBlueprint(blueprint))
 	}
@@ -258,7 +258,7 @@ func suiteScenarioFromBlueprint(blueprint ScenarioBlueprint) SuiteScenario {
 	gold.ScenarioID = blueprint.ScenarioID
 	suiteGold := SuiteGold{ScenarioGoldCriteria: gold}
 	if hint := gold.PromptHint; hint != nil {
-		published := &SuitePromptHint{HintedTools: append([]string(nil), hint.HintedTools...), Arguments: make([]SuiteHintArgumentSpec, 0, len(hint.Arguments))}
+		published := &SuitePromptHint{HintedTools: append([]string(nil), hint.HintedTools...)}
 		for _, argument := range hint.Arguments {
 			published.Arguments = append(published.Arguments, SuiteHintArgumentSpec{
 				ToolName: argument.ToolName, Name: argument.Name, Value: argument.Value,
@@ -311,7 +311,7 @@ func (s SuiteScenario) blueprint() (ScenarioBlueprint, error) {
 	gold := s.Gold.ScenarioGoldCriteria
 	gold.PromptHint = nil
 	if hint := s.Gold.PromptHint; hint != nil {
-		private := &ScenarioPromptHint{HintedTools: append([]string(nil), hint.HintedTools...), Arguments: make([]ScenarioHintArgument, 0, len(hint.Arguments))}
+		private := &ScenarioPromptHint{HintedTools: append([]string(nil), hint.HintedTools...)}
 		for _, argument := range hint.Arguments {
 			source, err := parseSuiteEnum[evalv1.EvaluationHintArgumentSource]("prompt_hint argument source", hintSourceEnumPrefix, evalv1.EvaluationHintArgumentSource_value, argument.Source)
 			if err != nil {

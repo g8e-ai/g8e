@@ -380,6 +380,7 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
+	aggregateState.Suite = methodologySuiteFromCatalog(catalog)
 	if RunAggregateComplete(assignments, results, aggregateState) {
 		if aggregateState.ProviderEnvironment, err = observationReader.ObservedProviderEnvironment(ctx, results); err != nil {
 			return nil, err
