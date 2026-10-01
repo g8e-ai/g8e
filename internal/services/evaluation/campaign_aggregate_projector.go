@@ -1212,8 +1212,10 @@ func elapsedSecondsBetween(startedAt, observedAt time.Time) *float64 {
 }
 
 // buildModelRoleMapping declares one variant per role when the run matrix
-// uses a single variant in that role; otherwise it stays empty because
-// homogeneous smoke matrices evaluate many variants per role independently.
+// uses a single variant in that role, which is always true of a model-role
+// run (one model per campaign). It stays empty for a role that several
+// formations fill with different variants, because those are evaluated
+// independently rather than as one declared stack.
 func buildModelRoleMapping(state *runAggregateState) map[string]string {
 	mapping := map[string]string{}
 	if state == nil {

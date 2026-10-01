@@ -209,6 +209,18 @@ func TestCampaignsCreate_ConflictsWhenTheSpecDiffers(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrEvaluationCampaignConflict)
 }
 
+func TestCampaignsCreate_RejectsMultiModelModelRoleCampaign(t *testing.T) {
+	env := setupRunEnv(t)
+	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, threeModelRegistry()...)
+
+	_, err := env.run(t, "campaigns", "create", "eval-many", "--all")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvaluationCampaignSubjectInvalid)
+
+	_, err = env.run(t, "campaigns", "show", "eval-many")
+	require.Error(t, err, "a rejected create must not persist the campaign")
+}
+
 func TestCampaignsCreate_SystemLanePersistsStacks(t *testing.T) {
 	env := setupRunEnv(t)
 	writeTestFrozenInventory(t, env.root, evaluation.DefaultModelInventoryRelPath, threeModelRegistry()...)

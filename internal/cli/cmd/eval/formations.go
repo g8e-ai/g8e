@@ -150,12 +150,12 @@ func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
 				return err
 			}
 			type tableRow struct {
-				id        string
+				id          string
 				displayName string
-				primary   string
-				assistant string
-				lite      string
-				vram      string
+				primary     string
+				assistant   string
+				lite        string
+				vram        string
 			}
 			var rows []tableRow
 			for i, formation := range topologies.Formations() {
@@ -175,12 +175,12 @@ func formationsListEvalCmd(deps nativeEvalDeps) *cobra.Command {
 						extractModelName(lite.ServedModelTag))
 				}
 				rows = append(rows, tableRow{
-					id:        summary.ID,
+					id:          summary.ID,
 					displayName: displayName,
-					primary:   primaryStr,
-					assistant: assistantStr,
-					lite:      liteStr,
-					vram:      vramStr,
+					primary:     primaryStr,
+					assistant:   assistantStr,
+					lite:        liteStr,
+					vram:        vramStr,
 				})
 			}
 			widths := [6]int{

@@ -189,7 +189,7 @@ Rules:
 
 ### Init campaign inventory (one model per campaign)
 
-Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 37 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
+A `model-role` campaign freezes exactly one model: **one model, one campaign, 37 cells**. `g8e eval campaigns create` and `g8e eval runs start` reject any other count. This keeps runs tidy, isolates failures, and lets the provider unload each model when its campaign finishes. Use `g8e eval runs start` for one model, or `g8e eval rollout run` for many (`g8e eval rollout next` inspects the next pending entry) — no `.env` edits or operator recreate between models.
 
 Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/README.md) for the public/private boundary.
 
@@ -224,14 +224,10 @@ Optional rollout queue (multi-model tracking):
 ./g8e eval rollout run --until 1
 ```
 
-List variants or create custom campaigns without a queue:
+List the variants available to queue:
 
 ```bash
 ./g8e eval models list
-
-# Mini smoke combined campaign (3 models → 225 cells)
-./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
-./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
 Track per-model verification progress in `.g8e/eval/init-campaign-queue.json` (`status: verified` or `pending`, plus `verified_run_id` when complete).
@@ -247,14 +243,16 @@ Build a three-model smoke inventory from your own provider freeze. Tags below ar
 | `gemma3:4b` | larger |
 
 ```bash
-# Full provider freeze, then create a three-model smoke campaign:
+# Full provider freeze, then queue each smoke model for rollout:
 ./g8e eval models freeze
 
-./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
-./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
+./g8e eval rollout add qwen3:0.6b
+./g8e eval rollout add qwen3:4b
+./g8e eval rollout add gemma3:4b
+./g8e eval rollout run
 ```
 
-Matrix size for three models: **111** assignments (3 × 37 role-eligible scenario cells).
+Rollout runs three campaigns of **37** role-eligible scenario cells each (**111** assignments in total), one model resident at a time.
 
 ## Environment configuration
 
