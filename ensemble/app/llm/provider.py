@@ -14,7 +14,7 @@ All provider implementations must implement this interface.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterable
 from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
@@ -44,6 +44,9 @@ class LLMProvider(ABC):
         self._model_boundary_privacy: ContextVar[ModelBoundaryPrivacyAttestation | None] = ContextVar(
             f"{type(self).__name__}_model_boundary_privacy_{id(self)}", default=None
         )
+        self._declared_tool_names: ContextVar[tuple[str, ...] | None] = ContextVar(
+            f"{type(self).__name__}_declared_tool_names_{id(self)}", default=None
+        )
 
     @property
     def input_artifact_hash(self) -> str:
@@ -53,9 +56,27 @@ class LLMProvider(ABC):
     def model_boundary_privacy(self) -> ModelBoundaryPrivacyAttestation | None:
         return self._model_boundary_privacy.get()
 
+    @property
+    def declared_tool_names(self) -> list[str] | None:
+        """Tool names as sent on the most recent provider call, in order.
+
+        ``None`` means no call has reported its declarations (a provider that
+        does not record them, or the evidence was cleared); ``[]`` means the
+        call genuinely declared no tools.
+        """
+        names = self._declared_tool_names.get()
+        return list(names) if names is not None else None
+
     def clear_input_artifact_hash(self) -> None:
         self._input_artifact_hash.set("")
         self._model_boundary_privacy.set(None)
+
+    def clear_declared_tools(self) -> None:
+        self._declared_tool_names.set(None)
+
+    def _record_declared_tools(self, names: Iterable[str]) -> None:
+        """Record the tool names crossing the provider boundary on this call."""
+        self._declared_tool_names.set(tuple(names))
 
     def set_g8e_context(self, context: G8eHttpContext | None) -> None:  # noqa: B027
         """Record the turn's HTTP context for providers that need it.

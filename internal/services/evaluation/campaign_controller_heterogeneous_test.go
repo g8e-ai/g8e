@@ -34,6 +34,7 @@ func TestCampaignController_GenerateHeterogeneousStackSet_PersistsStacks(t *test
 	require.NoError(t, err)
 	truncated.CatalogDigest = truncatedDigest
 	req.Catalog = truncated
+	req.Lane = evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM
 	req.Inventory, err = MaterializeModelRegistry(req.CampaignID, testHeterogeneousVariants())
 	require.NoError(t, err)
 

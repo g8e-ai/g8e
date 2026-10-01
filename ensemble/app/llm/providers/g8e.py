@@ -53,6 +53,7 @@ from app.llm.llm_types import (
     ThinkingConfig,
 )
 from app.llm.provider import LLMProvider
+from app.llm.providers._capability import translate_governed_tool_rejection
 from app.llm.thinking import translate_for_ollama
 from app.llm.utils import schema_to_dict
 from app.models.model_configs import get_model_config
@@ -525,6 +526,24 @@ class G8EProvider(LLMProvider):
     def set_provider_retry_count(self, retry_count: int) -> None:
         self._provider_retry_count.set(retry_count)
 
+    @staticmethod
+    def _raise_if_tool_declaration_rejected(
+        exc: BaseException, *, model: str, request: InferenceDispatchRequest
+    ) -> None:
+        """Re-raise a provider's refusal of the declared tools as a typed error.
+
+        A request that declared tools and was refused with the Gateway's
+        capability-unsupported rejection is the tool declaration being refused
+        (the scored agent call requests no other optional capability). Any
+        other failure returns so the caller re-raises the original exception.
+        """
+        translate_governed_tool_rejection(
+            exc,
+            service_name="g8e",
+            model=model,
+            tools_declared=len(request.tools) > 0,
+        )
+
     async def _close_resources(self):
         """Clean up provider resources. The HTTP client is owned by the
         application lifecycle, not by this provider, so close is a no-op."""
@@ -556,6 +575,8 @@ class G8EProvider(LLMProvider):
         tools: list[ToolGroup] | None = None,
     ) -> InferenceDispatchResponse:
         """Dispatch a governed inference request and return the response."""
+        from app.errors import NetworkError
+
         self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
         retry_count = self._provider_retry_count.get()
@@ -595,7 +616,12 @@ class G8EProvider(LLMProvider):
         if normalized_response_format is not None:
             request.response_format.CopyFrom(normalized_response_format)
         self._record_model_boundary(request)
-        response = await self._client.dispatch_inference(request)
+        self._record_declared_tools(tool.name for tool in request.tools)
+        try:
+            response = await self._client.dispatch_inference(request)
+        except NetworkError as exc:
+            self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
+            raise
         _validate_response_identity(request, response)
         _response_parts(response)
         self._governed_dispatch_evidence.set(
@@ -642,7 +668,7 @@ class G8EProvider(LLMProvider):
         thinking_config: ThinkingConfig | None,
         tools: list[ToolGroup] | None = None,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        from app.errors import ValidationError
+        from app.errors import NetworkError, ValidationError
 
         self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
@@ -684,16 +710,25 @@ class G8EProvider(LLMProvider):
         if normalized_response_format is not None:
             request.response_format.CopyFrom(normalized_response_format)
         self._record_model_boundary(request)
+        self._record_declared_tools(tool.name for tool in request.tools)
 
         completion: InferenceDispatchResponse | None = None
-        async for frame in self._client.dispatch_inference_stream(request):
-            if frame.HasField("failure"):
-                raise ValidationError(frame.failure.reason)
-            if frame.HasField("progress"):
-                for chunk in _progress_parts_to_stream_chunks(frame.progress):
-                    yield chunk
-            elif frame.HasField("completion"):
-                completion = frame.completion
+        try:
+            async for frame in self._client.dispatch_inference_stream(request):
+                if frame.HasField("failure"):
+                    failure = ValidationError(frame.failure.reason)
+                    self._raise_if_tool_declaration_rejected(
+                        failure, model=model, request=request
+                    )
+                    raise failure
+                if frame.HasField("progress"):
+                    for chunk in _progress_parts_to_stream_chunks(frame.progress):
+                        yield chunk
+                elif frame.HasField("completion"):
+                    completion = frame.completion
+        except NetworkError as exc:
+            self._raise_if_tool_declaration_rejected(exc, model=model, request=request)
+            raise
 
         if completion is None:
             raise ValidationError("Governed inference stream ended without a completion frame")

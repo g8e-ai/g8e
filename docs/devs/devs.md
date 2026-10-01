@@ -269,7 +269,7 @@ make lint
 ./g8e test summary
 ```
 
-2. `./g8e test unit` delegates to `make test-unit`. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
+2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
 3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make test-external`, `make dashboard-test`.
 4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-full` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
 

@@ -180,6 +180,7 @@ Files at `internal/cli/cmd/` root are the root command, its tests, and shared fi
 | `internal/cli/cmd/shared/` | `shared` | Config load, `NewFileSvc` (`fs.NewRuntimeFileService`), source-root lookup, command context, and version-info context. Exists so group packages do not import the root `cmd` package. |
 | `internal/cli/cmd/gwremote/` | `gwremote` | Gateway HTTP publication, model provenance, provider observation, and health hook used by `eval`, `public`, and `docker`. Exists so those packages do not import `gw`. |
 | `internal/cli/cmd/cmdtest/` | `cmdtest` | Cross-package test helpers. Not a Cobra group. |
+| `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/verify` and the harness `agent-launcher-config` scenario. |
 | `internal/cli/api/` | | Typed CLI HTTP client. |
 | `internal/cli/auth/` | | CLI enrollment, credential staging, key generation, passkey registration, trust bundles, and mTLS clients. |
 | `internal/cli/browserorigin/` | | Frontend-origin validation and normalization. |
@@ -388,7 +389,7 @@ Depth is [Testing](tests.md). `e2e-full` and Compose profiles: INV-TESTMAP-02, I
 
 | Command | Tier | Where the work lives |
 | --- | --- | --- |
-| `./g8e test unit` | 1 | Delegates to `make test-unit`. Go tests sit beside packages. `make test-unit` depends on `constants-check`. |
+| `./g8e test unit` | 1 | Delegates to `make test-unit` by default; supports `--pkg` and `--run` for targeted testing. Go tests sit beside packages. `make test-unit` depends on `constants-check`. |
 | `./g8e test integration` | 2 | `integration` build tag. Cross-package suites in `test/`. Reusable setup in `test/fixtures/`. |
 | `./g8e test e2e` | 3 | `e2e` build tag. Tests in `test/e2e/`. Expects an already running platform. |
 | `./g8e test e2e-full` | 3 | Same `go test` arguments as `e2e`, wrapped in `docker compose up -d` and `docker compose down -v`. Profile names: INV-TESTMAP-02. |

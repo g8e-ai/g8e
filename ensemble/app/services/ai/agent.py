@@ -28,7 +28,7 @@ import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import app.llm.llm_types as types
-from app.errors import ValidationError
+from app.errors import ToolsNotSupportedError, ValidationError
 from app.constants import (
     AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
@@ -251,7 +251,11 @@ class g8eEnsemble:
                         logger.error("[AGENT] Fatal error after streaming started: %s", e)
                     yield StreamChunkFromModel(
                         type=StreamChunkFromModelType.ERROR,
-                        data=StreamChunkData(error=str(e), model_calls=model_calls),
+                        data=StreamChunkData(
+                            error=str(e),
+                            model_calls=model_calls,
+                            provider_tool_rejection=isinstance(e, ToolsNotSupportedError),
+                        ),
                     )
                     return
 
@@ -372,10 +376,12 @@ class g8eEnsemble:
         tool_response_sizes: list[int] = []
 
         loop_turn = 0
+        tool_turn_limit_reached = False
         try:
             while True:
                 loop_turn += 1
                 if loop_turn > AGENT_MAX_TOOL_TURNS:
+                    tool_turn_limit_reached = True
                     if self._approval_service is None:
                         logger.error(
                             "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
@@ -529,7 +535,9 @@ class g8eEnsemble:
                     request_settings=inputs.request_settings,
                     event_service=event_service,
                 ):
-                    yield chunk
+                    yield chunk.model_copy(
+                        update={"data": chunk.data.model_copy(update={"loop_turn": loop_turn})}
+                    )
 
                 fc_responses: list[ToolCallResponse] = fc_responses_out[0]
 
@@ -604,5 +612,6 @@ class g8eEnsemble:
                 token_usage=token_usage,
                 model_calls=model_calls,
                 tool_response_sizes=tool_response_sizes if tool_response_sizes else None,
+                tool_turn_limit_reached=tool_turn_limit_reached or None,
             ),
         )

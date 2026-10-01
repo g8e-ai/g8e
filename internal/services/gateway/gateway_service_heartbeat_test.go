@@ -12,6 +12,7 @@ package gateway
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,4 +87,58 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 
 		ls.handleHeartbeatPublish("test-channel", heartbeatBytes)
 	})
+}
+
+func publishTestHeartbeat(t *testing.T, ls *GatewayModeService, operatorID string) {
+	t.Helper()
+	payload, err := proto.Marshal(&operatorv1.HeartbeatResult{
+		OperatorId:     operatorID,
+		Status:         "automatic",
+		SystemIdentity: &operatorv1.SystemIdentity{Hostname: "worker-1"},
+	})
+	require.NoError(t, err)
+	wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{OperatorId: operatorID, Payload: payload})
+	require.NoError(t, err)
+	ls.handleHeartbeatPublish("test-channel", wire)
+}
+
+func TestGatewayModeService_HandleHeartbeatPublish_StampsGatewayClockAndRestoresStale(t *testing.T) {
+	ls := newTestGatewayService(t, testGatewayOpts{})
+	store := ls.GetDocStore()
+
+	stale := remoteOperator(constants.OperatorStatusStale)
+	stale.LastHeartbeatAt = timeAgo(constants.OperatorHeartbeatStaleAfter * 10)
+	putOperator(t, store, "op-stale", stale, time.Hour)
+
+	before := time.Now().UTC()
+	publishTestHeartbeat(t, ls, "op-stale")
+
+	doc, err := store.DocGet(operatorsCollection, "op-stale")
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+
+	var status constants.OperatorStatus
+	require.NoError(t, json.Unmarshal(doc.Data["status"], &status))
+	assert.Equal(t, constants.OperatorStatusActive, status, "a heartbeat must restore a stale operator")
+
+	var stamped time.Time
+	require.NoError(t, json.Unmarshal(doc.Data["last_heartbeat_at"], &stamped))
+	assert.False(t, stamped.Before(before.Add(-time.Second)), "last_heartbeat_at must be the Gateway receive time")
+}
+
+func TestGatewayModeService_HandleHeartbeatPublish_DoesNotReviveStoppedOrTerminated(t *testing.T) {
+	for _, status := range []constants.OperatorStatus{
+		constants.OperatorStatusStopped,
+		constants.OperatorStatusTerminated,
+	} {
+		t.Run(string(status), func(t *testing.T) {
+			ls := newTestGatewayService(t, testGatewayOpts{})
+			store := ls.GetDocStore()
+			putOperator(t, store, "op-1", remoteOperator(status), time.Hour)
+
+			publishTestHeartbeat(t, ls, "op-1")
+
+			assert.Equal(t, status, persistedOperatorStatus(t, store, "op-1"))
+		})
+	}
 }

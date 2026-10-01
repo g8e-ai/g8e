@@ -196,6 +196,12 @@
         "type": "object",
         "required": false,
         "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (defined in protocol/proto/operator.proto): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
+      },
+      "last_heartbeat_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "Gateway clock time the most recent heartbeat was received. Stamped by the Gateway, never by the Operator. A remote Operator in 'active' status with no heartbeat for more than 60 seconds (falling back to claimed_at, then created_at, when no heartbeat has arrived) is moved to 'stale' by the Gateway on the next read of its document; the next heartbeat restores 'active'."
       }
     }
   },

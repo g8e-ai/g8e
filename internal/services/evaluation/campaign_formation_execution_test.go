@@ -283,16 +283,16 @@ func TestImportAssignmentResultFromFormationRun_DoesNotPublishUnavailablePromptU
 
 func TestBuildFormationInitialState_MaterializesScenarioFixture(t *testing.T) {
 	input := ScenarioInputFixture{
-		ScenarioID:    "instruction-exact-format",
-		UserPrompt:    "Reply with exactly: NORTH-STAR-OK",
-		SystemContext: "formation system context",
+		ScenarioID: "instruction-exact-format",
+		UserPrompt: "Reply with exactly: NORTH-STAR-OK",
+		Seed:       InvestigationSeed{CaseTitle: "Release readiness check"},
 	}
 	state, err := BuildFormationInitialState(input)
 	require.NoError(t, err)
 	var decoded ScenarioInputFixture
 	require.NoError(t, json.Unmarshal(state, &decoded))
 	assert.Equal(t, input.UserPrompt, decoded.UserPrompt)
-	assert.Equal(t, input.SystemContext, decoded.SystemContext)
+	assert.Equal(t, input.Seed, decoded.Seed)
 }
 
 func TestBuildFormationInitialState_RejectsMissingPrompt(t *testing.T) {

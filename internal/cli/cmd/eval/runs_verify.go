@@ -191,6 +191,9 @@ func verifyRun(
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: runs verify: %w", err)
 	}
+	if !jsonOutput && catalog != nil && catalog.GetCatalogRef() != nil && catalog.GetCatalogRef().GetVersion() != "" && catalog.GetCatalogRef().GetVersion() != evaluation.StandardCatalogVersion {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Note: catalog version %s differs from standard %s; grade recomputation skipped\n", catalog.GetCatalogRef().GetVersion(), evaluation.StandardCatalogVersion)
+	}
 	_, artifacts, err := evaluation.LoadScenarioCatalog()
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: runs verify: %w", err)

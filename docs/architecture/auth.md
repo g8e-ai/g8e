@@ -176,7 +176,7 @@ The `g8e operator bind` command manages the authenticated CLI session's persiste
 
 Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The bind request carries `operator_session_ids` (or the single `operator_session_id`); the gateway validates that every target operator session is active and belongs to the authenticated user before changing anything, so one rejected target binds none. It then issues one replacement CLI session server-side and returns the new `cli_session_id` with the `bound` list. The first target is the primary binding (`operator_session_id` on the CLI session, the identity the auth middleware stamps when a request names no operator); a request whose operator headers name another bound session is stamped as that session (INV-AUTH-OP-BIND-05). The full list is persisted as `bound_operator_session_ids`, carried through rotation, and kept on refresh only while the primary binding survives. One call accepts at most `CLIBindMaxOperators` (5000) targets. `GET /api/v1/auth/cli/session` reports the list.
 
-Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details before binding.
+Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details and the Gateway-recorded last heartbeat time before binding. An Operator with no heartbeat for more than 60 seconds is listed as `stale` and cannot be targeted until its next heartbeat restores it (see [Liveness and Staleness](./operator.md#liveness-and-staleness)).
 
 Re-binding to the identical ordered list of operator sessions is idempotent and does not rotate the CLI session.
 

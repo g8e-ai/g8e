@@ -757,6 +757,7 @@ func TestClassifyReceiptFailure_MapsTypedSentinelsToCodes(t *testing.T) {
 		{name: "provider response invalid", execErr: constants.ErrInferenceProviderResponseInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID},
 		{name: "generation options invalid", execErr: constants.ErrInferenceGenerationOptionsInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID},
 		{name: "capability unsupported", execErr: constants.ErrInferenceCapabilityUnsupported, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED},
+		{name: "tools unsupported", execErr: constants.ErrInferenceToolsUnsupported, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED},
 		{name: "provider attempt required", execErr: constants.ErrInferenceProviderAttemptRequired, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED},
 		{name: "identity mismatch", execErr: constants.ErrInferenceIdentityMismatch, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH},
 		{name: "model digest mismatch", execErr: constants.ErrInferenceModelDigestMismatch, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH},
