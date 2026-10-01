@@ -120,6 +120,20 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("%w: fileSvc must be provided to NewG8eoService", constants.ErrInternal)
 	}
 
+	// Verify the inference provider before bootstrap claims an Operator
+	// session. The check fails closed, so an Inference Operator whose provider
+	// is unreachable or missing a configured model can never serve; claiming a
+	// session first would leave a session on the registry that never
+	// heartbeats and ages to stale on every restart.
+	var ollamaBackend *inference.OllamaBackend
+	if vs.config.Inference.Enabled {
+		var err error
+		ollamaBackend, err = vs.verifyInferenceProvider(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	bootstrapConfig, err := vs.bootstrap.RequestBootstrapConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNotAuthenticated, err)
@@ -313,24 +327,14 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("g8eo: failed to initialize scrubbing service: %w", err)
 	}
 
-	// Initialize the inference backend and governed execution handler when
-	// cfg.Inference.Enabled is true. The backend is an HTTP client to the
-	// remote Ollama provider; the handler is wired into the
-	// OperatorPubSubService config alongside the existing ExecutionService
+	// Wire the governed inference execution handler over the backend that
+	// verifyInferenceProvider already proved ready. The handler is wired into
+	// the OperatorPubSubService config alongside the existing ExecutionService
 	// and FileEditService. The handler is dispatched by event type, not by
-	// replacing the command service. Startup fails closed when the provider
-	// is unreachable, responds with a malformed status, or lacks a
-	// configured role model.
+	// replacing the command service.
 	var inferenceHandler *inference.InferenceExecutionHandler
 	var inferenceAttemptStore inference.AttemptStore
 	if vs.config.Inference.Enabled {
-		ollamaBackend, err := inference.NewOllamaBackend(vs.config.Inference.OllamaEndpoint, vs.logger)
-		if err != nil {
-			return fmt.Errorf("g8eo: inference backend: %w", err)
-		}
-		if err := inference.VerifyProviderReady(ctx, ollamaBackend, vs.config.Inference); err != nil {
-			return fmt.Errorf("g8eo: %w", err)
-		}
 		inferenceHandler, err = inference.NewInferenceExecutionHandler(ollamaBackend, vs.config, scrubbingService, vs.logger)
 		if err != nil {
 			return fmt.Errorf("g8eo: inference handler: %w", err)
@@ -495,6 +499,32 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	vs.logger.Info("Standing by")
 	return nil
+}
+
+// verifyInferenceProvider builds the HTTP client to the remote Ollama provider
+// and runs the read-only readiness check against it. It fails closed when the
+// provider is unreachable, responds with a malformed status, or lacks a
+// configured role model. The check can block for inference.ProviderStatusTimeout
+// against an unreachable host, so the endpoint and bound are logged before the
+// call to make a stalled startup attributable from the log alone.
+func (vs *G8eoService) verifyInferenceProvider(ctx context.Context) (*inference.OllamaBackend, error) {
+	icfg := vs.config.Inference
+	vs.logger.Info("Verifying inference provider readiness",
+		"endpoint", icfg.OllamaEndpoint,
+		"timeout", inference.ProviderStatusTimeout,
+		"primary_model", icfg.PrimaryModel,
+		"assistant_model", icfg.AssistantModel,
+		"lite_model", icfg.LiteModel)
+
+	backend, err := inference.NewOllamaBackend(icfg.OllamaEndpoint, vs.logger)
+	if err != nil {
+		return nil, fmt.Errorf("g8eo: inference backend: %w", err)
+	}
+	if err := inference.VerifyProviderReady(ctx, backend, icfg); err != nil {
+		return nil, fmt.Errorf("g8eo: %w", err)
+	}
+	vs.logger.Info("Inference provider ready", "endpoint", icfg.OllamaEndpoint)
+	return backend, nil
 }
 
 // Stop gracefully shuts down all g8eo sub-services.
