@@ -77,6 +77,8 @@ func marshalSortedJSON(value any) ([]byte, error) {
 		}
 		buf.WriteByte('}')
 		return buf.Bytes(), nil
+	case map[string]any:
+		return marshalSortedJSON(EvaluationTrace(typed))
 	case []any:
 		var buf bytes.Buffer
 		buf.WriteByte('[')
@@ -95,6 +97,21 @@ func marshalSortedJSON(value any) ([]byte, error) {
 	default:
 		return json.Marshal(typed)
 	}
+}
+
+func canonicalJSONBytes(val any) ([]byte, error) {
+	if val == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(val)
+	if err != nil {
+		return nil, err
+	}
+	var raw any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	return marshalSortedJSON(raw)
 }
 
 // ComputeChatProbeTraceDigest returns the SHA-256 digest for one decoded
