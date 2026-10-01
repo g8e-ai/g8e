@@ -157,6 +157,19 @@ class EvaluationProviderToolRejection(G8eBaseModel):
     reason: str = Field(default="")
 
 
+class EvaluationSeedApplication(G8eBaseModel):
+    """What the investigation seed actually wrote before the scored turn.
+
+    The seed itself is echoed whole in ``evaluation_context.seed``; these
+    counts prove it was applied (not just received) so a reader can tell a
+    seeded investigation from a cold one without trusting the request.
+    """
+
+    turns: int = Field(default=0, ge=0)
+    history_events: int = Field(default=0, ge=0)
+    case_memory: bool = False
+
+
 class EvaluationAssignmentTrace(G8eBaseModel):
     """Immutable application-owned record of one scored chat assignment.
 
@@ -164,6 +177,14 @@ class EvaluationAssignmentTrace(G8eBaseModel):
     ``ModelCallTelemetry.tools_declared`` on each entry of ``model_calls``
     (captured at the provider boundary, never recomputed from the registry).
     ``tool_gate`` records which authority decided that set.
+
+    The remaining fields record the deliberate divergences between a scored
+    request and production chat, each keyed on ``evaluation_context``:
+    ``user_memories_suppressed`` (user-wide memories are not read, because they
+    are artifacts of other assignments), and ``tool_turn_limit_reached`` (the
+    continue-approval at ``AGENT_MAX_TOOL_TURNS`` is denied immediately instead
+    of waiting for a human who is not there). ``seed_application`` records what
+    the investigation seed wrote.
     """
 
     schema_version: str = Field(default="1")
@@ -174,6 +195,9 @@ class EvaluationAssignmentTrace(G8eBaseModel):
     controlled_role_assignment: EvaluationControlledRoleAssignment | None = None
     tool_gate: ToolGate | None = None
     provider_tool_rejection: EvaluationProviderToolRejection | None = None
+    tool_turn_limit_reached: bool = False
+    user_memories_suppressed: bool = False
+    seed_application: EvaluationSeedApplication | None = None
     model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     role_outcome: EvaluationRoleOutcome | None = None
     designated_role_output: str | None = None

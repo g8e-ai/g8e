@@ -33,7 +33,7 @@ from app.constants.collections import (
     DB_COLLECTION_SETTINGS,
     USER_SETTINGS_DOC_PREFIX,
 )
-from app.errors import ResourceNotFoundError, ServiceUnavailableError
+from app.errors import ResourceNotFoundError, ServiceUnavailableError, ValidationError
 from app.models import CaseCreateRequest
 from app.models.cases import (
     CaseCreatedPayload,
@@ -127,6 +127,9 @@ _GATEWAY_OPERATOR_AUTHORITY_ERROR = (
     "and POST /api/v1/operators/reauth instead of g8ee local services."
 )
 
+from app.models.evaluation_trace import EvaluationSeedApplication
+from app.services.evaluation.investigation_seed import InvestigationSeedService
+from app.services.evaluation.tool_gate import resolve_tool_gate
 from app.services.evaluation.trace_service import EvaluationTraceService, validated_trace_ids
 from app.dependencies import (
     get_g8ee_app_settings,
@@ -137,6 +140,7 @@ from app.dependencies import (
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_event_service,
+    get_g8ee_investigation_seed_service,
     get_g8ee_investigation_service,
     get_g8ee_operator_command_service,
     get_g8ee_gateway_operator_client,
@@ -272,6 +276,7 @@ async def internal_chat(
     event_service: EventService = Depends(get_g8ee_event_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context),
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    seed_service: InvestigationSeedService = Depends(get_g8ee_investigation_seed_service),
 ):
     """
     Non-streaming chat endpoint - default path for browser sessions.
@@ -284,7 +289,23 @@ async def internal_chat(
 
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
+
+    A scored request may carry an investigation seed in its evaluation_context.
+    The seed is written synchronously right after inline case creation, so a
+    seed can never write into an existing investigation (it is rejected with 400
+    unless the request creates the case) and a seed failure is an HTTP error,
+    not a model failure.
     """
+    resource_creation = request.resource_creation
+    create_new_case = resource_creation.create_case if resource_creation else False
+    seed = request.evaluation_context.seed if request.evaluation_context is not None else None
+    if seed is not None and not create_new_case:
+        raise ValidationError(
+            "an investigation seed is only accepted when the request creates the case",
+            field="evaluation_context.seed",
+            constraint="requires_create_case",
+        )
+
     if request.evaluation_context is not None:
         g8e_context = g8e_context.model_copy(
             update={"evaluation_context": request.evaluation_context}
@@ -307,9 +328,6 @@ async def internal_chat(
         lite_api_key_override=request.llm_lite_api_key,
         lite_endpoint_override=request.llm_lite_endpoint,
     )
-
-    resource_creation = request.resource_creation
-    create_new_case = resource_creation.create_case if resource_creation else False
 
     # Validate investigation_id exists before proceeding, UNLESS we are creating a new case
     if not create_new_case:
@@ -342,6 +360,7 @@ async def internal_chat(
         },
     )
 
+    seed_application: EvaluationSeedApplication | None = None
     if create_new_case:
         case_create_data = CaseCreateRequest(
             initial_message=request.message,
@@ -360,7 +379,7 @@ async def internal_chat(
         investigation_request = InvestigationCreateRequest(
             case_id=case.id,
             case_title=case.title,
-            case_description=case.description,
+            case_description=(seed.case_description if seed else "") or case.description,
             web_session_id=g8e_context.web_session_id,
             priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
             user_email=case.user_email,
@@ -380,6 +399,19 @@ async def internal_chat(
             }
         )
 
+        if seed is not None:
+            try:
+                seed_application = await seed_service.apply(seed, g8e_context)
+            except Exception as seed_err:
+                # The trace was begun above; close it so the harness reads a
+                # terminal trace instead of waiting on a running one.
+                chat_pipeline.evaluation_trace_service.finalize_crashed(
+                    g8e_context,
+                    error=f"investigation seed failed: {seed_err}",
+                    tool_gate=resolve_tool_gate(g8e_context.evaluation_context),
+                )
+                raise
+
         from app.models.events import SessionEvent
 
         # Publish CASE_CREATED event immediately after inline creation.
@@ -397,7 +429,9 @@ async def internal_chat(
                 extra={"case_id": g8e_context.case_id, "error": str(sse_err)},
             )
 
-        if request.message.strip():
+        # A seeded case already carries its scenario-authored title; generating
+        # one from the prompt would overwrite it.
+        if request.message.strip() and seed is None:
             task = asyncio.create_task(
                 _generate_and_update_title(
                     message=request.message,
@@ -455,6 +489,7 @@ async def internal_chat(
             llm_lite_endpoint=request.llm_lite_endpoint,
             _task_manager=chat_task_manager,
             user_settings=user_settings,
+            seed_application=seed_application,
         )
     )
     # Track the task - run_chat will also track it internally, but we track it here

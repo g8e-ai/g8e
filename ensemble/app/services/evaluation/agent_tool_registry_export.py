@@ -184,9 +184,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     committed = args.path.read_text(encoding="utf-8") if args.path.exists() else ""
     if committed != rendered:
-        print(
-            f"{args.path} is stale; run: python -m app.services.evaluation.agent_tool_registry_export --write",
-            file=sys.stderr,
+        sys.stderr.write(
+            f"{args.path} is stale; run: python -m app.services.evaluation.agent_tool_registry_export --write\n"
         )
         return 1
     return 0

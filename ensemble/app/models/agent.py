@@ -204,6 +204,10 @@ class AgentInputs(G8eBaseModel):
     contents: list[Content] = Field(default_factory=list)
     generation_config: PrimaryLLMSettings | None = None
     user_memories: list[InvestigationMemory] = Field(default_factory=list)
+    user_memories_suppressed: bool = Field(
+        default=False,
+        description="True when user-wide memories were deliberately not read (scored requests only)",
+    )
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
     designated_model_role: str | None = None

@@ -9,6 +9,7 @@ package evaluation
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -240,6 +241,22 @@ func validateTraceDigest(trace EvaluationTrace) error {
 	return nil
 }
 
+// canonicalSeedBytes canonicalizes a seed after decoding it into the typed wire
+// seed. g8ee records the seed through its own model, which adds defaults the
+// harness never sent (an empty case_description, empty lists), so the sent seed
+// and its echo are compared as the typed value both decode to, not as raw JSON.
+func canonicalSeedBytes(seed any) ([]byte, error) {
+	raw, err := json.Marshal(seed)
+	if err != nil {
+		return nil, err
+	}
+	var typed harnessclient.EnsembleInvestigationSeed
+	if err := json.Unmarshal(raw, &typed); err != nil {
+		return nil, err
+	}
+	return canonicalJSONBytes(typed)
+}
+
 func validateTraceEvaluationContext(req ChatProbeRequest, evalContext EvaluationTrace) error {
 	checks := map[string]string{
 		"campaign_id":                req.CampaignID,
@@ -278,11 +295,11 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext Evaluation
 		if !hasSeed || rawSeed == nil {
 			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.seed is required")
 		}
-		reqBytes, err := canonicalJSONBytes(req.Seed)
+		reqBytes, err := canonicalSeedBytes(req.Seed)
 		if err != nil {
 			return fmt.Errorf("evaluation: validate chat probe trace: canonicalize request seed: %w", err)
 		}
-		traceBytes, err := canonicalJSONBytes(rawSeed)
+		traceBytes, err := canonicalSeedBytes(rawSeed)
 		if err != nil {
 			return fmt.Errorf("evaluation: validate chat probe trace: canonicalize trace seed: %w", err)
 		}

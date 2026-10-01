@@ -47,6 +47,7 @@ from app.llm.providers.llama_cpp import LlamaCppProvider
 from app.llm.providers.fake import FakeProvider
 from app.llm.providers.g8e import G8EProvider
 from app.models.agent import AgentInputs, AgentStreamState
+from app.models.evaluation_trace import EvaluationSeedApplication
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import (
@@ -433,8 +434,13 @@ class ChatPipelineService:
 
         user_memories = []
         case_memories = []
+        # A scored request does not read user-wide memories: they are artifacts
+        # of other assignments and would leak one scenario into the next. Case
+        # memories (including any the seed wrote) are still read. The
+        # divergence is keyed on evaluation_context and recorded in the trace.
+        user_memories_suppressed = g8e_context.evaluation_context is not None
         try:
-            if investigation.user_id:
+            if investigation.user_id and not user_memories_suppressed:
                 user_memories = await self.memory_service.get_user_memories(
                     user_id=investigation.user_id
                 )
@@ -504,6 +510,7 @@ class ChatPipelineService:
             generation_config=generation_config,
             scrubbing_observations=built_contents.scrubbing_observations,
             user_memories=user_memories,
+            user_memories_suppressed=user_memories_suppressed,
             case_memories=case_memories,
             triage_result=triage_result,
             context_sizes=context_sizes,
@@ -790,6 +797,7 @@ class ChatPipelineService:
         inputs: AgentInputs,
         state: AgentStreamState,
         memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None,
+        seed_application: EvaluationSeedApplication | None = None,
     ) -> None:
         if g8e_context.evaluation_context is None:
             return
@@ -864,10 +872,41 @@ class ChatPipelineService:
             grader_calls=grader_calls,
             tool_gate=resolve_tool_gate(g8e_context.evaluation_context),
             provider_tool_rejection=state.provider_tool_rejection,
+            tool_turn_limit_reached=state.tool_turn_limit_reached,
+            user_memories_suppressed=inputs.user_memories_suppressed,
+            seed_application=seed_application,
             finish_reason=state.finish_reason or ("error" if state.stream_failed else "stop"),
             status="failed" if state.stream_failed else "completed",
             error=state.error,
         )
+
+    def _finalize_crashed_evaluation_assignment(
+        self,
+        g8e_context: G8eHttpContext,
+        crash: Exception,
+        seed_application: EvaluationSeedApplication | None,
+    ) -> None:
+        """Close a scored assignment's trace as failed when the pipeline crashes.
+
+        The Go harness polls the trace until it is terminal; without this a
+        crash before ``_finalize_evaluation_assignment`` leaves it ``running``
+        and the assignment times out instead of reporting why it failed.
+        """
+        if g8e_context.evaluation_context is None:
+            return
+        try:
+            self.evaluation_trace_service.finalize_crashed(
+                g8e_context,
+                error=str(crash),
+                tool_gate=resolve_tool_gate(g8e_context.evaluation_context),
+                seed_application=seed_application,
+            )
+        except Exception as finalize_err:
+            logger.error(
+                "[SSE-CHAT] Failed to finalize crashed evaluation trace: %s",
+                finalize_err,
+                exc_info=True,
+            )
 
     async def run_chat(
         self,
@@ -890,6 +929,7 @@ class ChatPipelineService:
         llm_lite_api_key: str | None = None,
         llm_lite_endpoint: str | None = None,
         _track_task: bool = True,
+        seed_application: EvaluationSeedApplication | None = None,
     ) -> None:
         """Non-streaming chat path - AI response delivered via SSE through client.
 
@@ -950,6 +990,7 @@ class ChatPipelineService:
                 llm_lite_endpoint=llm_lite_endpoint,
                 user_settings=user_settings,
                 task_manager=_task_manager,
+                seed_application=seed_application,
             )
             logger.info("[SSE-CHAT] _run_chat_impl completed successfully")
         except asyncio.CancelledError:
@@ -962,6 +1003,7 @@ class ChatPipelineService:
                 e,
                 exc_info=True,
             )
+            self._finalize_crashed_evaluation_assignment(g8e_context, e, seed_application)
             try:
                 await self.event_service.publish_investigation_event(
                     investigation_id=investigation_id,
@@ -998,6 +1040,7 @@ class ChatPipelineService:
         llm_lite_api_key: str | None = None,
         llm_lite_endpoint: str | None = None,
         task_manager: BackgroundTaskManager | None = None,
+        seed_application: EvaluationSeedApplication | None = None,
     ) -> None:
         """Run the chat implementation - main logic flow."""
         start_time = time.time()
@@ -1209,6 +1252,7 @@ class ChatPipelineService:
             inputs=inputs,
             state=state,
             memory_holder=memory_holder,
+            seed_application=seed_application,
         )
 
         await self._record_agent_activity_metadata(

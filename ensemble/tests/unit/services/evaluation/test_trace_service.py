@@ -12,6 +12,7 @@ from app.errors import ValidationError
 from app.models.evaluation_trace import (
     EvaluationAssignmentTrace,
     EvaluationProviderToolRejection,
+    EvaluationSeedApplication,
     EvaluationToolCallRecord,
     ToolGate,
 )
@@ -22,7 +23,12 @@ from app.services.evaluation.trace_service import (
     compute_trace_digest,
     validated_trace_ids,
 )
-from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+from g8e.models.internal_api import (
+    EvaluationInferenceContext,
+    EvaluationInvestigationSeed,
+    EvaluationSeedTurn,
+    InferenceModelVariant,
+)
 
 
 @pytest.fixture
@@ -231,10 +237,150 @@ def test_trace_persists_per_call_trajectory_and_guidance(trace_service):
     assert loaded.tool_calls[1].error is None
 
 
-def test_trace_schema_version_covers_the_boundary_evidence_fields(trace_service):
+def test_trace_schema_version_covers_the_seed_and_divergence_fields(trace_service):
     context = _context()
 
-    assert trace_service.begin(context).schema_version == "5"
+    assert trace_service.begin(context).schema_version == "6"
+
+
+def test_trace_records_seed_application_and_the_eval_only_divergences(trace_service):
+    context = _context()
+    trace_service.begin(context)
+
+    trace_service.finalize(
+        context,
+        model_calls=[],
+        tool_turn_limit_reached=True,
+        user_memories_suppressed=True,
+        seed_application=EvaluationSeedApplication(turns=2, history_events=1, case_memory=True),
+        finish_reason="tool_turn_limit",
+        status="completed",
+    )
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.tool_turn_limit_reached is True
+    assert loaded.user_memories_suppressed is True
+    assert loaded.seed_application == EvaluationSeedApplication(
+        turns=2, history_events=1, case_memory=True
+    )
+
+
+def test_trace_defaults_record_no_divergence_when_none_occurred(trace_service):
+    context = _context()
+
+    trace_service.finalize(context, model_calls=[], finish_reason="stop", status="completed")
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.tool_turn_limit_reached is False
+    assert loaded.user_memories_suppressed is False
+    assert loaded.seed_application is None
+
+
+def test_trace_digest_binds_seed_application_and_divergences():
+    base = EvaluationAssignmentTrace(
+        evaluation_context=_evaluation_context(), chat_execution_id="exec-1", status="completed"
+    )
+    seeded = base.model_copy(
+        update={"seed_application": EvaluationSeedApplication(turns=1, history_events=0)}
+    )
+    suppressed = base.model_copy(update={"user_memories_suppressed": True})
+    limited = base.model_copy(update={"tool_turn_limit_reached": True})
+
+    digests = {compute_trace_digest(t) for t in (base, seeded, suppressed, limited)}
+    assert len(digests) == 4
+
+
+def test_finalize_crashed_closes_a_running_trace_as_failed_and_keeps_triage(trace_service):
+    context = _context()
+    triage_call = ModelCallTelemetry(
+        agent_role="triage",
+        model_role="lite",
+        provider="G8EProvider",
+        model="model-a",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+    )
+    trace_service.begin(context, triage_model_call=triage_call)
+
+    trace = trace_service.finalize_crashed(
+        context,
+        error="pipeline exploded",
+        tool_gate=ToolGate.BYPASSED_FOR_EVAL,
+        seed_application=EvaluationSeedApplication(turns=1),
+    )
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.trace_digest == trace.trace_digest
+    assert loaded.status == "failed"
+    assert loaded.error == "pipeline exploded"
+    assert loaded.finish_reason == "error"
+    assert loaded.completed_at is not None
+    assert loaded.triage_model_call == triage_call
+    assert loaded.tool_gate is ToolGate.BYPASSED_FOR_EVAL
+    assert loaded.seed_application == EvaluationSeedApplication(turns=1)
+
+
+def test_finalize_crashed_without_a_running_trace_still_writes_a_failed_one(trace_service):
+    context = _context()
+
+    trace_service.finalize_crashed(context, error="crashed before begin")
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.status == "failed"
+    assert loaded.triage_model_call is None
+
+
+def test_finalize_crashed_never_overwrites_a_terminal_trace(trace_service):
+    context = _context()
+    trace_service.begin(context)
+    completed = trace_service.finalize(
+        context,
+        model_calls=[],
+        designated_role_output="READY",
+        finish_reason="stop",
+        status="completed",
+    )
+
+    returned = trace_service.finalize_crashed(context, error="late crash")
+
+    assert returned.status == "completed"
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.trace_digest == completed.trace_digest
+    assert loaded.designated_role_output == "READY"
+    assert loaded.error is None
+
+
+def test_finalize_crashed_requires_an_evaluation_context(trace_service):
+    with pytest.raises(ValidationError, match="evaluation_context is required"):
+        trace_service.finalize_crashed(G8eHttpContext(user_id="user-1"), error="x")
+
+
+def test_trace_echoes_the_seed_whole_including_model_defaults(trace_service):
+    """The echoed seed carries model defaults the harness never sent
+    (``case_description`` and empty lists; unset optionals are omitted). The Go
+    validator compares the seed after decoding it into its own typed form, so
+    these defaults must not make an honest echo look different; this pins the
+    shape."""
+    seed = EvaluationInvestigationSeed(
+        case_title="Checkout payment timeouts",
+        turns=[EvaluationSeedTurn(sender="user", content="Checkout is failing.")],
+    )
+    context = G8eHttpContext(
+        user_id="user-1",
+        evaluation_context=_evaluation_context().model_copy(update={"seed": seed}),
+    )
+
+    trace_service.begin(context)
+
+    echoed = trace_service.load("assignment-1", "attempt-1").model_dump(mode="json")[
+        "evaluation_context"
+    ]["seed"]
+    assert echoed == {
+        "case_title": "Checkout payment timeouts",
+        "case_description": "",
+        "turns": [{"sender": "user", "content": "Checkout is failing."}],
+        "history_events": [],
+    }
 
 
 def test_trace_digest_binds_declared_tools_and_gate():

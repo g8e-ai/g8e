@@ -382,6 +382,16 @@ class g8eEnsemble:
                 loop_turn += 1
                 if loop_turn > AGENT_MAX_TOOL_TURNS:
                     tool_turn_limit_reached = True
+                    if inputs.g8e_context.evaluation_context is not None:
+                        # A scored run has no human to answer the continue-approval,
+                        # so the request would stall until it times out. Deny it
+                        # immediately; the trace records tool_turn_limit_reached.
+                        logger.warning(
+                            "[AGENT] Scored run reached max tool turns (%d); stopping without approval",
+                            AGENT_MAX_TOOL_TURNS,
+                        )
+                        final_finish_reason = "tool_turn_limit"
+                        break
                     if self._approval_service is None:
                         logger.error(
                             "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
