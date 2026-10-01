@@ -3,8 +3,8 @@ doc_id: unified_stack
 title: Unified Docker Stack Guide
 audience: platform operators and evaluators
 status: current
-last_updated: 2026-09-30
-version: v2.2.4
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - docker-compose.yml
   - docs/guides/
@@ -174,22 +174,22 @@ Provider host (Windows + Ollama example)
 
 Keep internal plan vocabulary separate from public campaign branding.
 
-| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (26 scenarios × eligible roles) |
+| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (27 scenarios × eligible roles) |
 | --- | --- | --- | --- | --- |
-| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **39** |
-| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **117** |
+| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.g8e/eval/inventories/<campaign-id>.json` | 1 model → **41** |
+| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.g8e/eval/inventories/eval-smoke-mini.json` | 3 models → **123** |
 | **Full homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-<seq>` | `.g8e/eval/model-inventory.json` (from `inventory freeze`) | all discovered models |
 
 Rules:
 
-- **Do not** use `north-star` in public run IDs or campaign IDs. The frozen scenario catalog is `north-star-25@1.0.0` (legacy slug; content is the standard 26-scenario suite).
+- Campaigns score a suite (`g8e eval campaigns create --suite <id>`); the default is the built-in `default-suite`. Campaigns frozen before the suite rename carry the legacy catalog ID `north-star-25` in their frozen spec; that identity is historical and is never used for new campaigns, run IDs, or campaign IDs.
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
 - Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` **unset** in `.env`. Campaign authority travels on each governed dispatch from g8ee; do not rebind the inference operator per model.
 
 ### Init campaign inventory (one model per campaign)
 
-Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 37 cells**. Keeps runs tidy and isolates failures. Use `g8e eval runs start` (or `g8e eval rollout next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
+A `model-role` campaign freezes exactly one model: **one model, one campaign, 41 cells**. `g8e eval campaigns create` and `g8e eval runs start` reject any other count. This keeps runs tidy, isolates failures, and lets the provider unload each model when its campaign finishes. Use `g8e eval runs start` for one model, or `g8e eval rollout run` for many (`g8e eval rollout next` inspects the next pending entry) — no `.env` edits or operator recreate between models.
 
 Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/README.md) for the public/private boundary.
 
@@ -224,14 +224,12 @@ Optional rollout queue (multi-model tracking):
 ./g8e eval rollout run --until 1
 ```
 
-List variants or create custom campaigns without a queue:
+To compare models side by side in the explorer, run them with the Provider Observer enrolled. Each model's run is its own dataset, and the explorer compares datasets that report the same GPU memory and system RAM, which the observer supplies once a run completes; there is nothing to configure.
+
+List the variants available to queue:
 
 ```bash
 ./g8e eval models list
-
-# Mini smoke combined campaign (3 models → 225 cells)
-./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
-./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
 Track per-model verification progress in `.g8e/eval/init-campaign-queue.json` (`status: verified` or `pending`, plus `verified_run_id` when complete).
@@ -247,14 +245,16 @@ Build a three-model smoke inventory from your own provider freeze. Tags below ar
 | `gemma3:4b` | larger |
 
 ```bash
-# Full provider freeze, then create a three-model smoke campaign:
+# Full provider freeze, then queue each smoke model for rollout:
 ./g8e eval models freeze
 
-./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
-./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
+./g8e eval rollout add qwen3:0.6b
+./g8e eval rollout add qwen3:4b
+./g8e eval rollout add gemma3:4b
+./g8e eval rollout run
 ```
 
-Matrix size for three models: **111** assignments (3 × 37 role-eligible scenario cells).
+Rollout runs three campaigns of **41** role-eligible scenario cells each (**123** assignments in total), one model resident at a time.
 
 ## Environment configuration
 
@@ -276,7 +276,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
 | `G8E_INFERENCE_CAMPAIGN_ID` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
 | `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | *(unset)* | **Leave empty.** Static startup binding; per-model rollout uses dispatch-carried authority instead |
 
-Container names (`g8e-<service>`), host ports (8080, 8443, 8000, 3000, and loopback 8081, 8082, 5173), and heartbeat interval are literals in `docker-compose.yml`. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
+Container names (`g8e-<service>`) and host ports (8080, 8443, 8000, 3000, and loopback 8081, 8082, 5173) are literals in `docker-compose.yml`. Operators use the `g8e operator start` default heartbeat interval of 30 seconds; the Gateway marks an Operator `stale` after 60 seconds without a heartbeat, so `--heartbeat-interval` accepts at most 30. The Inference Operator model roles and keep-alive come from the `g8e operator start` defaults (`./g8e operator start --help` lists them: `--inference-primary-model`, `--inference-assistant-model`, `--inference-lite-model`, `--inference-keep-alive`). To run different ports or models, add a checked-in `docker-compose.override.yml` that changes the published ports or appends those flags to the Inference Operator `command`; do not set them in `.env`.
 
 ## Standard bootstrap workflow
 
@@ -496,7 +496,7 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 
 The Observer only samples provider-boundary telemetry between BEGIN and FINALIZE. It does not manage Ollama, restart the daemon, unload models, or execute generic commands. Model residency is owned by Ollama, and campaign model release uses an approved command dispatched to the exact Inference Operator after scored work completes.
 
-The legacy filesystem runner `g8e eval observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
+The Observer Operator is the only provider-boundary observer. There is no CLI-side observer process.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. That is expected. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
@@ -754,7 +754,7 @@ docker compose up -d --force-recreate g8e-inference-operator
 
 ### Observer not receiving commands
 
-- Confirm Observer enrolled with `--provider-boundary-observer-enabled` (not the filesystem `eval observer run` path).
+- Confirm Observer enrolled with `--provider-boundary-observer-enabled`.
 - Confirm Gateway can reach the Observer session (`./g8e operator list`).
 - Confirm the provider host can reach Gateway ports 8080/8443 and `g8e.local` resolves to the campaign host.
 

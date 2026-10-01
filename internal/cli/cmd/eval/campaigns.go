@@ -30,9 +30,8 @@ const campaignStatusNoRuns = "no-runs"
 
 func campaignsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "campaigns",
-		Aliases: []string{"campaign"},
-		Short:   "Define, inspect, and archive evaluation campaigns",
+		Use:   "campaigns",
+		Short: "Define, inspect, and archive evaluation campaigns",
 		Long: `A campaign is the frozen definition of an evaluation: which models, which
 scenarios, how many repetitions, and in which lane. Executions of a campaign are
 runs (g8e eval runs).`,
@@ -67,6 +66,7 @@ type campaignListJSON struct {
 
 type campaignShowJSON struct {
 	campaignRowJSON
+	Suite    string                      `json:"suite"`
 	Models   []string                    `json:"models"`
 	Runs     []runRow                    `json:"runs"`
 	Archive  *evaluation.ArchiveManifest `json:"archive,omitempty"`
@@ -232,6 +232,10 @@ func campaignsShowCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaigns show: %w", err)
 			}
+			catalog, err := store.LoadScenarioCatalog(cmd.Context(), campaignID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaigns show: %w", err)
+			}
 			payload := campaignShowJSON{
 				campaignRowJSON: campaignRowJSON{
 					CampaignID:          campaignID,
@@ -246,8 +250,9 @@ func campaignsShowCmd(deps nativeEvalDeps) *cobra.Command {
 					Status:              latestRunStatus(runRows),
 					RunIDs:              runIDs,
 				},
+				Suite:    spec.GetCatalogRef().GetId() + "@" + spec.GetCatalogRef().GetVersion(),
 				Runs:     runRows,
-				CellsPer: campaignCells(spec, lane, stacks),
+				CellsPer: campaignCells(catalog, spec, lane, stacks),
 			}
 			for _, variant := range spec.GetModelRegistry() {
 				payload.Models = append(payload.Models, variant.GetServedModelTag())
@@ -261,8 +266,8 @@ func campaignsShowCmd(deps nativeEvalDeps) *cobra.Command {
 				return output.WriteJSON(cmd.OutOrStdout(), payload)
 			}
 			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(out, "Campaign: %s\nLane: %s\nModels: %d (%s)\nScenarios: %d\nRepetitions: %d\nCells per run: %d\nModel registry digest: %s\nCatalog digest: %s\nStatus: %s\nArchived: %t\n",
-				campaignID, lane, payload.ModelCount, strings.Join(payload.Models, ", "), payload.ScenarioCount, payload.RepetitionCount,
+			_, _ = fmt.Fprintf(out, "Campaign: %s\nLane: %s\nSuite: %s\nModels: %d (%s)\nScenarios: %d\nRepetitions: %d\nCells per run: %d\nModel registry digest: %s\nCatalog digest: %s\nStatus: %s\nArchived: %t\n",
+				campaignID, lane, payload.Suite, payload.ModelCount, strings.Join(payload.Models, ", "), payload.ScenarioCount, payload.RepetitionCount,
 				payload.CellsPer, payload.ModelRegistryDigest, payload.CatalogDigest, payload.Status, archived)
 			if stacks > 0 {
 				_, _ = fmt.Fprintf(out, "Stacks: %d\n", stacks)
@@ -302,11 +307,13 @@ func campaignRunIDs(ctx context.Context, fileSvc fs.RuntimeFileService, store *e
 	return runIDs, nil
 }
 
-func campaignCells(spec *evalv1.EvaluationCampaignSpec, lane string, stacks int) uint64 {
+// campaignCells is the assignment count of one run, sized from the catalog the
+// campaign froze rather than from any built-in suite.
+func campaignCells(catalog *evalv1.EvaluationScenarioCatalog, spec *evalv1.EvaluationCampaignSpec, lane string, stacks int) uint64 {
 	if lane == campaignLaneSystem {
-		return evaluation.ComputeHeterogeneousMatrixSize(uint64(stacks))
+		return evaluation.FormationMatrixSize(catalog, uint64(stacks))
 	}
-	return evaluation.ComputeHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(spec.GetRepetitionCount())
+	return evaluation.ModelRoleMatrixSize(catalog, uint64(len(spec.GetModelRegistry())), spec.GetRepetitionCount())
 }
 
 // campaignCreateSpec is everything that defines one campaign.
@@ -314,15 +321,15 @@ type campaignCreateSpec struct {
 	CampaignID   string
 	Variants     []*evalv1.ModelVariant
 	Repetitions  uint32
-	System       bool
-	Seed         uint64
 	Formations   bool
 	FormationIDs []string
-	Smoke        bool
+	// SuiteID names the suite the campaign freezes; empty means the default suite.
+	SuiteID string
 }
 
 type campaignCreateResult struct {
 	Spec     *evalv1.EvaluationCampaignSpec
+	Catalog  *evalv1.EvaluationScenarioCatalog
 	StackSet *evaluation.HeterogeneousStackSet
 	Lane     string
 }
@@ -347,38 +354,29 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 	if err := evaluation.ValidateModelRegistry(freeze); err != nil {
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
-	var (
-		catalog   *evalv1.EvaluationScenarioCatalog
-		artifacts map[string]evaluation.ScenarioArtifacts
-	)
-	if spec.Smoke {
-		catalog, artifacts, err = evaluation.LoadSmokeGateScenarioCatalog()
-	} else {
-		catalog, artifacts, err = evaluation.LoadScenarioCatalog()
+	store := evaluation.NewStore(fileSvc)
+	suiteID := spec.SuiteID
+	if suiteID == "" {
+		suiteID = evaluation.DefaultSuiteID
 	}
+	catalog, artifacts, err := store.LoadSuiteCatalog(ctx, suiteID)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
 	var stackSet *evaluation.HeterogeneousStackSet
-	switch {
-	case spec.Formations:
+	if spec.Formations {
 		stackSet, err = evaluation.GenerateFormationCatalogStackSet(evaluation.FormationCatalogStackGenerationRequest{
 			CampaignID:   spec.CampaignID,
-			Seed:         spec.Seed,
 			Variants:     freeze.Variants,
 			FormationIDs: spec.FormationIDs,
 		})
-	case spec.System:
-		stackSet, err = evaluation.GenerateHeterogeneousStackSet(evaluation.HeterogeneousStackGenerationRequest{
-			CampaignID: spec.CampaignID,
-			Seed:       spec.Seed,
-			Variants:   freeze.Variants,
-		})
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
+		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
+	if stackSet == nil && len(freeze.Variants) != 1 {
+		return nil, fmt.Errorf("evaluation: campaigns create: %d models selected: %w", len(freeze.Variants), constants.ErrEvaluationCampaignSubjectInvalid)
 	}
-	store := evaluation.NewStore(fileSvc)
 	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
 	campaignSpec, err := controller.CreateCampaign(ctx, evaluation.CampaignCreateRequest{
 		CampaignID:        spec.CampaignID,
@@ -407,12 +405,13 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 	if stackSet != nil {
 		lane = campaignLaneSystem
 	}
-	return &campaignCreateResult{Spec: campaignSpec, StackSet: stackSet, Lane: lane}, nil
+	return &campaignCreateResult{Spec: campaignSpec, Catalog: catalog, StackSet: stackSet, Lane: lane}, nil
 }
 
 type campaignCreateJSON struct {
 	CampaignID          string `json:"campaign_id"`
 	Lane                string `json:"lane"`
+	Suite               string `json:"suite"`
 	ModelCount          int    `json:"model_count"`
 	ScenarioCount       uint32 `json:"scenario_count"`
 	RepetitionCount     uint32 `json:"repetition_count"`
@@ -425,27 +424,34 @@ type campaignCreateJSON struct {
 
 func campaignsCreateCmd(deps nativeEvalDeps) *cobra.Command {
 	var reps uint32
-	var lane string
-	var seed uint64
+	var suite string
 	var formations []string
 	var allFormations bool
 	var selector ModelSelector
 	cmd := &cobra.Command{
 		Use:   "create <campaign> <selector>",
 		Short: "Freeze a campaign over registry models or formations",
-		Long: `Freeze a campaign: the selected registry models, the scenario catalog, and the
-repetition count. Nothing executes until a run starts (g8e eval runs start).
+		Long: `Freeze a campaign: the selected registry models, the suite's scenario catalog,
+and the repetition count. Nothing executes until a run starts (g8e eval runs
+start).
+
+--suite picks the suite whose scenarios the campaign scores (default:
+default-suite; see g8e eval suites). The suite is copied into the campaign, so
+editing or deleting it later never changes the campaign.
 
 A model campaign takes a model selector (positional models, --family,
---max-params, or --all) and defaults to the model-role lane.
+--max-params, or --all) and scores each model on its own. A model campaign
+freezes exactly one model; the selector must resolve to a single model. Qualify
+several models with g8e eval rollout, which runs one campaign per model.
 
-A formation campaign takes --formations <id>... or --all-formations and always
-runs in the system lane.
+A formation campaign takes --formations <id>... or --all-formations and scores
+each formation as a set.
 
 Examples:
-  g8e eval campaigns create eval-qwen qwen3:4b qwen3:8b --reps 3
-  g8e eval campaigns create eval-small --max-params 4b
-  g8e eval campaigns create eval-formations --all-formations --seed 17
+  g8e eval campaigns create eval-qwen qwen3:4b --reps 3
+  g8e eval campaigns create eval-gemma gemma4:e4b
+  g8e eval campaigns create eval-custom qwen3:4b --suite my-suite
+  g8e eval campaigns create eval-formations --all-formations
   g8e eval campaigns create eval-two --formations qwen-powerhouse,ultra-efficient-speedster`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -455,14 +461,8 @@ Examples:
 			if allFormations && len(formations) > 0 {
 				return fmt.Errorf("evaluation: campaigns create: --formations and --all-formations are mutually exclusive")
 			}
-			if lane != campaignLaneModelRole && lane != campaignLaneSystem {
-				return fmt.Errorf("evaluation: campaigns create: --lane must be %s or %s (got %q)", campaignLaneModelRole, campaignLaneSystem, lane)
-			}
-			if formationCampaign && cmd.Flags().Changed("lane") && lane != campaignLaneSystem {
-				return fmt.Errorf("evaluation: campaigns create: --lane %s is incompatible with --formations/--all-formations, which always run in the system lane", lane)
-			}
 			if formationCampaign && selector.IsSet() {
-				msg := fmt.Sprintf("evaluation: campaigns create: formations run in the system lane and take no model selector, but got %s", selector.describe())
+				msg := fmt.Sprintf("evaluation: campaigns create: formations take no model selector, but got %s", selector.describe())
 				if len(selector.IDs) > 0 {
 					msg += "; if you meant to pass multiple --formations, separate them with a comma (--formations a,b) or repeat the flag (--formations a --formations b) — space-separated values after a flag are parsed as extra positional arguments"
 				}
@@ -482,18 +482,15 @@ Examples:
 			if len(registry) == 0 {
 				return fmt.Errorf("evaluation: campaigns create: the model registry is empty (run `g8e eval models freeze` or `g8e eval models import`): %w", constants.ErrEvaluationSelectionEmpty)
 			}
-			create := campaignCreateSpec{CampaignID: campaignID, Repetitions: reps, Seed: seed}
+			create := campaignCreateSpec{CampaignID: campaignID, Repetitions: reps, SuiteID: suite}
 			if formationCampaign {
 				create.Formations = true
 				create.FormationIDs = formations
 				if create.Variants, err = evaluation.MaterializeFormationVariants(registry, formations); err != nil {
 					return fmt.Errorf("evaluation: campaigns create: %w", err)
 				}
-			} else {
-				create.System = lane == campaignLaneSystem
-				if create.Variants, err = selector.Resolve(registry); err != nil {
-					return fmt.Errorf("evaluation: campaigns create: %w", err)
-				}
+			} else if create.Variants, err = selector.Resolve(registry); err != nil {
+				return fmt.Errorf("evaluation: campaigns create: %w", err)
 			}
 			result, err := createCampaign(cmd.Context(), deps, fileSvc, create)
 			if err != nil {
@@ -507,10 +504,11 @@ Examples:
 			payload := campaignCreateJSON{
 				CampaignID:          campaignID,
 				Lane:                result.Lane,
+				Suite:               result.Spec.GetCatalogRef().GetId() + "@" + result.Spec.GetCatalogRef().GetVersion(),
 				ModelCount:          len(result.Spec.GetModelRegistry()),
 				ScenarioCount:       result.Spec.GetScenarioCount(),
 				RepetitionCount:     result.Spec.GetRepetitionCount(),
-				CellsPerRun:         campaignCells(result.Spec, result.Lane, stacks),
+				CellsPerRun:         campaignCells(result.Catalog, result.Spec, result.Lane, stacks),
 				ModelRegistryDigest: result.Spec.GetModelRegistryDigest(),
 				CatalogDigest:       result.Spec.GetCatalogDigest(),
 				StackCount:          stacks,
@@ -520,8 +518,8 @@ Examples:
 				return output.WriteJSON(cmd.OutOrStdout(), payload)
 			}
 			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(out, "Campaign created\nCampaign: %s\nLane: %s\nModels: %d\nScenarios: %d\nRepetitions: %d\nCells per run: %d\nModel registry digest: %s\nCatalog digest: %s\n",
-				payload.CampaignID, payload.Lane, payload.ModelCount, payload.ScenarioCount, payload.RepetitionCount, payload.CellsPerRun, payload.ModelRegistryDigest, payload.CatalogDigest)
+			_, _ = fmt.Fprintf(out, "Campaign created\nCampaign: %s\nLane: %s\nSuite: %s\nModels: %d\nScenarios: %d\nRepetitions: %d\nCells per run: %d\nModel registry digest: %s\nCatalog digest: %s\n",
+				payload.CampaignID, payload.Lane, payload.Suite, payload.ModelCount, payload.ScenarioCount, payload.RepetitionCount, payload.CellsPerRun, payload.ModelRegistryDigest, payload.CatalogDigest)
 			if stacks > 0 {
 				_, _ = fmt.Fprintf(out, "Stacks: %d (set digest %s)\n", stacks, stackDigest)
 			}
@@ -530,10 +528,9 @@ Examples:
 		},
 	}
 	cmd.Flags().Uint32Var(&reps, "reps", 1, "Repetitions of each matrix cell")
-	cmd.Flags().StringVar(&lane, "lane", campaignLaneModelRole, "Evaluation lane: model-role or system")
-	cmd.Flags().Uint64Var(&seed, "seed", 0, "Deterministic stack generation seed (system lane)")
-	cmd.Flags().StringSliceVar(&formations, "formations", nil, "Formation catalog IDs to evaluate (system lane)")
-	cmd.Flags().BoolVar(&allFormations, "all-formations", false, "Evaluate every formation in the catalog (system lane)")
+	cmd.Flags().StringVar(&suite, "suite", evaluation.DefaultSuiteID, "Suite to freeze into the campaign (see g8e eval suites list)")
+	cmd.Flags().StringSliceVar(&formations, "formations", nil, "Formation catalog IDs to evaluate")
+	cmd.Flags().BoolVar(&allFormations, "all-formations", false, "Evaluate every formation in the catalog")
 	selector.bindFlags(cmd)
 	return cmd
 }

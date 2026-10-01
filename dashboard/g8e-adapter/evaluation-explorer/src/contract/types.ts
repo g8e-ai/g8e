@@ -82,6 +82,30 @@ export type PublicReportedPolicyOutcome = (typeof PUBLIC_REPORTED_POLICY_OUTCOME
 export const PUBLIC_RECEIPT_STATUSES = ['unavailable', 'reported'] as const;
 export type PublicReceiptStatus = (typeof PUBLIC_RECEIPT_STATUSES)[number];
 
+/** How the grader reads a scenario's tool trajectory. */
+export const PUBLIC_TRAJECTORY_POLICIES = ['answer', 'first_choice', 'guided', 'governed'] as const;
+export type PublicTrajectoryPolicy = (typeof PUBLIC_TRAJECTORY_POLICIES)[number];
+
+/** Closed vocabulary for why a trajectory passed or failed. */
+export const PUBLIC_TRAJECTORY_OUTCOMES = [
+  'direct',
+  'recovered',
+  'yielded_to_denial',
+  'no_tool_call',
+  'wrong_tool',
+  'wrong_arguments',
+  'ignored_guidance',
+  'abandoned_after_error',
+  'circumvented_denial',
+  'loop_exhausted',
+  'provider_rejected_tool_declaration',
+] as const;
+export type PublicTrajectoryOutcome = (typeof PUBLIC_TRAJECTORY_OUTCOMES)[number];
+
+/** Where a hinted tool argument can be derived from. Values are never public. */
+export const PUBLIC_HINT_ARGUMENT_SOURCES = ['prompt', 'seed', 'workspace', 'operator_context', 'model_authored'] as const;
+export type PublicHintArgumentSource = (typeof PUBLIC_HINT_ARGUMENT_SOURCES)[number];
+
 /** Quality state for every dataset, run, metric, and task shown in the site. */
 export const QUALITY_STATES = [
   'verified_public',
@@ -515,6 +539,18 @@ export interface PublicToolScoreDimensionRequirement {
   required: boolean;
 }
 
+export interface PublicPromptHintArgument {
+  tool_name: string;
+  argument_name: string;
+  source: PublicHintArgumentSource;
+}
+
+/** Tools the scenario prompt hints at and where each argument comes from. */
+export interface PublicPromptHint {
+  hinted_tools: string[];
+  arguments: PublicPromptHintArgument[];
+}
+
 export interface PublicScenarioSummary {
   scenario_id: string;
   scenario_version: string;
@@ -524,6 +560,8 @@ export interface PublicScenarioSummary {
   allowed_tools: string[];
   expected_tools: string[];
   forbidden_tools: string[];
+  trajectory_policy?: PublicTrajectoryPolicy;
+  prompt_hint?: PublicPromptHint;
   criteria: PublicScenarioCriterion[];
   tool_score_dimensions: PublicToolScoreDimensionRequirement[];
 }
@@ -567,6 +605,11 @@ export interface PublicToolCallActivityRecord {
   execution_outcome: PublicToolExecutionOutcome;
   semantic_outcome: PublicSemanticOutcome;
   evidence_source: PublicActivityEvidenceSource;
+  /** Tool-loop turn that issued the call (1-based). */
+  loop_turn?: number;
+  error_type?: string;
+  /** The model was shown error or suggestion text after this call. */
+  guidance_shown?: boolean;
 }
 
 export interface PublicPolicyDecisionActivityRecord {
@@ -647,6 +690,12 @@ export interface AssignmentResult extends ViewRecordEnvelope {
   model_response?: string;
   failure_output?: string;
   role_transcripts?: RoleTranscript[];
+  trajectory_outcome?: PublicTrajectoryOutcome;
+  guided_retry_count?: number;
+  /** Bounded public sentence saying exactly why the assignment failed. */
+  failure_reason?: string;
+  /** Tool names sent to the provider on the scored agent call. */
+  tools_declared?: string[];
 }
 
 export const TOOL_RESULT_REDACTIONS = ['truncated', 'restricted'] as const;

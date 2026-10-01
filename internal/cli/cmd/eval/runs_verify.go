@@ -191,7 +191,10 @@ func verifyRun(
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: runs verify: %w", err)
 	}
-	_, artifacts, err := evaluation.LoadScenarioCatalog()
+	if !jsonOutput && !evaluation.CatalogRecomputesGrades(catalog.GetCatalogRef()) {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Note: catalog %s@%s is not the current %s@%s; grade recomputation skipped\n", catalog.GetCatalogRef().GetId(), catalog.GetCatalogRef().GetVersion(), evaluation.DefaultSuiteID, evaluation.DefaultSuiteVersion)
+	}
+	artifacts, err := store.LoadScenarioArtifacts(cmd.Context(), run.GetCampaignBinding().GetCampaignId(), catalog)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: runs verify: %w", err)
 	}

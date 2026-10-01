@@ -23,7 +23,11 @@ import (
 
 const (
 	historicalVersion = "1.0.0"
+	// enrichedVersion is the first envelope with named public extensions;
+	// trajectoryVersion adds trajectory_outcome, guided_retry_count,
+	// failure_reason, tools_declared, and the per-tool-call guidance fields.
 	enrichedVersion   = "1.1.0"
+	trajectoryVersion = "1.2.0"
 	maxRecordBytes    = 256 * 1024
 	maxArrayEntries   = 128
 	maxStringBytes    = 512
@@ -79,7 +83,7 @@ func ValidateAssignmentRecord(envelopeVersion string, recordBytes []byte) error 
 		}
 		return validateStrings(envelope.Record)
 	}
-	if envelope.SchemaVersion != historicalVersion && envelope.SchemaVersion != enrichedVersion {
+	if envelope.SchemaVersion != historicalVersion && envelope.SchemaVersion != enrichedVersion && envelope.SchemaVersion != trajectoryVersion {
 		return schemaError("unsupported assignment version")
 	}
 	return validateResult(envelope.SchemaVersion, envelope.Record)
@@ -120,6 +124,9 @@ func validateResult(version string, raw json.RawMessage) error {
 	if version == historicalVersion && len(extensions) > 0 {
 		return schemaError("enriched fields in historical envelope")
 	}
+	if version != trajectoryVersion && hasTrajectoryFields(&record) {
+		return schemaError("trajectory fields require envelope " + trajectoryVersion)
+	}
 	if value, ok := extensions["benchmark_observations"]; ok {
 		if err := validateBenchmark(value); err != nil {
 			return err
@@ -131,6 +138,25 @@ func validateResult(version string, raw json.RawMessage) error {
 		}
 	}
 	return validateStrings(raw)
+}
+
+// hasTrajectoryFields reports whether a projection carries any field that only
+// envelope 1.2.0 may contain.
+func hasTrajectoryFields(record *evalv1.PublicAssignmentResultProjection) bool {
+	if record.GetTrajectoryOutcome() != evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED ||
+		record.GetGuidedRetryCount() != 0 || record.GetFailureReason() != "" || len(record.GetToolsDeclared()) > 0 {
+		return true
+	}
+	summary := record.GetScenarioSummary()
+	if summary.GetTrajectoryPolicy() != evalv1.EvaluationTrajectoryPolicy_EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED || summary.GetPromptHint() != nil {
+		return true
+	}
+	for _, call := range record.GetActivitySummary().GetToolCalls().GetRecords() {
+		if call.GetLoopTurn() != 0 || call.GetErrorType() != "" || call.GetGuidanceShown() {
+			return true
+		}
+	}
+	return false
 }
 
 func validateBindings(bindings []*evalv1.PublicEvidenceBinding) error {

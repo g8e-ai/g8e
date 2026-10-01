@@ -3,8 +3,8 @@ doc_id: build_operator
 title: Build and Run an Operator
 audience: developers, deployers, independent implementations
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - docs/guides/
   - cmd/g8e
@@ -61,7 +61,7 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 | Gateway start command and flags | `internal/cli/cmd/gw/gateway.go` (gatewayStartCmd) | `./g8e gw start --help` |
 | Operator list/bind/run/stop commands | `internal/cli/cmd/operator/operator.go` | `./g8e operator --help` |
 | Vault administration | `internal/cli/cmd/vault/` | `./g8e vault --help` |
-| Public protocol Go module | `github.com/g8e-ai/g8e/v2@v2.2.5` | `go get -d github.com/g8e-ai/g8e/v2@v2.2.5` |
+| Public protocol Go module | `github.com/g8e-ai/g8e/v2@v2.2.6` | `go get -d github.com/g8e-ai/g8e/v2@v2.2.6` |
 
 ## Procedures
 
@@ -190,7 +190,7 @@ The current worker path applies these options:
 | `-s, --execution-vault` (default true) | Enables the execution vault and defaults to `true`. Outbound startup currently requires it; setting it to `false` fails closed during service initialization. |
 | `-G, --no-git` | Disables the git-backed file ledger while retaining the encrypted audit store. |
 | `-l, --log <level>` | Sets `info`, `error`, or `debug` logging. |
-| `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds. |
+| `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds and the accepted range is 0-30 (0 selects the default). Larger values are rejected at startup because the Gateway marks an Operator `stale` after 60 seconds without a heartbeat. |
 | `--lattice-endpoint <url>` and related `--lattice-*` flags | These flags are exposed by Cobra but `operatorStartCmd` does not copy their values into `ServeOperatorOptions`, so the flags currently have no effect. The service-layer environment path uses `LATTICE_ENDPOINT`, `LATTICE_CLIENT_ID`, `LATTICE_CLIENT_SECRET`, `SANDBOXES_TOKEN`, `LATTICE_ENTITY_NAME`, and `LATTICE_POSTURE_FLOOR`; the adapter remains incomplete. |
 | `--inference-enabled` | Enables the governed inference backend for an Inference Operator. |
 | `--inference-ollama-endpoint <url>` | Selects the approved Ollama provider endpoint used by an inference-enabled Operator. |
@@ -259,7 +259,7 @@ After enrolling the host CLI with `g8e auth enroll user` and starting one or mor
 ./g8e operator show <operator-id-or-session-id>
 ```
 
-`operator list` prints operator ID, type, hostname (decoded from the Gateway-persisted latest heartbeat), session ID, and status. This hostname is live operator telemetry; it is distinct from the enrollment-time `name` metadata shown by `auth enroll list`. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata plus the same canonical latest heartbeat snapshot.
+`operator list` prints operator ID, type, hostname (decoded from the Gateway-persisted latest heartbeat), session ID, and status. This hostname is live operator telemetry; it is distinct from the enrollment-time `name` metadata shown by `auth enroll list`. The status is evaluated when the list is read: an `active` Operator with no heartbeat for more than 60 seconds is listed as `stale`, and its next heartbeat restores `active`. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata, the Gateway-recorded last heartbeat time, and the same canonical latest heartbeat snapshot.
 
 #### Bind the CLI session to operators
 
@@ -332,7 +332,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.2.5
+go get github.com/g8e-ai/g8e/v2@v2.2.6
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -344,7 +344,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.2.5
+pip install g8e==2.2.6
 ```
 
 See the [Protocol Library architecture document](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.

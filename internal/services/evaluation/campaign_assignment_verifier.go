@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -32,6 +33,7 @@ type CampaignAssignmentVerificationRequest struct {
 	GradingMethod             evalv1.EvaluationGradingMethod
 	Trace                     EvaluationTrace
 	FormationRunEvidence      *FormationRunEvidence
+	CatalogRef                *compliancev1.VersionedReference
 	ProviderObservationReader *CampaignProviderObservationReader
 	ProviderObservationPolicy ProviderObservationPolicy
 	ModelProvenanceReader     *CampaignModelProvenanceReader
@@ -98,25 +100,41 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 	} else if err := verifyImportedEvidence(req.Assignment, req.Result, req.Trace); err != nil {
 		failures = append(failures, "imported evidence does not match trace: "+err.Error())
 	}
-	designatedRole, err := designatedRoleFromAssignment(req.Assignment)
-	if err != nil {
-		failures = append(failures, err.Error())
-	} else {
-		recomputed, err := GradeHomogeneousScenario(ScenarioGradingRequest{
-			AssignmentID:   req.Assignment.GetAssignmentId(),
-			ScenarioID:     req.Assignment.GetScenarioId(),
-			DesignatedRole: designatedRole,
-			GradingMethod:  req.GradingMethod,
-			ScenarioInput:  req.ScenarioInput,
-			ScenarioGold:   req.ScenarioGold,
-			ScenarioTools:  req.ScenarioTools,
-			Trace:          req.Trace,
-			Lifecycle:      req.Result.GetLifecycleStatus(),
-		})
+	skipGradeRecomputation := !CatalogRecomputesGrades(req.CatalogRef)
+	if !skipGradeRecomputation {
+		designatedRole, err := designatedRoleFromAssignment(req.Assignment)
 		if err != nil {
-			failures = append(failures, "deterministic grade recomputation failed: "+err.Error())
-		} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputed.DeterministicGrades) {
-			failures = append(failures, "stored deterministic grades do not match recomputation")
+			failures = append(failures, err.Error())
+		} else {
+			recomputed, err := GradeHomogeneousScenario(ScenarioGradingRequest{
+				AssignmentID:   req.Assignment.GetAssignmentId(),
+				ScenarioID:     req.Assignment.GetScenarioId(),
+				DesignatedRole: designatedRole,
+				GradingMethod:  req.GradingMethod,
+				ScenarioInput:  req.ScenarioInput,
+				ScenarioGold:   req.ScenarioGold,
+				ScenarioTools:  req.ScenarioTools,
+				Trace:          req.Trace,
+				Lifecycle:      req.Result.GetLifecycleStatus(),
+			})
+			if err != nil {
+				failures = append(failures, "deterministic grade recomputation failed: "+err.Error())
+			} else {
+				if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputed.DeterministicGrades) {
+					failures = append(failures, "stored deterministic grades do not match recomputation")
+				}
+				// The outcome and both failure sentences are published, so they
+				// are recomputed from the digest-bound trace like the grades.
+				stored := ScenarioTrajectoryGradingResult{
+					Outcome:             req.Result.GetTrajectoryOutcome(),
+					GuidedRetryCount:    req.Result.GetGuidedRetryCount(),
+					FailureReason:       req.Result.GetFailureReason(),
+					PublicFailureReason: req.Result.GetPublicFailureReason(),
+				}
+				if stored != recomputed.Trajectory {
+					failures = append(failures, "stored trajectory result does not match recomputation")
+				}
+			}
 		}
 	}
 	if req.ProviderObservationReader != nil && len(scoredModelInferences(req.Result)) > 0 {
@@ -150,17 +168,20 @@ func (v *CampaignAssignmentVerifier) verifyHeterogeneousAssignment(ctx context.C
 			req.ModelProvenancePolicy,
 		)...)
 	}
-	recomputedGrades, err := RecomputeFormationAssignmentGrades(AssignmentExecutionRequest{
-		Assignment:    req.Assignment,
-		GradingMethod: req.GradingMethod,
-		ScenarioInput: req.ScenarioInput,
-		ScenarioGold:  req.ScenarioGold,
-		ScenarioTools: req.ScenarioTools,
-	}, req.Result, req.FormationRunEvidence)
-	if err != nil {
-		failures = append(failures, "formation grade recomputation failed: "+err.Error())
-	} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputedGrades) {
-		failures = append(failures, "stored deterministic grades do not match formation recomputation")
+	skipGradeRecomputation := !CatalogRecomputesGrades(req.CatalogRef)
+	if !skipGradeRecomputation {
+		recomputedGrades, err := RecomputeFormationAssignmentGrades(AssignmentExecutionRequest{
+			Assignment:    req.Assignment,
+			GradingMethod: req.GradingMethod,
+			ScenarioInput: req.ScenarioInput,
+			ScenarioGold:  req.ScenarioGold,
+			ScenarioTools: req.ScenarioTools,
+		}, req.Result, req.FormationRunEvidence)
+		if err != nil {
+			failures = append(failures, "formation grade recomputation failed: "+err.Error())
+		} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputedGrades) {
+			failures = append(failures, "stored deterministic grades do not match formation recomputation")
+		}
 	}
 	return failures
 }
@@ -222,6 +243,17 @@ func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *eva
 	for index, expected := range expectedPolicy {
 		if !proto.Equal(expected, result.GetPolicyDecisions()[index]) {
 			return fmt.Errorf("policy decision record %d mismatch", index)
+		}
+	}
+	expectedToolCalls := toolCallRecordsFromTrace(assignment, trace, func(prefix string) string { return prefix })
+	if len(expectedToolCalls) != len(result.GetToolCalls()) {
+		return fmt.Errorf("tool call records mismatch")
+	}
+	for index, expected := range expectedToolCalls {
+		actual := result.GetToolCalls()[index]
+		expected.CallId = actual.GetCallId()
+		if !proto.Equal(expected, actual) {
+			return fmt.Errorf("tool call record %d mismatch", index)
 		}
 	}
 	for field, expected := range map[string]bool{

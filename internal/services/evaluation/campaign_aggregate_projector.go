@@ -41,6 +41,11 @@ type catalogSnapshotRecord struct {
 	VerifierPassedCount  uint32   `json:"verifier_passed_count"`
 	VerifierFailedCount  uint32   `json:"verifier_failed_count"`
 	GeneratedAt          string   `json:"generated_at"`
+
+	// ProviderEnvironment is the hardware the run started on, when one was
+	// declared. The explorer compares datasets across runs only when both
+	// carry the same environment.
+	ProviderEnvironment *ProviderEnvironment `json:"provider_environment,omitempty"`
 }
 
 type modelPassRateRecord struct {
@@ -113,8 +118,33 @@ type methodologySnapshotRecord struct {
 const (
 	explorerViewSchemaVersion = "1.5.0"
 	campaignSourceRevision    = "g8e-eval-campaign"
-	standardSuiteID           = "north-star-25"
 )
+
+// methodologySuiteFromCatalog describes the suite a campaign froze, as the
+// public methodology snapshot reports it.
+func methodologySuiteFromCatalog(catalog *evalv1.EvaluationScenarioCatalog) *methodologySuiteRecord {
+	ref := catalog.GetCatalogRef()
+	if ref.GetId() == "" {
+		return nil
+	}
+	count := uint32(len(catalog.GetScenarios()))
+	return &methodologySuiteRecord{
+		SuiteID:     ref.GetId(),
+		DisplayName: ref.GetId(),
+		TaskCount:   count,
+		Description: fmt.Sprintf("Frozen %d-scenario suite %s@%s.", count, ref.GetId(), ref.GetVersion()),
+	}
+}
+
+// suiteForRun names the suite a run scored: the one attached to the aggregate
+// state, else the one the run's campaign binding pins.
+func suiteForRun(run *evalv1.EvaluationRun, state *runAggregateState) *methodologySuiteRecord {
+	if state != nil && state.Suite != nil {
+		return state.Suite
+	}
+	id := run.GetCampaignBinding().GetCatalogRef().GetId()
+	return &methodologySuiteRecord{SuiteID: id, DisplayName: id, Description: fmt.Sprintf("Frozen suite %s.", id)}
+}
 
 // CampaignViewRecord is one disclosure-safe explorer snapshot record published
 // directly to the public mirror without a CampaignProjectionEnvelope wrapper.
@@ -132,6 +162,17 @@ type runAggregateState struct {
 	VariantRoles   map[string]*variantRoleAggregate
 	EvaluatedCount uint32
 	Headline       *runHeadlineMetrics
+
+	// ProviderEnvironment is the declared environment the run started on. It is
+	// not derived from assignments: callers attach it after
+	// CollectRunAggregateState from the run's persisted snapshot.
+	ProviderEnvironment *ProviderEnvironment
+
+	// Suite is the suite the run scored, taken from the campaign's frozen
+	// catalog. Callers attach it after CollectRunAggregateState; when it is
+	// absent the snapshots name the suite from the run's campaign binding
+	// and report no task count.
+	Suite *methodologySuiteRecord
 }
 
 // runHeadlineMetrics carries the typed run-level metric aggregate for the
@@ -642,9 +683,9 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 
 	var methodologyRecord methodologySnapshotRecord
 	if settled {
-		methodologyRecord = buildCompletedMethodologySnapshotRecord(datasetID, observed)
+		methodologyRecord = buildCompletedMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state))
 	} else {
-		methodologyRecord = buildMethodologySnapshotRecord(datasetID, observed)
+		methodologyRecord = buildMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state))
 	}
 	methodologyBody, err := marshalCanonicalViewRecord(methodologyRecord)
 	if err != nil {
@@ -714,7 +755,7 @@ func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*eva
 		})
 	}
 
-	methodologyBody, err := marshalCanonicalViewRecord(buildCompletedMethodologySnapshotRecord(datasetID, observed))
+	methodologyBody, err := marshalCanonicalViewRecord(buildCompletedMethodologySnapshotRecord(datasetID, observed, suiteForRun(run, state)))
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +774,7 @@ func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runA
 		Description: "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. Values are provisional while assignments are still executing.",
 		Limitations: catalogSnapshotLimitations(), ModelCount: state.ModelCount, EvaluatedCount: state.EvaluatedCount,
 		SuiteCount: 1, RunCount: 1, AssignmentCount: state.Scheduled, ProviderRequestCount: state.Terminal,
-		GeneratedAt: observedAt,
+		GeneratedAt: observedAt, ProviderEnvironment: state.ProviderEnvironment,
 	}
 }
 
@@ -790,8 +831,8 @@ func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *vari
 	return record
 }
 
-func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) methodologySnapshotRecord {
-	record := buildMethodologySnapshotRecord(datasetID, observedAt)
+func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string, suite *methodologySuiteRecord) methodologySnapshotRecord {
+	record := buildMethodologySnapshotRecord(datasetID, observedAt, suite)
 	record.QualityState = "exploratory_partial"
 	record.Limitations = []string{
 		"Campaign execution is complete; values remain provisional until verification runs.",
@@ -1104,7 +1145,7 @@ func buildEvaluationSummaryRecord(input evaluationSummaryInput) (*evaluationSumm
 		SourceRevisionLabel: campaignSourceRevision,
 		RunID:               run.GetRunId(),
 		CampaignID:          run.GetCampaignBinding().GetCampaignId(),
-		SuiteID:             standardSuiteID,
+		SuiteID:             suiteForRun(run, state).SuiteID,
 		Arm:                 armForRun(run),
 		EvaluationUnit:      evaluationUnitForRun(run),
 		ModelRoleMapping:    buildModelRoleMapping(state),
@@ -1212,8 +1253,10 @@ func elapsedSecondsBetween(startedAt, observedAt time.Time) *float64 {
 }
 
 // buildModelRoleMapping declares one variant per role when the run matrix
-// uses a single variant in that role; otherwise it stays empty because
-// homogeneous smoke matrices evaluate many variants per role independently.
+// uses a single variant in that role, which is always true of a model-role
+// run (one model per campaign). It stays empty for a role that several
+// formations fill with different variants, because those are evaluated
+// independently rather than as one declared stack.
 func buildModelRoleMapping(state *runAggregateState) map[string]string {
 	mapping := map[string]string{}
 	if state == nil {
@@ -1240,12 +1283,12 @@ func buildModelRoleMapping(state *runAggregateState) map[string]string {
 	return mapping
 }
 
-func buildMethodologySnapshotRecord(datasetID, observedAt string) methodologySnapshotRecord {
+func buildMethodologySnapshotRecord(datasetID, observedAt string, suite *methodologySuiteRecord) methodologySnapshotRecord {
 	return methodologySnapshotRecord{
 		SchemaVersion: explorerViewSchemaVersion, Kind: "methodology_snapshot", DatasetID: datasetID,
 		QualityState: "live_in_progress", ObservedAt: observedAt, SourceRevisionLabel: campaignSourceRevision,
 		MetricDefinitions: methodologyMetricDefinitions(),
-		SuiteDefinitions:  []methodologySuiteRecord{{SuiteID: standardSuiteID, DisplayName: "Standard 25", TaskCount: 25, Description: "Frozen 25-scenario catalog covering instruction adherence, tool use, analysis, routing, verification, security, recovery, and final response."}},
+		SuiteDefinitions:  []methodologySuiteRecord{*suite},
 		Limitations:       methodologyLimitations(),
 	}
 }

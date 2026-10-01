@@ -78,7 +78,10 @@ entry is marked failed and the batch continues.
 
 --gate-smoke screens each model first with a fast smoke campaign
 (<campaign>-smoke). A smoke pass does not verify the entry; add
---promote-on-pass to follow it with the full run.
+--promote-on-pass to follow it with the full run. Before the first model is
+allocated, --gate-smoke runs the environment canaries (the same ones as
+'g8e eval gates chat') once against the first queued model; if any fails, the
+rollout aborts with "ENVIRONMENT ERROR (<canary>)" and no model is run.
 
 Examples:
   g8e eval rollout run --until 1
@@ -163,6 +166,14 @@ func runRolloutWith(cmd *cobra.Command, deps nativeEvalDeps, opts rolloutRunOpti
 	registry, err := newModelInventories(fileSvc, cfg.ProjectRoot).variants(cmd.Context(), modelScopeRegistry)
 	if err != nil {
 		return fmt.Errorf("evaluation: rollout run: %w", err)
+	}
+	if opts.GateSmoke {
+		// Once, before the first model is allocated: a broken harness aborts the
+		// whole rollout instead of failing every queued model for the wrong reason.
+		canaryModel := plan[0].ServedModelTag
+		if err := deps.runEnvironmentCanaries(cmd, canaryOptions{Model: canaryModel}); err != nil {
+			return fmt.Errorf("evaluation: rollout run: aborting before any model is allocated: %w", err)
+		}
 	}
 	runGate := gates(fileSvc, registry)
 	jsonOutput := output.JSONEnabled(cmd)
@@ -266,15 +277,16 @@ func qualifyRolloutEntry(cmd *cobra.Command, fileSvc fs.RuntimeFileService, runG
 // whenever a run was started, including when it then failed.
 func runRolloutGate(cmd *cobra.Command, deps nativeEvalDeps, fileSvc fs.RuntimeFileService, variant *evalv1.ModelVariant, entry evaluation.CampaignQueueModel, gate string) (*rolloutRunSuccess, error) {
 	campaignID := entry.CampaignID
-	smoke := gate == rolloutGateSmoke
-	if smoke {
+	suiteID := evaluation.DefaultSuiteID
+	if gate == rolloutGateSmoke {
 		campaignID += rolloutSmokeCampaignSuffix
+		suiteID = evaluation.SmokeSuiteID
 	}
 	if _, err := createCampaign(cmd.Context(), deps, fileSvc, campaignCreateSpec{
 		CampaignID:  campaignID,
 		Variants:    []*evalv1.ModelVariant{variant},
 		Repetitions: 1,
-		Smoke:       smoke,
+		SuiteID:     suiteID,
 	}); err != nil {
 		return nil, err
 	}

@@ -23,6 +23,8 @@ type PublicScenarioContext struct {
 	AllowedTools        []string
 	ExpectedTools       []string
 	ForbiddenTools      []string
+	TrajectoryPolicy    evalv1.EvaluationTrajectoryPolicy
+	PromptHint          *evalv1.PromptHint
 	Criteria            []*evalv1.PublicScenarioCriterion
 	ToolScoreDimensions []*evalv1.PublicToolScoreDimensionRequirement
 	CatalogRef          *compliancev1.VersionedReference

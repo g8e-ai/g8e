@@ -256,18 +256,41 @@ func TestDispatchInference_ExplicitTargetNotCapable(t *testing.T) {
 	assert.Equal(t, 0, dispatcher.calls)
 }
 
-func TestDispatchInference_TerminatedOperatorNotSelectable(t *testing.T) {
-	dispatcher := &stubCommandDispatcher{}
-	terminated := capableOp("sess-dead")
-	terminated.Status = constants.OperatorStatusTerminated
+func TestDispatchInference_NonActiveOperatorNotSelectable(t *testing.T) {
+	for _, status := range []constants.OperatorStatus{
+		constants.OperatorStatusTerminated,
+		constants.OperatorStatusStale,
+		constants.OperatorStatusStopped,
+		constants.OperatorStatusOffline,
+	} {
+		t.Run(string(status), func(t *testing.T) {
+			dispatcher := &stubCommandDispatcher{}
+			inactive := capableOp("sess-dead")
+			inactive.Status = status
+			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+				inactive,
+			}}, testLogger())
+
+			_, err := svc.DispatchInference(context.Background(), baseRequest())
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrInferenceOperatorNotFound)
+			assert.Equal(t, 0, dispatcher.calls)
+		})
+	}
+}
+
+func TestDispatchInference_StaleOperatorDoesNotContestSelection(t *testing.T) {
+	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
+	stale := capableOp("sess-stale")
+	stale.Status = constants.OperatorStatusStale
 	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
-		terminated,
+		stale,
+		capableOp("sess-live"),
 	}}, testLogger())
 
 	_, err := svc.DispatchInference(context.Background(), baseRequest())
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInferenceOperatorNotFound)
-	assert.Equal(t, 0, dispatcher.calls)
+	require.NoError(t, err)
+	assert.Equal(t, 1, dispatcher.calls)
 }
 
 // --- request validation ---

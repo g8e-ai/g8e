@@ -28,11 +28,14 @@ import {
   PUBLIC_EVIDENCE_KINDS,
   PUBLIC_FINISH_STATES,
   PUBLIC_GRADE_EXPLANATION_CODES,
+  PUBLIC_HINT_ARGUMENT_SOURCES,
   PUBLIC_LOAD_STATES,
   PUBLIC_RECEIPT_STATUSES,
   PUBLIC_SEMANTIC_OUTCOMES,
   PUBLIC_TOOL_EXECUTION_OUTCOMES,
   PUBLIC_TOOL_OUTCOMES,
+  PUBLIC_TRAJECTORY_OUTCOMES,
+  PUBLIC_TRAJECTORY_POLICIES,
   PUBLIC_USAGE_AVAILABILITIES,
   PUBLIC_UNAVAILABLE_REASONS,
   QUALITY_STATES,
@@ -83,7 +86,10 @@ type EnumName =
   | 'PublicToolExecutionOutcome'
   | 'PublicSemanticOutcome'
   | 'PublicReportedPolicyOutcome'
-  | 'PublicReceiptStatus';
+  | 'PublicReceiptStatus'
+  | 'PublicTrajectoryPolicy'
+  | 'PublicTrajectoryOutcome'
+  | 'PublicHintArgumentSource';
 
 const tsEnums: Record<EnumName, readonly string[]> = {
   ActivityAvailability: ACTIVITY_AVAILABILITIES,
@@ -122,6 +128,9 @@ const tsEnums: Record<EnumName, readonly string[]> = {
   PublicSemanticOutcome: PUBLIC_SEMANTIC_OUTCOMES,
   PublicReportedPolicyOutcome: PUBLIC_TOOL_OUTCOMES,
   PublicReceiptStatus: PUBLIC_RECEIPT_STATUSES,
+  PublicTrajectoryPolicy: PUBLIC_TRAJECTORY_POLICIES,
+  PublicTrajectoryOutcome: PUBLIC_TRAJECTORY_OUTCOMES,
+  PublicHintArgumentSource: PUBLIC_HINT_ARGUMENT_SOURCES,
 };
 
 describe('descriptor.json stays in sync with types.ts', () => {

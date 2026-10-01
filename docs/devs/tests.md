@@ -3,8 +3,8 @@ doc_id: tests
 title: Testing Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-26
-version: v2.2.0
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - internal/cli/cmd/test/test.go
   - Makefile
@@ -90,6 +90,9 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 ```bash
 # Tier 1: Fast unit tests (no network, no disk I/O, parallel across packages)
 ./g8e test unit
+
+# Narrow Tier 1 by package pattern or test name
+./g8e test unit --pkg ./internal/cli/cmd/test --run TestTestUnitCmd
 
 # Tier 2: In-process integration tests (local SQLite, PKI, pub/sub, race detector)
 ./g8e test integration

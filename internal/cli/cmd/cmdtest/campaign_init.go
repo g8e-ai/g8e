@@ -16,13 +16,13 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-// EvaluationTestCampaignInitRequest builds the north-star smoke campaign request
+// EvaluationTestCampaignInitRequest builds the default-suite smoke campaign request
 // used by eval and compliance command tests.
 func EvaluationTestCampaignInitRequest(t *testing.T) evaluation.CampaignInitRequest {
 	t.Helper()
 	catalog, artifacts, err := evaluation.LoadScenarioCatalog()
 	require.NoError(t, err)
-	inventory, err := evaluation.MaterializeModelRegistry("north-star-smoke", []*evalv1.ModelVariant{
+	inventory, err := evaluation.MaterializeModelRegistry("smoke-campaign", []*evalv1.ModelVariant{
 		{
 			VariantId:      "qwen3-4b",
 			ServedModelTag: "qwen3:4b",
@@ -32,7 +32,7 @@ func EvaluationTestCampaignInitRequest(t *testing.T) evaluation.CampaignInitRequ
 	})
 	require.NoError(t, err)
 	return evaluation.CampaignInitRequest{
-		CampaignID:                 "north-star-smoke",
+		CampaignID:                 "smoke-campaign",
 		RunID:                      "run-smoke-1",
 		Catalog:                    catalog,
 		Inventory:                  inventory,

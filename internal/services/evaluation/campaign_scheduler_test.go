@@ -26,7 +26,7 @@ func TestBuildHomogeneousAssignmentMatrix_MaterializesFullCrossProduct(t *testin
 		{VariantId: "gemma3-4b", ProviderClass: "ollama", ServedModelTag: "gemma3:4b", ModelDigest: repeatHex('b', 64)},
 	}
 	assignments, err := BuildHomogeneousAssignmentMatrix(HomogeneousScheduleRequest{
-		CampaignID:      "north-star-smoke",
+		CampaignID:      "smoke-campaign",
 		RunID:           "run-1",
 		Catalog:         catalog,
 		Variants:        variants,
@@ -34,14 +34,53 @@ func TestBuildHomogeneousAssignmentMatrix_MaterializesFullCrossProduct(t *testin
 		QueuedAt:        time.Unix(1_700_000_000, 0).UTC(),
 	})
 	require.NoError(t, err)
-	assert.Len(t, assignments, 78)
+	assert.Len(t, assignments, 82)
 	inventory := &ModelInventoryFreeze{
-		CampaignID:           "north-star-smoke",
+		CampaignID:           "smoke-campaign",
 		RegistryDigest:       repeatHex('c', 64),
 		Variants:             variants,
-		HomogeneousCellCount: 78,
+		HomogeneousCellCount: 82,
 	}
 	require.NoError(t, ValidateHomogeneousAssignmentMatrix(catalog, inventory, 1, assignments))
+}
+
+func TestBuildHomogeneousAssignmentMatrix_RunsModelByModel(t *testing.T) {
+	catalog, _, err := BuildScenarioCatalog()
+	require.NoError(t, err)
+	variants := []*evalv1.ModelVariant{
+		{VariantId: "qwen3-4b", ProviderClass: "ollama", ServedModelTag: "qwen3:4b", ModelDigest: repeatHex('a', 64)},
+		{VariantId: "gemma3-4b", ProviderClass: "ollama", ServedModelTag: "gemma3:4b", ModelDigest: repeatHex('b', 64)},
+		{VariantId: "llama3-2-3b", ProviderClass: "ollama", ServedModelTag: "llama3.2:3b", ModelDigest: repeatHex('c', 64)},
+	}
+	assignments, err := BuildHomogeneousAssignmentMatrix(HomogeneousScheduleRequest{
+		CampaignID:      "model-by-model",
+		RunID:           "run-1",
+		Catalog:         catalog,
+		Variants:        variants,
+		RepetitionCount: 2,
+		QueuedAt:        time.Unix(1_700_000_000, 0).UTC(),
+	})
+	require.NoError(t, err)
+
+	// Each model's assignments must form one contiguous block, so the provider
+	// loads every model exactly once.
+	blocks := make([]string, 0, len(variants))
+	for _, assignment := range assignments {
+		tag := assignment.GetHomogeneous().GetCandidateVariant().GetServedModelTag()
+		if len(blocks) == 0 || blocks[len(blocks)-1] != tag {
+			blocks = append(blocks, tag)
+		}
+	}
+	assert.Equal(t, []string{"gemma3:4b", "llama3.2:3b", "qwen3:4b"}, blocks)
+
+	// The store lists assignments from files named by hash; re-sorting a
+	// reversed copy must reproduce the scheduled order exactly.
+	reversed := make([]*evalv1.EvaluationAssignment, len(assignments))
+	for i, assignment := range assignments {
+		reversed[len(assignments)-1-i] = assignment
+	}
+	sortAssignmentsDeterministic(reversed)
+	assert.Equal(t, assignments, reversed)
 }
 
 func TestBuildHomogeneousAssignmentMatrix_RejectsDuplicateIdentity(t *testing.T) {

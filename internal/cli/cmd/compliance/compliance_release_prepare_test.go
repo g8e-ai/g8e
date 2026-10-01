@@ -47,6 +47,9 @@ type releasePrepareFixture struct {
 	calls       map[string][]string
 	verifyValid bool
 	imageCalls  int
+	dbPath      string
+	copyCalls   []string
+	copyErr     error
 }
 
 func newReleasePrepareFixture(t *testing.T) *releasePrepareFixture {
@@ -81,6 +84,10 @@ func newReleasePrepareFixture(t *testing.T) *releasePrepareFixture {
 		gatewayImage: func(context.Context, string) (string, error) {
 			fixture.imageCalls++
 			return releasePrepareTestDigest, nil
+		},
+		copyGatewayDB: func(_ context.Context, container, destDir string) (string, error) {
+			fixture.copyCalls = append(fixture.copyCalls, container, destDir)
+			return fixture.dbPath, fixture.copyErr
 		},
 		gitRevision:    func(context.Context, string) (string, error) { return strings.Repeat("a", 40), nil },
 		newGenerateCmd: func() *cobra.Command { return fixture.fakeCommand("generate", bundlePath+"\n") },
@@ -139,6 +146,7 @@ func (f *releasePrepareFixture) seedRuntimeDatabase(t *testing.T, receiptSigner,
 	fileSvc, err := fs.NewRuntimeFileService(f.projectRoot, testutil.NewTestLogger())
 	require.NoError(t, err)
 	dbPath := pathutil.ResolveDBPath(fileSvc.Resolve(constants.DataDirname), constants.DbFilename)
+	f.dbPath = dbPath
 	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), constants.PermDirStandard))
 	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), testutil.NewTestLogger())
 	require.NoError(t, err)
@@ -191,6 +199,8 @@ func TestRunReleasePrepare_DerivesInputsThenGeneratesVerifiesAndProjectsInOrder(
 	assert.Equal(t, releasePrepareTestDigest, scope.GetBuildIdentity(), "build identity defaults to the Gateway image digest")
 	assert.Equal(t, strings.Repeat("a", 40), scope.GetSourceRevision())
 	assert.Equal(t, 1, fixture.imageCalls)
+	assert.Equal(t, []string{constants.ComplianceReleaseDefaultGatewayContainer, filepath.Join(workDir, constants.ComplianceReleaseSnapshotDirname)}, fixture.copyCalls,
+		"the database is snapshotted from the Gateway container into the work directory")
 
 	reportTrustBody, err := os.ReadFile(filepath.Join(workDir, constants.ComplianceReleaseReportTrustFilename))
 	require.NoError(t, err)
@@ -250,13 +260,81 @@ func TestRunReleasePrepare_RejectsWindowWithoutReceiptsBeforeGenerating(t *testi
 	assert.Empty(t, fixture.calls, "no bundle is generated from an empty assessment window")
 }
 
-func TestRunReleasePrepare_RequiresSigningKeyPaths(t *testing.T) {
+func TestRunReleasePrepare_RejectsLoneSigningKeyPath(t *testing.T) {
 	fixture := newReleasePrepareFixture(t)
 	fixture.opts.signingMetadata = ""
 
 	err := runReleasePrepare(context.Background(), fixture.deps, fixture.opts, &bytes.Buffer{}, &bytes.Buffer{})
 
 	require.ErrorIs(t, err, constants.ErrValidationFailed)
+	assert.Empty(t, fixture.copyCalls, "no database is copied before the key paths are valid")
+}
+
+func TestRunReleasePrepare_DatabaseFlagSkipsGatewaySnapshot(t *testing.T) {
+	fixture := newReleasePrepareFixture(t)
+	commitAt := time.Date(2026, 9, 28, 2, 58, 52, 0, time.UTC)
+	fixture.seedRuntimeDatabase(t, releasePrepareSignerKey(t), releasePrepareSignerKey(t), []time.Time{commitAt.Add(-time.Second)}, []time.Time{commitAt})
+	fixture.opts.databasePath = fixture.dbPath
+	fixture.dbPath = ""
+
+	require.NoError(t, runReleasePrepare(context.Background(), fixture.deps, fixture.opts, &bytes.Buffer{}, &bytes.Buffer{}))
+
+	assert.Empty(t, fixture.copyCalls)
+}
+
+func TestRunReleasePrepare_StopsWhenGatewaySnapshotFails(t *testing.T) {
+	fixture := newReleasePrepareFixture(t)
+	fixture.copyErr = fmt.Errorf("container is not running")
+
+	err := runReleasePrepare(context.Background(), fixture.deps, fixture.opts, &bytes.Buffer{}, &bytes.Buffer{})
+
+	require.ErrorIs(t, err, fixture.copyErr)
+	assert.Empty(t, fixture.calls)
+}
+
+func TestResolveSigningKeyPaths(t *testing.T) {
+	secretsDir := filepath.Join(testutil.TempDir(t), constants.SecretsDirname)
+
+	t.Run("defaults to the runtime secrets directory", func(t *testing.T) {
+		opts := releasePrepareOptions{newKey: true}
+		require.NoError(t, resolveSigningKeyPaths(&opts, secretsDir))
+		assert.Equal(t, filepath.Join(secretsDir, constants.ComplianceReleaseSigningMetadataFilename), opts.signingMetadata)
+		assert.Equal(t, filepath.Join(secretsDir, constants.ComplianceReleaseSigningPrivateFilename), opts.signingPrivateKey)
+	})
+
+	t.Run("a missing key names --new-key", func(t *testing.T) {
+		err := resolveSigningKeyPaths(&releasePrepareOptions{}, secretsDir)
+		require.ErrorIs(t, err, constants.ErrValidationFailed)
+		assert.Contains(t, err.Error(), "--new-key")
+	})
+
+	t.Run("an existing key is reused without --new-key", func(t *testing.T) {
+		require.NoError(t, os.MkdirAll(secretsDir, constants.PermDirPrivate))
+		for _, name := range []string{constants.ComplianceReleaseSigningMetadataFilename, constants.ComplianceReleaseSigningPrivateFilename} {
+			require.NoError(t, os.WriteFile(filepath.Join(secretsDir, name), []byte("x"), constants.PermFilePrivate))
+		}
+		require.NoError(t, resolveSigningKeyPaths(&releasePrepareOptions{}, secretsDir))
+	})
+
+	t.Run("explicit paths are kept and must be set together", func(t *testing.T) {
+		opts := releasePrepareOptions{newKey: true, signingMetadata: "m.json", signingPrivateKey: "k.hex"}
+		require.NoError(t, resolveSigningKeyPaths(&opts, secretsDir))
+		assert.Equal(t, "m.json", opts.signingMetadata)
+		require.ErrorIs(t, resolveSigningKeyPaths(&releasePrepareOptions{signingPrivateKey: "k.hex"}, secretsDir), constants.ErrValidationFailed)
+	})
+}
+
+func TestWriteNewReleaseSigningKey_CreatesMissingKeyDirectory(t *testing.T) {
+	dir := filepath.Join(testutil.TempDir(t), "nested", constants.SecretsDirname)
+	opts := releasePrepareOptions{
+		signingMetadata:   filepath.Join(dir, constants.ComplianceReleaseSigningMetadataFilename),
+		signingPrivateKey: filepath.Join(dir, constants.ComplianceReleaseSigningPrivateFilename),
+	}
+
+	require.NoError(t, writeNewReleaseSigningKey(rand.Reader, opts, "v2.2.2", releasePrepareTestNow))
+
+	assert.FileExists(t, opts.signingMetadata)
+	assert.FileExists(t, opts.signingPrivateKey)
 }
 
 func TestResolveReleasePaths_DefaultsFollowTheVersionFile(t *testing.T) {

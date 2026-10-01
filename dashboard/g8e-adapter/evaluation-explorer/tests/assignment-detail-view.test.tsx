@@ -337,7 +337,7 @@ describe('AssignmentDetailView', () => {
     expect(providedHeading.compareDocumentPosition(didHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('renders task system context and attachments when present on the task definition', () => {
+  it('renders task attachments and the full-tool-set note when present on the task definition', () => {
     renderAssignment([
       assignmentResult({
         task_id: 'instruction-classify-severity',
@@ -350,7 +350,7 @@ describe('AssignmentDetailView', () => {
     expect(screen.getByRole('heading', { name: 'What the model was provided' })).toBeInTheDocument();
     expect(screen.getByText('synthetic-app-log')).toBeInTheDocument();
     expect(screen.getByText(/checkout payment gateway timeout after 30s/)).toBeInTheDocument();
-    expect(screen.getByText(/Use only the synthetic content below\. Do not invent external context\./)).toBeInTheDocument();
+    expect(screen.getByText(/always offered the full production tool set/i)).toBeInTheDocument();
   });
 
   it('does not render task prompt or provided sections when task is unrecognized', () => {

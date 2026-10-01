@@ -52,6 +52,9 @@ import {
   PUBLIC_SEMANTIC_OUTCOMES,
   PUBLIC_TOOL_EXECUTION_OUTCOMES,
   PUBLIC_TOOL_OUTCOMES,
+  PUBLIC_HINT_ARGUMENT_SOURCES,
+  PUBLIC_TRAJECTORY_OUTCOMES,
+  PUBLIC_TRAJECTORY_POLICIES,
   PUBLIC_USAGE_AVAILABILITIES,
   PUBLIC_UNAVAILABLE_REASONS,
   RUN_METRIC_UNITS,
@@ -583,9 +586,29 @@ function assertPublicStringArray(value: unknown, path: string, maxItems: number,
   }
 }
 
+function assertPublicPromptHint(value: unknown, path: string): void {
+  assertObject(value, path);
+  // Hint values are private; the public contract carries names and sources only.
+  rejectUnknown(value, ['hinted_tools', 'arguments'], path);
+  assertPublicStringArray(value.hinted_tools, `${path}.hinted_tools`, 16);
+  assert(Array.isArray(value.arguments), `${path}.arguments`, 'expected array');
+  assert(value.arguments.length <= 64, `${path}.arguments`, 'expected at most 64 entries');
+  for (let index = 0; index < value.arguments.length; index++) {
+    const argumentPath = `${path}.arguments[${index}]`;
+    const argument: unknown = value.arguments[index];
+    assertObject(argument, argumentPath);
+    rejectUnknown(argument, ['tool_name', 'argument_name', 'source'], argumentPath);
+    assertPublicIdentifier(argument.tool_name, `${argumentPath}.tool_name`);
+    assertPublicIdentifier(argument.argument_name, `${argumentPath}.argument_name`);
+    assertEnum(argument.source, PUBLIC_HINT_ARGUMENT_SOURCES, `${argumentPath}.source`);
+  }
+}
+
 function assertPublicScenarioSummary(value: unknown, path: string): void {
   assertObject(value, path);
-  rejectUnknown(value, ['scenario_id', 'scenario_version', 'category', 'public_description', 'grading_method', 'allowed_tools', 'expected_tools', 'forbidden_tools', 'criteria', 'tool_score_dimensions'], path);
+  rejectUnknown(value, ['scenario_id', 'scenario_version', 'category', 'public_description', 'grading_method', 'allowed_tools', 'expected_tools', 'forbidden_tools', 'trajectory_policy', 'prompt_hint', 'criteria', 'tool_score_dimensions'], path);
+  assertOptional(value.trajectory_policy, `${path}.trajectory_policy`, (v, p) => assertEnum(v, PUBLIC_TRAJECTORY_POLICIES, p));
+  if (value.prompt_hint !== undefined) assertPublicPromptHint(value.prompt_hint, `${path}.prompt_hint`);
   assertPublicIdentifier(value.scenario_id, `${path}.scenario_id`);
   assertPublicIdentifier(value.scenario_version, `${path}.scenario_version`);
   assertEnum(value.category, SCENARIO_CATEGORIES, `${path}.category`);
@@ -682,8 +705,11 @@ function assertPublicToolDecisionRecord(value: unknown, path: string): void {
 
 function assertPublicToolCallRecord(value: unknown, path: string): void {
   assertObject(value, path);
-  rejectUnknown(value, ['tool_label', 'execution_outcome', 'semantic_outcome', 'evidence_source'], path);
+  rejectUnknown(value, ['tool_label', 'execution_outcome', 'semantic_outcome', 'evidence_source', 'loop_turn', 'error_type', 'guidance_shown'], path);
   assertPublicIdentifier(value.tool_label, `${path}.tool_label`);
+  assertOptional(value.loop_turn, `${path}.loop_turn`, assertInteger);
+  assertOptional(value.error_type, `${path}.error_type`, assertPublicIdentifier);
+  assertOptional(value.guidance_shown, `${path}.guidance_shown`, assertBoolean);
   assertEnum(value.execution_outcome, PUBLIC_TOOL_EXECUTION_OUTCOMES, `${path}.execution_outcome`);
   assertEnum(value.semantic_outcome, PUBLIC_SEMANTIC_OUTCOMES, `${path}.semantic_outcome`);
   assert(value.evidence_source === 'application_reported', `${path}.evidence_source`, 'tool calls require application-reported evidence');
@@ -832,7 +858,7 @@ function assertPublicResourceSummary(value: unknown, path: string): void {
 
 export function isAssignmentResult(value: unknown): asserts value is AssignmentResult {
   assertObject(value, 'assignment_result');
-  rejectUnknown(value, [...ENVELOPE_FIELDS, 'assignment_id', 'run_id', 'task_id', 'scenario_id', 'variant_id', 'role', 'repetition', 'scenario_category', 'evaluation_unit', 'stack_id', 'scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'benchmark_observations', 'terminal_status', 'metric_values', 'missingness_reason', 'stage_summary', 'resource_summary', 'verification_disposition', 'verification_metadata', 'model_response', 'failure_output', 'role_transcripts'], 'assignment_result');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'assignment_id', 'run_id', 'task_id', 'scenario_id', 'variant_id', 'role', 'repetition', 'scenario_category', 'evaluation_unit', 'stack_id', 'scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'benchmark_observations', 'terminal_status', 'metric_values', 'missingness_reason', 'stage_summary', 'resource_summary', 'verification_disposition', 'verification_metadata', 'model_response', 'failure_output', 'role_transcripts', 'trajectory_outcome', 'guided_retry_count', 'failure_reason', 'tools_declared'], 'assignment_result');
   assertEnvelope(value, 'assignment_result', ['assignment_result']);
   assertString(value.assignment_id, 'assignment_result.assignment_id');
   assertString(value.run_id, 'assignment_result.run_id');
@@ -849,7 +875,7 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
   assertOptional(value.stack_id, 'assignment_result.stack_id', assertString);
   if (value.benchmark_observations !== undefined) assertBenchmarkObservations(value.benchmark_observations, 'assignment_result.benchmark_observations');
   if (value.schema_version !== '1.4.0' && value.schema_version !== '1.5.0') {
-    for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata'] as const) {
+    for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata', 'trajectory_outcome', 'guided_retry_count', 'failure_reason', 'tools_declared'] as const) {
       assert(value[field] === undefined, `assignment_result.${field}`, 'field requires schema 1.4.0 or later');
     }
   } else {
@@ -865,6 +891,13 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
   assertOptional(value.missingness_reason, 'assignment_result.missingness_reason', assertString);
   assertOptional(value.model_response, 'assignment_result.model_response', assertString);
   assertOptional(value.failure_output, 'assignment_result.failure_output', assertString);
+  assertOptional(value.trajectory_outcome, 'assignment_result.trajectory_outcome', (v, p) => assertEnum(v, PUBLIC_TRAJECTORY_OUTCOMES, p));
+  assertOptional(value.guided_retry_count, 'assignment_result.guided_retry_count', assertInteger);
+  if (value.failure_reason !== undefined) {
+    assertString(value.failure_reason, 'assignment_result.failure_reason');
+    assert(new TextEncoder().encode(value.failure_reason).byteLength <= 512, 'assignment_result.failure_reason', 'expected at most 512 UTF-8 bytes');
+  }
+  if (value.tools_declared !== undefined) assertPublicStringArray(value.tools_declared, 'assignment_result.tools_declared', 64);
   if (value.role_transcripts !== undefined) assertRoleTranscripts(value.role_transcripts, 'assignment_result.role_transcripts');
   assert(Array.isArray(value.stage_summary), 'assignment_result.stage_summary', 'expected array');
   assert(value.stage_summary.length <= 128, 'assignment_result.stage_summary', 'expected at most 128 entries');

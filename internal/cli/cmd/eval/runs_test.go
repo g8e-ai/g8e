@@ -60,7 +60,7 @@ func TestRunsList_AfterPrepare(t *testing.T) {
 	assert.Equal(t, "run-a-1", payload.Runs[0].RunID)
 	assert.Equal(t, "eval-a", payload.Runs[0].CampaignID)
 	assert.Equal(t, "scheduled", payload.Runs[0].Status)
-	assert.Equal(t, uint64(39), payload.Runs[0].ExpectedAssignments)
+	assert.Equal(t, uint64(41), payload.Runs[0].ExpectedAssignments)
 	assert.False(t, payload.Runs[0].Archived)
 }
 
@@ -89,7 +89,7 @@ func TestRunsShow_AfterPrepare(t *testing.T) {
 	assert.Contains(t, out, "Run: run-a-1")
 	assert.Contains(t, out, "Campaign: eval-a")
 	assert.Contains(t, out, "Status: scheduled")
-	assert.Contains(t, out, "Expected assignments: 39")
+	assert.Contains(t, out, "Expected assignments: 41")
 
 	var payload runShowJSON
 	require.NoError(t, env.runJSON(t, &payload, "runs", "show", "run-a-1"))
@@ -97,7 +97,7 @@ func TestRunsShow_AfterPrepare(t *testing.T) {
 	assert.Equal(t, "eval-a", payload.CampaignID)
 	assert.Equal(t, testInferenceSession, payload.InferenceSession)
 	assert.Equal(t, testDataSession, payload.DataSession)
-	assert.Equal(t, uint32(39), payload.Queued)
+	assert.Equal(t, uint32(41), payload.Queued)
 	assert.Nil(t, payload.Holder)
 }
 
@@ -156,7 +156,7 @@ func TestRunsVerify_CoverageReportsIncompleteScheduledRun(t *testing.T) {
 	err = env.runJSON(t, &payload, "runs", "verify", "run-a-1", "--coverage")
 	require.Error(t, err)
 	assert.False(t, payload.Complete)
-	assert.Equal(t, uint64(39), payload.ExpectedCells)
+	assert.Equal(t, uint64(41), payload.ExpectedCells)
 }
 
 func TestRunsVerify_CoverageCannotCombineWithWitnessRequirements(t *testing.T) {
@@ -261,7 +261,7 @@ func TestRunsStart_DryRunJSON(t *testing.T) {
 	var payload runStartPlanJSON
 	require.NoError(t, env.runJSON(t, &payload, "runs", "start", "eval-a", "--dry-run"))
 	assert.Equal(t, "eval-a", payload.CampaignID)
-	assert.Equal(t, uint64(39), payload.CellCount)
+	assert.Equal(t, uint64(41), payload.CellCount)
 	assert.Equal(t, testInferenceSession, payload.InferenceSession)
 	assert.Equal(t, testDataSession, payload.DataSession)
 	assert.Equal(t, []string{"qwen3:4b"}, payload.ModelTags)
@@ -273,7 +273,7 @@ func TestRunsStart_PrepareOnlyPersistsRunAndSchedulesAssignments(t *testing.T) {
 
 	out := env.mustRun(t, "runs", "start", "eval-a", "--prepare-only", "--publish=false", "--daemon=false")
 	assert.Contains(t, out, "Started run")
-	assert.Contains(t, out, "Scheduled 39 assignments")
+	assert.Contains(t, out, "Scheduled 41 assignments")
 	assert.Contains(t, out, "g8e eval runs resume")
 
 	runIDs, err := env.store(t).ListRunIDs(context.Background())
@@ -283,7 +283,7 @@ func TestRunsStart_PrepareOnlyPersistsRunAndSchedulesAssignments(t *testing.T) {
 
 	assignments, err := env.store(t).ListAssignments(context.Background(), runIDs[0])
 	require.NoError(t, err)
-	assert.Len(t, assignments, 39)
+	assert.Len(t, assignments, 41)
 }
 
 func TestRunsStart_PrepareOnlyBindsTheOperatorSessions(t *testing.T) {
@@ -332,12 +332,12 @@ func TestRunsStart_ExecutesAndVerifiesWithoutPublication(t *testing.T) {
 	assert.Equal(t, 1, result.Executed)
 	require.NotNil(t, result.Report)
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, result.Report.GetStatus())
-	assertPopulationBoundCampaignReport(t, result.Report, 39, 1)
+	assertPopulationBoundCampaignReport(t, result.Report, 41, 1)
 	assert.Contains(t, out.String(), "verification")
 
 	loaded, err := env.store(t).LoadCampaignVerification(context.Background(), "run-a-1")
 	require.NoError(t, err)
-	assertPopulationBoundCampaignReport(t, loaded, 39, 1)
+	assertPopulationBoundCampaignReport(t, loaded, 41, 1)
 	assert.Empty(t, publication.completionRunIDs)
 	assert.Empty(t, publication.reports)
 }
@@ -454,7 +454,7 @@ func TestRunsResume_JSONOutput(t *testing.T) {
 	assert.Equal(t, runID, payload.RunID)
 	assert.Equal(t, 1, payload.Executed)
 	assert.NotEmpty(t, payload.Results)
-	assert.Equal(t, int64(38), payload.Remaining)
+	assert.Equal(t, int64(40), payload.Remaining)
 }
 
 func TestRunsResume_WithPublishFlag(t *testing.T) {
@@ -521,7 +521,7 @@ func TestVerifyRun_PersistsAndPublishesPopulationBoundReport(t *testing.T) {
 	loaded, err := store.LoadCampaignVerification(context.Background(), runID)
 	require.NoError(t, err)
 	assert.Equal(t, report.GetStatus(), loaded.GetStatus())
-	assertPopulationBoundCampaignReport(t, loaded, 39, 1)
+	assertPopulationBoundCampaignReport(t, loaded, 41, 1)
 	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, loaded.GetProviderObservationPolicy())
 	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, loaded.GetModelProvenancePolicy())
 	assert.Equal(t, spec.GetCampaignDigest(), loaded.GetCampaignDigest())
@@ -529,7 +529,7 @@ func TestVerifyRun_PersistsAndPublishesPopulationBoundReport(t *testing.T) {
 	assert.Equal(t, spec.GetModelRegistryDigest(), loaded.GetModelRegistryDigest())
 	assert.Equal(t, []string{runID}, publication.completionRunIDs)
 	require.Len(t, publication.reports, 1)
-	assertPopulationBoundCampaignReport(t, publication.reports[0], 39, 1)
+	assertPopulationBoundCampaignReport(t, publication.reports[0], 41, 1)
 	assert.Equal(t, loaded.GetReportDigestRef().GetSha256(), publication.reports[0].GetReportDigestRef().GetSha256())
 }
 
@@ -557,7 +557,7 @@ func TestRunsVerify_ViaCLIPersistsAndPublishesPopulationBoundReport(t *testing.T
 
 	loaded, err := env.store(t).LoadCampaignVerification(context.Background(), "run-a-1")
 	require.NoError(t, err)
-	assertPopulationBoundCampaignReport(t, loaded, 39, 1)
+	assertPopulationBoundCampaignReport(t, loaded, 41, 1)
 	assert.Equal(t, []string{"run-a-1"}, publication.completionRunIDs)
 	require.Len(t, publication.reports, 1)
 	assert.Equal(t, loaded.GetReportDigestRef().GetSha256(), publication.reports[0].GetReportDigestRef().GetSha256())
@@ -640,15 +640,15 @@ func TestRunsCompare_ReportsSharedCellsAndDifferences(t *testing.T) {
 	require.NoError(t, env.runJSON(t, &payload, "runs", "compare", "run-a-1", "run-a-2"))
 	assert.Equal(t, "run-a-1", payload.Left.RunID)
 	assert.Equal(t, "run-a-2", payload.Right.RunID)
-	assert.Equal(t, 39, payload.Left.Cells)
-	assert.Equal(t, 39, payload.Right.Cells)
+	assert.Equal(t, 41, payload.Left.Cells)
+	assert.Equal(t, 41, payload.Right.Cells)
 	assert.Empty(t, payload.OnlyInLeft)
 	assert.Empty(t, payload.OnlyInRight)
 	assert.Zero(t, payload.Regressions)
 	assert.Zero(t, payload.Improvements)
 
 	out := env.mustRun(t, "runs", "compare", "run-a-1", "run-a-2")
-	assert.Contains(t, out, "run-a-1 (eval-a): 39 cells")
+	assert.Contains(t, out, "run-a-1 (eval-a): 41 cells")
 	assert.Contains(t, out, "Regressions: 0  Improvements: 0")
 }
 
@@ -660,8 +660,8 @@ func TestRunsCompare_FlagsCellsOnlyInOneRun(t *testing.T) {
 
 	var payload runCompareJSON
 	require.NoError(t, env.runJSON(t, &payload, "runs", "compare", "run-a-1", "run-b-1"))
-	assert.Len(t, payload.OnlyInLeft, 39, "no cell of a different model is shared")
-	assert.Len(t, payload.OnlyInRight, 39)
+	assert.Len(t, payload.OnlyInLeft, 41, "no cell of a different model is shared")
+	assert.Len(t, payload.OnlyInRight, 41)
 }
 
 func TestRunsCompare_RequiresTwoRuns(t *testing.T) {

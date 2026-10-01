@@ -41,11 +41,17 @@ func complianceEvidenceExportCmdWithConfig(fileSvcFactory func(string, *slog.Log
 
 	cmd := &cobra.Command{
 		Use:   "export",
-		Short: "Export bounded operational evidence without changing runtime state",
-		Args:  cobra.NoArgs,
+		Short: "Export bounded operational evidence for a hand-authored assessment scope",
+		Long: `Export the bounded operational source package for an assessment scope you
+wrote by hand. This is a low-level step.
+
+To prepare release compliance evidence, run "g8e compliance release-prepare"
+instead: it builds the scope, exports, signs, verifies, and projects in one
+command.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if scopePath == "" || outputDir == "" {
-				return fmt.Errorf("%w: --scope and --out are required", constants.ErrValidationFailed)
+				return fmt.Errorf("%w: --scope and --out are required (to prepare release evidence, run \"g8e compliance release-prepare\")", constants.ErrValidationFailed)
 			}
 			ctx := cmd.Context()
 			if ctx == nil {

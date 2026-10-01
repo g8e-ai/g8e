@@ -100,6 +100,14 @@ func BuildAssignmentResultProjection(assignment *evalv1.EvaluationAssignment, re
 		VerificationStatus: verificationStatus,
 		CompletedAt:        result.GetCompletedAt(),
 		DecomposedScores:   append([]*evalv1.DecomposedScoreRecord(nil), result.GetDecomposedScores()...),
+		// The private failure_reason quotes hint values and the start of the
+		// model output; only the bounded public sentence is projected (R7).
+		TrajectoryOutcome: result.GetTrajectoryOutcome(),
+		GuidedRetryCount:  result.GetGuidedRetryCount(),
+		FailureReason:     result.GetPublicFailureReason(),
+	}
+	if scored := scoredAgentInference(result.GetModelInferences()); scored != nil && scored.GetToolsDeclaredReported() {
+		projection.ToolsDeclared = append([]string(nil), scored.GetToolsDeclared()...)
 	}
 	if homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous); ok && homogeneous.Homogeneous != nil {
 		projection.DesignatedRole = homogeneous.Homogeneous.GetDesignatedRole()

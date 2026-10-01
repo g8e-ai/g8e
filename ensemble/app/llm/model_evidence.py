@@ -80,6 +80,18 @@ def recorded_model_boundary_privacy(
     return attestation if isinstance(attestation, ModelBoundaryPrivacyAttestation) else None
 
 
+def recorded_declared_tool_names(provider: object) -> list[str] | None:
+    """Tool names the provider reports having sent on its last call.
+
+    ``None`` when the provider records nothing (or reports an unusable value),
+    so callers can distinguish "not captured" from "no tools were declared".
+    """
+    names = getattr(provider, "declared_tool_names", None)
+    if isinstance(names, list) and all(isinstance(name, str) for name in names):
+        return list(names)
+    return None
+
+
 def recorded_governed_dispatch_evidence(
     provider: object,
 ) -> GovernedDispatchEvidence | None:

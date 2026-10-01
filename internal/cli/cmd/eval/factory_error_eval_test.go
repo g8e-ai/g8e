@@ -102,10 +102,6 @@ func TestEvalCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 		// backup
 		{name: "backup", args: []string{"backup", "--output-dir", "out"}},
 		{name: "restore", args: []string{"restore", "snapshot-dir"}},
-
-		// observer
-		{name: "observer run", args: []string{"observer", "run"}},
-		{name: "observer verify", args: []string{"observer", "verify", "attempt-1"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

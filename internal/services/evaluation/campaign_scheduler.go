@@ -89,10 +89,38 @@ func BuildHomogeneousAssignmentMatrix(req HomogeneousScheduleRequest) ([]*evalv1
 			}
 		}
 	}
-	sort.Slice(assignments, func(i, j int) bool {
-		return assignments[i].GetDeterministicIdentity() < assignments[j].GetDeterministicIdentity()
-	})
+	sortAssignmentsDeterministic(assignments)
 	return assignments, nil
+}
+
+// assignmentExecutionLess is the single execution order for assignments.
+// Homogeneous assignments run model by model, so the provider keeps one model
+// resident while it works through every scenario, role, and repetition before
+// the next model loads. Identity breaks ties and orders every other lane.
+func assignmentExecutionLess(left, right *evalv1.EvaluationAssignment) bool {
+	leftTarget, rightTarget := left.GetHomogeneous(), right.GetHomogeneous()
+	if (leftTarget != nil) != (rightTarget != nil) {
+		return leftTarget != nil
+	}
+	if leftTarget != nil {
+		leftVariant, rightVariant := leftTarget.GetCandidateVariant(), rightTarget.GetCandidateVariant()
+		if l, r := leftVariant.GetServedModelTag(), rightVariant.GetServedModelTag(); l != r {
+			return l < r
+		}
+		if l, r := leftVariant.GetVariantId(), rightVariant.GetVariantId(); l != r {
+			return l < r
+		}
+		if l, r := left.GetScenarioId(), right.GetScenarioId(); l != r {
+			return l < r
+		}
+		if l, r := leftTarget.GetDesignatedRole(), rightTarget.GetDesignatedRole(); l != r {
+			return l < r
+		}
+		if l, r := left.GetRepetition(), right.GetRepetition(); l != r {
+			return l < r
+		}
+	}
+	return left.GetDeterministicIdentity() < right.GetDeterministicIdentity()
 }
 
 func buildHomogeneousAssignment(campaignID, runID string, scenario *evalv1.EvaluationScenarioDefinition, variant *evalv1.ModelVariant, role evalv1.ModelCampaignRole, repetition uint32, queuedAt time.Time) (*evalv1.EvaluationAssignment, error) {
@@ -154,20 +182,39 @@ func scenarioEligibleRoles(scenario *evalv1.EvaluationScenarioDefinition) ([]eva
 	return roles, nil
 }
 
+// CatalogModelRoleCells returns the (scenario, role) cells one model scores in
+// catalog, counting each scenario once per role it declares eligible. It reads
+// the catalog a campaign froze, so a custom or smoke suite sizes correctly.
+func CatalogModelRoleCells(catalog *evalv1.EvaluationScenarioCatalog) uint64 {
+	var cells uint64
+	for _, scenario := range catalog.GetScenarios() {
+		cells += uint64(len(scenario.GetEligibleRoles()))
+	}
+	return cells
+}
+
+// ModelRoleMatrixSize returns the assignment count of a model-role run over
+// catalog: models × cells per model × repetitions. Zero repetitions count as one.
+func ModelRoleMatrixSize(catalog *evalv1.EvaluationScenarioCatalog, modelCount uint64, repetitions uint32) uint64 {
+	if repetitions == 0 {
+		repetitions = 1
+	}
+	return modelCount * CatalogModelRoleCells(catalog) * uint64(repetitions)
+}
+
+// FormationMatrixSize returns the assignment count of a system-lane run over
+// catalog: one assignment per formation per scenario.
+func FormationMatrixSize(catalog *evalv1.EvaluationScenarioCatalog, formationCount uint64) uint64 {
+	return formationCount * uint64(len(catalog.GetScenarios()))
+}
+
 // ValidateHomogeneousAssignmentMatrix verifies the Phase 4 scheduler gate for one
 // homogeneous smoke run.
 func ValidateHomogeneousAssignmentMatrix(catalog *evalv1.EvaluationScenarioCatalog, inventory *ModelInventoryFreeze, repetitionCount uint32, assignments []*evalv1.EvaluationAssignment) error {
 	if catalog == nil || inventory == nil {
 		return fmt.Errorf("evaluation: validate homogeneous assignment matrix: %w", constants.ErrMissingRequiredField)
 	}
-	if repetitionCount == 0 {
-		repetitionCount = 1
-	}
-	var cellsPerVariant uint64
-	for _, scenario := range catalog.GetScenarios() {
-		cellsPerVariant += uint64(len(scenario.GetEligibleRoles()))
-	}
-	expected := uint64(len(inventory.Variants)) * cellsPerVariant * uint64(repetitionCount)
+	expected := ModelRoleMatrixSize(catalog, uint64(len(inventory.Variants)), repetitionCount)
 	if uint64(len(assignments)) != expected {
 		return fmt.Errorf("evaluation: validate homogeneous assignment matrix: expected %d assignments, got %d", expected, len(assignments))
 	}

@@ -128,6 +128,42 @@ func TestBuildPublicResourceSummary(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
 }
 
+func TestBuildPublicResourceSummary_ExcludesMemoryCodexCalls(t *testing.T) {
+	reported := evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
+	scored := &evalv1.ModelInferenceRecord{
+		AgentPersona: "sage", UsageAvailability: reported, PromptTokens: 10, CompletionTokens: 5,
+		ThinkingTokens: proto.Uint32(2), CacheTokens: proto.Uint32(1), RetryCount: proto.Uint32(1),
+	}
+	codex := &evalv1.ModelInferenceRecord{
+		AgentPersona: "codex", UsageAvailability: reported, PromptTokens: 700, CompletionTokens: 300,
+		ThinkingTokens: proto.Uint32(40), CacheTokens: proto.Uint32(30), RetryCount: proto.Uint32(9),
+	}
+	span := proto.Uint64(3_000_000)
+
+	without, err := BuildPublicResourceSummary(&evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{scored}, ScoredInferenceSpanNanos: span,
+	})
+	require.NoError(t, err)
+	with, err := BuildPublicResourceSummary(&evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{scored, codex}, ScoredInferenceSpanNanos: span,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, without, with)
+	require.NotNil(t, with.InputTokens.Value)
+	assert.Equal(t, float64(10), *with.InputTokens.Value)
+	require.NotNil(t, with.Retries.Value)
+	assert.Equal(t, float64(1), *with.Retries.Value)
+
+	t.Run("codex-only result reports no scored calls", func(t *testing.T) {
+		summary, err := BuildPublicResourceSummary(&evalv1.EvaluationAssignmentResult{
+			ModelInferences: []*evalv1.ModelInferenceRecord{codex},
+		})
+		require.NoError(t, err)
+		assert.Nil(t, summary.InputTokens.Value)
+		assert.Equal(t, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS, summary.InputTokens.UnavailableReason)
+	})
+}
+
 func TestBuildPublicResourceSummary_NilResult(t *testing.T) {
 	_, err := BuildPublicResourceSummary(nil)
 	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)

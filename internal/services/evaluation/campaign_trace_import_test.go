@@ -100,16 +100,17 @@ func homogeneousAssignmentExecutionRequest(t *testing.T, role string) Assignment
 		AttemptID:  "attempt-1",
 		ScenarioInput: ScenarioInputFixture{
 			ScenarioID: "instruction-exact-format",
-			UserPrompt: "Reply with exactly: NORTH-STAR-OK",
+			UserPrompt: "Reply with exactly: SUITE-OK",
 		},
 		ScenarioGold:  loadScenarioGold(t, "instruction-exact-format"),
 		GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		Binding: CampaignExecutionBinding{
-			InferenceOperatorSessionID: "session-1",
-			DataOperatorID:             "data-op",
-			DataOperatorSessionID:      "data-session",
-			ModelRegistryDigest:        "d" + repeatHex('d', 63),
-			ModelRegistry:              InferenceVariantsFromEvalRegistry([]*evalv1.ModelVariant{assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous).Homogeneous.GetCandidateVariant()}),
+			InferenceOperatorSessionID:   "session-1",
+			DataOperatorID:               "data-op",
+			DataOperatorSessionID:        "data-session",
+			DataOperatorWorkingDirectory: "/home/operator",
+			ModelRegistryDigest:          "d" + repeatHex('d', 63),
+			ModelRegistry:                InferenceVariantsFromEvalRegistry([]*evalv1.ModelVariant{assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous).Homogeneous.GetCandidateVariant()}),
 		},
 	}
 }
@@ -276,6 +277,103 @@ func TestImportAssignmentResultFromTrace_SchemaV2AllowsAbsentOptionalUsageCounte
 	inference := result.GetModelInferences()[0]
 	assert.Nil(t, inference.ThinkingTokens)
 	assert.Nil(t, inference.CacheTokens)
+}
+
+func TestImportAssignmentResultFromTrace_NewFieldsRoundTrip(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace(t, "primary")
+	call := trace["model_calls"].([]any)[0].(EvaluationTrace)
+	call["tools_declared"] = []any{"recursive_grep_search", "file_read_on_operator"}
+	trace["tool_calls"] = []any{
+		EvaluationTrace{
+			"call_id":          "call-1",
+			"tool_name":        "recursive_grep_search",
+			"arguments_hash":   "hash-1",
+			"success":          false,
+			"loop_turn":        float64(2),
+			"error_type":       "runtime.error",
+			"error":            "syntax error",
+			"suggestion":       "check patterns",
+			"is_operator_tool": true,
+			"execution_id":     "exec-1",
+		},
+	}
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+
+	req := homogeneousAssignmentExecutionRequest(t, "primary")
+	req.ScenarioTools = ScenarioToolExpectations{ExpectedTools: []string{"recursive_grep_search"}}
+	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+
+	// Model inference tools declared
+	require.Len(t, result.GetModelInferences(), 1)
+	inf := result.GetModelInferences()[0]
+	assert.True(t, inf.GetToolsDeclaredReported())
+	assert.Equal(t, []string{"recursive_grep_search", "file_read_on_operator"}, inf.GetToolsDeclared())
+
+	// Tool call record
+	require.Len(t, result.GetToolCalls(), 1)
+	tc := result.GetToolCalls()[0]
+	assert.Equal(t, uint32(2), tc.GetLoopTurn())
+	assert.Equal(t, "runtime.error", tc.GetErrorType())
+	assert.True(t, tc.GetGuidanceShown())
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, tc.GetSchemaOutcome())
+
+	// Trajectory fields copied
+	assert.NotEqual(t, evalv1.EvaluationTrajectoryOutcome_EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED, result.GetTrajectoryOutcome())
+}
+
+func TestImportAssignmentResultFromTrace_CodexCallsExcludedFromScoredInferenceSpan(t *testing.T) {
+	t.Parallel()
+	traceWithoutCodex := completedHomogeneousTrace(t, "primary")
+	scoredCall := traceWithoutCodex["model_calls"].([]any)[0].(EvaluationTrace)
+	scoredCall["monotonic_start"] = 100.0
+	scoredCall["monotonic_end"] = 102.5 // 2.5s -> 2_500_000_000 ns
+	digestWithout, err := ComputeChatProbeTraceDigest(traceWithoutCodex)
+	require.NoError(t, err)
+	traceWithoutCodex["trace_digest"] = digestWithout
+
+	resultWithout, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), traceWithoutCodex, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix })
+	require.NoError(t, err)
+	require.NotNil(t, resultWithout.ScoredInferenceSpanNanos)
+	spanWithout := resultWithout.GetScoredInferenceSpanNanos()
+	assert.Equal(t, uint64(2_500_000_000), spanWithout)
+
+	// Now create a trace WITH an additional codex call spanning past the scored calls
+	traceWithCodex := completedHomogeneousTrace(t, "primary")
+	call1 := traceWithCodex["model_calls"].([]any)[0].(EvaluationTrace)
+	call1["monotonic_start"] = 100.0
+	call1["monotonic_end"] = 102.5
+
+	codexCall := EvaluationTrace{
+		"agent_role":              "codex",
+		"model_role":              "primary",
+		"provider":                "G8EProvider",
+		"governed_transaction_id": "tx-2",
+		"governed_result_digest":  "b" + repeatHex('b', 63),
+		"provider_attempt_id":     "attempt-codex-1",
+		"normalized_request_hash": "c" + repeatHex('c', 63),
+		"monotonic_start":         105.0,
+		"monotonic_end":           110.0, // Would make span 10s if included
+	}
+	traceWithCodex["model_calls"] = []any{call1, codexCall}
+	digestWith, err := ComputeChatProbeTraceDigest(traceWithCodex)
+	require.NoError(t, err)
+	traceWithCodex["trace_digest"] = digestWith
+
+	resultWith, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest(t, "primary"), traceWithCodex, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix })
+	require.NoError(t, err)
+	require.NotNil(t, resultWith.ScoredInferenceSpanNanos)
+	spanWith := resultWith.GetScoredInferenceSpanNanos()
+
+	// Codex call is emitted in records
+	assert.Len(t, resultWith.GetModelInferences(), 2)
+	assert.Equal(t, "codex", resultWith.GetModelInferences()[1].GetAgentPersona())
+
+	// ScoredInferenceSpanNanos for trace with a codex call equals the span without it!
+	assert.Equal(t, spanWithout, spanWith)
 }
 
 func completedHomogeneousTrace(t *testing.T, role string) EvaluationTrace {

@@ -2,10 +2,18 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { describe, expect, it } from 'vitest';
-import type { AssignmentResult, CatalogSnapshot, EvaluationSummary, LiveEvent, ModelSummary } from '../src/contract/types';
+import type {
+  AssignmentResult,
+  CatalogSnapshot,
+  EvaluationSummary,
+  LiveEvent,
+  ModelSummary,
+  ProviderEnvironment,
+} from '../src/contract/types';
 import {
   assignmentMetricEntries,
   assignmentMetricFormatter,
+  comparisonCompatibility,
   recentCampaignRows,
   roleLabel,
   roleLeaderRows,
@@ -143,6 +151,123 @@ describe('roleLeaderRows', () => {
     ];
     const primary = roleLeaderRows(models).find((row) => row.role === 'primary');
     expect(primary?.leader?.model.variant_id).toBe('model-b');
+  });
+});
+
+const TEST_ENVIRONMENT: ProviderEnvironment = {
+  source: 'declared',
+  processor: 'test-cpu',
+  memory: '64 GiB',
+  graphics: 'test-gpu',
+};
+
+function datasetCatalog(datasetId: string, environment?: ProviderEnvironment): CatalogSnapshot {
+  return {
+    schema_version: '1.5.0',
+    kind: 'catalog_snapshot',
+    dataset_id: datasetId,
+    dataset_kind: 'live_run',
+    quality_state: 'live_in_progress',
+    observed_at: '2026-09-17T00:00:00Z',
+    title: datasetId,
+    description: '',
+    limitations: [],
+    model_count: 1,
+    evaluated_count: 1,
+    suite_count: 1,
+    run_count: 1,
+    assignment_count: 1,
+    provider_request_count: 0,
+    provider_token_count: 0,
+    retry_count: 0,
+    verifier_passed_count: 0,
+    verifier_failed_count: 0,
+    generated_at: '2026-09-17T00:00:00Z',
+    ...(environment ? { provider_environment: environment } : {}),
+  };
+}
+
+describe('comparisonCompatibility', () => {
+  const alpha = modelSummary({ variant_id: 'model-a', role: 'primary', dataset_id: 'ds-a' });
+  const beta = modelSummary({ variant_id: 'model-b', role: 'primary', dataset_id: 'ds-b' });
+  const catalogs = [datasetCatalog('ds-a', TEST_ENVIRONMENT), datasetCatalog('ds-b', { ...TEST_ENVIRONMENT })];
+  const runs = [
+    evaluationSummary({ dataset_id: 'ds-a', run_id: 'run-a' }),
+    evaluationSummary({ dataset_id: 'ds-b', run_id: 'run-b' }),
+  ];
+
+  it('accepts models from one dataset without consulting environment or suites', () => {
+    const sibling = modelSummary({ variant_id: 'model-c', role: 'lite', dataset_id: 'ds-a' });
+    expect(comparisonCompatibility([alpha, sibling], [], [])).toEqual({ compatible: true, crossDataset: false });
+  });
+
+  it('accepts separate datasets that share a provider environment and suites', () => {
+    expect(comparisonCompatibility([alpha, beta], catalogs, runs)).toEqual({
+      compatible: true,
+      crossDataset: true,
+      environmentSource: 'declared',
+    });
+  });
+
+  it('reports an observed environment as observed', () => {
+    const observed = { ...TEST_ENVIRONMENT, source: 'observed' as const };
+    const result = comparisonCompatibility(
+      [alpha, beta],
+      [datasetCatalog('ds-a', observed), datasetCatalog('ds-b', { ...observed })],
+      runs,
+    );
+    expect(result).toEqual({ compatible: true, crossDataset: true, environmentSource: 'observed' });
+  });
+
+  it('treats a suite set that differs only in run count as the same suites', () => {
+    const extra = [...runs, evaluationSummary({ dataset_id: 'ds-b', run_id: 'run-b-2' })];
+    expect(comparisonCompatibility([alpha, beta], catalogs, extra)).toMatchObject({
+      compatible: true,
+      crossDataset: true,
+    });
+  });
+
+  it('fails closed when a dataset does not declare its provider environment', () => {
+    const result = comparisonCompatibility([alpha, beta], [catalogs[0]!, datasetCatalog('ds-b')], runs);
+    expect(result).toEqual({
+      compatible: false,
+      reason: 'a selected dataset does not declare its provider environment',
+    });
+  });
+
+  it('rejects datasets whose provider environments differ in any field', () => {
+    for (const changed of [
+      { source: 'observed' },
+      { processor: 'other-cpu' },
+      { memory: '32 GiB' },
+      { graphics: 'other-gpu' },
+      { storage: 'nvme' },
+      { system_type: 'workstation' },
+    ] as Partial<ProviderEnvironment>[]) {
+      const result = comparisonCompatibility(
+        [alpha, beta],
+        [catalogs[0]!, datasetCatalog('ds-b', { ...TEST_ENVIRONMENT, ...changed })],
+        runs,
+      );
+      expect(result, JSON.stringify(changed)).toEqual({
+        compatible: false,
+        reason: 'the datasets ran on different provider environments',
+      });
+    }
+  });
+
+  it('fails closed when a dataset has no evaluation suite', () => {
+    const result = comparisonCompatibility([alpha, beta], catalogs, [runs[0]!]);
+    expect(result).toEqual({ compatible: false, reason: 'a selected dataset has no evaluation suite' });
+  });
+
+  it('rejects datasets that evaluated different suites', () => {
+    const result = comparisonCompatibility(
+      [alpha, beta],
+      catalogs,
+      [runs[0]!, evaluationSummary({ dataset_id: 'ds-b', run_id: 'run-b', suite_id: 'other-suite' })],
+    );
+    expect(result).toEqual({ compatible: false, reason: 'the datasets evaluated different suites' });
   });
 });
 
@@ -427,7 +552,7 @@ function evaluationSummary(
     kind: 'evaluation_summary',
     quality_state: 'live_in_progress',
     observed_at: '2026-09-17T00:00:00Z',
-    suite_id: 'north-star-25',
+    suite_id: 'default-suite',
     arm: 'platform',
     evaluation_unit: 'model',
     model_role_mapping: {},
@@ -493,7 +618,7 @@ describe('recentCampaignRows', () => {
       'init-campaign',
       'Exploratory baseline (2026-09-14 r2)',
     ]);
-    expect(rows[0]?.detail).toBe('north-star-25');
+    expect(rows[0]?.detail).toBe('default-suite');
     expect(rows[0]?.runId).toBe('eval-init-qwen3-4b-1789657337');
   });
 });

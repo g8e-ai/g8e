@@ -3,8 +3,8 @@ doc_id: devs
 title: Developer Guidelines
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - go.mod
   - Makefile
@@ -188,7 +188,7 @@ Selection, timeouts, race settings, fixtures, and CI scope live in the [Testing 
 | Doctrine references | `protocol/constants/doctrine/` and demo doctrine inputs | `make validate-doctrines` |
 | COSAiS overlays | Canonical overlay and doctrine references | `make validate-cosais` |
 
-The [Documentation Guide](docs.md#generated-and-machine-readable-documentation) owns the full matrix. The [Release Process](release_process.md) owns native evaluation and signed compliance evidence.
+The [Documentation Guide](docs.md#generated-outputs-inv-doc-gen) owns the full matrix. The [Release Process](release_process.md) owns native evaluation and signed compliance evidence.
 
 ### Doctrine (`INV-DOCTRINE`)
 
@@ -269,7 +269,7 @@ make lint
 ./g8e test summary
 ```
 
-2. `./g8e test unit` delegates to `make test-unit`. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
+2. `./g8e test unit` delegates to `make test-unit` by default, or accepts `--pkg` and `--run` for targeted unit testing. Other suites keep their own package and timeout flags inside the CLI. Reproduce a CI failure through the same entry point.
 3. Makefile entry points that this guide names: `make test`, `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, `make ensemble-test`, `make test-external`, `make dashboard-test`.
 4. Apply INV-TEST-12 and INV-TEST-13 before describing `e2e-full` or a Compose profile. Further selection and lifecycle rules are in the [Testing Guide](tests.md).
 
@@ -324,7 +324,7 @@ make lint
 ## Links out
 
 - [Code Map](codemap.md): package ownership, runtime modes, and the CLI group list. Gateway and outbound mode ownership is [Runtime Modes](codemap.md#runtime-modes).
-- [Testing Guide](tests.md): tiers, fixtures, `testutil` path rules, selection, race, coverage, and CI. `tests.md` still says `e2e-full` starts a `bootstrapped` Compose profile; that sentence disagrees with tip `docker-compose.yml` (INV-TEST-13).
+- [Testing Guide](tests.md): tiers, fixtures, `testutil` path rules, selection, race, coverage, and CI.
 - [Documentation Guide](docs.md): audit, catalog, style, generation, and the `docs/devs/` format.
 - [Release Process](release_process.md): versioning, native evaluation acceptance, and signed evidence.
 - [Governance](../architecture/governance.md) and [AI Agents and the g8e Governance Boundary](../architecture/agents.md): five-layer and posture model, and ingress limits.

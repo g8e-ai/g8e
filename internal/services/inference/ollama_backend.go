@@ -336,7 +336,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		case resp.StatusCode == http.StatusNotFound:
 			return nil, fmt.Errorf("ollama_backend: generate: %w: model %q", constants.ErrInferenceModelNotFound, req.Model)
 		case ollamaErrorIndicatesCapabilityUnsupported(resp.StatusCode, errorBody):
-			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceCapabilityUnsupported)
+			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceToolsUnsupported)
 		default:
 			return nil, fmt.Errorf("ollama_backend: generate: %w: status %d", constants.ErrInferenceGenerateFailed, resp.StatusCode)
 		}

@@ -22,13 +22,13 @@ func TestMaterializeCampaignSpec_BindsCatalogAndInventory(t *testing.T) {
 	t.Parallel()
 	catalog, _, err := LoadScenarioCatalog()
 	require.NoError(t, err)
-	inventory, err := MaterializeModelRegistry("north-star-smoke", []*evalv1.ModelVariant{testModelVariant()})
+	inventory, err := MaterializeModelRegistry("smoke-campaign", []*evalv1.ModelVariant{testModelVariant()})
 	require.NoError(t, err)
 
-	spec, err := MaterializeCampaignSpec("north-star-smoke", catalog, inventory, 0)
+	spec, err := MaterializeCampaignSpec("smoke-campaign", catalog, inventory, 0)
 	require.NoError(t, err)
 	assert.Equal(t, CampaignSchemaVersion, spec.GetSchemaVersion())
-	assert.Equal(t, "north-star-smoke", spec.GetCampaignId())
+	assert.Equal(t, "smoke-campaign", spec.GetCampaignId())
 	assert.Equal(t, uint32(1), spec.GetRepetitionCount())
 	assert.Equal(t, catalog.GetCatalogDigest(), spec.GetCatalogDigest())
 	assert.Equal(t, inventory.RegistryDigest, spec.GetModelRegistryDigest())
@@ -40,7 +40,7 @@ func TestMaterializeCampaignSpec_RejectsMissingInputs(t *testing.T) {
 	t.Parallel()
 	catalog, _, err := LoadScenarioCatalog()
 	require.NoError(t, err)
-	inventory, err := MaterializeModelRegistry("north-star-smoke", []*evalv1.ModelVariant{testModelVariant()})
+	inventory, err := MaterializeModelRegistry("smoke-campaign", []*evalv1.ModelVariant{testModelVariant()})
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -50,8 +50,8 @@ func TestMaterializeCampaignSpec_RejectsMissingInputs(t *testing.T) {
 		inventory  *ModelInventoryFreeze
 	}{
 		{name: "empty campaign id", campaignID: "", catalog: catalog, inventory: inventory},
-		{name: "nil catalog", campaignID: "north-star-smoke", catalog: nil, inventory: inventory},
-		{name: "nil inventory", campaignID: "north-star-smoke", catalog: catalog, inventory: nil},
+		{name: "nil catalog", campaignID: "smoke-campaign", catalog: nil, inventory: inventory},
+		{name: "nil inventory", campaignID: "smoke-campaign", catalog: catalog, inventory: nil},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

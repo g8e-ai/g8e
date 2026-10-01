@@ -27,7 +27,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/shared"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -44,6 +43,7 @@ type releasePrepareDeps struct {
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)
 	signingLoader  complianceReportSigningIdentityLoader
 	gatewayImage   func(ctx context.Context, container string) (string, error)
+	copyGatewayDB  func(ctx context.Context, container, destDir string) (string, error)
 	gitRevision    func(ctx context.Context, repoRoot string) (string, error)
 	newGenerateCmd func() *cobra.Command
 	newVerifyCmd   func() *cobra.Command
@@ -58,6 +58,7 @@ type releasePrepareOptions struct {
 	repoRoot           string
 	workDir            string
 	releaseDir         string
+	databasePath       string
 	reportID           string
 	windowStart        string
 	windowEnd          string
@@ -82,9 +83,14 @@ func complianceReleasePrepareCmdWithConfig(deps releasePrepareDeps) *cobra.Comma
 		Short: "Prepare, generate, verify, and project release compliance evidence",
 		Long: `Prepare the compliance evidence for the release named by VERSION.
 
+Run it with no flags against a running Gateway built from the release HEAD.
+The first run needs --new-key to create the report-signing key; later runs
+reuse it. Run from the repository root.
+
 The command derives the protected assessment scope from VERSION, git, the
-running Gateway image, and the assessment window; exports the bounded
-operational evidence for that window from the runtime database; builds the
+running Gateway image, and the assessment window; copies the Gateway database
+out of the container (or reads --db); exports the bounded
+operational evidence for that window from it; builds the
 external report and source-evidence trust policies from the report-signing
 identity and the signer keys actually present in the exported evidence;
 generates a public signed bundle; verifies it offline against those trust
@@ -92,9 +98,10 @@ policies; and projects the verified bundle into docs/release_notes/vX.Y.x/.
 
 The trust policies record a first-party engineering assessment. They are
 written outside the bundle and never confer external attestation. Generated
-scope, trust policies, and the source export stay under --work-dir; the
-report-signing private key is read from --signing-private-key and is never
-copied. The AI coding agent runs this command; it does not commit or tag.`,
+scope, trust policies, the database snapshot, and the source export stay under
+--work-dir; the report-signing private key is read from --signing-private-key
+(default: the runtime secrets directory) and is never copied. The AI coding
+agent runs this command; it does not commit or tag.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -109,6 +116,7 @@ copied. The AI coding agent runs this command; it does not commit or tag.`,
 	flags.StringVar(&opts.repoRoot, "repo-root", "", "Repository root holding VERSION and docs/release_notes (defaults to cwd)")
 	flags.StringVar(&opts.workDir, "work-dir", "", "Directory for the scope, trust policies, and source export (defaults to <project-root>/release-evidence/<version>)")
 	flags.StringVar(&opts.releaseDir, "release-dir", "", "Release notes directory receiving the projections (defaults to <repo-root>/docs/release_notes/vX.Y.x)")
+	flags.StringVar(&opts.databasePath, "db", "", "Gateway g8e.db to assess (defaults to a snapshot copied from --gateway-container into --work-dir)")
 	flags.StringVar(&opts.reportID, "report-id", "", "Immutable report bundle ID (defaults to <version>-gateway-operational-public)")
 	flags.StringVar(&opts.windowStart, "window-start", "", "Assessment window start, RFC 3339 (set with --window-end, or omit both to end the window at the newest ledger commitment)")
 	flags.StringVar(&opts.windowEnd, "window-end", "", "Assessment window end, RFC 3339 (set with --window-start, or omit both to end the window at the newest ledger commitment)")
@@ -120,9 +128,9 @@ copied. The AI coding agent runs this command; it does not commit or tag.`,
 	flags.StringVar(&opts.gatewayImageDigest, "gateway-image-digest", "", "Gateway image SHA-256 digest (defaults to the --gateway-container image)")
 	flags.StringVar(&opts.buildIdentity, "build-identity", "", "Build identity SHA-256 digest (defaults to the Gateway image digest)")
 	flags.StringVar(&opts.sourceRevision, "source-revision", "", "Source revision (defaults to git HEAD of --repo-root)")
-	flags.StringVar(&opts.signingMetadata, "signing-metadata", "", "Path to canonical report signing-key metadata")
-	flags.StringVar(&opts.signingPrivateKey, "signing-private-key", "", "Path to hex-encoded Ed25519 report private key")
-	flags.BoolVar(&opts.newKey, "new-key", false, "Generate the report-signing key at --signing-metadata and --signing-private-key; refuses to overwrite")
+	flags.StringVar(&opts.signingMetadata, "signing-metadata", "", "Path to canonical report signing-key metadata (defaults to the runtime secrets directory; set with --signing-private-key)")
+	flags.StringVar(&opts.signingPrivateKey, "signing-private-key", "", "Path to hex-encoded Ed25519 report private key (defaults to the runtime secrets directory; set with --signing-metadata)")
+	flags.BoolVar(&opts.newKey, "new-key", false, "Generate the report-signing key at the signing key paths; refuses to overwrite")
 	flags.StringVar(&opts.assessor, "assessor", constants.ComplianceReleaseDefaultAssessor, "Assessor identity recorded in the first-party trust policies")
 	return cmd
 }
@@ -145,9 +153,6 @@ type releasePrepareContext struct {
 }
 
 func runReleasePrepare(ctx context.Context, deps releasePrepareDeps, opts releasePrepareOptions, stdout, stderr io.Writer) error {
-	if strings.TrimSpace(opts.signingMetadata) == "" || strings.TrimSpace(opts.signingPrivateKey) == "" {
-		return fmt.Errorf("%w: --signing-metadata and --signing-private-key are required", constants.ErrValidationFailed)
-	}
 	if opts.maxRows <= 0 || opts.windowSpan <= 0 {
 		return fmt.Errorf("%w: --max-rows and --window-span must be positive", constants.ErrValidationFailed)
 	}
@@ -160,7 +165,18 @@ func runReleasePrepare(ctx context.Context, deps releasePrepareDeps, opts releas
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
-	dbPath := pathutil.ResolveDBPath(fileSvc.Resolve(constants.DataDirname), constants.DbFilename)
+	if err := resolveSigningKeyPaths(&opts, fileSvc.Resolve(constants.SecretsDirname)); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(prepared.workDir, constants.PermDirPrivate); err != nil {
+		return fmt.Errorf("%w: create release work directory: %w", constants.ErrDirCreateFailed, err)
+	}
+	dbPath := opts.databasePath
+	if dbPath == "" {
+		if dbPath, err = deps.copyGatewayDB(ctx, opts.gatewayContainer, filepath.Join(prepared.workDir, constants.ComplianceReleaseSnapshotDirname)); err != nil {
+			return err
+		}
+	}
 	if err := resolveReleaseWindow(ctx, dbPath, opts, prepared); err != nil {
 		return err
 	}
@@ -194,9 +210,6 @@ func runReleasePrepare(ctx context.Context, deps releasePrepareDeps, opts releas
 	})
 	if err != nil {
 		return err
-	}
-	if err := os.MkdirAll(prepared.workDir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("%w: create release work directory: %w", constants.ErrDirCreateFailed, err)
 	}
 	if err := writeCanonicalReleaseInput(prepared.scopePath, scope); err != nil {
 		return err
@@ -415,6 +428,31 @@ func resolveReleaseIdentity(ctx context.Context, deps releasePrepareDeps, opts *
 	return nil
 }
 
+// resolveSigningKeyPaths fills the report-signing key paths from the runtime
+// secrets directory when neither flag is set, and rejects a lone path. Without
+// --new-key both files must already exist, so a missing key is reported with
+// the command that creates it instead of a bare open error.
+func resolveSigningKeyPaths(opts *releasePrepareOptions, secretsDir string) error {
+	opts.signingMetadata = strings.TrimSpace(opts.signingMetadata)
+	opts.signingPrivateKey = strings.TrimSpace(opts.signingPrivateKey)
+	switch {
+	case opts.signingMetadata == "" && opts.signingPrivateKey == "":
+		opts.signingMetadata = filepath.Join(secretsDir, constants.ComplianceReleaseSigningMetadataFilename)
+		opts.signingPrivateKey = filepath.Join(secretsDir, constants.ComplianceReleaseSigningPrivateFilename)
+	case opts.signingMetadata == "" || opts.signingPrivateKey == "":
+		return fmt.Errorf("%w: set --signing-metadata and --signing-private-key together, or neither to use the runtime secrets directory", constants.ErrValidationFailed)
+	}
+	if opts.newKey {
+		return nil
+	}
+	for _, path := range []string{opts.signingMetadata, opts.signingPrivateKey} {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return fmt.Errorf("%w: report signing key file %s does not exist; run once with --new-key to create it", constants.ErrValidationFailed, path)
+		}
+	}
+	return nil
+}
+
 // writeNewReleaseSigningKey creates the report-signing key. It refuses to
 // overwrite an existing key so a release cannot silently rotate its identity.
 func writeNewReleaseSigningKey(random io.Reader, opts releasePrepareOptions, version string, now time.Time) error {
@@ -423,6 +461,9 @@ func writeNewReleaseSigningKey(random io.Reader, opts releasePrepareOptions, ver
 			return fmt.Errorf("%w: refusing to overwrite existing signing key file %s", constants.ErrValidationFailed, path)
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("release-prepare: inspect signing key file %s: %w", path, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(path), constants.PermDirPrivate); err != nil {
+			return fmt.Errorf("%w: create signing key directory: %w", constants.ErrDirCreateFailed, err)
 		}
 	}
 	metadata, privateKey, err := compliancereport.GenerateReportSigningKey(random, version+constants.ComplianceReleaseSigningKeyIDSuffix, now, constants.ComplianceReleaseNewKeyLifetime)
@@ -491,6 +532,33 @@ func defaultGatewayImageDigest(ctx context.Context, container string) (string, e
 	return strings.TrimPrefix(strings.TrimSpace(string(output)), "sha256:"), nil
 }
 
+// defaultCopyGatewayDB copies the Gateway audit database out of the running
+// container into destDir and returns the copied database path. The database
+// is required; its -wal and -shm companions are copied when the container has
+// them. destDir is emptied first so a stale companion from an earlier run can
+// never be paired with a fresh database.
+func defaultCopyGatewayDB(ctx context.Context, container, destDir string) (string, error) {
+	if err := os.RemoveAll(destDir); err != nil {
+		return "", fmt.Errorf("%w: clear Gateway snapshot directory: %w", constants.ErrFileWriteFailed, err)
+	}
+	if err := os.MkdirAll(destDir, constants.PermDirPrivate); err != nil {
+		return "", fmt.Errorf("%w: create Gateway snapshot directory: %w", constants.ErrDirCreateFailed, err)
+	}
+	dbPath := filepath.Join(destDir, constants.DbFilename)
+	for _, suffix := range []string{"", constants.SQLiteWALSuffix, constants.SQLiteSHMSuffix} {
+		source := container + ":" + constants.ContainerAuditVaultDB + suffix
+		output, err := exec.CommandContext(ctx, constants.DockerExecutable, "cp", source, dbPath+suffix).CombinedOutput()
+		switch {
+		case err == nil:
+		case suffix == "":
+			return "", fmt.Errorf("%w: copy Gateway database from container %q (is it running? use --db to assess a local copy): %w: %s", constants.ErrValidationFailed, container, err, strings.TrimSpace(string(output)))
+		default:
+			slog.Default().Debug("compliance: Gateway database companion not copied", "file", constants.DbFilename+suffix, "error", err)
+		}
+	}
+	return dbPath, nil
+}
+
 // defaultGitRevision reads the checked-out commit of the repository.
 func defaultGitRevision(ctx context.Context, repoRoot string) (string, error) {
 	output, err := exec.CommandContext(ctx, constants.ComplianceReleaseGitExecutable, "-C", repoRoot, "rev-parse", "HEAD").Output()
@@ -509,6 +577,7 @@ func newReleasePrepareDeps() releasePrepareDeps {
 		fileSvcFactory: shared.NewFileSvc,
 		signingLoader:  loadComplianceReportSigningIdentity,
 		gatewayImage:   defaultGatewayImageDigest,
+		copyGatewayDB:  defaultCopyGatewayDB,
 		gitRevision:    defaultGitRevision,
 		newGenerateCmd: func() *cobra.Command {
 			return complianceReportGenerateCmdWithConfig(shared.NewFileSvc, defaultProvenanceSourceFactory, loadComplianceReportSigningIdentity, time.Now)

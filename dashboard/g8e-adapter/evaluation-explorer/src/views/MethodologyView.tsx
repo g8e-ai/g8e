@@ -21,6 +21,7 @@ import {
   WORKSTATION_SPECS,
 } from '../content/platform';
 import { MODEL_ROLES } from '../content/roles';
+import { SCENARIO_CATALOG_ID, SCENARIO_CATEGORY_META } from '../content/scenario-task';
 import {
   DATASET_KINDS,
   FEED_RECORD_TYPES,
@@ -56,17 +57,10 @@ const DATASET_KIND_META: Record<
   },
 };
 
-const SCENARIO_COUNTS: Record<(typeof SCENARIO_CATEGORIES)[number], number> = {
-  instruction_adherence: 4,
-  tool_selection: 4,
-  tool_arguments: 3,
-  technical_analysis: 4,
-  routing_delegation: 3,
-  verification: 2,
-  security_policy: 3,
-  recovery: 2,
-  final_response: 1,
-};
+// Counts come from the generated scenario catalog, never from a hand-kept table.
+const SCENARIO_COUNTS = Object.fromEntries(
+  SCENARIO_CATEGORIES.map((category) => [category, SCENARIO_CATEGORY_META[category].count]),
+) as Record<(typeof SCENARIO_CATEGORIES)[number], number>;
 
 const ENGINEERING_RULES = [
   ['Missing metrics', 'Render Unavailable with reason — never zero'],
@@ -87,7 +81,7 @@ const EVALUATION_PROGRAMS = [
   },
   {
     name: 'Model campaign',
-    id: 'north-star-25@1.0.0',
+    id: SCENARIO_CATALOG_ID,
     purpose: 'Scores real models through production chat, governed inference, host tools, provider telemetry, and storage-side model provenance.',
     path: 'g8ee chat → Gateway → bound Inference / Data Operators + independent witnesses',
     excludes: 'No direct Ollama calls from the campaign CLI or g8ee',
@@ -631,7 +625,7 @@ export function MethodologyView() {
             </article>
           </div>
           <p className="docs-reading-note">
-            <strong>Read the UI in this order:</strong> dataset → role → quality state → denominator → metric. Never compare values across dataset boundaries or treat a live run as terminal evidence.
+            <strong>Read the UI in this order:</strong> dataset → role → quality state → denominator → metric. Compare values across dataset boundaries only where the Explorer offers it: the runs must declare the same provider environment and evaluated suites, and each stays a separate run that is never pooled or averaged. Never treat a live run as terminal evidence.
           </p>
         </DocsSection>
 

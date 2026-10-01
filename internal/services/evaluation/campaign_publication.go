@@ -193,7 +193,7 @@ func (c *CampaignPublicationCoordinator) publishAssignmentResultWithKey(
 	if err != nil {
 		return err
 	}
-	_, artifacts, err := LoadScenarioCatalog()
+	artifacts, err := c.store.LoadScenarioArtifacts(ctx, run.GetCampaignBinding().GetCampaignId(), catalog)
 	if err != nil {
 		return fmt.Errorf("evaluation: publish assignment result: load scenario artifacts: %w", err)
 	}
@@ -414,7 +414,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	}
 	verifiedRequests := make([]campaignFeedPublishRequest, 0, len(assignments))
 	if verified {
-		_, artifacts, err := LoadScenarioCatalog()
+		artifacts, err := c.store.LoadScenarioArtifacts(ctx, run.GetCampaignBinding().GetCampaignId(), catalog)
 		if err != nil {
 			return 0, fmt.Errorf("evaluation: publish run verification: load scenario artifacts: %w", err)
 		}
@@ -815,7 +815,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 	if err != nil {
 		return 0, err
 	}
-	_, artifacts, err := LoadScenarioCatalog()
+	artifacts, err := c.store.LoadScenarioArtifacts(ctx, run.GetCampaignBinding().GetCampaignId(), catalog)
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: publish run catch-up: load scenario artifacts: %w", err)
 	}
@@ -933,6 +933,22 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 	state, err := CollectRunAggregateState(assignments, results)
 	if err != nil {
 		return nil, nil, nil, nil, err
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	state.Suite = methodologySuiteFromCatalog(catalog)
+	if RunAggregateComplete(assignments, results, state) {
+		// Only a finished run claims an environment: a live dataset is
+		// provisional and must not be matched against another run's.
+		reader, err := NewCampaignProviderObservationReaderWithRemote(c.files, c.observationRemote)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		if state.ProviderEnvironment, err = reader.ObservedProviderEnvironment(ctx, results); err != nil {
+			return nil, nil, nil, nil, err
+		}
 	}
 	return run, assignments, results, state, nil
 }

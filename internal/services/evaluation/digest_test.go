@@ -34,7 +34,7 @@ func testCampaignSpec() *evalv1.EvaluationCampaignSpec {
 	return &evalv1.EvaluationCampaignSpec{
 		SchemaVersion:       CampaignSchemaVersion,
 		CampaignId:          "phase1a-smoke",
-		CatalogRef:          &compliancev1.VersionedReference{Id: "north-star-25", Version: "1.0.0"},
+		CatalogRef:          &compliancev1.VersionedReference{Id: DefaultSuiteID, Version: "1.0.0"},
 		CatalogDigest:       repeatHex('a', 64),
 		ModelRegistry:       []*evalv1.ModelVariant{testModelVariant()},
 		ModelRegistryDigest: repeatHex('c', 64),
@@ -47,7 +47,7 @@ func testCampaignSpec() *evalv1.EvaluationCampaignSpec {
 func testScenarioCatalog() *evalv1.EvaluationScenarioCatalog {
 	return &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: CampaignSchemaVersion,
-		CatalogRef:    &compliancev1.VersionedReference{Id: "north-star-25", Version: "1.0.0"},
+		CatalogRef:    &compliancev1.VersionedReference{Id: DefaultSuiteID, Version: "1.0.0"},
 		Scenarios: []*evalv1.EvaluationScenarioDefinition{
 			{
 				ScenarioId:        "instruction-exact-1",

@@ -98,6 +98,38 @@ class PublicGradeExplanationCode(int, metaclass=_enum_type_wrapper.EnumTypeWrapp
     PUBLIC_GRADE_EXPLANATION_CODE_INVALID_EVIDENCE: _ClassVar[PublicGradeExplanationCode]
     PUBLIC_GRADE_EXPLANATION_CODE_GRADER_UNAVAILABLE: _ClassVar[PublicGradeExplanationCode]
 
+class EvaluationTrajectoryPolicy(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED: _ClassVar[EvaluationTrajectoryPolicy]
+    EVALUATION_TRAJECTORY_POLICY_ANSWER: _ClassVar[EvaluationTrajectoryPolicy]
+    EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE: _ClassVar[EvaluationTrajectoryPolicy]
+    EVALUATION_TRAJECTORY_POLICY_GUIDED: _ClassVar[EvaluationTrajectoryPolicy]
+    EVALUATION_TRAJECTORY_POLICY_GOVERNED: _ClassVar[EvaluationTrajectoryPolicy]
+
+class EvaluationTrajectoryOutcome(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_DIRECT: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_RECOVERED: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED: _ClassVar[EvaluationTrajectoryOutcome]
+    EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION: _ClassVar[EvaluationTrajectoryOutcome]
+
+class EvaluationHintArgumentSource(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED: _ClassVar[EvaluationHintArgumentSource]
+    EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT: _ClassVar[EvaluationHintArgumentSource]
+    EVALUATION_HINT_ARGUMENT_SOURCE_SEED: _ClassVar[EvaluationHintArgumentSource]
+    EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE: _ClassVar[EvaluationHintArgumentSource]
+    EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT: _ClassVar[EvaluationHintArgumentSource]
+    EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED: _ClassVar[EvaluationHintArgumentSource]
+
 class PublicActivityAvailability(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     PUBLIC_ACTIVITY_AVAILABILITY_UNSPECIFIED: _ClassVar[PublicActivityAvailability]
@@ -339,6 +371,29 @@ PUBLIC_GRADE_EXPLANATION_CODE_EVIDENCE_UNAVAILABLE: PublicGradeExplanationCode
 PUBLIC_GRADE_EXPLANATION_CODE_UNSUPPORTED: PublicGradeExplanationCode
 PUBLIC_GRADE_EXPLANATION_CODE_INVALID_EVIDENCE: PublicGradeExplanationCode
 PUBLIC_GRADE_EXPLANATION_CODE_GRADER_UNAVAILABLE: PublicGradeExplanationCode
+EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED: EvaluationTrajectoryPolicy
+EVALUATION_TRAJECTORY_POLICY_ANSWER: EvaluationTrajectoryPolicy
+EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE: EvaluationTrajectoryPolicy
+EVALUATION_TRAJECTORY_POLICY_GUIDED: EvaluationTrajectoryPolicy
+EVALUATION_TRAJECTORY_POLICY_GOVERNED: EvaluationTrajectoryPolicy
+EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_DIRECT: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_RECOVERED: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED: EvaluationTrajectoryOutcome
+EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION: EvaluationTrajectoryOutcome
+EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED: EvaluationHintArgumentSource
+EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT: EvaluationHintArgumentSource
+EVALUATION_HINT_ARGUMENT_SOURCE_SEED: EvaluationHintArgumentSource
+EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE: EvaluationHintArgumentSource
+EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT: EvaluationHintArgumentSource
+EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED: EvaluationHintArgumentSource
 PUBLIC_ACTIVITY_AVAILABILITY_UNSPECIFIED: PublicActivityAvailability
 PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED: PublicActivityAvailability
 PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE: PublicActivityAvailability
@@ -771,8 +826,26 @@ class PublicToolScoreDimensionRequirement(_message.Message):
     required: bool
     def __init__(self, dimension: _Optional[_Union[PublicToolScoreDimension, str]] = ..., required: _Optional[bool] = ...) -> None: ...
 
+class PromptHintArgument(_message.Message):
+    __slots__ = ("argument_name", "source", "tool_name")
+    ARGUMENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_FIELD_NUMBER: _ClassVar[int]
+    TOOL_NAME_FIELD_NUMBER: _ClassVar[int]
+    argument_name: str
+    source: EvaluationHintArgumentSource
+    tool_name: str
+    def __init__(self, argument_name: _Optional[str] = ..., source: _Optional[_Union[EvaluationHintArgumentSource, str]] = ..., tool_name: _Optional[str] = ...) -> None: ...
+
+class PromptHint(_message.Message):
+    __slots__ = ("hinted_tools", "arguments")
+    HINTED_TOOLS_FIELD_NUMBER: _ClassVar[int]
+    ARGUMENTS_FIELD_NUMBER: _ClassVar[int]
+    hinted_tools: _containers.RepeatedScalarFieldContainer[str]
+    arguments: _containers.RepeatedCompositeFieldContainer[PromptHintArgument]
+    def __init__(self, hinted_tools: _Optional[_Iterable[str]] = ..., arguments: _Optional[_Iterable[_Union[PromptHintArgument, _Mapping]]] = ...) -> None: ...
+
 class EvaluationScenarioDefinition(_message.Message):
-    __slots__ = ("scenario_id", "scenario_version", "category", "public_description", "grading_method", "allowed_tools", "expected_tools", "forbidden_tools", "input_fixture_ref", "required_concepts", "gold_criteria_ref", "public_criteria", "public_tool_score_dimensions", "eligible_roles")
+    __slots__ = ("scenario_id", "scenario_version", "category", "public_description", "grading_method", "allowed_tools", "expected_tools", "forbidden_tools", "input_fixture_ref", "required_concepts", "gold_criteria_ref", "public_criteria", "public_tool_score_dimensions", "eligible_roles", "trajectory_policy", "prompt_hint")
     SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
     SCENARIO_VERSION_FIELD_NUMBER: _ClassVar[int]
     CATEGORY_FIELD_NUMBER: _ClassVar[int]
@@ -787,6 +860,8 @@ class EvaluationScenarioDefinition(_message.Message):
     PUBLIC_CRITERIA_FIELD_NUMBER: _ClassVar[int]
     PUBLIC_TOOL_SCORE_DIMENSIONS_FIELD_NUMBER: _ClassVar[int]
     ELIGIBLE_ROLES_FIELD_NUMBER: _ClassVar[int]
+    TRAJECTORY_POLICY_FIELD_NUMBER: _ClassVar[int]
+    PROMPT_HINT_FIELD_NUMBER: _ClassVar[int]
     scenario_id: str
     scenario_version: str
     category: EvaluationScenarioCategory
@@ -801,7 +876,9 @@ class EvaluationScenarioDefinition(_message.Message):
     public_criteria: _containers.RepeatedCompositeFieldContainer[PublicScenarioCriterion]
     public_tool_score_dimensions: _containers.RepeatedCompositeFieldContainer[PublicToolScoreDimensionRequirement]
     eligible_roles: _containers.RepeatedScalarFieldContainer[ModelCampaignRole]
-    def __init__(self, scenario_id: _Optional[str] = ..., scenario_version: _Optional[str] = ..., category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., public_description: _Optional[str] = ..., grading_method: _Optional[_Union[EvaluationGradingMethod, str]] = ..., allowed_tools: _Optional[_Iterable[str]] = ..., expected_tools: _Optional[_Iterable[str]] = ..., forbidden_tools: _Optional[_Iterable[str]] = ..., input_fixture_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., required_concepts: _Optional[_Iterable[str]] = ..., gold_criteria_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., public_criteria: _Optional[_Iterable[_Union[PublicScenarioCriterion, _Mapping]]] = ..., public_tool_score_dimensions: _Optional[_Iterable[_Union[PublicToolScoreDimensionRequirement, _Mapping]]] = ..., eligible_roles: _Optional[_Iterable[_Union[ModelCampaignRole, str]]] = ...) -> None: ...
+    trajectory_policy: EvaluationTrajectoryPolicy
+    prompt_hint: PromptHint
+    def __init__(self, scenario_id: _Optional[str] = ..., scenario_version: _Optional[str] = ..., category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., public_description: _Optional[str] = ..., grading_method: _Optional[_Union[EvaluationGradingMethod, str]] = ..., allowed_tools: _Optional[_Iterable[str]] = ..., expected_tools: _Optional[_Iterable[str]] = ..., forbidden_tools: _Optional[_Iterable[str]] = ..., input_fixture_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., required_concepts: _Optional[_Iterable[str]] = ..., gold_criteria_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., public_criteria: _Optional[_Iterable[_Union[PublicScenarioCriterion, _Mapping]]] = ..., public_tool_score_dimensions: _Optional[_Iterable[_Union[PublicToolScoreDimensionRequirement, _Mapping]]] = ..., eligible_roles: _Optional[_Iterable[_Union[ModelCampaignRole, str]]] = ..., trajectory_policy: _Optional[_Union[EvaluationTrajectoryPolicy, str]] = ..., prompt_hint: _Optional[_Union[PromptHint, _Mapping]] = ...) -> None: ...
 
 class ModelVariant(_message.Message):
     __slots__ = ("variant_id", "provider_class", "served_model_tag", "model_digest", "model_family", "parameter_count", "quantization", "context_limit", "capability_observations")
@@ -1066,7 +1143,7 @@ class ModelProvenanceObservationCompleted(_message.Message):
     def __init__(self, window: _Optional[_Union[ModelProvenanceAttestationWindow, _Mapping]] = ...) -> None: ...
 
 class ModelInferenceRecord(_message.Message):
-    __slots__ = ("inference_record_id", "provider_attempt_id", "assignment_id", "evaluation_attempt_id", "model_role", "agent_persona", "call_site", "model_variant", "temperature", "top_p", "top_k", "seed", "max_output_tokens", "input_hash", "output_hash", "usage_availability", "prompt_tokens", "completion_tokens", "thinking_tokens", "cache_tokens", "request_started_at_unix_nanos", "first_token_at_unix_nanos", "generation_duration_nanos", "total_duration_nanos", "load_duration_nanos", "load_state", "retry_count", "finish_reason", "privacy_attested", "governed_receipt_ref", "result_digest", "provider_boundary_observation_ref")
+    __slots__ = ("inference_record_id", "provider_attempt_id", "assignment_id", "evaluation_attempt_id", "model_role", "agent_persona", "call_site", "model_variant", "temperature", "top_p", "top_k", "seed", "max_output_tokens", "input_hash", "output_hash", "usage_availability", "prompt_tokens", "completion_tokens", "thinking_tokens", "cache_tokens", "request_started_at_unix_nanos", "first_token_at_unix_nanos", "generation_duration_nanos", "total_duration_nanos", "load_duration_nanos", "load_state", "retry_count", "finish_reason", "privacy_attested", "governed_receipt_ref", "result_digest", "provider_boundary_observation_ref", "tools_declared", "tools_declared_reported")
     INFERENCE_RECORD_ID_FIELD_NUMBER: _ClassVar[int]
     PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
     ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -1099,6 +1176,8 @@ class ModelInferenceRecord(_message.Message):
     GOVERNED_RECEIPT_REF_FIELD_NUMBER: _ClassVar[int]
     RESULT_DIGEST_FIELD_NUMBER: _ClassVar[int]
     PROVIDER_BOUNDARY_OBSERVATION_REF_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_DECLARED_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_DECLARED_REPORTED_FIELD_NUMBER: _ClassVar[int]
     inference_record_id: str
     provider_attempt_id: str
     assignment_id: str
@@ -1131,7 +1210,9 @@ class ModelInferenceRecord(_message.Message):
     governed_receipt_ref: _compliance_pb2.ComplianceEvidenceReference
     result_digest: str
     provider_boundary_observation_ref: _compliance_pb2.ComplianceEvidenceReference
-    def __init__(self, inference_record_id: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., model_role: _Optional[_Union[ModelCampaignRole, str]] = ..., agent_persona: _Optional[str] = ..., call_site: _Optional[str] = ..., model_variant: _Optional[_Union[ModelVariant, _Mapping]] = ..., temperature: _Optional[float] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., seed: _Optional[int] = ..., max_output_tokens: _Optional[int] = ..., input_hash: _Optional[str] = ..., output_hash: _Optional[str] = ..., usage_availability: _Optional[_Union[EvaluationUsageAvailability, str]] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., thinking_tokens: _Optional[int] = ..., cache_tokens: _Optional[int] = ..., request_started_at_unix_nanos: _Optional[int] = ..., first_token_at_unix_nanos: _Optional[int] = ..., generation_duration_nanos: _Optional[int] = ..., total_duration_nanos: _Optional[int] = ..., load_duration_nanos: _Optional[int] = ..., load_state: _Optional[_Union[EvaluationLoadState, str]] = ..., retry_count: _Optional[int] = ..., finish_reason: _Optional[str] = ..., privacy_attested: _Optional[bool] = ..., governed_receipt_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., result_digest: _Optional[str] = ..., provider_boundary_observation_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ...) -> None: ...
+    tools_declared: _containers.RepeatedScalarFieldContainer[str]
+    tools_declared_reported: bool
+    def __init__(self, inference_record_id: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., model_role: _Optional[_Union[ModelCampaignRole, str]] = ..., agent_persona: _Optional[str] = ..., call_site: _Optional[str] = ..., model_variant: _Optional[_Union[ModelVariant, _Mapping]] = ..., temperature: _Optional[float] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., seed: _Optional[int] = ..., max_output_tokens: _Optional[int] = ..., input_hash: _Optional[str] = ..., output_hash: _Optional[str] = ..., usage_availability: _Optional[_Union[EvaluationUsageAvailability, str]] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., thinking_tokens: _Optional[int] = ..., cache_tokens: _Optional[int] = ..., request_started_at_unix_nanos: _Optional[int] = ..., first_token_at_unix_nanos: _Optional[int] = ..., generation_duration_nanos: _Optional[int] = ..., total_duration_nanos: _Optional[int] = ..., load_duration_nanos: _Optional[int] = ..., load_state: _Optional[_Union[EvaluationLoadState, str]] = ..., retry_count: _Optional[int] = ..., finish_reason: _Optional[str] = ..., privacy_attested: _Optional[bool] = ..., governed_receipt_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., result_digest: _Optional[str] = ..., provider_boundary_observation_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., tools_declared: _Optional[_Iterable[str]] = ..., tools_declared_reported: _Optional[bool] = ...) -> None: ...
 
 class ToolDecisionRecord(_message.Message):
     __slots__ = ("decision_id", "assignment_id", "tool_name", "recognized", "selected", "permission_compliant", "unnecessary", "outcome")
@@ -1154,7 +1235,7 @@ class ToolDecisionRecord(_message.Message):
     def __init__(self, decision_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., tool_name: _Optional[str] = ..., recognized: _Optional[bool] = ..., selected: _Optional[bool] = ..., permission_compliant: _Optional[bool] = ..., unnecessary: _Optional[bool] = ..., outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ...) -> None: ...
 
 class ToolCallRecord(_message.Message):
-    __slots__ = ("call_id", "assignment_id", "tool_name", "arguments_hash", "schema_outcome", "semantic_outcome", "governed_binding_ref")
+    __slots__ = ("call_id", "assignment_id", "tool_name", "arguments_hash", "schema_outcome", "semantic_outcome", "governed_binding_ref", "loop_turn", "error_type", "guidance_shown")
     CALL_ID_FIELD_NUMBER: _ClassVar[int]
     ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
     TOOL_NAME_FIELD_NUMBER: _ClassVar[int]
@@ -1162,6 +1243,9 @@ class ToolCallRecord(_message.Message):
     SCHEMA_OUTCOME_FIELD_NUMBER: _ClassVar[int]
     SEMANTIC_OUTCOME_FIELD_NUMBER: _ClassVar[int]
     GOVERNED_BINDING_REF_FIELD_NUMBER: _ClassVar[int]
+    LOOP_TURN_FIELD_NUMBER: _ClassVar[int]
+    ERROR_TYPE_FIELD_NUMBER: _ClassVar[int]
+    GUIDANCE_SHOWN_FIELD_NUMBER: _ClassVar[int]
     call_id: str
     assignment_id: str
     tool_name: str
@@ -1169,7 +1253,10 @@ class ToolCallRecord(_message.Message):
     schema_outcome: EvaluationVerdictStatus
     semantic_outcome: EvaluationVerdictStatus
     governed_binding_ref: _compliance_pb2.ComplianceEvidenceReference
-    def __init__(self, call_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., tool_name: _Optional[str] = ..., arguments_hash: _Optional[str] = ..., schema_outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., semantic_outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., governed_binding_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ...) -> None: ...
+    loop_turn: int
+    error_type: str
+    guidance_shown: bool
+    def __init__(self, call_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., tool_name: _Optional[str] = ..., arguments_hash: _Optional[str] = ..., schema_outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., semantic_outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., governed_binding_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., loop_turn: _Optional[int] = ..., error_type: _Optional[str] = ..., guidance_shown: _Optional[bool] = ...) -> None: ...
 
 class EscalationRecord(_message.Message):
     __slots__ = ("escalation_id", "assignment_id", "from_role", "to_role", "justified", "reason_code")
@@ -1310,7 +1397,7 @@ class PolicyDecisionRecord(_message.Message):
     def __init__(self, decision_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., tool_name: _Optional[str] = ..., outcome: _Optional[_Union[EvaluationPolicyDecisionOutcome, str]] = ..., detail: _Optional[str] = ...) -> None: ...
 
 class EvaluationAssignmentResult(_message.Message):
-    __slots__ = ("schema_version", "assignment_id", "run_id", "campaign_id", "lane", "lifecycle_status", "result_digest", "model_inferences", "tool_decisions", "tool_calls", "escalations", "handoffs", "recoveries", "governed_actions", "deterministic_grades", "semantic_grades", "decomposed_scores", "grader_calls", "evidence_refs", "completed_at", "policy_decisions", "tool_decisions_captured", "tool_calls_captured", "governed_actions_captured", "policy_decisions_captured", "scored_inference_span_nanos")
+    __slots__ = ("schema_version", "assignment_id", "run_id", "campaign_id", "lane", "lifecycle_status", "result_digest", "model_inferences", "tool_decisions", "tool_calls", "escalations", "handoffs", "recoveries", "governed_actions", "deterministic_grades", "semantic_grades", "decomposed_scores", "grader_calls", "evidence_refs", "completed_at", "policy_decisions", "tool_decisions_captured", "tool_calls_captured", "governed_actions_captured", "policy_decisions_captured", "scored_inference_span_nanos", "trajectory_outcome", "guided_retry_count", "failure_reason", "public_failure_reason")
     SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
     RUN_ID_FIELD_NUMBER: _ClassVar[int]
@@ -1337,6 +1424,10 @@ class EvaluationAssignmentResult(_message.Message):
     GOVERNED_ACTIONS_CAPTURED_FIELD_NUMBER: _ClassVar[int]
     POLICY_DECISIONS_CAPTURED_FIELD_NUMBER: _ClassVar[int]
     SCORED_INFERENCE_SPAN_NANOS_FIELD_NUMBER: _ClassVar[int]
+    TRAJECTORY_OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    GUIDED_RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_REASON_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_FAILURE_REASON_FIELD_NUMBER: _ClassVar[int]
     schema_version: str
     assignment_id: str
     run_id: str
@@ -1363,7 +1454,11 @@ class EvaluationAssignmentResult(_message.Message):
     governed_actions_captured: bool
     policy_decisions_captured: bool
     scored_inference_span_nanos: int
-    def __init__(self, schema_version: _Optional[str] = ..., assignment_id: _Optional[str] = ..., run_id: _Optional[str] = ..., campaign_id: _Optional[str] = ..., lane: _Optional[_Union[EvaluationLane, str]] = ..., lifecycle_status: _Optional[_Union[EvaluationAssignmentLifecycleStatus, str]] = ..., result_digest: _Optional[str] = ..., model_inferences: _Optional[_Iterable[_Union[ModelInferenceRecord, _Mapping]]] = ..., tool_decisions: _Optional[_Iterable[_Union[ToolDecisionRecord, _Mapping]]] = ..., tool_calls: _Optional[_Iterable[_Union[ToolCallRecord, _Mapping]]] = ..., escalations: _Optional[_Iterable[_Union[EscalationRecord, _Mapping]]] = ..., handoffs: _Optional[_Iterable[_Union[HandoffRecord, _Mapping]]] = ..., recoveries: _Optional[_Iterable[_Union[RecoveryRecord, _Mapping]]] = ..., governed_actions: _Optional[_Iterable[_Union[GovernedActionBinding, _Mapping]]] = ..., deterministic_grades: _Optional[_Iterable[_Union[DeterministicGrade, _Mapping]]] = ..., semantic_grades: _Optional[_Iterable[_Union[SemanticGrade, _Mapping]]] = ..., decomposed_scores: _Optional[_Iterable[_Union[DecomposedScoreRecord, _Mapping]]] = ..., grader_calls: _Optional[_Iterable[_Union[GraderModelCallRecord, _Mapping]]] = ..., evidence_refs: _Optional[_Iterable[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., policy_decisions: _Optional[_Iterable[_Union[PolicyDecisionRecord, _Mapping]]] = ..., tool_decisions_captured: _Optional[bool] = ..., tool_calls_captured: _Optional[bool] = ..., governed_actions_captured: _Optional[bool] = ..., policy_decisions_captured: _Optional[bool] = ..., scored_inference_span_nanos: _Optional[int] = ...) -> None: ...
+    trajectory_outcome: EvaluationTrajectoryOutcome
+    guided_retry_count: int
+    failure_reason: str
+    public_failure_reason: str
+    def __init__(self, schema_version: _Optional[str] = ..., assignment_id: _Optional[str] = ..., run_id: _Optional[str] = ..., campaign_id: _Optional[str] = ..., lane: _Optional[_Union[EvaluationLane, str]] = ..., lifecycle_status: _Optional[_Union[EvaluationAssignmentLifecycleStatus, str]] = ..., result_digest: _Optional[str] = ..., model_inferences: _Optional[_Iterable[_Union[ModelInferenceRecord, _Mapping]]] = ..., tool_decisions: _Optional[_Iterable[_Union[ToolDecisionRecord, _Mapping]]] = ..., tool_calls: _Optional[_Iterable[_Union[ToolCallRecord, _Mapping]]] = ..., escalations: _Optional[_Iterable[_Union[EscalationRecord, _Mapping]]] = ..., handoffs: _Optional[_Iterable[_Union[HandoffRecord, _Mapping]]] = ..., recoveries: _Optional[_Iterable[_Union[RecoveryRecord, _Mapping]]] = ..., governed_actions: _Optional[_Iterable[_Union[GovernedActionBinding, _Mapping]]] = ..., deterministic_grades: _Optional[_Iterable[_Union[DeterministicGrade, _Mapping]]] = ..., semantic_grades: _Optional[_Iterable[_Union[SemanticGrade, _Mapping]]] = ..., decomposed_scores: _Optional[_Iterable[_Union[DecomposedScoreRecord, _Mapping]]] = ..., grader_calls: _Optional[_Iterable[_Union[GraderModelCallRecord, _Mapping]]] = ..., evidence_refs: _Optional[_Iterable[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., policy_decisions: _Optional[_Iterable[_Union[PolicyDecisionRecord, _Mapping]]] = ..., tool_decisions_captured: _Optional[bool] = ..., tool_calls_captured: _Optional[bool] = ..., governed_actions_captured: _Optional[bool] = ..., policy_decisions_captured: _Optional[bool] = ..., scored_inference_span_nanos: _Optional[int] = ..., trajectory_outcome: _Optional[_Union[EvaluationTrajectoryOutcome, str]] = ..., guided_retry_count: _Optional[int] = ..., failure_reason: _Optional[str] = ..., public_failure_reason: _Optional[str] = ...) -> None: ...
 
 class CampaignComplianceSourceArtifact(_message.Message):
     __slots__ = ("runtime_path", "sha256", "media_type")
@@ -1576,7 +1671,7 @@ class PublicModelCallSummary(_message.Message):
     def __init__(self, assignment_id: _Optional[str] = ..., inference_record_id: _Optional[str] = ..., model_role: _Optional[_Union[ModelCampaignRole, str]] = ..., agent_persona: _Optional[str] = ..., variant_id: _Optional[str] = ..., usage_availability: _Optional[_Union[EvaluationUsageAvailability, str]] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., first_token_at_unix_nanos: _Optional[int] = ..., generation_duration_nanos: _Optional[int] = ..., load_state: _Optional[_Union[EvaluationLoadState, str]] = ..., finish_reason: _Optional[str] = ..., input_hash: _Optional[str] = ..., output_hash: _Optional[str] = ...) -> None: ...
 
 class PublicScenarioSummary(_message.Message):
-    __slots__ = ("scenario_id", "scenario_version", "category", "public_description", "grading_method", "allowed_tools", "expected_tools", "forbidden_tools", "criteria", "tool_score_dimensions")
+    __slots__ = ("scenario_id", "scenario_version", "category", "public_description", "grading_method", "allowed_tools", "expected_tools", "forbidden_tools", "criteria", "tool_score_dimensions", "trajectory_policy", "prompt_hint")
     SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
     SCENARIO_VERSION_FIELD_NUMBER: _ClassVar[int]
     CATEGORY_FIELD_NUMBER: _ClassVar[int]
@@ -1587,6 +1682,8 @@ class PublicScenarioSummary(_message.Message):
     FORBIDDEN_TOOLS_FIELD_NUMBER: _ClassVar[int]
     CRITERIA_FIELD_NUMBER: _ClassVar[int]
     TOOL_SCORE_DIMENSIONS_FIELD_NUMBER: _ClassVar[int]
+    TRAJECTORY_POLICY_FIELD_NUMBER: _ClassVar[int]
+    PROMPT_HINT_FIELD_NUMBER: _ClassVar[int]
     scenario_id: str
     scenario_version: str
     category: EvaluationScenarioCategory
@@ -1597,7 +1694,9 @@ class PublicScenarioSummary(_message.Message):
     forbidden_tools: _containers.RepeatedScalarFieldContainer[str]
     criteria: _containers.RepeatedCompositeFieldContainer[PublicScenarioCriterion]
     tool_score_dimensions: _containers.RepeatedCompositeFieldContainer[PublicToolScoreDimensionRequirement]
-    def __init__(self, scenario_id: _Optional[str] = ..., scenario_version: _Optional[str] = ..., category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., public_description: _Optional[str] = ..., grading_method: _Optional[_Union[EvaluationGradingMethod, str]] = ..., allowed_tools: _Optional[_Iterable[str]] = ..., expected_tools: _Optional[_Iterable[str]] = ..., forbidden_tools: _Optional[_Iterable[str]] = ..., criteria: _Optional[_Iterable[_Union[PublicScenarioCriterion, _Mapping]]] = ..., tool_score_dimensions: _Optional[_Iterable[_Union[PublicToolScoreDimensionRequirement, _Mapping]]] = ...) -> None: ...
+    trajectory_policy: EvaluationTrajectoryPolicy
+    prompt_hint: PromptHint
+    def __init__(self, scenario_id: _Optional[str] = ..., scenario_version: _Optional[str] = ..., category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., public_description: _Optional[str] = ..., grading_method: _Optional[_Union[EvaluationGradingMethod, str]] = ..., allowed_tools: _Optional[_Iterable[str]] = ..., expected_tools: _Optional[_Iterable[str]] = ..., forbidden_tools: _Optional[_Iterable[str]] = ..., criteria: _Optional[_Iterable[_Union[PublicScenarioCriterion, _Mapping]]] = ..., tool_score_dimensions: _Optional[_Iterable[_Union[PublicToolScoreDimensionRequirement, _Mapping]]] = ..., trajectory_policy: _Optional[_Union[EvaluationTrajectoryPolicy, str]] = ..., prompt_hint: _Optional[_Union[PromptHint, _Mapping]] = ...) -> None: ...
 
 class PublicSemanticGradeSummary(_message.Message):
     __slots__ = ("criterion_id", "status", "grading_method", "judge_variant_id", "explanation_code")
@@ -1662,16 +1761,22 @@ class PublicToolDecisionActivityRecord(_message.Message):
     def __init__(self, tool_label: _Optional[str] = ..., recognized: _Optional[bool] = ..., selected: _Optional[bool] = ..., permission_compliant: _Optional[bool] = ..., unnecessary: _Optional[bool] = ..., outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., evidence_source: _Optional[_Union[PublicEvidenceSource, str]] = ...) -> None: ...
 
 class PublicToolCallActivityRecord(_message.Message):
-    __slots__ = ("tool_label", "execution_outcome", "semantic_outcome", "evidence_source")
+    __slots__ = ("tool_label", "execution_outcome", "semantic_outcome", "evidence_source", "loop_turn", "error_type", "guidance_shown")
     TOOL_LABEL_FIELD_NUMBER: _ClassVar[int]
     EXECUTION_OUTCOME_FIELD_NUMBER: _ClassVar[int]
     SEMANTIC_OUTCOME_FIELD_NUMBER: _ClassVar[int]
     EVIDENCE_SOURCE_FIELD_NUMBER: _ClassVar[int]
+    LOOP_TURN_FIELD_NUMBER: _ClassVar[int]
+    ERROR_TYPE_FIELD_NUMBER: _ClassVar[int]
+    GUIDANCE_SHOWN_FIELD_NUMBER: _ClassVar[int]
     tool_label: str
     execution_outcome: EvaluationVerdictStatus
     semantic_outcome: EvaluationVerdictStatus
     evidence_source: PublicEvidenceSource
-    def __init__(self, tool_label: _Optional[str] = ..., execution_outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., semantic_outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., evidence_source: _Optional[_Union[PublicEvidenceSource, str]] = ...) -> None: ...
+    loop_turn: int
+    error_type: str
+    guidance_shown: bool
+    def __init__(self, tool_label: _Optional[str] = ..., execution_outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., semantic_outcome: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., evidence_source: _Optional[_Union[PublicEvidenceSource, str]] = ..., loop_turn: _Optional[int] = ..., error_type: _Optional[str] = ..., guidance_shown: _Optional[bool] = ...) -> None: ...
 
 class PublicPolicyDecisionActivityRecord(_message.Message):
     __slots__ = ("tool_label", "outcome", "evidence_source")
@@ -1786,7 +1891,7 @@ class PublicVerificationMetadata(_message.Message):
     def __init__(self, provenance: _Optional[_Union[PublicVerificationProvenance, str]] = ..., verifier_state: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., verifier_release_version: _Optional[str] = ..., verifier_contract_version: _Optional[str] = ..., report_digest: _Optional[str] = ..., population_digest: _Optional[str] = ...) -> None: ...
 
 class PublicAssignmentResultProjection(_message.Message):
-    __slots__ = ("assignment_id", "run_id", "scenario_id", "scenario_category", "lane", "designated_role", "variant_id", "lifecycle_status", "summary_status", "decomposed_scores", "result_digest", "verification_status", "unavailable_metric_reasons", "completed_at", "scenario_summary", "semantic_grade_summaries", "activity_summary", "evidence_bindings", "verification_metadata")
+    __slots__ = ("assignment_id", "run_id", "scenario_id", "scenario_category", "lane", "designated_role", "variant_id", "lifecycle_status", "summary_status", "decomposed_scores", "result_digest", "verification_status", "unavailable_metric_reasons", "completed_at", "scenario_summary", "semantic_grade_summaries", "activity_summary", "evidence_bindings", "verification_metadata", "trajectory_outcome", "guided_retry_count", "failure_reason", "tools_declared")
     ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
     RUN_ID_FIELD_NUMBER: _ClassVar[int]
     SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
@@ -1806,6 +1911,10 @@ class PublicAssignmentResultProjection(_message.Message):
     ACTIVITY_SUMMARY_FIELD_NUMBER: _ClassVar[int]
     EVIDENCE_BINDINGS_FIELD_NUMBER: _ClassVar[int]
     VERIFICATION_METADATA_FIELD_NUMBER: _ClassVar[int]
+    TRAJECTORY_OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    GUIDED_RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_REASON_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_DECLARED_FIELD_NUMBER: _ClassVar[int]
     assignment_id: str
     run_id: str
     scenario_id: str
@@ -1825,4 +1934,8 @@ class PublicAssignmentResultProjection(_message.Message):
     activity_summary: PublicAssignmentActivitySummary
     evidence_bindings: _containers.RepeatedCompositeFieldContainer[PublicEvidenceBinding]
     verification_metadata: PublicVerificationMetadata
-    def __init__(self, assignment_id: _Optional[str] = ..., run_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., scenario_category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., lane: _Optional[_Union[EvaluationLane, str]] = ..., designated_role: _Optional[_Union[ModelCampaignRole, str]] = ..., variant_id: _Optional[str] = ..., lifecycle_status: _Optional[_Union[EvaluationAssignmentLifecycleStatus, str]] = ..., summary_status: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., decomposed_scores: _Optional[_Iterable[_Union[DecomposedScoreRecord, _Mapping]]] = ..., result_digest: _Optional[str] = ..., verification_status: _Optional[str] = ..., unavailable_metric_reasons: _Optional[_Iterable[str]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., scenario_summary: _Optional[_Union[PublicScenarioSummary, _Mapping]] = ..., semantic_grade_summaries: _Optional[_Iterable[_Union[PublicSemanticGradeSummary, _Mapping]]] = ..., activity_summary: _Optional[_Union[PublicAssignmentActivitySummary, _Mapping]] = ..., evidence_bindings: _Optional[_Iterable[_Union[PublicEvidenceBinding, _Mapping]]] = ..., verification_metadata: _Optional[_Union[PublicVerificationMetadata, _Mapping]] = ...) -> None: ...
+    trajectory_outcome: EvaluationTrajectoryOutcome
+    guided_retry_count: int
+    failure_reason: str
+    tools_declared: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, assignment_id: _Optional[str] = ..., run_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., scenario_category: _Optional[_Union[EvaluationScenarioCategory, str]] = ..., lane: _Optional[_Union[EvaluationLane, str]] = ..., designated_role: _Optional[_Union[ModelCampaignRole, str]] = ..., variant_id: _Optional[str] = ..., lifecycle_status: _Optional[_Union[EvaluationAssignmentLifecycleStatus, str]] = ..., summary_status: _Optional[_Union[EvaluationVerdictStatus, str]] = ..., decomposed_scores: _Optional[_Iterable[_Union[DecomposedScoreRecord, _Mapping]]] = ..., result_digest: _Optional[str] = ..., verification_status: _Optional[str] = ..., unavailable_metric_reasons: _Optional[_Iterable[str]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., scenario_summary: _Optional[_Union[PublicScenarioSummary, _Mapping]] = ..., semantic_grade_summaries: _Optional[_Iterable[_Union[PublicSemanticGradeSummary, _Mapping]]] = ..., activity_summary: _Optional[_Union[PublicAssignmentActivitySummary, _Mapping]] = ..., evidence_bindings: _Optional[_Iterable[_Union[PublicEvidenceBinding, _Mapping]]] = ..., verification_metadata: _Optional[_Union[PublicVerificationMetadata, _Mapping]] = ..., trajectory_outcome: _Optional[_Union[EvaluationTrajectoryOutcome, str]] = ..., guided_retry_count: _Optional[int] = ..., failure_reason: _Optional[str] = ..., tools_declared: _Optional[_Iterable[str]] = ...) -> None: ...

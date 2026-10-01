@@ -236,6 +236,66 @@ describe('adaptCampaignProjectionEnvelope', () => {
     expect(started).toMatchObject({ completed: 2, total: 4 });
   });
 
+  it('keeps completed within total when restore publishes terminal assignments before queued ones', () => {
+    const context = createCampaignAdaptContext();
+    const terminalIds = ['assign-1', 'assign-2', 'assign-3'];
+    for (const assignmentId of terminalIds) {
+      adaptCampaignProjectionEnvelope(
+        {
+          schema_version: '1.0.0',
+          message_type: 'PublicAssignmentLifecycleRecord',
+          idempotency_key: `run-1:${assignmentId}:lifecycle:completed`,
+          record: {
+            assignment_id: assignmentId,
+            run_id: 'run-1',
+            scenario_id: 'instruction-exact-format',
+            lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+            observed_at: '2026-09-16T14:00:00.000Z',
+          },
+        },
+        context,
+      );
+      adaptCampaignProjectionEnvelope(
+        {
+          schema_version: '1.0.0',
+          message_type: 'PublicAssignmentResultProjection',
+          idempotency_key: `run-1:${assignmentId}:result`,
+          record: {
+            assignment_id: assignmentId,
+            run_id: 'run-1',
+            scenario_id: 'instruction-exact-format',
+            lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+            summary_status: 'EVALUATION_VERDICT_STATUS_PASS',
+            result_digest: '0'.repeat(64),
+            verification_status: 'unverified',
+            completed_at: '2026-09-16T14:00:05Z',
+          },
+        },
+        context,
+      );
+    }
+
+    const queued = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-4:lifecycle:queued',
+        record: {
+          assignment_id: 'assign-4',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+          observed_at: '2026-09-16T14:00:06Z',
+        },
+      },
+      context,
+    );
+
+    const stage = queued.find((record) => record.kind === 'stage_updated');
+    expect(stage).toMatchObject({ completed: 3, total: 3 });
+    expect(() => decodeViewRecord(stage!.kind, stage)).not.toThrow();
+  });
+
   it('caps live-event progress when a later model starts after the matrix is complete', () => {
     const context = createCampaignAdaptContext();
     const runId = 'run-multi-model';
@@ -805,7 +865,7 @@ describe('EvalStore campaign ingest', () => {
         observed_at: '2026-09-16T14:00:00.000Z',
         source_revision_label: 'g8e-eval-campaign',
         run_id: runId,
-        suite_id: 'north-star-25',
+        suite_id: 'default-suite',
         arm: 'homogeneous-model-role',
         evaluation_unit: 'model',
         model_role_mapping: {},

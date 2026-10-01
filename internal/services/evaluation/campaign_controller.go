@@ -183,6 +183,9 @@ func (c *CampaignController) StartRun(ctx context.Context, req RunStartRequest) 
 	if lane == evalv1.EvaluationLane_EVALUATION_LANE_UNSPECIFIED {
 		lane = evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE
 	}
+	if lane == evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE && len(spec.GetModelRegistry()) != 1 {
+		return nil, fmt.Errorf("evaluation: start run %q: campaign %q freezes %d models: %w", req.RunID, req.CampaignID, len(spec.GetModelRegistry()), constants.ErrEvaluationCampaignSubjectInvalid)
+	}
 	run := &evalv1.EvaluationRun{
 		SchemaVersion: CampaignSchemaVersion,
 		RunId:         req.RunID,
@@ -294,10 +297,9 @@ func (c *CampaignController) ScheduleHomogeneousRun(ctx context.Context, runID s
 		return 0, err
 	}
 	inventory := &ModelInventoryFreeze{
-		CampaignID:           spec.GetCampaignId(),
-		RegistryDigest:       spec.GetModelRegistryDigest(),
-		Variants:             spec.GetModelRegistry(),
-		HomogeneousCellCount: ComputeHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(spec.GetRepetitionCount()),
+		CampaignID:     spec.GetCampaignId(),
+		RegistryDigest: spec.GetModelRegistryDigest(),
+		Variants:       spec.GetModelRegistry(),
 	}
 	if err := ValidateHomogeneousAssignmentMatrix(catalog, inventory, spec.GetRepetitionCount(), assignments); err != nil {
 		return 0, err
@@ -336,30 +338,6 @@ func (c *CampaignController) GenerateFormationCatalogStackSet(ctx context.Contex
 		Seed:         seed,
 		Variants:     spec.GetModelRegistry(),
 		FormationIDs: formationIDs,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := c.store.SaveHeterogeneousStackSet(ctx, campaignID, stackSet); err != nil {
-		return nil, err
-	}
-	return stackSet, nil
-}
-
-// GenerateHeterogeneousStackSet materializes and persists the preregistered
-// heterogeneous stack set for one frozen campaign registry.
-func (c *CampaignController) GenerateHeterogeneousStackSet(ctx context.Context, campaignID string, seed uint64) (*HeterogeneousStackSet, error) {
-	if c == nil || c.store == nil {
-		return nil, fmt.Errorf("evaluation: generate heterogeneous stack set: %w", constants.ErrMissingRequiredField)
-	}
-	spec, err := c.store.LoadCampaignSpec(ctx, campaignID)
-	if err != nil {
-		return nil, err
-	}
-	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: campaignID,
-		Seed:       seed,
-		Variants:   spec.GetModelRegistry(),
 	})
 	if err != nil {
 		return nil, err
@@ -443,9 +421,9 @@ func (c *CampaignController) RunSummary(ctx context.Context, runID string) (*Cam
 	if err != nil {
 		return nil, err
 	}
-	repetition := spec.GetRepetitionCount()
-	if repetition == 0 {
-		repetition = 1
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return nil, err
 	}
 	var expected uint64
 	switch run.GetLane() {
@@ -454,9 +432,9 @@ func (c *CampaignController) RunSummary(ctx context.Context, runID string) (*Cam
 		if err != nil {
 			return nil, err
 		}
-		expected = ComputeHeterogeneousMatrixSize(uint64(len(stackSet.Stacks)))
+		expected = FormationMatrixSize(catalog, uint64(len(stackSet.Stacks)))
 	default:
-		expected = ComputeHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(repetition)
+		expected = ModelRoleMatrixSize(catalog, uint64(len(spec.GetModelRegistry())), spec.GetRepetitionCount())
 	}
 	summary := &CampaignRunSummary{
 		Run:                run,
@@ -651,8 +629,10 @@ func scenarioToolsForAssignment(catalog *evalv1.EvaluationScenarioCatalog, assig
 	for _, scenario := range catalog.GetScenarios() {
 		if scenario.GetScenarioId() == assignment.GetScenarioId() {
 			return ScenarioToolExpectations{
-				ExpectedTools:  append([]string(nil), scenario.GetExpectedTools()...),
-				ForbiddenTools: append([]string(nil), scenario.GetForbiddenTools()...),
+				AllowedTools:     append([]string(nil), scenario.GetAllowedTools()...),
+				ExpectedTools:    append([]string(nil), scenario.GetExpectedTools()...),
+				ForbiddenTools:   append([]string(nil), scenario.GetForbiddenTools()...),
+				TrajectoryPolicy: scenario.GetTrajectoryPolicy(),
 			}, nil
 		}
 	}

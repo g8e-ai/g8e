@@ -10,9 +10,9 @@ import { VIEW_SCHEMA_VERSION } from '../src/contract/types';
 describe('useActiveDatasetId', () => {
   it('honors explicit ds-live route ids without a catalog snapshot', () => {
     const { result } = renderHook(() =>
-      useActiveDatasetId('ds-live-north-star-smoke-1789575779'),
+      useActiveDatasetId('ds-live-smoke-campaign-1789575779'),
     );
-    expect(result.current).toBe('ds-live-north-star-smoke-1789575779');
+    expect(result.current).toBe('ds-live-smoke-campaign-1789575779');
   });
 
   it('prefers verified public live run over in-progress live run', () => {
@@ -131,15 +131,15 @@ describe('useActiveDatasetId', () => {
 
   it('auto-selects the most recent live dataset when no catalog snapshots exist', () => {
     evalStore.loadFixtures([], []);
-    evalStore.getState().evaluations.set('ds-live-north-star-smoke-1789575779:north-star-smoke-1789575779', {
+    evalStore.getState().evaluations.set('ds-live-smoke-campaign-1789575779:smoke-campaign-1789575779', {
       schema_version: VIEW_SCHEMA_VERSION,
       kind: 'evaluation_summary',
-      dataset_id: 'ds-live-north-star-smoke-1789575779',
+      dataset_id: 'ds-live-smoke-campaign-1789575779',
       quality_state: 'live_in_progress',
       observed_at: '2026-09-16T10:00:00Z',
       source_revision_label: 'test',
-      run_id: 'north-star-smoke-1789575779',
-      suite_id: 'north-star-25',
+      run_id: 'smoke-campaign-1789575779',
+      suite_id: 'default-suite',
       arm: 'homogeneous-model-role',
       evaluation_unit: 'model',
       lifecycle_state: 'running',
@@ -158,7 +158,7 @@ describe('useActiveDatasetId', () => {
     });
 
     const { result } = renderHook(() => useActiveDatasetId(undefined));
-    expect(result.current).toBe('ds-live-north-star-smoke-1789575779');
+    expect(result.current).toBe('ds-live-smoke-campaign-1789575779');
   });
 
   it('honors route ids that already have evaluation summaries indexed', () => {

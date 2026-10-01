@@ -47,7 +47,7 @@ func heterogeneousAssignmentExecutionRequest(t *testing.T, stack *evalv1.Heterog
 		AttemptID: "attempt-heterogeneous-1",
 		ScenarioInput: ScenarioInputFixture{
 			ScenarioID: "instruction-exact-format",
-			UserPrompt: "Reply with exactly: NORTH-STAR-OK",
+			UserPrompt: "Reply with exactly: SUITE-OK",
 		},
 		GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		Binding: CampaignExecutionBinding{
@@ -63,7 +63,7 @@ func heterogeneousAssignmentExecutionRequest(t *testing.T, stack *evalv1.Heterog
 func TestBindHeterogeneousStack_BindsRegistryVariants(t *testing.T) {
 	variants := testHeterogeneousVariants()
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       11,
 		Variants:   variants,
 	})
@@ -84,7 +84,7 @@ func TestBindHeterogeneousStack_BindsRegistryVariants(t *testing.T) {
 func TestCampaignFormationExecutor_ExecutesHeterogeneousAssignment(t *testing.T) {
 	variants := testHeterogeneousVariants()
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       11,
 		Variants:   variants,
 	})
@@ -110,7 +110,7 @@ func TestCampaignFormationExecutor_ExecutesHeterogeneousAssignment(t *testing.T)
 func TestCampaignAssignmentRouter_RoutesHeterogeneousAssignments(t *testing.T) {
 	variants := testHeterogeneousVariants()
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       11,
 		Variants:   variants,
 	})
@@ -144,7 +144,7 @@ func (e *recordingCampaignExecutor) ExecuteAssignment(context.Context, Assignmen
 func TestImportAssignmentResultFromFormationRun_SetsAgentPersonaForPublication(t *testing.T) {
 	variants := testHeterogeneousVariants()
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       11,
 		Variants:   variants,
 	})
@@ -175,7 +175,7 @@ func TestImportAssignmentResultFromFormationRun_SetsAgentPersonaForPublication(t
 func TestImportAssignmentResultFromFormationRun_MaterializesRoleTelemetry(t *testing.T) {
 	variants := testHeterogeneousVariants()
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       11,
 		Variants:   variants,
 	})
@@ -283,16 +283,16 @@ func TestImportAssignmentResultFromFormationRun_DoesNotPublishUnavailablePromptU
 
 func TestBuildFormationInitialState_MaterializesScenarioFixture(t *testing.T) {
 	input := ScenarioInputFixture{
-		ScenarioID:    "instruction-exact-format",
-		UserPrompt:    "Reply with exactly: NORTH-STAR-OK",
-		SystemContext: "formation system context",
+		ScenarioID: "instruction-exact-format",
+		UserPrompt: "Reply with exactly: SUITE-OK",
+		Seed:       InvestigationSeed{CaseTitle: "Release readiness check"},
 	}
 	state, err := BuildFormationInitialState(input)
 	require.NoError(t, err)
 	var decoded ScenarioInputFixture
 	require.NoError(t, json.Unmarshal(state, &decoded))
 	assert.Equal(t, input.UserPrompt, decoded.UserPrompt)
-	assert.Equal(t, input.SystemContext, decoded.SystemContext)
+	assert.Equal(t, input.Seed, decoded.Seed)
 }
 
 func TestBuildFormationInitialState_RejectsMissingPrompt(t *testing.T) {
@@ -321,7 +321,7 @@ func TestVerifyFormationAssignmentEvidence_AcceptsCompletedResult(t *testing.T) 
 func mustHeterogeneousStack(t *testing.T) *evalv1.HeterogeneousStackDefinition {
 	t.Helper()
 	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
-		CampaignID: "north-star-heterogeneous",
+		CampaignID: "heterogeneous-campaign",
 		Seed:       11,
 		Variants:   testHeterogeneousVariants(),
 	})

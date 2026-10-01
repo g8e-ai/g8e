@@ -11,7 +11,7 @@ import { PUBLIC_UNAVAILABLE_REASONS, type RoleTranscript } from './types';
 import { assertRoleTranscripts, ValidationError } from './validators';
 
 export const CAMPAIGN_LIFECYCLE_SCHEMA_VERSION = '1.0.0' as const;
-export const CAMPAIGN_RESULT_SCHEMA_VERSIONS = ['1.0.0', '1.1.0'] as const;
+export const CAMPAIGN_RESULT_SCHEMA_VERSIONS = ['1.0.0', '1.1.0', '1.2.0'] as const;
 export const CAMPAIGN_MESSAGE_TYPES = ['PublicAssignmentLifecycleRecord', 'PublicAssignmentResultProjection'] as const;
 export type CampaignMessageType = (typeof CAMPAIGN_MESSAGE_TYPES)[number];
 export type CampaignEnvelopeVersion = typeof CAMPAIGN_LIFECYCLE_SCHEMA_VERSION | (typeof CAMPAIGN_RESULT_SCHEMA_VERSIONS)[number];
@@ -95,6 +95,32 @@ const EVIDENCE_KINDS = [
   'assignment_audit_slice',
   'assignment_audit_vault_key',
 ] as const;
+const TRAJECTORY_POLICIES = [
+  'EVALUATION_TRAJECTORY_POLICY_ANSWER',
+  'EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE',
+  'EVALUATION_TRAJECTORY_POLICY_GUIDED',
+  'EVALUATION_TRAJECTORY_POLICY_GOVERNED',
+] as const;
+const TRAJECTORY_OUTCOMES = [
+  'EVALUATION_TRAJECTORY_OUTCOME_DIRECT',
+  'EVALUATION_TRAJECTORY_OUTCOME_RECOVERED',
+  'EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL',
+  'EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL',
+  'EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL',
+  'EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS',
+  'EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE',
+  'EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR',
+  'EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL',
+  'EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED',
+  'EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION',
+] as const;
+const HINT_ARGUMENT_SOURCES = [
+  'EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT',
+  'EVALUATION_HINT_ARGUMENT_SOURCE_SEED',
+  'EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE',
+  'EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT',
+  'EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED',
+] as const;
 const TOOL_DIMENSIONS = [
   'PUBLIC_TOOL_SCORE_DIMENSION_TOOL_RECOGNITION',
   'PUBLIC_TOOL_SCORE_DIMENSION_TOOL_SELECTION',
@@ -142,6 +168,16 @@ interface WireScenarioCriterion {
   required: boolean;
 }
 
+/** Hinted tools and where each argument comes from. Values are private. */
+export interface WirePromptHint {
+  hinted_tools?: string[];
+  arguments?: Array<{
+    tool_name: string;
+    argument_name: string;
+    source: (typeof HINT_ARGUMENT_SOURCES)[number];
+  }>;
+}
+
 interface WireScenarioSummary {
   scenario_id: string;
   scenario_version: string;
@@ -151,6 +187,8 @@ interface WireScenarioSummary {
   allowed_tools: string[];
   expected_tools: string[];
   forbidden_tools: string[];
+  trajectory_policy?: (typeof TRAJECTORY_POLICIES)[number];
+  prompt_hint?: WirePromptHint;
   criteria: WireScenarioCriterion[];
   tool_score_dimensions: Array<{ dimension: (typeof TOOL_DIMENSIONS)[number]; required: boolean }>;
 }
@@ -194,6 +232,9 @@ interface WireToolCallActivityRecord {
   execution_outcome: (typeof EXECUTION_OUTCOMES)[number];
   semantic_outcome: (typeof SEMANTIC_OUTCOMES)[number];
   evidence_source: (typeof EVIDENCE_SOURCES)[number];
+  loop_turn?: number;
+  error_type?: string;
+  guidance_shown?: boolean;
 }
 
 interface WirePolicyDecisionActivityRecord {
@@ -271,6 +312,11 @@ export interface CampaignResultRecord {
   model_response?: string;
   failure_output?: string;
   role_transcripts?: RoleTranscript[];
+  /** Envelope 1.2.0: why the assignment passed or failed, in bounded public terms. */
+  trajectory_outcome?: (typeof TRAJECTORY_OUTCOMES)[number];
+  guided_retry_count?: number;
+  failure_reason?: string;
+  tools_declared?: string[];
 }
 
 export interface CampaignProjectionEnvelope {
@@ -291,6 +337,7 @@ const RESULT_FIELDS = [
   'unavailable_metric_reasons', 'completed_at', 'scenario_summary', 'semantic_grade_summaries',
   'activity_summary', 'evidence_bindings', 'verification_metadata', 'benchmark_observations', 'resource_summary',
   'model_response', 'failure_output', 'role_transcripts',
+  'trajectory_outcome', 'guided_retry_count', 'failure_reason', 'tools_declared',
 ] as const;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -408,9 +455,30 @@ function assertScore(value: unknown, path: string): asserts value is WireScore {
   assertOptionalString(value.missing_data_policy, `${path}.missing_data_policy`);
 }
 
+function assertPromptHint(value: unknown, path: string): void {
+  assertObject(value, path);
+  // Hint values are private; only names and sources are part of the contract.
+  rejectUnknown(value, ['hinted_tools', 'arguments'], path);
+  if (value.hinted_tools !== undefined) assertStringArray(value.hinted_tools, `${path}.hinted_tools`, 16);
+  if (value.arguments === undefined) return;
+  assert(Array.isArray(value.arguments), `${path}.arguments`, 'expected array');
+  assert(value.arguments.length <= 64, `${path}.arguments`, 'expected at most 64 entries');
+  for (let index = 0; index < value.arguments.length; index++) {
+    const argumentPath = `${path}.arguments[${index}]`;
+    const argument: unknown = value.arguments[index];
+    assertObject(argument, argumentPath);
+    rejectUnknown(argument, ['tool_name', 'argument_name', 'source'], argumentPath);
+    assertString(argument.tool_name, `${argumentPath}.tool_name`);
+    assertString(argument.argument_name, `${argumentPath}.argument_name`);
+    assertEnum(argument.source, HINT_ARGUMENT_SOURCES, `${argumentPath}.source`);
+  }
+}
+
 function assertScenarioSummary(value: unknown, path: string): void {
   assertObject(value, path);
-  rejectUnknown(value, ['scenario_id', 'scenario_version', 'category', 'public_description', 'grading_method', 'allowed_tools', 'expected_tools', 'forbidden_tools', 'criteria', 'tool_score_dimensions'], path);
+  rejectUnknown(value, ['scenario_id', 'scenario_version', 'category', 'public_description', 'grading_method', 'allowed_tools', 'expected_tools', 'forbidden_tools', 'trajectory_policy', 'prompt_hint', 'criteria', 'tool_score_dimensions'], path);
+  assertOptionalEnum(value.trajectory_policy, TRAJECTORY_POLICIES, `${path}.trajectory_policy`);
+  if (value.prompt_hint !== undefined) assertPromptHint(value.prompt_hint, `${path}.prompt_hint`);
   assertString(value.scenario_id, `${path}.scenario_id`);
   assertString(value.scenario_version, `${path}.scenario_version`);
   assertEnum(value.category, SCENARIO_CATEGORIES, `${path}.category`);
@@ -505,8 +573,11 @@ function assertToolDecisionRecord(value: unknown, path: string): void {
 
 function assertToolCallRecord(value: unknown, path: string): void {
   assertObject(value, path);
-  rejectUnknown(value, ['tool_label', 'execution_outcome', 'semantic_outcome', 'evidence_source'], path);
+  rejectUnknown(value, ['tool_label', 'execution_outcome', 'semantic_outcome', 'evidence_source', 'loop_turn', 'error_type', 'guidance_shown'], path);
   assertString(value.tool_label, `${path}.tool_label`);
+  if (value.loop_turn !== undefined) assertInteger(value.loop_turn, `${path}.loop_turn`, 1000);
+  assertOptionalString(value.error_type, `${path}.error_type`);
+  assertOptionalBoolean(value.guidance_shown, `${path}.guidance_shown`);
   assertEnum(value.execution_outcome, EXECUTION_OUTCOMES, `${path}.execution_outcome`);
   assertEnum(value.semantic_outcome, SEMANTIC_OUTCOMES, `${path}.semantic_outcome`);
   assert(value.evidence_source === 'PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED', `${path}.evidence_source`, 'tool calls require application-reported evidence');
@@ -643,6 +714,29 @@ function assertResultRecord(value: unknown, path: string, version: CampaignEnvel
   } else {
     assertExtensions(value, path);
   }
+  assertOptionalEnum(value.trajectory_outcome, TRAJECTORY_OUTCOMES, `${path}.trajectory_outcome`);
+  if (value.guided_retry_count !== undefined) assertInteger(value.guided_retry_count, `${path}.guided_retry_count`, 1000);
+  // failure_reason is the bounded public sentence; the private one never reaches this record.
+  assertOptionalString(value.failure_reason, `${path}.failure_reason`, 512);
+  if (value.tools_declared !== undefined) assertStringArray(value.tools_declared, `${path}.tools_declared`, 64);
+  if (version !== '1.2.0') {
+    assert(!hasTrajectoryFields(value), path, 'trajectory fields require campaign envelope 1.2.0');
+  }
+}
+
+/** True when a result record carries any field that only envelope 1.2.0 may contain. */
+function hasTrajectoryFields(value: Record<string, unknown>): boolean {
+  if (['trajectory_outcome', 'guided_retry_count', 'failure_reason', 'tools_declared'].some((field) => value[field] !== undefined)) {
+    return true;
+  }
+  const summary = value.scenario_summary;
+  if (isObject(summary) && (summary.trajectory_policy !== undefined || summary.prompt_hint !== undefined)) return true;
+  const activity = value.activity_summary;
+  const toolCalls = isObject(activity) && isObject(activity.tool_calls) ? activity.tool_calls.records : undefined;
+  if (Array.isArray(toolCalls)) {
+    return toolCalls.some((call: unknown) => isObject(call) && (call.loop_turn !== undefined || call.error_type !== undefined || call.guidance_shown !== undefined));
+  }
+  return false;
 }
 
 export function decodeCampaignProjectionEnvelope(value: unknown): CampaignProjectionEnvelope {

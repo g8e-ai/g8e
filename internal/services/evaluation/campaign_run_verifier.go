@@ -189,6 +189,7 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 			GradingMethod:             gradingMethod,
 			Trace:                     trace,
 			FormationRunEvidence:      formationRunEvidence,
+			CatalogRef:                catalog.GetCatalogRef(),
 			ProviderObservationReader: v.providerObservationReader,
 			ProviderObservationPolicy: v.providerObservationPolicy,
 			ModelProvenanceReader:     v.modelProvenanceReader,

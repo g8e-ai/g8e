@@ -3,8 +3,8 @@ doc_id: ensemble
 title: Ensemble Architecture (g8ee)
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-29
-version: v2.2.4
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - ensemble/
   - ensemble/app/main.py
@@ -86,7 +86,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | --- | --- |
 | INV-ENS-DATA-01 | g8ee maintains no local durable database. The Gateway owns all durable application documents, KV entries, and blob objects in its own runtime storage. g8ee accesses these services via mTLS clients orchestrated by `CacheAsideService`. |
 | INV-ENS-DATA-02 | The g8ee process owns only ephemeral coordination state (active model turns, pending application approvals, background task tracking, and command-result correlations). This state does not survive container restarts. |
-| INV-ENS-DATA-03 | The Gateway is the sole authoritative owner of the Operator domain (documents, sessions, bindings, lifecycle states, command dispatch, results, and heartbeat snapshots). g8ee maintains no Operator service and queries or dispatches via Gateway protocol endpoints. |
+| INV-ENS-DATA-03 | The Gateway is the sole authoritative owner of the Operator domain (documents, sessions, bindings, lifecycle states including heartbeat-driven `stale` transitions, command dispatch, results, and heartbeat snapshots). g8ee maintains no Operator service and queries or dispatches via Gateway protocol endpoints. |
 
 ### Dispatch and Communication (`INV-ENS-COMM`)
 
@@ -357,7 +357,7 @@ flowchart LR
 
 1. **Gateway-Owned Stores**: The Gateway owns all persistent storage for application documents (cases, investigations, memories, user settings), key-value cache entries, and binary blobs.
 2. **Cache-Aside Orchestration**: `CacheAsideService` provides read-through caching and write-through/invalidation over `KVService` and `DBService`. Read operations check KV cache before falling back to the Gateway document service; write operations update the document service and invalidate or refresh KV cache keys.
-3. **Operator Domain Exclusivity**: The Gateway is the sole owner of Operator documents, sessions, bindings, lifecycle states, command dispatch records, and heartbeat snapshots (`latest_heartbeat_snapshot`). g8ee never subscribes to Operator pub/sub or persists Operator records.
+3. **Operator Domain Exclusivity**: The Gateway is the sole owner of Operator documents, sessions, bindings, lifecycle states, command dispatch records, and heartbeat state (`latest_heartbeat_snapshot` and the Gateway-stamped `last_heartbeat_at`, from which the Gateway derives `stale`; g8ee defines no staleness threshold of its own and reads the status the Gateway returns). g8ee never subscribes to Operator pub/sub or persists Operator records.
 4. **Ephemeral Coordination**: The ensemble process retains only active in-memory turns, background task handles, pending application approvals, and command correlation IDs. A container restart cleanly drops ephemeral state while persistent application data remains safe in the Gateway.
 
 ### The Five-Layer Governance Interlock and Boundary Guarantees
