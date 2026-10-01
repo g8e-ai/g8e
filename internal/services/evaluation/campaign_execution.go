@@ -102,8 +102,10 @@ func modelCampaignRoleLabel(role evalv1.ModelCampaignRole) (string, error) {
 
 // ScenarioToolExpectations carries frozen scenario tool constraints for grading.
 type ScenarioToolExpectations struct {
-	ExpectedTools  []string
-	ForbiddenTools []string
+	AllowedTools     []string
+	ExpectedTools    []string
+	ForbiddenTools   []string
+	TrajectoryPolicy evalv1.EvaluationTrajectoryPolicy
 }
 
 // CampaignChatGradingContext carries private grading inputs for one chat assignment.

@@ -34,12 +34,12 @@ func TestBuildHomogeneousAssignmentMatrix_MaterializesFullCrossProduct(t *testin
 		QueuedAt:        time.Unix(1_700_000_000, 0).UTC(),
 	})
 	require.NoError(t, err)
-	assert.Len(t, assignments, 78)
+	assert.Len(t, assignments, 82)
 	inventory := &ModelInventoryFreeze{
 		CampaignID:           "north-star-smoke",
 		RegistryDigest:       repeatHex('c', 64),
 		Variants:             variants,
-		HomogeneousCellCount: 78,
+		HomogeneousCellCount: 82,
 	}
 	require.NoError(t, ValidateHomogeneousAssignmentMatrix(catalog, inventory, 1, assignments))
 }

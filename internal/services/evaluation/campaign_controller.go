@@ -654,8 +654,10 @@ func scenarioToolsForAssignment(catalog *evalv1.EvaluationScenarioCatalog, assig
 	for _, scenario := range catalog.GetScenarios() {
 		if scenario.GetScenarioId() == assignment.GetScenarioId() {
 			return ScenarioToolExpectations{
-				ExpectedTools:  append([]string(nil), scenario.GetExpectedTools()...),
-				ForbiddenTools: append([]string(nil), scenario.GetForbiddenTools()...),
+				AllowedTools:     append([]string(nil), scenario.GetAllowedTools()...),
+				ExpectedTools:    append([]string(nil), scenario.GetExpectedTools()...),
+				ForbiddenTools:   append([]string(nil), scenario.GetForbiddenTools()...),
+				TrajectoryPolicy: scenario.GetTrajectoryPolicy(),
 			}, nil
 		}
 	}

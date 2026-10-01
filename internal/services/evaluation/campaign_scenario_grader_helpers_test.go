@@ -57,25 +57,19 @@ func TestNumericValue_AcceptsSupportedTypes(t *testing.T) {
 	}
 }
 
-func TestHasTraceToolCallsAndGovernedActions(t *testing.T) {
+func TestCountWordsAndSentences(t *testing.T) {
 	t.Parallel()
-	trace := EvaluationTrace{
-		"tool_calls": []any{
-			EvaluationTrace{"name": "probe_echo"},
-		},
-		"governed_actions": []any{
-			EvaluationTrace{"action_type": "inference_dispatch"},
-		},
-	}
-	assert.True(t, hasTraceToolCalls(trace))
-	assert.True(t, hasTraceGovernedActions(trace))
-	assert.False(t, hasTraceToolCalls(EvaluationTrace{}))
+	assert.Equal(t, 3, countWords("one two three"))
+	assert.Equal(t, 2, countSentences("Hello world. How are you?"))
+	assert.Equal(t, 1, countSentences("Only one sentence"))
+	assert.Equal(t, 0, countSentences(""))
 }
 
-func TestParseExactFormatExpectedAndCountWords(t *testing.T) {
+func TestCleanContentLabel(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, "READY", parseExactFormatExpected("Reply with exactly: READY"))
-	assert.Equal(t, 3, countWords("one two three"))
+	assert.Equal(t, "error", cleanContentLabel("**ERROR**."))
+	assert.Equal(t, "noise", cleanContentLabel("`noise`!"))
+	assert.Equal(t, "ready", cleanContentLabel("\"ready\""))
 }
 
 func TestGradesEquivalent_ComparesNormalizedFields(t *testing.T) {
@@ -103,4 +97,13 @@ func TestRoleInvokedGradeStatus(t *testing.T) {
 		roleInvokedGradeStatus(true, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED))
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		roleInvokedGradeStatus(false, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED))
+}
+
+func findDeterministicGrade(grades []*evalv1.DeterministicGrade, criterionID string) *evalv1.DeterministicGrade {
+	for _, grade := range grades {
+		if grade != nil && grade.GetCriterionId() == criterionID {
+			return grade
+		}
+	}
+	return nil
 }

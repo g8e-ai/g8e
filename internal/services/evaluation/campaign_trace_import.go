@@ -180,6 +180,9 @@ func classifyCampaignTraceOutcome(req ChatProbeRequest, trace EvaluationTrace) (
 		Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		Detail:      "designated model role was not invoked",
 	}
+	if status == "failed" && trace["provider_tool_rejection"] != nil {
+		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, grade
+	}
 	modelCalls, _ := trace["model_calls"].([]any)
 	// A failed trace with zero model calls never reached governed inference — that
 	// is provider/infrastructure failure, not a scored capability miss.
