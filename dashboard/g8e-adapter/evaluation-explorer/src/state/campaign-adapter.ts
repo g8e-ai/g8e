@@ -171,15 +171,20 @@ function markTerminalAssignment(
   return { progress, isNew: true };
 }
 
-/** Live-event progress: terminal assignments finished vs the full campaign matrix size. */
+/**
+ * Live-event progress: terminal assignments finished vs the full campaign matrix size.
+ * A restore/catch-up publishes already-terminal assignments before the queued records and
+ * catalog snapshot of the remainder, so the scheduled or matrix count seen so far can lag
+ * the terminal count; the total is floored at terminal to keep completed <= total.
+ */
 export function campaignProgressCounts(progress: RunProgress): { completed: number; total: number } {
-  const total =
+  const known =
     progress.matrixTotal > 0
       ? progress.matrixTotal
       : progress.scheduled > 0
         ? progress.scheduled
         : progress.terminal;
-  return { completed: progress.terminal, total };
+  return { completed: progress.terminal, total: Math.max(known, progress.terminal) };
 }
 
 /** Point-in-time progress stamped onto a live event. */
