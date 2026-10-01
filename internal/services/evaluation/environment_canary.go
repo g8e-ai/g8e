@@ -41,7 +41,7 @@ const (
 	canaryScenarioID      = "environment-canary"
 	canaryWorkspaceFile   = "canary/probe.txt"
 	canaryGuidanceVector  = "recursive_grep_search.missing_path"
-	canaryGuidanceEvent   = "g8e.v1.operator.filesystem.grep.failed"
+	canaryGuidanceEvent   = string(constants.EventOperatorFilesystemGrepFailed)
 	canaryBoundAgentMode  = "g8e.bound"
 	canaryToolGateBypass  = "bypassed_for_eval"
 	canaryChatInstruction = "Reply with exactly: canary-ok"

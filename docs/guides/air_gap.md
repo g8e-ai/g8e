@@ -89,7 +89,7 @@ Ids are stable. Append the next free number in a group. Do not renumber.
 | Makefile air-gap target | `Makefile` | `make test-airgap` target at line ~1800 |
 | Go vendor build support | `go.mod`, `vendor/` | `go build -mod=vendor ./...` succeeds |
 | Container image build | `Dockerfile`, `docker-compose.yml` | `docker compose build` completes without external registry access on connected host |
-| Python wheel build | `protocol/python/pyproject.toml`, `Makefile` | `make python-build` produces `protocol/python/dist/g8e-2.2.5-py3-none-any.whl` |
+| Python wheel build | `protocol/python/pyproject.toml`, `Makefile` | `make python-build` produces `protocol/python/dist/g8e-2.2.6-py3-none-any.whl` |
 | Demo manifest and images | `demos/images.json`, `demos/*/compose.yml` | `./g8e demos pull`, `./g8e demos export` |
 | Gateway port defaults | `internal/constants/ports.go` | HTTP 8080, HTTPS 8443 |
 
@@ -114,7 +114,7 @@ The Gateway exposes a consolidated two-port topology as default:
 - **HTTP port 8080**: Health checks, initial bootstrap, CA bundle and fingerprint discovery, token-scoped CLI recovery, token-scoped platform enrollment, and binary downloads. All other paths return HTTP 301 redirect to HTTPS.
 - **HTTPS port 8443**: Authenticated APIs, embedded browser console, WebAuthn ceremonies, governance envelopes, MCP and A2A ingress, WebSocket pub/sub, SSE, audit APIs, and data services. Authentication per route: mTLS, browser web session, JWT when JWKS is configured, or scoped bootstrap or enrollment token.
 
-Port configuration is derived from [internal/constants/ports.go](internal/constants/ports.go). Modify with `--http-port` and `--https-port` flags to `gw start`.
+Port configuration is derived from [internal/constants/ports.go](../../internal/constants/ports.go). Modify with `--http-port` and `--https-port` flags to `gw start`.
 
 The Operator initiates an outbound-only mTLS WebSocket connection to the Gateway and pulls work from its operator-specific channel. No inbound service port is opened. Gateway, Operator, CLI, dashboard, ensemble, consensus, and downstream service traffic can cross private networks; air-gapped does not mean localhost-only.
 
@@ -141,7 +141,7 @@ The vault is mandatory for audit and execution-vault services. Sensitive audit f
 
 Protect the runtime directory with restrictive filesystem permissions, full-disk or volume encryption, controlled backups, and physical access controls. Back up the vault key alongside encrypted data; storing only one makes the backup unusable.
 
-Gateway and Operator have separate runtime trees. Operators are authoritative for their host-local audit and execution state. The Gateway stores platform, identity, routing, and mirrored audit state. Container deployments persist these trees in separate named Docker volumes, defined in [docker-compose.yml](docker-compose.yml).
+Gateway and Operator have separate runtime trees. Operators are authoritative for their host-local audit and execution state. The Gateway stores platform, identity, routing, and mirrored audit state. Container deployments persist these trees in separate named Docker volumes, defined in [docker-compose.yml](../../docker-compose.yml).
 
 ### Prepare a native binary
 
@@ -257,7 +257,7 @@ docker compose -f demos/<org>/compose.yml config --images
 docker save -o /tmp/g8e-<org>-built-images.tar <built-image-ref> [<built-image-ref> ...]
 ```
 
-`./g8e demos export` saves only images listed in [demos/images.json](demos/images.json); it does not save locally built Gateway/Operator images. Transfer both archives, the selected `demos/<org>/` tree, and `demos/images.json`.
+`./g8e demos export` saves only images listed in [demos/images.json](../../demos/images.json); it does not save locally built Gateway/Operator images. Transfer both archives, the selected `demos/<org>/` tree, and `demos/images.json`.
 
 On the isolated host:
 
@@ -277,13 +277,13 @@ Build the Python protocol wheel and collect its transitive dependencies on the c
 
 ```bash
 make python-build
-pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.2.5-py3-none-any.whl
+pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.2.6-py3-none-any.whl
 ```
 
 Transfer the complete wheel directory, then install without an index:
 
 ```bash
-pip install --no-index --find-links /media/g8e-python-wheels g8e==2.2.5
+pip install --no-index --find-links /media/g8e-python-wheels g8e==2.2.6
 ```
 
 The Python package includes JSON constants at `g8e/_data`; there is no `G8E_PROTOCOL_DIR` runtime setting.

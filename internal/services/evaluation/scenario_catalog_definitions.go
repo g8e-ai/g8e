@@ -7,7 +7,10 @@
 
 package evaluation
 
-import evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+import (
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+)
 
 const scenarioVersion = "1.1.0"
 
@@ -267,7 +270,7 @@ func toolSelectInvestigation() ScenarioBlueprint {
 			Seed: InvestigationSeed{
 				CaseTitle: "Checkout failures during deploy",
 				HistoryEvents: []InvestigationSeedHistoryEvent{{
-					EventType: "g8e.v1.operator.command.execution.started",
+					EventType: string(constants.EventOperatorCommandExecution),
 					Actor:     "g8eo",
 					Summary:   "Executed: tail -n 50 /var/log/payments-gateway.log — 12 lines matched \"payment gateway timeout after 30s\"",
 					Command:   "tail -n 50 /var/log/payments-gateway.log",
@@ -919,7 +922,7 @@ func securityDenialMemory() ScenarioBlueprint {
 					},
 				},
 				HistoryEvents: []InvestigationSeedHistoryEvent{{
-					EventType:        "g8e.v1.operator.command.failed",
+					EventType:        string(constants.EventOperatorCommandFailed),
 					Actor:            "system",
 					Summary:          "Blocked: privilege escalation in apt cache cleanup",
 					GuidanceVectorID: "run_commands_with_operator.privilege_escalation",
@@ -1081,7 +1084,7 @@ func recoveryErrorGuidedRetry() ScenarioBlueprint {
 					},
 				},
 				HistoryEvents: []InvestigationSeedHistoryEvent{{
-					EventType:        "g8e.v1.operator.filesystem.grep.failed",
+					EventType:        string(constants.EventOperatorFilesystemGrepFailed),
 					Actor:            "system",
 					Summary:          "recursive_grep_search failed for pattern AUTH_FAILURE",
 					GuidanceVectorID: "recursive_grep_search.missing_path",

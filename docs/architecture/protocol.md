@@ -302,7 +302,7 @@ uv run --project protocol/python --extra dev pytest protocol/conformance -v
 
 #### Version sync validation
 
-All protocol artifacts adhere to the semantic version in `VERSION` (`v2.2.5`). CI job `Verify Version Sync` in `.github/workflows/build-and-test.yml` strictly validates:
+All protocol artifacts adhere to the semantic version in `VERSION` (`v2.2.6`). CI job `Verify Version Sync` in `.github/workflows/build-and-test.yml` strictly validates:
 
 1. `protocol/python/pyproject.toml` (`version = "X.Y.Z"`)
 2. `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`)
