@@ -6,7 +6,7 @@ Checked-in evaluation program data and templates live here. **Runtime** campaign
 
 | Path | Purpose |
 | --- | --- |
-| `eval/base-model-inventory.json` | **Default genesis program inventory** — 50 init-campaign models (3 roles × 25 scenarios = **3750** cells when run homogeneously) |
+| `eval/base-model-inventory.json` | **Default genesis program inventory** — 50 init-campaign models (41 scored assignments per model under `default-suite`: 27 scenarios, each under only the roles that perform it) |
 | `eval/base-init-campaign-queue.json` | Template rollout queue (`status: pending`); currently 47 entries and does not yet list `gemma4:12b`, `glm-5.3-air`, or `qwen2.5:1b-rlcd` |
 | `examples/eval/init-campaign-queue.example.json` | Minimal queue shape reference |
 
@@ -31,7 +31,7 @@ The optional Hugging Face rollout intake (`eval/rollout-intake-hf.json`) also tr
 | SmolLM | `smollm2:135m`, `smollm2:360m`, `smollm2:1.7b`, `Impulse2000/smollm3:3b-q4_k_m` |
 | Other | `Randomblock1/nemotron-nano:8b`, `sam860/LFM2:350m`, `sam860/LFM2:700m`, `sam860/LFM2:2.6b` |
 
-Per-model campaigns use `eval-init-<variant_id>` (legacy exception: `gemma4:e4b` → `init-campaign`). Each single-model run is **75** cells.
+Per-model campaigns use `eval-init-<variant_id>` (legacy exception: `gemma4:e4b` → `init-campaign`). Each single-model run is **41** assignments under `default-suite`.
 
 ## Runtime files (campaign host)
 

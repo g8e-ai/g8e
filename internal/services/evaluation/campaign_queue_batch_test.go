@@ -46,5 +46,5 @@ func TestCampaignQueueBuildBatchPlan(t *testing.T) {
 }
 
 func TestStrictWitnessVerifyNotes(t *testing.T) {
-	assert.Equal(t, "75/75 witness verify PASS (--require-provider-observation --require-model-provenance); run run-abc", StrictWitnessVerifyNotes("run-abc"))
+	assert.Equal(t, "witness verify PASS (--require-provider-observation --require-model-provenance); run run-abc", StrictWitnessVerifyNotes("run-abc"))
 }

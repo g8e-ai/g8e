@@ -55,7 +55,6 @@ func checkPluralGroupNames(t *testing.T, cmd *cobra.Command) {
 	massNouns := map[string]bool{
 		"rollout":  true,
 		"boundary": true,
-		"observer": true,
 	}
 
 	walkCommands(cmd, func(path []string, c *cobra.Command) {
@@ -159,7 +158,7 @@ func TestEvalCmd_ContainsExpectedGroups(t *testing.T) {
 	cmd := evalCmdWithConfig(deps)
 
 	expected := []string{
-		"backup", "boundary", "campaigns", "formations", "gates", "models", "observer", "restore", "rollout", "runs", "suites",
+		"backup", "boundary", "campaigns", "formations", "gates", "models", "restore", "rollout", "runs", "suites",
 	}
 	var actual []string
 	for _, subcmd := range cmd.Commands() {

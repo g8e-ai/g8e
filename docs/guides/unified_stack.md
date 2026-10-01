@@ -496,7 +496,7 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 
 The Observer only samples provider-boundary telemetry between BEGIN and FINALIZE. It does not manage Ollama, restart the daemon, unload models, or execute generic commands. Model residency is owned by Ollama, and campaign model release uses an approved command dispatched to the exact Inference Operator after scored work completes.
 
-The legacy filesystem runner `g8e eval observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
+The Observer Operator is the only provider-boundary observer. There is no CLI-side observer process.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. That is expected. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
@@ -754,7 +754,7 @@ docker compose up -d --force-recreate g8e-inference-operator
 
 ### Observer not receiving commands
 
-- Confirm Observer enrolled with `--provider-boundary-observer-enabled` (not the filesystem `eval observer run` path).
+- Confirm Observer enrolled with `--provider-boundary-observer-enabled`.
 - Confirm Gateway can reach the Observer session (`./g8e operator list`).
 - Confirm the provider host can reach Gateway ports 8080/8443 and `g8e.local` resolves to the campaign host.
 

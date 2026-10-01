@@ -190,13 +190,6 @@ func ValidateModelRegistry(freeze *ModelInventoryFreeze) error {
 		seenTags[variant.GetServedModelTag()] = struct{}{}
 		seenIDs[variant.GetVariantId()] = struct{}{}
 	}
-	expectedCells := ComputeHomogeneousMatrixSize(uint64(len(freeze.Variants)))
-	if freeze.HomogeneousCellCount != expectedCells {
-		return fmt.Errorf("evaluation: validate model registry: homogeneous matrix size mismatch")
-	}
-	if expectedCells == 0 {
-		return fmt.Errorf("evaluation: validate model registry: empty smoke matrix")
-	}
 	return nil
 }
 

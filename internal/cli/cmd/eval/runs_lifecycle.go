@@ -119,6 +119,10 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: runs start: %w", err)
 	}
+	catalog, err := store.LoadScenarioCatalog(cmd.Context(), opts.CampaignID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: runs start: %w", err)
+	}
 	sessions, err := resolveOperatorSessions(cmd, deps, operatorRoleInference, operatorRoleData)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: runs start: %w", err)
@@ -131,7 +135,7 @@ func runStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts runStartFlowOpti
 		CampaignID: opts.CampaignID,
 		RunID:      runID,
 		Lane:       laneName,
-		Cells:      campaignCells(spec, laneName, stacks),
+		Cells:      campaignCells(catalog, spec, laneName, stacks),
 		Sessions:   sessions,
 	}
 	for _, variant := range spec.GetModelRegistry() {

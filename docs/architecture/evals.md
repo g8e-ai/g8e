@@ -88,6 +88,7 @@ Ids are stable. Append the next free number within each group; do not renumber.
 | INV-EVAL-CAMP-13 | Every scenario prompt is answerable. For each hinted tool, every required argument in the agent tool registry has one hint argument naming where its value comes from: the `PROMPT`, the `SEED`, the attempt `WORKSPACE`, the `OPERATOR_CONTEXT` (`target_operators`), or the model itself (`MODEL_AUTHORED`, only `justification` or `request`). Catalog build verifies each claim against the prompt, seed, and workspace and fails with `ErrEvaluationPromptUnanswerable` otherwise, so a scenario cannot name an object that does not exist. |
 | INV-EVAL-CAMP-14 | The only eval-only divergences from production chat are keyed on the request's `evaluation_context` (never an environment variable) and recorded in the trace: the tool gate bypass (`tool_gate: bypassed_for_eval`), user-wide memories not read (`user_memories_suppressed: true`), and an immediate denial of the continue-approval at `AGENT_MAX_TOOL_TURNS` (`tool_turn_limit_reached: true`). Triage runs on the candidate model and is graded as its own `triage` criterion, excluded from `task_score`; the post-turn memory update (`agent_role: codex`) stays but is excluded from the scored inference span and from latency and token aggregates. |
 | INV-EVAL-CAMP-15 | `g8e eval gates chat` and `g8e eval rollout run --gate-smoke` run the environment canaries before any case or model allocation. A failing canary reports `ENVIRONMENT ERROR (<canary>)`, wraps `ErrEvaluationEnvironmentCanaryFailed`, and aborts the work; it is never a model verdict, and a canary never reads or judges the model's reply text. |
+| INV-EVAL-CAMP-16 | Every assignment count derives from the campaign's frozen catalog, never from a built-in suite: the scheduler gates, `RunSummary.ExpectedAssignment` (run progress and the `completed` status), and the `cells per run` that `campaigns create`, `campaigns show`, and `runs start` print all call `ModelRoleMatrixSize` or `FormationMatrixSize` over the catalog loaded with `Store.LoadScenarioCatalog`. A custom suite, `smoke-suite`, and a system-lane run over any suite size correctly. |
 
 ### Witness Separation (`INV-EVAL-WIT`)
 
@@ -168,7 +169,7 @@ Both programs persist canonical, content-addressed run evidence beneath `.g8e/da
 
 ### CLI surface
 
-The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation commands across eleven top-level subcommands:
+The `g8e eval` command tree groups platform evaluation commands across ten top-level subcommands. Groups carry no singular or plural aliases: each is spelled one way.
 
 | Subcommand | Purpose |
 | --- | --- |
@@ -180,7 +181,6 @@ The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation comma
 | `g8e eval rollout …` | Rollout qualification queue (list, add, remove, next, retry, skip, run) |
 | `g8e eval formations …` | Heterogeneous multi-model stacks (list, show, add, remove, smoke) |
 | `g8e eval gates …` | Pre-campaign acceptance gates (chat, inference, probe) |
-| `g8e eval observer …` | Provider-boundary hardware observer (run, verify) |
 | `g8e eval backup` | Copy evaluation evidence to a directory outside `.g8e/` (default `eval/backups`) |
 | `g8e eval restore [snapshot-dir]` | Verify a backup snapshot and restore it into `.g8e/` (default: newest in `eval/backups`) |
 
@@ -283,7 +283,7 @@ Each persona wraps in the production modular system prompt stack: Core Safety, C
 
 **Fixtures:** each assignment runs in a seeded investigation with an attempt-scoped workspace on the Data Operator; see [Scenario fixtures, trajectories, and grading](#scenario-fixtures-trajectories-and-grading).
 
-**Campaign lanes and formations:** The default campaign lane is `model_role`, which schedules one frozen model variant against catalog scenarios and records role-specific results; a `model_role` campaign freezes exactly one model (INV-EVAL-CAMP-06), so use `g8e eval rollout add` and `rollout run` to qualify several. Campaigns can also use the `system` lane. The CLI creates deterministic, persisted heterogeneous stacks with `g8e eval campaigns create <id> --formations <id>... --seed <seed>` and starts execution with `g8e eval runs start <id>`.
+**Campaign lanes and formations:** The default campaign lane is `model_role`, which schedules one frozen model variant against catalog scenarios and records role-specific results; a `model_role` campaign freezes exactly one model (INV-EVAL-CAMP-06), so use `g8e eval rollout add` and `rollout run` to qualify several. A campaign over formations runs in the `system` lane; the lane is implied by `--formations` or `--all-formations`, never chosen with a flag, and is recorded on the run. `g8e eval campaigns create <id> --formations <id>...` persists one stack per formation from the catalog, and `g8e eval runs start <id>` starts execution. Stack sets that earlier releases generated from the registry (generation rule `heterogeneous-v1`) still validate, resume, and verify, but no command creates one.
 
 A formation contains primary, assistant, and lite model bindings, executed in `lite → assistant → primary` order. `g8e eval formations add` writes a formation (all three roles required) to the checked-in overlay `eval/formation-catalog-overlay.json`, replacing any entry with the same ID; `formations remove` deletes an overlay entry or records a checked-in default as removed, and the catalog can never be left empty. The effective catalog is the built-in execution topologies merged with that overlay. `runs start` and `runs resume` select the formation runner with `--formation-runner`:
 

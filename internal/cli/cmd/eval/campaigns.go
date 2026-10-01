@@ -30,9 +30,8 @@ const campaignStatusNoRuns = "no-runs"
 
 func campaignsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "campaigns",
-		Aliases: []string{"campaign"},
-		Short:   "Define, inspect, and archive evaluation campaigns",
+		Use:   "campaigns",
+		Short: "Define, inspect, and archive evaluation campaigns",
 		Long: `A campaign is the frozen definition of an evaluation: which models, which
 scenarios, how many repetitions, and in which lane. Executions of a campaign are
 runs (g8e eval runs).`,
@@ -233,6 +232,10 @@ func campaignsShowCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaigns show: %w", err)
 			}
+			catalog, err := store.LoadScenarioCatalog(cmd.Context(), campaignID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaigns show: %w", err)
+			}
 			payload := campaignShowJSON{
 				campaignRowJSON: campaignRowJSON{
 					CampaignID:          campaignID,
@@ -249,7 +252,7 @@ func campaignsShowCmd(deps nativeEvalDeps) *cobra.Command {
 				},
 				Suite:    spec.GetCatalogRef().GetId() + "@" + spec.GetCatalogRef().GetVersion(),
 				Runs:     runRows,
-				CellsPer: campaignCells(spec, lane, stacks),
+				CellsPer: campaignCells(catalog, spec, lane, stacks),
 			}
 			for _, variant := range spec.GetModelRegistry() {
 				payload.Models = append(payload.Models, variant.GetServedModelTag())
@@ -304,11 +307,13 @@ func campaignRunIDs(ctx context.Context, fileSvc fs.RuntimeFileService, store *e
 	return runIDs, nil
 }
 
-func campaignCells(spec *evalv1.EvaluationCampaignSpec, lane string, stacks int) uint64 {
+// campaignCells is the assignment count of one run, sized from the catalog the
+// campaign froze rather than from any built-in suite.
+func campaignCells(catalog *evalv1.EvaluationScenarioCatalog, spec *evalv1.EvaluationCampaignSpec, lane string, stacks int) uint64 {
 	if lane == campaignLaneSystem {
-		return evaluation.ComputeHeterogeneousMatrixSize(uint64(stacks))
+		return evaluation.FormationMatrixSize(catalog, uint64(stacks))
 	}
-	return evaluation.ComputeHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(spec.GetRepetitionCount())
+	return evaluation.ModelRoleMatrixSize(catalog, uint64(len(spec.GetModelRegistry())), spec.GetRepetitionCount())
 }
 
 // campaignCreateSpec is everything that defines one campaign.
@@ -316,8 +321,6 @@ type campaignCreateSpec struct {
 	CampaignID   string
 	Variants     []*evalv1.ModelVariant
 	Repetitions  uint32
-	System       bool
-	Seed         uint64
 	Formations   bool
 	FormationIDs []string
 	// SuiteID names the suite the campaign freezes; empty means the default suite.
@@ -326,6 +329,7 @@ type campaignCreateSpec struct {
 
 type campaignCreateResult struct {
 	Spec     *evalv1.EvaluationCampaignSpec
+	Catalog  *evalv1.EvaluationScenarioCatalog
 	StackSet *evaluation.HeterogeneousStackSet
 	Lane     string
 }
@@ -360,23 +364,15 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
 	var stackSet *evaluation.HeterogeneousStackSet
-	switch {
-	case spec.Formations:
+	if spec.Formations {
 		stackSet, err = evaluation.GenerateFormationCatalogStackSet(evaluation.FormationCatalogStackGenerationRequest{
 			CampaignID:   spec.CampaignID,
-			Seed:         spec.Seed,
 			Variants:     freeze.Variants,
 			FormationIDs: spec.FormationIDs,
 		})
-	case spec.System:
-		stackSet, err = evaluation.GenerateHeterogeneousStackSet(evaluation.HeterogeneousStackGenerationRequest{
-			CampaignID: spec.CampaignID,
-			Seed:       spec.Seed,
-			Variants:   freeze.Variants,
-		})
-	}
-	if err != nil {
-		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
+		}
 	}
 	if stackSet == nil && len(freeze.Variants) != 1 {
 		return nil, fmt.Errorf("evaluation: campaigns create: %d models selected: %w", len(freeze.Variants), constants.ErrEvaluationCampaignSubjectInvalid)
@@ -409,7 +405,7 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 	if stackSet != nil {
 		lane = campaignLaneSystem
 	}
-	return &campaignCreateResult{Spec: campaignSpec, StackSet: stackSet, Lane: lane}, nil
+	return &campaignCreateResult{Spec: campaignSpec, Catalog: catalog, StackSet: stackSet, Lane: lane}, nil
 }
 
 type campaignCreateJSON struct {
@@ -428,9 +424,7 @@ type campaignCreateJSON struct {
 
 func campaignsCreateCmd(deps nativeEvalDeps) *cobra.Command {
 	var reps uint32
-	var lane string
 	var suite string
-	var seed uint64
 	var formations []string
 	var allFormations bool
 	var selector ModelSelector
@@ -446,18 +440,18 @@ default-suite; see g8e eval suites). The suite is copied into the campaign, so
 editing or deleting it later never changes the campaign.
 
 A model campaign takes a model selector (positional models, --family,
---max-params, or --all) and defaults to the model-role lane. A model-role
-campaign freezes exactly one model; the selector must resolve to a single model.
-Qualify several models with g8e eval rollout, which runs one campaign per model.
+--max-params, or --all) and scores each model on its own. A model campaign
+freezes exactly one model; the selector must resolve to a single model. Qualify
+several models with g8e eval rollout, which runs one campaign per model.
 
-A formation campaign takes --formations <id>... or --all-formations and always
-runs in the system lane.
+A formation campaign takes --formations <id>... or --all-formations and scores
+each formation as a set.
 
 Examples:
   g8e eval campaigns create eval-qwen qwen3:4b --reps 3
   g8e eval campaigns create eval-gemma gemma4:e4b
   g8e eval campaigns create eval-custom qwen3:4b --suite my-suite
-  g8e eval campaigns create eval-formations --all-formations --seed 17
+  g8e eval campaigns create eval-formations --all-formations
   g8e eval campaigns create eval-two --formations qwen-powerhouse,ultra-efficient-speedster`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -467,14 +461,8 @@ Examples:
 			if allFormations && len(formations) > 0 {
 				return fmt.Errorf("evaluation: campaigns create: --formations and --all-formations are mutually exclusive")
 			}
-			if lane != campaignLaneModelRole && lane != campaignLaneSystem {
-				return fmt.Errorf("evaluation: campaigns create: --lane must be %s or %s (got %q)", campaignLaneModelRole, campaignLaneSystem, lane)
-			}
-			if formationCampaign && cmd.Flags().Changed("lane") && lane != campaignLaneSystem {
-				return fmt.Errorf("evaluation: campaigns create: --lane %s is incompatible with --formations/--all-formations, which always run in the system lane", lane)
-			}
 			if formationCampaign && selector.IsSet() {
-				msg := fmt.Sprintf("evaluation: campaigns create: formations run in the system lane and take no model selector, but got %s", selector.describe())
+				msg := fmt.Sprintf("evaluation: campaigns create: formations take no model selector, but got %s", selector.describe())
 				if len(selector.IDs) > 0 {
 					msg += "; if you meant to pass multiple --formations, separate them with a comma (--formations a,b) or repeat the flag (--formations a --formations b) — space-separated values after a flag are parsed as extra positional arguments"
 				}
@@ -494,18 +482,15 @@ Examples:
 			if len(registry) == 0 {
 				return fmt.Errorf("evaluation: campaigns create: the model registry is empty (run `g8e eval models freeze` or `g8e eval models import`): %w", constants.ErrEvaluationSelectionEmpty)
 			}
-			create := campaignCreateSpec{CampaignID: campaignID, Repetitions: reps, Seed: seed, SuiteID: suite}
+			create := campaignCreateSpec{CampaignID: campaignID, Repetitions: reps, SuiteID: suite}
 			if formationCampaign {
 				create.Formations = true
 				create.FormationIDs = formations
 				if create.Variants, err = evaluation.MaterializeFormationVariants(registry, formations); err != nil {
 					return fmt.Errorf("evaluation: campaigns create: %w", err)
 				}
-			} else {
-				create.System = lane == campaignLaneSystem
-				if create.Variants, err = selector.Resolve(registry); err != nil {
-					return fmt.Errorf("evaluation: campaigns create: %w", err)
-				}
+			} else if create.Variants, err = selector.Resolve(registry); err != nil {
+				return fmt.Errorf("evaluation: campaigns create: %w", err)
 			}
 			result, err := createCampaign(cmd.Context(), deps, fileSvc, create)
 			if err != nil {
@@ -523,7 +508,7 @@ Examples:
 				ModelCount:          len(result.Spec.GetModelRegistry()),
 				ScenarioCount:       result.Spec.GetScenarioCount(),
 				RepetitionCount:     result.Spec.GetRepetitionCount(),
-				CellsPerRun:         campaignCells(result.Spec, result.Lane, stacks),
+				CellsPerRun:         campaignCells(result.Catalog, result.Spec, result.Lane, stacks),
 				ModelRegistryDigest: result.Spec.GetModelRegistryDigest(),
 				CatalogDigest:       result.Spec.GetCatalogDigest(),
 				StackCount:          stacks,
@@ -544,10 +529,8 @@ Examples:
 	}
 	cmd.Flags().Uint32Var(&reps, "reps", 1, "Repetitions of each matrix cell")
 	cmd.Flags().StringVar(&suite, "suite", evaluation.DefaultSuiteID, "Suite to freeze into the campaign (see g8e eval suites list)")
-	cmd.Flags().StringVar(&lane, "lane", campaignLaneModelRole, "Evaluation lane: model-role or system")
-	cmd.Flags().Uint64Var(&seed, "seed", 0, "Deterministic stack generation seed (system lane)")
-	cmd.Flags().StringSliceVar(&formations, "formations", nil, "Formation catalog IDs to evaluate (system lane)")
-	cmd.Flags().BoolVar(&allFormations, "all-formations", false, "Evaluate every formation in the catalog (system lane)")
+	cmd.Flags().StringSliceVar(&formations, "formations", nil, "Formation catalog IDs to evaluate")
+	cmd.Flags().BoolVar(&allFormations, "all-formations", false, "Evaluate every formation in the catalog")
 	selector.bindFlags(cmd)
 	return cmd
 }

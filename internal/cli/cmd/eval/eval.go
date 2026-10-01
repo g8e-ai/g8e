@@ -112,10 +112,9 @@ func Cmd() *cobra.Command {
 
 func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "eval",
-		Aliases: []string{"evals"},
-		Short:   "Run and verify g8e evaluation programs",
-		Long:    `Platform evaluation programs and their supporting workflows.`,
+		Use:   "eval",
+		Short: "Run and verify g8e evaluation programs",
+		Long:  `Platform evaluation programs and their supporting workflows.`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
 	cmd.AddCommand(
@@ -127,7 +126,6 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		formationsEvalCmd(deps),
 		gatesEvalCmd(deps),
 		boundaryEvalCmd(deps),
-		observerEvalCmd(deps),
 		jsonLeaf(backupEvalCmd(deps)),
 		jsonLeaf(restoreEvalCmd(deps)),
 	)
@@ -136,9 +134,8 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 
 func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "boundary",
-		Aliases: []string{"boundaries"},
-		Short:   "Native execution-boundary suite (no models)",
+		Use:   "boundary",
+		Short: "Native execution-boundary suite (no models)",
 	}
 	cmd.AddCommand(
 		jsonLeaf(boundaryEvalListCmd(deps)),
@@ -151,9 +148,8 @@ func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "formations",
-		Aliases: []string{"formation"},
-		Short:   "Heterogeneous model sets",
+		Use:   "formations",
+		Short: "Heterogeneous model sets",
 	}
 	cmd.AddCommand(
 		formationsListEvalCmd(deps),
@@ -167,9 +163,8 @@ func formationsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func gatesEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "gates",
-		Aliases: []string{"gate"},
-		Short:   "Pre-campaign acceptance gates",
+		Use:   "gates",
+		Short: "Pre-campaign acceptance gates",
 	}
 	cmd.AddCommand(
 		jsonLeaf(gatesChatEvalCmd(deps)),

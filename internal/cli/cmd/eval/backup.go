@@ -70,9 +70,8 @@ type evalRestoreJSON struct {
 func backupEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var outputDir string
 	cmd := &cobra.Command{
-		Use:     "backup",
-		Aliases: []string{"backups"},
-		Short:   "Copy evaluation evidence to a directory outside the runtime tree",
+		Use:   "backup",
+		Short: "Copy evaluation evidence to a directory outside the runtime tree",
 		Long: `Copy all evaluation evidence (runs, campaigns, archives, exports, the rollout
 queue, and the frozen model inventory) into a new timestamped snapshot
 directory beneath --output-dir (default: eval/backups under the project root),
@@ -115,9 +114,8 @@ automatically when they finish. Use 'g8e eval restore' to put a snapshot back.`,
 func restoreEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	var overwrite bool
 	cmd := &cobra.Command{
-		Use:     "restore [snapshot-dir]",
-		Aliases: []string{"restores"},
-		Short:   "Restore evaluation evidence from a backup snapshot",
+		Use:   "restore [snapshot-dir]",
+		Short: "Restore evaluation evidence from a backup snapshot",
 		Long: `Verify every file in a snapshot created by 'g8e eval backup' against its
 manifest, then write them back into .g8e/. Files already present with identical
 content are skipped. If any existing file differs, nothing is written unless

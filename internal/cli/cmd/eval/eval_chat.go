@@ -261,7 +261,7 @@ The model must be in the frozen inventory (g8e eval models).`,
 					return err
 				}
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nPhase 1A chat acceptance: %d passed, %d failed\n", len(cases)-failures, failures)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nChat acceptance: %d passed, %d failed\n", len(cases)-failures, failures)
 			}
 			if failures > 0 {
 				return fmt.Errorf("evaluation: chat accept: %d case(s) failed", failures)
@@ -271,7 +271,7 @@ The model must be in the frozen inventory (g8e eval models).`,
 	}
 	cmd.Flags().StringVar(&model, "model", "", "Requested provider model tag")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A chat matrix)")
+	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: every chat acceptance case)")
 	cmd.Flags().BoolVar(&noAutoBind, "no-auto-bind", false, "Do not bind the data-operator to the CLI session when it is not bound")
 	return cmd
 }
@@ -297,7 +297,7 @@ func (r *chatAcceptReporter) writef(format string, args ...any) {
 }
 
 func (r *chatAcceptReporter) writeSetup(caseCount int, model, inferenceSessionID, dataSessionID, ensembleURL string) {
-	r.writef("Running Phase 1A chat acceptance (%d case(s))", caseCount)
+	r.writef("Running chat acceptance (%d case(s))", caseCount)
 	r.writef("  model: %s", model)
 	r.writef("  inference operator session: %s", inferenceSessionID)
 	r.writef("  data operator session: %s", dataSessionID)

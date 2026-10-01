@@ -55,11 +55,12 @@ func TestSuitesList_ShowsBuiltinSuites(t *testing.T) {
 	assert.Equal(t, evaluation.DefaultSuiteScenarioCount, payload.Suites[0].ScenarioCount)
 }
 
-func TestSuites_SingularAliasWorks(t *testing.T) {
+func TestSuites_HasNoSingularAlias(t *testing.T) {
 	env := setupRunEnv(t)
 
-	out := env.mustRun(t, "suite", "list")
-	assert.Contains(t, out, evaluation.DefaultSuiteID)
+	_, err := env.run(t, "suite", "list")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `unknown command "suite"`)
 }
 
 func TestSuitesExport_WritesTheCreateFormat(t *testing.T) {

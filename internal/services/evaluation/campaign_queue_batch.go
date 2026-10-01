@@ -42,5 +42,5 @@ func (queue *CampaignQueue) BuildBatchPlan(req CampaignQueueBatchPlanRequest) []
 
 // StrictWitnessVerifyNotes returns the standard queue note for a strict-witness verified run.
 func StrictWitnessVerifyNotes(runID string) string {
-	return "75/75 witness verify PASS (--require-provider-observation --require-model-provenance); run " + runID
+	return "witness verify PASS (--require-provider-observation --require-model-provenance); run " + runID
 }

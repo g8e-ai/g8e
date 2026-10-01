@@ -33,9 +33,8 @@ func normalizeRuntimeEvalPath(rawPath string) string {
 
 func runsEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "runs",
-		Aliases: []string{"run"},
-		Short:   "Start, follow, verify, and publish campaign runs",
+		Use:   "runs",
+		Short: "Start, follow, verify, and publish campaign runs",
 		Long: `A run is one execution of a campaign. Runs have a lifecycle: start, resume,
 cancel, verify, publish, and export, and they can be archived.`,
 	}

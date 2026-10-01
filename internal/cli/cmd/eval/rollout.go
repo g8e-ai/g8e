@@ -22,9 +22,8 @@ import (
 
 func rolloutEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "rollout",
-		Aliases: []string{"rollouts"},
-		Short:   "Qualify registry models one at a time through the rollout queue",
+		Use:   "rollout",
+		Short: "Qualify registry models one at a time through the rollout queue",
 		Long: `The rollout queue orders registry models for unattended qualification. Each
 entry is created as a campaign, run with strict witness verification, and marked
 verified only when a full run passes.
