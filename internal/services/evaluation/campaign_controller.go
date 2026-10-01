@@ -183,6 +183,9 @@ func (c *CampaignController) StartRun(ctx context.Context, req RunStartRequest) 
 	if lane == evalv1.EvaluationLane_EVALUATION_LANE_UNSPECIFIED {
 		lane = evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE
 	}
+	if lane == evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE && len(spec.GetModelRegistry()) != 1 {
+		return nil, fmt.Errorf("evaluation: start run %q: campaign %q freezes %d models: %w", req.RunID, req.CampaignID, len(spec.GetModelRegistry()), constants.ErrEvaluationCampaignSubjectInvalid)
+	}
 	run := &evalv1.EvaluationRun{
 		SchemaVersion: CampaignSchemaVersion,
 		RunId:         req.RunID,
@@ -651,8 +654,10 @@ func scenarioToolsForAssignment(catalog *evalv1.EvaluationScenarioCatalog, assig
 	for _, scenario := range catalog.GetScenarios() {
 		if scenario.GetScenarioId() == assignment.GetScenarioId() {
 			return ScenarioToolExpectations{
-				ExpectedTools:  append([]string(nil), scenario.GetExpectedTools()...),
-				ForbiddenTools: append([]string(nil), scenario.GetForbiddenTools()...),
+				AllowedTools:     append([]string(nil), scenario.GetAllowedTools()...),
+				ExpectedTools:    append([]string(nil), scenario.GetExpectedTools()...),
+				ForbiddenTools:   append([]string(nil), scenario.GetForbiddenTools()...),
+				TrajectoryPolicy: scenario.GetTrajectoryPolicy(),
 			}, nil
 		}
 	}

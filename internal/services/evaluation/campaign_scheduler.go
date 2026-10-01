@@ -89,10 +89,38 @@ func BuildHomogeneousAssignmentMatrix(req HomogeneousScheduleRequest) ([]*evalv1
 			}
 		}
 	}
-	sort.Slice(assignments, func(i, j int) bool {
-		return assignments[i].GetDeterministicIdentity() < assignments[j].GetDeterministicIdentity()
-	})
+	sortAssignmentsDeterministic(assignments)
 	return assignments, nil
+}
+
+// assignmentExecutionLess is the single execution order for assignments.
+// Homogeneous assignments run model by model, so the provider keeps one model
+// resident while it works through every scenario, role, and repetition before
+// the next model loads. Identity breaks ties and orders every other lane.
+func assignmentExecutionLess(left, right *evalv1.EvaluationAssignment) bool {
+	leftTarget, rightTarget := left.GetHomogeneous(), right.GetHomogeneous()
+	if (leftTarget != nil) != (rightTarget != nil) {
+		return leftTarget != nil
+	}
+	if leftTarget != nil {
+		leftVariant, rightVariant := leftTarget.GetCandidateVariant(), rightTarget.GetCandidateVariant()
+		if l, r := leftVariant.GetServedModelTag(), rightVariant.GetServedModelTag(); l != r {
+			return l < r
+		}
+		if l, r := leftVariant.GetVariantId(), rightVariant.GetVariantId(); l != r {
+			return l < r
+		}
+		if l, r := left.GetScenarioId(), right.GetScenarioId(); l != r {
+			return l < r
+		}
+		if l, r := leftTarget.GetDesignatedRole(), rightTarget.GetDesignatedRole(); l != r {
+			return l < r
+		}
+		if l, r := left.GetRepetition(), right.GetRepetition(); l != r {
+			return l < r
+		}
+	}
+	return left.GetDeterministicIdentity() < right.GetDeterministicIdentity()
 }
 
 func buildHomogeneousAssignment(campaignID, runID string, scenario *evalv1.EvaluationScenarioDefinition, variant *evalv1.ModelVariant, role evalv1.ModelCampaignRole, repetition uint32, queuedAt time.Time) (*evalv1.EvaluationAssignment, error) {

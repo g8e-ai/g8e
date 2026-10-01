@@ -28,17 +28,18 @@ type FormationBindingRequest struct {
 // FormationRunContext carries opaque campaign identifiers into governed role
 // execution. Checkpoint persistence remains an adapter responsibility.
 type FormationRunContext struct {
-	CampaignID          string
-	RunID               string
-	AssignmentID        string
-	EvaluationAttemptID string
-	ScenarioID          string
-	ModelRegistryDigest string
-	InitialState        []byte
-	InferenceSessionID  string
-	DataSessionID       string
-	OnRoleStarting      func(context.Context, FormationRole) error
-	OnRoleProgress      func(context.Context, *FormationRunResult) error
+	CampaignID                   string
+	RunID                        string
+	AssignmentID                 string
+	EvaluationAttemptID          string
+	ScenarioID                   string
+	ModelRegistryDigest          string
+	InitialState                 []byte
+	InferenceSessionID           string
+	DataSessionID                string
+	DataOperatorWorkingDirectory string
+	OnRoleStarting               func(context.Context, FormationRole) error
+	OnRoleProgress               func(context.Context, *FormationRunResult) error
 }
 
 // FormationBindingFromCatalog materializes the canonical stack for one catalog

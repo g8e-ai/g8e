@@ -19,6 +19,7 @@ from app.constants import AgentMode
 import app.llm.llm_types as types
 from app.errors import ConfigurationError
 from app.models.settings import G8eeUserSettings, LLMSettings
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 pytestmark = [pytest.mark.unit]
 
@@ -247,7 +248,9 @@ class TestGetGenerationConfig:
         assert config.system_instructions == "instructions"
         assert config.max_output_tokens == 2048
         assert config.parallel_tool_calls is False
-        mock_tool_executor.get_tools.assert_called_once_with(AgentMode.G8E_BOUND, "gemini-1.5-pro")
+        mock_tool_executor.get_tools.assert_called_once_with(
+            AgentMode.G8E_BOUND, "gemini-1.5-pro", evaluation_context=None
+        )
 
     def test_raises_configuration_error_when_model_missing(self, builder):
         settings = G8eeUserSettings(
@@ -269,7 +272,35 @@ class TestGetGenerationConfig:
             model_override="override-model",
         )
 
-        mock_tool_executor.get_tools.assert_called_with(AgentMode.G8E_BOUND, "override-model")
+        mock_tool_executor.get_tools.assert_called_with(
+            AgentMode.G8E_BOUND, "override-model", evaluation_context=None
+        )
+
+    def test_passes_evaluation_context_to_tool_executor(self, builder, mock_tool_executor):
+        """The scored request's context, not an env var, drives the tool-gate bypass."""
+        evaluation_context = EvaluationInferenceContext(
+            campaign_id="campaign-1",
+            run_id="run-1",
+            assignment_id="assignment-1",
+            evaluation_attempt_id="attempt-1",
+            scenario_id="tool-select-grep",
+            model_registry_digest="d" * 64,
+            model_registry=[InferenceModelVariant(model="qwen3.5:4b", digest="a" * 64)],
+            target_operator_session_id="session-1",
+        )
+        settings = G8eeUserSettings(llm=LLMSettings(llm_model="default-model"))
+
+        builder.get_generation_config(
+            system_instructions="...",
+            settings=settings,
+            agent_mode=AgentMode.G8E_BOUND,
+            model_override="qwen3.5:4b",
+            evaluation_context=evaluation_context,
+        )
+
+        mock_tool_executor.get_tools.assert_called_once_with(
+            AgentMode.G8E_BOUND, "qwen3.5:4b", evaluation_context=evaluation_context
+        )
 
 
 class TestFormatAttachmentParts:

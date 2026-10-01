@@ -30,7 +30,7 @@ import {
   MODEL_QUALITY_FILTER_STATES,
   normalizeQualityFilter,
 } from '../utils/feed-state';
-import { datasetLabel, roleLabel } from './derived';
+import { comparisonCompatibility, datasetLabel, roleLabel } from './derived';
 
 interface ModelFilters {
   search: string;
@@ -82,8 +82,12 @@ export function ModelsView() {
       .filter((m): m is NonNullable<typeof m> => m !== undefined),
   );
 
-  const comparisonDatasetMismatch =
-    comparedModels.length >= 2 && new Set(comparedModels.map((m) => m.dataset_id)).size > 1;
+  const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
+  const evaluations = useStoreState((state) => Array.from(state.evaluations.values()));
+  const compatibility = useMemo(
+    () => comparisonCompatibility(comparedModels, catalogs, evaluations),
+    [comparedModels, catalogs, evaluations],
+  );
 
   const qualityOptions = useMemo(
     () => availableQualityFilterOptions(models, MODEL_QUALITY_FILTER_STATES),
@@ -281,13 +285,16 @@ export function ModelsView() {
         <ErrorState message="Some selected models were not found in the catalog." />
       ) : null}
 
-      {comparisonDatasetMismatch ? (
-        <ErrorState message="Selected models come from different datasets. Comparison never combines incompatible datasets." />
+      {comparedModels.length >= 2 && !compatibility.compatible ? (
+        <ErrorState
+          message={`Selected models come from different datasets that cannot be compared: ${compatibility.reason}. Comparison never combines incompatible datasets.`}
+        />
       ) : null}
 
-      {comparedModels.length >= 2 && !comparisonDatasetMismatch ? (
+      {comparedModels.length >= 2 && compatibility.compatible ? (
         <ModelComparisonPanel
           models={comparedModels}
+          environmentSource={compatibility.crossDataset ? compatibility.environmentSource : undefined}
           onClear={() => setComparison([])}
         />
       ) : null}

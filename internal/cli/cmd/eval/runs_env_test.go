@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/cmd/cmdtest"
@@ -38,13 +39,15 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 const (
-	testInferenceSession = "infer-session"
-	testDataSession      = "data-session"
-	testHost             = "test-host"
-	testPID              = 4242
+	testInferenceSession             = "infer-session"
+	testDataSession                  = "data-session"
+	testDataOperatorWorkingDirectory = "/home/operator"
+	testHost                         = "test-host"
+	testPID                          = 4242
 )
 
 // fakeProcessControl is the run-control process boundary for tests. It makes
@@ -126,8 +129,19 @@ func testRunOperators() []models.OperatorDocumentGo {
 			Status:            constants.OperatorStatusActive,
 			OperatorType:      constants.OperatorTypeRemote,
 			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: false},
+			LatestHeartbeat:   testDataOperatorHeartbeat(testDataOperatorWorkingDirectory),
 		},
 	}
+}
+
+// testDataOperatorHeartbeat is the latest heartbeat snapshot a Data Operator
+// reports, which carries the working directory campaign workspaces live under.
+func testDataOperatorHeartbeat(workingDirectory string) json.RawMessage {
+	snapshot, err := protojson.Marshal(&operatorv1.HeartbeatResult{Environment: &operatorv1.EnvironmentDetails{Pwd: workingDirectory}})
+	if err != nil {
+		panic(fmt.Sprintf("testDataOperatorHeartbeat: %v", err))
+	}
+	return snapshot
 }
 
 func writePublicationProofResponse(w http.ResponseWriter, r *http.Request) bool {
@@ -512,11 +526,26 @@ func repeatTestHex(ch byte, n int) string {
 	return string(out)
 }
 
+// newTestEnsembleServer fakes g8ee's chat and trace endpoints. Like g8ee, it
+// stores the posted evaluation_context whole in the trace it serves, so the
+// seed and workspace a request carried are echoed back and the trace digest
+// covers them.
 func newTestEnsembleServer(t *testing.T, traceFn func(assignmentID, attemptID string) map[string]any) *httptest.Server {
 	t.Helper()
+	var mu sync.Mutex
+	postedContexts := map[string]map[string]any{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == harnessclient.EnsembleChatPath:
+			var posted struct {
+				EvaluationContext map[string]any `json:"evaluation_context"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&posted); err == nil && posted.EvaluationContext != nil {
+				key := fmt.Sprint(posted.EvaluationContext["assignment_id"]) + "/" + fmt.Sprint(posted.EvaluationContext["evaluation_attempt_id"])
+				mu.Lock()
+				postedContexts[key] = posted.EvaluationContext
+				mu.Unlock()
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true,"case_id":"case-1","investigation_id":"inv-1"}`))
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/evaluation/trace/"):
@@ -529,6 +558,18 @@ func newTestEnsembleServer(t *testing.T, traceFn func(assignmentID, attemptID st
 			if trace == nil {
 				http.NotFound(w, r)
 				return
+			}
+			mu.Lock()
+			posted, echoed := postedContexts[parts[0]+"/"+parts[1]]
+			mu.Unlock()
+			if echoed {
+				trace["evaluation_context"] = posted
+				digest, err := evaluation.ComputeChatProbeTraceDigest(trace)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				trace["trace_digest"] = digest
 			}
 			raw, err := json.Marshal(trace)
 			if err != nil {

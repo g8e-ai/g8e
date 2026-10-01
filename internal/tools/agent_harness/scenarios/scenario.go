@@ -144,6 +144,7 @@ func Registry() []Scenario {
 	var s []Scenario
 	s = append(s, mcpScenarios()...)
 	s = append(s, a2aScenarios()...)
+	s = append(s, agentLauncherScenarios()...)
 	s = append(s, governanceScenarios()...)
 	s = append(s, ensembleScenarios()...)
 	s = append(s, dhsScenarios()...)

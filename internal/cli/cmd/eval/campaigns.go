@@ -378,6 +378,9 @@ func createCampaign(ctx context.Context, deps nativeEvalDeps, fileSvc fs.Runtime
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaigns create: %w", err)
 	}
+	if stackSet == nil && len(freeze.Variants) != 1 {
+		return nil, fmt.Errorf("evaluation: campaigns create: %d models selected: %w", len(freeze.Variants), constants.ErrEvaluationCampaignSubjectInvalid)
+	}
 	store := evaluation.NewStore(fileSvc)
 	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
 	campaignSpec, err := controller.CreateCampaign(ctx, evaluation.CampaignCreateRequest{
@@ -437,14 +440,16 @@ func campaignsCreateCmd(deps nativeEvalDeps) *cobra.Command {
 repetition count. Nothing executes until a run starts (g8e eval runs start).
 
 A model campaign takes a model selector (positional models, --family,
---max-params, or --all) and defaults to the model-role lane.
+--max-params, or --all) and defaults to the model-role lane. A model-role
+campaign freezes exactly one model; the selector must resolve to a single model.
+Qualify several models with g8e eval rollout, which runs one campaign per model.
 
 A formation campaign takes --formations <id>... or --all-formations and always
 runs in the system lane.
 
 Examples:
-  g8e eval campaigns create eval-qwen qwen3:4b qwen3:8b --reps 3
-  g8e eval campaigns create eval-small --max-params 4b
+  g8e eval campaigns create eval-qwen qwen3:4b --reps 3
+  g8e eval campaigns create eval-gemma gemma4:e4b
   g8e eval campaigns create eval-formations --all-formations --seed 17
   g8e eval campaigns create eval-two --formations qwen-powerhouse,ultra-efficient-speedster`,
 		Args: cobra.MinimumNArgs(1),

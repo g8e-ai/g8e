@@ -13,6 +13,7 @@ import time
 from typing import Any
 
 from app.llm.model_evidence import (
+    recorded_declared_tool_names,
     recorded_governed_dispatch_evidence,
     recorded_model_boundary_hash,
     recorded_model_boundary_privacy,
@@ -33,6 +34,7 @@ def prepare_provider_call(
 ) -> None:
     """Reset per-call evidence and bind request-scoped evaluation context."""
     provider.clear_input_artifact_hash()
+    provider.clear_declared_tools()
     provider.set_g8e_context(g8e_context)
     provider.set_provider_retry_count(retry_count)
 
@@ -116,6 +118,7 @@ def build_model_call_telemetry(
         input_artifact_hash=resolved_input_hash,
         output_artifact_hash=output_artifact_hash,
         model_boundary_privacy=recorded_model_boundary_privacy(provider),
+        tools_declared=recorded_declared_tool_names(provider),
         **governed_telemetry_fields(provider),
         **extra,
     )

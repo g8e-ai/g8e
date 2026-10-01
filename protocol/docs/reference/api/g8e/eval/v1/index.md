@@ -43,6 +43,8 @@
     - [ModelVariant](#g8e-eval-v1-ModelVariant)
     - [ModelWeightAttestation](#g8e-eval-v1-ModelWeightAttestation)
     - [PolicyDecisionRecord](#g8e-eval-v1-PolicyDecisionRecord)
+    - [PromptHint](#g8e-eval-v1-PromptHint)
+    - [PromptHintArgument](#g8e-eval-v1-PromptHintArgument)
     - [ProviderBoundaryHardwareSample](#g8e-eval-v1-ProviderBoundaryHardwareSample)
     - [ProviderBoundaryObservationCommand](#g8e-eval-v1-ProviderBoundaryObservationCommand)
     - [ProviderBoundaryObservationCompleted](#g8e-eval-v1-ProviderBoundaryObservationCompleted)
@@ -81,6 +83,7 @@
     - [EvaluationEvidenceAuthority](#g8e-eval-v1-EvaluationEvidenceAuthority)
     - [EvaluationGovernancePosture](#g8e-eval-v1-EvaluationGovernancePosture)
     - [EvaluationGradingMethod](#g8e-eval-v1-EvaluationGradingMethod)
+    - [EvaluationHintArgumentSource](#g8e-eval-v1-EvaluationHintArgumentSource)
     - [EvaluationLane](#g8e-eval-v1-EvaluationLane)
     - [EvaluationLoadState](#g8e-eval-v1-EvaluationLoadState)
     - [EvaluationMetricDirection](#g8e-eval-v1-EvaluationMetricDirection)
@@ -90,6 +93,8 @@
     - [EvaluationPolicyDecisionOutcome](#g8e-eval-v1-EvaluationPolicyDecisionOutcome)
     - [EvaluationRuntimeComponent](#g8e-eval-v1-EvaluationRuntimeComponent)
     - [EvaluationScenarioCategory](#g8e-eval-v1-EvaluationScenarioCategory)
+    - [EvaluationTrajectoryOutcome](#g8e-eval-v1-EvaluationTrajectoryOutcome)
+    - [EvaluationTrajectoryPolicy](#g8e-eval-v1-EvaluationTrajectoryPolicy)
     - [EvaluationUsageAvailability](#g8e-eval-v1-EvaluationUsageAvailability)
     - [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus)
     - [EvaluationWitnessPolicy](#g8e-eval-v1-EvaluationWitnessPolicy)
@@ -301,6 +306,10 @@ EvaluationAssignmentResult is the private terminal result for one assignment.
 | governed_actions_captured | [bool](#bool) |  |  |
 | policy_decisions_captured | [bool](#bool) |  |  |
 | scored_inference_span_nanos | [uint64](#uint64) | optional |  |
+| trajectory_outcome | [EvaluationTrajectoryOutcome](#g8e-eval-v1-EvaluationTrajectoryOutcome) |  |  |
+| guided_retry_count | [uint32](#uint32) |  |  |
+| failure_reason | [string](#string) |  | Private one-sentence failure reason (may quote the hint values and the start of the model output). Empty when the scenario passed. |
+| public_failure_reason | [string](#string) |  | Public-safe failure reason built only from public fields. |
 
 
 
@@ -542,6 +551,8 @@ EvaluationScenarioDefinition describes one frozen typed scenario.
 | public_criteria | [PublicScenarioCriterion](#g8e-eval-v1-PublicScenarioCriterion) | repeated |  |
 | public_tool_score_dimensions | [PublicToolScoreDimensionRequirement](#g8e-eval-v1-PublicToolScoreDimensionRequirement) | repeated |  |
 | eligible_roles | [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole) | repeated | eligible_roles lists the model roles that perform this task in g8ee. The homogeneous scheduler assigns the scenario only to these roles; the frozen catalog digest binds the set. |
+| trajectory_policy | [EvaluationTrajectoryPolicy](#g8e-eval-v1-EvaluationTrajectoryPolicy) |  |  |
+| prompt_hint | [PromptHint](#g8e-eval-v1-PromptHint) |  |  |
 
 
 
@@ -881,6 +892,8 @@ ModelInferenceRecord captures one governed scored inference call.
 | governed_receipt_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
 | result_digest | [string](#string) |  |  |
 | provider_boundary_observation_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
+| tools_declared | [string](#string) | repeated | Tool names as sent to the provider for this call, captured at the provider boundary. tools_declared_reported distinguishes &#34;none declared&#34; from &#34;not reported&#34;. |
+| tools_declared_reported | [bool](#bool) |  |  |
 
 
 
@@ -1013,6 +1026,41 @@ by the storage-side Provenance Operator at the model file site.
 | tool_name | [string](#string) |  |  |
 | outcome | [EvaluationPolicyDecisionOutcome](#g8e-eval-v1-EvaluationPolicyDecisionOutcome) |  |  |
 | detail | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PromptHint"></a>
+
+### PromptHint
+PromptHint records which tools a scenario prompt hints at and where each
+required argument comes from, so a failure can say the opportunity was real.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| hinted_tools | [string](#string) | repeated |  |
+| arguments | [PromptHintArgument](#g8e-eval-v1-PromptHintArgument) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PromptHintArgument"></a>
+
+### PromptHintArgument
+PromptHintArgument names one required argument of a hinted tool and where
+its value is derivable from. Values stay in the private input fixture.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| argument_name | [string](#string) |  |  |
+| source | [EvaluationHintArgumentSource](#g8e-eval-v1-EvaluationHintArgumentSource) |  |  |
+| tool_name | [string](#string) |  |  |
 
 
 
@@ -1185,6 +1233,10 @@ to one governed inference provider attempt.
 | activity_summary | [PublicAssignmentActivitySummary](#g8e-eval-v1-PublicAssignmentActivitySummary) |  |  |
 | evidence_bindings | [PublicEvidenceBinding](#g8e-eval-v1-PublicEvidenceBinding) | repeated |  |
 | verification_metadata | [PublicVerificationMetadata](#g8e-eval-v1-PublicVerificationMetadata) |  |  |
+| trajectory_outcome | [EvaluationTrajectoryOutcome](#g8e-eval-v1-EvaluationTrajectoryOutcome) |  |  |
+| guided_retry_count | [uint32](#uint32) |  |  |
+| failure_reason | [string](#string) |  |  |
+| tools_declared | [string](#string) | repeated |  |
 
 
 
@@ -1426,6 +1478,8 @@ to one governed inference provider attempt.
 | forbidden_tools | [string](#string) | repeated |  |
 | criteria | [PublicScenarioCriterion](#g8e-eval-v1-PublicScenarioCriterion) | repeated |  |
 | tool_score_dimensions | [PublicToolScoreDimensionRequirement](#g8e-eval-v1-PublicToolScoreDimensionRequirement) | repeated |  |
+| trajectory_policy | [EvaluationTrajectoryPolicy](#g8e-eval-v1-EvaluationTrajectoryPolicy) |  |  |
+| prompt_hint | [PromptHint](#g8e-eval-v1-PromptHint) |  |  |
 
 
 
@@ -1480,6 +1534,9 @@ to one governed inference provider attempt.
 | execution_outcome | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
 | semantic_outcome | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
 | evidence_source | [PublicEvidenceSource](#g8e-eval-v1-PublicEvidenceSource) |  |  |
+| loop_turn | [uint32](#uint32) |  |  |
+| error_type | [string](#string) |  |  |
+| guidance_shown | [bool](#bool) |  |  |
 
 
 
@@ -1630,6 +1687,9 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 | schema_outcome | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
 | semantic_outcome | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
 | governed_binding_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
+| loop_turn | [uint32](#uint32) |  | Tool-loop turn whose model response issued the call (1-based; 0 = not reported). The model-visible guidance text stays in the private trace. |
+| error_type | [string](#string) |  |  |
+| guidance_shown | [bool](#bool) |  |  |
 
 
 
@@ -1756,6 +1816,23 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 | EVALUATION_GRADING_METHOD_UNSPECIFIED | 0 |  |
 | EVALUATION_GRADING_METHOD_DETERMINISTIC | 1 |  |
 | EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE | 2 |  |
+
+
+
+<a name="g8e-eval-v1-EvaluationHintArgumentSource"></a>
+
+### EvaluationHintArgumentSource
+EvaluationHintArgumentSource names where a hinted tool argument&#39;s value is
+derivable from, so catalog lint can prove a prompt is answerable.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| EVALUATION_HINT_ARGUMENT_SOURCE_UNSPECIFIED | 0 |  |
+| EVALUATION_HINT_ARGUMENT_SOURCE_PROMPT | 1 | The literal value appears in the rendered prompt. |
+| EVALUATION_HINT_ARGUMENT_SOURCE_SEED | 2 | The value appears in the scenario&#39;s investigation seed. |
+| EVALUATION_HINT_ARGUMENT_SOURCE_WORKSPACE | 3 | The value is the attempt-scoped fixture workspace named in the prompt. |
+| EVALUATION_HINT_ARGUMENT_SOURCE_OPERATOR_CONTEXT | 4 | The value comes from the bound-operator context g8ee supplies. |
+| EVALUATION_HINT_ARGUMENT_SOURCE_MODEL_AUTHORED | 5 | Free-text rationale the model authors (for example a justification). |
 
 
 
@@ -1889,6 +1966,45 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 | EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY | 7 |  |
 | EVALUATION_SCENARIO_CATEGORY_RECOVERY | 8 |  |
 | EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE | 9 |  |
+
+
+
+<a name="g8e-eval-v1-EvaluationTrajectoryOutcome"></a>
+
+### EvaluationTrajectoryOutcome
+EvaluationTrajectoryOutcome is the closed vocabulary for what the model did
+across its guided loop.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| EVALUATION_TRAJECTORY_OUTCOME_UNSPECIFIED | 0 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_DIRECT | 1 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_RECOVERED | 2 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_YIELDED_TO_DENIAL | 3 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_NO_TOOL_CALL | 4 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_WRONG_TOOL | 5 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_WRONG_ARGUMENTS | 6 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_IGNORED_GUIDANCE | 7 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_ABANDONED_AFTER_ERROR | 8 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_CIRCUMVENTED_DENIAL | 9 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_LOOP_EXHAUSTED | 10 |  |
+| EVALUATION_TRAJECTORY_OUTCOME_PROVIDER_REJECTED_TOOL_DECLARATION | 11 |  |
+
+
+
+<a name="g8e-eval-v1-EvaluationTrajectoryPolicy"></a>
+
+### EvaluationTrajectoryPolicy
+EvaluationTrajectoryPolicy decides how a scenario grades the ordered tool
+trajectory the model produced in its guided loop.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| EVALUATION_TRAJECTORY_POLICY_UNSPECIFIED | 0 |  |
+| EVALUATION_TRAJECTORY_POLICY_ANSWER | 1 | No tool is expected; graded on the final output. |
+| EVALUATION_TRAJECTORY_POLICY_FIRST_CHOICE | 2 | The first tool choice is the test: the expected tool must be called and no forbidden tool may be called. |
+| EVALUATION_TRAJECTORY_POLICY_GUIDED | 3 | Graded on the final outcome after a legitimate guided trajectory; a correction that follows returned guidance passes as RECOVERED. |
+| EVALUATION_TRAJECTORY_POLICY_GOVERNED | 4 | No unauthorized effect plus an acceptable response to governance. |
 
 
 

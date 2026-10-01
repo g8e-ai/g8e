@@ -205,6 +205,12 @@ func TestTestUnitCmd_StructureAndFlags(t *testing.T) {
 	cmd := testUnitCmd()
 	assert.Equal(t, "unit", cmd.Use)
 	assert.NotNil(t, cmd.RunE)
+	runFlag := cmd.Flags().Lookup("run")
+	require.NotNil(t, runFlag)
+	assert.Equal(t, "", runFlag.DefValue)
+	pkgFlag := cmd.Flags().Lookup("pkg")
+	require.NotNil(t, pkgFlag)
+	assert.Equal(t, "./...", pkgFlag.DefValue)
 }
 
 func TestTestUnitCmd_DelegatesToMakefileTarget(t *testing.T) {
@@ -229,6 +235,85 @@ func TestTestUnitCmd_RunnerFailureWrapsUnitError(t *testing.T) {
 
 func TestTestUnitCmd_NonzeroExitWrapsUnitError(t *testing.T) {
 	cmd := testUnitCmdWithRunner(recordingE2ERunner(2, nil, &[]string{}))
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnitTestsFailed)
+	assert.Contains(t, err.Error(), "exit code 2")
+}
+
+func TestTestUnitCmd_RunFlagAppendsRegexp(t *testing.T) {
+	var captured []string
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+	require.NoError(t, cmd.Flags().Set("pkg", "./internal/services/evaluation"))
+	require.NoError(t, cmd.Flags().Set("run", "TestEvaluationContract"))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.Contains(t, captured, "-timeout")
+	assert.Contains(t, captured, "./internal/services/evaluation")
+	assert.NotContains(t, captured, "./...")
+	idx := -1
+	for i, arg := range captured {
+		if arg == "-run" {
+			idx = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, idx, 0)
+	require.True(t, len(captured) > idx+1)
+	assert.Equal(t, "TestEvaluationContract", captured[idx+1])
+}
+
+func TestTestUnitCmd_TargetedOnlyPkg(t *testing.T) {
+	var captured []string
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+	require.NoError(t, cmd.Flags().Set("pkg", "./internal/services/evaluation"))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.Contains(t, captured, "-timeout")
+	assert.Contains(t, captured, "./internal/services/evaluation")
+	assert.NotContains(t, captured, "-run")
+}
+
+func TestTestUnitCmd_TargetedOnlyRun(t *testing.T) {
+	var captured []string
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+	require.NoError(t, cmd.Flags().Set("run", "TestSpecificUnitTest"))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.Contains(t, captured, "-timeout")
+	assert.Contains(t, captured, "./...")
+	idx := -1
+	for i, arg := range captured {
+		if arg == "-run" {
+			idx = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, idx, 0)
+	require.True(t, len(captured) > idx+1)
+	assert.Equal(t, "TestSpecificUnitTest", captured[idx+1])
+}
+
+func TestTestUnitCmd_TargetedRunnerFailureWrapsUnitError(t *testing.T) {
+	runnerErr := fmt.Errorf("child process failed")
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
+	require.NoError(t, cmd.Flags().Set("pkg", "./internal/services/evaluation"))
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnitTestsFailed)
+	assert.ErrorIs(t, err, runnerErr)
+}
+
+func TestTestUnitCmd_TargetedNonzeroExitWrapsUnitError(t *testing.T) {
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(2, nil, &[]string{}))
+	require.NoError(t, cmd.Flags().Set("run", "TestEvaluationContract"))
 
 	err := cmd.RunE(cmd, nil)
 

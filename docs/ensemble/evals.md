@@ -89,6 +89,7 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | --- | --- | --- |
 | Evaluation request model | [protocol/python/g8e/models/internal_api.py](../../protocol/python/g8e/models/internal_api.py) | `EvaluationInferenceContext`, `EvaluationLane`, `DesignatedModelRole`, `EvaluationGoldSummary` |
 | Trace service implementation | [ensemble/app/services/evaluation/trace_service.py](../../ensemble/app/services/evaluation/trace_service.py) | `EvaluationTraceService.begin()`, `finalize()`, `load()` |
+| Eval tool-gate decision | [ensemble/app/services/evaluation/tool_gate.py](../../ensemble/app/services/evaluation/tool_gate.py) | `resolve_tool_gate()`; applied by `AIToolService.get_tools()` |
 | Role control implementation | [ensemble/app/services/evaluation/role_control.py](../../ensemble/app/services/evaluation/role_control.py) | `apply_homogeneous_role_control()`, `resolve_role_outcome()` |
 | Semantic grader implementation | [ensemble/app/services/evaluation/semantic_grader.py](../../ensemble/app/services/evaluation/semantic_grader.py) | `grade_campaign_assignment_semantically()` |
 | Chat pipeline integration | [ensemble/app/services/ai/chat_pipeline.py](../../ensemble/app/services/ai/chat_pipeline.py) | Trace begin/finalize in `_finalize_evaluation_assignment()` |
@@ -121,9 +122,10 @@ A scored request uses the normal `ChatPipelineService` rather than an evaluation
 2. For the `model_role` lane, `apply_homogeneous_role_control` runs after triage. It records the designated role, the natural role implied by triage, whether they agree, and the triage complexity. `primary` dynamically activates `ReasoningAgent.SAGE` with `SagePersona`; `assistant` and `lite` activate `ReasoningAgent.DASH` with `DashPersona`, with model resolution taken from the designated tier and its request overrides, with no cross-tier fallback.
 3. The designated role controls the scored model selection even when triage would normally select another tier. A `lite` assignment always resolves the lite tier; the normal simple/complex routing rule does not override that assignment.
 4. The system lane does not apply homogeneous role control and follows normal triage routing: complex turns use the primary Sage path, and other turns use the assistant Dash path.
-5. The sequential ReAct loop (`G8eAgent._stream_with_tool_loop`) records model calls and tool activity against the bound remote Data Operator without synthetic mocks. Both Tier 1 fast smoke gate assignments (`--gate-smoke`) and full qualification assignments drive this identical production ReAct loop. Governed operator tool calls retain the bound Operator ID and session ID, execution binding, and receipt status in the trace. Failed tool results are classified as policy `deny` for known policy or validation blocks, or `refused` for other failures.
-6. Before finalizing the trace, g8ee waits for the background memory-generation task, subject to its evaluation barrier timeout, and includes its model telemetry when available.
-7. For `semantic_judge`, g8ee invokes the evaluation judge after the interaction completes, then finalizes the trace. Deterministic assignments do not invoke the semantic judge.
+5. The full production tool set for the agent mode is declared to the scored model, for any model tag, registered or not. The request's `evaluation_context` lifts the static `supports_tools` gate that production chat applies (`tool_gate: bypassed_for_eval`); no capability probe, table, or label withholds tools or alters a verdict. The tool names actually sent to the provider are recorded on each model call as `tools_declared`. If the provider itself rejects the declaration, g8ee records a `provider_tool_rejection` and finalizes the trace as `failed`; that is an explicit scored reason, not an infrastructure error.
+6. The sequential ReAct loop (`G8eAgent._stream_with_tool_loop`) records model calls and tool activity against the bound remote Data Operator without synthetic mocks. Both Tier 1 fast smoke gate assignments (`--gate-smoke`) and full qualification assignments drive this identical production ReAct loop. Governed operator tool calls retain the bound Operator ID and session ID, execution binding, and receipt status in the trace. Failed tool results are classified as policy `deny` for known policy or validation blocks, or `refused` for other failures. Every tool result, including a failure, returns to the model, and the trace keeps the guidance the model was shown (see [Tool and governed-action evidence](#tool-and-governed-action-evidence)).
+7. Before finalizing the trace, g8ee waits for the background memory-generation task, subject to its evaluation barrier timeout, and includes its model telemetry when available.
+8. For `semantic_judge`, g8ee invokes the evaluation judge after the interaction completes, then finalizes the trace. Deterministic assignments do not invoke the semantic judge.
 
 The Tribunal, Marshal, and Auditor remain application-layer behavior in the normal agent path. Tribunal agreement is not protocol L2 consensus and does not authorize a campaign action. Governed tool execution and its authoritative receipt remain owned by the Gateway and target Operator.
 
@@ -145,13 +147,15 @@ GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}
 
 The response is `{ "trace": <typed trace> }`. Missing traces return a not-found response, and unsafe path parameters are rejected. The Go campaign client polls this endpoint after submitting the chat request and imports the trace into the campaign's run-scoped evidence; g8ee does not write the Go campaign run store.
 
-A trace has schema version `2` and can contain:
+A trace has schema version `5` and can contain:
 
 - evaluation context and the g8ee chat execution ID;
 - triage and model-call telemetry;
 - controlled-role assignment and `invoked` or `role_not_invoked` outcome;
 - the designated-role output;
-- model tool decisions and executed tool calls, each with the model's exact canonical-JSON `arguments_json`, `arguments_hash` (`sha256(arguments_json)`), the resolved `command`, and the canonical-JSON `result_json`;
+- per model call, `tools_declared`: the tool names as actually sent to the provider on that call (captured at the provider boundary, never recomputed from the registry; absent when the provider reports nothing, `[]` when the call declared none), including a call the provider refused; and `tool_gate`, which is `bypassed_for_eval` for every scored request and `registry` only where the production table decided the set;
+- `provider_tool_rejection` (the rejected model and the Gateway's public-safe reason) when the provider itself refused the tool declaration;
+- model tool decisions and executed tool calls, each with the model's exact canonical-JSON `arguments_json`, `arguments_hash` (`sha256(arguments_json)`), the resolved `command`, and the canonical-JSON `result_json`, plus the guidance the model was shown for the result (`loop_turn`, `error`, `error_type`, `suggestion`, and an `error_analysis` summary);
 - governed-action bindings and policy decisions;
 - semantic grades and judge-call telemetry;
 - finish reason, terminal status, the terminal stream `error` message for a failed assignment, completion timestamp, and trace digest.
@@ -161,6 +165,8 @@ The trace is campaign evidence, not an independent authorization record. It does
 ## Tool and governed-action evidence
 
 Evaluation tool evidence is collected only when `g8e_context.evaluation_context` is present. A started tool call records its name and decision ID. A completed call records the model's arguments as canonical JSON with their SHA-256 hash, the resolved command, the canonical-JSON typed result, success, execution ID, operator-tool status, and error type. These values are the source of the public `role_transcripts` extension described in [Public Spectator Architecture](../architecture/public_spectator.md).
+
+Each completed call also records the guidance its result carried back to the model, because g8ee is a guided loop: argument-validation failures return the exception text, blocked commands return a `SECURITY VIOLATION` or `RISK_ANALYSIS_BLOCKED` result, and a failed operator command can carry an LLM error analysis. `loop_turn` is the tool-loop turn whose model response issued the call (it restarts at 1 only if an operator approves continuing past the turn limit), so the ordered `tool_calls` list shows what the model did after each correction. `error` and `suggestion` are the result's own text, `error_type` is the typed error class, and `error_analysis` is a bounded summary (`error_category`, `root_cause`, `suggested_fix`, `suggested_command`, `should_escalate`). These fields are recorded; the trace does not judge whether the model followed the guidance.
 
 For a failed `CommandExecutionResult`, g8ee records a typed policy decision with the outcome `deny` or `refused` and the available error or denial detail. For a successful operator tool, it records the first bound Operator's ID and session ID, the execution binding, a completed receipt status, and policy outcome `allow`. These records describe what g8ee observed; they do not independently prove protocol authorization or receipt validity.
 

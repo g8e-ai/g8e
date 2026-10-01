@@ -359,6 +359,7 @@ func classifyInferenceDispatchError(err error) (int, error) {
 		{constants.ErrInferenceToolSchemaInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceGenerationOptionsInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceCapabilityUnsupported, http.StatusUnprocessableEntity},
+		{constants.ErrInferenceToolsUnsupported, http.StatusUnprocessableEntity},
 		{constants.ErrInferenceModelRefInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceModelOverrideDenied, http.StatusForbidden},
 		{constants.ErrInferenceModelRegistryInvalid, http.StatusForbidden},

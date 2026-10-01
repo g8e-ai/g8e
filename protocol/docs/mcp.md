@@ -176,6 +176,12 @@ To list all supported agents:
 g8e mcp agent list
 ```
 
+To check an agent's launcher config and tool lockdown without installing or starting the agent (writes only to an isolated temporary directory, so it is safe in CI):
+
+```bash
+g8e mcp agent verify <agent>
+```
+
 The `show` command displays three configuration modes:
 
 **g8e.local (mTLS)**: Production environments with DNS configured. Requires DNS or `/etc/hosts` entry for `g8e.local` resolution. Suitable for Claude Code, Codex, Goose, Gemini CLI MCP clients.
@@ -455,6 +461,7 @@ See [SSE Streaming](../../docs/architecture/sse.md) for the full endpoint and se
 | Concern | File |
 |---|---|
 | Agent launcher (agent run) | `internal/cli/cmd/mcp/` (`runMCPAgentRun`) |
+| Supported-agent registry (config, launch args, verify hooks) | `internal/cli/agent/` |
 | Gateway entry | `internal/cli/cmd/gateway.go` (gatewayCmd, gatewayStartCmd) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http_router.go` |

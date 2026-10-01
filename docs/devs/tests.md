@@ -91,6 +91,9 @@ Ids are stable. Append the next free number in a topic. Do not renumber.
 # Tier 1: Fast unit tests (no network, no disk I/O, parallel across packages)
 ./g8e test unit
 
+# Narrow Tier 1 by package pattern or test name
+./g8e test unit --pkg ./internal/cli/cmd/test --run TestTestUnitCmd
+
 # Tier 2: In-process integration tests (local SQLite, PKI, pub/sub, race detector)
 ./g8e test integration
 
