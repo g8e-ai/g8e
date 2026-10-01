@@ -9,11 +9,7 @@ from __future__ import annotations
 
 import ipaddress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
-
-if TYPE_CHECKING:
-    from app.llm.llm_types import Schema
 
 
 @dataclass(frozen=True)
@@ -45,34 +41,6 @@ class ModelOverrideResolver:
             The primary model override if needs_primary, otherwise assistant model override
         """
         return self.primary_model if needs_primary else self.assistant_model
-
-
-def schema_to_dict(schema: Schema | dict[str, Any]) -> dict[str, Any]:
-    """Recursively convert a ToolDeclaration parameter schema to a plain dictionary."""
-    if isinstance(schema, dict):
-        return schema
-
-    result: dict[str, Any] = {}
-    if hasattr(schema, "type") and schema.type is not None:
-        t = schema.type
-        result["type"] = t.value.lower() if hasattr(t, "value") else str(t).lower()
-
-    if hasattr(schema, "description") and schema.description:
-        result["description"] = schema.description
-
-    if hasattr(schema, "enum") and schema.enum:
-        result["enum"] = schema.enum
-
-    if hasattr(schema, "properties") and schema.properties:
-        result["properties"] = {k: schema_to_dict(v) for k, v in schema.properties.items()}
-
-    if hasattr(schema, "required") and schema.required:
-        result["required"] = schema.required
-
-    if hasattr(schema, "items") and schema.items:
-        result["items"] = schema_to_dict(schema.items)
-
-    return result
 
 
 def is_internal_endpoint(url: str | None) -> bool:

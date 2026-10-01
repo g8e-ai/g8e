@@ -153,6 +153,10 @@ The model must be in the frozen inventory (g8e eval models).`,
 				return fmt.Errorf("evaluation: chat accept: %w", err)
 			}
 			resolvedEnsembleURL := resolveChatEvalEnsembleURL(ensembleURL)
+			ensembleClient, err := chatEvalEnsembleClient(cfg, authContext, resolvedEnsembleURL, deps.chatDeps())
+			if err != nil {
+				return fmt.Errorf("evaluation: chat accept: %w", err)
+			}
 			persona := harnessclient.Persona{
 				ID:                "g8e-chat-acceptance",
 				UserAgent:         "g8e-eval-chat-acceptance",
@@ -191,7 +195,7 @@ The model must be in the frozen inventory (g8e eval models).`,
 
 				reporter.caseStart(caseIndex+1, len(cases), string(acceptanceCase.ID), probeReq.AssignmentID, probeReq.EvaluationAttemptID)
 				ctx, cancel := context.WithTimeout(cmd.Context(), 8*time.Minute)
-				chatResp, runErr := gatewayClient.EnsembleChat(ctx, persona, chatReq)
+				chatResp, runErr := ensembleClient.EnsembleChat(ctx, persona, chatReq)
 				if runErr == nil && chatResp != nil {
 					reporter.chatSubmitted(chatResp.CaseID, chatResp.InvestigationID)
 				} else if runErr != nil {
@@ -200,7 +204,7 @@ The model must be in the frozen inventory (g8e eval models).`,
 				var trace evaluation.EvaluationTrace
 				if runErr == nil {
 					trace, runErr = chatEvalWaitForTrace(ctx, func(pollCtx context.Context) (evaluation.EvaluationTrace, error) {
-						rawTrace, err := gatewayClient.GetEvaluationTrace(pollCtx, persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
+						rawTrace, err := ensembleClient.GetEvaluationTrace(pollCtx, persona, probeReq.AssignmentID, probeReq.EvaluationAttemptID)
 						if err != nil {
 							return nil, err
 						}

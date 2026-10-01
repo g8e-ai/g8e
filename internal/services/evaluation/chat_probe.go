@@ -165,7 +165,7 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 			BoundOperators: []harnessclient.EnsembleBoundOperator{{
 				OperatorID:        dataOperatorID,
 				OperatorSessionID: dataOperatorSessionID,
-				Status:            "BOUND",
+				Status:            string(constants.OperatorStatusBound),
 			}},
 		},
 		Message:              message,
@@ -206,7 +206,11 @@ func ValidateChatProbeTrace(req ChatProbeRequest, trace EvaluationTrace) error {
 		return fmt.Errorf("evaluation: validate chat probe trace: trace status %q is not terminal", status)
 	}
 	if status != "completed" {
-		return fmt.Errorf("evaluation: validate chat probe trace: assignment failed")
+		reason, _ := trace["error"].(string)
+		if reason == "" {
+			return fmt.Errorf("evaluation: validate chat probe trace: assignment failed without a recorded error")
+		}
+		return fmt.Errorf("evaluation: validate chat probe trace: assignment failed: %s", reason)
 	}
 	if err := validateTraceDigest(trace); err != nil {
 		return err

@@ -6,12 +6,8 @@
 # released under the Apache License, Version 2.0.
 
 import pytest
-from enum import Enum
-from dataclasses import dataclass
-from typing import Any
 from app.llm.utils import (
     ModelOverrideResolver,
-    schema_to_dict,
     is_internal_endpoint,
     is_ollama_endpoint,
     resolve_model,
@@ -36,66 +32,6 @@ class TestModelOverrideResolver:
         assert resolver.for_triage() is None
         assert resolver.for_main_generation(needs_primary=True) is None
         assert resolver.for_main_generation(needs_primary=False) is None
-
-
-class TestSchemaToDict:
-    def test_schema_to_dict_recursive(self):
-        @dataclass
-        class MockSchema:
-            type: Any = None
-            description: str | None = None
-            enum: list[Any] | None = None
-            properties: dict[str, Any] | None = None
-            required: list[str] | None = None
-            items: Any = None
-
-        class MockType(Enum):
-            STRING = "string"
-            OBJECT = "object"
-            ARRAY = "array"
-
-        inner_schema = MockSchema(type=MockType.STRING, description="inner desc")
-
-        outer_schema = MockSchema(
-            type=MockType.OBJECT, properties={"field": inner_schema}, required=["field"]
-        )
-
-        result = schema_to_dict(outer_schema)
-        assert result == {
-            "type": "object",
-            "properties": {"field": {"type": "string", "description": "inner desc"}},
-            "required": ["field"],
-        }
-
-    def test_schema_to_dict_array(self):
-        @dataclass
-        class MockSchema:
-            type: Any = None
-            items: Any = None
-
-        class MockType(Enum):
-            ARRAY = "array"
-            STRING = "string"
-
-        item_schema = MockSchema(type=MockType.STRING)
-        array_schema = MockSchema(type=MockType.ARRAY, items=item_schema)
-
-        result = schema_to_dict(array_schema)
-        assert result == {"type": "array", "items": {"type": "string"}}
-
-    def test_schema_to_dict_with_dict_input(self):
-        d = {"type": "object", "properties": {}}
-        assert schema_to_dict(d) is d
-
-    def test_schema_to_dict_enum(self):
-        @dataclass
-        class MockSchema:
-            type: Any = None
-            enum: list[str] | None = None
-
-        schema = MockSchema(type="string", enum=["a", "b"])
-        result = schema_to_dict(schema)
-        assert result == {"type": "string", "enum": ["a", "b"]}
 
 
 class TestIsInternalEndpoint:
@@ -123,16 +59,6 @@ class TestIsInternalEndpoint:
     def test_is_internal_endpoint_missing_hostname(self):
         # urlparse('http:///path') results in empty hostname
         assert is_internal_endpoint("http:///path") is False
-
-    def test_schema_to_dict_non_value_type(self):
-        @dataclass
-        class MockSchema:
-            type: Any = None
-
-        # Test string type (not an Enum with .value)
-        schema = MockSchema(type="string")
-        result = schema_to_dict(schema)
-        assert result == {"type": "string"}
 
     def test_is_internal_endpoint_public_ip(self):
         assert is_internal_endpoint("http://8.8.8.8") is False

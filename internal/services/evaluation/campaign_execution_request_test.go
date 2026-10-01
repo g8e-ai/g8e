@@ -391,7 +391,9 @@ func TestBuildChatProbeRequest_ProducesTheGovernedScoredRequestShape(t *testing.
 	assert.Equal(t, "data-op", chatReq.Context.OperatorID)
 	assert.Equal(t, "data-session", chatReq.Context.OperatorSessionID)
 	require.Len(t, chatReq.Context.BoundOperators, 1, "exactly one bound operator, so g8ee injects the single target")
-	assert.Equal(t, harnessclient.EnsembleBoundOperator{OperatorID: "data-op", OperatorSessionID: "data-session", Status: "BOUND"}, chatReq.Context.BoundOperators[0])
+	// g8ee compares status to the protocol value ("bound"); any other spelling
+	// silently runs the request unbound, with no operator tools declared.
+	assert.Equal(t, harnessclient.EnsembleBoundOperator{OperatorID: "data-op", OperatorSessionID: "data-session", Status: "bound"}, chatReq.Context.BoundOperators[0])
 
 	require.NotNil(t, chatReq.ResourceCreation)
 	assert.True(t, chatReq.ResourceCreation.CreateCase, "a seed is only accepted with inline case creation (R3)")
