@@ -741,6 +741,10 @@ def _tool_settings(*names: str) -> PrimaryLLMSettings:
 
 
 _CAPABILITY_UNSUPPORTED_BODY = '{"error":"inference: requested capability unsupported"}'
+_TOOLS_UNSUPPORTED_BODY = '{"error":"inference: tools unsupported"}'
+# The Gateway's typed tools-unsupported sentinel, and the generic capability one
+# it replaced for this failure; both mean the provider refused the declaration.
+_TOOL_REJECTION_BODIES = [_TOOLS_UNSUPPORTED_BODY, _CAPABILITY_UNSUPPORTED_BODY]
 
 
 def _http_rejection(status: int, body: str) -> NetworkError:
@@ -825,11 +829,10 @@ class TestG8EProviderToolDeclarationRejection:
     """A provider that refuses the tool declaration is a typed, explicit outcome."""
 
     @pytest.mark.asyncio
-    async def test_http_capability_rejection_with_tools_raises_tools_not_supported(self):
+    @pytest.mark.parametrize("body", _TOOL_REJECTION_BODIES)
+    async def test_http_capability_rejection_with_tools_raises_tools_not_supported(self, body):
         client = _client()
-        client.dispatch_inference = AsyncMock(
-            side_effect=_http_rejection(422, _CAPABILITY_UNSUPPORTED_BODY)
-        )
+        client.dispatch_inference = AsyncMock(side_effect=_http_rejection(422, body))
         provider = G8EProvider(internal_http_client=client)
 
         with pytest.raises(ToolsNotSupportedError) as raised:
@@ -841,9 +844,12 @@ class TestG8EProviderToolDeclarationRejection:
         assert provider.declared_tool_names == ["recursive_grep_search"]
 
     @pytest.mark.asyncio
-    async def test_streaming_http_capability_rejection_with_tools_raises_tools_not_supported(self):
+    @pytest.mark.parametrize("body", _TOOL_REJECTION_BODIES)
+    async def test_streaming_http_capability_rejection_with_tools_raises_tools_not_supported(
+        self, body
+    ):
         async def dispatch_stream(_request):
-            raise _http_rejection(422, _CAPABILITY_UNSUPPORTED_BODY)
+            raise _http_rejection(422, body)
             yield  # pragma: no cover - makes this an async generator
 
         client = _client()
@@ -857,12 +863,15 @@ class TestG8EProviderToolDeclarationRejection:
                 pass
 
     @pytest.mark.asyncio
-    async def test_failure_frame_capability_rejection_with_tools_raises_tools_not_supported(self):
+    @pytest.mark.parametrize(
+        "reason", ["inference: tools unsupported", "inference: requested capability unsupported"]
+    )
+    async def test_failure_frame_capability_rejection_with_tools_raises_tools_not_supported(
+        self, reason
+    ):
         async def dispatch_stream(_request):
             yield InferenceDispatchStreamFrame(
-                failure=InferenceDispatchStreamFailure(
-                    reason="inference: requested capability unsupported"
-                )
+                failure=InferenceDispatchStreamFailure(reason=reason)
             )
 
         client = _client()
@@ -876,11 +885,10 @@ class TestG8EProviderToolDeclarationRejection:
                 pass
 
     @pytest.mark.asyncio
-    async def test_capability_rejection_without_declared_tools_is_not_a_tool_rejection(self):
+    @pytest.mark.parametrize("body", _TOOL_REJECTION_BODIES)
+    async def test_capability_rejection_without_declared_tools_is_not_a_tool_rejection(self, body):
         client = _client()
-        client.dispatch_inference = AsyncMock(
-            side_effect=_http_rejection(422, _CAPABILITY_UNSUPPORTED_BODY)
-        )
+        client.dispatch_inference = AsyncMock(side_effect=_http_rejection(422, body))
         provider = G8EProvider(internal_http_client=client)
 
         with pytest.raises(NetworkError):

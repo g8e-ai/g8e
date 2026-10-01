@@ -46,6 +46,54 @@ type EnsembleEvaluationContext struct {
 	DesignatedModelRole     string                         `json:"designated_model_role,omitempty"`
 	GradingMethod           string                         `json:"grading_method,omitempty"`
 	GoldSummary             *EnsembleEvaluationGoldSummary `json:"gold_summary,omitempty"`
+	Seed                    *EnsembleInvestigationSeed     `json:"seed,omitempty"`
+	Workspace               *EnsembleEvaluationWorkspace   `json:"workspace,omitempty"`
+}
+
+// EnsembleInvestigationSeed mirrors the Python EvaluationInvestigationSeed:
+// the investigation state a scored turn runs in, which g8ee applies through
+// its own investigation and memory services before triage.
+type EnsembleInvestigationSeed struct {
+	CaseTitle       string                     `json:"case_title"`
+	CaseDescription string                     `json:"case_description,omitempty"`
+	Turns           []EnsembleSeedTurn         `json:"turns,omitempty"`
+	HistoryEvents   []EnsembleSeedHistoryEvent `json:"history_events,omitempty"`
+	CaseMemory      *EnsembleSeedMemory        `json:"case_memory,omitempty"`
+}
+
+// EnsembleSeedTurn mirrors the Python EvaluationSeedTurn.
+type EnsembleSeedTurn struct {
+	Sender  string `json:"sender"`
+	Content string `json:"content"`
+}
+
+// EnsembleSeedHistoryEvent mirrors the Python EvaluationSeedHistoryEvent.
+type EnsembleSeedHistoryEvent struct {
+	EventType     string `json:"event_type"`
+	Actor         string `json:"actor"`
+	Summary       string `json:"summary"`
+	ToolName      string `json:"tool_name,omitempty"`
+	ExecutionID   string `json:"execution_id,omitempty"`
+	ArgumentsJSON string `json:"arguments_json,omitempty"`
+	Command       string `json:"command,omitempty"`
+	Error         string `json:"error,omitempty"`
+	ErrorType     string `json:"error_type,omitempty"`
+}
+
+// EnsembleSeedMemory mirrors the Python EvaluationSeedMemory.
+type EnsembleSeedMemory struct {
+	InvestigationSummary     string `json:"investigation_summary,omitempty"`
+	CommunicationPreferences string `json:"communication_preferences,omitempty"`
+	TechnicalBackground      string `json:"technical_background,omitempty"`
+	ResponseStyle            string `json:"response_style,omitempty"`
+	ProblemSolvingApproach   string `json:"problem_solving_approach,omitempty"`
+	InteractionStyle         string `json:"interaction_style,omitempty"`
+}
+
+// EnsembleEvaluationWorkspace mirrors the Python EvaluationWorkspace.
+type EnsembleEvaluationWorkspace struct {
+	Root                     string `json:"root"`
+	OperatorWorkingDirectory string `json:"operator_working_directory"`
 }
 
 // EnsembleEvaluationGoldSummary mirrors the private gold summary carried with

@@ -430,8 +430,8 @@ async def deliver_via_sse(
                 state.token_usage = chunk.data.token_usage
                 token_usage = chunk.data.token_usage
                 state.model_calls = chunk.data.model_calls
-                state.tools_declared = chunk.data.tools_declared
                 state.finish_reason = chunk.data.finish_reason
+                state.tool_turn_limit_reached = bool(chunk.data.tool_turn_limit_reached)
                 if chunk.data.tool_response_sizes:
                     state.tool_response_sizes = chunk.data.tool_response_sizes
                 logger.info(
@@ -464,9 +464,8 @@ async def deliver_via_sse(
                 if chunk.data.model_calls:
                     state.model_calls = chunk.data.model_calls
 
-                # The tool declaration that reached the provider, and whether the
-                # provider itself refused it, are evidence of the failed turn.
-                state.tools_declared = chunk.data.tools_declared
+                # Whether the provider itself refused the tool declaration is
+                # evidence of the failed turn.
                 if chunk.data.provider_tool_rejection and inputs.model_to_use:
                     state.provider_tool_rejection = EvaluationProviderToolRejection(
                         model=inputs.model_to_use,

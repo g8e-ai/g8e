@@ -862,7 +862,6 @@ class ChatPipelineService:
             policy_decisions=state.policy_decisions,
             semantic_grades=semantic_grades,
             grader_calls=grader_calls,
-            tools_declared=state.tools_declared,
             tool_gate=resolve_tool_gate(g8e_context.evaluation_context),
             provider_tool_rejection=state.provider_tool_rejection,
             finish_reason=state.finish_reason or ("error" if state.stream_failed else "stop"),

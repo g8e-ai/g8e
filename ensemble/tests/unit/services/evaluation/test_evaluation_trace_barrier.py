@@ -134,11 +134,20 @@ def _boundary_inputs(g8e_context: G8eHttpContext) -> AgentInputs:
 
 
 @pytest.mark.asyncio
-async def test_finalize_records_declared_tools_and_the_eval_tool_gate():
+async def test_finalize_records_the_eval_tool_gate_and_keeps_per_call_declared_tools():
     trace_service = MagicMock()
     pipeline = _boundary_pipeline(trace_service)
     g8e_context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-    state = AgentStreamState(tools_declared=["recursive_grep_search", "file_read_on_operator"])
+    agent_call = ModelCallTelemetry(
+        agent_role="sage",
+        model_role="primary",
+        provider="G8EProvider",
+        model="model-a",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+        tools_declared=["recursive_grep_search", "file_read_on_operator"],
+    )
+    state = AgentStreamState(model_calls=[agent_call])
 
     await pipeline._finalize_evaluation_assignment(
         g8e_context=g8e_context,
@@ -148,7 +157,10 @@ async def test_finalize_records_declared_tools_and_the_eval_tool_gate():
     )
 
     kwargs = trace_service.finalize.call_args.kwargs
-    assert kwargs["tools_declared"] == ["recursive_grep_search", "file_read_on_operator"]
+    assert kwargs["model_calls"][0].tools_declared == [
+        "recursive_grep_search",
+        "file_read_on_operator",
+    ]
     assert kwargs["tool_gate"] is ToolGate.BYPASSED_FOR_EVAL
     assert kwargs["provider_tool_rejection"] is None
 
@@ -162,7 +174,6 @@ async def test_finalize_records_a_provider_tool_declaration_rejection_as_a_faile
         model="model-a", reason="Provider rejected the tool declaration"
     )
     state = AgentStreamState(
-        tools_declared=["recursive_grep_search"],
         provider_tool_rejection=rejection,
         stream_failed=True,
         error="Provider rejected the tool declaration",
@@ -178,4 +189,3 @@ async def test_finalize_records_a_provider_tool_declaration_rejection_as_a_faile
     kwargs = trace_service.finalize.call_args.kwargs
     assert kwargs["status"] == "failed"
     assert kwargs["provider_tool_rejection"] is rejection
-    assert kwargs["tools_declared"] == ["recursive_grep_search"]

@@ -567,6 +567,7 @@ enum ReceiptFailureCode {
   RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID = 16;
   RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID = 17;
   RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID = 18;
+  RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED = 19;
 }
 
 // ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.

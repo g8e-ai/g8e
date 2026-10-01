@@ -71,6 +71,33 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def forbidden_command_violation(pattern: str) -> CommandExecutionResult:
+    """The result the model is shown when a command contains a forbidden pattern."""
+    return CommandExecutionResult(
+        success=False,
+        error=(
+            f"SECURITY VIOLATION: Command contains forbidden pattern '{pattern}'. "
+            f"Privilege escalation commands (sudo, su, pkexec, doas, etc.) are strictly prohibited. "
+            f"Find an alternative approach that does not require elevated privileges."
+        ),
+        error_type=CommandErrorType.SECURITY_VIOLATION,
+        blocked_pattern=pattern,
+    )
+
+
+def tool_execution_failure(tool_name: str, exc: Exception) -> ExternalServiceError:
+    """The error raised to the tool loop when a tool handler fails.
+
+    The tool loop shows ``str()`` of this error to the model as the tool result,
+    so its wording is the guidance a model receives for a malformed call.
+    """
+    return ExternalServiceError(
+        f"Tool execution failed for {tool_name}: {exc}",
+        service_name=tool_name,
+        component=G8EE_COMPONENT,
+    )
+
+
 class AIToolService:
     """Service for AI tool registration and execution on bound operators."""
 
@@ -305,22 +332,12 @@ class AIToolService:
                 command_lower = raw_command.lower() if isinstance(raw_command, str) else ""
                 for pattern in FORBIDDEN_COMMAND_PATTERNS:
                     if pattern in command_lower:
-                        error_msg = (
-                            f"SECURITY VIOLATION: Command contains forbidden pattern '{pattern}'. "
-                            f"Privilege escalation commands (sudo, su, pkexec, doas, etc.) are strictly prohibited. "
-                            f"Find an alternative approach that does not require elevated privileges."
-                        )
                         logger.error(
                             "[SECURITY] Blocked forbidden command pattern '%s' in: %s",
                             pattern,
                             raw_command,
                         )
-                        return CommandExecutionResult(
-                            success=False,
-                            error=error_msg,
-                            error_type=CommandErrorType.SECURITY_VIOLATION,
-                            blocked_pattern=pattern,
-                        )
+                        return forbidden_command_violation(pattern)
 
             if tool_name in OPERATOR_TOOLS:
                 if not g8e_context or not g8e_context.has_bound_operator():
@@ -384,8 +401,4 @@ class AIToolService:
             raise
         except Exception as e:
             logger.error("[TOOL_CALL] Execution failed for %s: %s", tool_name, e)
-            raise ExternalServiceError(
-                f"Tool execution failed for {tool_name}: {e}",
-                service_name=tool_name,
-                component=G8EE_COMPONENT,
-            ) from e
+            raise tool_execution_failure(tool_name, e) from e

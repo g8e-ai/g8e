@@ -5245,7 +5245,8 @@
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH",
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID",
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID",
-                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID"
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED"
             ]
         },
         "operatorv1.ReceiptPersistenceAttestation": {

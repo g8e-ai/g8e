@@ -160,9 +160,9 @@ class EvaluationProviderToolRejection(G8eBaseModel):
 class EvaluationAssignmentTrace(G8eBaseModel):
     """Immutable application-owned record of one scored chat assignment.
 
-    ``tools_declared`` is the tool names as actually sent to the provider on
-    the scored agent call, captured at the provider boundary (never recomputed
-    from the registry); ``None`` means the provider did not report them.
+    The tool names actually sent to the provider are recorded per call, as
+    ``ModelCallTelemetry.tools_declared`` on each entry of ``model_calls``
+    (captured at the provider boundary, never recomputed from the registry).
     ``tool_gate`` records which authority decided that set.
     """
 
@@ -172,7 +172,6 @@ class EvaluationAssignmentTrace(G8eBaseModel):
     status: EvaluationTraceStatus = Field(default="running")
     triage_model_call: ModelCallTelemetry | None = None
     controlled_role_assignment: EvaluationControlledRoleAssignment | None = None
-    tools_declared: list[str] | None = None
     tool_gate: ToolGate | None = None
     provider_tool_rejection: EvaluationProviderToolRejection | None = None
     model_calls: list[ModelCallTelemetry] = Field(default_factory=list)

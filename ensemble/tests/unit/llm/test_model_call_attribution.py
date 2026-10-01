@@ -93,6 +93,44 @@ def test_prepare_provider_call_discards_tool_declarations_from_the_prior_call():
     assert provider.declared_tool_names is None
 
 
+def _telemetry(provider):
+    return build_model_call_telemetry(
+        provider=provider,
+        agent_role="sage",
+        model_role="primary",
+        model="model-a",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+        input_artifact_hash="e" * 64,
+    )
+
+
+def test_build_model_call_telemetry_records_the_tools_sent_on_that_call():
+    provider = _RecordingProvider()
+    provider.declared_tool_names = ["recursive_grep_search", "file_read_on_operator"]
+
+    assert _telemetry(provider).tools_declared == ["recursive_grep_search", "file_read_on_operator"]
+
+
+def test_build_model_call_telemetry_distinguishes_no_tools_from_not_reported():
+    provider = _RecordingProvider()
+
+    provider.declared_tool_names = []
+    assert _telemetry(provider).tools_declared == []
+
+    provider.declared_tool_names = None
+    assert _telemetry(provider).tools_declared is None
+
+
+def test_build_model_call_telemetry_ignores_a_provider_without_the_capture():
+    class _NoCapture:
+        input_artifact_hash = ""
+        model_boundary_privacy = None
+        governed_dispatch_evidence = None
+
+    assert _telemetry(_NoCapture()).tools_declared is None
+
+
 def test_build_model_call_telemetry_includes_governed_fields():
     provider = _RecordingProvider()
     telemetry = build_model_call_telemetry(

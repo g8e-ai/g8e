@@ -114,15 +114,23 @@ def test_trace_finalize_persists_designated_role_output(trace_service):
 
 
 def test_trace_finalize_records_the_proof_that_the_opportunity_was_real(trace_service):
-    """tools_declared (as sent to the provider) and tool_gate make 'tool offered and
-    ignored' distinguishable from 'tool never offered' for every reader of the trace."""
+    """Per-call tools_declared (as sent to the provider) and tool_gate make 'tool offered
+    and ignored' distinguishable from 'tool never offered' for every reader of the trace."""
     context = _context()
     trace_service.begin(context)
+    agent_call = ModelCallTelemetry(
+        agent_role="sage",
+        model_role="primary",
+        provider="G8EProvider",
+        model="model-a",
+        monotonic_start=3.0,
+        monotonic_end=4.0,
+        tools_declared=["recursive_grep_search", "file_read_on_operator"],
+    )
 
     finalized = trace_service.finalize(
         context,
-        model_calls=[],
-        tools_declared=["recursive_grep_search", "file_read_on_operator"],
+        model_calls=[agent_call],
         tool_gate=ToolGate.BYPASSED_FOR_EVAL,
         finish_reason="stop",
         status="completed",
@@ -130,7 +138,7 @@ def test_trace_finalize_records_the_proof_that_the_opportunity_was_real(trace_se
 
     loaded = trace_service.load("assignment-1", "attempt-1")
     assert loaded.trace_digest == finalized.trace_digest
-    assert loaded.tools_declared == ["recursive_grep_search", "file_read_on_operator"]
+    assert loaded.model_calls[0].tools_declared == ["recursive_grep_search", "file_read_on_operator"]
     assert loaded.tool_gate is ToolGate.BYPASSED_FOR_EVAL
     assert loaded.provider_tool_rejection is None
 
@@ -142,7 +150,6 @@ def test_trace_finalize_records_a_provider_tool_declaration_rejection(trace_serv
     trace_service.finalize(
         context,
         model_calls=[],
-        tools_declared=["recursive_grep_search"],
         tool_gate=ToolGate.BYPASSED_FOR_EVAL,
         provider_tool_rejection=EvaluationProviderToolRejection(
             model="qwen3.5:4b",
@@ -160,15 +167,30 @@ def test_trace_finalize_records_a_provider_tool_declaration_rejection(trace_serv
     assert "requested capability unsupported" in loaded.provider_tool_rejection.reason
 
 
-def test_trace_leaves_boundary_evidence_unset_when_not_reported(trace_service):
-    """Unknown must stay distinguishable from 'no tools were declared'."""
+def test_trace_distinguishes_no_tools_declared_from_not_reported(trace_service):
+    """Unknown (None) must stay distinguishable from 'no tools were declared' ([])."""
     context = _context()
     trace_service.begin(context)
 
-    trace_service.finalize(context, model_calls=[], finish_reason="stop", status="completed")
+    def _call(role: str, tools: list[str] | None) -> ModelCallTelemetry:
+        return ModelCallTelemetry(
+            agent_role=role,
+            provider="G8EProvider",
+            model="model-a",
+            monotonic_start=1.0,
+            monotonic_end=2.0,
+            tools_declared=tools,
+        )
+
+    trace_service.finalize(
+        context,
+        model_calls=[_call("codex", []), _call("sage", None)],
+        finish_reason="stop",
+        status="completed",
+    )
 
     loaded = trace_service.load("assignment-1", "attempt-1")
-    assert loaded.tools_declared is None
+    assert [call.tools_declared for call in loaded.model_calls] == [[], None]
     assert loaded.tool_gate is None
 
 
@@ -215,13 +237,24 @@ def test_trace_schema_version_covers_the_boundary_evidence_fields(trace_service)
     assert trace_service.begin(context).schema_version == "5"
 
 
-def test_trace_digest_binds_tools_declared_and_gate():
+def test_trace_digest_binds_declared_tools_and_gate():
+    def _call(tools: list[str]) -> ModelCallTelemetry:
+        return ModelCallTelemetry(
+            agent_role="sage",
+            provider="G8EProvider",
+            model="model-a",
+            monotonic_start=1.0,
+            monotonic_end=2.0,
+            tools_declared=tools,
+        )
+
     base = EvaluationAssignmentTrace(
         evaluation_context=_evaluation_context(),
         chat_execution_id="exec-1",
         status="completed",
+        model_calls=[_call([])],
     )
-    declared = base.model_copy(update={"tools_declared": ["recursive_grep_search"]})
+    declared = base.model_copy(update={"model_calls": [_call(["recursive_grep_search"])]})
     gated = base.model_copy(update={"tool_gate": ToolGate.BYPASSED_FOR_EVAL})
 
     digests = {compute_trace_digest(t) for t in (base, declared, gated)}

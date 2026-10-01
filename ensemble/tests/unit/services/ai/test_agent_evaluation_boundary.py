@@ -135,7 +135,7 @@ class TestToolLoopBoundaryEvidence:
             (StreamChunkFromModelType.TOOL_RESULT, 2),
         ]
 
-    async def test_complete_chunk_carries_tools_recorded_at_the_provider_boundary(self):
+    async def test_every_agent_call_records_the_tools_sent_to_the_provider(self):
         agent, inputs = _agent_and_inputs()
         provider = _BoundaryProvider([_tool_turn("call-1"), _text_turn()], DECLARED)
 
@@ -148,7 +148,9 @@ class TestToolLoopBoundaryEvidence:
 
         complete = [c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE]
         assert len(complete) == 1
-        assert complete[0].data.tools_declared == DECLARED
+        agent_calls = complete[0].data.model_calls
+        assert len(agent_calls) == 2
+        assert [call.tools_declared for call in agent_calls] == [DECLARED, DECLARED]
 
     async def test_complete_chunk_reports_unknown_when_the_provider_records_nothing(self):
         agent, inputs = _agent_and_inputs()
@@ -171,7 +173,7 @@ class TestToolLoopBoundaryEvidence:
         ]
 
         complete = [c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE]
-        assert complete[0].data.tools_declared is None
+        assert [call.tools_declared for call in complete[0].data.model_calls] == [None]
 
     async def test_error_chunk_flags_a_provider_tool_declaration_rejection(self):
         agent, inputs = _agent_and_inputs()
@@ -195,8 +197,11 @@ class TestToolLoopBoundaryEvidence:
         assert [c.type for c in chunks] == [StreamChunkFromModelType.ERROR]
         error = chunks[0].data
         assert error.provider_tool_rejection is True
-        assert error.tools_declared == DECLARED
         assert "requested capability unsupported" in (error.error or "")
+        # The refused call is still on the record, with the tools it declared.
+        assert [(call.succeeded, call.tools_declared) for call in error.model_calls] == [
+            (False, DECLARED)
+        ]
 
     async def test_error_chunk_for_any_other_failure_is_not_a_tool_rejection(self):
         agent, inputs = _agent_and_inputs()
@@ -211,7 +216,7 @@ class TestToolLoopBoundaryEvidence:
 
         assert chunks[0].type == StreamChunkFromModelType.ERROR
         assert not chunks[0].data.provider_tool_rejection
-        assert chunks[0].data.tools_declared == DECLARED
+        assert [call.tools_declared for call in chunks[0].data.model_calls] == [DECLARED]
 
 
 async def _stream(*chunks: StreamChunkFromModel):
@@ -221,14 +226,14 @@ async def _stream(*chunks: StreamChunkFromModel):
 
 @pytest.mark.asyncio
 class TestStreamStateBoundaryEvidence:
-    async def test_complete_chunk_populates_declared_tools_on_state(self):
+    async def test_complete_chunk_records_no_rejection(self):
         inputs, state = make_agent_run_args()
 
         await deliver_via_sse(
             stream=_stream(
                 StreamChunkFromModel(
                     type=StreamChunkFromModelType.COMPLETE,
-                    data=StreamChunkData(finish_reason="STOP", tools_declared=DECLARED),
+                    data=StreamChunkData(finish_reason="STOP"),
                 )
             ),
             inputs=inputs,
@@ -236,7 +241,6 @@ class TestStreamStateBoundaryEvidence:
             event_service=make_event_service(),
         )
 
-        assert state.tools_declared == DECLARED
         assert state.provider_tool_rejection is None
 
     async def test_tool_rejection_error_chunk_records_the_rejected_model_and_reason(self):
@@ -248,7 +252,6 @@ class TestStreamStateBoundaryEvidence:
                     type=StreamChunkFromModelType.ERROR,
                     data=StreamChunkData(
                         error="Provider rejected the tool declaration: capability unsupported",
-                        tools_declared=DECLARED,
                         provider_tool_rejection=True,
                     ),
                 )
@@ -259,19 +262,18 @@ class TestStreamStateBoundaryEvidence:
         )
 
         assert state.stream_failed is True
-        assert state.tools_declared == DECLARED
         assert state.provider_tool_rejection is not None
         assert state.provider_tool_rejection.model == "qwen3.5:4b"
         assert "capability unsupported" in state.provider_tool_rejection.reason
 
-    async def test_plain_error_chunk_records_declared_tools_without_a_rejection(self):
+    async def test_plain_error_chunk_is_not_recorded_as_a_rejection(self):
         inputs, state = make_agent_run_args()
 
         await deliver_via_sse(
             stream=_stream(
                 StreamChunkFromModel(
                     type=StreamChunkFromModelType.ERROR,
-                    data=StreamChunkData(error="backend unavailable", tools_declared=DECLARED),
+                    data=StreamChunkData(error="backend unavailable"),
                 )
             ),
             inputs=inputs,
@@ -279,5 +281,5 @@ class TestStreamStateBoundaryEvidence:
             event_service=make_event_service(),
         )
 
-        assert state.tools_declared == DECLARED
+        assert state.stream_failed is True
         assert state.provider_tool_rejection is None

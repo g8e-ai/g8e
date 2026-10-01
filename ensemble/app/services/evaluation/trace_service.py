@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # for a failed assignment, so failure diagnosis no longer depends on ensemble
 # server logs that outlive the run.
 # 5: proves the opportunity was real and records the trajectory. Adds
-# `tools_declared` (names as sent to the provider), `tool_gate`
-# (registry | bypassed_for_eval), `provider_tool_rejection`, and per tool call
+# `tool_gate` (registry | bypassed_for_eval), `provider_tool_rejection`, per
+# model call `tools_declared` (names as sent to the provider), and per tool call
 # `loop_turn`, `error`, `suggestion`, and `error_analysis`.
 _TRACE_SCHEMA_VERSION = "5"
 
@@ -128,7 +128,6 @@ class EvaluationTraceService:
         policy_decisions: list[EvaluationPolicyDecisionRecord] | None = None,
         semantic_grades: list[EvaluationSemanticGradeRecord] | None = None,
         grader_calls: list[EvaluationGraderCallRecord] | None = None,
-        tools_declared: list[str] | None = None,
         tool_gate: ToolGate | None = None,
         provider_tool_rejection: EvaluationProviderToolRejection | None = None,
         finish_reason: str | None,
@@ -150,7 +149,6 @@ class EvaluationTraceService:
             status=status,
             triage_model_call=triage_model_call,
             controlled_role_assignment=controlled_role_assignment,
-            tools_declared=list(tools_declared) if tools_declared is not None else None,
             tool_gate=tool_gate,
             provider_tool_rejection=provider_tool_rejection,
             model_calls=list(model_calls),
