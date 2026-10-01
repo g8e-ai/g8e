@@ -119,8 +119,21 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 			})
 			if err != nil {
 				failures = append(failures, "deterministic grade recomputation failed: "+err.Error())
-			} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputed.DeterministicGrades) {
-				failures = append(failures, "stored deterministic grades do not match recomputation")
+			} else {
+				if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputed.DeterministicGrades) {
+					failures = append(failures, "stored deterministic grades do not match recomputation")
+				}
+				// The outcome and both failure sentences are published, so they
+				// are recomputed from the digest-bound trace like the grades.
+				stored := ScenarioTrajectoryGradingResult{
+					Outcome:             req.Result.GetTrajectoryOutcome(),
+					GuidedRetryCount:    req.Result.GetGuidedRetryCount(),
+					FailureReason:       req.Result.GetFailureReason(),
+					PublicFailureReason: req.Result.GetPublicFailureReason(),
+				}
+				if stored != recomputed.Trajectory {
+					failures = append(failures, "stored trajectory result does not match recomputation")
+				}
 			}
 		}
 	}

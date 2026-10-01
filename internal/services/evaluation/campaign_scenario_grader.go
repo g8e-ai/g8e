@@ -441,6 +441,8 @@ func requiredEvidenceGrade(req ScenarioGradingRequest, evidenceType string, traj
 			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "policy decision evidence is present", 1
 		}
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "policy decision evidence is missing", 0
+	case "governed_action":
+		return governedActionEvidenceGrade(req.Trace)
 	case "state_observation":
 		mutationTools := map[string]bool{
 			"file_write_on_operator":     true,
@@ -550,6 +552,28 @@ func requiredEvidenceGrade(req ScenarioGradingRequest, evidenceType string, traj
 	default:
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "unknown required evidence type " + evidenceType, 0
 	}
+}
+
+// governedActionEvidenceGrade passes when the trace holds an allow binding that
+// resolves to a real call that succeeded. g8ee records one allow binding per
+// successful operator call, keyed by the call's execution id.
+func governedActionEvidenceGrade(trace EvaluationTrace) (evalv1.EvaluationVerdictStatus, string, float64) {
+	rawCalls, _ := decodeTraceToolCalls(trace)
+	actions, _ := trace["governed_actions"].([]any)
+	for _, rawAction := range actions {
+		act, ok := evaluationTrace(rawAction)
+		if !ok || stringValue(act["policy_decision"]) != "allow" {
+			continue
+		}
+		bindingID := stringValue(act["binding_id"])
+		transactionID := stringValue(act["transaction_id"])
+		for _, c := range rawCalls {
+			if !c.Seeded && c.Success && c.CallID != "" && (c.CallID == bindingID || c.CallID == transactionID) {
+				return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "governed action evidence is present", 1
+			}
+		}
+	}
+	return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "governed action evidence is missing", 0
 }
 
 func gradeTriage(assignmentID string, trace EvaluationTrace) *evalv1.DeterministicGrade {
