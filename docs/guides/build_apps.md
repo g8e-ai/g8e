@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-09-28
-Version: v2.2.3
+Last Updated: 2026-10-01
+Version: v2.2.6
 
 ---
 

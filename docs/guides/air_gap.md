@@ -3,8 +3,8 @@ doc_id: air_gap
 title: Air-Gapped Deployment
 audience: platform operators and infrastructure teams
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - docs/guides/air_gap.md
   - Dockerfile

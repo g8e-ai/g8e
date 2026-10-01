@@ -3,8 +3,8 @@ doc_id: overview
 title: Platform Architecture Overview
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - cmd/g8e/
   - internal/cli/

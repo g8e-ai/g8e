@@ -3,8 +3,8 @@ doc_id: ensemble_sse
 title: Server-Sent Events (SSE) Architecture
 audience: developers and coding agents
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - docs/ensemble/sse.md
   - ensemble/app/services/infra/event_service.py

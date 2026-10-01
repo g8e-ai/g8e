@@ -4,7 +4,7 @@ title: Ensemble Evaluations
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-01
-version: v2.2.5
+version: v2.2.6
 owners:
   - ensemble/app/services/evaluation/
   - protocol/python/g8e/models/internal_api.py

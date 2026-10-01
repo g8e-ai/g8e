@@ -3,8 +3,8 @@ doc_id: tests
 title: Testing Guide
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-26
-version: v2.2.0
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - internal/cli/cmd/test/test.go
   - Makefile

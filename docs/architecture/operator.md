@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-09-28
-Version: v2.2.3
+Last Updated: 2026-10-01
+Version: v2.2.6
 
 The Governed Operator is the Policy Execution Point (PEP) for the runtime in which the Operator process runs. The reference implementation is the `g8e` binary started with `g8e operator start`. It receives governed `GovernanceEnvelope` transactions from a Gateway over an outbound-only mTLS WebSocket connection, verifies each transaction locally, executes accepted typed actions through the L5 Actuator, and stores authoritative local execution evidence.
 

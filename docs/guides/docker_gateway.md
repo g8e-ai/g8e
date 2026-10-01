@@ -3,8 +3,8 @@ doc_id: docker_gateway
 title: Docker Gateway Guide
 audience: developers and operators deploying g8e in Docker
 status: current
-last_updated: 2026-09-28
-version: v2.2.3
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - Dockerfile
   - docker-compose.yml

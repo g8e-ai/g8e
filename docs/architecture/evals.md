@@ -4,7 +4,7 @@ title: Evaluation Programs
 audience: maintainers and coding agents
 status: current
 last_updated: 2026-10-01
-version: v2.2.5
+version: v2.2.6
 owners:
   - internal/services/evaluation/
   - internal/cli/cmd/eval/
@@ -175,7 +175,7 @@ The `g8e eval` command tree groups platform evaluation commands across ten top-l
 | --- | --- |
 | `g8e eval boundary …` | Run, list, verify, and show native execution-boundary test suites |
 | `g8e eval models …` | Catalog and registry management (list, show, add, remove, import, freeze, pull, diff) |
-| `g8e eval suites …` (alias `suite`) | Scenario suites (list, show, export, create, update, delete) |
+| `g8e eval suites …` | Scenario suites (list, show, export, create, update, delete) |
 | `g8e eval campaigns …` | Campaign definitions (list, show, create, archive, unarchive) |
 | `g8e eval runs …` | Campaign execution and lifecycle (list, show, start, resume, cancel, logs, verify, publish, export, repair, compare, archive, unarchive) |
 | `g8e eval rollout …` | Rollout qualification queue (list, add, remove, next, retry, skip, run) |

@@ -3,8 +3,8 @@ doc_id: ensemble
 title: Ensemble Architecture (g8ee)
 audience: maintainers and coding agents
 status: current
-last_updated: 2026-09-29
-version: v2.2.4
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - ensemble/
   - ensemble/app/main.py

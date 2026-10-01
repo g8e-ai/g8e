@@ -3,8 +3,8 @@ doc_id: unified_stack
 title: Unified Docker Stack Guide
 audience: platform operators and evaluators
 status: current
-last_updated: 2026-09-30
-version: v2.2.4
+last_updated: 2026-10-01
+version: v2.2.6
 owners:
   - docker-compose.yml
   - docs/guides/
@@ -189,7 +189,7 @@ Rules:
 
 ### Init campaign inventory (one model per campaign)
 
-A `model-role` campaign freezes exactly one model: **one model, one campaign, 37 cells**. `g8e eval campaigns create` and `g8e eval runs start` reject any other count. This keeps runs tidy, isolates failures, and lets the provider unload each model when its campaign finishes. Use `g8e eval runs start` for one model, or `g8e eval rollout run` for many (`g8e eval rollout next` inspects the next pending entry) — no `.env` edits or operator recreate between models.
+A `model-role` campaign freezes exactly one model: **one model, one campaign, 41 cells**. `g8e eval campaigns create` and `g8e eval runs start` reject any other count. This keeps runs tidy, isolates failures, and lets the provider unload each model when its campaign finishes. Use `g8e eval runs start` for one model, or `g8e eval rollout run` for many (`g8e eval rollout next` inspects the next pending entry) — no `.env` edits or operator recreate between models.
 
 Runtime data lives under `.g8e/eval/` (gitignored). See [eval/examples/README.md](../../eval/README.md) for the public/private boundary.
 
@@ -254,7 +254,7 @@ Build a three-model smoke inventory from your own provider freeze. Tags below ar
 ./g8e eval rollout run
 ```
 
-Rollout runs three campaigns of **37** role-eligible scenario cells each (**111** assignments in total), one model resident at a time.
+Rollout runs three campaigns of **41** role-eligible scenario cells each (**123** assignments in total), one model resident at a time.
 
 ## Environment configuration
 
