@@ -176,6 +176,76 @@ class TestRunAuditStage:
         assert all(call.input_artifact_hash for call in model_calls)
         assert all(call.output_artifact_hash for call in model_calls)
 
+    @pytest.mark.parametrize(
+        ("kwargs", "expected_role"),
+        [
+            pytest.param({}, "primary", id="auditor-runs-on-the-primary-tier-by-default"),
+            pytest.param({"model_role": "lite"}, "lite", id="fallback-to-the-lite-provider-is-reported"),
+        ],
+    )
+    async def test_auditor_attributes_its_calls_to_the_tier_it_was_resolved_from(
+        self,
+        make_mock_provider,
+        mock_g8e_context,
+        mock_operator_context,
+        mock_reputation_service,
+        kwargs,
+        expected_role,
+    ):
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
+        response = GenerateContentResponse(
+            candidates=[
+                Candidate(
+                    content=Content(role=Role.MODEL, parts=[Part(text='{"status": "ok"}')]),
+                    finish_reason="stop",
+                )
+            ],
+            usage_metadata=UsageMetadata(prompt_token_count=10, candidates_token_count=2, total_token_count=12),
+        )
+        provider = make_mock_provider(generate_content_lite_side_effect=[response])
+        event_service = MagicMock()
+        event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(event_service, mock_g8e_context, correlation_id="tribunal-test")
+        auditor = TribunalAuditor(
+            emitter=emitter,
+            reputation_data_service=mock_reputation_service,
+            auditor_hmac_key="a" * 64,
+        )
+
+        await auditor.run(
+            provider=provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            vote_winner="ls -la",
+            vote_breakdown=vote_breakdown,
+            tied_candidates=None,
+            operator_context=mock_operator_context,
+            auditor_enabled=True,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            investigation_id="inv-1",
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
+            **kwargs,
+        )
+
+        completed_event = next(
+            call.args[0]
+            for call in event_service.publish.await_args_list
+            if call.args[0].event_type == EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED
+        )
+        assert [call.model_role for call in completed_event.payload.model_calls] == [expected_role]
+
     async def test_auditor_empty_responses_emit_failed_model_call_observations(
         self, make_mock_provider, mock_g8e_context, mock_operator_context, mock_reputation_service
     ):

@@ -80,7 +80,7 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         call_site="tribunal_auditor",
         module="app.services.ai.auditor_service",
         agent_role="auditor",
-        model_role="lite",
+        model_role="primary",
         provider_method="generate_content_lite",
     ),
     ChatModelCallSite(

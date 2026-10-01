@@ -23,6 +23,7 @@ from app.models.evaluation_trace import (
 )
 from app.models.http_context import G8eHttpContext
 from app.models.tool_results import CommandExecutionResult
+from app.services.evaluation.player_steps import attach_to_call
 
 if TYPE_CHECKING:
     from app.models.agent import AgentStreamState
@@ -126,6 +127,10 @@ def record_tool_call_completed(
             error_analysis=_error_analysis_summary(chunk.result),
         )
     )
+    if chunk.player_steps:
+        state.player_steps.extend(
+            attach_to_call(chunk.player_steps, execution_id, len(state.player_steps) + 1)
+        )
     if not isinstance(chunk.result, CommandExecutionResult):
         return
     result = chunk.result

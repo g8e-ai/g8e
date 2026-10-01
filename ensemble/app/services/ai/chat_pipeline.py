@@ -64,6 +64,12 @@ from .agent import g8eEnsemble
 from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
 from app.services.evaluation.tool_gate import resolve_tool_gate
 from app.services.evaluation.trace_service import EvaluationTraceService
+from app.services.evaluation.player_steps import (
+    assemble_player_steps,
+    memory_step,
+    memory_text,
+    reasoning_step,
+)
 from app.services.evaluation.role_control import (
     apply_homogeneous_role_control,
     resolve_role_outcome,
@@ -87,6 +93,10 @@ from app.models.events import (
 from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)
+
+# What the background memory update leaves for the scored trace: its task, the
+# model call it made, and the text Codex wrote.
+MemoryHolder = dict[str, asyncio.Task[None] | ModelCallTelemetry | str | None]
 
 
 class ChatPipelineService:
@@ -533,7 +543,7 @@ class ChatPipelineService:
         state: AgentStreamState,
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None = None,
-        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None = None,
+        memory_holder: MemoryHolder | None = None,
     ) -> None:
         """Persist the final AI response and schedule memory update off the response path.
 
@@ -726,7 +736,7 @@ class ChatPipelineService:
         task_manager: BackgroundTaskManager | None,
         context: RequestContext,
         g8e_context: G8eHttpContext | None = None,
-        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None = None,
+        memory_holder: MemoryHolder | None = None,
     ) -> None:
         """Schedule memory generation as a background task so it never blocks persistence.
 
@@ -740,7 +750,7 @@ class ChatPipelineService:
 
         async def _run_memory_update() -> None:
             try:
-                _, model_call = await self.memory_generation_service.update_memory_from_conversation(
+                memory, model_call = await self.memory_generation_service.update_memory_from_conversation(
                     conversation_history=conversation_history,
                     investigation=investigation,
                     settings=user_settings,
@@ -749,6 +759,7 @@ class ChatPipelineService:
                 )
                 if memory_holder is not None:
                     memory_holder["model_call"] = model_call
+                    memory_holder["memory_text"] = memory_text(memory)
                 logger.info(
                     "Background memory update completed for investigation %s",
                     investigation_id,
@@ -796,7 +807,7 @@ class ChatPipelineService:
         g8e_context: G8eHttpContext,
         inputs: AgentInputs,
         state: AgentStreamState,
-        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None,
+        memory_holder: MemoryHolder | None,
         seed_application: EvaluationSeedApplication | None = None,
     ) -> None:
         if g8e_context.evaluation_context is None:
@@ -827,6 +838,35 @@ class ChatPipelineService:
 
         model_calls = list(state.model_calls)
         model_calls.extend(background_calls)
+
+        codex_step = None
+        if memory_task is not None:
+            written = memory_holder.get("memory_text") if memory_holder else None
+            codex_step = memory_step(
+                model_call=background_calls[0] if background_calls else None,
+                summary=written if isinstance(written, str) else None,
+                sequence=1,
+            )
+        reasoning = None
+        if inputs.active_agent is not None:
+            active_agent = ReasoningAgent(inputs.active_agent)
+            reasoning = reasoning_step(
+                player=active_agent.value,
+                model_role=inputs.designated_model_role
+                or ("assistant" if active_agent == ReasoningAgent.DASH else "primary"),
+                model=inputs.model_to_use or "",
+                text=state.response_text or "",
+                succeeded=not state.stream_failed,
+                error=state.error,
+                sequence=1,
+            )
+        player_steps = assemble_player_steps(
+            triage=inputs.triage_result,
+            tribunal_steps=state.player_steps,
+            tool_calls=state.tool_calls,
+            reasoning=reasoning,
+            codex=codex_step,
+        )
 
         role_outcome = None
         controlled_role_assignment = inputs.controlled_role_assignment
@@ -860,6 +900,7 @@ class ChatPipelineService:
         self.evaluation_trace_service.finalize(
             g8e_context,
             model_calls=model_calls,
+            player_steps=player_steps,
             triage_model_call=inputs.triage_result.model_call if inputs.triage_result else None,
             controlled_role_assignment=controlled_role_assignment,
             role_outcome=role_outcome,
@@ -1184,7 +1225,7 @@ class ChatPipelineService:
         logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 
         state = AgentStreamState()
-        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] = {}
+        memory_holder: MemoryHolder = {}
 
         triage_complexity = (
             inputs.triage_result.complexity

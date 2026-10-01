@@ -119,6 +119,30 @@ func TestValidateScenarioContract_RejectsContractViolations(t *testing.T) {
 		{"retired handoff evidence type", toolArgGrepPattern, func(b *ScenarioBlueprint) {
 			b.Gold.RequiredEvidenceTypes = append(b.Gold.RequiredEvidenceTypes, "handoff")
 		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"triage expectation grades no label", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.Players = &ScenarioPlayerExpectations{Triage: &TriageExpectation{}}
+		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"triage complexity g8ee never emits", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.Players = &ScenarioPlayerExpectations{Triage: &TriageExpectation{Complexity: []constants.TriageComplexity{"medium"}}}
+		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"triage intent g8ee never emits", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.Players = &ScenarioPlayerExpectations{Triage: &TriageExpectation{Intent: []constants.TriageIntent{"request"}}}
+		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"triage posture g8ee never emits", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.Players = &ScenarioPlayerExpectations{Triage: &TriageExpectation{Posture: []constants.TriagePosture{"angry"}}}
+		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"command expectation has no constraint", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.Players = &ScenarioPlayerExpectations{Command: &ScenarioContentCheck{}}
+		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"marshal expectation accepts no risk level", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.Players = &ScenarioPlayerExpectations{Marshal: &MarshalExpectation{}}
+		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"marshal risk level g8ee never emits", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.Players = &ScenarioPlayerExpectations{Marshal: &MarshalExpectation{Risk: []MarshalRisk{"CRITICAL"}}}
+		}, constants.ErrEvaluationScenarioContractInvalid},
+		{"codex expectation has no constraint", toolArgGrepPattern, func(b *ScenarioBlueprint) {
+			b.Gold.Players = &ScenarioPlayerExpectations{Codex: &ScenarioContentCheck{}}
+		}, constants.ErrEvaluationScenarioContractInvalid},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

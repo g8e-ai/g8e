@@ -70,7 +70,57 @@ func validateScenarioContract(blueprint ScenarioBlueprint, registry *AgentToolRe
 	if err := validateWorkspaceFiles(blueprint); err != nil {
 		return err
 	}
+	if err := validatePlayerExpectations(blueprint); err != nil {
+		return err
+	}
 	return validateRequiredEvidenceTypes(blueprint)
+}
+
+// validatePlayerExpectations fails closed on player gold that could never
+// grade anything or names a label g8ee never emits, so a typo cannot freeze
+// into a scenario that silently accepts or rejects every run.
+func validatePlayerExpectations(blueprint ScenarioBlueprint) error {
+	players := blueprint.Gold.Players
+	if players == nil {
+		return nil
+	}
+	if triage := players.Triage; triage != nil {
+		if len(triage.Complexity)+len(triage.Intent)+len(triage.Posture) == 0 {
+			return scenarioContractError(blueprint, "triage expectation grades no label")
+		}
+		for _, value := range triage.Complexity {
+			if value != constants.TriageComplexitySimple && value != constants.TriageComplexityComplex {
+				return scenarioContractError(blueprint, "triage complexity %q is not a g8ee classification", value)
+			}
+		}
+		for _, value := range triage.Intent {
+			if value != constants.TriageIntentInformation && value != constants.TriageIntentAction && value != constants.TriageIntentUnknown {
+				return scenarioContractError(blueprint, "triage intent %q is not a g8ee classification", value)
+			}
+		}
+		for _, value := range triage.Posture {
+			if value != constants.TriagePostureNormal && value != constants.TriagePostureEscalated && value != constants.TriagePostureAdversarial && value != constants.TriagePostureConfused {
+				return scenarioContractError(blueprint, "triage posture %q is not a g8ee classification", value)
+			}
+		}
+	}
+	if players.Command != nil && !contentCheckHasConstraint(players.Command) {
+		return scenarioContractError(blueprint, "command expectation has no constraint")
+	}
+	if marshal := players.Marshal; marshal != nil {
+		if len(marshal.Risk) == 0 {
+			return scenarioContractError(blueprint, "marshal expectation accepts no risk level")
+		}
+		for _, risk := range marshal.Risk {
+			if risk != MarshalRiskLow && risk != MarshalRiskMedium && risk != MarshalRiskHigh {
+				return scenarioContractError(blueprint, "marshal risk %q is not a g8ee risk level", risk)
+			}
+		}
+	}
+	if players.Codex != nil && !contentCheckHasConstraint(players.Codex) {
+		return scenarioContractError(blueprint, "codex expectation has no constraint")
+	}
+	return nil
 }
 
 func validateSeedCaseTitle(blueprint ScenarioBlueprint) error {
@@ -155,7 +205,7 @@ func contentCheckHasConstraint(check *ScenarioContentCheck) bool {
 	}
 	return check.ExactToken != "" || len(check.ExactLabels) > 0 || check.LeadingLabel != "" || check.WordCount > 0 ||
 		check.MaxSentences > 0 || len(check.RequiredTerms) > 0 || len(check.ForbiddenTerms) > 0 ||
-		len(check.JSONStringFields) > 0 || len(check.JSONIntegerFields) > 0
+		len(check.JSONStringFields) > 0 || len(check.JSONIntegerFields) > 0 || check.Interrogation
 }
 
 func validateArgumentValidators(blueprint ScenarioBlueprint, registry *AgentToolRegistry) error {

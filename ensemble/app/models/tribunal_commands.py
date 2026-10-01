@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dataclass_field
 
 from app.constants import CommandGenerationOutcome, AuditorReason
-from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
+from app.models.agents.tribunal import CandidateCommand, TribunalObserver, VoteBreakdown
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime, Field
 
@@ -38,6 +38,7 @@ class TribunalGenerationRequest:
     blacklisting_enabled: bool = False
     whitelisted_commands: list[WhitelistedCommand] = dataclass_field(default_factory=list)
     blacklisted_commands: list[str] = dataclass_field(default_factory=list)
+    step_observer: TribunalObserver | None = None
 
     def __post_init__(self) -> None:
         if not self.request:

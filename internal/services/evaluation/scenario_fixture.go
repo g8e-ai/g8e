@@ -165,6 +165,11 @@ type ScenarioContentCheck struct {
 	ForbiddenTerms    []string          `json:"forbidden_terms,omitempty"`
 	JSONStringFields  map[string]string `json:"json_string_fields,omitempty"`
 	JSONIntegerFields map[string]int64  `json:"json_integer_fields,omitempty"`
+	// Interrogation requires the whole answer to be the Interrogation Protocol
+	// block Sage and Dash are told to emit when context is missing: one
+	// <interrogation> element holding exactly three numbered, strictly binary
+	// (yes/no) questions and nothing else.
+	Interrogation bool `json:"interrogation,omitempty"`
 }
 
 // ToolArgumentConstraint constrains one named argument of a tool call. Values
@@ -246,6 +251,7 @@ type ScenarioGoldCriteria struct {
 	PipelineCriteria      []ScenarioPipelineCriteria    `json:"pipeline_criteria"`
 	ContentCheck          *ScenarioContentCheck         `json:"content_check,omitempty"`
 	ArgumentValidators    []ToolArgumentValidator       `json:"argument_validators,omitempty"`
+	Players               *ScenarioPlayerExpectations   `json:"players,omitempty"`
 	PromptHint            *ScenarioPromptHint           `json:"prompt_hint,omitempty"`
 	PolicyExpectation     ScenarioPolicyExpectation     `json:"policy_expectation"`
 	EscalationExpectation ScenarioEscalationExpectation `json:"escalation_expectation"`
