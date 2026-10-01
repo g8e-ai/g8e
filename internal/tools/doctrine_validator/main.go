@@ -42,6 +42,13 @@ func validate() error {
 		return fmt.Errorf("doctrine references: load compliance catalogs: %w", err)
 	}
 	doctrinePath := filepath.Join(constants.DemosDirname, constants.DemosOrgFedRAMP, constants.DemosDoctrineDir, constants.DemosFedRAMPDoctrineFile)
+	return validateDoctrineFile(doctrinePath, assertions, frameworks)
+}
+
+// validateDoctrineFile checks that every doctrine in the file at doctrinePath
+// carries assertion references and that each KSI, control, and assertion
+// reference resolves against the supplied canonical catalogs.
+func validateDoctrineFile(doctrinePath string, assertions *compliancev1.ControlAssertionCatalog, frameworks *compliancev1.FrameworkCatalog) error {
 	encoded, err := os.ReadFile(doctrinePath)
 	if err != nil {
 		return fmt.Errorf("doctrine references: read %s: %w", doctrinePath, err)

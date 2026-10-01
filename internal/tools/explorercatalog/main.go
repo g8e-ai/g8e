@@ -17,8 +17,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,38 +73,48 @@ type task struct {
 }
 
 func main() {
-	checkOnly := flag.Bool("check", false, "verify the generated catalog module matches the Go catalog")
-	write := flag.Bool("write", false, "write the generated catalog module")
-	flag.Parse()
-	if *checkOnly && *write {
-		fatal("use only one of -check or -write")
-	}
-	if !*checkOnly && !*write {
-		*checkOnly = true
-	}
 	root, err := findRepoRoot()
 	if err != nil {
 		fatal("%v", err)
 	}
+	if err := run(os.Args[1:], root, os.Stdout, os.Stderr); err != nil {
+		fatal("%v", err)
+	}
+}
+
+// run parses args and either writes the generated module under root or
+// verifies the committed module matches the Go catalog. -check is the default.
+func run(args []string, root string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("explorercatalog", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	checkOnly := flags.Bool("check", false, "verify the generated catalog module matches the Go catalog")
+	write := flags.Bool("write", false, "write the generated catalog module")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *checkOnly && *write {
+		return errors.New("use only one of -check or -write")
+	}
 	generated, err := generate()
 	if err != nil {
-		fatal("%v", err)
+		return err
 	}
 	path := filepath.Join(root, outputRelPath)
 	if *write {
 		if err := os.WriteFile(path, generated, 0o644); err != nil {
-			fatal("write %s: %v", outputRelPath, err)
+			return fmt.Errorf("write %s: %w", outputRelPath, err)
 		}
-		fmt.Printf("generated %s\n", outputRelPath)
-		return
+		fmt.Fprintf(stdout, "generated %s\n", outputRelPath)
+		return nil
 	}
 	existing, err := os.ReadFile(path)
 	if err != nil {
-		fatal("read %s: %v (run: make explorer-catalog)", outputRelPath, err)
+		return fmt.Errorf("read %s: %w (run: make explorer-catalog)", outputRelPath, err)
 	}
 	if !bytes.Equal(existing, generated) {
-		fatal("%s is out of date (run: make explorer-catalog)", outputRelPath)
+		return fmt.Errorf("%s is out of date (run: make explorer-catalog)", outputRelPath)
 	}
+	return nil
 }
 
 // generate renders the TypeScript module for the current Go catalog.

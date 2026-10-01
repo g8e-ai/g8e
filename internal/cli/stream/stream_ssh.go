@@ -16,6 +16,7 @@ import (
 	"net"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	sshlib "golang.org/x/crypto/ssh"
@@ -434,6 +435,12 @@ type proxyConn struct {
 	stdout io.Reader
 	cmd    *exec.Cmd
 	addr   string
+
+	// golang.org/x/crypto/ssh closes the net.Conn from more than one goroutine
+	// (connection teardown and the key-exchange loop), and exec.Cmd.Wait must
+	// run exactly once, so Close is idempotent and safe for concurrent use.
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func (c *proxyConn) Read(b []byte) (int, error) {
@@ -445,11 +452,13 @@ func (c *proxyConn) Write(b []byte) (int, error) {
 }
 
 func (c *proxyConn) Close() error {
-	_ = c.stdin.Close()
-	if err := c.cmd.Wait(); err != nil {
-		return fmt.Errorf("ssh: proxy command wait: %w", err)
-	}
-	return nil
+	c.closeOnce.Do(func() {
+		_ = c.stdin.Close()
+		if err := c.cmd.Wait(); err != nil {
+			c.closeErr = fmt.Errorf("ssh: proxy command wait: %w", err)
+		}
+	})
+	return c.closeErr
 }
 
 func (c *proxyConn) LocalAddr() net.Addr {
