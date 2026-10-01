@@ -934,6 +934,17 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	if RunAggregateComplete(assignments, results, state) {
+		// Only a finished run claims an environment: a live dataset is
+		// provisional and must not be matched against another run's.
+		reader, err := NewCampaignProviderObservationReaderWithRemote(c.files, c.observationRemote)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		if state.ProviderEnvironment, err = reader.ObservedProviderEnvironment(ctx, results); err != nil {
+			return nil, nil, nil, nil, err
+		}
+	}
 	return run, assignments, results, state, nil
 }
 

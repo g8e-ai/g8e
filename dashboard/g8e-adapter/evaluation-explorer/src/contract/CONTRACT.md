@@ -51,7 +51,7 @@ The application uses `BrowserRouter` for client-side routing, which relies on se
 - `#/evaluations` evaluations: evaluation list with dataset, suite, status, quality, model, role, and date filters.
 - `#/evaluations/:runId` evaluation-detail: run status, progress, quality, model-role map, metrics, verification, resources, assignment table.
 - `#/evaluations/:runId/assignments/:assignmentId` assignment-detail: assignment identity, status, metric values, missingness, stage and resource summaries.
-- `#/compare` compare: two to four model comparison within one dataset and compatible metrics.
+- `#/compare` compare: two to four model comparison within one dataset, or across datasets only when every dataset declares the same `provider_environment` (every field equal) and has the same set of evaluation `suite_id`s. A model-role campaign freezes one model, so each model lives in its own run-scoped dataset and this rule is what makes them comparable. It fails closed: a dataset with no declared environment or no evaluation suite is incompatible. Each value stays attributed to its own run; nothing is pooled or averaged. The Go projector emits `provider_environment` on run-scoped `catalog_snapshot` records from the environment the operator declared when the run started, always with `source: declared`; it is omitted for a run started without a declaration. The panel states that a declared environment is the operator's claim, not an observation.
 - `#/methodology` methodology: dataset definitions, metric direction and denominator, uncertainty, quality states, and limitations.
 
 ## Record and event shapes

@@ -41,6 +41,11 @@ type catalogSnapshotRecord struct {
 	VerifierPassedCount  uint32   `json:"verifier_passed_count"`
 	VerifierFailedCount  uint32   `json:"verifier_failed_count"`
 	GeneratedAt          string   `json:"generated_at"`
+
+	// ProviderEnvironment is the hardware the run started on, when one was
+	// declared. The explorer compares datasets across runs only when both
+	// carry the same environment.
+	ProviderEnvironment *ProviderEnvironment `json:"provider_environment,omitempty"`
 }
 
 type modelPassRateRecord struct {
@@ -132,6 +137,11 @@ type runAggregateState struct {
 	VariantRoles   map[string]*variantRoleAggregate
 	EvaluatedCount uint32
 	Headline       *runHeadlineMetrics
+
+	// ProviderEnvironment is the declared environment the run started on. It is
+	// not derived from assignments: callers attach it after
+	// CollectRunAggregateState from the run's persisted snapshot.
+	ProviderEnvironment *ProviderEnvironment
 }
 
 // runHeadlineMetrics carries the typed run-level metric aggregate for the
@@ -733,7 +743,7 @@ func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runA
 		Description: "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. Values are provisional while assignments are still executing.",
 		Limitations: catalogSnapshotLimitations(), ModelCount: state.ModelCount, EvaluatedCount: state.EvaluatedCount,
 		SuiteCount: 1, RunCount: 1, AssignmentCount: state.Scheduled, ProviderRequestCount: state.Terminal,
-		GeneratedAt: observedAt,
+		GeneratedAt: observedAt, ProviderEnvironment: state.ProviderEnvironment,
 	}
 }
 

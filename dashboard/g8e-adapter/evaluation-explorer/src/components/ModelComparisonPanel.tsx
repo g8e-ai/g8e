@@ -1,11 +1,12 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-// Inline side-by-side comparison for two to four models from the same dataset.
+// Inline side-by-side comparison for two to four models from one dataset, or
+// from separate datasets that declare the same provider environment and suites.
 
 import { Link } from 'react-router-dom';
 import { modelComparisonId } from '../state/store';
-import { roleLabel } from '../views/derived';
+import { datasetLabel, roleLabel } from '../views/derived';
 import {
   IntervalDisplay,
   QualityBadge,
@@ -15,22 +16,30 @@ import {
   formatThroughput,
   formatTokens,
 } from './shared';
-import type { ModelSummary } from '../contract/types';
+import type { EnvironmentSource, ModelSummary } from '../contract/types';
 
 export function ModelComparisonPanel({
   models,
+  environmentSource,
   onClear,
 }: {
   models: ModelSummary[];
+  /** Set when the models come from separate datasets: how their shared provider environment was established. */
+  environmentSource?: EnvironmentSource;
   onClear: () => void;
 }) {
+  const crossDataset = environmentSource !== undefined;
   return (
     <section className="comparison-panel" aria-labelledby="comparison-heading">
       <div className="comparison-panel-header">
         <div>
           <h2 id="comparison-heading">Side-by-side comparison</h2>
           <p className="comparison-panel-lede">
-            Comparing {models.length} models from the same dataset. This is not a superiority claim.
+            {crossDataset
+              ? `Comparing ${models.length} models from separate runs that share ${environmentSource === 'observed' ? 'an observed' : 'a declared'} provider environment and evaluated the same suites.${
+                  environmentSource === 'declared' ? ' A declared environment is the operator’s claim, not an observation.' : ''
+                } Each value comes from that model's own run. This is not a superiority claim.`
+              : `Comparing ${models.length} models from the same dataset. This is not a superiority claim.`}
           </p>
         </div>
         <button type="button" className="comparison-clear-btn" onClick={onClear}>
@@ -55,6 +64,18 @@ export function ModelComparisonPanel({
             </tr>
           </thead>
           <tbody>
+            {crossDataset ? (
+              <tr>
+                <th scope="row">Run dataset</th>
+                {models.map((m) => (
+                  <td key={modelComparisonId(m)}>
+                    <code className="dataset-id" title={m.dataset_id}>
+                      {datasetLabel(m.dataset_id)}
+                    </code>
+                  </td>
+                ))}
+              </tr>
+            ) : null}
             <tr>
               <th scope="row">Role</th>
               {models.map((m) => <td key={modelComparisonId(m)}>{roleLabel(m.role)}</td>)}
