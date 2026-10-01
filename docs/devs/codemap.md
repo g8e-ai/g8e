@@ -180,6 +180,7 @@ Files at `internal/cli/cmd/` root are the root command, its tests, and shared fi
 | `internal/cli/cmd/shared/` | `shared` | Config load, `NewFileSvc` (`fs.NewRuntimeFileService`), source-root lookup, command context, and version-info context. Exists so group packages do not import the root `cmd` package. |
 | `internal/cli/cmd/gwremote/` | `gwremote` | Gateway HTTP publication, model provenance, provider observation, and health hook used by `eval`, `public`, and `docker`. Exists so those packages do not import `gw`. |
 | `internal/cli/cmd/cmdtest/` | `cmdtest` | Cross-package test helpers. Not a Cobra group. |
+| `internal/cli/agent/` | | Registry of external coding agents the launcher supports: per-agent config writing, launch arguments, tool-lockdown level, and verify hooks. Consumed by `mcp agent list/run/verify` and the harness `agent-launcher-config` scenario. |
 | `internal/cli/api/` | | Typed CLI HTTP client. |
 | `internal/cli/auth/` | | CLI enrollment, credential staging, key generation, passkey registration, trust bundles, and mTLS clients. |
 | `internal/cli/browserorigin/` | | Frontend-origin validation and normalization. |

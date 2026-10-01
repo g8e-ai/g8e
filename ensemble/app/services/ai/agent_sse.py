@@ -30,6 +30,7 @@ from app.models.agent import (
     StreamChunkFromModel,
 )
 from app.models.base import G8eBaseModel
+from app.models.evaluation_trace import EvaluationProviderToolRejection
 from app.models.events import (
     AiProcessingStoppedPayload,
     AIToolLifecyclePayload,
@@ -429,6 +430,7 @@ async def deliver_via_sse(
                 state.token_usage = chunk.data.token_usage
                 token_usage = chunk.data.token_usage
                 state.model_calls = chunk.data.model_calls
+                state.tools_declared = chunk.data.tools_declared
                 state.finish_reason = chunk.data.finish_reason
                 if chunk.data.tool_response_sizes:
                     state.tool_response_sizes = chunk.data.tool_response_sizes
@@ -461,6 +463,15 @@ async def deliver_via_sse(
                 # governed-inference evidence for every turn that already ran.
                 if chunk.data.model_calls:
                     state.model_calls = chunk.data.model_calls
+
+                # The tool declaration that reached the provider, and whether the
+                # provider itself refused it, are evidence of the failed turn.
+                state.tools_declared = chunk.data.tools_declared
+                if chunk.data.provider_tool_rejection and inputs.model_to_use:
+                    state.provider_tool_rejection = EvaluationProviderToolRejection(
+                        model=inputs.model_to_use,
+                        reason=error_message,
+                    )
 
                 # Publish the error event and continue - don't raise exception
                 await _publish(

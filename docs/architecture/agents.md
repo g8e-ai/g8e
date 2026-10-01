@@ -95,6 +95,11 @@ Each path provides different governance guarantees:
 # Start Gateway with a posture (once):
 g8e gw start --posture doctrine
 
+# If the launcher has to start the Gateway it uses --posture, else the previous managed
+# Gateway's posture, else doctrine. A running Gateway keeps its posture; an explicit
+# --posture that does not match it fails closed:
+g8e mcp agent run claude --posture notary
+
 # Launch a supported agent with automatic enrollment and tool disabling:
 g8e mcp agent run claude      # Claude Code
 g8e mcp agent run codex       # OpenAI Codex
@@ -180,6 +185,16 @@ Credentials resolve in this order (first complete pair wins):
 Each tier must provide a complete certificate and key pair. An incomplete pair fails closed immediately with `ErrIncompleteCredentialPair` rather than attempting to degrade. Application credentials are owner-approved platform application enrollments (`g8e auth enroll app <name>`). The CA bundle resolves from its flag, then the enrolled trust bundle. The Gateway URL resolves from its flag, then the default HTTPS MCP URL (`https://g8e.local:8443/mcp`). No credential, path, or endpoint is read from the environment (INV-ENV-04): `g8e mcp agent run` writes `--app <agent>` into the agent's generated MCP configuration and passes nothing else to the agent process.
 
 When L3 approval is required, the stdio bridge opens the approval page in the browser, waits for the matching `approval.completed` event over the authenticated SSE stream, and retries the original request. This automatic flow requires enrolled CLI credentials and a CLI session even when the MCP request itself uses an enrolled application identity.
+
+### What `agent run` is not
+
+`g8e mcp agent run` launches an external coding agent so its MCP traffic is governed. It is easy to conflate with three other things that also carry the word "agent":
+
+| Not this | Why | Where it lives |
+| --- | --- | --- |
+| **g8ee** | g8ee is a first-party application that integrates over governed HTTP dispatch (`POST /api/v1/operators/commands`), never as an MCP stdio child of the launcher. | [First-Party Agentic Ensemble](#first-party-agentic-ensemble-g8ee), [Ensemble Architecture](./ensemble.md) |
+| **Agent harness personas** | Personas (`claude-desktop`, `cursor`, ...) impersonate MCP clients against a real Gateway to test Gateway behavior. They do not exercise launcher output. The `agent-launcher-config` scenario is the complement: it verifies the launcher's generated config for every registry entry, while `scenarios/ensemble.go` exercises the g8ee chat path. Neither duplicates the other. | [internal/tools/agent_harness/](internal/tools/agent_harness/), INV-AGT-08 |
+| **Eval campaigns** | Campaigns score candidate models by driving the g8ee chat turn and importing its trace. They never validate external agent launcher configs. | [Evals](./evals.md) |
 
 ## Five-Layer Governance Enforcement
 

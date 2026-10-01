@@ -61,6 +61,7 @@ from app.llm.utils import resolve_model, ModelOverrideResolver
 from app.services.infra.event_service import EventService
 from .agent import g8eEnsemble
 from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
+from app.services.evaluation.tool_gate import resolve_tool_gate
 from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.evaluation.role_control import (
     apply_homogeneous_role_control,
@@ -462,6 +463,7 @@ class ChatPipelineService:
             agent_mode=agent_mode,
             max_tokens=max_tokens,
             model_override=model_to_use,
+            evaluation_context=g8e_context.evaluation_context,
         )
 
         attachment_parts: list[types.Part] = []
@@ -860,6 +862,9 @@ class ChatPipelineService:
             policy_decisions=state.policy_decisions,
             semantic_grades=semantic_grades,
             grader_calls=grader_calls,
+            tools_declared=state.tools_declared,
+            tool_gate=resolve_tool_gate(g8e_context.evaluation_context),
+            provider_tool_rejection=state.provider_tool_rejection,
             finish_reason=state.finish_reason or ("error" if state.stream_failed else "stop"),
             status="failed" if state.stream_failed else "completed",
             error=state.error,

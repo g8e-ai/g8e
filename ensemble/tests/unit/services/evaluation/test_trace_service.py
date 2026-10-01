@@ -9,7 +9,12 @@ import pytest
 
 from app.constants.bootstrap import BootstrapSettings, configure_bootstrap
 from app.errors import ValidationError
-from app.models.evaluation_trace import EvaluationAssignmentTrace
+from app.models.evaluation_trace import (
+    EvaluationAssignmentTrace,
+    EvaluationProviderToolRejection,
+    EvaluationToolCallRecord,
+    ToolGate,
+)
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.services.evaluation.trace_service import (
@@ -106,6 +111,121 @@ def test_trace_finalize_persists_designated_role_output(trace_service):
     assert finalized.designated_role_output == "READY"
     loaded = trace_service.load("assignment-1", "attempt-1")
     assert loaded.designated_role_output == "READY"
+
+
+def test_trace_finalize_records_the_proof_that_the_opportunity_was_real(trace_service):
+    """tools_declared (as sent to the provider) and tool_gate make 'tool offered and
+    ignored' distinguishable from 'tool never offered' for every reader of the trace."""
+    context = _context()
+    trace_service.begin(context)
+
+    finalized = trace_service.finalize(
+        context,
+        model_calls=[],
+        tools_declared=["recursive_grep_search", "file_read_on_operator"],
+        tool_gate=ToolGate.BYPASSED_FOR_EVAL,
+        finish_reason="stop",
+        status="completed",
+    )
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.trace_digest == finalized.trace_digest
+    assert loaded.tools_declared == ["recursive_grep_search", "file_read_on_operator"]
+    assert loaded.tool_gate is ToolGate.BYPASSED_FOR_EVAL
+    assert loaded.provider_tool_rejection is None
+
+
+def test_trace_finalize_records_a_provider_tool_declaration_rejection(trace_service):
+    context = _context()
+    trace_service.begin(context)
+
+    trace_service.finalize(
+        context,
+        model_calls=[],
+        tools_declared=["recursive_grep_search"],
+        tool_gate=ToolGate.BYPASSED_FOR_EVAL,
+        provider_tool_rejection=EvaluationProviderToolRejection(
+            model="qwen3.5:4b",
+            reason="Provider rejected the tool declaration: inference: requested capability unsupported",
+        ),
+        finish_reason="error",
+        status="failed",
+        error="Provider rejected the tool declaration",
+    )
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.status == "failed"
+    assert loaded.provider_tool_rejection is not None
+    assert loaded.provider_tool_rejection.model == "qwen3.5:4b"
+    assert "requested capability unsupported" in loaded.provider_tool_rejection.reason
+
+
+def test_trace_leaves_boundary_evidence_unset_when_not_reported(trace_service):
+    """Unknown must stay distinguishable from 'no tools were declared'."""
+    context = _context()
+    trace_service.begin(context)
+
+    trace_service.finalize(context, model_calls=[], finish_reason="stop", status="completed")
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.tools_declared is None
+    assert loaded.tool_gate is None
+
+
+def test_trace_persists_per_call_trajectory_and_guidance(trace_service):
+    context = _context()
+    trace_service.begin(context)
+
+    trace_service.finalize(
+        context,
+        model_calls=[],
+        tool_calls=[
+            EvaluationToolCallRecord(
+                call_id="exec-1",
+                tool_name="recursive_grep_search",
+                arguments_json='{"pattern":"AUTH_FAILURE"}',
+                success=False,
+                error_type="validation.error",
+                loop_turn=1,
+                error="path Field required",
+                suggestion="Provide path",
+            ),
+            EvaluationToolCallRecord(
+                call_id="exec-2",
+                tool_name="recursive_grep_search",
+                arguments_json='{"path":"/w","pattern":"AUTH_FAILURE"}',
+                success=True,
+                loop_turn=2,
+            ),
+        ],
+        finish_reason="stop",
+        status="completed",
+    )
+
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert [(call.loop_turn, call.success) for call in loaded.tool_calls] == [(1, False), (2, True)]
+    assert loaded.tool_calls[0].error == "path Field required"
+    assert loaded.tool_calls[0].suggestion == "Provide path"
+    assert loaded.tool_calls[1].error is None
+
+
+def test_trace_schema_version_covers_the_boundary_evidence_fields(trace_service):
+    context = _context()
+
+    assert trace_service.begin(context).schema_version == "5"
+
+
+def test_trace_digest_binds_tools_declared_and_gate():
+    base = EvaluationAssignmentTrace(
+        evaluation_context=_evaluation_context(),
+        chat_execution_id="exec-1",
+        status="completed",
+    )
+    declared = base.model_copy(update={"tools_declared": ["recursive_grep_search"]})
+    gated = base.model_copy(update={"tool_gate": ToolGate.BYPASSED_FOR_EVAL})
+
+    digests = {compute_trace_digest(t) for t in (base, declared, gated)}
+    assert len(digests) == 3
 
 
 def test_trace_load_rejects_path_traversal(trace_service):

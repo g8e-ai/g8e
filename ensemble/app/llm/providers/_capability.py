@@ -42,6 +42,55 @@ _TOOLS_PATTERNS: tuple[str, ...] = (
 )
 
 
+# Public-safe text of the Gateway's typed ``ErrInferenceCapabilityUnsupported``
+# sentinel (internal/constants/errors.go). The Gateway never forwards provider
+# error text, so this is the only fingerprint a governed-dispatch rejection
+# carries: HTTP 422 body for a pre-stream rejection, or the failure-frame reason.
+_GOVERNED_CAPABILITY_UNSUPPORTED = "requested capability unsupported"
+
+
+def _governed_rejection_text(exc: BaseException) -> str:
+    """The Gateway-reported rejection text carried by a governed-dispatch failure."""
+    detail = getattr(exc, "error_detail", None)
+    details = getattr(detail, "details", None)
+    response = details.get("response") if isinstance(details, dict) else None
+    if isinstance(response, str) and response:
+        return response
+    return str(exc)
+
+
+def translate_governed_tool_rejection(
+    exc: BaseException,
+    *,
+    service_name: str,
+    model: str,
+    tools_declared: bool,
+) -> None:
+    """Raise ``ToolsNotSupportedError`` when the Gateway reports that the
+    provider rejected a request that declared tools.
+
+    The scored agent call declares tools and requests no other optional
+    capability (no response format, default tool choice), so a typed
+    capability-unsupported rejection there is the tool declaration. Returns
+    without raising for any other failure so the caller re-raises the
+    original exception.
+    """
+    if not tools_declared:
+        return
+    rejection_text = _governed_rejection_text(exc)
+    if _GOVERNED_CAPABILITY_UNSUPPORTED not in rejection_text.lower():
+        return
+
+    from app.errors import ToolsNotSupportedError
+
+    raise ToolsNotSupportedError(
+        f"Provider rejected the tool declaration: {rejection_text}",
+        model=model,
+        service_name=service_name,
+        cause=exc if isinstance(exc, Exception) else None,
+    ) from exc
+
+
 def translate_capability_error(
     exc: BaseException,
     *,

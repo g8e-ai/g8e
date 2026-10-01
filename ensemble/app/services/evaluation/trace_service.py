@@ -21,11 +21,13 @@ from app.models.evaluation_trace import (
     EvaluationGovernedActionRecord,
     EvaluationGraderCallRecord,
     EvaluationPolicyDecisionRecord,
+    EvaluationProviderToolRejection,
     EvaluationRoleOutcome,
     EvaluationSemanticGradeRecord,
     EvaluationToolCallRecord,
     EvaluationToolDecisionRecord,
     EvaluationTraceStatus,
+    ToolGate,
 )
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
@@ -39,7 +41,11 @@ logger = logging.getLogger(__name__)
 # 4: adds the optional `error` field carrying the terminal stream error message
 # for a failed assignment, so failure diagnosis no longer depends on ensemble
 # server logs that outlive the run.
-_TRACE_SCHEMA_VERSION = "4"
+# 5: proves the opportunity was real and records the trajectory. Adds
+# `tools_declared` (names as sent to the provider), `tool_gate`
+# (registry | bypassed_for_eval), `provider_tool_rejection`, and per tool call
+# `loop_turn`, `error`, `suggestion`, and `error_analysis`.
+_TRACE_SCHEMA_VERSION = "5"
 
 
 def _trace_root() -> Path:
@@ -122,6 +128,9 @@ class EvaluationTraceService:
         policy_decisions: list[EvaluationPolicyDecisionRecord] | None = None,
         semantic_grades: list[EvaluationSemanticGradeRecord] | None = None,
         grader_calls: list[EvaluationGraderCallRecord] | None = None,
+        tools_declared: list[str] | None = None,
+        tool_gate: ToolGate | None = None,
+        provider_tool_rejection: EvaluationProviderToolRejection | None = None,
         finish_reason: str | None,
         status: EvaluationTraceStatus,
         error: str | None = None,
@@ -141,6 +150,9 @@ class EvaluationTraceService:
             status=status,
             triage_model_call=triage_model_call,
             controlled_role_assignment=controlled_role_assignment,
+            tools_declared=list(tools_declared) if tools_declared is not None else None,
+            tool_gate=tool_gate,
+            provider_tool_rejection=provider_tool_rejection,
             model_calls=list(model_calls),
             role_outcome=role_outcome,
             designated_role_output=designated_role_output,

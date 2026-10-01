@@ -21,6 +21,7 @@ class _RecordingProvider:
         self.last_retry_count = -1
         self.input_artifact_hash = ""
         self.model_boundary_privacy = None
+        self.declared_tool_names: list[str] | None = ["stale_tool_from_prior_call"]
         self._governed_dispatch_evidence = GovernedDispatchEvidence(
             transaction_id="tx-1",
             result_digest="digest-1",
@@ -45,6 +46,9 @@ class _RecordingProvider:
 
     def clear_input_artifact_hash(self) -> None:
         self.input_artifact_hash = ""
+
+    def clear_declared_tools(self) -> None:
+        self.declared_tool_names = None
 
     def set_g8e_context(self, context: G8eHttpContext | None) -> None:
         self.last_context = context
@@ -77,6 +81,16 @@ def test_prepare_provider_call_binds_context_and_retry():
 
     assert provider.last_context == context
     assert provider.last_retry_count == 2
+
+
+def test_prepare_provider_call_discards_tool_declarations_from_the_prior_call():
+    """A call that reports nothing must never inherit the previous call's tool set."""
+    provider = _RecordingProvider()
+    assert provider.declared_tool_names == ["stale_tool_from_prior_call"]
+
+    prepare_provider_call(provider)
+
+    assert provider.declared_tool_names is None
 
 
 def test_build_model_call_telemetry_includes_governed_fields():

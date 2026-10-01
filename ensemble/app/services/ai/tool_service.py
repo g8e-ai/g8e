@@ -34,6 +34,9 @@ from app.constants.generated_status import (
 from app.constants.prompts import AgentMode
 from app.constants.config import FORBIDDEN_COMMAND_PATTERNS
 from app.errors import ConfigurationError, ExternalServiceError, ValidationError
+from g8e.models.internal_api import EvaluationInferenceContext
+
+from app.models.evaluation_trace import ToolGate
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.model_configs import get_model_config
@@ -44,6 +47,7 @@ from app.services.ai.tool_registry import (
     OPERATOR_TOOLS,
     TOOL_SPECS,
 )
+from app.services.evaluation.tool_gate import resolve_tool_gate
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.operator.command_service import OperatorCommandService
 from app.utils.validation.auto_approved_validator import CommandAutoApprovedValidator
@@ -245,6 +249,7 @@ class AIToolService:
         self,
         agent_mode: AgentMode,
         model_to_use: str | None,
+        evaluation_context: EvaluationInferenceContext | None = None,
     ) -> list[types.ToolGroup]:
         """Build tool declarations for the given AgentMode, driven by TOOL_SPECS.
 
@@ -252,9 +257,11 @@ class AIToolService:
         currently registered (``g8e_web_search`` is only registered when a
         ``WebSearchProvider`` was injected). Ordering follows ``TOOL_SPECS``.
 
-        Returns an empty list if the model does not support tools.
+        Returns an empty list if the model does not support tools, except for a
+        request carrying an ``evaluation_context``: a scored request always
+        declares the full production set (see :func:`resolve_tool_gate`).
         """
-        if model_to_use:
+        if model_to_use and resolve_tool_gate(evaluation_context) is ToolGate.REGISTRY:
             config = get_model_config(model_to_use)
             if not config.supports_tools:
                 logger.info(

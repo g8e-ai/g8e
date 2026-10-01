@@ -21,7 +21,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.constants import LLMProvider, ThinkingLevel
-from app.errors import ConfigurationError, ModelCapabilityError, NetworkError, ValidationError
+from app.errors import (
+    ConfigurationError,
+    ModelCapabilityError,
+    NetworkError,
+    ToolsNotSupportedError,
+    ValidationError,
+)
 from app.llm.factory import (
     clear_provider_cache,
     get_llm_provider,
@@ -715,6 +721,183 @@ class TestG8EProviderDispatch:
         request = client.dispatch_inference.await_args.args[0]
         assert request.case_id == ""
         assert request.investigation_id == ""
+
+
+def _tool_settings(*names: str) -> PrimaryLLMSettings:
+    return PrimaryLLMSettings(
+        tools=[
+            ToolGroup(
+                tools=[
+                    ToolDeclaration(
+                        name=name,
+                        description=f"{name} tool",
+                        parameters={"type": "object", "properties": {}},
+                    )
+                    for name in names
+                ]
+            )
+        ]
+    )
+
+
+_CAPABILITY_UNSUPPORTED_BODY = '{"error":"inference: requested capability unsupported"}'
+
+
+def _http_rejection(status: int, body: str) -> NetworkError:
+    return NetworkError(
+        f"[HTTP-CLIENT] Inference dispatch returned HTTP {status}",
+        details={"status_code": status, "response": body},
+    )
+
+
+class TestG8EProviderToolDeclarationEvidence:
+    """The trace proves the opportunity was real from what crossed the provider boundary."""
+
+    @pytest.mark.asyncio
+    async def test_nothing_recorded_before_any_dispatch(self):
+        provider = G8EProvider(internal_http_client=_client())
+
+        assert provider.declared_tool_names is None
+
+    @pytest.mark.asyncio
+    async def test_dispatch_records_tool_names_as_sent_in_order(self):
+        client = _client()
+        provider = G8EProvider(internal_http_client=client)
+
+        await provider.generate_content_primary(
+            "gemma3:4b", _contents(), _tool_settings("recursive_grep_search", "file_read_on_operator")
+        )
+
+        request = client.dispatch_inference.await_args.args[0]
+        assert [tool.name for tool in request.tools] == [
+            "recursive_grep_search",
+            "file_read_on_operator",
+        ]
+        assert provider.declared_tool_names == ["recursive_grep_search", "file_read_on_operator"]
+
+    @pytest.mark.asyncio
+    async def test_stream_dispatch_records_tool_names_as_sent(self):
+        provider = G8EProvider(internal_http_client=_client())
+
+        async for _ in provider.generate_content_stream_primary(
+            "gemma3:4b", _contents(), _tool_settings("recursive_grep_search")
+        ):
+            pass
+
+        assert provider.declared_tool_names == ["recursive_grep_search"]
+
+    @pytest.mark.asyncio
+    async def test_dispatch_without_tools_records_an_empty_set_not_unknown(self):
+        provider = G8EProvider(internal_http_client=_client())
+
+        await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
+
+        assert provider.declared_tool_names == []
+
+    @pytest.mark.asyncio
+    async def test_clear_resets_recorded_tool_names(self):
+        provider = G8EProvider(internal_http_client=_client())
+        await provider.generate_content_primary(
+            "gemma3:4b", _contents(), _tool_settings("recursive_grep_search")
+        )
+
+        provider.clear_declared_tools()
+
+        assert provider.declared_tool_names is None
+
+    @pytest.mark.asyncio
+    async def test_tools_remain_recorded_when_the_provider_rejects_the_dispatch(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(
+            side_effect=_http_rejection(502, '{"error":"inference: backend unavailable"}')
+        )
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(NetworkError):
+            await provider.generate_content_primary(
+                "gemma3:4b", _contents(), _tool_settings("recursive_grep_search")
+            )
+
+        assert provider.declared_tool_names == ["recursive_grep_search"]
+
+
+class TestG8EProviderToolDeclarationRejection:
+    """A provider that refuses the tool declaration is a typed, explicit outcome."""
+
+    @pytest.mark.asyncio
+    async def test_http_capability_rejection_with_tools_raises_tools_not_supported(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(
+            side_effect=_http_rejection(422, _CAPABILITY_UNSUPPORTED_BODY)
+        )
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ToolsNotSupportedError) as raised:
+            await provider.generate_content_primary(
+                "qwen3.5:4b", _contents(), _tool_settings("recursive_grep_search")
+            )
+
+        assert raised.value.model == "qwen3.5:4b"
+        assert provider.declared_tool_names == ["recursive_grep_search"]
+
+    @pytest.mark.asyncio
+    async def test_streaming_http_capability_rejection_with_tools_raises_tools_not_supported(self):
+        async def dispatch_stream(_request):
+            raise _http_rejection(422, _CAPABILITY_UNSUPPORTED_BODY)
+            yield  # pragma: no cover - makes this an async generator
+
+        client = _client()
+        client.dispatch_inference_stream = dispatch_stream
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ToolsNotSupportedError):
+            async for _ in provider.generate_content_stream_primary(
+                "qwen3.5:4b", _contents(), _tool_settings("recursive_grep_search")
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_failure_frame_capability_rejection_with_tools_raises_tools_not_supported(self):
+        async def dispatch_stream(_request):
+            yield InferenceDispatchStreamFrame(
+                failure=InferenceDispatchStreamFailure(
+                    reason="inference: requested capability unsupported"
+                )
+            )
+
+        client = _client()
+        client.dispatch_inference_stream = dispatch_stream
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ToolsNotSupportedError):
+            async for _ in provider.generate_content_stream_primary(
+                "qwen3.5:4b", _contents(), _tool_settings("recursive_grep_search")
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_capability_rejection_without_declared_tools_is_not_a_tool_rejection(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(
+            side_effect=_http_rejection(422, _CAPABILITY_UNSUPPORTED_BODY)
+        )
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(NetworkError):
+            await provider.generate_content_primary("qwen3.5:4b", _contents(), PrimaryLLMSettings())
+
+    @pytest.mark.asyncio
+    async def test_other_http_failures_with_tools_are_not_tool_rejections(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(
+            side_effect=_http_rejection(502, '{"error":"inference: backend unavailable"}')
+        )
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(NetworkError):
+            await provider.generate_content_primary(
+                "qwen3.5:4b", _contents(), _tool_settings("recursive_grep_search")
+            )
 
 
 class TestEvaluationInferenceContextValidation:

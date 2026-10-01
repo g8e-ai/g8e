@@ -13,6 +13,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -853,6 +854,7 @@ func agentRunCmdWithConfig(
 	enrollerFactory authcmd.EnrollerFactory,
 ) *cobra.Command {
 	var verify bool
+	var posture string
 
 	cmd := &cobra.Command{
 		Use:   "run <agent> [-- <args...>]",
@@ -891,6 +893,12 @@ EXTERNAL MCP SERVERS:
     g8e serve gateway --mcp-downstream-cmd npx --mcp-downstream-args '-y,@modelcontextprotocol/server-filesystem,/path'
     g8e serve gateway --mcp-downstream-url http://localhost:3000
 
+GATEWAY POSTURE:
+  If the launcher has to start the gateway, it uses --posture, else the posture of
+  the previous managed gateway (its launch profile), else doctrine. Posture is
+  immutable on a running gateway; an explicit --posture that does not match it is
+  an error. Use 'g8e gw restart' (or 'g8e gw start --posture <p>') to change it.
+
 AUDIT TRAIL:
   When launching an agent, the agent is automatically enrolled as an external app
   identity (SPIFFE ID: spiffe://g8e.local/app/<agent-name>). All MCP tool calls
@@ -928,19 +936,84 @@ the gateway and use 'g8e mcp stdio'.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPAgentRun(args, verify, fileSvcFactory, enrollerFactory)
+			return runMCPAgentRun(args, verify, posture, fileSvcFactory, enrollerFactory)
 		},
 	}
 
 	cmd.Flags().BoolVar(&verify, "verify", true, "Verify tool interception config before launching agent (use --verify=false to skip)")
+	cmd.Flags().StringVar(&posture, "posture", "", "Governance posture for a gateway the launcher starts: doctrine, consensus, ratify, or notary (default: the previous managed gateway's posture, else doctrine). A running gateway keeps its posture; an explicit value that differs fails closed")
 	return cmd
+}
+
+// validateRequestedPosture rejects an unrecognized --posture value. An empty
+// value means "not requested".
+func validateRequestedPosture(requested string) error {
+	if requested == "" {
+		return nil
+	}
+	if _, ok := constants.GetGovernancePostureRequirements(requested); !ok {
+		return fmt.Errorf("%w: %q (must be one of: %s, %s, %s, %s)", constants.ErrInvalidPosture, requested,
+			constants.PostureDoctrine, constants.PostureConsensus, constants.PostureRatify, constants.PostureNotary)
+	}
+	return nil
+}
+
+// resolveGatewayLaunchConfig builds the config for a gateway the launcher must
+// start. The persisted launch profile of the previous managed gateway is the
+// base so its ports, origins, and downstream settings survive; without one the
+// launcher starts a localhost gateway. The posture is the requested one, else
+// the profile's, else the doctrine default. A corrupt profile fails closed.
+func resolveGatewayLaunchConfig(fileSvc fs.RuntimeFileService, requested string) (serve.GatewayConfig, error) {
+	cfg := serve.GatewayConfig{LogLevel: "info", CertIdentityMode: "localhost"}
+	profile, err := serve.ReadLaunchProfile(fileSvc)
+	switch {
+	case err == nil:
+		cfg = profile.Config
+	case !errors.Is(err, constants.ErrLaunchProfileMissing):
+		return serve.GatewayConfig{}, fmt.Errorf("mcp: read launch profile: %w", err)
+	}
+
+	switch {
+	case requested != "":
+		cfg.Posture = g8econfig.GatewayPosture(requested)
+	case cfg.Posture == "":
+		cfg.Posture = g8econfig.PostureDoctrine
+	}
+	return cfg, nil
+}
+
+// confirmRunningGatewayPosture checks an explicit --posture against the running
+// gateway. Posture is immutable at runtime, so a request that cannot be shown
+// to match fails closed rather than launching an agent under a different
+// posture than the user asked for.
+func confirmRunningGatewayPosture(fileSvc fs.RuntimeFileService, requested string) error {
+	if requested == "" {
+		return nil
+	}
+	profile, err := serve.ReadLaunchProfile(fileSvc)
+	if err != nil {
+		return fmt.Errorf("%w: cannot confirm the running gateway's posture is %q: %w", constants.ErrGatewayPostureMismatch, requested, err)
+	}
+	if string(profile.Config.Posture) != requested {
+		return fmt.Errorf("%w: running gateway posture is %q, requested %q; restart it with 'g8e gw restart' or omit --posture",
+			constants.ErrGatewayPostureMismatch, profile.Config.Posture, requested)
+	}
+	return nil
 }
 
 // startGatewayIfNeeded starts the gateway if it is not already running and
 // waits until it is healthy, then ensures CLI mTLS credentials exist.
 // HTTP is only used here to poll the bootstrap health endpoint before mTLS
 // certs have been issued — all subsequent traffic uses mTLS.
-func startGatewayIfNeeded(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) error {
+//
+// requestedPosture is the --posture flag value ("" when unset). It selects the
+// posture of a gateway the launcher starts; a gateway that is already running
+// keeps the posture it was started with, which must match an explicit request.
+func startGatewayIfNeeded(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), requestedPosture string) error {
+	if err := validateRequestedPosture(requestedPosture); err != nil {
+		return err
+	}
+
 	_, err := shared.LoadConfig("")
 	if err != nil {
 		return fmt.Errorf("mcp: load config: %w", err)
@@ -962,14 +1035,17 @@ func startGatewayIfNeeded(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeF
 	}
 
 	if running {
+		if err := confirmRunningGatewayPosture(fileSvc, requestedPosture); err != nil {
+			return err
+		}
 		fmt.Fprintf(os.Stderr, "[g8e] Gateway already running (PID %d)\n", pid)
 	} else {
-		fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
-		startOpts := platform.OperatorStartOptions{GatewayConfig: serve.GatewayConfig{
-			Posture:          g8econfig.GatewayPosture("doctrine"),
-			LogLevel:         "info",
-			CertIdentityMode: "localhost",
-		}}
+		gatewayCfg, err := resolveGatewayLaunchConfig(fileSvc, requestedPosture)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Starting gateway (posture: %s)...\n", gatewayCfg.Posture)
+		startOpts := platform.OperatorStartOptions{GatewayConfig: gatewayCfg}
 		if err := pm.StartOperator(&startOpts); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 		}
@@ -1013,8 +1089,8 @@ func startGatewayIfNeeded(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeF
 // then launches the requested agent with 'g8e mcp stdio --app <agent>' as its sole
 // MCP server. The stdio bridge loads the agent's managed application credentials by
 // name; no credential material or paths are passed through the environment.
-func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
-	if err := startGatewayIfNeeded(fileSvcFactory); err != nil {
+func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, posture string, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
+	if err := startGatewayIfNeeded(fileSvcFactory, posture); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
 
@@ -1132,7 +1208,7 @@ func launchAgentProcess(integration agent.Integration, extraArgs, launchArgs []s
 	return agentCmd.Run()
 }
 
-func runMCPAgentRun(args []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
+func runMCPAgentRun(args []string, verify bool, posture string, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory authcmd.EnrollerFactory) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%w: specify an agent name to launch with g8e governance\n\nUsage:\n  g8e mcp agent run <agent> [-- <args...>]\n\nUse 'g8e mcp agent list' to see supported agents", constants.ErrAgentNotFound)
 	}
@@ -1141,7 +1217,7 @@ func runMCPAgentRun(args []string, verify bool, fileSvcFactory func(string, *slo
 	if err != nil {
 		return fmt.Errorf("mcp: agent run: %w", err)
 	}
-	return launchAgentWithGovernance(string(integration.ID), args[1:], verify, fileSvcFactory, enrollerFactory)
+	return launchAgentWithGovernance(string(integration.ID), args[1:], verify, posture, fileSvcFactory, enrollerFactory)
 }
 
 func extractURLFromText(text string) string {

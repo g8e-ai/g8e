@@ -25,14 +25,14 @@ import (
 )
 
 func TestRunMCPAgentRun_NoArgsReturnsError(t *testing.T) {
-	err := runMCPAgentRun(nil, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+	err := runMCPAgentRun(nil, false, "", shared.NewFileSvc,authcmd.PanickingEnrollerFactory())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotFound)
 	assert.Contains(t, err.Error(), "specify an agent name")
 }
 
 func TestRunMCPAgentRun_UnknownAgentReturnsError(t *testing.T) {
-	err := runMCPAgentRun([]string{"unknown-agent"}, false, shared.NewFileSvc, authcmd.PanickingEnrollerFactory())
+	err := runMCPAgentRun([]string{"unknown-agent"}, false, "", shared.NewFileSvc,authcmd.PanickingEnrollerFactory())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotFound)
 }

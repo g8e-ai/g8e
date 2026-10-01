@@ -26,9 +26,10 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from dataclasses import dataclass
 
 import app.llm.llm_types as types
-from app.errors import ValidationError
+from app.errors import ToolsNotSupportedError, ValidationError
 from app.constants import (
     AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
@@ -39,7 +40,7 @@ from app.constants import (
     DEFAULT_FINISH_REASON,
     ReasoningAgent,
 )
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, recorded_declared_tool_names
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.provider import LLMProvider
 from app.llm.providers.g8e import G8EProvider
@@ -74,6 +75,19 @@ from app.services.protocols import ApprovalServiceProtocol
 from app.utils.time_ids.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ProviderBoundary:
+    """Provider-boundary evidence that must survive a failed turn and loop retries.
+
+    ``tools_declared`` is read from the provider immediately after each agent
+    call (before tool execution can reuse the provider), so the COMPLETE and
+    ERROR chunks report what was actually sent rather than what the registry
+    would produce.
+    """
+
+    tools_declared: list[str] | None = None
 
 
 def _sum_optional_usage_counts(values: list[int | None]) -> int | None:
@@ -218,6 +232,7 @@ class g8eEnsemble:
 
         triage_call = inputs.triage_result.model_call if inputs.triage_result else None
         model_calls = [triage_call] if triage_call else []
+        boundary = _ProviderBoundary()
         while attempt <= max_attempts:
             try:
                 # Emit RETRY chunk before retrying (not on first attempt)
@@ -234,6 +249,7 @@ class g8eEnsemble:
                     event_service=event_service,
                     model_calls=model_calls,
                     retry_count=attempt - 1,
+                    boundary=boundary,
                 ):
                     # Mark streaming as started as soon as we receive any chunk
                     # This prevents retries after streaming has begun
@@ -251,7 +267,12 @@ class g8eEnsemble:
                         logger.error("[AGENT] Fatal error after streaming started: %s", e)
                     yield StreamChunkFromModel(
                         type=StreamChunkFromModelType.ERROR,
-                        data=StreamChunkData(error=str(e), model_calls=model_calls),
+                        data=StreamChunkData(
+                            error=str(e),
+                            model_calls=model_calls,
+                            tools_declared=boundary.tools_declared,
+                            provider_tool_rejection=isinstance(e, ToolsNotSupportedError),
+                        ),
                     )
                     return
 
@@ -335,6 +356,7 @@ class g8eEnsemble:
         event_service: EventService,
         model_calls: list[ModelCallTelemetry] | None = None,
         retry_count: int = 0,
+        boundary: _ProviderBoundary | None = None,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """
         ReAct function-calling loop.
@@ -357,6 +379,9 @@ class g8eEnsemble:
         # These should be validated by run_with_sse, but add assertions for type safety
         assert generation_config is not None, "generation_config must not be None"
         assert model_name is not None, "model_name must not be None"
+
+        if boundary is None:
+            boundary = _ProviderBoundary()
 
         case_id = inputs.case_id
         investigation_id = inputs.investigation_id
@@ -450,7 +475,9 @@ class g8eEnsemble:
                         yield chunk
 
                     gated = gated_result_out[0]
+                    boundary.tools_declared = recorded_declared_tool_names(llm_provider)
                 except Exception as exc:
+                    boundary.tools_declared = recorded_declared_tool_names(llm_provider)
                     model_calls.append(
                         build_model_call_telemetry(
                             provider=llm_provider,
@@ -529,7 +556,9 @@ class g8eEnsemble:
                     request_settings=inputs.request_settings,
                     event_service=event_service,
                 ):
-                    yield chunk
+                    yield chunk.model_copy(
+                        update={"data": chunk.data.model_copy(update={"loop_turn": loop_turn})}
+                    )
 
                 fc_responses: list[ToolCallResponse] = fc_responses_out[0]
 
@@ -604,5 +633,6 @@ class g8eEnsemble:
                 token_usage=token_usage,
                 model_calls=model_calls,
                 tool_response_sizes=tool_response_sizes if tool_response_sizes else None,
+                tools_declared=boundary.tools_declared,
             ),
         )

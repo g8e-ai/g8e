@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from g8e.models.internal_api import EvaluationInferenceContext
@@ -14,6 +15,21 @@ from g8e.models.internal_api import EvaluationInferenceContext
 from app.models.base import Field, G8eBaseModel
 from app.models.model_telemetry import ModelCallTelemetry
 from app.constants import TriageComplexityClassification
+
+
+class ToolGate(StrEnum):
+    """Which authority decided the tool set declared to the provider.
+
+    ``REGISTRY`` consults the static per-model ``supports_tools`` table (the
+    production path). ``BYPASSED_FOR_EVAL`` declares the full production tool
+    set for the agent mode without consulting that table; it is keyed on the
+    request's ``evaluation_context`` and is the one deliberate divergence
+    between a scored request and production chat (INV-EVAL-CAMP-07).
+    """
+
+    REGISTRY = "registry"
+    BYPASSED_FOR_EVAL = "bypassed_for_eval"
+
 
 EvaluationTraceStatus = Literal["running", "completed", "failed"]
 DesignatedModelRole = Literal["primary", "assistant", "lite"]
@@ -36,6 +52,19 @@ class EvaluationToolDecisionRecord(G8eBaseModel):
     outcome: EvaluationToolOutcome = "pass"
 
 
+class EvaluationErrorAnalysisSummary(G8eBaseModel):
+    """Bounded summary of the LLM error analysis shown to the model after a
+    failed operator command (``suggested_fix`` / ``suggested_command`` /
+    ``should_escalate``), so grading can tell guidance followed from guidance
+    ignored."""
+
+    error_category: str = Field(default="")
+    root_cause: str = Field(default="")
+    suggested_fix: str | None = None
+    suggested_command: str | None = None
+    should_escalate: bool = False
+
+
 class EvaluationToolCallRecord(G8eBaseModel):
     """One executed tool call: the model's exact arguments, the resolved command,
     and the tool's returned result.
@@ -44,6 +73,11 @@ class EvaluationToolCallRecord(G8eBaseModel):
     so the cross-language trace digest never depends on float formatting, and
     arguments_hash is sha256(arguments_json) so any reader can verify the
     arguments shown against the hash bound into the trace.
+
+    ``loop_turn`` is the tool-loop turn whose model response issued the call,
+    and ``error`` / ``error_type`` / ``suggestion`` / ``error_analysis`` are the
+    guidance the model was shown for this result, so a reader can order the
+    trajectory and see what the model did after each correction.
     """
 
     call_id: str = Field(..., min_length=1)
@@ -56,6 +90,10 @@ class EvaluationToolCallRecord(G8eBaseModel):
     is_operator_tool: bool = False
     execution_id: str | None = None
     error_type: str | None = None
+    loop_turn: int | None = Field(default=None, ge=1)
+    error: str | None = None
+    suggestion: str | None = None
+    error_analysis: EvaluationErrorAnalysisSummary | None = None
 
 
 class EvaluationGovernedActionRecord(G8eBaseModel):
@@ -106,8 +144,27 @@ class EvaluationControlledRoleAssignment(G8eBaseModel):
     triage_complexity: TriageComplexityClassification
 
 
+class EvaluationProviderToolRejection(G8eBaseModel):
+    """The provider itself rejected the tool declaration for this model.
+
+    Recorded as its own explicit reason (``PROVIDER_REJECTED_TOOL_DECLARATION``)
+    so a model that cannot accept tools is a plain FAIL on tool scenarios, never
+    an infrastructure error and never a capability label that gates the result.
+    ``reason`` is the gateway's public-safe rejection text.
+    """
+
+    model: str = Field(..., min_length=1)
+    reason: str = Field(default="")
+
+
 class EvaluationAssignmentTrace(G8eBaseModel):
-    """Immutable application-owned record of one scored chat assignment."""
+    """Immutable application-owned record of one scored chat assignment.
+
+    ``tools_declared`` is the tool names as actually sent to the provider on
+    the scored agent call, captured at the provider boundary (never recomputed
+    from the registry); ``None`` means the provider did not report them.
+    ``tool_gate`` records which authority decided that set.
+    """
 
     schema_version: str = Field(default="1")
     evaluation_context: EvaluationInferenceContext
@@ -115,6 +172,9 @@ class EvaluationAssignmentTrace(G8eBaseModel):
     status: EvaluationTraceStatus = Field(default="running")
     triage_model_call: ModelCallTelemetry | None = None
     controlled_role_assignment: EvaluationControlledRoleAssignment | None = None
+    tools_declared: list[str] | None = None
+    tool_gate: ToolGate | None = None
+    provider_tool_rejection: EvaluationProviderToolRejection | None = None
     model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     role_outcome: EvaluationRoleOutcome | None = None
     designated_role_output: str | None = None

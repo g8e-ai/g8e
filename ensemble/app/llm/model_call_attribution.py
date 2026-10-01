@@ -33,6 +33,7 @@ def prepare_provider_call(
 ) -> None:
     """Reset per-call evidence and bind request-scoped evaluation context."""
     provider.clear_input_artifact_hash()
+    provider.clear_declared_tools()
     provider.set_g8e_context(g8e_context)
     provider.set_provider_retry_count(retry_count)
 
