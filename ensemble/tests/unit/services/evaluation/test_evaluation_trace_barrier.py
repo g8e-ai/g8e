@@ -312,3 +312,63 @@ async def test_a_failure_to_finalize_the_crashed_trace_does_not_hide_the_origina
     trace_service.finalize_crashed.assert_called_once()
     publish.assert_awaited_once()
     assert publish.await_args.kwargs["payload"].error == "pipeline exploded"
+
+
+def _memory_barrier_fixture():
+    trace_service = MagicMock()
+    pipeline = _boundary_pipeline(trace_service)
+    g8e_context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    agent_call = ModelCallTelemetry(
+        agent_role="sage",
+        model_role="primary",
+        provider="G8EProvider",
+        model="model-a",
+        monotonic_start=1.0,
+        monotonic_end=2.0,
+    )
+    return trace_service, pipeline, g8e_context, agent_call
+
+
+@pytest.mark.asyncio
+async def test_a_failing_memory_update_does_not_fail_the_scored_trace():
+    trace_service, pipeline, g8e_context, agent_call = _memory_barrier_fixture()
+
+    async def _failing_memory_task() -> None:
+        raise RuntimeError("memory model unavailable")
+
+    await pipeline._finalize_evaluation_assignment(
+        g8e_context=g8e_context,
+        inputs=_boundary_inputs(g8e_context),
+        state=AgentStreamState(model_calls=[agent_call]),
+        memory_holder={"task": asyncio.create_task(_failing_memory_task()), "model_call": None},
+    )
+
+    kwargs = trace_service.finalize.call_args.kwargs
+    assert kwargs["status"] == "completed"
+    assert kwargs["model_calls"] == [agent_call]
+
+
+@pytest.mark.asyncio
+async def test_a_timed_out_memory_update_does_not_fail_the_scored_trace(monkeypatch):
+    trace_service, pipeline, g8e_context, agent_call = _memory_barrier_fixture()
+    monkeypatch.setattr(
+        "app.services.ai.chat_pipeline.EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS", 0.01
+    )
+
+    async def _hung_memory_task() -> None:
+        await asyncio.sleep(30)
+
+    task = asyncio.create_task(_hung_memory_task())
+    try:
+        await pipeline._finalize_evaluation_assignment(
+            g8e_context=g8e_context,
+            inputs=_boundary_inputs(g8e_context),
+            state=AgentStreamState(model_calls=[agent_call]),
+            memory_holder={"task": task, "model_call": None},
+        )
+    finally:
+        task.cancel()
+
+    kwargs = trace_service.finalize.call_args.kwargs
+    assert kwargs["status"] == "completed"
+    assert kwargs["model_calls"] == [agent_call]

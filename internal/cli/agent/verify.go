@@ -52,6 +52,37 @@ func (i Integration) Prepare(homeDir, binaryPath, appName string, verify bool) (
 	return Prepared{ConfigPath: configPath, LaunchArgs: launchArgs, Cleanup: cleanup}, nil
 }
 
+// VerifyIsolated writes the integration's config into a throwaway home
+// directory, computes its launch argv, and runs the verify hooks. The agent
+// binary is never started and the real agent config is never touched, so it is
+// safe to run anywhere. It is the one verification path shared by
+// `g8e mcp agent verify` and the evaluation environment canaries.
+func (i Integration) VerifyIsolated(binaryPath string) error {
+	homeDir, err := os.MkdirTemp("", "g8e-agent-verify-*")
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+	}
+	defer os.RemoveAll(homeDir)
+
+	prepared, err := i.Prepare(homeDir, binaryPath, string(i.ID), true)
+	if err != nil {
+		return err
+	}
+	prepared.Cleanup()
+	return nil
+}
+
+// VerifyAllIsolated runs VerifyIsolated for every registered integration and
+// returns the first failure.
+func VerifyAllIsolated(binaryPath string) error {
+	for _, integration := range All() {
+		if err := integration.VerifyIsolated(binaryPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Verify runs every VerifyHook of the integration against the config the
 // launcher wrote and the argv it computed. It catches config write failures,
 // missing launch flags, and config format drift before the agent starts.

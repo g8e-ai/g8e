@@ -283,3 +283,45 @@ class TestStreamStateBoundaryEvidence:
 
         assert state.stream_failed is True
         assert state.provider_tool_rejection is None
+
+
+class TestAgentRoleAttribution:
+    """Every scored model call reports a persona the grader recognises."""
+
+    def _inputs(self, *, scored: bool, active_agent):
+        from tests.fakes.agent_helpers import make_agent_inputs
+        from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
+
+        inputs = make_agent_inputs()
+        inputs.active_agent = active_agent
+        if scored:
+            inputs.g8e_context.evaluation_context = EvaluationInferenceContext(
+                campaign_id="c",
+                run_id="r",
+                assignment_id="a",
+                evaluation_attempt_id="e",
+                scenario_id="s",
+                model_registry_digest="d" * 64,
+                model_registry=[InferenceModelVariant(model="m", digest="a" * 64)],
+                target_operator_session_id="op",
+            )
+        return inputs
+
+    def test_reports_the_active_agent_persona(self):
+        from app.constants import ReasoningAgent
+        from app.services.ai.agent import _agent_role_for_telemetry
+
+        inputs = self._inputs(scored=True, active_agent=ReasoningAgent.DASH)
+        assert _agent_role_for_telemetry(inputs) == "dash"
+
+    def test_a_scored_request_without_an_active_agent_fails_loudly(self):
+        from app.errors import ValidationError
+        from app.services.ai.agent import _agent_role_for_telemetry
+
+        with pytest.raises(ValidationError):
+            _agent_role_for_telemetry(self._inputs(scored=True, active_agent=None))
+
+    def test_an_unscored_request_without_an_active_agent_keeps_the_legacy_label(self):
+        from app.services.ai.agent import _agent_role_for_telemetry
+
+        assert _agent_role_for_telemetry(self._inputs(scored=False, active_agent=None)) == "unknown"

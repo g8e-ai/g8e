@@ -453,3 +453,62 @@ func TestCommandLane_WriteWorkspaceFile_RequiresOperatorTargetAndPath(t *testing
 
 	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }
+
+func TestCommandLane_ReadWorkspaceFile_DispatchesGovernedFsReadAndReturnsContent(t *testing.T) {
+	target := Target{OperatorID: "operator-1", SessionID: "session-1"}
+	absPath := "/home/op/workspaces/ws-0123456789abcdef/canary/probe.txt"
+	payload, err := proto.Marshal(&operatorv1.FsReadResult{
+		ExecutionId: "attempt-1", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, Path: absPath, Content: "canary-1",
+	})
+	require.NoError(t, err)
+	fakeClient := &laneTestClient{
+		dispatchStatus:   http.StatusOK,
+		dispatchResponse: &client.DispatchCommandResponse{Success: true, TransactionID: "tx-1", ResultPayload: payload},
+	}
+	lane := NewCommandLane(fakeClient, &laneTestArtifactSink{}, client.Persona{CLISessionID: "cli-session-1"}, time.Millisecond, time.Second)
+
+	content, err := lane.ReadWorkspaceFile(context.Background(), target, "run-1", "environment-canary", "attempt-1", absPath)
+
+	require.NoError(t, err)
+	assert.Equal(t, "canary-1", content)
+	require.Len(t, fakeClient.dispatchRequests, 1)
+	dispatch := fakeClient.dispatchRequests[0]
+	assert.Equal(t, string(constants.ActionTypeFsRead), dispatch.ActionType)
+	assert.Equal(t, target.SessionID, dispatch.TargetOperatorSessionID)
+	assert.Equal(t, absPath, dispatch.TargetResource)
+	fsRead := &operatorv1.FsReadRequested{}
+	require.NoError(t, proto.Unmarshal(dispatch.Payload, fsRead))
+	assert.Equal(t, absPath, fsRead.Path)
+	assert.Equal(t, "attempt-1", fsRead.ExecutionId)
+}
+
+func TestCommandLane_ReadWorkspaceFile_FailsClosed(t *testing.T) {
+	target := Target{OperatorID: "operator-1", SessionID: "session-1"}
+	failed, err := proto.Marshal(&operatorv1.FsReadResult{Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, ErrorMessage: "no such file"})
+	require.NoError(t, err)
+	tests := []struct {
+		name     string
+		response *client.DispatchCommandResponse
+	}{
+		{"dispatch rejected", &client.DispatchCommandResponse{Success: false}},
+		{"no result payload", &client.DispatchCommandResponse{Success: true, TransactionID: "tx-1"}},
+		{"operator read failed", &client.DispatchCommandResponse{Success: true, TransactionID: "tx-1", ResultPayload: failed}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lane := NewCommandLane(&laneTestClient{dispatchStatus: http.StatusOK, dispatchResponse: tt.response}, &laneTestArtifactSink{}, client.Persona{}, time.Millisecond, time.Second)
+
+			_, err := lane.ReadWorkspaceFile(context.Background(), target, "run-1", "environment-canary", "attempt-1", "/home/op/workspaces/ws-0123456789abcdef/missing.txt")
+
+			require.ErrorIs(t, err, constants.ErrEvaluationDispatchFailed)
+		})
+	}
+}
+
+func TestCommandLane_ReadWorkspaceFile_RequiresOperatorTargetAndPath(t *testing.T) {
+	lane := NewCommandLane(&laneTestClient{}, &laneTestArtifactSink{}, client.Persona{}, time.Millisecond, time.Second)
+
+	_, err := lane.ReadWorkspaceFile(context.Background(), Target{}, "run-1", "scenario-1", "attempt-1", "")
+
+	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}

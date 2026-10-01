@@ -753,17 +753,9 @@ func runAgentVerify(cmd *cobra.Command, agentID string) error {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
-	homeDir, err := os.MkdirTemp("", "g8e-agent-verify-*")
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
-	defer os.RemoveAll(homeDir)
-
-	prepared, err := integration.Prepare(homeDir, binaryPath, string(integration.ID), true)
-	if err != nil {
+	if err := integration.VerifyIsolated(binaryPath); err != nil {
 		return fmt.Errorf("mcp: agent verify: %w", err)
 	}
-	defer prepared.Cleanup()
 
 	cmd.Printf("PASS %s: g8e is the only MCP server (%s tool lockdown)\n", integration.ID, integration.ToolLockdown)
 	return nil

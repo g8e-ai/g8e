@@ -47,6 +47,20 @@ func TestPrepare_EveryRegisteredAgentWritesAndVerifies(t *testing.T) {
 	}
 }
 
+func TestVerifyAllIsolated_VerifiesEveryRegisteredAgentWithoutTouchingRealConfig(t *testing.T) {
+	require.NoError(t, VerifyAllIsolated("/fake/g8e"))
+}
+
+func TestVerifyIsolated_ReportsTheAgentThatFailsVerification(t *testing.T) {
+	integration := All()[0]
+	integration.VerifyHooks = []VerifyHook{func(VerifyInput) error { return verifyFailure("lockdown drift") }}
+
+	err := integration.VerifyIsolated("/fake/g8e")
+
+	require.ErrorIs(t, err, constants.ErrToolInterceptionVerification)
+	assert.Contains(t, err.Error(), string(integration.ID))
+}
+
 func TestPrepare_VerifyFalseSkipsHooks(t *testing.T) {
 	broken := Integration{
 		ID:             "broken",

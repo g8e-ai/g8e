@@ -291,3 +291,31 @@ func TestBuildChatProbeRequest_MarshalsEmptyGoldToolListsAsArrays(t *testing.T) 
 	require.Contains(t, payload, `"expected_tools":[]`)
 	require.Contains(t, payload, `"forbidden_tools":[]`)
 }
+
+func TestBuildChatProbeRequest_CaseTitleComesFromTheSeedNeverAConstant(t *testing.T) {
+	t.Parallel()
+	base := ChatProbeRequest{
+		AssignmentID:            "assignment-1",
+		EvaluationAttemptID:     "attempt-1",
+		CampaignID:              "campaign-1",
+		RunID:                   "run-1",
+		ScenarioID:              "scenario-1",
+		Model:                   "qwen3:4b",
+		ModelDigest:             "a" + repeatHex('a', 63),
+		TargetOperatorSessionID: "session-1",
+		ModelRegistryDigest:     "d" + repeatHex('d', 63),
+		ModelRegistry:           []*operatorv1.InferenceModelVariant{{Model: "qwen3:4b", Digest: "a" + repeatHex('a', 63)}},
+		Message:                 "hello",
+	}
+
+	unseeded, err := BuildChatProbeRequest(base, "data-op", "data-session")
+	require.NoError(t, err)
+	require.NotNil(t, unseeded.ResourceCreation)
+	require.Empty(t, unseeded.ResourceCreation.CaseTitle, "an unseeded request leaves titling to g8ee")
+
+	seeded := base
+	seeded.Seed = &harnessclient.EnsembleInvestigationSeed{CaseTitle: "Checkout payment timeouts"}
+	req, err := BuildChatProbeRequest(seeded, "data-op", "data-session")
+	require.NoError(t, err)
+	require.Equal(t, "Checkout payment timeouts", req.ResourceCreation.CaseTitle)
+}

@@ -149,6 +149,14 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 			OperatorWorkingDirectory: req.Workspace.OperatorWorkingDirectory,
 		}
 	}
+	// The case title is model-visible, so it is never a harness constant: a
+	// seeded request carries the scenario-authored title, and an unseeded one
+	// leaves it empty so g8ee titles the case from the message as it does in
+	// production.
+	caseTitle := ""
+	if req.Seed != nil {
+		caseTitle = req.Seed.CaseTitle
+	}
 	return harnessclient.EnsembleChatRequest{
 		Context: harnessclient.EnsembleRequestContext{
 			SourceComponent:   "CLIENT",
@@ -162,7 +170,7 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 		},
 		Message:              message,
 		SentinelMode:         true,
-		ResourceCreation:     &harnessclient.EnsembleResourceCreation{CreateCase: true, CaseTitle: "phase1a-chat-probe"},
+		ResourceCreation:     &harnessclient.EnsembleResourceCreation{CreateCase: true, CaseTitle: caseTitle},
 		EvaluationContext:    &evalContext,
 		LLMPrimaryProvider:   "g8e",
 		LLMPrimaryModel:      req.Model,

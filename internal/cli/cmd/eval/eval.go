@@ -64,6 +64,7 @@ type nativeEvalDeps struct {
 	verifierFactory            func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier
 	campaignPublicationFactory campaignVerificationPublicationFactory
 	runControl                 runControlDeps
+	canaryRunner               environmentCanaryRunner
 	now                        func() time.Time
 	newID                      func() string
 }

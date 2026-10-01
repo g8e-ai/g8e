@@ -23,6 +23,28 @@ const (
 	maxPublicRetryCount = uint64(1000)
 )
 
+// memoryCodexAgentRole is the agent_role the post-turn memory update reports.
+// That call is real production behavior but is not part of the measured
+// assignment, so it is excluded from scored latency and token aggregates (R9).
+const memoryCodexAgentRole = "codex"
+
+func isMemoryCodexCall(call *evalv1.ModelInferenceRecord) bool {
+	return call.GetAgentPersona() == memoryCodexAgentRole
+}
+
+// scoredInferenceRecords returns the inference records that count toward
+// resource aggregates, preserving nil entries so callers still reject them.
+func scoredInferenceRecords(calls []*evalv1.ModelInferenceRecord) []*evalv1.ModelInferenceRecord {
+	scored := make([]*evalv1.ModelInferenceRecord, 0, len(calls))
+	for _, call := range calls {
+		if call != nil && isMemoryCodexCall(call) {
+			continue
+		}
+		scored = append(scored, call)
+	}
+	return scored
+}
+
 func (metric PublicResourceMetric) MarshalJSON() ([]byte, error) {
 	value := struct {
 		Value             *float64 `json:"value,omitempty"`
@@ -58,12 +80,13 @@ func metricOrNil(metric PublicResourceMetric) *PublicResourceMetric {
 
 // BuildPublicResourceSummary projects complete resource observations from scored
 // inference calls. Grader calls are not part of the assignment result's model
-// inference list and are never included in these totals.
+// inference list and are never included in these totals; the post-turn memory
+// update (agent_role codex) is recorded but excluded (R9).
 func BuildPublicResourceSummary(result *evalv1.EvaluationAssignmentResult) (*PublicResourceSummary, error) {
 	if result == nil {
 		return nil, fmt.Errorf("evaluation: build public resource summary: %w", constants.ErrMissingRequiredField)
 	}
-	calls := result.GetModelInferences()
+	calls := scoredInferenceRecords(result.GetModelInferences())
 	if len(calls) == 0 {
 		reason := evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS
 		return &PublicResourceSummary{

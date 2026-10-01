@@ -158,6 +158,42 @@ func (l *CommandLane) WriteWorkspaceFile(ctx context.Context, target Target, run
 	return nil
 }
 
+// ReadWorkspaceFile dispatches a governed filesystem read of absPath on the
+// bound Data Operator, the same action `file_read_on_operator` uses, and
+// returns the file content. It proves a materialized fixture is reachable by
+// the path the model will be given.
+func (l *CommandLane) ReadWorkspaceFile(ctx context.Context, target Target, runID, scenarioID, attemptID, absPath string) (string, error) {
+	if l == nil || l.client == nil {
+		return "", fmt.Errorf("%w: evaluation lane client is required", constants.ErrMissingRequiredField)
+	}
+	if target.OperatorID == "" || target.SessionID == "" || runID == "" || scenarioID == "" || attemptID == "" || absPath == "" {
+		return "", fmt.Errorf("%w: workspace file read requires operator target, scenario identity, and path", constants.ErrMissingRequiredField)
+	}
+	payload, err := proto.Marshal(&operatorv1.FsReadRequested{Path: absPath, ExecutionId: attemptID})
+	if err != nil {
+		return "", fmt.Errorf("%w: marshal filesystem read request: %v", constants.ErrEvaluationDispatchFailed, err)
+	}
+	request := ExecutionRequest{RunID: runID, ScenarioID: scenarioID, AttemptID: attemptID, Target: target, TargetResource: absPath}
+	status, response, _, err := l.dispatchAction(ctx, request, constants.ActionTypeFsRead, payload)
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK || response == nil || !response.Success {
+		return "", fmt.Errorf("%w: workspace file read rejected for %s", constants.ErrEvaluationDispatchFailed, absPath)
+	}
+	if len(response.ResultPayload) == 0 {
+		return "", fmt.Errorf("%w: governed read response carries no result for %s", constants.ErrEvaluationDispatchFailed, absPath)
+	}
+	result := &operatorv1.FsReadResult{}
+	if err := proto.Unmarshal(response.ResultPayload, result); err != nil {
+		return "", fmt.Errorf("%w: decode filesystem read result: %v", constants.ErrEvaluationDispatchFailed, err)
+	}
+	if result.GetStatus() != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		return "", fmt.Errorf("%w: workspace file read of %s ended %s: %s", constants.ErrEvaluationDispatchFailed, absPath, result.GetStatus(), result.GetErrorMessage())
+	}
+	return result.GetContent(), nil
+}
+
 func (l *CommandLane) executeAllowed(ctx context.Context, request ExecutionRequest) (*LaneOutcome, error) {
 	status, response, _, err := l.dispatch(ctx, request, request.Marker)
 	if err != nil {
@@ -269,12 +305,16 @@ func (l *CommandLane) dispatch(ctx context.Context, request ExecutionRequest, co
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("%w: marshal file edit request: %v", constants.ErrEvaluationDispatchFailed, err)
 	}
+	return l.dispatchAction(ctx, request, constants.ActionTypeFileEdit, payload)
+}
+
+func (l *CommandLane) dispatchAction(ctx context.Context, request ExecutionRequest, action constants.ActionType, payload []byte) (int, *client.DispatchCommandResponse, []byte, error) {
 	status, response, body, err := l.client.DispatchCommand(ctx, l.persona, client.DispatchCommandRequest{
-		TargetOperatorSessionID: request.Target.SessionID, ActionType: string(constants.ActionTypeFileEdit), Payload: payload, TargetResource: request.TargetResource,
+		TargetOperatorSessionID: request.Target.SessionID, ActionType: string(action), Payload: payload, TargetResource: request.TargetResource,
 		CaseID: request.RunID, InvestigationID: request.ScenarioID, TaskID: request.AttemptID, CLISessionID: l.persona.CLISessionID,
 	})
 	if err != nil {
-		return status, response, body, fmt.Errorf("%w: submit governed file edit: %v", constants.ErrEvaluationDispatchFailed, err)
+		return status, response, body, fmt.Errorf("%w: submit governed %s: %v", constants.ErrEvaluationDispatchFailed, action, err)
 	}
 	return status, response, body, nil
 }

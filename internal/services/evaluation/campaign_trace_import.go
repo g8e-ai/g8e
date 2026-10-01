@@ -582,7 +582,7 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			}
 		}
 		agentRole := stringValue(call["agent_role"])
-		if agentRole != "codex" {
+		if agentRole != memoryCodexAgentRole {
 			scoredCallsCount++
 			if start, end, complete, err := monotonicCallBounds(call); err != nil {
 				return nil, nil, err

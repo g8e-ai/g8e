@@ -32,7 +32,12 @@ import (
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
-const chatAcceptTracePollInterval = 2 * time.Second
+const (
+	chatAcceptTracePollInterval = 2 * time.Second
+	// chatAcceptCampaignID is the campaign the acceptance chats are issued under;
+	// the registry digest each request carries is bound to it.
+	chatAcceptCampaignID = "chat-accept"
+)
 
 type chatEvalDeps struct {
 	configLoader      func(string) (*config.Config, error)
@@ -83,6 +88,17 @@ func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "chat",
 		Short: "Chat-path vertical acceptance through production POST /api/v1/chat",
+		Long: `Run the environment canaries, then the chat-path acceptance cases.
+
+The canaries fail fast with "ENVIRONMENT ERROR (<canary>)" and run no case when
+the harness is broken rather than the model:
+  tools-declared        the provider received every bound registry tool and the eval tool-gate bypass is recorded
+  seed-delivered        a seeded investigation was applied by g8ee and echoed unchanged
+  workspace-reachable   a fixture file written to the attempt workspace reads back through governed dispatch
+  guidance-delivered    seeded tool guidance reached g8ee byte for byte from the agent tool registry
+  registry-mcp          every agent registry entry verifies and the Gateway /mcp tools/list answers
+
+The model must be in the frozen inventory (g8e eval models).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
 				return fmt.Errorf("evaluation: gates chat: --model is required")
@@ -95,7 +111,20 @@ func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: gates chat: %w", err)
 			}
+			// The canaries prove the harness is intact before any case runs, so a
+			// broken environment is never reported as a model failure.
+			if err := deps.runEnvironmentCanaries(cmd, canaryOptions{Model: model, EnsembleURL: ensembleURL, NoAutoBind: noAutoBind}); err != nil {
+				return err
+			}
 			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			projectRoot, err := cmd.Flags().GetString("project-root")
+			if err != nil {
+				return fmt.Errorf("evaluation: read project root: %w", err)
+			}
+			probeModel, err := resolveChatProbeModel(cmd.Context(), fileSvc, projectRoot, chatAcceptCampaignID, model)
 			if err != nil {
 				return err
 			}
@@ -143,10 +172,13 @@ func gatesChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 				baseReq := evaluation.ChatProbeRequest{
 					AssignmentID:            assignmentID,
 					EvaluationAttemptID:     attemptID,
-					CampaignID:              "chat-accept",
+					CampaignID:              chatAcceptCampaignID,
 					RunID:                   "chat-accept-run",
 					ScenarioID:              string(acceptanceCase.ID),
 					Model:                   model,
+					ModelDigest:             probeModel.Digest,
+					ModelRegistryDigest:     probeModel.RegistryDigest,
+					ModelRegistry:           probeModel.Registry,
 					TargetOperatorSessionID: selectedInference.OperatorSessionID,
 				}
 				probeReq := acceptanceCase.Apply(baseReq)

@@ -94,6 +94,24 @@ def _resolve_agent_model_role(inputs: AgentInputs) -> str:
     )
 
 
+def _agent_role_for_telemetry(inputs: AgentInputs) -> str:
+    """Return the persona a model call is attributed to.
+
+    The chat pipeline always assigns an active agent. A scored request without
+    one would be attributed to a role the grader cannot recognise, so it fails
+    loudly instead of reporting ``unknown``.
+    """
+    if inputs.active_agent:
+        return inputs.active_agent.value
+    if inputs.g8e_context.evaluation_context is not None:
+        raise ValidationError(
+            "active_agent is required for evaluation requests",
+            field="active_agent",
+            component="g8ee",
+        )
+    return "unknown"
+
+
 def _agent_generation_stream(
     llm_provider: LLMProvider,
     *,
@@ -450,6 +468,7 @@ class g8eEnsemble:
                 )
                 monotonic_start = time.monotonic()
                 model_role = _resolve_agent_model_role(inputs)
+                agent_role = _agent_role_for_telemetry(inputs)
                 try:
                     stream_response = _agent_generation_stream(
                         llm_provider,
@@ -470,9 +489,7 @@ class g8eEnsemble:
                     model_calls.append(
                         build_model_call_telemetry(
                             provider=llm_provider,
-                            agent_role=inputs.active_agent.value
-                            if inputs.active_agent
-                            else "unknown",
+                            agent_role=agent_role,
                             model_role=model_role,
                             model=model_name,
                             monotonic_start=monotonic_start,
@@ -488,7 +505,7 @@ class g8eEnsemble:
                 model_calls.append(
                     build_model_call_telemetry(
                         provider=llm_provider,
-                        agent_role=inputs.active_agent.value if inputs.active_agent else "unknown",
+                        agent_role=agent_role,
                         model_role=model_role,
                         model=model_name,
                         monotonic_start=monotonic_start,
