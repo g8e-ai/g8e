@@ -856,6 +856,10 @@ var (
 	ErrDocumentStoreParseCreatedAt      = errors.New("failed to parse created_at timestamp")
 	ErrDocumentStoreParseUpdatedAt      = errors.New("failed to parse updated_at timestamp")
 	ErrOperatorStalenessReconcile       = errors.New("failed to reconcile operator heartbeat staleness")
+	ErrOperatorHeartbeatIntervalInvalid = errors.New("invalid operator heartbeat interval")
+	ErrOperatorStatusEventUnsupported   = errors.New("operator status has no status.updated event")
+	ErrOperatorStatusObserverNil        = errors.New("operator status observer binding cannot be nil")
+	ErrOperatorStatusObserverBound      = errors.New("operator status observer already bound")
 	ErrDocumentStoreUnmarshalData       = errors.New("failed to unmarshal document data")
 
 	// App policy store service errors

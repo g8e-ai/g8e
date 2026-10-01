@@ -388,7 +388,7 @@ Depth is [Testing](tests.md). `e2e-full` and Compose profiles: INV-TESTMAP-02, I
 
 | Command | Tier | Where the work lives |
 | --- | --- | --- |
-| `./g8e test unit` | 1 | Delegates to `make test-unit`. Go tests sit beside packages. `make test-unit` depends on `constants-check`. |
+| `./g8e test unit` | 1 | Delegates to `make test-unit` by default; supports `--pkg` and `--run` for targeted testing. Go tests sit beside packages. `make test-unit` depends on `constants-check`. |
 | `./g8e test integration` | 2 | `integration` build tag. Cross-package suites in `test/`. Reusable setup in `test/fixtures/`. |
 | `./g8e test e2e` | 3 | `e2e` build tag. Tests in `test/e2e/`. Expects an already running platform. |
 | `./g8e test e2e-full` | 3 | Same `go test` arguments as `e2e`, wrapped in `docker compose up -d` and `docker compose down -v`. Profile names: INV-TESTMAP-02. |

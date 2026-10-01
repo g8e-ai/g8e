@@ -173,6 +173,13 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	wsHandler := NewGatewayWebSocketHandler(logger)
 
+	// The document store reports every Operator status transition it
+	// reconciles or is told about to the dashboard push path. Bind it once,
+	// before any reader or sweeper can run.
+	if err := docStore.BindOperatorStatusObserver(NewOperatorStatusPublisher(docStore, NewSSEEventPublisher(sseStore, wsHandler), logger)); err != nil {
+		return nil, fmt.Errorf("gateway: bind operator status observer: %w", err)
+	}
+
 	// --- Secret manager ---
 	sm := db.GetSecretManager()
 
@@ -1185,6 +1192,10 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 	// Start background enrollment token cleanup
 	go ls.runEnrollmentTokenCleanup(ctx)
 
+	// Start the Operator staleness sweep so a silent Operator is marked stale
+	// and pushed to the dashboard without waiting for a reader.
+	go ls.runOperatorStalenessSweep(ctx, constants.OperatorStalenessSweepInterval)
+
 	// Start managed cleanup for platform enrollment (expired lease
 	// reconciliation and terminal request retention cleanup).
 	ls.platformEnrollmentSvc.StartCleanup(ctx)
@@ -1395,6 +1406,37 @@ func (ls *GatewayModeService) runEnrollmentTokenCleanup(ctx context.Context) {
 	}
 }
 
+// notifyOperatorRecovered reports a stale Operator restored to active so a
+// dashboard showing it stale clears the row. The document is already updated;
+// a failed lookup only costs the push, so it is logged.
+func (ls *GatewayModeService) notifyOperatorRecovered(operatorID string) {
+	transition, err := ls.docStore.OperatorStatusTransition(operatorID, constants.OperatorStatusActive)
+	if err != nil {
+		ls.logger.Warn("heartbeat: recovered operator not reported", "operator_id", operatorID, "error", err)
+		return
+	}
+	ls.docStore.NotifyOperatorStatusChanged(transition)
+}
+
+// runOperatorStalenessSweep reconciles the Operator registry every interval
+// until ctx is cancelled. Reconciling persists each stale transition and
+// reports it to the bound status observer.
+func (ls *GatewayModeService) runOperatorStalenessSweep(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := ls.docStore.ReconcileOperatorStaleness(); err != nil {
+				ls.logger.Warn("Operator staleness sweep error", "error", err)
+			}
+		}
+	}
+}
+
 // runServiceCertRenewalLoop runs a background goroutine that periodically checks
 // and renews the service certificate if it is expiring soon.
 func (ls *GatewayModeService) runServiceCertRenewalLoop(ctx context.Context) {
@@ -1502,6 +1544,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 	}
 	if restored {
 		ls.logger.Info("heartbeat: stale operator restored to active", "operator_id", env.GetOperatorId())
+		ls.notifyOperatorRecovered(env.GetOperatorId())
 	}
 
 	ls.logger.Debug("heartbeat: operator snapshot updated", "operator_id", env.GetOperatorId(), "channel", channel)

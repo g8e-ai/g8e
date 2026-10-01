@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -27,6 +28,35 @@ import (
 type DocumentStoreService struct {
 	db     *sqliteutil.DB
 	logger *slog.Logger
+
+	// statusObserver receives Operator status transitions. It is bound once
+	// during Gateway construction; an unbound store, as in unit tests, reports
+	// to no one.
+	statusObserver atomic.Pointer[OperatorStatusObserver]
+}
+
+// BindOperatorStatusObserver registers the observer told about every Operator
+// status transition the Gateway persists or reconciles. It MUST be called once
+// during construction, before the Gateway serves. It rejects a nil
+// (constants.ErrOperatorStatusObserverNil) or second
+// (constants.ErrOperatorStatusObserverBound) binding.
+func (s *DocumentStoreService) BindOperatorStatusObserver(observer OperatorStatusObserver) error {
+	if observer == nil {
+		return constants.ErrOperatorStatusObserverNil
+	}
+	if !s.statusObserver.CompareAndSwap(nil, &observer) {
+		return constants.ErrOperatorStatusObserverBound
+	}
+	return nil
+}
+
+// NotifyOperatorStatusChanged reports a status transition that is already
+// persisted to the bound observer. Callers that change an Operator's status
+// outside the staleness reconciler call this after the write succeeds.
+func (s *DocumentStoreService) NotifyOperatorStatusChanged(t OperatorStatusTransition) {
+	if observer := s.statusObserver.Load(); observer != nil {
+		(*observer).OperatorStatusChanged(t)
+	}
 }
 
 // NewDocumentStoreService creates a new document store service.
