@@ -118,9 +118,11 @@ func TestVerifyHooks(t *testing.T) {
 			in:   func(t *testing.T) VerifyInput { return VerifyInput{ConfigPath: writeFile(t, "c.json", g8eServerJSON)} },
 		},
 		{
-			name:    "mcp servers json: missing file",
-			hook:    verifyMCPServersJSON,
-			in:      func(t *testing.T) VerifyInput { return VerifyInput{ConfigPath: filepath.Join(testutil.TempDir(t), "nope.json")} },
+			name: "mcp servers json: missing file",
+			hook: verifyMCPServersJSON,
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{ConfigPath: filepath.Join(testutil.TempDir(t), "nope.json")}
+			},
 			wantErr: "read mcp config",
 		},
 		{
@@ -130,9 +132,11 @@ func TestVerifyHooks(t *testing.T) {
 			wantErr: "parse mcp config",
 		},
 		{
-			name:    "mcp servers json: no g8e server",
-			hook:    verifyMCPServersJSON,
-			in:      func(t *testing.T) VerifyInput { return VerifyInput{ConfigPath: writeFile(t, "c.json", `{"mcpServers":{}}`)} },
+			name: "mcp servers json: no g8e server",
+			hook: verifyMCPServersJSON,
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{ConfigPath: writeFile(t, "c.json", `{"mcpServers":{}}`)}
+			},
 			wantErr: "missing g8e server entry",
 		},
 		{
@@ -147,9 +151,11 @@ func TestVerifyHooks(t *testing.T) {
 			wantErr: "missing --strict-mcp-config",
 		},
 		{
-			name:    "strict flags: --disallowed-tools without a value",
-			hook:    verifyStrictLaunchFlags,
-			in:      func(t *testing.T) VerifyInput { return VerifyInput{LaunchArgs: []string{"--strict-mcp-config", "--disallowed-tools"}} },
+			name: "strict flags: --disallowed-tools without a value",
+			hook: verifyStrictLaunchFlags,
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{LaunchArgs: []string{"--strict-mcp-config", "--disallowed-tools"}}
+			},
 			wantErr: "missing --disallowed-tools",
 		},
 		{
@@ -158,9 +164,11 @@ func TestVerifyHooks(t *testing.T) {
 			in:   func(t *testing.T) VerifyInput { return VerifyInput{LaunchArgs: gooseArgs} },
 		},
 		{
-			name:    "goose flags: missing --no-profile",
-			hook:    verifyGooseLaunchFlags,
-			in:      func(t *testing.T) VerifyInput { return VerifyInput{LaunchArgs: []string{"session", "--with-extension", "x"}} },
+			name: "goose flags: missing --no-profile",
+			hook: verifyGooseLaunchFlags,
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{LaunchArgs: []string{"session", "--with-extension", "x"}}
+			},
 			wantErr: "missing --no-profile",
 		},
 		{
@@ -177,21 +185,27 @@ func TestVerifyHooks(t *testing.T) {
 			},
 		},
 		{
-			name:    "goose extension: no g8e entry",
-			hook:    verifyGooseExtensionEntry,
-			in:      func(t *testing.T) VerifyInput { return VerifyInput{ConfigPath: writeFile(t, "config.yaml", "extensions: {}\n")} },
+			name: "goose extension: no g8e entry",
+			hook: verifyGooseExtensionEntry,
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{ConfigPath: writeFile(t, "config.yaml", "extensions: {}\n")}
+			},
 			wantErr: "missing g8e extension entry",
 		},
 		{
-			name:    "goose extension: missing file",
-			hook:    verifyGooseExtensionEntry,
-			in:      func(t *testing.T) VerifyInput { return VerifyInput{ConfigPath: filepath.Join(testutil.TempDir(t), "nope.yaml")} },
+			name: "goose extension: missing file",
+			hook: verifyGooseExtensionEntry,
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{ConfigPath: filepath.Join(testutil.TempDir(t), "nope.yaml")}
+			},
 			wantErr: "read goose config",
 		},
 		{
 			name: "gemini tools.core: empty array passes",
 			hook: verifyGeminiToolsCoreEmpty,
-			in:   func(t *testing.T) VerifyInput { return VerifyInput{ConfigPath: writeFile(t, "s.json", `{"tools":{"core":[]}}`)} },
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{ConfigPath: writeFile(t, "s.json", `{"tools":{"core":[]}}`)}
+			},
 		},
 		{
 			name:    "gemini tools.core: tools missing",
@@ -200,15 +214,19 @@ func TestVerifyHooks(t *testing.T) {
 			wantErr: "missing tools.core",
 		},
 		{
-			name:    "gemini tools.core: null",
-			hook:    verifyGeminiToolsCoreEmpty,
-			in:      func(t *testing.T) VerifyInput { return VerifyInput{ConfigPath: writeFile(t, "s.json", `{"tools":{"exclude":["read_file"]}}`)} },
+			name: "gemini tools.core: null",
+			hook: verifyGeminiToolsCoreEmpty,
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{ConfigPath: writeFile(t, "s.json", `{"tools":{"exclude":["read_file"]}}`)}
+			},
 			wantErr: "tools.core is null",
 		},
 		{
-			name:    "gemini tools.core: entries leave native tools enabled",
-			hook:    verifyGeminiToolsCoreEmpty,
-			in:      func(t *testing.T) VerifyInput { return VerifyInput{ConfigPath: writeFile(t, "s.json", `{"tools":{"core":["read_file","write_file"]}}`)} },
+			name: "gemini tools.core: entries leave native tools enabled",
+			hook: verifyGeminiToolsCoreEmpty,
+			in: func(t *testing.T) VerifyInput {
+				return VerifyInput{ConfigPath: writeFile(t, "s.json", `{"tools":{"core":["read_file","write_file"]}}`)}
+			},
 			wantErr: "tools.core has 2 entries",
 		},
 		{
