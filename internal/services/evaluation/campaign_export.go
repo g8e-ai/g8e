@@ -380,11 +380,6 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
-	if RunAggregateComplete(assignments, results, aggregateState) {
-		if aggregateState.ProviderEnvironment, err = observationReader.ObservedProviderEnvironment(ctx, results); err != nil {
-			return nil, err
-		}
-	}
 	aggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, boundReport, exportedAt)
 	if err != nil {
 		return nil, err

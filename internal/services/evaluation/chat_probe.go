@@ -8,7 +8,6 @@
 package evaluation
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
@@ -20,37 +19,23 @@ import (
 
 // renderScenarioMessage composes the outgoing chat message text from the
 // frozen user prompt and any inline synthetic content. Content is appended
-// beneath the prompt in labeled blocks with no stray header, so the model
+// beneath the prompt, each block introduced by its label, so the model
 // receives it as literal message text rather than through any attachment
-// mechanism. The prompt and content are rendered with workspace substitution.
-func renderScenarioMessage(userPrompt string, inlineContext []ScenarioInlineContent, ws *ScenarioWorkspace) string {
-	var b strings.Builder
-	prompt := strings.TrimSpace(userPrompt)
-	if ws != nil {
-		prompt = ws.Render(prompt)
+// mechanism.
+func renderScenarioMessage(userPrompt string, inlineContext []ScenarioInlineContent) string {
+	if len(inlineContext) == 0 {
+		return userPrompt
 	}
-	b.WriteString(prompt)
+	var b strings.Builder
+	b.WriteString(userPrompt)
+	b.WriteString("\n\nBelow:")
 	for _, item := range inlineContext {
 		b.WriteString("\n\n")
-		if item.Label != "" || item.Kind != "" {
-			b.WriteString("[")
-			if item.Label != "" {
-				b.WriteString(item.Label)
-				if item.Kind != "" {
-					b.WriteString(" (")
-					b.WriteString(item.Kind)
-					b.WriteString(")")
-				}
-			} else if item.Kind != "" {
-				b.WriteString(item.Kind)
-			}
-			b.WriteString("]\n")
+		if item.Label != "" {
+			b.WriteString(item.Label)
+			b.WriteString(":\n")
 		}
-		content := item.Content
-		if ws != nil {
-			content = ws.Render(content)
-		}
-		b.WriteString(content)
+		b.WriteString(item.Content)
 	}
 	return b.String()
 }
@@ -80,8 +65,6 @@ type ChatProbeRequest struct {
 	Message                 string
 	GradingMethod           evalv1.EvaluationGradingMethod
 	GoldSummary             *ChatProbeGoldSummary
-	Seed                    *harnessclient.EnsembleInvestigationSeed
-	Workspace               *ScenarioWorkspace
 }
 
 // ChatProbeGoldSummary carries private gold criteria for semantic judge grading.
@@ -139,13 +122,6 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 			RequiredConcepts: nonNullStringSlice(req.GoldSummary.RequiredConcepts),
 			ExpectedTools:    nonNullStringSlice(req.GoldSummary.ExpectedTools),
 			ForbiddenTools:   nonNullStringSlice(req.GoldSummary.ForbiddenTools),
-		}
-	}
-	evalContext.Seed = req.Seed
-	if req.Workspace != nil {
-		evalContext.Workspace = &harnessclient.EnsembleEvaluationWorkspace{
-			Root:                     req.Workspace.Root,
-			OperatorWorkingDirectory: req.Workspace.OperatorWorkingDirectory,
 		}
 	}
 	return harnessclient.EnsembleChatRequest{
@@ -271,53 +247,6 @@ func validateTraceEvaluationContext(req ChatProbeRequest, evalContext Evaluation
 		gotRole, _ := evalContext["designated_model_role"].(string)
 		if gotRole != req.DesignatedModelRole {
 			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.designated_model_role=%q, want %q", gotRole, req.DesignatedModelRole)
-		}
-	}
-	if req.Seed != nil {
-		rawSeed, hasSeed := evalContext["seed"]
-		if !hasSeed || rawSeed == nil {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.seed is required")
-		}
-		reqBytes, err := canonicalJSONBytes(req.Seed)
-		if err != nil {
-			return fmt.Errorf("evaluation: validate chat probe trace: canonicalize request seed: %w", err)
-		}
-		traceBytes, err := canonicalJSONBytes(rawSeed)
-		if err != nil {
-			return fmt.Errorf("evaluation: validate chat probe trace: canonicalize trace seed: %w", err)
-		}
-		if !bytes.Equal(reqBytes, traceBytes) {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.seed mismatch")
-		}
-	}
-	if req.Workspace != nil {
-		rawWs, hasWs := evalContext["workspace"]
-		if !hasWs || rawWs == nil {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace is required")
-		}
-		wsMap, ok := evaluationTrace(rawWs)
-		if !ok {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace must be an object")
-		}
-		traceWs := ScenarioWorkspace{
-			Root:                     stringValue(wsMap["root"]),
-			OperatorWorkingDirectory: stringValue(wsMap["operator_working_directory"]),
-		}
-		if traceWs.Root != req.Workspace.Root || traceWs.OperatorWorkingDirectory != req.Workspace.OperatorWorkingDirectory {
-			return fmt.Errorf("evaluation: validate chat probe trace: evaluation_context.workspace mismatch")
-		}
-		if err := traceWs.Validate(req.RunID, req.EvaluationAttemptID); err != nil {
-			return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
-		}
-	} else if rawWs, hasWs := evalContext["workspace"]; hasWs && rawWs != nil {
-		if wsMap, ok := evaluationTrace(rawWs); ok {
-			traceWs := ScenarioWorkspace{
-				Root:                     stringValue(wsMap["root"]),
-				OperatorWorkingDirectory: stringValue(wsMap["operator_working_directory"]),
-			}
-			if err := traceWs.Validate(req.RunID, req.EvaluationAttemptID); err != nil {
-				return fmt.Errorf("evaluation: validate chat probe trace: %w", err)
-			}
 		}
 	}
 	return nil

@@ -132,17 +132,7 @@ export class OperatorPanel {
         this._applyOperatorState({ cause: 'list_updated' });
     }
 
-    _recountOperators() {
-        this._totalOperatorCount = this._operators.length;
-        this._activeOperatorCount = this._operators.filter(op => _ACTIVE_STATUSES.has(op.status)).length;
-    }
-
     _onStatusUpdated(data) {
-        const status = data.operator_data?.status ?? data.status;
-        const wasBound = this._operators.some(
-            op => op.operator_id === data.operator_id && op.status === OperatorStatus.BOUND
-        );
-
         if (data.operator_data) {
             const idx = this._operators.findIndex(op => op.operator_id === data.operator_id);
             if (idx >= 0) {
@@ -150,18 +140,8 @@ export class OperatorPanel {
             } else {
                 this._operators.push(data.operator_data);
             }
-            this._recountOperators();
-        } else if (status) {
-            // A transition carries the new status, not the Operator document:
-            // patch the Operator the panel already holds, or re-fetch the list
-            // when the Operator is not one of them.
-            const idx = this._operators.findIndex(op => op.operator_id === data.operator_id);
-            if (idx >= 0) {
-                this._operators[idx] = { ...this._operators[idx], status };
-                this._recountOperators();
-            } else {
-                this._refreshOperatorList();
-            }
+            this._totalOperatorCount = this._operators.length;
+            this._activeOperatorCount = this._operators.filter(op => _ACTIVE_STATUSES.has(op.status)).length;
         }
 
         if (data.total_count !== undefined) {
@@ -169,13 +149,18 @@ export class OperatorPanel {
             this._activeOperatorCount = data.active_count || 0;
         }
 
-        if (wasBound && status && _OFFLINE_STATUSES.has(status)) {
-            this._isConnected = false;
-            this._lastHeartbeat = null;
+        if (data.operator_data?.status && _OFFLINE_STATUSES.has(data.operator_data.status)) {
+            const isBound = this._operators.some(
+                op => op.operator_id === data.operator_id && op.status === OperatorStatus.BOUND
+            );
+            if (isBound) {
+                this._isConnected = false;
+                this._lastHeartbeat = null;
+            }
         }
 
         operatorSessionService.setBoundOperators(this._operators);
-        devLogger.log('[OPERATOR-PANEL] Status updated:', data.operator_id, status);
+        devLogger.log('[OPERATOR-PANEL] Status updated:', data.operator_id, data.status);
         this._applyOperatorState({ cause: 'status_updated' });
     }
 

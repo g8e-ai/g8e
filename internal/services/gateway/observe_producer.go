@@ -182,10 +182,11 @@ type sseEventEnvelope struct {
 // receipts — consumers reconcile against read API snapshots, not against the
 // event stream alone.
 type ObserveProducerService struct {
-	docStore  *DocumentStoreService
-	publisher *SSEEventPublisher
-	fileSvc   fs.RuntimeFileService
-	logger    *slog.Logger
+	docStore *DocumentStoreService
+	sseStore *SSEEventService
+	pubsub   *GatewayWebSocketHandler
+	fileSvc  fs.RuntimeFileService
+	logger   *slog.Logger
 
 	// sourceSeq is the monotonic source sequence counter for live campaign
 	// events. Each live event gets the next sequence number for ordering
@@ -205,7 +206,8 @@ type ObserveProducerService struct {
 func NewObserveProducerService(docStore *DocumentStoreService, sseStore *SSEEventService, pubsub *GatewayWebSocketHandler, fileSvc fs.RuntimeFileService, logger *slog.Logger) *ObserveProducerService {
 	return &ObserveProducerService{
 		docStore:     docStore,
-		publisher:    NewSSEEventPublisher(sseStore, pubsub),
+		sseStore:     sseStore,
+		pubsub:       pubsub,
 		fileSvc:      fileSvc,
 		logger:       logger,
 		seenEventIDs: make(map[string]struct{}),
@@ -366,10 +368,61 @@ func (s *ObserveProducerService) UpdateRunState(ctx context.Context, userID stri
 	return nil
 }
 
-// emitSSEEvent appends the event to the SSE event store and publishes it live
-// for the given route, attributed to the observe producer.
+// emitSSEEvent constructs the nested SSE event envelope, appends a durable
+// row to the SSE event store, and publishes the live event to the pubsub
+// channel for the given route. The stored payload matches the SSEPushPayload
+// wire shape so consumers parse it identically whether it arrived via the
+// HTTP push endpoint or the in-process producer.
 func (s *ObserveProducerService) emitSSEEvent(route SSERoute, eventType string, payload any) error {
-	return s.publisher.Publish(route, eventType, payload, observeProducerID)
+	dataBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal event data: %w", err)
+	}
+	envelope := sseEventEnvelope{
+		Type: eventType,
+		Data: dataBytes,
+	}
+	eventBytes, err := json.Marshal(envelope)
+	if err != nil {
+		return fmt.Errorf("marshal event envelope: %w", err)
+	}
+	pushPayload := models.SSEPushPayload{
+		UserID: route.UserID,
+		Event:  eventBytes,
+	}
+	if route.WebSessionID != "" {
+		pushPayload.WebSessionID = route.WebSessionID
+	} else {
+		pushPayload.CliSessionID = route.CLISessionID
+	}
+	payloadBytes, err := json.Marshal(pushPayload)
+	if err != nil {
+		return fmt.Errorf("marshal push payload: %w", err)
+	}
+
+	rowID, err := s.sseStore.SSEEventsAppend(route, eventType, string(payloadBytes), observeProducerID)
+	if err != nil {
+		return fmt.Errorf("append sse event: %w", err)
+	}
+
+	// Publish to pubsub for real-time delivery. The channel matches the
+	// SSE stream handler's subscription channel.
+	var channel string
+	switch {
+	case route.CLISessionID != "":
+		channel = "sse:cli:" + route.CLISessionID
+	case route.WebSessionID != "":
+		channel = "sse:web:" + route.WebSessionID
+	}
+	if channel != "" && s.pubsub != nil {
+		pubEvent := models.SSEPublishedEvent{ID: rowID, Payload: json.RawMessage(payloadBytes)}
+		envelopeJSON, err := json.Marshal(pubEvent)
+		if err != nil {
+			return fmt.Errorf("marshal published event: %w", err)
+		}
+		s.pubsub.Publish(channel, envelopeJSON)
+	}
+	return nil
 }
 
 // StreamDownload streams the bytes of a download artifact to the given

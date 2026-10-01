@@ -47,7 +47,6 @@ def mock_provider():
     provider.__aexit__ = AsyncMock(return_value=False)
     provider.generate_content_lite = AsyncMock()
     provider.clear_input_artifact_hash = MagicMock()
-    provider.clear_declared_tools = MagicMock()
     provider.set_g8e_context = MagicMock()
     provider.set_provider_retry_count = MagicMock()
     provider.input_artifact_hash = ""

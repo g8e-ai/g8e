@@ -66,11 +66,9 @@ Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Doc
 ./g8e eval rollout run
 # ./g8e eval rollout run --until 5
 
-# A model-role campaign freezes exactly one model; queue several for rollout
-./g8e eval rollout add qwen3:0.6b
-./g8e eval rollout add qwen3:4b
-./g8e eval rollout add gemma3:4b
-./g8e eval rollout run
+# Or create a custom campaign for a multi-model smoke run
+./g8e eval campaigns create eval-smoke-mini qwen3:0.6b,qwen3:4b,gemma3:4b
+./g8e eval runs start eval-smoke-mini --publish --daemon --require-witness
 ```
 
 Regenerate checked-in base files after changing the program model set:

@@ -36,7 +36,6 @@ from app.models.evaluation_trace import (
     EvaluationControlledRoleAssignment,
     EvaluationGovernedActionRecord,
     EvaluationPolicyDecisionRecord,
-    EvaluationProviderToolRejection,
     EvaluationToolCallRecord,
     EvaluationToolDecisionRecord,
 )
@@ -245,8 +244,6 @@ class AgentStreamState(G8eBaseModel):
     tool_calls: list[EvaluationToolCallRecord] = Field(default_factory=list)
     governed_actions: list[EvaluationGovernedActionRecord] = Field(default_factory=list)
     policy_decisions: list[EvaluationPolicyDecisionRecord] = Field(default_factory=list)
-    provider_tool_rejection: EvaluationProviderToolRejection | None = None
-    tool_turn_limit_reached: bool = False
     tool_response_sizes: list[int] = Field(
         default_factory=list, description="Character sizes of individual tool responses"
     )
@@ -290,18 +287,6 @@ class StreamChunkData(G8eBaseModel):
     tool_response_sizes: list[int] | None = None
     investigation_id: str | None = None
     case_id: str | None = None
-    loop_turn: int | None = Field(
-        default=None,
-        description="Tool-loop turn whose model response issued this TOOL_CALL/TOOL_RESULT",
-    )
-    provider_tool_rejection: bool | None = Field(
-        default=None,
-        description="ERROR: the provider itself refused the tool declaration for this model",
-    )
-    tool_turn_limit_reached: bool | None = Field(
-        default=None,
-        description="COMPLETE: the tool loop reached AGENT_MAX_TOOL_TURNS during this run",
-    )
 
 
 class StreamChunkFromModel(G8eBaseModel):

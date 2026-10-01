@@ -191,12 +191,6 @@ func (s *RegistrationService) MarkOperatorStopped(operatorID, userID, reason str
 	if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, update); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
-	s.docStore.NotifyOperatorStatusChanged(OperatorStatusTransition{
-		OperatorID: operatorID,
-		UserID:     op.UserID,
-		Name:       op.Name,
-		Status:     constants.OperatorStatusStopped,
-	})
 	return nil
 }
 
@@ -254,13 +248,6 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		"operator_id", operatorID,
 		"user_id", userID,
 		"reason", reason)
-
-	s.docStore.NotifyOperatorStatusChanged(OperatorStatusTransition{
-		OperatorID: operatorID,
-		UserID:     userID,
-		Name:       op.Name,
-		Status:     constants.OperatorStatusTerminated,
-	})
 
 	return nil
 }

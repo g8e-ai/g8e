@@ -612,8 +612,6 @@ func inferenceReceiptFailureError(receipt *operatorv1.ActionReceipt) error {
 		return constants.ErrInferenceGenerationOptionsInvalid
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED:
 		return constants.ErrInferenceCapabilityUnsupported
-	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_TOOLS_UNSUPPORTED:
-		return constants.ErrInferenceToolsUnsupported
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED:
 		return constants.ErrInferenceProviderAttemptRequired
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH:

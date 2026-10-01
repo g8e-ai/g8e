@@ -8,16 +8,11 @@
 import hashlib
 import json
 
-from app.constants import CommandErrorType, ErrorAnalysisCategory, ExecutionStatus
+from app.constants import CommandErrorType
 from app.llm.llm_dataclasses import ToolCall
 from app.models.agent import AgentStreamState, StreamChunkData
 from app.models.http_context import G8eHttpContext
-from app.models.tool_results import (
-    CommandExecutionResult,
-    CommandInternalResult,
-    ErrorAnalysisResult,
-    FsGrepToolResult,
-)
+from app.models.tool_results import CommandExecutionResult
 from app.services.ai.agent_tool_loop import _tribunal_error_result
 from app.services.evaluation.tool_evidence import (
     record_tool_call_completed,
@@ -103,134 +98,6 @@ def test_record_tool_call_completed_uses_producer_result_chunk():
     assert json.loads(state.tool_calls[0].arguments_json) == {"pattern": "AUTH_FAILURE"}
     assert state.tool_calls[0].success is False
     assert len(state.policy_decisions) == 1
-
-
-def _completed(state, context, **chunk_fields):
-    record_tool_call_completed(
-        state,
-        context,
-        StreamChunkData(
-            tool_name=chunk_fields.pop("tool_name", "recursive_grep_search"),
-            execution_id=chunk_fields.pop("execution_id", "exec-1"),
-            **chunk_fields,
-        ),
-    )
-    return state.tool_calls[-1]
-
-
-def test_tool_call_record_carries_loop_turn_and_the_validation_guidance_shown_to_the_model():
-    """A rejected call must keep the exact guidance the model saw, so a later
-    corrected call can be graded as guidance followed rather than a lucky retry."""
-    state = AgentStreamState()
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-    validation_error = (
-        "1 validation error for RecursiveGrepArgs\npath\n  Field required [type=missing]"
-    )
-
-    call = _completed(
-        state,
-        context,
-        success=False,
-        loop_turn=2,
-        arguments={"pattern": "AUTH_FAILURE"},
-        result=CommandExecutionResult(
-            success=False,
-            error=validation_error,
-            error_type=CommandErrorType.VALIDATION_ERROR,
-            suggestion="Provide the directory to search as path",
-        ),
-        error_type=CommandErrorType.VALIDATION_ERROR,
-    )
-
-    assert call.loop_turn == 2
-    assert call.error == validation_error
-    assert call.error_type == CommandErrorType.VALIDATION_ERROR.value
-    assert call.suggestion == "Provide the directory to search as path"
-    assert call.error_analysis is None
-
-
-def test_tool_call_record_summarizes_the_llm_error_analysis_shown_to_the_model():
-    state = AgentStreamState()
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-    analysis = ErrorAnalysisResult(
-        error_category=ErrorAnalysisCategory.DEPENDENCY,
-        root_cause="deploy-healthcheck is not installed",
-        can_auto_fix=False,
-        suggested_fix="Install the healthcheck package",
-        suggested_command="apt-get install deploy-healthcheck",
-        should_escalate=True,
-        reasoning="missing binary",
-        user_message="command not found",
-    )
-
-    call = _completed(
-        state,
-        context,
-        tool_name="run_commands_with_operator",
-        success=False,
-        is_operator_tool=True,
-        loop_turn=1,
-        result=CommandExecutionResult(
-            success=False,
-            error="command not found",
-            error_type=CommandErrorType.EXECUTION_ERROR,
-            execution_result=CommandInternalResult(
-                status=ExecutionStatus.FAILED, error_analysis=analysis
-            ),
-        ),
-    )
-
-    assert call.error_analysis is not None
-    assert call.error_analysis.error_category == ErrorAnalysisCategory.DEPENDENCY.value
-    assert call.error_analysis.root_cause == "deploy-healthcheck is not installed"
-    assert call.error_analysis.suggested_fix == "Install the healthcheck package"
-    assert call.error_analysis.suggested_command == "apt-get install deploy-healthcheck"
-    assert call.error_analysis.should_escalate is True
-
-
-def test_tool_call_record_captures_the_error_of_non_command_tool_results():
-    state = AgentStreamState()
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-
-    call = _completed(
-        state,
-        context,
-        success=False,
-        loop_turn=1,
-        result=FsGrepToolResult(success=False, error="path does not exist: /missing"),
-    )
-
-    assert call.error == "path does not exist: /missing"
-    assert call.suggestion is None
-
-
-def test_successful_tool_call_record_has_no_guidance_fields():
-    state = AgentStreamState()
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-
-    call = _completed(
-        state,
-        context,
-        success=True,
-        loop_turn=3,
-        result=CommandExecutionResult(success=True, output="auth.log:3: AUTH_FAILURE"),
-    )
-
-    assert call.loop_turn == 3
-    assert call.error is None
-    assert call.suggestion is None
-    assert call.error_analysis is None
-
-
-def test_tool_call_record_without_a_loop_turn_leaves_it_unset():
-    state = AgentStreamState()
-    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
-
-    call = _completed(
-        state, context, success=True, result=CommandExecutionResult(success=True, output="ok")
-    )
-
-    assert call.loop_turn is None
 
 
 def test_record_tool_call_completed_captures_governed_action_and_policy_denial():

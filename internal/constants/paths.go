@@ -260,13 +260,6 @@ const (
 	EvaluationTargetFilenamePrefix   = "g8e-eval-"
 	EvaluationObserverTargetEnv      = "G8E_EVAL_TARGET"
 	EvaluationObserverAbsentExitCode = 3
-	// EvaluationWorkspaceDirname is the directory under the Data Operator's
-	// reported working directory that holds attempt-scoped scenario fixture
-	// workspaces. Names are neutral so the model is not told it is evaluated.
-	EvaluationWorkspaceDirname = "workspaces"
-	// EvaluationWorkspacePrefix prefixes the per-attempt workspace directory,
-	// which is completed by a digest of the run and attempt identity.
-	EvaluationWorkspacePrefix = "ws-"
 )
 
 // Demos constants for organization names, doctrine files, and compose config.
