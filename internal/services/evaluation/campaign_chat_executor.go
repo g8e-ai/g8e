@@ -31,13 +31,13 @@ type CampaignTraceStore interface {
 	SaveAssignmentTrace(ctx context.Context, runID, assignmentID string, body []byte) error
 }
 
-// SimulatedFileWriter materializes one frozen scenario fixture file onto the
-// bound Data Operator by dispatching a governed file write, so a
-// tool-selection/tool-argument scenario's expected file_read_on_operator or
-// run_commands_with_operator target actually exists before the scenario's
-// chat request is sent. *CommandLane implements this.
-type SimulatedFileWriter interface {
-	WriteSimulatedFile(ctx context.Context, target Target, runID, scenarioID, attemptID string, file ScenarioSimulatedFile) error
+// WorkspaceFileWriter materializes one frozen scenario fixture file at an
+// absolute path under the attempt-scoped workspace on the bound Data Operator
+// by dispatching a governed file write, so a scenario's expected
+// file_read_on_operator or recursive_grep_search target actually exists before
+// the scenario's chat request is sent. *CommandLane implements this.
+type WorkspaceFileWriter interface {
+	WriteWorkspaceFile(ctx context.Context, target Target, runID, scenarioID, attemptID, absPath, content string) error
 }
 
 // CampaignChatExecutor submits one scored assignment through production
@@ -49,16 +49,16 @@ type CampaignChatExecutor struct {
 	dataOperatorSessionID string
 	traceStore            CampaignTraceStore
 	waitForTrace          CampaignTraceWaiter
-	fileWriter            SimulatedFileWriter
+	fileWriter            WorkspaceFileWriter
 	now                   func() time.Time
 	newID                 func(string) string
 }
 
 // NewCampaignChatExecutor wires the production chat execution path for one
 // run. fileWriter may be nil for a deployment with no scenario that sets
-// ScenarioInputFixture.SimulatedFiles; ExecuteAssignment fails closed if a
+// ScenarioInputFixture.WorkspaceFiles; ExecuteAssignment fails closed if a
 // scenario needs one and none is configured.
-func NewCampaignChatExecutor(client CampaignChatClient, persona harnessclient.Persona, dataOperatorID, dataOperatorSessionID string, traceStore CampaignTraceStore, waitForTrace CampaignTraceWaiter, fileWriter SimulatedFileWriter, now func() time.Time, newID func(string) string) *CampaignChatExecutor {
+func NewCampaignChatExecutor(client CampaignChatClient, persona harnessclient.Persona, dataOperatorID, dataOperatorSessionID string, traceStore CampaignTraceStore, waitForTrace CampaignTraceWaiter, fileWriter WorkspaceFileWriter, now func() time.Time, newID func(string) string) *CampaignChatExecutor {
 	if now == nil {
 		now = time.Now
 	}
@@ -93,8 +93,8 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	if err != nil {
 		return nil, err
 	}
-	if err := e.materializeSimulatedFiles(ctx, req); err != nil {
-		return nil, assignmentExecutionError("evaluation: execute assignment: materialize simulated files", err)
+	if err := e.materializeWorkspaceFiles(ctx, req); err != nil {
+		return nil, assignmentExecutionError("evaluation: execute assignment: materialize workspace files", err)
 	}
 	chatReq, err := BuildChatProbeRequest(probeReq, e.dataOperatorID, e.dataOperatorSessionID)
 	if err != nil {
@@ -141,25 +141,17 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	return result, nil
 }
 
-// materializeSimulatedFiles writes every ScenarioInputFixture.SimulatedFiles
-// entry onto the bound Data Operator before the chat request is sent, so a
-// tool-selection/tool-argument scenario's expected read target actually
-// exists instead of failing with a missing-path error. It fails closed when
-// a scenario needs a writer and none is configured, rather than letting the
-// assignment run against fixture content the model can never actually read.
-func (e *CampaignChatExecutor) materializeSimulatedFiles(ctx context.Context, req AssignmentExecutionRequest) error {
-	files := req.ScenarioInput.SimulatedFiles
-	if len(files) == 0 {
+// materializeWorkspaceFiles writes every ScenarioInputFixture.WorkspaceFiles
+// entry under the attempt-scoped workspace on the bound Data Operator before
+// the chat request is sent. It fails closed when a scenario needs a writer and
+// none is configured, rather than letting the assignment run against fixture
+// content the model can never actually read.
+func (e *CampaignChatExecutor) materializeWorkspaceFiles(_ context.Context, req AssignmentExecutionRequest) error {
+	if len(req.ScenarioInput.WorkspaceFiles) == 0 {
 		return nil
 	}
 	if e.fileWriter == nil {
-		return fmt.Errorf("evaluation: scenario %s requires a simulated file writer", req.Assignment.GetScenarioId())
+		return fmt.Errorf("evaluation: scenario %s requires a workspace file writer", req.Assignment.GetScenarioId())
 	}
-	target := Target{OperatorID: e.dataOperatorID, SessionID: e.dataOperatorSessionID}
-	for _, file := range files {
-		if err := e.fileWriter.WriteSimulatedFile(ctx, target, req.Assignment.GetRunId(), req.Assignment.GetScenarioId(), req.AttemptID, file); err != nil {
-			return err
-		}
-	}
-	return nil
+	return fmt.Errorf("evaluation: workspace materialization lands in WP5")
 }

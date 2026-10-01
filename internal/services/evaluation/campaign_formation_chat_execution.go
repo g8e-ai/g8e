@@ -33,7 +33,7 @@ type CampaignFormationChatRunner struct {
 	persona        harnessclient.Persona
 	dataOperatorID string
 	waitForTrace   CampaignTraceWaiter
-	fileWriter     SimulatedFileWriter
+	fileWriter     WorkspaceFileWriter
 	production     FormationProductionDependencies
 }
 
@@ -41,9 +41,9 @@ type CampaignFormationChatRunner struct {
 // runner. production supplies the same provenance, observation, allocation,
 // and release dependencies the direct-dispatch runner uses; its RoleExecutor
 // is set per run. fileWriter may be nil for a deployment with no scenario that
-// sets ScenarioInputFixture.SimulatedFiles; RunHeterogeneousFormation fails
+// sets ScenarioInputFixture.WorkspaceFiles; RunHeterogeneousFormation fails
 // closed if a scenario needs one and none is configured.
-func NewCampaignFormationChatRunner(client CampaignChatClient, persona harnessclient.Persona, dataOperatorID string, waitForTrace CampaignTraceWaiter, fileWriter SimulatedFileWriter, production FormationProductionDependencies) *CampaignFormationChatRunner {
+func NewCampaignFormationChatRunner(client CampaignChatClient, persona harnessclient.Persona, dataOperatorID string, waitForTrace CampaignTraceWaiter, fileWriter WorkspaceFileWriter, production FormationProductionDependencies) *CampaignFormationChatRunner {
 	return &CampaignFormationChatRunner{
 		client:         client,
 		persona:        persona,
@@ -76,8 +76,8 @@ func (r *CampaignFormationChatRunner) RunHeterogeneousFormation(ctx context.Cont
 	if err := json.Unmarshal(initialState, &input); err != nil {
 		return nil, fmt.Errorf("evaluation: run heterogeneous formation: decode initial state: %w", err)
 	}
-	if err := r.materializeSimulatedFiles(ctx, runContext, input); err != nil {
-		return nil, fmt.Errorf("evaluation: run heterogeneous formation: materialize simulated files: %w", err)
+	if err := r.materializeWorkspaceFiles(ctx, runContext, input); err != nil {
+		return nil, fmt.Errorf("evaluation: run heterogeneous formation: materialize workspace files: %w", err)
 	}
 	deps := r.production
 	deps.RunContext = runContext
@@ -171,20 +171,14 @@ func (e *formationChatRoleExecutor) ExecuteRole(ctx context.Context, req Formati
 	return result, nil
 }
 
-func (r *CampaignFormationChatRunner) materializeSimulatedFiles(ctx context.Context, runContext FormationRunContext, input ScenarioInputFixture) error {
-	if len(input.SimulatedFiles) == 0 {
+func (r *CampaignFormationChatRunner) materializeWorkspaceFiles(_ context.Context, runContext FormationRunContext, input ScenarioInputFixture) error {
+	if len(input.WorkspaceFiles) == 0 {
 		return nil
 	}
 	if r.fileWriter == nil {
-		return fmt.Errorf("evaluation: scenario %s requires a simulated file writer", runContext.ScenarioID)
+		return fmt.Errorf("evaluation: scenario %s requires a workspace file writer", runContext.ScenarioID)
 	}
-	target := Target{OperatorID: r.dataOperatorID, SessionID: runContext.DataSessionID}
-	for _, file := range input.SimulatedFiles {
-		if err := r.fileWriter.WriteSimulatedFile(ctx, target, runContext.RunID, runContext.ScenarioID, runContext.EvaluationAttemptID, file); err != nil {
-			return err
-		}
-	}
-	return nil
+	return fmt.Errorf("evaluation: workspace materialization lands in WP5")
 }
 
 // formationRoleChatMessage renders the outgoing chat message for one role:

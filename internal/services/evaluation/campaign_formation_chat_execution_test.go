@@ -121,7 +121,7 @@ func g8eeFormationProductionDeps(observer *stubFormationObservationLoader, dispa
 	}
 }
 
-func newTestFormationChatRunner(client *recordingFormationChatClient, writer SimulatedFileWriter, observer *stubFormationObservationLoader) *CampaignFormationChatRunner {
+func newTestFormationChatRunner(client *recordingFormationChatClient, writer WorkspaceFileWriter, observer *stubFormationObservationLoader) *CampaignFormationChatRunner {
 	return NewCampaignFormationChatRunner(client, harnessclient.Persona{ID: "campaign-cli", UserID: "user-1", CLISessionID: "cli-1"}, "data-op", waitForTraceImmediately, writer,
 		g8eeFormationProductionDeps(observer, &recordingFormationInferenceDispatcher{}, &recordingOllamaModelCommandDispatcher{}))
 }
@@ -217,29 +217,7 @@ func TestCampaignFormationChatRunner_ExecutesRolesInOrderThroughG8ee(t *testing.
 	assert.Contains(t, client.calls[2].Message, "assistant output")
 }
 
-func TestCampaignFormationChatRunner_MaterializesSimulatedFilesBeforeFirstRole(t *testing.T) {
-	t.Parallel()
-	variants := testHeterogeneousVariants()
-	stack := mustHeterogeneousStack(t)
-	client := &recordingFormationChatClient{traces: heterogeneousFormationTraces(t, "attempt-heterogeneous-1", nil, "")}
-	writer := &fakeSimulatedFileWriter{}
-	runner := newTestFormationChatRunner(client, writer, g8eeFormationObserver())
-
-	simulated := ScenarioSimulatedFile{Kind: "file", Label: "network-summary", Path: "/synthetic/eval/network-summary.txt", Content: "upstream_host=payments.internal.example"}
-	initialState, err := BuildFormationInitialState(ScenarioInputFixture{
-		ScenarioID:     "instruction-exact-format",
-		UserPrompt:     "Reply with exactly: READY",
-		SimulatedFiles: []ScenarioSimulatedFile{simulated},
-	})
-	require.NoError(t, err)
-
-	_, err = runner.RunHeterogeneousFormation(context.Background(), FormationBindingRequest{Stack: stack, Variants: variants}, heterogeneousFormationRunContext(), initialState)
-	require.NoError(t, err)
-	require.Len(t, writer.written, 1)
-	assert.Equal(t, simulated, writer.written[0])
-}
-
-func TestCampaignFormationChatRunner_FailsClosedWhenSimulatedFileWriterMissing(t *testing.T) {
+func TestCampaignFormationChatRunner_FailsClosedWhenWorkspaceFileWriterMissing(t *testing.T) {
 	t.Parallel()
 	variants := testHeterogeneousVariants()
 	stack := mustHeterogeneousStack(t)
@@ -249,8 +227,8 @@ func TestCampaignFormationChatRunner_FailsClosedWhenSimulatedFileWriterMissing(t
 	initialState, err := BuildFormationInitialState(ScenarioInputFixture{
 		ScenarioID: "instruction-exact-format",
 		UserPrompt: "Reply with exactly: READY",
-		SimulatedFiles: []ScenarioSimulatedFile{
-			{Kind: "file", Label: "network-summary", Path: "/synthetic/eval/network-summary.txt", Content: "upstream_host=payments.internal.example"},
+		WorkspaceFiles: []ScenarioWorkspaceFile{
+			{Label: "network-summary", RelPath: "net/network-summary.txt", Content: "upstream_host=payments.internal.example"},
 		},
 	})
 	require.NoError(t, err)

@@ -40,19 +40,6 @@ func (s *stubCampaignTraceStore) SaveAssignmentTrace(_ context.Context, _, _ str
 	return nil
 }
 
-type fakeSimulatedFileWriter struct {
-	written []ScenarioSimulatedFile
-	err     error
-}
-
-func (f *fakeSimulatedFileWriter) WriteSimulatedFile(_ context.Context, _ Target, _, _, _ string, file ScenarioSimulatedFile) error {
-	if f.err != nil {
-		return f.err
-	}
-	f.written = append(f.written, file)
-	return nil
-}
-
 func TestCampaignChatExecutor_ImportsCompletedTrace(t *testing.T) {
 	t.Parallel()
 	files := newCampaignMemoryFileService()
@@ -80,46 +67,12 @@ func TestCampaignChatExecutor_ImportsCompletedTrace(t *testing.T) {
 	require.NoError(t, store.SaveAssignmentResult(context.Background(), result))
 }
 
-// TestCampaignChatExecutor_MaterializesSimulatedFilesBeforeChat guards the fix
-// for the gap where ScenarioSimulatedFile content was frozen fixture data
-// with no executor behind it: a tool-selection/tool-argument scenario's
-// simulated file must be written to the bound Data Operator before the chat
-// request is dispatched, not after and not never.
-func TestCampaignChatExecutor_MaterializesSimulatedFilesBeforeChat(t *testing.T) {
-	t.Parallel()
-	traceStore := &stubCampaignTraceStore{}
-	client := &stubCampaignChatClient{trace: completedHomogeneousTrace(t, "primary")}
-	writer := &fakeSimulatedFileWriter{}
-	executor := NewCampaignChatExecutor(
-		client,
-		harnessclient.Persona{ID: "campaign-cli", UserID: "user-1", CLISessionID: "cli-1"},
-		"data-op",
-		"data-session",
-		traceStore,
-		func(ctx context.Context, fetch func(context.Context) (EvaluationTrace, error)) (EvaluationTrace, error) {
-			return fetch(ctx)
-		},
-		writer,
-		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
-		func(prefix string) string { return prefix + "-1" },
-	)
-	req := homogeneousAssignmentExecutionRequest(t, "primary")
-	simulated := ScenarioSimulatedFile{Kind: "file", Label: "network-summary", Path: "/synthetic/eval/network-summary.txt", Content: "upstream_host=payments.internal.example"}
-	req.ScenarioInput.SimulatedFiles = []ScenarioSimulatedFile{simulated}
-
-	_, err := executor.ExecuteAssignment(context.Background(), req)
-
-	require.NoError(t, err)
-	require.Len(t, writer.written, 1)
-	assert.Equal(t, simulated, writer.written[0])
-}
-
-// TestCampaignChatExecutor_FailsClosedWhenSimulatedFileWriterMissing ensures a
-// scenario that requires a simulated file is never silently run against a
+// TestCampaignChatExecutor_FailsClosedWhenWorkspaceFileWriterMissing ensures a
+// scenario that requires workspace files is never silently run against a
 // Data Operator that lacks the fixture content: without a configured writer,
 // execution must fail before the chat request reaches the model rather than
 // let the model's tool call fail with a misleading missing-path error.
-func TestCampaignChatExecutor_FailsClosedWhenSimulatedFileWriterMissing(t *testing.T) {
+func TestCampaignChatExecutor_FailsClosedWhenWorkspaceFileWriterMissing(t *testing.T) {
 	t.Parallel()
 	traceStore := &stubCampaignTraceStore{}
 	client := &stubCampaignChatClient{trace: completedHomogeneousTrace(t, "primary")}
@@ -137,7 +90,7 @@ func TestCampaignChatExecutor_FailsClosedWhenSimulatedFileWriterMissing(t *testi
 		func(prefix string) string { return prefix + "-1" },
 	)
 	req := homogeneousAssignmentExecutionRequest(t, "primary")
-	req.ScenarioInput.SimulatedFiles = []ScenarioSimulatedFile{{Kind: "file", Label: "network-summary", Path: "/synthetic/eval/network-summary.txt", Content: "upstream_host=payments.internal.example"}}
+	req.ScenarioInput.WorkspaceFiles = []ScenarioWorkspaceFile{{Label: "network-summary", RelPath: "net/network-summary.txt", Content: "upstream_host=payments.internal.example"}}
 
 	_, err := executor.ExecuteAssignment(context.Background(), req)
 
