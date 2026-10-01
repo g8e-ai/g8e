@@ -12,7 +12,7 @@ import hmac
 import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING, Literal, NoReturn
 
 from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
@@ -219,8 +219,14 @@ async def call_auditor_llm(
     auditor_persona: AgentPersona,
     attempt: int = 0,
     g8e_context: G8eHttpContext | None = None,
+    model_role: Literal["primary", "assistant", "lite"] = "primary",
 ) -> AuditorLLMCallResult:
-    """Execute the LLM call for the Auditor."""
+    """Execute the LLM call for the Auditor.
+
+    ``model_role`` is the tier the caller resolved ``provider`` and ``model``
+    from. The Auditor is a primary-tier player; the Tribunal falls back to the
+    lite tier only when no primary provider is available, and says so here.
+    """
     model_config = get_model_config(model)
 
     response_format = None
@@ -263,7 +269,7 @@ async def call_auditor_llm(
             telemetry=build_model_call_telemetry(
                 provider=provider,
                 agent_role="auditor",
-                model_role="lite",
+                model_role=model_role,
                 model=model,
                 monotonic_start=monotonic_start,
                 input_artifact_hash=input_artifact_hash,
@@ -299,7 +305,7 @@ async def call_auditor_llm(
         telemetry=build_model_call_telemetry(
             provider=provider,
             agent_role="auditor",
-            model_role="lite",
+            model_role=model_role,
             model=model,
             monotonic_start=monotonic_start,
             monotonic_end=monotonic_end,

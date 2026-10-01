@@ -16,7 +16,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 
-from app.models.base import BaseModel, ConfigDict, ValidationError
+from app.models.base import BaseModel, ConfigDict, Field, ValidationError
 
 from app.constants import (
     CommandErrorType,
@@ -42,6 +42,7 @@ from app.models.agent import (
 
 from app.services.ai.generator import generate_command
 from app.models.tribunal_commands import TribunalGenerationRequest
+from app.models.evaluation_trace import EvaluationPlayerStep
 from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -56,7 +57,9 @@ from app.models.settings import G8eeUserSettings
 from app.models.agents.tribunal import (
     CommandGenerationResult,
     TribunalError,
+    TribunalObserver,
 )
+from app.services.evaluation.player_steps import PlayerStepRecorder
 from app.services.investigation.investigation_service import (
     extract_operator_context_by_target,
     extract_single_operator_context,
@@ -139,6 +142,7 @@ class TribunalInvoker:
         event_service: EventService,
         request_settings: G8eeUserSettings,
         tool_executor: AIToolService,
+        step_observer: TribunalObserver | None = None,
     ) -> tuple[ExecutorCommandArgs, CommandGenerationResult]:
         """Invoke Tribunal pipeline and return executor args with generated command.
 
@@ -200,6 +204,7 @@ class TribunalInvoker:
             blacklisting_enabled=blacklisting_enabled,
             whitelisted_commands=whitelisted_commands,
             blacklisted_commands=blacklisted_commands,
+            step_observer=step_observer,
         )
         gen_result = await generate_command(tribunal_request)
         logger.info(
@@ -233,6 +238,7 @@ class ToolCallResult(BaseModel):
     result: ToolResult
     grounding: GroundingMetadata | None = None
     tribunal_result: CommandGenerationResult | None = None
+    player_steps: list[EvaluationPlayerStep] = Field(default_factory=list)
 
 
 logger = logging.getLogger(__name__)
@@ -297,6 +303,7 @@ def _tribunal_error_result(
     arguments: dict[str, object],
     request: str,
     error_msg: str,
+    player_steps: list[EvaluationPlayerStep] | None = None,
 ) -> ToolCallResult:
     """Build a failed ToolCallResult when the Tribunal cannot produce a command.
 
@@ -328,8 +335,10 @@ def _tribunal_error_result(
             success=False,
             result=error_result,
             error_type=CommandErrorType.EXECUTION_ERROR,
+            player_steps=list(player_steps or []),
         ),
         result=error_result,
+        player_steps=list(player_steps or []),
     )
 
 
@@ -361,6 +370,11 @@ async def orchestrate_tool_execution(
     is_operator_tool = tool_name in OPERATOR_TOOLS
     sage_request: SageOperatorRequest | None = None
     gen_result: CommandGenerationResult | None = None
+    # A scored turn records what each Tribunal player produced; production
+    # chat has no observer and the Tribunal runs exactly as before.
+    step_recorder = (
+        PlayerStepRecorder() if g8e_context.evaluation_context is not None else None
+    )
 
     try:
         if tool_name == OperatorToolName.RUN_COMMANDS:
@@ -391,6 +405,7 @@ async def orchestrate_tool_execution(
                         event_service=event_service,
                         request_settings=request_settings,
                         tool_executor=tool_executor,
+                        step_observer=step_recorder,
                     )
                 except (TribunalError, ValidationError) as exc:
                     error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
@@ -405,6 +420,7 @@ async def orchestrate_tool_execution(
                         arguments=model_args,
                         request=request,
                         error_msg=error_msg,
+                        player_steps=step_recorder.steps if step_recorder else None,
                     )
 
                 raw_args = executor_args.model_dump(by_alias=True)
@@ -486,6 +502,8 @@ async def orchestrate_tool_execution(
         tool_name, command_display or ""
     )
 
+    chain_steps = step_recorder.steps if step_recorder else []
+
     return ToolCallResult(
         tool_name=tool_name,
         call_info=StreamChunkData(
@@ -510,9 +528,11 @@ async def orchestrate_tool_execution(
             error_type=result.error_type
             if not result.success and hasattr(result, "error_type")
             else None,
+            player_steps=chain_steps,
         ),
         result=result,
         tribunal_result=gen_result,
+        player_steps=chain_steps,
     )
 
 

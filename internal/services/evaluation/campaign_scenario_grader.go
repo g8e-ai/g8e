@@ -129,8 +129,29 @@ func GradeHomogeneousScenario(req ScenarioGradingRequest) (*ScenarioGradingResul
 	result.DeterministicGrades = append(result.DeterministicGrades, gradePipelineCriteria(req)...)
 	result.DeterministicGrades = append(result.DeterministicGrades, gradeRequiredEvidenceTypes(req, traj, contentPassed, ws)...)
 
+	playerGrades, err := gradePlayers(req, traj.Passed && contentPassed && semanticPassed, personaDetail(traj.Passed && contentPassed && semanticPassed, privReason, contentDetail), ws)
+	if err != nil {
+		return nil, err
+	}
+	result.DeterministicGrades = append(result.DeterministicGrades, playerGrades...)
+
 	result.DecomposedScores = deriveScenarioDecomposedScores(req.AssignmentID, result.DeterministicGrades)
 	return result, nil
+}
+
+// personaDetail is what the reasoning persona's player grade says: why its
+// trajectory or answer failed, or that both held.
+func personaDetail(passed bool, failureReason, contentDetail string) string {
+	switch {
+	case passed:
+		return "the persona's trajectory and answer meet the scenario"
+	case failureReason != "":
+		return failureReason
+	case contentDetail != "":
+		return contentDetail
+	default:
+		return "the persona's trajectory or answer does not meet the scenario"
+	}
 }
 
 // RoleTrace pairs one formation role with its imported g8ee trace for
@@ -251,6 +272,13 @@ func GradeHeterogeneousScenario(req HeterogeneousScenarioGradingRequest) (*Scena
 
 		result.DeterministicGrades = append(result.DeterministicGrades, gradeRoleCriteria(roleReq, traj.Passed, contentPassed, semanticPassed)...)
 		result.DeterministicGrades = append(result.DeterministicGrades, gradeRequiredEvidenceTypes(roleReq, traj, contentPassed, ws)...)
+
+		personaPassed := traj.Passed && contentPassed && semanticPassed
+		playerGrades, err := gradePlayers(roleReq, personaPassed, personaDetail(personaPassed, privReason, contentDetail), ws)
+		if err != nil {
+			return nil, err
+		}
+		result.DeterministicGrades = append(result.DeterministicGrades, playerGrades...)
 	}
 
 	result.DeterministicGrades = append(result.DeterministicGrades, gradeHeterogeneousPipelineCriteria(req)...)
@@ -639,7 +667,7 @@ func deriveScenarioDecomposedScores(assignmentID string, grades []*evalv1.Determ
 	if passed == deterministic {
 		taskScore = 1.0
 	}
-	return []*evalv1.DecomposedScoreRecord{
+	scores := []*evalv1.DecomposedScoreRecord{
 		{
 			ScoreId:           assignmentID + ":task-score",
 			Dimension:         "task_score",
@@ -665,6 +693,25 @@ func deriveScenarioDecomposedScores(assignmentID string, grades []*evalv1.Determ
 			MissingDataPolicy: evalv1.EvaluationMissingDataPolicy_EVALUATION_MISSING_DATA_POLICY_FAIL,
 		},
 	}
+	// A tier's score is the share of its graded players that passed, so a
+	// failing Triage lowers the lite tier and never the persona's. A tier with
+	// no graded player is absent.
+	tierScores := playerTierScores(grades)
+	for _, tier := range []FormationRole{FormationRolePrimary, FormationRoleAssistant, FormationRoleLite} {
+		value, graded := tierScores[tier]
+		if !graded {
+			continue
+		}
+		scores = append(scores, &evalv1.DecomposedScoreRecord{
+			ScoreId:           assignmentID + ":tier-" + string(tier),
+			Dimension:         "tier_" + string(tier),
+			Value:             value,
+			Unit:              evalv1.EvaluationMetricUnit_EVALUATION_METRIC_UNIT_RATIO,
+			Direction:         evalv1.EvaluationMetricDirection_EVALUATION_METRIC_DIRECTION_HIGHER_IS_BETTER,
+			MissingDataPolicy: evalv1.EvaluationMissingDataPolicy_EVALUATION_MISSING_DATA_POLICY_FAIL,
+		})
+	}
+	return scores
 }
 
 func newDeterministicGrade(assignmentID, criterionID string, status evalv1.EvaluationVerdictStatus, detail string, score float64) *evalv1.DeterministicGrade {

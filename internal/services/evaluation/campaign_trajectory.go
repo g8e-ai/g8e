@@ -715,15 +715,24 @@ func failureSentences(req ScenarioGradingRequest, traj trajectoryResult, content
 
 	output := designatedRoleOutput(req.Trace)
 	if strings.TrimSpace(output) != "" {
-		collapsed := strings.ReplaceAll(strings.ReplaceAll(output, "\r\n", " "), "\n", " ")
-		runes := []rune(collapsed)
-		if len(runes) > 160 {
-			runes = runes[:160]
-		}
-		privateReason += fmt.Sprintf(" Its output began: “%s”.", string(runes))
+		privateReason += fmt.Sprintf(" Its output began: “%s”.", outputExcerpt(output, outputExcerptRunes))
 	}
 
 	return privateReason, publicReason
+}
+
+// outputExcerptRunes bounds how much of a model's output a private failure
+// sentence quotes.
+const outputExcerptRunes = 160
+
+// outputExcerpt is the first limit runes of text with line breaks collapsed to
+// spaces, so a quoted excerpt stays on one line.
+func outputExcerpt(text string, limit int) string {
+	runes := []rune(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", " "), "\n", " "))
+	if len(runes) > limit {
+		runes = runes[:limit]
+	}
+	return string(runes)
 }
 
 func modelCallDeclaredTool(trace EvaluationTrace, tool string) bool {

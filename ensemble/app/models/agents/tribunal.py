@@ -7,9 +7,12 @@
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from app.models.base import G8eBaseModel, Field
 from app.constants import (
     CommandGenerationOutcome,
+    EventType,
     TieBreakReason,
     ConsensusMember,
     AuditorReason,
@@ -17,6 +20,20 @@ from app.constants import (
 )
 from app.models.model_telemetry import ModelBoundaryPrivacyAttestation, ModelCallTelemetry
 from app.models.tool_results import CommandRiskAnalysis
+
+
+class TribunalObserver(Protocol):
+    """Receives what the Tribunal produces, as it produces it.
+
+    The observer never influences the Tribunal: its callbacks run before the
+    event is published, and a callback that raises is logged and ignored. It
+    exists so a scored turn can record every player's output (see
+    ``PlayerStepRecorder``).
+    """
+
+    def observe(self, event_type: EventType, payload: G8eBaseModel) -> None: ...
+
+    def observe_marshal_risk(self, command: str, analysis: CommandRiskAnalysis | None) -> None: ...
 
 
 class TribunalError(Exception):

@@ -78,6 +78,8 @@ async def _run_marshal_stage(
         settings=settings,
     )
 
+    emitter.observe_marshal_risk(vote_winner, risk_analysis)
+
     if not risk_analysis:
         return None
 

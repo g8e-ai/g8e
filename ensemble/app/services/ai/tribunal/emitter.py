@@ -7,9 +7,11 @@
 
 import logging
 from app.constants import EventType
+from app.models.agents.tribunal import TribunalObserver
 from app.models.base import G8eBaseModel
 from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext
+from app.models.tool_results import CommandRiskAnalysis
 from app.services.protocols import EventServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -34,15 +36,35 @@ class TribunalEmitter:
         event_service: EventServiceProtocol | None,
         g8e_context: G8eHttpContext | None,
         correlation_id: str | None = None,
+        observer: TribunalObserver | None = None,
     ):
         self.event_service = event_service
         self.g8e_context = g8e_context
         self.correlation_id = correlation_id
+        self.observer = observer
+
+    def observe_marshal_risk(
+        self, command: str, analysis: CommandRiskAnalysis | None
+    ) -> None:
+        """Tell the observer what Marshal classified. Marshal publishes no event unless it blocks."""
+        if self.observer is None:
+            return
+        try:
+            self.observer.observe_marshal_risk(command, analysis)
+        except Exception as exc:
+            logger.warning("[TRIBUNAL-EMIT] Observer failed on marshal risk (ignored): %s", exc)
 
     async def emit(
         self, event_type: EventType, payload: G8eBaseModel, correlation_id: str | None = None
     ) -> None:
         """Emit an SSE event. Re-raises if event_type is terminal."""
+        if self.observer is not None:
+            try:
+                self.observer.observe(event_type, payload)
+            except Exception as exc:
+                logger.warning(
+                    "[TRIBUNAL-EMIT] Observer failed on %s (ignored): %s", event_type, exc
+                )
         try:
             if self.event_service is None or self.g8e_context is None:
                 return

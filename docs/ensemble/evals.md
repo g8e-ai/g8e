@@ -65,8 +65,9 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | --- | --- |
 | INV-EVAL-TRACE-01 | `EvaluationTraceService` persists one immutable JSON trace per assignment and evaluation attempt at `<runtime-dir>/data/evaluation/traces/<assignment-id>/<evaluation-attempt-id>.json`. `<runtime-dir>` is the `--runtime-dir` launch argument; when it is not given, g8ee uses `.g8e` in the project root. |
 | INV-EVAL-TRACE-02 | Assignment and attempt IDs are validated as safe filenames before filesystem access. Trace writes use canonical JSON and atomic temporary-file replacement (write to `.json.tmp`, then replace). |
-| INV-EVAL-TRACE-03 | Trace schema version is `6` (`3` added `arguments_json`, `command`, and `result_json` to tool calls; `4` added the terminal `error` field; `5` added `tool_gate`, `provider_tool_rejection`, per-call `tools_declared`, and the guidance fields; `6` added `seed_application`, `user_memories_suppressed`, and `tool_turn_limit_reached`). Digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch. |
+| INV-EVAL-TRACE-03 | Trace schema version is `7` (`3` added `arguments_json`, `command`, and `result_json` to tool calls; `4` added the terminal `error` field; `5` added `tool_gate`, `provider_tool_rejection`, per-call `tools_declared`, and the guidance fields; `6` added `seed_application`, `user_memories_suppressed`, and `tool_turn_limit_reached`; `7` added `player_steps`). Digest is computed with the shared `g8e.eval.v1` chat-probe trace-digest implementation over the trace with its own `trace_digest` field cleared. Loading validates the typed trace and rejects a digest mismatch. |
 | INV-EVAL-TRACE-04 | The authenticated, read-only lookup is `GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}`. The response is `{ "trace": <typed trace> }`. Missing traces return not-found. Unsafe path parameters are rejected. |
+| INV-EVAL-TRACE-05 | `player_steps` is the chain of the scored turn: one typed `EvaluationPlayerStep` per player that did its job (`triage`, `sage` or `dash`, the Tribunal seats `axiom` `concord` `variance` `pragma` `nemesis`, the deterministic `tribunal` vote, `marshal_command`, `marshal_error`, `auditor`, `codex`), each carrying the tier it resolved from (`model_role`), the model, and at most one typed output (triage classification, candidate command, vote, risk, audit verdict, error analysis, or text). A step is recorded where the player finishes, from the objects g8ee itself produced: Tribunal-chain steps through the `TribunalObserver` on `TribunalEmitter` (so a failed seat, a second round, and a failed Auditor are recorded as well as successes), the others from `TriageResult`, the agent stream state, and the memory update. Recording never changes how the chain runs, and a production request has no observer. The wire shape is pinned by `protocol/vectors/eval/player_steps.json`, which `test_player_steps.py` and the Go grader both test. |
 
 ### Role control and model selection (`INV-EVAL-ROLE`)
 
@@ -102,6 +103,7 @@ Describes the g8ee evaluation pipeline: how campaign controllers submit scored c
 | Evaluation request model | [protocol/python/g8e/models/internal_api.py](../../protocol/python/g8e/models/internal_api.py) | `EvaluationInferenceContext`, `EvaluationLane`, `DesignatedModelRole`, `EvaluationGoldSummary` |
 | Trace service implementation | [ensemble/app/services/evaluation/trace_service.py](../../ensemble/app/services/evaluation/trace_service.py) | `EvaluationTraceService.begin()`, `finalize()`, `load()` |
 | Investigation seed application | [ensemble/app/services/evaluation/investigation_seed.py](../../ensemble/app/services/evaluation/investigation_seed.py) | `InvestigationSeedService.apply()`, `SEEDABLE_HISTORY_EVENTS` |
+| Player step recording | [ensemble/app/services/evaluation/player_steps.py](../../ensemble/app/services/evaluation/player_steps.py) | `PlayerStepRecorder`, `assemble_player_steps()`; wire vector [protocol/vectors/eval/player_steps.json](../../protocol/vectors/eval/player_steps.json) |
 | Agent tool registry export | [ensemble/app/services/evaluation/agent_tool_registry_export.py](../../ensemble/app/services/evaluation/agent_tool_registry_export.py) | `make agent-tool-registry-check`; see [Ensemble Development Guide](devs.md) |
 | Eval tool-gate decision | [ensemble/app/services/evaluation/tool_gate.py](../../ensemble/app/services/evaluation/tool_gate.py) | `resolve_tool_gate()`; applied by `AIToolService.get_tools()` |
 | Role control implementation | [ensemble/app/services/evaluation/role_control.py](../../ensemble/app/services/evaluation/role_control.py) | `apply_homogeneous_role_control()`, `resolve_role_outcome()` |
@@ -165,9 +167,10 @@ GET /api/v1/evaluation/trace/{assignment_id}/{evaluation_attempt_id}
 
 The response is `{ "trace": <typed trace> }`. Missing traces return a not-found response, and unsafe path parameters are rejected. The Go campaign client polls this endpoint after submitting the chat request and imports the trace into the campaign's run-scoped evidence; g8ee does not write the Go campaign run store.
 
-A trace has schema version `6` and can contain:
+A trace has schema version `7` and can contain:
 
 - evaluation context (including the echoed `seed` and `workspace`) and the g8ee chat execution ID;
+- `player_steps`, the chain: what each player produced for its own job, in the order the chain ran (INV-EVAL-TRACE-05). The Auditor and Marshal steps carry the tier their call resolved from; the Auditor runs on the primary-tier model and is attributed `primary`, or `lite` when the Tribunal had to fall back to the lite provider;
 - `seed_application`, the counts of what the seed actually wrote (`turns`, `history_events`, `case_memory`), which proves the investigation was seeded and not merely requested;
 - `user_memories_suppressed` and `tool_turn_limit_reached`, the two eval-only divergences besides `tool_gate`;
 - triage and model-call telemetry;
