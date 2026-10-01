@@ -14,11 +14,13 @@ stateDiagram-v2
 
     Bound --> Available: Unbind<br/>(producer unbinds)
 
+    Active --> Stale: No heartbeat > 60s<br/>(checked on every operator<br/>document read)
+
     Bound --> Stale: Heartbeat missed<br/>(no heartbeat > 2 intervals)
 
     Available --> Stale: Heartbeat missed
 
-    Stale --> Bound: Rebind<br/>(producer re-binds<br/>after recovery)
+    Stale --> Active: Heartbeat received<br/>(Gateway restores active)
 
     Stale --> Offline: Connection lost
 
@@ -47,7 +49,7 @@ stateDiagram-v2
 
     note right of Stale
         Stale operators are unusable
-        until bound again.
+        until their next heartbeat.
         STALE and OFFLINE statuses
         can authenticate (for bootstrap
         and recovery); TERMINATED is
@@ -105,7 +107,7 @@ Bound Operators emit heartbeat telemetry every **30 seconds** (default; configur
 - **Heartbeat interval**: `heartbeatIntervalOrDefault` defaults to 30s (`internal/config/config.go`).
 - **Heartbeat scheduler**: `HeartbeatService.StartScheduler` runs a periodic ticker (`internal/services/pubsub/heartbeat_service.go`).
 - **Heartbeat payload**: System telemetry wrapped in a `GovernanceEnvelope` with `operator_id`.
-- **Gateway handling**: `handleHeartbeatPublish` is the sole heartbeat persistence path. It decodes the authoritative `GovernanceEnvelope.payload` (falling back to `intent_data` only when payload bytes are absent), stores canonical `HeartbeatResult` protojson with protobuf field names in `latest_heartbeat_snapshot`, denormalizes `system_identity.hostname` to `current_hostname`, and updates `updated_at` (`internal/services/gateway/gateway_service.go`).
+- **Gateway handling**: `handleHeartbeatPublish` is the sole heartbeat persistence path. It decodes the authoritative `GovernanceEnvelope.payload` (falling back to `intent_data` only when payload bytes are absent), stores canonical `HeartbeatResult` protojson with protobuf field names in `latest_heartbeat_snapshot`, denormalizes `system_identity.hostname` to `current_hostname`, stamps `last_heartbeat_at` with the Gateway clock, restores a `stale` Operator to `active`, and updates `updated_at` (`internal/services/gateway/gateway_service.go`).
 - **Ensemble handling**: g8ee is not on the heartbeat channel. Application consumers receive Gateway-owned operator events through the Gateway protocol and SSE bridge.
 - **Protocol events**:
   - `g8e.v1.operator.heartbeat.sent` — Operator sent heartbeat
@@ -115,14 +117,14 @@ Bound Operators emit heartbeat telemetry every **30 seconds** (default; configur
 
 ### 5. Stale Detection
 
-If a heartbeat is not received after **60 seconds** (2 × 30s default interval), the Operator is considered stale per protocol semantics.
+A remote Operator in `active` status with no heartbeat for more than **60 seconds** (2 × 30s default interval, `constants.OperatorHeartbeatStaleAfter`) is moved to `stale`.
 
+- **Mechanism**: The Gateway document store evaluates staleness before every read of the `operators` collection (`DocGet`, `DocQuery`, `DocList`, `GetField`) and persists the transition with a conditional update (`internal/services/gateway/operator_staleness.go`). No reader can observe a silent Operator as `active`. If reconciliation fails, the read fails closed.
+- **Last sign of life**: The Gateway-stamped `last_heartbeat_at`, falling back to `claimed_at` and then `created_at` for an Operator that has not heartbeated yet. The Operator never supplies it. The embedded Operator is exempt.
 - **Status**: `OperatorStatusStale` (`internal/constants/status.go`).
 - **Protocol event**: `g8e.v1.operator.status.updated.stale`.
-- **Impact**: Stale Operators are **unusable** until they are bound again. However, `STALE` and `OFFLINE` statuses can still authenticate (to support bootstrap and recovery) — only `TERMINATED` is a hard-gate rejection (`internal/services/gateway/gateway_auth.go`).
-- **Recovery**: A stale operator that reconnects and is re-bound by its producer transitions back to `bound`.
-
-Consumers can also evaluate freshness from `latest_heartbeat_snapshot` timestamps on the operator document.
+- **Impact**: Stale Operators are **unusable**: every capability selector and every CLI command that requires `active` rejects them. However, `STALE` and `OFFLINE` statuses can still authenticate (to support bootstrap and recovery) — only `TERMINATED` is a hard-gate rejection (`internal/services/gateway/gateway_auth.go`).
+- **Recovery**: The next heartbeat restores a `stale` Operator to `active`. A heartbeat never revives a `stopped` or `terminated` Operator.
 
 ### 6. Remote Stop
 

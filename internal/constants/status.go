@@ -7,6 +7,13 @@
 
 package constants
 
+import "time"
+
+// OperatorHeartbeatStaleAfter is how long a remote Operator may go without a
+// heartbeat before the Gateway marks its document stale. Operators heartbeat
+// every 30 seconds by default, so this tolerates one missed beat plus jitter.
+const OperatorHeartbeatStaleAfter = 60 * time.Second
+
 // ExecutionStatus is a typed string for execution status.
 type ExecutionStatus string
 

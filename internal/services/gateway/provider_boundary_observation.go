@@ -160,6 +160,12 @@ func (c *ProviderBoundaryObservationCoordinator) synchronizeObserverSubscription
 	return nil
 }
 
+// selectProviderBoundaryObserverForGateway resolves the single observer the
+// campaign should use. Operators the Gateway has marked stale or offline are
+// already excluded by their status, so more than one match means more than one
+// live observer. When that happens the tie is broken by the inference node's
+// system fingerprint; if that fails too, the ambiguity error is returned so the
+// operator sees why selection failed instead of a misleading not-found.
 func selectProviderBoundaryObserverForGateway(operators []models.OperatorDocumentGo) (*operatorcapability.ProviderBoundaryObserverStatus, error) {
 	selected, err := operatorcapability.SelectProviderBoundaryObserver(operators, "")
 	if err == nil || !errors.Is(err, constants.ErrProviderBoundaryObserverAmbiguous) {
@@ -183,11 +189,17 @@ func selectProviderBoundaryObserverForGateway(operators []models.OperatorDocumen
 	if len(inference) != 1 {
 		return nil, err
 	}
-	return operatorcapability.SelectProviderBoundaryObserverForHardware(
+	selected, err = operatorcapability.SelectProviderBoundaryObserverForHardware(
 		operators,
 		"",
 		inference[0].SystemFingerprint,
 	)
+	if err != nil {
+		// No observer shares the inference node's hardware; that is a failed
+		// tiebreak, not an absent observer.
+		return nil, fmt.Errorf("%w: no observer matches the inference node fingerprint", constants.ErrProviderBoundaryObserverAmbiguous)
+	}
+	return selected, nil
 }
 
 func (c *ProviderBoundaryObservationCoordinator) resetObserver() {

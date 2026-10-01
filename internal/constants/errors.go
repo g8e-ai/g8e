@@ -855,6 +855,7 @@ var (
 	ErrDocumentStoreInvalidOrderByField = errors.New("invalid orderBy field")
 	ErrDocumentStoreParseCreatedAt      = errors.New("failed to parse created_at timestamp")
 	ErrDocumentStoreParseUpdatedAt      = errors.New("failed to parse updated_at timestamp")
+	ErrOperatorStalenessReconcile       = errors.New("failed to reconcile operator heartbeat staleness")
 	ErrDocumentStoreUnmarshalData       = errors.New("failed to unmarshal document data")
 
 	// App policy store service errors

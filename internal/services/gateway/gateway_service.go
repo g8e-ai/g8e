@@ -1440,12 +1440,15 @@ func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) 
 // heartbeatUpdate is the typed patch payload for operator document heartbeat updates.
 type heartbeatUpdate struct {
 	LatestHeartbeatSnapshot json.RawMessage `json:"latest_heartbeat_snapshot"`
+	LastHeartbeatAt         time.Time       `json:"last_heartbeat_at"`
 	CurrentHostname         string          `json:"current_hostname,omitempty"`
 	UpdatedAt               time.Time       `json:"updated_at"`
 }
 
 // handleHeartbeatPublish processes a heartbeat published to the pub/sub broker,
-// updating the operator document's latest_heartbeat_snapshot in the DB.
+// updating the operator document's latest_heartbeat_snapshot and Gateway-clock
+// last_heartbeat_at in the DB. A heartbeat from an Operator previously marked
+// stale restores it to active.
 func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte) {
 	var env commonv1.GovernanceEnvelope
 	if err := protojson.Unmarshal(data, &env); err != nil {
@@ -1469,10 +1472,12 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
+	now := time.Now().UTC()
 	update, err := json.Marshal(heartbeatUpdate{
 		LatestHeartbeatSnapshot: snapshot,
+		LastHeartbeatAt:         now,
 		CurrentHostname:         currentHostnameFromHeartbeat(heartbeat),
-		UpdatedAt:               time.Now().UTC(),
+		UpdatedAt:               now,
 	})
 	if err != nil {
 		ls.logger.Warn("heartbeat: failed to build update", "operator_id", env.GetOperatorId(), "error", err)
@@ -1482,6 +1487,21 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 	if _, err := ls.docStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
 		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.GetOperatorId(), "error", err)
 		return
+	}
+
+	// Conditional on the document still being stale so a stopped or
+	// terminated Operator that keeps publishing is never revived.
+	restored, err := ls.docStore.DocConditionalUpdate(
+		string(constants.CollectionOperators), env.GetOperatorId(),
+		json.RawMessage(fmt.Sprintf(`{"status":%q}`, constants.OperatorStatusActive)),
+		"status", string(constants.OperatorStatusStale),
+	)
+	if err != nil {
+		ls.logger.Warn("heartbeat: failed to restore stale operator", "operator_id", env.GetOperatorId(), "error", err)
+		return
+	}
+	if restored {
+		ls.logger.Info("heartbeat: stale operator restored to active", "operator_id", env.GetOperatorId())
 	}
 
 	ls.logger.Debug("heartbeat: operator snapshot updated", "operator_id", env.GetOperatorId(), "channel", channel)

@@ -85,6 +85,14 @@ Operators running on the same host are differentiated and separated by four key 
 
 The canonical `system_fingerprint` is a SHA-256 composite hash of immutable host properties (`os`, `arch`, `cpu_count`, `machine_id`, `hostname`) combined with `local_dir`, `account`, `port`, and `role`. This ensures that each operator running on the same host produces a distinct, collision-free identity in the Gateway operator registry and SQLite document store, allowing idempotent re-enrollment and unambiguous slot binding.
 
+Re-enrollment is a replacement, not an addition. When platform enrollment issues an Operator whose `system_fingerprint` matches a non-terminated remote Operator document the same owner already holds, the Gateway terminates the earlier document (`termination_reason` names the replacement) and deactivates its Operator session in the same governed issuance step. The new document is persisted first, so a failure leaves a redundant lease rather than none, and a retried issuance supersedes whatever it left behind. Certificate revocation remains an explicit `revoke` intent. This keeps roles that must resolve to exactly one Operator (provider-boundary observer, provenance, inference) unambiguous after an Operator is restarted with fresh enrollment.
+
+### Liveness and Staleness
+
+The Gateway stamps `last_heartbeat_at` with its own clock whenever a heartbeat arrives; the Operator never supplies it. A remote Operator document in `active` status whose last sign of life is older than 60 seconds (`constants.OperatorHeartbeatStaleAfter`, two missed beats at the default interval) is moved to `stale`. The last sign of life is `last_heartbeat_at`, falling back to `claimed_at` and then `created_at` for an Operator that has not heartbeated yet.
+
+The transition runs inside the Gateway document store before any read of the `operators` collection (`DocGet`, `DocQuery`, `DocList`, `GetField`) and is persisted with a conditional update, so registry listings, session validation, SSE, the data API, and every capability selector (Data, Inference, Provenance, Observer) see the same status and a concurrent heartbeat or stop is never overwritten. If reconciliation cannot run, the read fails closed with `ErrOperatorStalenessReconcile`. A stale Operator may still authenticate so it can recover; its next heartbeat restores `active`. Heartbeats never revive `stopped` or `terminated` Operators, and the embedded Operator, which is live exactly when the Gateway is, is never marked stale. CLI and harness commands that require an `active` Operator (`operator run`, `operator deploy`, eval bind and inference discovery) therefore reject a silent Operator without any client-side check.
+
 ### Role Boundaries and Verification Gates
 
 Each operator's responsibilities and execution boundaries are strictly gated by its operational role:
